@@ -29,8 +29,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   classifyRaster,
+  downscaleRaster,
   encodeFigurePng,
   type FigureMarker,
+  MAX_FIGURE_EDGE,
   MAX_FIGURE_PIXELS,
   pairPageFigures,
   pdfFigureRef,
@@ -222,6 +224,159 @@ describe("classifyRaster: validation", () => {
 
     /* And the classic: RGBA bytes wearing an RGB kind. */
     expect(classifyRaster({ ...rgba(4, 4, [1, 2, 3, 4]), kind: 2 }).status).toBe("refused");
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The downscale
+ * ------------------------------------------------------------------ */
+
+/** A raster the validator has agreed to, so nothing here builds one by hand. */
+function usable(candidate: RasterCandidate) {
+  const verdict = classifyRaster(candidate);
+  if (verdict.status !== "usable") throw new Error(`expected usable, got ${verdict.status}`);
+  return verdict.raster;
+}
+
+/** A candidate whose pixels are given outright rather than repeated. */
+function pixels(width: number, height: number, kind: 2 | 3, values: readonly number[]): RasterCandidate {
+  const data = new Uint8Array(values);
+  expect(data.length).toBe(width * height * (kind === 3 ? 4 : 3));
+  return { page: 1, key: "img_p0_1", width, height, kind, data };
+}
+
+describe("downscaleRaster", () => {
+  it("returns a raster already inside the bound as the very same object", () => {
+    /* Not "equal to" — the same object. A figure small enough to keep is
+       provably untouched, and costs nothing to prove it. */
+    const raster = usable(rgb(40, 30, [1, 2, 3]));
+    expect(downscaleRaster(raster, 1600)).toBe(raster);
+    expect(downscaleRaster(raster)).toBe(raster);
+  });
+
+  it("leaves a raster exactly on the threshold alone, and shrinks the next pixel up", () => {
+    const onIt = usable(rgb(1600, 2, [4, 5, 6]));
+    expect(downscaleRaster(onIt, 1600)).toBe(onIt);
+
+    const overIt = usable(rgb(1601, 2, [4, 5, 6]));
+    const smaller = downscaleRaster(overIt, 1600);
+    expect(smaller).not.toBe(overIt);
+    /* One pixel over the bound is still a whole factor of two: there is no
+       fractional scaling here, and 801 × 1 is the honest consequence. */
+    expect([smaller.width, smaller.height]).toEqual([801, 1]);
+  });
+
+  it("uses MAX_FIGURE_EDGE when it is not told otherwise", () => {
+    const big = usable(rgb(MAX_FIGURE_EDGE * 2, 4, [7, 7, 7]));
+    const smaller = downscaleRaster(big);
+    expect(Math.max(smaller.width, smaller.height)).toBeLessThanOrEqual(MAX_FIGURE_EDGE);
+  });
+
+  it("averages a 4× box down to values that can be computed by hand", async () => {
+    /* Two 4 × 4 boxes side by side, so every destination pixel is sixteen
+       source pixels and the arithmetic is stated rather than reimplemented.
+       Left box: red runs 0, 16, 32 … 240, which sums to 1920 and averages to
+       120; green is 10 throughout and blue 200. Right box: red 7 throughout,
+       blue 255 throughout, and green is 0 on the top two rows and 100 on the
+       bottom two, averaging 50. */
+    const values: number[] = [];
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 8; x++) {
+        if (x < 4) values.push((y * 4 + x) * 16, 10, 200);
+        else values.push(7, y < 2 ? 0 : 100, 255);
+      }
+    }
+    const smaller = downscaleRaster(usable(pixels(8, 4, 2, values)), 2);
+    expect([smaller.width, smaller.height]).toEqual([2, 1]);
+    expect([...smaller.data]).toEqual([120, 10, 200, 7, 50, 255]);
+  });
+
+  it("averages a partial edge box over what is actually there", () => {
+    /* Three pixels into two: the second destination pixel has only one source
+       pixel under it, and averaging it as though it had two — over the zeroes
+       past the end of the row — would halve it. */
+    const smaller = downscaleRaster(usable(pixels(3, 1, 2, [10, 10, 10, 20, 20, 20, 90, 90, 90])), 2);
+    expect([smaller.width, smaller.height]).toEqual([2, 1]);
+    expect([...smaller.data]).toEqual([15, 15, 15, 90, 90, 90]);
+  });
+
+  it("does not darken the edge of a transparent region — the alpha fringe", () => {
+    /* **The test this function exists for.** Column 0 is opaque white; columns
+       1–3 are fully transparent, and their colour bytes are black, which is
+       what an unwritten RGBA buffer holds. The first destination pixel
+       straddles the boundary: two opaque white pixels and two transparent
+       black ones.
+     *
+     * An unweighted average reads those black bytes and returns 128 — a grey
+     * halo around every transparent edge, which reads as a rendering fault
+     * rather than as a resize. Weighting the colour by alpha returns 255: the
+     * transparent pixels contribute nothing to the colour and everything to
+     * the alpha, which is the whole point. */
+    const values: number[] = [];
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        if (x === 0) values.push(255, 255, 255, 255);
+        else values.push(0, 0, 0, 0);
+      }
+    }
+    const smaller = downscaleRaster(usable(pixels(4, 4, 3, values)), 2);
+    expect([smaller.width, smaller.height]).toEqual([2, 2]);
+
+    /* Full brightness kept, and the coverage halved — 255 and 128, not 128
+       and 128. */
+    expect([...smaller.data.slice(0, 4)]).toEqual([255, 255, 255, 128]);
+    /* And a destination pixel with nothing opaque under it stays exactly
+       transparent, rather than acquiring a colour nobody can see. */
+    expect([...smaller.data.slice(4, 8)]).toEqual([0, 0, 0, 0]);
+  });
+
+  it("weights by alpha without disturbing a uniformly opaque image", () => {
+    /* The weighting must be invisible where there is nothing to weight: an
+       image of one alpha everywhere has to average exactly as RGB would. */
+    const values: number[] = [];
+    for (let y = 0; y < 2; y++) {
+      for (let x = 0; x < 2; x++) values.push((y * 2 + x) * 40, 60, 100, 200);
+    }
+    const smaller = downscaleRaster(usable(pixels(2, 2, 3, values)), 1);
+    expect([smaller.width, smaller.height]).toEqual([1, 1]);
+    /* (0 + 40 + 80 + 120) / 4 = 60, and the alpha comes through untouched. */
+    expect([...smaller.data]).toEqual([60, 60, 100, 200]);
+  });
+
+  it("keeps the aspect ratio, to within the pixel integer sides allow", () => {
+    const smaller = downscaleRaster(usable(rgb(900, 759, [1, 2, 3])), 300);
+    expect([smaller.width, smaller.height]).toEqual([300, 253]);
+    expect(Math.abs(smaller.width / smaller.height - 900 / 759)).toBeLessThan(0.01);
+    expect(smaller.data.length).toBe(300 * 253 * 3);
+  });
+
+  it("never produces a side of zero, however extreme the shape", () => {
+    /* A 1-pixel-tall strip divided by four is a quarter of a pixel, and a
+       zero-height raster is not an image — `encodeFigurePng` would write an
+       IHDR no decoder accepts, and nothing else here would notice. */
+    const strip = downscaleRaster(usable(rgb(5000, 1, [9, 9, 9])), 1600);
+    expect([strip.width, strip.height]).toEqual([1250, 1]);
+    expect([...strip.data.slice(0, 3)]).toEqual([9, 9, 9]);
+
+    const tiny = downscaleRaster(usable(rgb(2, 1, [4, 5, 6])), 1);
+    expect([tiny.width, tiny.height]).toEqual([1, 1]);
+  });
+
+  it("leaves a 1 × 1 raster alone at any bound", () => {
+    const one = usable(rgb(1, 1, [7, 8, 9]));
+    expect(downscaleRaster(one, 1)).toBe(one);
+    expect(downscaleRaster(one)).toBe(one);
+  });
+
+  it("keeps the kind it was given", () => {
+    expect(downscaleRaster(usable(rgb(10, 10, [1, 2, 3])), 2).kind).toBe("rgb");
+    expect(downscaleRaster(usable(rgba(10, 10, [1, 2, 3, 4])), 2).kind).toBe("rgba");
+  });
+
+  it("refuses a bound that is not a positive whole number", () => {
+    const raster = usable(rgb(10, 10, [1, 2, 3]));
+    expect(() => downscaleRaster(raster, 0)).toThrow(/positive whole number/);
+    expect(() => downscaleRaster(raster, 2.5)).toThrow(/positive whole number/);
   });
 });
 

@@ -28,6 +28,9 @@ import {
   runPdfExtract,
 } from "../src/pdf-read.js";
 
+/** A raw PDF's sha256, which `renderHtml` requires and nothing here reads. */
+const RAW_SHA = "a".repeat(64);
+
 const HARDER = "evals/pdf/harder/source.pdf";
 
 const paragraph = (page: number, text: string, continues = false): PdfRecord => ({
@@ -125,7 +128,7 @@ describe("a word broken across a chunk seam", () => {
       paragraph(3, "The captain passed the dis"),
       paragraph(4, "patcher and went into the rear cabin.", true),
     ];
-    const html = renderHtml(mendSeamHyphens(records, pass), "t");
+    const html = renderHtml(mendSeamHyphens(records, pass), "t", RAW_SHA);
     expect(html).toContain("dispatcher and went into the rear cabin.");
     expect(html).not.toContain("dis patcher");
   });
@@ -479,7 +482,7 @@ describe("a word broken across a chunk seam", () => {
     const out = mendSeamHyphens(records, pass);
     expect(out[0]!.text).toBe("He saw an orange");
     expect(out[1]!.text).toBe("");
-    expect(renderHtml(out, "t")).toContain("He saw an orange sphere of 15 cm.");
+    expect(renderHtml(out, "t", RAW_SHA)).toContain("He saw an orange sphere of 15 cm.");
   });
 });
 

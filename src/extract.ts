@@ -409,6 +409,18 @@ function sourceDom(html: string, url: string): InstanceType<ReturnType<typeof js
  */
 function prepareDocument(doc: Document): { notes: NoteStats; callouts: CalloutStats } {
   unhideCollapsedSections(doc);
+  /* **The PDF figure marker, scrubbed on the one path a stranger's markup
+     arrives by.** Nothing on this path ever *writes* one — only `renderHtml`
+     (src/pdf-read.ts) does, and a PDF never comes through here — so this is the
+     namespace's standing obligation with no recogniser behind it: the attribute
+     is ours and therefore forgeable, and unlike our other marks it is
+     deliberately allowed past the sanitiser so it can reach the reading view
+     (src/reserved.ts § `pdfFigure`).
+
+     A forged one already resolves to nothing, because the ref folds in a raw
+     PDF's sha256 and a web article has no raw PDF and therefore no `pdfFigures`
+     entry to match. This is belt to that braces, and it is one line. */
+  scrubReserved(doc, [RESERVED_ATTRS.pdfFigure]);
   /* Before Readability, and it has to be: Readability's `keepClasses: false`
      takes the identifying classes off, and the sanitiser downstream of it
      deletes the `<label>`/`<input>` that Tufte's sidenotes are made of. By stage

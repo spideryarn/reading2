@@ -33,7 +33,7 @@ rest.** A fifteenth word there is red until it has a row in each of these totals
 |---|---|
 | `MODE_LABEL` | [`src/title-text.ts`](../../src/title-text.ts) — the only place a mode is spelled for a person |
 | `OWNER_MODE_NOTE` | [`src/messages.ts`](../../src/messages.ts) |
-| `MODES_UI`, via `ModesMissingFromDock` | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) — an ordered array, because the order is Greg's; the type check stands in for the `Record`. **The row carries a required `experimental: boolean`**, so adding a mode means deciding whether it is finished enough to draw for everybody — [experimental-features.md](experimental-features.md). Say why in the table there either way |
+| `MODES_UI`, via `ModesMissingFromDock` | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) — an ordered array, because the order is Greg's; the type check stands in for the `Record`. **The row carries a required `experimental: boolean`**, so adding a mode means deciding whether it is finished enough to draw for everybody — [experimental-features.md](experimental-features.md). Say why in the table there either way; moving one later is [§ Moving a mode in or out of the switch](#moving-a-mode-in-or-out-of-the-switch) |
 | `POLICY` | [`src/web/visitor.ts`](../../src/web/visitor.ts) — what a visitor may see; there is no fall-through any more, a missing row is a typecheck error |
 | `BAND_SAYS` | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) |
 
@@ -73,6 +73,28 @@ Then the residue, which is why this page exists:
   doc; nothing for the line.*
 
 A mode that shows nothing generated — Plain, Hierarchy, Search — stops here.
+
+## Moving a mode in or out of the switch
+
+Three edits, and the second is the point:
+
+1. **The `experimental` flag on its `MODES_UI` row.** That is the whole of the behaviour — the route,
+   the band and the URL do not change, and a hidden mode was always reachable by `?mode=…` anyway.
+2. **Its name in `BEHIND_THE_SWITCH`**, [`tests/dock-experimental-modes.test.tsx`](../../tests/dock-experimental-modes.test.tsx).
+   An independent copy of the policy on purpose, so that nobody moves a mode in or out of every
+   reader's bar by editing one boolean: change the flag alone and six of that file's tests go red,
+   in either direction. Deriving the list from `MODES_UI` would assert that the bar draws what the
+   table says, which is what `visibleModes` *means* — a check that cannot fail. GPT Sol weighed the
+   alternatives on 2026-09-06 and this is the one it kept.
+3. **The row, and the reason, in [experimental-features.md](experimental-features.md)** — going in
+   or coming out, say why. That doc owns the argument.
+
+**Nothing counts the modes, anywhere, and it must stay that way.** Promoting Quotes on 2026-09-06 was
+one line of behaviour and 86 of bookkeeping, because "nine of fourteen" had been restated in five
+source comments, two docs and a pile of assertions — and one of the two literal lists had already
+drifted wrong and gone on passing, since a stale name in a `not.toContain` loop is a weaker
+assertion rather than a failing one. Assert identities against `BEHIND_THE_SWITCH`; derive
+everything else from `MODES`.
 
 ## The artefact, if the mode shows one
 

@@ -1,9 +1,24 @@
 # Delete `SPIDERYARN_STORE` and the filesystem store
 
-**Status, 2026-09-04. Fourth draft; seven of thirteen stages are done, and stage B is started.** GPT Sol returned *not
-ready* on the first draft and *ready with changes* on the second; those changes are in. The three
-pre-build spikes the second review asked for have all run, and each of them moved the plan — the
-sections below carry what they found.
+**Status, 2026-09-06. Everything through stage G has landed and is on `dev`. The flag and the
+filesystem store are gone.** What is left is two stages, and neither is ordinary work in progress:
+
+- **H is optional and currently declined** — tightening contracts the filesystem store had been
+  weakening. It is the only stage of the nine with no failure behind it; every other one had a bug,
+  an outage or a flag that lied. Greg has said he was "not sure about H and I".
+- **I is blocked on Greg, and on nobody else** — it cannot start until `SPIDERYARN_STORE` is removed
+  from Vercel Preview and Production, because deleting the tombstone while a deployment still asks
+  for `files` would silently ignore what the operator asked. **The signal is an absence**: while the
+  variable is set, `npm run deploy` prints a *"still to remove"* line; when it stops appearing, the
+  gate is open. Nobody has to remember, and no agent on this box needs a Vercel credential.
+
+**Do not re-derive a stage count from this file.** An earlier version of this header said "seven of
+thirteen stages are done, and stage B is started" and was two days and five stages out of date —
+the failure § *Counts are perishable here* is about, in the header warning about it.
+
+GPT Sol returned *not ready* on the first draft and *ready with changes* on the second; those
+changes are in. The three pre-build spikes the second review asked for have all run, and each of
+them moved the plan — the sections below carry what they found.
 
 **This plan absorbed [260903e](260903e-a-private-test-database-so-the-suite-stops-racing-dev-servers.md)
 on Greg's decision** — see stage T. That is the largest change to its shape since it was written.
@@ -14,7 +29,8 @@ three later stages consume it**:
 ```
 A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
   → T-D (activation) ✅ → T-E (pollution) ✅
-  → B ✅ → B2 ✅ → B3 ✅ → C → D → E → F (hinge) → G → H → I
+  → B ✅ → B2 ✅ → B3 ✅ → C ✅ → D ✅ → D′ ✅ → E ✅ → F ✅ (hinge) → G ✅
+  → H (optional, declined) → I (blocked on Greg's Vercel change)
 ```
 
 **`C → B` became `B → C` on 2026-09-04**, and this line is the only place the order lives, so

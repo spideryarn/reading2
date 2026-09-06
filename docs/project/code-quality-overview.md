@@ -84,7 +84,7 @@ you read those two *before* you measure something, not after.
 - **[browser-testing-playwright.md](browser-testing-playwright.md)** — those same checks in
   Playwright, for the remote box, and which of that doc's traps stop existing once the browser is
   headless and yours: the hidden tab, the black screenshot, the pixel arithmetic, the 605px floor.
-- **[claude-in-chrome.md](claude-in-chrome.md)** — getting the extension to talk to Claude Code in
+- **[claude-in-chrome.md](../reusable/claude-in-chrome.md)** — getting the extension to talk to Claude Code in
   the first place. `list_connected_browsers` returning `[]` is almost always the wrong Chrome
   profile, not broken plumbing. Open this before you debug anything below the extension.
 - **[performance.md](performance.md)** — what the page costs at rest and while scrolling, the exact

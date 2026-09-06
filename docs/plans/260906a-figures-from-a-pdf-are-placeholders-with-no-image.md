@@ -367,6 +367,28 @@ that changed the design are folded in above; the rest, held as build constraints
   A cap is still worth having, on the honest grounds — what the reader has to download — rather
   than on a platform limit that is not there. The largest figure measured anywhere in the corpus is
   756 KB.
+
+  **That 756 KB was the *Analog Cognition* document's number, and the corpus is worse.** Stage C
+  measured the ball-lightning paper's page-3 figure at 2067 × 1741 of photographic RGB encoding to
+  **9,355,050 bytes**, so a 4 MiB cap refused a real fixture — silently — and the cap went up to
+  16 MiB to let it through, leaving a reader fetching 9 MB for one picture.
+
+  **A cap was the wrong instrument, and Greg's call on 2026-09-06 was to fix the pixels instead:**
+
+  > downscale instead
+
+  A figure renders at roughly 700 px of CSS width in the reading view, so ~1600 px on the longest
+  side is already generous for a 2× display. `downscaleRaster` in
+  [`src/pdf-figures.ts`](../../src/pdf-figures.ts) box-filters everything above `MAX_FIGURE_EDGE`
+  down to it — alpha-weighted, because averaging colour across pixels of differing alpha puts a dark
+  fringe round every transparent edge — and it runs immediately before `encodeFigurePng`. Re-measured
+  over the corpus the same day: 9,355,050 → **2,349,789** at 1034 × 871, 2,917,234 → 985,154,
+  3,432,261 → 822,724, and every figure already inside the bound returned untouched.
+
+  `MAX_FIGURE_BYTES` becomes a backstop rather than the control, at **12 MiB** — above the
+  10,241,600 raw bytes a 1600 × 1600 RGBA raster could ever deflate from, so it cannot refuse a
+  figure the downscale allowed. The next real reduction is a lossy encoder, and that is still
+  blocked on `@napi-rs/canvas` being 34 MB of Vercel bundle.
 - **Drop the second blankness clause.** "Every pixel within tolerance of one colour" buys nothing
   the corpus needs and introduces the one false negative that matters — a near-white diagram or a
   faint grid deleted silently. Only exact transparency, only for `RGBA_32BPP`. Keeping a flat
@@ -417,6 +439,36 @@ Asked to arbitrate the product calls rather than the plumbing.
 - **`kind` 1 (`GRAYSCALE_1BPP`) exists** and must be handled or refused explicitly, never fallen
   through. The corpus only exercises 2 and 3.
 
+## The browser pass, 2026-09-06 — it works
+
+A fresh ingest of the real document on this box, job `spya-t333w9`, **$0.2868** of model spend,
+slug `analog-cognition-and-consciousness-4-28-26-spya-f03kqf`. Eight of eight figures recovered.
+
+| check | result |
+| --- | --- |
+| `.prose figure` / `.prose figure img` | **8 / 8** |
+| every image decoded | yes — `naturalWidth`/`naturalHeight` non-zero on all eight |
+| **each picture under its own caption** | **yes, all eight, checked by eye against the screenshots** |
+| the ⤢ button | present on each, opens the lightbox at full resolution |
+| the open-the-original icon | present on all eight, titled *Open page N of the PDF* for N = 3, 4, 7, 9, 11, 12, 14, 16 |
+| `/api/asset/…` | 16 requests, all **200** |
+
+Those eight page numbers are **exactly the pages the first probe in this document measured**, arrived
+at independently — the probe read them off the operator list on 2026-09-06 and the reading view got
+them from a marker minted by the model's own page field. Two routes to the same eight numbers is
+worth more than either.
+
+**One thing this plan and my brief for it were wrong about: there is no dark mode to test.** The app
+is dark-only by design — `src/web/styles/tokens.css`, *"DARK ONLY, unconditionally — no toggle, no
+`prefers-color-scheme`, no light fallback"*, Greg 2026-08-24. Forcing `data-theme="dark"` produced a
+byte-identical screenshot. The concern behind the question was still the right one and is still
+answered: `--figure-sheet` resolves to `#f4f3f0`, and every figure sits on that fixed light mat
+against the app's near-black page, so a transparent PNG of black line art is never drawn
+dark-on-dark. The mechanism was already there; this work needed none of its own.
+
+The two console errors seen are `/api/glossary/…` and `/api/library/…/open`, neither of them on this
+path — a fresh article has no glossary yet.
+
 ## Stages
 
 Each ends with the gates green and the tree safe to commit. Nothing a reader sees changes until D.
@@ -426,15 +478,52 @@ the original**.
 
 | | Stage | Lands | State |
 |---|---|---|---|
-| A | **The pure module** | `src/pdf-figures.ts` — the transparency rule, the validator, the PNG writer, the pairing gate, the ref. No pdf.js, no store. | |
-| B | **The extraction** | real XObjects out of a real PDF through `loadPdfjs`, `maxImageSize` on the document, pinned against the eight known-real and eight known-blank keys. | |
-| C | **The marker, the manifest and the step** | `data-spya-pdf-figure` in `renderHtml` and `src/reserved.ts`; `pdfFigures` on `Assets`; the assets step extended; **the freshness stamp fixed and `ASSETS_VERSION` bumped**. Nothing served yet. | |
-| D | **Delivery and the prose** | the generic asset route after `sendPlate`; `rehostImages` after `sanitizeArticle`; the muted line and its link. PDF figures only. **The first stage a reader can see.** | |
-| E | **Web images through the same door** | the article's own images switched on — 260829b's stages C and D finished, and readers stop announcing themselves to publishers' CDNs. | |
-| F | **Proof and docs** | the browser pass on a real ingest, `article-images.md`, `content-extraction.md`, `export.md`, this file. | |
+| A | **The pure module** | `src/pdf-figures.ts` — the transparency rule, the validator, the PNG writer, the pairing gate, the ref. No pdf.js, no store. | done `0297784f`, reviewed `93d565b4` |
+| B | **The extraction** | real XObjects out of a real PDF through `loadPdfjs`, `maxImageSize` on the document, pinned against the eight known-real and eight known-blank keys. | done `06ed314b`, reviewed `a6b1ce49` (one P0) |
+| C | **The marker, the manifest and the step** | `data-spya-pdf-figure` in `renderHtml` and `src/reserved.ts`; `pdfFigures` on `Assets`; the assets step extended; **the freshness stamp fixed in both its homes and `ASSETS_VERSION` bumped**. Nothing served yet. | done `87359bca` |
+| D | **Delivery and the prose** | `/api/asset/…` and its public twin; `rehostImages` after `sanitizeArticle`; the muted line; the open-at-that-page icon. PDF figures only. **The first stage a reader can see.** | done `1b8fdc30`, reviewed — see below |
+| E | **Web images through the same door** | the article's own images switched on — 260829b's stages C and D finished, and readers stop announcing themselves to publishers' CDNs. `storedAssetFor` already searches `entries`, so this is a switch rather than a build. | |
+| F | **Proof and docs** | the browser pass on a real ingest, `article-images.md`, `content-extraction.md`, `export.md`, `security-map.md` and `security.md` (which do not yet name the two new routes), this file. | browser pass running |
 
 **Done looks like:** the Analog Cognition PDF re-ingested locally against Postgres shows eight
 figures under their eight captions; the ball-lightning paper shows four and refuses the masthead;
 the Wellcome scan shows none and staples no page of the book under a caption; `evals/pdf/easy` —
 which has no raster at all — is untouched and costs nothing; and no reader's browser fetches
 anything from a publisher.
+
+## Stage D's review, and the five things it found
+
+[260906a-stageD-review-sol.md](260906a-stageD-review-sol.md) — no P0 and no security vulnerability:
+authorisation on both routes was verified sound, and the fixes below deliberately left it alone. All
+five findings are fixed, and **every new test was watched red first**, which is the point of three of
+them.
+
+- **D-1, the reader-visible one.** The public branch wrote `/api/public/asset/…` straight into the
+  `src` without ever observing a response, so a 404 after un-sharing left an `<img>` with the
+  manifest's `width`/`height` over a failed request — a big blank rectangle, where the module's own
+  contract promises a caption and nothing else. An owner never saw it, because their branch inserts
+  only after a fetch succeeds. **Both footings now fetch and mint a `blob:`**; they differ in one
+  expression, `publicFetch` versus `apiFetch`. The costs are named in `src/web/rehost.ts` § Why every
+  picture arrives as a `blob:` — the bytes are held, and a visitor's figures are now fetched before
+  the prose draws — along with the alternative rejected for costing two fetches.
+- **D-2, the leak.** `releasePrevious()` sat *after* the "no figures here" guard, so the commonest
+  navigation of all — an owned PDF to an ordinary article — freed nothing. And a superseded load went
+  on minting object URLs after the sweep that would have revoked them. Fixed by `beginLoad()`, which
+  runs before any early return and carries an `AbortController`; the signal is re-read after
+  `blob()`, because a response already in hand is not cancelled by aborting its request.
+- **D-3, the one a green suite was hiding.** `tests/asset-route.test.ts` seeded one permanently
+  public and one permanently private article, so memoising the public projection would have left it
+  green — and *un-sharing takes effect on the next request* is the entire reason that route answers
+  `no-store`. Now: same slug, fetched, un-shared, fetched again. Verified red against a two-line
+  memoisation of `publicCurrentRevisionQuery`.
+- **D-4, the incomplete snapshot.** `book.storageErrors` went back by reference, so a `put` rejecting
+  after the race could push into an array the caller was already holding. Copied. The test aborts the
+  run from inside the fake bucket's own `putIfAbsent`, so it is deterministic rather than timed.
+- **D-5, three true claims no test isolated.** Every fixture left `Assets.entries` empty, so deleting
+  the generic web-image half of `storedAssetFor` passed the file; A now carries a stored web image,
+  as a **JPEG**, which also gives the wrong-extension case a second stored extension to be
+  distinguished from. The third claim — that the key comes from `found.sha256`/`found.ext` rather
+  than from the path — is **not** separately observable at runtime, since after an exact match those
+  pairs are equal by construction; what refuses the substitution is the compiler, `canonicalKey`
+  taking a `StoredKind` where the route holds two `string`s. The commentary now says that instead of
+  claiming a test proves it.

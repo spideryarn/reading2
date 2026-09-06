@@ -146,8 +146,10 @@ Ranked by value for the effort.
 
 ## The review
 
-GPT Sol on the change before it landed, `08d5aaee` as base. **No P0, P1 or P2**, and it reproduced
-rather than only reasoned: it ran both files separately and together in one worker, the doc-link
+GPT Sol on the change before it landed, `08d5aaee` as base — a *live* pre-commit candidate, which
+names a tree rather than bytes, so: **what it reviewed became `edc26a87`**, plus the three P3 fixes
+below, which were made in response to it and are in that same commit. **No P0, P1 or P2**, and it
+reproduced rather than only reasoned: it ran both files separately and together in one worker, the doc-link
 suite, Biome, and all three TypeScript projects.
 
 Three P3 findings, all accepted and all fixed here, and all three were mine to have caught:

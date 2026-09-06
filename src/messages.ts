@@ -2865,6 +2865,32 @@ export const SHARING_MARK_PUBLIC = `${SHARING_ON} Change who can read it.`;
 export const SHARING_MARK_PRIVATE = `${SHARING_OFF} Share it with anyone.`;
 
 /**
+ * **The second paragraph of the mark's card, which is the one worth hovering
+ * for** — added 2026-09-06, when the mark's tooltip became a `ControlTip`
+ * rather than a bare sentence (src/web/Masthead.tsx § `SharingMark`).
+ *
+ * `ControlTip`'s rule is that the second paragraph says the thing a reader
+ * cannot work out by pressing the control, and for this one that is the same
+ * fact from either side: **sharing is not symmetrical**. Turning it on can be
+ * turned off, and turning it off does not reach what has already been read —
+ * `SHARING_CANNOT_UNRING` is the long version, said at the point of no return.
+ * An owner deciding whether to press this deserves the short version here,
+ * before they get to the confirmation.
+ *
+ * The private twin says the smaller thing, and says it because the absence of a
+ * warning is not itself reassuring: an owner who has just read what publishing
+ * costs should be told plainly that none of it has happened.
+ */
+export const SHARING_MARK_HOW_PUBLIC =
+  "Taking it down again refuses the next request, and no more than that — whatever somebody has " +
+  "already read or copied stays with them.";
+
+/** @see SHARING_MARK_HOW_PUBLIC */
+export const SHARING_MARK_HOW_PRIVATE =
+  "Nothing has left your account: the article, your notes and your comments are yours alone until " +
+  "you say otherwise.";
+
+/**
  * **The mark's *name*, which is not its tooltip** — and the two have to differ.
  *
  * Floating UI gives the tooltip to the link as `aria-describedby`, so an

@@ -9,13 +9,39 @@ npm run count-lines -- --json             # for a script to read
 npm run count-lines -- --help
 ```
 
-[`scripts/count-lines.ts`](../../scripts/count-lines.ts). Ported from gjdutils'
-[`count-lines.ts`](https://github.com/gregdetre/gjdutils/blob/main/src/ts/scripts/count-lines.ts),
-which wraps [cloc](https://github.com/AlDanial/cloc). `brew install cloc`; without it the script
-still runs and says so.
+[`scripts/count-lines.ts`](../../scripts/count-lines.ts), ported from gjdutils.
+**The design, and the four ways a line count goes quiet on you, are in
+[count-lines-in-a-repo.md](../reusable/count-lines-in-a-repo.md)** — read that first; this page is
+only what is true about this repo in particular.
 
 Nothing gates on this number. It is here so that "how big is this thing now" is a command rather
-than an argument, and so the answer is the same one every time somebody asks.
+than an argument.
+
+## What is different here
+
+- **The categories are `CATEGORIES` at the top of the script**, path rules in order, first match
+  wins. `evals/results/` is the case that fixes the order: machine-written JSON and hand-written
+  write-ups of what that JSON meant, side by side.
+- **`.gitignore` is the only exclusion list**, which is the point of taking the file list from git.
+  This repo ignores `api-dist/`, `scratch-bakeoff/`, `output/` and `*.activity.log`, none of which
+  appear in any generic skip list — and the flip side is that a file written but not `git add`ed is
+  not counted. `--untracked` counts it.
+- **`CLAUDE.md` is a symlink to `AGENTS.md`**, which is the symlink that found the cloc
+  de-duplication trap: cloc kept the symlink and dropped the target, so 261 lines were filed under a
+  name that is not a file and the total was simply short. If a second symlink to real content ever
+  appears, this is the failure to expect.
+- **The arithmetic check here is weaker than it looks**, and this is the known hole.
+  [`scripts/count-lines.ts`](../../scripts/count-lines.ts) § `gather` defines `skipped` as every
+  listed file that did not end up in `counted`, so `total.files + skipped.length === files.length`
+  holds by construction: a file that is unreadable, or that vanished between `git ls-files` and
+  `readFileSync`, is silently reclassified as binary and the check still passes. It does catch
+  double-counting. Closing it means testing each uncounted file rather than subtracting —
+  [count-lines-in-a-repo.md](../reusable/count-lines-in-a-repo.md).
+
+**What the 2026-08-27 run turned up**, as dated observations rather than current counts: seven files
+and 400 lines in extensions cloc does not recognise (`.jsonc`, `.gitignore`, `.env.example`,
+`.vercelignore`), 14 binary files with no lines at all, and — the reason generated material is kept
+out of the hand-written headline — an 8,629-line lockfile plus 48 drizzle snapshots.
 
 ## What it says today
 
@@ -32,80 +58,26 @@ config                  17      869    0.6%      445  33.9%     118  build, lint
 — written by hand      646  138,159  100.0%   67,404  32.8%  25,290
 ```
 
-Three of those numbers are worth saying out loud:
+A dated example, not a fact — re-run the command rather than trusting it. Three of those numbers are
+worth saying out loud:
 
 - **53% of `src/` is comments.** That is the house style working, not a lint failure —
   [CLAUDE.md](../../AGENTS.md) asks for the reasoning to sit next to the code, and this is what it
-  costs. Any "lines of code" figure that folds the comments in, or silently drops them, is
-  describing a different repo. Hence the `% cmt` column.
+  costs. Hence the `% cmt` column.
 - **Tests are 43% of the code.** Source and tests are the same order of magnitude, which is the
   shape [testing.md](testing.md) is aiming for.
 - **Two thirds of a line of prose per line of code.** `docs/` is the largest single category in the
   repo, and `docs/plans/` alone is larger than `src/web/`. That is deliberate and it is worth being
   able to see.
 
-## The two decisions
-
-**The file list comes from git, not from a hand-kept exclude list.** The gjdutils original hands
-cloc a directory plus a list of things to skip — `node_modules`, `dist`, `data`, `.vercel` and so
-on. That list is a second copy of `.gitignore`, and a second copy drifts. This repo ignores
-`api-dist/`, `scratch-bakeoff/`, `output/` and `*.activity.log`, none of which appear in any generic
-list, and the day somebody ignores a fifth thing a hard-coded list starts counting it without
-saying anything. `git ls-files` already knows, so it is the input, and `.gitignore` is the only
-place an exclusion is ever written.
-
-The cost is real and worth stating: **a file you have written but not `git add`ed is not counted.**
-`--untracked` counts it. In a tree several agents share, a big number that moved for no reason is
-usually somebody's new directory arriving in the index.
-
-**The breakdown is by what a file is for, not what language it is in.** cloc groups by language,
-which for this repo means one enormous TypeScript row. The interesting question is how much is
-product code, how much is tests, and how much is prose. Categories are path rules in `CATEGORIES`
-at the top of the script; a file belongs to the **first** category that claims it, and the order
-encodes two judgements:
-
-- `docs` is first, so **a `.md` is prose wherever it sits**. `evals/results/` holds machine-written
-  JSON and hand-written write-ups of what that JSON meant, side by side. A rule that claimed the
-  whole directory would file six essays as generated output.
-- `fixtures`, `generated` and `assets` come next, above `tests`. Otherwise
-  `tests/fixtures/structures.blocks.json` — pipeline output, committed so a test has something to run
-  against — counts as a test somebody sat down and wrote.
-
-Those three are listed but kept out of the headline, under `— nobody wrote`. A total that includes
-an 8,629-line lockfile and 48 drizzle snapshots is measuring npm and drizzle-kit, not us.
-
-Anything matching no rule lands in `other`, which is printed with a note rather than dropped. If
-`other` is growing, the rules need one more line.
-
-## The ways it goes quiet
-
-Every one of these was found by running it, and each is now either fixed or reported in the output.
-
-**A symlink made the repo's largest document disappear.** `git ls-files` lists `CLAUDE.md`, which is
-a symlink to `AGENTS.md`. Hand both to cloc and it counts one and drops the other as a duplicate —
-and it dropped `AGENTS.md`, so 261 lines were filed under a name that is not a file. Nothing warned;
-the total was simply 261 short. The script now drops symlinks from the list before cloc sees them, on
-the grounds that a symlink has no lines of its own. If a second symlink to real content ever appears,
-this is the failure to expect.
-
-**cloc silently omits extensions it has never heard of.** `.jsonc`, `.gitignore`, `.env.example`,
-`.vercelignore` — seven files and 400 real lines here — are absent from cloc's output entirely,
-not zeroed. The script counts those itself, without a comment split, and says in the output how many
-and how many lines. A count that quietly depends on which extensions a third-party tool recognises
-is a count that shrinks when you rename a file.
-
-**Fourteen binary files have no lines at all** (PDFs, PNGs, the favicon, a CA certificate). They are
-named in the output rather than folded into a total, because "counted files" and "files in the repo"
-being different numbers should be visible.
-
-**The arithmetic checks itself.** Every listed file must end up either counted or in the binary
-list. If those do not add up the script prints a warning naming itself, because a silently dropped
-category would look exactly like a repo that got smaller —
-[silent-success.md](../reusable/silent-success.md) again.
-
 ## See also
 
+- [count-lines-in-a-repo.md](../reusable/count-lines-in-a-repo.md) — the design and the traps.
 - [testing.md](testing.md) — what the `tests` row is made of, and `evals/`
 - [static-analysis.md](static-analysis.md) — the checks that do gate, and why this one doesn't
 - [linting.md](linting.md), [typechecking.md](typechecking.md) — the other two commands in this
   family; `scripts/check.ts` runs those and deliberately not this one
+
+---
+
+Up: [code-quality-overview.md](code-quality-overview.md)

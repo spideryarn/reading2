@@ -317,6 +317,72 @@ tr.row-active .block-ref { opacity: 0.95; }
    GPT Sol, 2026-08-28. */
 .prose .zoomable > * { margin: 0; }
 
+/* **What a reader is told about a figure that came out of a PDF** —
+   PdfFigureNote.tsx.
+
+   Two things, sometimes both: one muted line when the picture could not be
+   recovered, and a way back to the page of the PDF the figure sits on.
+
+   **Outside `.prose`, and that is the whole reason it needs its own rules
+   here.** It is a sibling of the prose box inside the same cell, exactly like
+   `.notes-head` and `.note-num` further down, because `selection.ts` roots
+   comment offsets at `td.text .prose` — generated copy inside the block would
+   shift every anchor in it, silently. So none of `.prose`'s typography reaches
+   it and all of it is set here.
+
+   **No horizontal padding of its own**: `td.text` already pads by
+   `--text-pad-l` (§ the prose cell), and adding it again here would indent the
+   note past the caption it belongs to.
+
+   Left-aligned rather than following § text's centring, for the reason the
+   notes' apparatus opts out too: this is a label about the block, not part of
+   its measure. */
+td.text .figure-note {
+  margin: 0.25rem 0 0;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--ink-faint);
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  /* It sits below a caption that may be centred with the figure; the note is
+     apparatus and stays where the column starts. */
+  text-align: start;
+}
+/* *View the original*, when there is no picture to look at. `SourceLink` is a
+   `<button>` (see that file for why it cannot be an anchor), so the border,
+   the padding and the cursor have to be written out: the app's reset is scoped
+   to `[data-slot]`, and a bare `<button>` otherwise gets the UA's `2px outset
+   white`. Same reason the ⤢ below states its own. */
+td.text .figure-note-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--highlight);
+  text-decoration: underline;
+  cursor: pointer;
+}
+/* And the quiet version, on a figure that *did* come through: an icon and
+   nothing else, because this sits in the prose and the prose is the point. The
+   accessible name is an `.sr-only` sentence inside the button. */
+td.text .figure-note-icon {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.55;
+}
+td.text .figure-note-icon:hover,
+td.text .figure-note-icon:focus-visible {
+  opacity: 1;
+  color: var(--highlight);
+}
+
 /* The ⤢ itself — see zoomable.ts, and Lightbox.tsx for what it opens.
 
    **Visible at rest, not on hover.** Every instinct says to fade it in under

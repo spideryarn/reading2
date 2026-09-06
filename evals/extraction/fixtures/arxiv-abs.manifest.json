@@ -1,0 +1,44 @@
+{
+  "fixture": "arxiv-abs",
+  "file": "arxiv_abs.html",
+  "note": "A GENUINELY SHORT ARTICLE: a 250-word abstract competing with metadata panels of comparable weight, and the negative control for any 'too short to be an article' rule — including the bot-wall detector stage C is going to want. The byline is deliberately NOT asserted: what stage 2 produces today is '[Submitted on 12 Jun 2017 (v1), last revised 2 Aug 2023 (this version, v7)]', which is a submission history rather than a byline, and pinning it would pin the bug as the answer. EXCLUSION WAS AT ZERO UNTIL 2026-09-05: the one mustNotContain needle ('View PDF HTML (experimental)') is kept by the shipped extraction, so exclusionPrecision read 0.00 and no arm could ever be caught by it on this page — a metric already on its floor cannot fall. Two needles the shipped extraction does exclude were added so the metric has somewhere to fall from; both are arXiv's own furniture and both are in the fixture's bytes. STRUCTURE: the only structural element on this page that is the article is the <blockquote class='abstract'> — declared 'exactly 1' because the source has exactly one and an arm that drags in more has stopped extracting the abstract. The source's seven <h1> are one article title plus six arXivLabs panel headings, and its three <h2> are 'Submission history', 'Access Paper:' and 'BibTeX formatted citation', none of them the article, so no heading floor is honest here. minArticleChars 1100: the abstract itself measures 1,136 characters, so any arm that truncates it fails, and no correct extraction of this page can come in under it. ARTICLE REGION AND THE FLOOR ON IT, MEASURED 2026-09-05: The title and abstract are 1,007 characters against 4,087 for the source body — a quarter of the page. The shipped extraction returns 980; the 27 it misses are the <h1> title and its 'Title:' label, which Readability hoists into `title` by design, so the floor is 940.",
+  "mustContain": [
+    {
+      "text": "The dominant sequence transduction models are based on complex recurrent",
+      "why": "the abstract's opening — the only prose on the page",
+      "negativeControl": "short-article"
+    },
+    {
+      "text": "attention mechanisms, dispensing with recurrence and convolutions entirely",
+      "why": "the abstract's claim, in the middle of it"
+    }
+  ],
+  "mustNotContain": [
+    {
+      "text": "View PDF HTML (experimental)",
+      "why": "a download affordance kept as the article's first block today"
+    },
+    {
+      "text": "Skip to main content",
+      "why": "arXiv's accessibility skip link, the first text in the page's chrome. Excluded by the shipped extraction today, which is the point: without at least one needle the pipeline already gets right, exclusionPrecision sits at 0.00 on this fixture and can never fall"
+    },
+    {
+      "text": "Bibliographic Explorer",
+      "why": "one of the arXivLabs widget panels in the rail below the abstract — six <h1>-headed panels of third-party tooling that are not the paper. Also excluded today, and the second needle keeping the metric off its floor"
+    }
+  ],
+  "structure": {
+    "blockquote": {
+      "exactly": 1
+    }
+  },
+  "maxBlockChars": 4000,
+  "articleRegion": {
+    "within": [
+      "h1.title",
+      "blockquote.abstract"
+    ],
+    "why": "The piece on an abs page is its title and its 250-word abstract, and nothing else on the page is the article: the submission history, the subject line, the citation tools and the six arXivLabs panels are arXiv's furniture. Deliberately conservative — it leaves the author line out rather than claim metadata as prose."
+  },
+  "minArticleChars": 940
+}

@@ -1326,8 +1326,13 @@ describe("sharing one article", { timeout: 60_000 }, () => {
              stays *"the whole public surface"* rather than *"the routes that
              happen to take a slug"*. The set is asserted so a sweep cannot go on
              passing over an inventory that has quietly lost a kind. */
+          /* Three since 2026-09-06, when `asset` landed. `pathOf` fills its
+             hash in with sixty-four zeros, so what this sweep proves about it is
+             that reaching it spends nothing and needs no owner — not that it
+             serves anything, which no sweep can know a hash for.
+             tests/public-asset-route.test.ts is where that is checked. */
           expect(new Set(PUBLIC_ROUTES.map((r) => r.kind))).toEqual(
-            new Set(["slug", "collection"]),
+            new Set(["slug", "collection", "asset"]),
           );
           for (const path of [
             ...PUBLIC_ROUTES.map((route) => pathOf(route, SLUG)),

@@ -16,7 +16,7 @@ the several traps here that simply stop existing there. What the client *is*:
 [web-client.md](web-client.md). Why the feature exists:
 [granularity-zoom.md](granularity-zoom.md). If the extension isn't connected at all —
 `list_connected_browsers` comes back `[]` — that's a different problem and it lives in
-[claude-in-chrome.md](claude-in-chrome.md).
+[claude-in-chrome.md](../reusable/claude-in-chrome.md).
 
 ## Before anything, check the server is actually up
 

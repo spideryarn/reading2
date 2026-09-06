@@ -44,11 +44,12 @@ import type { ServerResponse } from "node:http";
 import { isSlug } from "../ingest.js";
 import {
   PUBLIC_ROUTE_NAMES,
+  type PublicAssetRouteName,
   type PublicCollectionRouteName,
   type PublicSlugRouteName,
 } from "./route-names.js";
 import { pgPublicLibraryReader } from "../store/public-library.js";
-import { pgPublicReader } from "../store/public-reader.js";
+import { type PublicAsset, pgPublicReader } from "../store/public-reader.js";
 
 /**
  * Everything a public handler is allowed to know about the request.
@@ -122,6 +123,48 @@ function send(res: ServerResponse, status: number, body: unknown, method: string
 }
 
 /**
+ * **The same reply, for the one public route whose answer is bytes.**
+ *
+ * Its own function beside `send` rather than a branch inside it, because
+ * everything about it is different: the body is not JSON, the length is the
+ * buffer's rather than a string's, and it carries two headers `send` has no
+ * business setting.
+ *
+ * **`X-Content-Type-Options: nosniff`.** These bytes are a publisher's file or
+ * a picture cut out of a stranger's uploaded PDF, served from our own origin —
+ * the one place a wrong content type becomes script. `sendSource` and
+ * `sendPlate` in src/routes.ts set it for the same reason.
+ *
+ * **No `Cache-Control` here, and that is the decision rather than an
+ * omission.** `serveApi` sets `no-store` on the whole namespace before it
+ * dispatches (src/routes.ts § the public namespace), so this answer carries it
+ * already — and it must, which is the half worth saying out loud: the
+ * authenticated twin sends `private, max-age=31536000, immutable`, and that
+ * would be sound *about the bytes* here too, because the URL contains the hash
+ * of its own contents. It would be unsound about the **entitlement**. Making an
+ * article private again has to take effect on the next request, and a shared
+ * cache holding a public article's picture for a year is the one thing that
+ * would stop it.
+ * docs/plans/260829b-hosting-the-articles-images.md § Two readers, two paths
+ * weighed exactly this and chose the same way.
+ *
+ * The HEAD branch is `send`'s and for `send`'s reason: Node drops
+ * `Content-Length` on a HEAD of its own accord, and an unfurler that HEADs a
+ * URL to decide whether to fetch it learns nothing from a missing length.
+ */
+function sendBytes(res: ServerResponse, asset: PublicAsset, method: string): void {
+  res.statusCode = 200;
+  res.setHeader("Content-Type", asset.contentType);
+  res.setHeader("Content-Length", String(asset.bytes.byteLength));
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  if (method === "HEAD") {
+    res.end();
+    return;
+  }
+  res.end(Buffer.from(asset.bytes));
+}
+
+/**
  * Is this request in the public namespace?
  *
  * **Two comparisons rather than one**, which is the admin check's own lesson
@@ -158,7 +201,10 @@ export function isPublicNamespace(path: string): boolean {
  */
 export type PublicRoute =
   | (PublicSlugRouteName & { read(slug: string): Promise<unknown> })
-  | (PublicCollectionRouteName & { read(): Promise<unknown> });
+  | (PublicCollectionRouteName & { read(): Promise<unknown> })
+  | (PublicAssetRouteName & {
+      read(slug: string, sha256: string, ext: string): Promise<PublicAsset | null>;
+    });
 
 /**
  * What each route reads, by name.
@@ -176,6 +222,21 @@ const SLUG_READS: Record<string, (slug: string) => Promise<unknown>> = {
 
 const COLLECTION_READS: Record<string, () => Promise<unknown>> = {
   library: () => pgPublicLibraryReader.listPublic(),
+};
+
+/**
+ * The third record, split the way the union is — see `SLUG_READS` above.
+ *
+ * **The read takes the hash and the extension and does not trust either.**
+ * `pgPublicReader.loadAsset` looks them up in the article's own manifest and
+ * rebuilds the storage key from what it finds; the caller's strings are never
+ * joined onto anything. GPT Sol, I-5.
+ */
+const ASSET_READS: Record<
+  string,
+  (slug: string, sha256: string, ext: string) => Promise<PublicAsset | null>
+> = {
+  asset: (slug, sha256, ext) => pgPublicReader.loadAsset(slug, sha256, ext),
 };
 
 /**
@@ -214,6 +275,11 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = PUBLIC_ROUTE_NAMES.map((rou
       if (read) return { ...route, read };
       break;
     }
+    case "asset": {
+      const read = ASSET_READS[route.name];
+      if (read) return { ...route, read };
+      break;
+    }
     default: {
       const unreachable: never = route;
       throw new Error(`Unknown public route kind: ${JSON.stringify(unreachable)}`);
@@ -228,9 +294,11 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = PUBLIC_ROUTE_NAMES.map((rou
 
 {
   const named = new Set(PUBLIC_ROUTE_NAMES.map((route) => route.name));
-  const orphans = [...Object.keys(SLUG_READS), ...Object.keys(COLLECTION_READS)].filter(
-    (name) => !named.has(name),
-  );
+  const orphans = [
+    ...Object.keys(SLUG_READS),
+    ...Object.keys(COLLECTION_READS),
+    ...Object.keys(ASSET_READS),
+  ].filter((name) => !named.has(name));
   if (orphans.length) {
     throw new Error(
       `src/public/routes.ts has readers for routes that do not exist: ${orphans.join(", ")}. ` +
@@ -345,6 +413,23 @@ export async function servePublicApi(request: PublicRequest): Promise<void> {
       }
       case "collection": {
         send(res, 200, await route.read(), method);
+        return;
+      }
+      case "asset": {
+        /* The slug is validated first, exactly as on the `slug` arm and for the
+           same reason. The other two captures need no validation of their own —
+           the pattern has already narrowed them to hex and to one of three
+           extensions, and neither is ever joined onto anything: `loadAsset`
+           only ever *compares* them with what the manifest says. */
+        const slug = slugFrom(matched);
+        const found = await route.read(slug, matched[2] ?? "", matched[3] ?? "");
+        /* **`null` is a 404 and is deliberately the same 404 as an article
+           nobody shared.** A visitor who names a real hash of somebody else's
+           private article must not be able to tell it apart from a hash of
+           nothing at all — content addressing puts both in one bucket, and the
+           difference between the two answers is exactly the fact worth hiding. */
+        if (!found) throw httpError(404, "No such image.");
+        sendBytes(res, found, method);
         return;
       }
       default: {

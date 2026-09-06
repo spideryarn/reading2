@@ -56,8 +56,15 @@ export type PublicRead<T> = { kind: "ok"; body: T } | { kind: "not-shared" };
  * in this app authenticates by cookie today — Supabase hands out a bearer token
  * — but a same-origin `fetch` sends cookies by default, so if one ever appeared
  * this call would start carrying it without a line changing here.
+ *
+ * **`signal` is the only thing a caller may add**, and it is spelled as its own
+ * parameter rather than a `RequestInit` on purpose: an init bag would let a
+ * caller pass `credentials`, `headers` or a method, and the two lines above are
+ * the whole point of this function. Added 2026-09-06 for `rehostImages`, which
+ * has to be able to drop a superseded article's figure downloads
+ * (src/web/rehost.ts § the object URLs).
  */
-export async function publicFetch(path: string): Promise<Response> {
+export async function publicFetch(path: string, signal?: AbortSignal): Promise<Response> {
   /**
    * **Normalised before it is checked**, because `startsWith` tests a string
    * and the browser sends a *resolved* path.
@@ -90,7 +97,10 @@ export async function publicFetch(path: string): Promise<Response> {
   if (url.origin !== SAME_ORIGIN || !url.pathname.startsWith("/api/public/")) {
     throw new Error(`publicFetch is for the public namespace only, and this is not: ${path}`);
   }
-  return fetch(path, { credentials: "omit" });
+  /* Spread rather than `signal` straight in: `exactOptionalPropertyTypes` is on
+     (docs/project/typechecking.md), so an explicit `signal: undefined` is not
+     the same thing as no signal at all. */
+  return fetch(path, { credentials: "omit", ...(signal ? { signal } : {}) });
 }
 
 /**

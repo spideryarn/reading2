@@ -569,6 +569,12 @@
 .tip-soon-head {
   font-weight: 600;
   color: var(--ink);
+  /* Every other head here is a phrase with spaces in it and never needs this.
+     The masthead's origin card puts a *hostname* in the head (Masthead.tsx §
+     `OriginLine`), and a hostname is one unbroken token that can legally run to
+     253 characters — with no break opportunity it would push straight through
+     the `max-width` above. GPT Sol, 2026-09-06. */
+  overflow-wrap: anywhere;
 }
 .tip-soon-flag {
   margin-left: 0.4rem;
