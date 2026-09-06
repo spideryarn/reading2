@@ -1614,6 +1614,16 @@ function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: str
          function throw the answer away. The rects are the expensive half of
          this measurement (performance.md). GPT Sol, 2026-08-30. */
       const jumpInFlight = glideTarget() !== null;
+      /* **One `stickyOffset()` per frame, not two.** `line` and `atTop` both
+         wanted it and each called it, and each call is a rect on `.controls`
+         plus a `getComputedStyle` in safe-area.ts — four layout reads a frame
+         where two do, on every article whatever its length. Measured at 2
+         calls and 2 reads per frame before this hoist; see
+         docs/plans/260906d-share-measured-geometry-after-profiling-scroll-and-layout-reads.md
+         § Stage 2. The value cannot change between the two uses: nothing here
+         writes to the DOM, and a bar that moved mid-frame would have made the
+         old pair disagree with each other, which was the worse bug. */
+      const sticky = stickyOffset();
       const next = positionToWrite({
         sections,
         rowOf,
@@ -1622,9 +1632,9 @@ function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: str
           : rows.map((el) =>
               el ? el.getBoundingClientRect().top : Number.POSITIVE_INFINITY,
             ),
-        line: stickyOffset() + 1,
+        line: sticky + 1,
         jumpInFlight,
-        atTop: window.scrollY <= stickyOffset(),
+        atTop: window.scrollY <= sticky,
         held: synced.current,
       });
       /* Before the early return, so a frame that decides to write nothing still

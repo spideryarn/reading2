@@ -550,10 +550,13 @@ describe("the gist column's per-frame sampler", () => {
     });
   }
 
-  it("reads three fixed properties and one rect per resolved section", async () => {
-    /* Three fixed reads, plus one rect per section row. Named here so the
-       control below is a subtraction rather than a second guess. */
-    const FIXED = 3;
+  it("reads two fixed properties and one rect per resolved section", async () => {
+    /* Two fixed reads since Stage 2 hoisted the duplicate `innerHeight` — one
+       `innerHeight` and the `svh` probe — plus one rect per section row. Named
+       here so the control below is a subtraction rather than a second guess,
+       and asserted exactly so that adding a read without updating
+       `readsPerMeasure` goes red rather than drifting quietly. */
+    const FIXED = 2;
 
     startGeometryCost();
     await run(sectionsOf(ROWS));
@@ -562,7 +565,7 @@ describe("the gist column's per-frame sampler", () => {
     expect(all.columnContext.calls, "the hook never measured").toBeGreaterThan(0);
     expect(
       all.columnContext.reads,
-      "the sampler is not reading three fixed properties and one rect per section",
+      "the sampler is not reading two fixed properties and one rect per section",
     ).toBe(all.columnContext.calls * (FIXED + ROWS));
     expect(all.columnContext.writes, "a reads-only sampler wrote something").toBe(0);
 
@@ -603,7 +606,7 @@ describe("the gist column's per-frame sampler", () => {
     expect(
       cost.columnContext.reads,
       "two unresolvable sections were charged a rect read each",
-    ).toBe(cost.columnContext.calls * (3 + ROWS));
+    ).toBe(cost.columnContext.calls * (2 + ROWS));
   });
 });
 

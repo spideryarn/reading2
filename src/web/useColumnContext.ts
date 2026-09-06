@@ -138,13 +138,17 @@ export function useColumnContext({
      * whose tree never resolved — the exact inversion
      * docs/reusable/silent-success.md is about.
      *
-     * Three fixed reads: `innerHeight` twice (the focus line and `viewportH` —
-     * the duplication Stage 2 hoists) and the `svh` probe's `clientHeight`.
-     * Then one rect per resolved row, one per gist header found, and one for
-     * the pinned column if it is there.
+     * **Two** fixed reads since Stage 2 hoisted the duplicate: one
+     * `innerHeight`, serving both the focus line and `viewportH`, and the `svh`
+     * probe's `clientHeight`. Then one rect per resolved row, one per gist
+     * header found, and one for the pinned column if it is there.
+     *
+     * It was three. If you add a read, change this number — it is a
+     * hand-maintained constant and a wrong one is invisible, which is why
+     * tests/geometry-cost.test.ts asserts it exactly rather than `> 0`.
      */
     const readsPerMeasure =
-      3 +
+      2 +
       rows.reduce((n, el) => (el ? n + 1 : n), 0) +
       [...heads.values()].reduce((n, th) => (th ? n + 1 : n), 0) +
       (pin ? 1 : 0);
@@ -152,7 +156,11 @@ export function useColumnContext({
     const measure = () => {
       frame = 0;
       const t0 = parentGeometryClock();
-      const focusLine = window.innerHeight * FOCUS_LINE;
+      /* **One `innerHeight` per frame, not two.** The focus line and
+         `viewportH` both wanted it and each read it. Same hoist, same reason,
+         same measurement as App.tsx § useReadingPosition's `sticky`. */
+      const viewportH = window.innerHeight;
+      const focusLine = viewportH * FOCUS_LINE;
       const tops = rows.map((el) =>
         el ? el.getBoundingClientRect().top : Number.POSITIVE_INFINITY,
       );
@@ -164,7 +172,6 @@ export function useColumnContext({
         const r = th.getBoundingClientRect();
         rects.set(d, { left: r.left, width: r.width, top: r.bottom });
       }
-      const viewportH = window.innerHeight;
       const stableH = probe.clientHeight || viewportH;
       const clipLeft = pin?.getBoundingClientRect().right ?? 0;
 
