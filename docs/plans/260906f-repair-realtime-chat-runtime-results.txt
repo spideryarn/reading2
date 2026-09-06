@@ -1,0 +1,2401 @@
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:11245) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > times out a ticket request that never settles, before opening any device
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > times out a ticket request that never settles, before opening any device
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > times out a ticket request that never settles, before opening any device
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > times out an unanswered microphone permission and stops a track arriving afterwards
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > times out an unanswered microphone permission and stops a track arriving afterwards
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > times out an unanswered microphone permission and stops a track arriving afterwards
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > fails and releases capture when the data channel never opens
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > fails and releases capture when the data channel never opens
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > fails and releases capture when the data channel never opens
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > does not let a cancelled session's seed deadline close a later session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > does not let a cancelled session's seed deadline close a later session
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > does not let a cancelled session's seed deadline close a later session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > does not let a cancelled session's seed deadline close a later session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > does not let a cancelled session's seed deadline close a later session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > does not let a cancelled session's seed deadline close a later session
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > does not let a cancelled session's seed deadline close a later session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > does not let a cancelled session's seed deadline close a later session
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > does not let a cancelled session's seed deadline close a later session
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > fails loudly rather than sitting there when the acknowledgements never come
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > fails loudly rather than sitting there when the acknowledgements never come
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > fails loudly rather than sitting there when the acknowledgements never come
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > fails loudly rather than sitting there when the acknowledgements never come
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > opens the same remembered microphone as dictation and names the acquired device
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > opens the same remembered microphone as dictation and names the acquired device
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > opens the same remembered microphone as dictation and names the acquired device
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > falls back visibly when the remembered microphone was unplugged
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > falls back visibly when the remembered microphone was unplugged
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > falls back visibly when the remembered microphone was unplugged
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > falls back visibly when the remembered microphone was unplugged
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > falls back visibly when the remembered microphone was unplugged
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > falls back visibly when the remembered microphone was unplugged
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > shows blocked playback and retries it from an explicit enable-audio action
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > shows blocked playback and retries it from an explicit enable-audio action
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > shows blocked playback and retries it from an explicit enable-audio action
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > returns every tool output once and continues only after the response and all tools finish
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > returns every tool output once and continues only after the response and all tools finish
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > returns every tool output once and continues only after the response and all tools finish
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > returns every tool output once and continues only after the response and all tools finish
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores late tool completions and playback failures belonging to a stopped session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores late tool completions and playback failures belonging to a stopped session
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores late tool completions and playback failures belonging to a stopped session
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores late tool completions and playback failures belonging to a stopped session
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores late tool completions and playback failures belonging to a stopped session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores late tool completions and playback failures belonging to a stopped session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores late tool completions and playback failures belonging to a stopped session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores late tool completions and playback failures belonging to a stopped session
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores late tool completions and playback failures belonging to a stopped session
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/live-session-flow.test.tsx (38 tests | 10 failed) 7936ms
+     × times out a ticket request that never settles, before opening any device 16ms
+     × times out an unanswered microphone permission and stops a track arriving afterwards 3ms
+     × fails and releases capture when the data channel never opens 2ms
+     × does not let a cancelled session's seed deadline close a later session 2ms
+     × fails loudly rather than sitting there when the acknowledgements never come 1ms
+     × opens the same remembered microphone as dictation and names the acquired device 5ms
+     × falls back visibly when the remembered microphone was unplugged 3ms
+     × shows blocked playback and retries it from an explicit enable-audio action 2ms
+     × returns every tool output once and continues only after the response and all tools finish 3ms
+     × ignores late tool completions and playback failures belonging to a stopped session 5ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > the seeding barrier > times out a ticket request that never settles, before opening any device
+AssertionError: expected 'connecting' to be 'failed' // Object.is equality
+
+Expected: "failed"
+Received: "connecting"
+
+ ❯ tests/live-session-flow.test.tsx:359:29
+    357|       act(() => h.get().start({ threadId: THREAD }));
+    358|       await act(async () => { await vi.advanceTimersByTimeAsync(30_000…
+    359|       expect(h.get().phase).toBe("failed");
+       |                             ^
+    360|       expect(mic).toBeNull();
+    361|     } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > the seeding barrier > times out an unanswered microphone permission and stops a track arriving afterwards
+AssertionError: expected 'connecting' to be 'failed' // Object.is equality
+
+Expected: "failed"
+Received: "connecting"
+
+ ❯ tests/live-session-flow.test.tsx:377:29
+    375|       act(() => h.get().start({ threadId: THREAD }));
+    376|       await act(async () => { await vi.advanceTimersByTimeAsync(30_000…
+    377|       expect(h.get().phase).toBe("failed");
+       |                             ^
+    378|       await act(async () => { grant(); });
+    379|       expect(mic?.stopped).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > the seeding barrier > fails and releases capture when the data channel never opens
+AssertionError: expected 'connecting' to be 'failed' // Object.is equality
+
+Expected: "failed"
+Received: "connecting"
+
+ ❯ tests/live-session-flow.test.tsx:395:29
+    393|       expect(mic?.stopped).toBe(false);
+    394|       await act(async () => { await vi.advanceTimersByTimeAsync(30_000…
+    395|       expect(h.get().phase).toBe("failed");
+       |                             ^
+    396|       expect(h.get().error).toMatch(/starting|connect/i);
+    397|       expect(mic?.stopped).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > the seeding barrier > does not let a cancelled session's seed deadline close a later session
+AssertionError: an old timer cancelled the new connection: expected 'closing' to be 'connecting' // Object.is equality
+
+Expected: "connecting"
+Received: "closing"
+
+ ❯ tests/live-session-flow.test.tsx:415:74
+    413|       await act(async () => { await vi.advanceTimersByTimeAsync(0); ch…
+    414|       await act(async () => { await vi.advanceTimersByTimeAsync(6_000)…
+    415|       expect(h.get().phase, "an old timer cancelled the new connection…
+       |                                                                          ^
+    416|       await act(async () => { channel?.deliver(seedAck("s2", "user"));…
+    417|       expect(h.get().phase).toBe("live");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > the seeding barrier > fails loudly rather than sitting there when the acknowledgements never come
+AssertionError: the retry button would stay disabled in closing: expected 'closing' to be 'failed' // Object.is equality
+
+Expected: "failed"
+Received: "closing"
+
+ ❯ tests/live-session-flow.test.tsx:532:80
+    530|       expect(h.get().error).toMatch(/did not finish starting/);
+    531|       expect(mic?.enabled, "it started listening against an unseeded s…
+    532|       expect(h.get().phase, "the retry button would stay disabled in c…
+       |                                                                                ^
+    533|     } finally {
+    534|       vi.useRealTimers();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > live audio and tool recovery > opens the same remembered microphone as dictation and names the acquired device
+AssertionError: expected "getUserMedia" to be called with arguments: [ { audio: { deviceId: { …(1) } } } ]
+
+Received:
+
+  1st getUserMedia call:
+
+  [
+    {
+-     "audio": {
+-       "deviceId": {
+-         "exact": "physical-mic",
+-       },
+-     },
++     "audio": true,
+    },
+  ]
+
+
+Number of calls: 1
+
+ ❯ tests/live-session-flow.test.tsx:1097:21
+    1095|     const capture = vi.spyOn(navigator.mediaDevices, "getUserMedia");
+    1096|     const h = await connected({ wiring: wiringFor(ticketWith()) });
+    1097|     expect(capture).toHaveBeenCalledWith({ audio: { deviceId: { exact:…
+       |                     ^
+    1098|     expect(h.get().deviceLabel).toBe("Built-in Microphone");
+    1099|     h.unmount();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > live audio and tool recovery > falls back visibly when the remembered microphone was unplugged
+AssertionError: expected "getUserMedia" to be called 2 times, but got 1 times
+ ❯ tests/live-session-flow.test.tsx:1109:21
+    1107|       .mockRejectedValueOnce(new DOMException("Device absent", "Overco…
+    1108|     const h = await connected({ wiring: wiringFor(ticketWith()) });
+    1109|     expect(capture).toHaveBeenCalledTimes(2);
+       |                     ^
+    1110|     expect(h.get().phase).toBe("live");
+    1111|     expect(h.get().notice).toMatch(/microphone|device/i);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > live audio and tool recovery > shows blocked playback and retries it from an explicit enable-audio action
+AssertionError: expected undefined to be true // Object.is equality
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ tests/live-session-flow.test.tsx:1121:37
+    1119|       (pcs.at(-1) as { ontrack: (e: unknown) => void }).ontrack({ stre…
+    1120|     });
+    1121|     expect(h.get().playbackBlocked).toBe(true);
+       |                                     ^
+    1122|     expect(h.get().phase).toBe("live");
+    1123|     playbackRefused = false;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > live audio and tool recovery > returns every tool output once and continues only after the response and all tools finish
+AssertionError: continued while the original response was still running: expected [ { type: 'response.create' } ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ tests/live-session-flow.test.tsx:1144:121
+    1142|       for (const call of calls) channel?.deliver({ ...call, type: "res…
+    1143|     });
+    1144|     expect(sent.filter((e) => e.type === "response.create"), "continue…
+       |                                                                                                                         ^
+    1145|     expect(h.get().thinking).toBe(true);
+    1146|     expect(h.get().pendingTools.map((t) => t.callId)).toEqual(["c2"]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > live audio and tool recovery > ignores late tool completions and playback failures belonging to a stopped session
+AssertionError: expected undefined to be false // Object.is equality
+
+- Expected:
+false
+
++ Received:
+undefined
+
+ ❯ tests/live-session-flow.test.tsx:1182:37
+    1180|     });
+    1181|     expect(h.get().phase).toBe("live");
+    1182|     expect(h.get().playbackBlocked).toBe(false);
+       |                                     ^
+    1183|     expect(h.get().pendingTools).toEqual([]);
+    1184|     expect(sent).toHaveLength(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  10 failed | 28 passed (38)
+   Start at  12:17:46
+   Duration  8.59s (transform 145ms, setup 43ms, import 236ms, tests 7.94s, environment 289ms)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:12394) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > shows provisional input transcription and replaces it with the final wording
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > shows provisional input transcription and replaces it with the final wording
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > shows provisional input transcription and replaces it with the final wording
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > shows provisional input transcription and replaces it with the final wording
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/live-session-flow.test.tsx (39 tests | 1 failed | 38 skipped) 17ms
+     × shows provisional input transcription and replaces it with the final wording 16ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > live audio and tool recovery > shows provisional input transcription and replaces it with the final wording
+AssertionError: expected undefined to match object { text: 'The draft', done: false }
+
+- Expected:
+{
+  "done": false,
+  "text": "The draft",
+}
+
++ Received:
+undefined
+
+ ❯ tests/live-session-flow.test.tsx:1097:65
+    1095|       channel?.deliver({ type: "conversation.item.input_audio_transcri…
+    1096|     });
+    1097|     expect(h.get().lines.find((line) => line.id === "heard-1")).toMatc…
+       |                                                                 ^
+    1098|     await act(async () => {
+    1099|       channel?.deliver({ type: "conversation.item.input_audio_transcri…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 38 skipped (39)
+   Start at  12:19:20
+   Duration  724ms (transform 161ms, setup 45ms, import 272ms, tests 17ms, environment 302ms)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:12745) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > surfaces a failed provider response and releases the microphone for typing or dictation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > surfaces a failed provider response and releases the microphone for typing or dictation
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > surfaces a failed provider response and releases the microphone for typing or dictation
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > surfaces a failed provider response and releases the microphone for typing or dictation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+[live-meter] a paid event arrived without the numbers needed to price it; this session's cost is understated
+
+ ❯ |unit| tests/live-session-flow.test.tsx (40 tests | 1 failed | 39 skipped) 17ms
+     × surfaces a failed provider response and releases the microphone for typing or dictation 16ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > live audio and tool recovery > surfaces a failed provider response and releases the microphone for typing or dictation
+TypeError: .toMatch() expects to receive a string, but got object
+ ❯ tests/live-session-flow.test.tsx:1100:27
+    1098|     });
+    1099|     await settle();
+    1100|     expect(h.get().error).toMatch(/temporarily unavailable/);
+       |                           ^
+    1101|     expect(h.get().phase).toBe("failed");
+    1102|     expect(mic?.stopped).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 39 skipped (40)
+   Start at  12:20:17
+   Duration  691ms (transform 155ms, setup 46ms, import 253ms, tests 17ms, environment 288ms)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:13503) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > returns a failure output when a remote tool never finishes
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > returns a failure output when a remote tool never finishes
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > returns a failure output when a remote tool never finishes
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > returns a failure output when a remote tool never finishes
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+[live-meter] a paid event arrived without the numbers needed to price it; this session's cost is understated
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > returns a failure output when a remote tool never finishes
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/live-session-flow.test.tsx (41 tests | 1 failed | 40 skipped) 17ms
+     × returns a failure output when a remote tool never finishes 17ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > live audio and tool recovery > returns a failure output when a remote tool never finishes
+TypeError: .toMatch() expects to receive a string, but got undefined
+ ❯ tests/live-session-flow.test.tsx:1200:73
+    1198|       });
+    1199|       const output = sent.find((e) => (e.item as { type?: string } | u…
+    1200|       expect((output?.item as { output?: string } | undefined)?.output…
+       |                                                                         ^
+    1201|       expect(sent.filter((e) => e.type === "response.create")).toHaveL…
+    1202|       expect(h.get().pendingTools).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 40 skipped (41)
+   Start at  12:21:45
+   Duration  690ms (transform 150ms, setup 43ms, import 248ms, tests 17ms, environment 296ms)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:17731) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > hands live lines to provisional chat rows during a deferred append and restores failed words
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > hands live lines to provisional chat rows during a deferred append and restores failed words
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > hands live lines to provisional chat rows during a deferred append and restores failed words
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > hands live lines to provisional chat rows during a deferred append and restores failed words
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > hands live lines to provisional chat rows during a deferred append and restores failed words
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > hands live lines to provisional chat rows during a deferred append and restores failed words
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > hands live lines to provisional chat rows during a deferred append and restores failed words
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > hands live lines to provisional chat rows during a deferred append and restores failed words
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > hands live lines to provisional chat rows during a deferred append and restores failed words
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > hands live lines to provisional chat rows during a deferred append and restores failed words
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/live-session-flow.test.tsx (42 tests | 1 failed | 41 skipped) 22ms
+     × hands live lines to provisional chat rows during a deferred append and restores failed words 21ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > live audio and tool recovery > hands live lines to provisional chat rows during a deferred append and restores failed words
+AssertionError: the completed exchange appeared beside its provisional chat rows: expected [ { id: 'handoff-u-a', …(3) }, …(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "done": true,
++     "id": "handoff-u-a",
++     "role": "companion",
++     "text": "Answer survives",
++   },
++   {
++     "done": true,
++     "id": "handoff-u",
++     "role": "reader",
++     "text": "Question survives",
++   },
++ ]
+
+ ❯ tests/live-session-flow.test.tsx:1101:95
+    1099|     await speakTurn("handoff-u", "handoff-r", "Question survives", "An…
+    1100|     expect(provisional).toMatchObject({ question: "Question survives",…
+    1101|     expect(h.get().lines, "the completed exchange appeared beside its …
+       |                                                                                               ^
+    1102|     await act(async () => { finishAppend({ ok: false, conflict: false,…
+    1103|     expect(h.get().lines.map((line) => line.text)).toEqual(expect.arra…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 skipped (42)
+   Start at  12:28:06
+   Duration  743ms (transform 174ms, setup 42ms, import 290ms, tests 22ms, environment 302ms)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:21199) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21198) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  4 passed (4)
+      Tests  87 passed (87)
+   Start at  12:30:17
+   Duration  8.88s (transform 405ms, setup 163ms, import 626ms, tests 8.07s, environment 1.31s)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:21820) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > releases a connection that stays disconnected instead of reporting live forever
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > releases a connection that stays disconnected instead of reporting live forever
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > releases a connection that stays disconnected instead of reporting live forever
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > releases a connection that stays disconnected instead of reporting live forever
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > releases a connection that stays disconnected instead of reporting live forever
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > releases a connection that stays disconnected instead of reporting live forever
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/live-session-flow.test.tsx (44 tests | 1 failed | 43 skipped) 21ms
+     × releases a connection that stays disconnected instead of reporting live forever 20ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > live audio and tool recovery > releases a connection that stays disconnected instead of reporting live forever
+AssertionError: expected 'live' to be 'failed' // Object.is equality
+
+Expected: "failed"
+Received: "live"
+
+ ❯ tests/live-session-flow.test.tsx:1104:29
+    1102|         await vi.advanceTimersByTimeAsync(12_000);
+    1103|       });
+    1104|       expect(h.get().phase).toBe("failed");
+       |                             ^
+    1105|       expect(h.get().error).toMatch(/connection/i);
+    1106|       expect(mic?.stopped).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 43 skipped (44)
+   Start at  12:31:02
+   Duration  699ms (transform 163ms, setup 41ms, import 269ms, tests 21ms, environment 284ms)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:21932) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21931) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  4 passed (4)
+      Tests  89 passed (89)
+   Start at  12:31:36
+   Duration  9.14s (transform 516ms, setup 157ms, import 948ms, tests 8.07s, environment 1.61s)
+
+
+TYPECHECK: npm run typecheck was blocked by sandbox tsx IPC EPERM. Same script via node --import tsx scripts/typecheck.ts exited 0:
+✓ src/web/tsconfig.json  (301 files)
+✓ tests/tsconfig.json  (1341 files)
+✓ tsconfig.json  (406 files)
+✓ all 1413 source files are covered by some project
+
+TOUCHED RUNTIME LINT (exit 0):
+src/web/live/useLiveConversation.ts:539:55 lint/complexity/noExcessiveCognitiveComplexity ━━━━━━━━━━
+
+  i Excessive complexity of 37 detected (max: 25).
+  
+    537 │     if (!speak) return;
+    538 │     for (const exchange of exchanges) {
+  > 539 │       writing.current = writing.current.then(async () => {
+        │                                                       ^^^
+    540 │         /* **Checked here, at the top of every link, and not only once when the
+    541 │            queue was built.** `harvest` can return two completed exchanges at
+  
+  i Please refactor this function to reduce its complexity score from 37 to the max allowed complexity 25.
+  
+
+src/web/live/useLiveConversation.ts:757:33 lint/complexity/noExcessiveCognitiveComplexity ━━━━━━━━━━
+
+  i Excessive complexity of 105 detected (max: 25).
+  
+    756 │   const onEvent = useCallback(
+  > 757 │     (raw: MessageEvent<string>) => {
+        │                                 ^^^
+    758 │       let e: Record<string, unknown>;
+    759 │       try {
+  
+  i Please refactor this function to reduce its complexity score from 105 to the max allowed complexity 25.
+  
+
+src/web/live/useLiveConversation.ts:1011:30 lint/complexity/noExcessiveCognitiveComplexity ━━━━━━━━━━
+
+  i Excessive complexity of 31 detected (max: 25).
+  
+    1009 │     if (oldContext && oldContext.state !== "closed") void oldContext.close?.().catch(() => {});
+    1010 │ 
+  > 1011 │     const finish = (async () => {
+         │                              ^^^
+    1012 │       /* **Zero: let a sentence in progress finish, before the device goes.**
+    1013 │          Muting the track stops audio going up immediately — which is what the
+  
+  i Please refactor this function to reduce its complexity score from 31 to the max allowed complexity 25.
+  
+
+src/web/live/useLiveConversation.ts:1318:22 lint/complexity/noExcessiveCognitiveComplexity ━━━━━━━━━━
+
+  i Excessive complexity of 48 detected (max: 25).
+  
+    1316 │       const stale = () => mine !== epoch.current;
+    1317 │ 
+  > 1318 │       void (async () => {
+         │                      ^^^
+    1319 │         try {
+    1320 │           /* One: our server mints a token. It is the only thing in this whole
+  
+  i Please refactor this function to reduce its complexity score from 48 to the max allowed complexity 25.
+  
+
+Checked 4 files in 1793ms. No fixes applied.
+Found 4 infos.
+
+DIFF WHITESPACE: git diff --check exited 0.
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:30501) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30500) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  4 passed (4)
+      Tests  89 passed (89)
+   Start at  12:34:19
+   Duration  8.90s (transform 475ms, setup 209ms, import 626ms, tests 8.04s, environment 1.41s)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:31249) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > meters and settles a failed response before exposing the failure
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > meters and settles a failed response before exposing the failure
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > meters and settles a failed response before exposing the failure
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > meters and settles a failed response before exposing the failure
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > meters and settles a failed response before exposing the failure
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > meters and settles a failed response before exposing the failure
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > meters and settles a failed response before exposing the failure
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > uses the injected text item's provider id for its one visible reader line
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > uses the injected text item's provider id for its one visible reader line
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > uses the injected text item's provider id for its one visible reader line
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > uses the injected text item's provider id for its one visible reader line
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > uses the injected text item's provider id for its one visible reader line
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > uses the injected text item's provider id for its one visible reader line
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/live-session-flow.test.tsx (47 tests | 2 failed | 45 skipped) 27ms
+     × meters and settles a failed response before exposing the failure 21ms
+     × uses the injected text item's provider id for its one visible reader line 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > live audio and tool recovery > meters and settles a failed response before exposing the failure
+AssertionError: expected [] to match object [ { …(4) } ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     "inputTokens": 132,
+-     "outputTokens": 121,
+-     "providerEventId": "failed-r",
+-     "status": "failed",
+-   },
+- ]
++ []
+
+ ❯ tests/live-session-flow.test.tsx:1113:103
+    1111|     });
+    1112|     await settle();
+    1113|     expect(metered.filter((event) => event.report?.kind === "response"…
+       |                                                                                                       ^
+    1114|       { providerEventId: "failed-r", status: "failed", inputTokens: 13…
+    1115|     ]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > live audio and tool recovery > uses the injected text item's provider id for its one visible reader line
+AssertionError: expected undefined to be 'typed-1788687381444' // Object.is equality
+
+- Expected:
+"typed-1788687381444"
+
++ Received:
+undefined
+
+ ❯ tests/live-session-flow.test.tsx:1126:21
+    1124|     act(() => h.get().say("A typed probe"));
+    1125|     const item = sent.find((event) => event.type === "conversation.ite…
+    1126|     expect(item.id).toBe(h.get().lines[0]?.id);
+       |                     ^
+    1127|     await act(async () => { channel?.deliver({ type: "conversation.ite…
+    1128|     expect(h.get().lines).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 45 skipped (47)
+   Start at  12:36:20
+   Duration  731ms (transform 170ms, setup 44ms, import 271ms, tests 27ms, environment 304ms)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:31500) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31499) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  4 passed (4)
+      Tests  91 passed (91)
+   Start at  12:36:49
+   Duration  8.94s (transform 381ms, setup 152ms, import 597ms, tests 8.05s, environment 1.50s)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:40511) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores a duplicate start while an existing session still owns the device
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores a duplicate start while an existing session still owns the device
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores a duplicate start while an existing session still owns the device
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores a duplicate start while an existing session still owns the device
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores a duplicate start while an existing session still owns the device
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores a duplicate start while an existing session still owns the device
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores a duplicate start while an existing session still owns the device
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores a duplicate start while an existing session still owns the device
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores a duplicate start while an existing session still owns the device
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > ignores a duplicate start while an existing session still owns the device
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/live-session-flow.test.tsx (48 tests | 1 failed | 47 skipped) 37ms
+     × ignores a duplicate start while an existing session still owns the device 35ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > live audio and tool recovery > ignores a duplicate start while an existing session still owns the device
+AssertionError: expected [ <Anonymous Class>{ …(2) }, …(1) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ tests/live-session-flow.test.tsx:1103:17
+    1101|     act(() => h.get().start({ threadId: THREAD }));
+    1102|     await settle();
+    1103|     expect(pcs).toHaveLength(before);
+       |                 ^
+    1104|     expect(h.get().phase).toBe("live");
+    1105|     expect(mic?.stopped).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 47 skipped (48)
+   Start at  12:37:30
+   Duration  2.61s (transform 547ms, setup 131ms, import 949ms, tests 37ms, environment 1.31s)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:41161) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:41164) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  4 passed (4)
+      Tests  92 passed (92)
+   Start at  12:37:34
+   Duration  11.43s (transform 1.53s, setup 245ms, import 2.42s, tests 8.94s, environment 3.50s)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:73444) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > releases startup audio and its deadline on unmount while the ticket is pending
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > releases startup audio and its deadline on unmount while the ticket is pending
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > releases startup audio and its deadline on unmount while the ticket is pending
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > releases startup audio and its deadline on pagehide while the ticket is pending
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > releases startup audio and its deadline on pagehide while the ticket is pending
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the seeding barrier > releases startup audio and its deadline on pagehide while the ticket is pending
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/live-session-flow.test.tsx (50 tests | 2 failed | 48 skipped) 98ms
+     × releases startup audio and its deadline on unmount while the ticket is pending 87ms
+     × releases startup audio and its deadline on pagehide while the ticket is pending 9ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > the seeding barrier > releases startup audio and its deadline on unmount while the ticket is pending
+ FAIL  |unit| tests/live-session-flow.test.tsx > the seeding barrier > releases startup audio and its deadline on pagehide while the ticket is pending
+AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times
+ ❯ tests/live-session-flow.test.tsx:375:21
+    373|       else act(() => window.dispatchEvent(new Event("pagehide")));
+    374|       await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    375|       expect(close).toHaveBeenCalledTimes(1);
+       |                     ^
+    376|       expect(ticketSignal?.aborted).toBe(true);
+    377|       expect(vi.getTimerCount()).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 48 skipped (50)
+   Start at  12:38:48
+   Duration  4.71s (transform 1.03s, setup 196ms, import 1.72s, tests 98ms, environment 2.36s)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:74905) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:74902) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  4 passed (4)
+      Tests  94 passed (94)
+   Start at  12:38:57
+   Duration  14.58s (transform 1.63s, setup 586ms, import 3.32s, tests 9.02s, environment 10.63s)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:16869) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/live-session-flow.test.tsx (51 tests | 1 failed | 50 skipped) 57ms
+     × retains unsaved words and their warning when retrying the same conversation 56ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > live audio and tool recovery > retains unsaved words and their warning when retrying the same conversation
+AssertionError: expected [] to deeply equal ArrayContaining{…}
+
+- Expected
++ Received
+
+- ArrayContaining [
+-   "Keep my question",
+-   "Keep the answer",
+- ]
++ []
+
+ ❯ tests/live-session-flow.test.tsx:1133:52
+    1131|     await act(async () => { channel?.open(); });
+    1132|     expect(h.get().phase).toBe("live");
+    1133|     expect(h.get().lines.map((line) => line.text)).toEqual(expect.arra…
+       |                                                    ^
+    1134|     expect(h.get().hasUnsavedLines).toBe(true);
+    1135|     expect(h.get().error).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 50 skipped (51)
+   Start at  12:41:10
+   Duration  3.89s (transform 873ms, setup 88ms, import 1.52s, tests 57ms, environment 1.99s)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:19840) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19839) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/live-session-flow.test.tsx (51 tests | 1 failed) 8634ms
+     × names the cap when a cap is what ended it 91ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > names the cap when a cap is what ended it
+AssertionError: expected { kind: 'close', …(2) } to match object { kind: 'close', reason: 'idle-cap' }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "kind": "close",
+-   "reason": "idle-cap",
++   "reason": "unmounted",
+  }
+
+ ❯ tests/live-session-flow.test.tsx:1549:30
+    1547|       });
+    1548|       expect(h.get().error).toMatch(/quiet/);
+    1549|       expect(metered.at(-1)).toMatchObject({ kind: "close", reason: "i…
+       |                              ^
+    1550|     } finally {
+    1551|       vi.useRealTimers();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 94 passed (95)
+   Start at  12:41:17
+   Duration  11.89s (transform 946ms, setup 439ms, import 2.11s, tests 8.82s, environment 5.07s)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:50263) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:50261) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  4 passed (4)
+      Tests  95 passed (95)
+   Start at  12:42:44
+   Duration  17.07s (transform 2.32s, setup 1.18s, import 5.10s, tests 9.39s, environment 13.26s)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:19554) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/live-session-flow.test.tsx (52 tests | 1 failed | 51 skipped) 40ms
+     × ignores an old channel's delayed close when accounting for the resumed session 38ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > the meter, which is the only place a live conversation's cost exists > ignores an old channel's delayed close when accounting for the resumed session
+AssertionError: expected [ 'reader', 'channel-closed' ] to deeply equal [ 'reader', 'reader' ]
+
+- Expected
++ Received
+
+  [
+    "reader",
+-   "reader",
++   "channel-closed",
+  ]
+
+ ❯ tests/live-session-flow.test.tsx:1441:96
+    1439|     expect(h.get().phase).toBe("live");
+    1440|     await act(async () => { await h.get().stop(); });
+    1441|     expect(metered.filter((report) => report.kind === "close").map((re…
+       |                                                                                                ^
+    1442|     h.unmount();
+    1443|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 51 skipped (52)
+   Start at  12:46:02
+   Duration  3.32s (transform 753ms, setup 101ms, import 1.05s, tests 40ms, environment 1.75s)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:25493) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25494) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  4 passed (4)
+      Tests  96 passed (96)
+   Start at  12:46:08
+   Duration  11.39s (transform 1.08s, setup 328ms, import 1.97s, tests 8.69s, environment 4.52s)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+ ❯ |unit| tests/chat-spoken-operation.test.ts (18 tests | 1 failed | 17 skipped) 7ms
+     × keeps provisional rows while it goes and checks whether the write landed 6ms
+(node:20116) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > keeps exactly one provisional copy through a deferred 409 repair, then uses the recovered server tail
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > keeps exactly one provisional copy through a deferred 409 repair, then uses the recovered server tail
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > keeps exactly one provisional copy through a deferred 409 repair, then uses the recovered server tail
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > keeps exactly one provisional copy through a deferred 409 repair, then uses the recovered server tail
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > keeps exactly one provisional copy through a deferred 409 repair, then uses the recovered server tail
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > keeps exactly one provisional copy through a deferred 409 repair, then uses the recovered server tail
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > keeps exactly one provisional copy through a deferred 409 repair, then uses the recovered server tail
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > keeps exactly one provisional copy through a deferred 409 repair, then uses the recovered server tail
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > keeps exactly one provisional copy through a deferred 409 repair, then uses the recovered server tail
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > keeps exactly one provisional copy through a deferred 409 repair, then uses the recovered server tail
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > keeps exactly one provisional copy through a deferred 409 repair, then uses the recovered server tail
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > keeps exactly one provisional copy through a deferred 409 repair, then uses the recovered server tail
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > restores genuinely missing words only after repair finishes
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > restores genuinely missing words only after repair finishes
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > restores genuinely missing words only after repair finishes
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > restores genuinely missing words only after repair finishes
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > restores genuinely missing words only after repair finishes
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > restores genuinely missing words only after repair finishes
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > restores genuinely missing words only after repair finishes
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > restores genuinely missing words only after repair finishes
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > restores genuinely missing words only after repair finishes
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > restores genuinely missing words only after repair finishes
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > restores genuinely missing words only after repair finishes
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > restores genuinely missing words only after repair finishes
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > bounds a hung repair while finishing and ignores its late saved response
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > bounds a hung repair while finishing and ignores its late saved response
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > bounds a hung repair while finishing and ignores its late saved response
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > bounds a hung repair while finishing and ignores its late saved response
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > bounds a hung repair while finishing and ignores its late saved response
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > bounds a hung repair while finishing and ignores its late saved response
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > bounds a hung repair while finishing and ignores its late saved response
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > bounds a hung repair while finishing and ignores its late saved response
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > bounds a hung repair while finishing and ignores its late saved response
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > bounds a hung repair while finishing and ignores its late saved response
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > bounds a hung repair while finishing and ignores its late saved response
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > bounds a hung repair while finishing and ignores its late saved response
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/live-session-flow.test.tsx (55 tests | 3 failed | 52 skipped) 38ms
+     × keeps exactly one provisional copy through a deferred 409 repair, then uses the recovered server tail 24ms
+     × restores genuinely missing words only after repair finishes 6ms
+     × bounds a hung repair while finishing and ignores its late saved response 7ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/chat-spoken-operation.test.ts > when the server refuses it > keeps provisional rows while it goes and checks whether the write landed
+AssertionError: the repair owns the provisional copy: expected [ { id: 'spya-msgu01', …(4) }, …(1) ] to have a length of 4 but got 2
+
+- Expected
++ Received
+
+- 4
++ 2
+
+ ❯ tests/chat-spoken-operation.test.ts:328:81
+    326|       repair: { id: REPAIR },
+    327|     });
+    328|     expect(project(state)[0]?.messages, "the repair owns the provision…
+       |                                                                                 ^
+    329|     expect(state.error).toBeNull();
+    330|     expect(commands).toEqual([
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > keeps exactly one provisional copy through a deferred 409 repair, then uses the recovered server tail
+AssertionError: expected [ { id: 'u-repair', …(3) }, …(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "done": true,
++     "id": "u-repair",
++     "role": "reader",
++     "text": "What happened?",
++   },
++   {
++     "done": true,
++     "id": "u-repair-a",
++     "role": "companion",
++     "text": "The response was lost.",
++   },
++ ]
+
+ ❯ tests/live-session-flow.test.tsx:1657:29
+    1655|       expect(visible()).toEqual(["What happened?", "The response was l…
+    1656|       await act(async () => { s.refuse(); });
+    1657|       expect(h.get().lines).toEqual([]);
+       |                             ^
+    1658|       expect(h.get().hasUnsavedLines).toBe(false);
+    1659|       expect(visible()).toEqual(["What happened?", "The response was l…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > restores genuinely missing words only after repair finishes
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/live-session-flow.test.tsx:1681:39
+    1679|       await speakTurn("u-missing", "r-missing", "What happened?", "The…
+    1680|       await act(async () => { s.refuse(); });
+    1681|       expect(h.get().hasUnsavedLines).toBe(false);
+       |                                       ^
+    1682|       await act(async () => { s.repair({ ok: true, threads: [{ ...s.sa…
+    1683|       expect(h.get().hasUnsavedLines).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > bounds a hung repair while finishing and ignores its late saved response
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/live-session-flow.test.tsx:1696:39
+    1694|       vi.useFakeTimers();
+    1695|       await act(async () => { s.refuse(); });
+    1696|       expect(h.get().hasUnsavedLines).toBe(false);
+       |                                       ^
+    1697|       let finished = false;
+    1698|       act(() => { void h.get().stop().then(() => { finished = true; })…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  4 failed | 69 skipped (73)
+   Start at  15:25:37
+   Duration  1.11s (transform 251ms, setup 72ms, import 429ms, tests 45ms, environment 547ms)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:20851) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  2 passed (2)
+      Tests  4 passed | 69 skipped (73)
+   Start at  15:27:24
+   Duration  975ms (transform 250ms, setup 75ms, import 398ms, tests 38ms, environment 459ms)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+  [private lane] could not scavenge (carrying on): connect EPERM 127.0.0.1:54362 - Local (0.0.0.0:0)
+No test files found, exiting with code 1
+
+filter: tests/live-session-flow.test.tsx, tests/live-mic-lock.test.tsx, tests/live-exchanges.test.ts, tests/live-mic-placement.test.ts, tests/chat-spoken-operation.test.ts, tests/chat-spoken-route.test.ts, tests/chat-spoken-turn.test.ts, tests/chat-reduce.test.ts, tests/use-chat-recovery.test.ts
+
+|unit| 
+
+include: tests/**/*.test.ts, tests/**/*.test.tsx
+exclude:  **/node_modules/**, **/.git/**, tests/a-claim-that-lost-its-draft.test.ts, tests/a-long-pdf-is-refused-before-it-is-stored.test.ts, tests/acquire-extract-blocks-end-to-end.test.ts, tests/admin-feedback-store.test.ts, tests/ai-calls-spend-pg.test.ts, tests/all-skipped-publication-log.test.ts, tests/all-skipped-publication-refusal.test.ts, tests/an-upload-is-queued-only-once-its-bytes-arrive.test.ts, tests/article-cache-call-site.test.ts, tests/article-rows-snapshot.test.ts, tests/asset-route.test.ts, tests/billing-admission.test.ts, tests/billing-checkout.test.ts, tests/billing-half-units.test.ts, tests/billing-quota-adjustment.test.ts, tests/billing-quota-race.test.ts, tests/billing-settlement.test.ts, tests/billing-tiers.test.ts, tests/billing-usage-route.test.ts, tests/blocks-baseline.test.ts, tests/candidates-route.test.ts, tests/chat-anchor-route.test.ts, tests/chat-anchor.test.ts, tests/chat-help-route.test.ts, tests/chat-library-exclusion.test.ts, tests/chat-live-ticket-route.test.ts, tests/chat-live-turn.test.ts, tests/chat-route.test.ts, tests/chat-spoken-route.test.ts, tests/checkpoints-durable-resume.test.ts, tests/claim-session-postgres.test.ts, tests/comment-referee-mark.test.ts, tests/comment-sweep.test.ts, tests/corpus-lock.test.ts, tests/cost-ledger-shortfall.test.ts, tests/cost-store-under-test.test.ts, tests/db-error-scrub.test.ts, tests/db-referee-criteria.test.ts, tests/db-schema-drift.test.ts, tests/db-schema.test.ts, tests/db-transaction-errors.test.ts, tests/enqueue-drives-what-it-queues.test.ts, tests/enqueue-owns-the-article.test.ts, tests/export-route.test.ts, tests/feedback-store.test.ts, tests/fetch-allowance.test.ts, tests/find-article.test.ts, tests/glossary-delete-then-rebuild.test.ts, tests/glossary-ideas-baseline.test.ts, tests/health.test.ts, tests/helpers-load-article.test.ts, tests/helpers-seed-reader-state.test.ts, tests/illustrated-pg.test.ts, tests/illustrated-route.test.ts, tests/job-failure.test.ts, tests/jobs-commit-path.test.ts, tests/jobs-walk.test.ts, tests/jobs.test.ts, tests/library-log-volume.test.ts, tests/link-preview-cache.test.ts, tests/link-preview-route.test.ts, tests/link-summary-cache.test.ts, tests/list-reconciles-expired.test.ts, tests/live-session-routes.test.ts, tests/load-article-serialisation.test.ts, tests/lock-lifecycle.test.ts, tests/migration-reconciliations.test.ts, tests/one-article-for-one-address.test.ts, tests/owner-isolation.test.ts, tests/owner-jobs.test.ts, tests/pg-ready.test.ts, tests/pg-session-exact-base.test.ts, tests/pg-session-real-step.test.ts, tests/pipeline-slug-claim.test.ts, tests/plans-match-tiers.test.ts, tests/private-lane-survives-a-module-reset.test.ts, tests/public-visibility-pg.test.ts, tests/quiz-mark-route.test.ts, tests/raw-source-store.test.ts, tests/referee-claims-omitted.test.ts, tests/referee-claims-routes.test.ts, tests/referee-criteria-routes.test.ts, tests/referee-criteria-store.test.ts, tests/referee-mirror-route.test.ts, tests/referee-routes-postgres.test.ts, tests/referee-scan-route.test.ts, tests/remember-route.test.ts, tests/request-spend.test.ts, tests/reserved-article-address.test.ts, tests/retry-is-only-for-a-failed-job.test.ts, tests/retry-keeps-the-checkpoints.test.ts, tests/routes.test.ts, tests/run-lock.test.ts, tests/running-slot.test.ts, tests/second-job-queues.test.ts, tests/source-store.test.ts, tests/step-failure-seam.test.ts, tests/store-ai-calls.test.ts, tests/store-artefacts-pg.test.ts, tests/store-block-roles-pg.test.ts, tests/store-carry-forward.test.ts, tests/store-chat-pg.test.ts, tests/store-checkpoints.test.ts, tests/store-comments.test.ts, tests/store-export-bundle.test.ts, tests/store-export-covers-tables.test.ts, tests/store-export-isolation.test.ts, tests/store-export-raw.test.ts, tests/store-export-referee.test.ts, tests/store-glossary-delete-pg.test.ts, tests/store-job-draft.test.ts, tests/store-jobs-parity.test.ts, tests/store-lookups-pg.test.ts, tests/store-parity-referee.test.ts, tests/store-parity.test.ts, tests/store-pg-referee-claims.test.ts, tests/store-pg-session.test.ts, tests/store-publish-guards.test.ts, tests/store-raw-source-race.test.ts, tests/store-reader-parity.test.ts, tests/store-realtime-sessions.test.ts, tests/store-revision-policy.test.ts, tests/store-roundtrip.test.ts, tests/store-searches-pg.test.ts, tests/store-session-isolation.test.ts, tests/store-shelf-pg.test.ts, tests/store-shelf-reads.test.ts, tests/store-slug-guard.test.ts, tests/store-step-fence.test.ts, tests/store-transaction-isolation.test.ts, tests/store-uploads-parity.test.ts, tests/store-wiring.test.ts, tests/store-writes-land-in-postgres.test.ts, tests/term-lookup.test.ts, tests/the-query-string-does-not-decide-the-route.test.ts, tests/upload-acquire.test.ts, tests/upload-records.test.ts, tests/uploads-api.test.ts, tests/admin-store.test.ts, tests/auth-user-seeding.test.ts, tests/db-test-create.test.ts, tests/seed-admin-signin.test.ts
+
+|private-postgres| 
+
+include: tests/a-claim-that-lost-its-draft.test.ts, tests/a-long-pdf-is-refused-before-it-is-stored.test.ts, tests/acquire-extract-blocks-end-to-end.test.ts, tests/admin-feedback-store.test.ts, tests/ai-calls-spend-pg.test.ts, tests/all-skipped-publication-log.test.ts, tests/all-skipped-publication-refusal.test.ts, tests/an-upload-is-queued-only-once-its-bytes-arrive.test.ts, tests/article-cache-call-site.test.ts, tests/article-rows-snapshot.test.ts, tests/asset-route.test.ts, tests/billing-admission.test.ts, tests/billing-checkout.test.ts, tests/billing-half-units.test.ts, tests/billing-quota-adjustment.test.ts, tests/billing-quota-race.test.ts, tests/billing-settlement.test.ts, tests/billing-tiers.test.ts, tests/billing-usage-route.test.ts, tests/blocks-baseline.test.ts, tests/candidates-route.test.ts, tests/chat-anchor-route.test.ts, tests/chat-anchor.test.ts, tests/chat-help-route.test.ts, tests/chat-library-exclusion.test.ts, tests/chat-live-ticket-route.test.ts, tests/chat-live-turn.test.ts, tests/chat-route.test.ts, tests/chat-spoken-route.test.ts, tests/checkpoints-durable-resume.test.ts, tests/claim-session-postgres.test.ts, tests/comment-referee-mark.test.ts, tests/comment-sweep.test.ts, tests/corpus-lock.test.ts, tests/cost-ledger-shortfall.test.ts, tests/cost-store-under-test.test.ts, tests/db-error-scrub.test.ts, tests/db-referee-criteria.test.ts, tests/db-schema-drift.test.ts, tests/db-schema.test.ts, tests/db-transaction-errors.test.ts, tests/enqueue-drives-what-it-queues.test.ts, tests/enqueue-owns-the-article.test.ts, tests/export-route.test.ts, tests/feedback-store.test.ts, tests/fetch-allowance.test.ts, tests/find-article.test.ts, tests/glossary-delete-then-rebuild.test.ts, tests/glossary-ideas-baseline.test.ts, tests/health.test.ts, tests/helpers-load-article.test.ts, tests/helpers-seed-reader-state.test.ts, tests/illustrated-pg.test.ts, tests/illustrated-route.test.ts, tests/job-failure.test.ts, tests/jobs-commit-path.test.ts, tests/jobs-walk.test.ts, tests/jobs.test.ts, tests/library-log-volume.test.ts, tests/link-preview-cache.test.ts, tests/link-preview-route.test.ts, tests/link-summary-cache.test.ts, tests/list-reconciles-expired.test.ts, tests/live-session-routes.test.ts, tests/load-article-serialisation.test.ts, tests/lock-lifecycle.test.ts, tests/migration-reconciliations.test.ts, tests/one-article-for-one-address.test.ts, tests/owner-isolation.test.ts, tests/owner-jobs.test.ts, tests/pg-ready.test.ts, tests/pg-session-exact-base.test.ts, tests/pg-session-real-step.test.ts, tests/pipeline-slug-claim.test.ts, tests/plans-match-tiers.test.ts, tests/private-lane-survives-a-module-reset.test.ts, tests/public-visibility-pg.test.ts, tests/quiz-mark-route.test.ts, tests/raw-source-store.test.ts, tests/referee-claims-omitted.test.ts, tests/referee-claims-routes.test.ts, tests/referee-criteria-routes.test.ts, tests/referee-criteria-store.test.ts, tests/referee-mirror-route.test.ts, tests/referee-routes-postgres.test.ts, tests/referee-scan-route.test.ts, tests/remember-route.test.ts, tests/request-spend.test.ts, tests/reserved-article-address.test.ts, tests/retry-is-only-for-a-failed-job.test.ts, tests/retry-keeps-the-checkpoints.test.ts, tests/routes.test.ts, tests/run-lock.test.ts, tests/running-slot.test.ts, tests/second-job-queues.test.ts, tests/source-store.test.ts, tests/step-failure-seam.test.ts, tests/store-ai-calls.test.ts, tests/store-artefacts-pg.test.ts, tests/store-block-roles-pg.test.ts, tests/store-carry-forward.test.ts, tests/store-chat-pg.test.ts, tests/store-checkpoints.test.ts, tests/store-comments.test.ts, tests/store-export-bundle.test.ts, tests/store-export-covers-tables.test.ts, tests/store-export-isolation.test.ts, tests/store-export-raw.test.ts, tests/store-export-referee.test.ts, tests/store-glossary-delete-pg.test.ts, tests/store-job-draft.test.ts, tests/store-jobs-parity.test.ts, tests/store-lookups-pg.test.ts, tests/store-parity-referee.test.ts, tests/store-parity.test.ts, tests/store-pg-referee-claims.test.ts, tests/store-pg-session.test.ts, tests/store-publish-guards.test.ts, tests/store-raw-source-race.test.ts, tests/store-reader-parity.test.ts, tests/store-realtime-sessions.test.ts, tests/store-revision-policy.test.ts, tests/store-roundtrip.test.ts, tests/store-searches-pg.test.ts, tests/store-session-isolation.test.ts, tests/store-shelf-pg.test.ts, tests/store-shelf-reads.test.ts, tests/store-slug-guard.test.ts, tests/store-step-fence.test.ts, tests/store-transaction-isolation.test.ts, tests/store-uploads-parity.test.ts, tests/store-wiring.test.ts, tests/store-writes-land-in-postgres.test.ts, tests/term-lookup.test.ts, tests/the-query-string-does-not-decide-the-route.test.ts, tests/upload-acquire.test.ts, tests/upload-records.test.ts, tests/uploads-api.test.ts
+exclude:  **/node_modules/**, **/.git/**
+
+|shared-services| 
+
+include: tests/admin-store.test.ts, tests/auth-user-seeding.test.ts, tests/db-test-create.test.ts, tests/seed-admin-signin.test.ts
+exclude:  **/node_modules/**, **/.git/**
+
+
+⎯⎯⎯⎯⎯⎯ Unhandled Error ⎯⎯⎯⎯⎯⎯⎯
+Error: No database, and every test that touches the store needs one.
+
+  could not ask Docker which container serves port 54362: Command failed: docker ps --format {{.Names}}	{{.Ports}}
+
+  Run: npm run db:start   (docs/project/supabase-local.md)
+
+  This fails the command rather than skipping ninety suites, because there
+  is one store and it is Postgres — a run that skipped over this would be
+  reporting green about a configuration this application does not have.
+  The same applies to Supabase Storage: SUPABASE_URL and
+  SUPABASE_SERVICE_ROLE_KEY are needed by src/store/index.ts at import,
+  and their absence is not a database fault.
+ ❯ Object.setup tests/setup/private-db-global.ts:523:11
+ ❯ TestProject._initializeGlobalSetup node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:10813:21
+ ❯ Vitest.initializeGlobalSetup node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:13812:35
+ ❯ node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:13655:6
+ ❯ node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:13684:11
+ ❯ node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:13546:19
+ ❯ startVitest node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:14621:8
+ ❯ start node_modules/vitest/dist/chunks/cac.uFydS1Z4.js:2340:15
+ ❯ CAC.run node_modules/vitest/dist/chunks/cac.uFydS1Z4.js:2318:2
+
+
+
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:22706) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/live-session-flow.test.tsx (56 tests | 1 failed | 55 skipped) 25ms
+     × recovers the paired answer tail without claiming later turns the live model has not heard 24ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > recovers the paired answer tail without claiming later turns the live model has not heard
+AssertionError: expected 'spya-othera' to be 'spya-srva01' // Object.is equality
+
+Expected: "spya-srva01"
+Received: "spya-othera"
+
+ ❯ tests/live-session-flow.test.tsx:1689:43
+    1687|       expect(s.controller.threads[0]?.messages).toHaveLength(4);
+    1688|       await speakTurn("u-after", "r-after", "Continue?", "Only with th…
+    1689|       expect(s.bodies[1]?.expectedTailId).toBe("spya-srva01");
+       |                                           ^
+    1690|       // The next write still conflicts against the unrelated later ro…
+    1691|       await act(async () => { s.refuse(); });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 55 skipped (56)
+   Start at  15:31:55
+   Duration  753ms (transform 192ms, setup 45ms, import 312ms, tests 25ms, environment 288ms)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:28166) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28167) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28169) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  8 passed (8)
+      Tests  217 passed (217)
+   Start at  15:32:31
+   Duration  8.82s (transform 1.99s, setup 324ms, import 2.83s, tests 8.16s, environment 1.54s)
+
+✓ src/web/tsconfig.json  (302 files)
+✓ tests/tsconfig.json  (1349 files)
+✓ tsconfig.json  (414 files)
+✓ all 1425 source files are covered by some project
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:38999) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38998) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ |unit| tests/chat-spoken-effect.test.ts (7 tests | 6 failed) 25ms
+   × marks exhausted network responses uncertain 8ms
+   × marks exhausted server responses uncertain 5ms
+   × marks exhausted malformed responses uncertain 3ms
+   × marks exhausted empty responses uncertain 3ms
+   × marks timed out attempts uncertain 2ms
+   × keeps uncertainty from an earlier lost response when the next attempt is refused 2ms
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > checks exhausted ambiguous writes before restoring a live copy
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > checks exhausted ambiguous writes before restoring a live copy
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > checks exhausted ambiguous writes before restoring a live copy
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > checks exhausted ambiguous writes before restoring a live copy
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > checks exhausted ambiguous writes before restoring a live copy
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > checks exhausted ambiguous writes before restoring a live copy
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > checks exhausted ambiguous writes before restoring a live copy
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > checks exhausted ambiguous writes before restoring a live copy
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > checks exhausted ambiguous writes before restoring a live copy
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > checks exhausted ambiguous writes before restoring a live copy
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > checks exhausted ambiguous writes before restoring a live copy
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > checks exhausted ambiguous writes before restoring a live copy
+The current testing environment is not configured to support act(...)
+
+ ❯ |unit| tests/live-session-flow.test.tsx (57 tests | 1 failed | 56 skipped) 25ms
+     × checks exhausted ambiguous writes before restoring a live copy 24ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/chat-spoken-effect.test.ts > marks exhausted network responses uncertain
+ FAIL  |unit| tests/chat-spoken-effect.test.ts > marks exhausted server responses uncertain
+ FAIL  |unit| tests/chat-spoken-effect.test.ts > marks exhausted malformed responses uncertain
+ FAIL  |unit| tests/chat-spoken-effect.test.ts > marks exhausted empty responses uncertain
+AssertionError: expected { ok: false, conflict: false, …(1) } to match object { ok: false, conflict: false, …(1) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "conflict": false,
+    "ok": false,
+-   "uncertain": true,
+  }
+
+ ❯ tests/chat-spoken-effect.test.ts:29:18
+     27|   const result = await appendSpoken("a-slug", "spya-thra01", body, 0);
+     28|   expect(attempts).toBe(3);
+     29|   expect(result).toMatchObject({ ok: false, conflict: false, uncertain…
+       |                  ^
+     30| });
+     31|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  |unit| tests/chat-spoken-effect.test.ts > marks timed out attempts uncertain
+AssertionError: expected { ok: false, conflict: false, …(1) } to match object { ok: false, conflict: false, …(1) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "conflict": false,
+    "ok": false,
+-   "uncertain": true,
+  }
+
+ ❯ tests/chat-spoken-effect.test.ts:39:24
+     37|   const pending = appendSpoken("a-slug", "spya-thra01", body, 0);
+     38|   await vi.advanceTimersByTimeAsync(35_000);
+     39|   await expect(pending).resolves.toMatchObject({ ok: false, conflict: …
+       |                        ^
+     40| });
+     41|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  |unit| tests/chat-spoken-effect.test.ts > keeps uncertainty from an earlier lost response when the next attempt is refused
+AssertionError: expected { ok: false, conflict: false, …(1) } to match object { ok: false, conflict: false, …(1) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "conflict": false,
+    "ok": false,
+-   "uncertain": true,
+  }
+
+ ❯ tests/chat-spoken-effect.test.ts:51:18
+     49|   const result = await appendSpoken("a-slug", "spya-thra01", body, 0);
+     50|   expect(attempts).toBe(2);
+     51|   expect(result).toMatchObject({ ok: false, conflict: false, uncertain…
+       |                  ^
+     52| });
+     53|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  |unit| tests/live-session-flow.test.tsx > spoken repair through the actual chat controller > checks exhausted ambiguous writes before restoring a live copy
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/live-session-flow.test.tsx:1683:39
+    1681|       await speakTurn("u-uncertain", "r-uncertain", "What happened?", …
+    1682|       await act(async () => { s.fail({ ok: false, conflict: false, unc…
+    1683|       expect(h.get().hasUnsavedLines).toBe(false);
+       |                                       ^
+    1684|       expect(h.get().lines).toEqual([]);
+    1685|       expect(s.controller.threads[0]?.messages).toHaveLength(2);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  7 failed | 1 passed | 56 skipped (64)
+   Start at  15:37:35
+   Duration  1.01s (transform 328ms, setup 103ms, import 682ms, tests 50ms, environment 971ms)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+(node:45709) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45708) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  2 passed (2)
+      Tests  8 passed | 56 skipped (64)
+   Start at  15:38:47
+   Duration  745ms (transform 318ms, setup 90ms, import 564ms, tests 42ms, environment 605ms)
+
+
+ RUN  v4.1.11 /Users/greg/dev/spideryarn/reading2/.claude/worktrees/realtime-chat-repair
+
+✓ src/web/tsconfig.json  (302 files)
+(node:46029) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46030) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46028) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46026) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✓ tests/tsconfig.json  (1350 files)
+✓ tsconfig.json  (414 files)
+✓ all 1426 source files are covered by some project
+
+ Test Files  9 passed (9)
+      Tests  225 passed (225)
+   Start at  15:39:27
+   Duration  9.80s (transform 4.06s, setup 832ms, import 6.55s, tests 8.29s, environment 3.77s)
+

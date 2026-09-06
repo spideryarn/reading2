@@ -110,6 +110,11 @@ const SHARED = new Set([
      after somebody has talked for two minutes.
      See src/dictation-limits.ts. */
   "dictation-limits.js",
+  // The server caps spoken passage/tool labels before saving them. Live's
+  // lost-response repair compares those saved fields with the same cap, so it
+  // must share the rule. Extracted from routes.ts into this import-free leaf;
+  // the purity check below keeps server dependencies out of the client.
+  "spoken-label.js",
   /* What a bug report may carry — the diagnostics blob's shape and the two
      image formats a pasted screenshot may be. On the list for the same reason
      `monitoring-scrub.js` is, and it is the same argument one seam over: the
@@ -232,6 +237,24 @@ const SHARED = new Set([
      URL left in place. One module, both callers.
      See src/assets.ts and docs/plans/260829b-hosting-the-articles-images.md. */
   "assets.js",
+  /* **Which stored object an asset URL names, and how that URL is spelled.**
+     The delivery half of the file above, and on the list for the same reason:
+     it imports `assets.js` for its types and nothing else.
+
+     Being on it is again the point rather than a convenience. `sendArticleAsset`
+     (src/routes.ts) and `pgPublicReader.loadAsset` both look a hash up with
+     `storedAssetFor`, and `rehost.ts` builds the `src` the browser asks with —
+     so the route's idea of which entry a URL names and the client's idea of
+     which URL an entry has are two halves of one fact. A second copy would not
+     404; it would serve nothing at a URL nobody complains about.
+
+     **This rule cost it one import**, which is worth knowing before somebody
+     adds it back: `publicAssetPath` spells a URL `src/public/route-names.ts`
+     also spells, and delegating to that file is refused here — the allowlist
+     holds flat module names, so a nested one cannot be shared. The two are tied
+     by an assertion in tests/rehost.test.ts instead.
+     See src/asset-delivery.ts. */
+  "asset-delivery.js",
   /* Escaping text into markup, and composing an article's page title. On the
      list because they qualify — `html.js` imports nothing at all, and
      `title-text.js` imports only the other leaves below it — and because being

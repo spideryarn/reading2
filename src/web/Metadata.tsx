@@ -1221,7 +1221,7 @@ function Questions({
  * unreachable for a visitor (`PublicMetadataPage` replaces it, App.tsx) and
  * `/api/metadata/:slug` behind it is owner-only, so it holds here. The masthead
  * is mounted for both and has to gate the same sentence on ownership;
- * `OriginMark` there says what a visitor's absent `url` can also mean.
+ * `OriginLine` there says what a visitor's absent `url` can also mean.
  *
  * ## Why the file link is on the uploaded branch only
  *

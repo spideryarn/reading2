@@ -27,7 +27,8 @@ listed here; the names under each are files in `docs/project/`.
 - **[vision.md](docs/project/vision.md)** — the intent, the principles, the anti-goals, and the two
   exceptions Greg has made to "prefer boring".
   <br>↳ `open-questions.md` · `positioning.md` (the website, the name, who it speaks to first) ·
-  `original-version/` (the larger app this is an offshoot of)
+  `original-version/` (the larger app this is an offshoot of) · and the four folders that hold the
+  project's memory: `plans.md` · `research.md` · `postmortems.md` · `tutorials.md`
 - **[architecture.md](docs/project/architecture.md)** — the pipeline stage by stage, what a block
   is, who owns which stage, where the data lives.
   <br>↳ `block-ids.md` · `fetching.md` (stage 1) · `content-extraction.md` (stage 2, and there are
@@ -76,7 +77,8 @@ listed here; the names under each are files in `docs/project/`.
   <br>↳ `testing.md` · `typechecking.md` · `linting.md` · `static-analysis.md` (`npm run check`) ·
   `browser-control.md` (which browser automation on which machine — start here) ·
   `browser-testing.md` (what to check) · `browser-testing-playwright.md` (the same, on the box) ·
-  `claude-in-chrome.md` (the laptop extension: nothing connected?) · `performance.md` ·
+  [claude-in-chrome.md](docs/reusable/claude-in-chrome.md) (the laptop extension: nothing
+  connected?) · `performance.md` ·
   `counting-lines.md` (how big the repo is)
 - **[dev-and-deployment-overview.md](docs/project/dev-and-deployment-overview.md)** — running it on
   your laptop, the command for each pipeline stage, and shipping it to Vercel.
@@ -86,6 +88,7 @@ listed here; the names under each are files in `docs/project/`.
   `feedback.md` (the Feedback button, and where a bug report goes) ·
   `feedback-reports.md` (and what an agent does with one afterwards) ·
   `hetzner-remote-server-box.md` (the always-on box, and `gjd-remote`) ·
+  `changelog.md` (turning deploys into the public `/changelog`) ·
   `worktrees.md` (one tree per agent, and how to start one)
 
 Two of those are worth reading before you touch anything they bear on:
@@ -99,14 +102,18 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
 
 - **`docs/plans/`** — one file per piece of work, written before it lands and kept afterwards, so
   the reasoning and the evidence survive. A plan names the simpler option it passed over, and why.
+  [plans.md](docs/project/plans.md)
 - **`docs/postmortems/`** — one file per bug worth understanding: the real root cause and the name
   of its class, the commit that introduced it, the fix that's right for the long term, and what
-  would have caught the class.
+  would have caught the class. [postmortems.md](docs/project/postmortems.md)
 - **`docs/tutorials/`** — self-contained HTML explainers of how one area works, written for somebody
   who has never read the code — [reusable/write-tutorial.md](docs/reusable/write-tutorial.md) is how
-  to write one.
+  to write one. [tutorials.md](docs/project/tutorials.md)
 - **`docs/research/`** — the working behind a decision: the options weighed, the sources, the dead
   ends. A plan says what we're doing; a research doc says what else we could have done and why not.
+  [research.md](docs/project/research.md)
+- **`docs/user-feedback/`** — one note per reader report: their words, what we did, and which of the
+  three endings it got — [feedback-reports.md](docs/project/feedback-reports.md).
 - **[`docs/reusable/`](docs/reusable/README.md)** — notes that aren't about this project and are
   meant to be carried elsewhere, several copied in from Greg's
   [gjdutils](https://github.com/gregdetre/gjdutils/tree/main/docs/instructions) library of "how to
@@ -117,11 +124,12 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
   is a whole-tree sweep for the rework worth doing, run every week or so — suggest it when nobody has
   run one lately.
 
-None of those first three is indexed here — there are a lot of files and they keep arriving. List
+The individual files are not indexed here — there are a lot of them and they keep arriving. List
 the directory and read the file names; they say what each one is about, and the first paragraph of
-the file says the rest. They are named `yyMMdd<letter>-kebab-description.md`, so they sort by the day
-the work started; a plan and its reviews share one letter. Get the name from
-`npx tsx scripts/plan-name.ts` — [write-planning-doc.md](docs/reusable/write-planning-doc.md).
+the file says the rest. They are named `yyMMdd<letter>-kebab-description.md` (`.html` for a
+tutorial), so they sort by the day the work started; a plan and its reviews share one letter. Get
+the name from `npx tsx scripts/plan-name.ts` (`--dir=` for the other three) —
+[write-planning-doc.md](docs/reusable/write-planning-doc.md).
 
 ## The one contract that matters
 
@@ -134,43 +142,26 @@ The format, the reasoning, and the one way to get range checks silently wrong ar
 
 ## How we write docs here
 
-A doc under `docs/project/` is two things: **intent** — Greg's directions, the goals, the
-constraints, the decisions and why they were made, mostly in his own words — and **signposts** to
-the other docs and to the code. Not descriptions of code, which the code already provides.
+**The policy is [documentation-policy.md](docs/reusable/documentation-policy.md)** — who each kind of
+doc is written for, one home per fact, cite don't restate, less is more, signpost heavily, writing
+down what a future reader would otherwise have to reverse-engineer, and why an agent-facing doc holds
+intent rather than descriptions of code. Read it once.
 
-- **Less is more.** Where Greg gave instructions, follow them rather than embroidering. Say each
-  thing once, briefly, and leave the next agent room to use its judgment.
-- **Update the docs as you go.** If you change what something does, fix the doc in the same piece of
-  work.
-- **Every doc has a parent.** New doc under `docs/project/` ⇒ add a line for it to the entry-point
-  doc that owns it, and link back up. Only the seven are listed in this file, and
-  `tests/doc-links.test.ts` fails if a doc has no owner or two.
-- **Editing a doc whose wording is a rule** — this file above all, the seven entry points,
-  anything in `docs/reusable/` — goes one approved set of changes at a time, with the before and
-  after shown: [edit-important-docs.md](docs/reusable/edit-important-docs.md).
-  **Signposting is not a rule**, so adding a new doc's line under its entry point, or tweaking a
-  pointer's wording, needs no approval — just do it. Greg, 2026-09-02.
-- **File names are lower-case kebab-case**, everywhere under `docs/`, even when copied in from
-  somewhere that shouted. Rename on sight and fix the links.
-- **Quote Greg directly** — his exact wording, in a blockquote, attributed and dated. The phrasing
-  carries intent that a paraphrase loses. If you find you've flattened a quote into your own voice,
-  put his back.
-- **Signpost heavily**, both directions, deep-linking to sections, and out to the code
-  (e.g. [`src/blocks.ts`](src/blocks.ts)). **Cite, don't restate.** Give a fact one home. For facts
-  held in code, cite the defining file and stable name — `` `src/models.ts` § `STAGE_EFFORT` `` —
-  rather than copying a value or line number. For inventories, record the command, scope and run
-  date; treat its output as a dated example. Otherwise record the source, date and confidence or
-  status. [Why](docs/research/260903b-facts-that-were-wrong.md).
+Four things are ours:
+
+- **Quote Greg directly** — his exact wording, in a blockquote, attributed and dated. A paraphrase
+  loses the intent. If you've flattened one into your own voice, put his back.
+- **Every doc has a parent.** New doc under `docs/project/` ⇒ a line under the entry point that owns
+  it, and a link back up. `tests/doc-links.test.ts` fails if a doc has no owner or two.
+- **Editing a doc whose wording is a rule** — this file above all, the seven entry points, anything
+  in `docs/reusable/` — goes one approved set at a time, before and after shown:
+  [edit-important-docs.md](docs/reusable/edit-important-docs.md). **Signposting is not a rule**, so a
+  new doc's line under its entry point, or a pointer's wording, needs no approval. Greg, 2026-09-02.
 - **Record decisions where they belong.** When something in
-  [open-questions.md](docs/project/open-questions.md) gets decided, write it into the relevant doc
-  and delete the question. That file should shrink.
-- **Harness memory is not where knowledge lives.** An agent's own auto-memory is for its
-  preferences, machine-local state, and a pointer to a thread left open. Anything a future reader
-  would need — a trap, a decision, a rule — goes in the doc that owns it, where Greg and the other
-  agents can see it too.
-- **Write down anything a future reader would otherwise have to reverse-engineer** — especially why
-  a design went one way rather than the obvious other way, and *especially* where the decision went
-  against the recommendation written down at the time.
+  [open-questions.md](docs/project/open-questions.md) gets decided, write it into the doc that owns
+  it and delete the question. That file should shrink. The same goes for anything you learn: your own
+  auto-memory is for preferences and machine-local state, not for knowledge Greg and the other agents
+  need.
 - **Keep this file short.** Detail goes in the doc; this file gets a line.
 
 ## Working agreements for agents
@@ -304,10 +295,9 @@ nothing else has a copy of.
   just the prose. Check each finding yourself; some are wrong. And check a verdict actually arrived,
   exit code *and* answer file, because a review that returned nothing looks exactly like one that
   found nothing. [codex-cli-as-subagent.md](docs/reusable/codex-cli-as-subagent.md).
-- **Root-cause every bug in a subagent, and write it up** under `docs/postmortems/`: the real cause
-  rather than the line that broke, **the class it belongs to, named**, which commit introduced it,
-  the fix that's right for the long term, and what would have caught the whole class of it — ranked
-  by ease and value where there is more than one.
+- **Root-cause every bug in a subagent, and write it up** under `docs/postmortems/`. The point is
+  never the incident, it is **the class it belongs to, named** —
+  [write-postmortem.md](docs/reusable/write-postmortem.md) is the five things one has to say.
 - **"Close this tab if successful" means exactly that** — close it with the recipe in
   [iterm.md](docs/reusable/iterm.md), and only once the work in that conversation is actually done
   and its checks passed. If anything failed or is unfinished, leave the tab open and say why.

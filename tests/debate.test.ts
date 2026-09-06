@@ -857,6 +857,40 @@ describe("a direct row must show the page naming this article", () => {
     expect(namesArticle("the piece On rye says so", short)).toBe(false);
     expect(namesArticle("Marta Ek in On rye says so", short)).toBe(true);
   });
+
+  /**
+   * **Typography is not identity, and this comparison used to think it was.**
+   *
+   * `namesArticle` folded whitespace and case and nothing else, while every
+   * other text comparison in this mode goes through `findQuote`, whose `FOLD`
+   * table also maps curly quotes, the three dashes and the non-breaking space
+   * (src/quote-match.ts). Titles carry curly punctuation all the time —
+   * `Claude’s Constitution` is one on the shelf — and a search extract's
+   * apostrophe is whatever the page's CMS emitted.
+   *
+   * So the rule failed in **both** directions on one character, which is the
+   * worst of the three ways it could have gone: a source spelling the title with
+   * the straight apostrophe lost an honest row as `directnessUnverified` — the
+   * exact failure the rule exists to prevent — and which way any given page fell
+   * was decided by whose editor smart-quoted what.
+   *
+   * Found on 2026-09-06 while building 260906b's corpus, not by a reader.
+   */
+  it("reads the two apostrophes, and the two dashes, as the same character", () => {
+    const curly = { url: null, title: "Claude’s Constitution", byline: null };
+    const straight = { url: null, title: "Claude's Constitution", byline: null };
+    /* Each title against the other's spelling: the bug was symmetric. */
+    expect(namesArticle("a reply to Claude's Constitution, at length", curly)).toBe(true);
+    expect(namesArticle("a reply to Claude’s Constitution, at length", straight)).toBe(true);
+
+    /* The same fold, on the dash — and a title short enough to need its byline,
+       so the byline branch is exercised rather than only the length shortcut. */
+    const dashed = { url: null, title: "Rye — a note", byline: "Marta Ek" };
+    expect(namesArticle("Marta Ek in Rye - a note says so", dashed)).toBe(true);
+
+    /* And it stays a comparison: folding punctuation must not fold the words. */
+    expect(namesArticle("a reply to Claude's Manifesto, at length", curly)).toBe(false);
+  });
 });
 
 /* ---------------------------------------------- a quote too short to be one -- */

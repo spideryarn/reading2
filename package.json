@@ -1,7 +1,7 @@
 {
-  "name": "reading2",
+  "name": "spideryarn",
   "version": "1.0.0",
-  "description": "HTML content extraction experiments",
+  "description": "AI-assisted reading that augments rather than replaces reading.",
   "private": true,
   "scripts": {
     "test": "vitest run",
@@ -39,6 +39,7 @@
     "eval:summaries": "tsx evals/summaries/run.ts",
     "eval:cost": "tsx evals/cost/run.ts",
     "eval:deepen": "tsx evals/deepen/run.ts",
+    "eval:debate": "tsx evals/debate/run.ts",
     "eval:cost:interactions": "tsx evals/cost/interactions.ts",
     "typecheck": "tsx scripts/typecheck.ts",
     "db:generate": "tsx scripts/db-generate.ts",
@@ -68,8 +69,8 @@
     "typecheck:committed": "tsx scripts/typecheck-committed.ts"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Greg Detre",
+  "license": "MIT",
   "type": "module",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

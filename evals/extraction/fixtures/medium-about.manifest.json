@@ -1,0 +1,17 @@
+{
+  "fixture": "medium-about",
+  "file": "medium_about.html",
+  "note": "NOT AN ARTICLE, and the assertion is that stage 2 says so. What the fetch got back from Medium is a 404 shell — 281 characters of visible text reading 'PAGE NOT FOUND 404 / Out of nothing, something.' wrapped in a sign-in rail — and Readability finds an article in it, titled 'Medium', with no complaint. Committed with NO manifest until 2026-09-05, because 'refuse this page' was not something a manifest could say; GPT Sol's review of stage B made the point that deciding what PRODUCTION does about a wall can wait, while scoring 'this is not an article' cannot, since it is the worst silent success in the whole trawl. So this asserts the refusal and nothing else: there is no article here whose text could be required, and the parser refuses a mustContain needle beside notAnArticle for that reason. IT FAILS TODAY, and that failure is the finding.",
+  "mustContain": [],
+  "mustNotContain": [
+    {
+      "text": "PAGE NOT FOUND",
+      "why": "the whole of what this page has to say. If it reaches a reader as article prose, the pipeline has passed off an error page as a piece of writing"
+    },
+    {
+      "text": "Out of nothing, something.",
+      "why": "Medium's 404 strapline — the sentence stage 2 currently returns as the article's opening"
+    }
+  ],
+  "notAnArticle": true
+}

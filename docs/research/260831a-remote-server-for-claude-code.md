@@ -167,7 +167,7 @@ script), **rescue mode** (boot a recovery system when the box will not come up).
 - **Browser: Playwright MCP plus chrome-devtools-mcp.** Claude in Chrome cannot follow us to a
   headless box — it needs a real desktop Chrome with the extension, has no headless mode, and is
   disabled outright under API-key or `setup-token` auth. Playwright drives, chrome-devtools-mcp
-  debugs. See [claude-in-chrome.md](../project/claude-in-chrome.md) and
+  debugs. See [claude-in-chrome.md](../reusable/claude-in-chrome.md) and
   [browser-testing.md](../project/browser-testing.md) for how browser work is done here today.
 - **Watching it yourself:** Xvfb + x11vnc + noVNC over an SSH tunnel. CDP screenshots work whether
   or not anyone is connected, so the model never depends on the viewer.

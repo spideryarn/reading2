@@ -128,7 +128,7 @@ export function PublicMetadataPage({
 
             **And no "uploaded" arm**, unlike the owner's page. An absent url
             here means an upload *or* an address the policy withheld, and this
-            page cannot tell which — src/web/Masthead.tsx § `OriginMark`. */}
+            page cannot tell which — src/web/Masthead.tsx § `OriginLine`. */}
         <SourceRow url={webSource(meta)} />
 
         <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />

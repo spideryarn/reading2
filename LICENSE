@@ -1,0 +1,41 @@
+MIT License
+
+Copyright (c) 2026 Greg Detre
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Third-party material
+
+The licence above covers this project's own code and documentation. It does
+**not** cover the third-party documents kept as test inputs, which remain the
+property of their respective rights holders and are included here under their
+own terms:
+
+- `evals/pdf/*/` — each directory carries a `LICENCE.md` naming the source,
+  the rights holder, the licence quoted off the document itself, and a sha256.
+- `evals/extraction/fixtures/` — captured web pages, with source URL, sha256
+  and capture date for each in `hashes.json`. See that directory's `README.md`.
+- `tests/fixtures/data-root/data/` — article text used as pipeline fixtures.
+  Each article's `meta.json` records the URL it came from.
+
+Attribution for these sits with the named rights holder, not with this
+project. If you are one of them and would rather your document were not here,
+write to hello@spideryarn.com and it will be removed.

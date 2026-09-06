@@ -1,0 +1,36 @@
+{
+  "fixture": "pg-greatwork",
+  "file": "pg_greatwork.html",
+  "note": "THE GENERATED-NODE PAGE, and it is the fifteenth manifest because GPT Sol's third review had to declare a region by hand to run its reproduction on. paulgraham.com is a 1990s table layout: the whole 54,900-character essay sits in ONE <td> as 599 <br>-separated runs with no <p> anywhere in the source, so Readability's _prepDocument builds the paragraphs itself. 231 <p> in the output, 216 of them nodes that have no source element of their own and resolve only to an ancestor. MEASURED 2026-09-05: those 216 carry 44,408 of the 66,449 gistable characters the extraction returns — 67% of the article is in nodes nothing had ever credited, and deleting every one of them left articleChars at 6,330 and articleRecall at 0.1153, unchanged to the digit, with both gates green and no regression detected. That is why articleReturned credits an ancestor-resolved node against its ancestor's own text now, and why this page is in the corpus rather than only in a review. ARTICLE REGION, MEASURED 2026-09-05: table table td is the essay's own cell, 54,900 squeezed characters against 57,390 for the whole source body — the other 2,490 are script text and 1x1 spacer gifs, and there is NO visible text outside the cell at all, which is why mustNotContain is empty here and exclusionPrecision correctly abstains. THE FLOOR: the shipped extraction returns 50,738 of the region's 54,900, which is 92.4%. THE MISSING 7.6% IS ENUMERATED, 2026-09-06, and the earlier account of it here was wrong. It is not lost prose and it is not generated nodes their ancestor fails to cover: all 108 region elements come back, and the 4,189 uncredited characters are 4,162 characters in 14 nodes that resolve as `descendant` — wrappers Readability built around a stamped child, whose own text earns no region credit because a descendant's text is not the container's. It is genuine article text that the extraction returned and the numerator does not count. Crediting it is possible with the order gate's alignment machinery and is deliberately not done in this round; until it is, this is a known, bounded and now COUNTED under-count rather than an attribution nobody had checked. Nothing in the essay is legitimately droppable, so minArticleChars is 48,000: the region less that measured 7.6% under-count and a little slack. It is deliberately NOT set just under 50,738. THE PARAGRAPH FLOOR IS WHAT THIS PAGE IS FOR, and it comes from the source rather than from what we produce: the essay cell holds 595 <br> in 235 runs (counted 2026-09-05), so the author wrote about 236 paragraphs and the source has no <p> at all. 'p at least 200' therefore says the paragraph breaks this page keeps in <br> have to come out as paragraphs, which is the whole reason Readability generates nodes here. It was added because restore-everything came out with NOTHING against the shipped arm: on a page with no chrome, returning every prose element does no harm by any other measure, and it hands the reader 55,000 characters in one <font> with no paragraph in it. That is damage, and the manifest was not saying so. The alternative was a third HARMLESS_HERE entry, which would have been the corpus admitting its manifest was thin instead of thickening it.",
+  "mustContain": [
+    {
+      "text": "If you collected lists of techniques for doing great work in a lot of different fields, what would the intersection look like?",
+      "why": "the first sentence of the essay, so any truncation from the top loses it"
+    },
+    {
+      "text": "It may be helpful always to walk or run the same route, because that frees attention for thinking.",
+      "why": "note [29], the last thing on the page before the acknowledgements — an arm that keeps the essay and drops the notes loses this and nothing else"
+    },
+    {
+      "text": "Thanks to Trevor Blackwell, Daniel Gackle",
+      "why": "the acknowledgements, which are the author's own words about the piece and are the first thing a 'drop the tail' rule takes"
+    }
+  ],
+  "mustNotContain": [],
+  "structure": {
+    "p": {
+      "atLeast": 200
+    },
+    "img": {
+      "exactly": 1
+    }
+  },
+  "maxBlockChars": 4000,
+  "articleRegion": {
+    "within": [
+      "table table td"
+    ],
+    "why": "The essay is the inner table's single cell, walked on 2026-09-05: 54,900 squeezed characters of the source body's 57,390, and the remaining 2,490 are inline scripts and three 1x1 turbify spacer gifs with no visible text between them. There is nothing on this page to exclude, which is unusual and is the reason it is a good page for the generated-node question and a poor one for the furniture question."
+  },
+  "minArticleChars": 48000
+}

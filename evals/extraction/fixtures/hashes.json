@@ -208,5 +208,11 @@
     "bytes": 99729,
     "url": "https://wiki.archlinux.org/title/Installation_guide",
     "capturedAt": "2026-09-04"
+  },
+  "negative-controls": {
+    "sha256": "1a2916350531e605010cf3005b3265cdf524450090414f5ea29da33fafaac2bd",
+    "bytes": 5822,
+    "url": "https://example.invalid/braemar-result",
+    "capturedAt": "2026-09-05"
   }
 }

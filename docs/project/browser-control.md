@@ -17,7 +17,7 @@ version of it that works on a headless server. That is the whole reason the seco
 
 ## On the laptop
 
-- **[claude-in-chrome.md](claude-in-chrome.md)** — getting the extension to talk to Claude Code at
+- **[claude-in-chrome.md](../reusable/claude-in-chrome.md)** — getting the extension to talk to Claude Code at
   all. `list_connected_browsers` returning `[]` is almost always the wrong Chrome profile. Start
   here when nothing is connected; it stops at the handshake.
 - **[browser-testing.md](browser-testing.md)** — everything after the handshake: what to look at in

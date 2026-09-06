@@ -14,6 +14,7 @@ inventing a process.
 |---|---|
 | [gjdutils-instructions.md](gjdutils-instructions.md) | **start here** — the index of Greg's instruction library, copied and uncopied |
 | [engineering-manager.md](engineering-manager.md) | a job too big for one sitting — cut it into stages that each end committable, and hand the work to subagents |
+| [documentation-policy.md](documentation-policy.md) | **what a doc is for** — intent and signposts rather than descriptions of code, one home per fact, and who each kind of doc is written for |
 | [capture-sounding-board-conversation.md](capture-sounding-board-conversation.md) | writing a conversation up as a document: quote Greg verbatim, synthesise the rest |
 | [write-deep-dive-as-doc.md](write-deep-dive-as-doc.md) | researching a topic and writing it up as a reference doc with its sources attached |
 | [third-party-library-selection.md](third-party-library-selection.md) | picking a dependency — favour long-lived, heavily-documented ones, then write the decision down |
@@ -27,12 +28,16 @@ inventing a process.
 | [debrief-progress.md](debrief-progress.md) | reporting where a piece of work stands: what's done, what's left, whether it's still worth it |
 | [improve-the-codebase.md](improve-the-codebase.md) | the periodic sweep — find the rework worth doing across the whole tree, cluster and prioritise it, and land the clusters that fit |
 | [write-tutorial.md](write-tutorial.md) | explaining how something works to somebody who has never read the code — mental models first, spiral passes, diagrams you actually look at |
+| [write-postmortem.md](write-postmortem.md) | a bug whose cause was more interesting than the line that broke — name the class, say why nothing went red, and rank what would have caught it |
 | [edit-important-docs.md](edit-important-docs.md) | changing a doc whose wording is a rule — one small set of changes at a time, before/after, approval before each |
 | [codex-cli-as-subagent.md](codex-cli-as-subagent.md) | a GPT/Codex subagent for cross-family review or delegated work, via [`scripts/run-codex.ts`](../../scripts/run-codex.ts) |
+| [claude-cli-as-subagent.md](claude-cli-as-subagent.md) | the mirror image — reaching Opus from something that is *not* a Claude session (a Codex run, a script, the box), via [`scripts/run-claude.ts`](../../scripts/run-claude.ts) |
 | [review-prompt-template.md](review-prompt-template.md) | writing the prompt for that review — name the candidate durably, suspicions last, a severity scale, an ID on every finding |
+| [claude-in-chrome.md](claude-in-chrome.md) | driving a browser through the Chrome extension, and it will not connect — `list_connected_browsers` returning `[]` is almost always the wrong Chrome profile |
 | [playwright-browser-control.md](playwright-browser-control.md) | driving a browser from a script, with no eyes — on the remote box, where the Chrome extension cannot follow ([browser-control.md](../project/browser-control.md) is which mechanism goes where) |
 | [long-waits.md](long-waits.md) | waiting hours rather than minutes — which mechanism survives what, and the two that outlive the session |
 | [gjd-remote.md](gjd-remote.md) | driving the always-on box — the commands you actually type, and what bites when you run it from a repo that has never heard of it ([hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md) is the whole of it) |
+| [count-lines-in-a-repo.md](count-lines-in-a-repo.md) | making "how big is this thing" a command rather than an argument — take the file list from git, categorise by purpose, and the four ways cloc goes quiet |
 | [diagnose-box-resources.md](diagnose-box-resources.md) | a shared box is slow, or something got OOM-killed — measure, attribute, and add swap without disrupting anyone |
 
 ## Traps, before you meet them

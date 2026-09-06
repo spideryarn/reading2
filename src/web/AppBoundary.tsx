@@ -31,7 +31,7 @@
  */
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
-import { recordLog } from "./log-buffer.js";
+import { nameOfThrown, recordLog } from "./log-buffer.js";
 import { captureClientFailure } from "./monitoring.js";
 
 interface Props {
@@ -64,19 +64,10 @@ export class AppBoundary extends Component<Props, State> {
        The name only: `error.message` is not sent for the same reason it is not
        rendered above. See src/web/log-buffer.ts § ClientErrorLogEntry.
 
-       Derived defensively: the parameter is typed `Error`, but React hands this
-       the thrown value unchanged and `throw null` is a real thing a component
-       can do. Reading `.name` off it threw a second time, out of the boundary
-       itself, and there is nothing above this one to catch that — so the reader
-       got an empty page instead of the apology below. */
-    let name = "Error";
-    try {
-      const candidate = (error as unknown as { name?: unknown } | null)?.name;
-      if (typeof candidate === "string") name = candidate;
-    } catch {
-      /* Keep the default. A diagnostic must not replace the failure it records. */
-    }
-    recordLog({ kind: "client-error", source: "boundary", name });
+       Not `error.name`: the parameter is typed `Error` and the runtime value
+       need not be one, so the read is `nameOfThrown`'s job and not this file's
+       — src/web/log-buffer.ts § nameOfThrown. */
+    recordLog({ kind: "client-error", source: "boundary", name: nameOfThrown(error) });
   }
 
   override render(): ReactNode {

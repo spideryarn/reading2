@@ -7,10 +7,18 @@
  * >
  * > — Greg, 2026-08-31
  *
- * Five panels can do this — Glossary, Ideas, Quotes, Timeline and the Sketch
- * picture inside Diagram — and this is the whole of it, in one place, because
- * five copies of a rule about spending money is five chances to get one of them
- * wrong.
+ * Eleven targets can do this — Glossary, Ideas, Quotes, Timeline and Debate;
+ * the Sketch and Illustrated pictures inside Diagram; the Quiz half of Remember;
+ * Referee's Claims and Candidates; and the Tweets page — reached by twelve
+ * controls, since Diagram's bar button and its Sketch chip both arm the Sketch.
+ * This is the whole of it, in one place, because eleven copies of a rule about
+ * spending money is eleven chances to get one of them wrong.
+ *
+ * **Two of them have no job behind them.** `claims` and `candidates` are SSE
+ * streams rather than pipeline steps (auto-run-targets.ts), so `ensure` starts
+ * a stream instead of enqueuing work. Nothing here notices: this hook asks only
+ * *is there anything there* and *did the reader press it*, and the panel decides
+ * what running means.
  *
  * ## The three questions, in the order they have to be asked
  *
@@ -24,9 +32,12 @@
  *     bar's idea of what exists is a cached fact about somebody else's article
  *     and may be wrong, so it never authorises a paid call.
  *  3. **Has this tab already tried?** `jobEngine.beginAutoAttempt`. One attempt
- *     per `(slug, step)` per session, which is what closes the
+ *     per `(slug, target)` per session, which is what closes the
  *     generate-fail-generate loop structurally rather than by remembering to set
- *     a flag on every error path.
+ *     a flag on every error path. That loop is not hypothetical: it is the bug
+ *     the Tweets page's button was written to avoid in 2026-08-25, back when
+ *     this hook did not exist, and the reason the button could stop being the
+ *     thing that avoids it.
  *
  * The press is consumed once step 2 has an **answer**, whichever answer it is:
  * a `ready` retires it exactly as a `none` spends it.
@@ -60,10 +71,13 @@
  *
  * ## What it does not do
  *
- * It never runs for a visitor, and not because of a check here: the five hooks
- * mount under `OwnedReader` and never for a visitor, which is the capability
- * seam the whole reading view uses. tests/public-network-trace.test.tsx is the
- * measure of that taken from outside.
+ * It never runs for a visitor, and mostly not because of a check here: every
+ * hook that calls it mounts under `OwnedReader` — or, for Tweets, under the
+ * owner's arm of `OwnedArticle` — and never for a visitor, which is the
+ * capability seam the whole reading view uses. The Tweets *link* is the one
+ * place that also checks, because the bar itself is drawn for a visitor and a
+ * press there would mint a token nothing could ever spend (Dock.tsx). tests/public-network-trace.test.tsx is the measure of
+ * that taken from outside.
  *
  * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 2b–2c.
  */
@@ -77,7 +91,7 @@ import {
 } from "./activation.js";
 import { jobEngine } from "./jobEngine.js";
 
-/** The four states every one of the five read hooks reports. */
+/** The four states every one of every read hook that calls this reports. */
 export type ArtefactStatus = "loading" | "none" | "ready" | "error";
 
 /**

@@ -63,6 +63,7 @@ import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { JobProgress } from "./JobProgress.js";
 import { TooltipGroup } from "./Tooltip.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
+import { armActivation } from "./activation.js";
 import { useRenderCount } from "./perf.js";
 
 /**
@@ -78,9 +79,18 @@ import { useRenderCount } from "./perf.js";
  * says which half is open and asks for the other.
  */
 export function RememberSubModeToggle({
+  slug,
   value,
   onChange,
 }: {
+  /**
+   * **Only so that a press can be recorded**, and read nowhere else in here —
+   * `RefereeViews` in App.tsx took the same prop for the same reason on the same
+   * day. Arming at the click rather than one level up is what `Dock` and
+   * `DiagramPanel` already do, and it keeps the button and the token in one
+   * file, so a test that clicks the real chip is a test of the real rule.
+   */
+  slug: string;
   value: RememberView;
   onChange(next: RememberView): void;
 }) {
@@ -100,7 +110,29 @@ export function RememberSubModeToggle({
              arrow-key handling a tablist promises is worse than not claiming
              it. */
           aria-pressed={value === view}
-          onClick={() => value !== view && onChange(view)}
+          onClick={() => {
+            /* **The gesture seam for the questions.** Pressing Quiz with none
+               written writes them — Greg's rule about opening a mode, one level
+               down (src/web/activation.ts). Here, in a real `onClick`, and
+               deliberately *not* inside the `setBoth` the caller runs:
+               `?remember=` is query state, so Back and Forward move it too, and
+               retracing your steps through this toggle must not buy a model
+               call. Recall arms nothing — it is a conversation the reader
+               starts, and there is no empty artefact for a press to fill.
+
+               **Armed before the `value === view` check, not after**, so that
+               pressing Quiz while already *in* Quiz mints a press. That is the
+               rule the bar's own mode buttons follow — pressing the mode you are
+               in re-arms it (tests/modes-that-start-themselves.test.tsx § "runs
+               it when the mode pressed is the one already open") — and it is the
+               only way back from a read that failed, because a failed read keeps
+               the press and re-reads, and nothing re-fires without a new nonce.
+               GPT Sol, 2026-09-06. */
+            if (view === "quiz") armActivation(slug, "quiz");
+            /* The sub-mode itself does not change, and writing the same value to
+               the URL would push a history entry that goes nowhere. */
+            if (value !== view) onChange(view);
+          }}
         >
           {view === "recall" ? "Recall" : "Quiz"}
         </button>
@@ -187,7 +219,20 @@ export function QuizPanel({
     context: { kind: "article", slug: owner.slug },
   });
 
-  const run = (label: string) => (
+  /**
+   * The run button, and **which verb it calls is the argument**.
+   *
+   * One helper with `owner.write()` hard-coded until 2026-09-06, which put a
+   * *forced* request behind the empty state's button — and that is a
+   * double-charge, not a nicety: `work_key` is computed from the request
+   * including `force`, so the automatic unforced run and a press here during the
+   * same second are two requests `enqueueOrGet` will not collapse, and the
+   * reader pays for two. GPT Sol found it in the plan for this change.
+   *
+   * So: `ensure` where there is nothing, `write` where there is something to
+   * replace. The same split, and the same reason, as `useIdeas`.
+   */
+  const run = (label: string, verb: () => Promise<void> = owner.write) => (
     <JobProgress
       job={owner.job}
       /* Between the press and the first poll there is no job yet, and without
@@ -198,7 +243,7 @@ export function QuizPanel({
       starting={owner.starting}
       failed={owner.failed}
       stalled={owner.stalled}
-      onRun={() => owner.write()}
+      onRun={() => verb()}
       onCancel={owner.cancel}
       label={label}
       step="quiz"
@@ -296,7 +341,11 @@ export function QuizPanel({
             One model call over the whole article, and it takes about a minute. Written once and
             kept — you will not be asked again unless the article changes.
           </p>
-          {run("Write the questions")}
+          {/* **`ensure`, not `write`.** There are no questions — that is what
+              this branch is — so the unforced request is the right one, and it
+              is the *same request* the automatic run makes, which is what stops
+              a press landing beside it from being charged twice. See `run`. */}
+          {run("Write the questions", owner.ensure)}
         </div>
       )}
 

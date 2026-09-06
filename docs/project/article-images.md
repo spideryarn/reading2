@@ -10,6 +10,34 @@ the budget and the bucket), both of which explain themselves at length. The reas
 weighed and the review that found a blocker are in
 [260829b-hosting-the-articles-images.md](../plans/260829b-hosting-the-articles-images.md).
 
+## Delivery, and what is actually switched on
+
+Storing was built first and **serving came a week later**, on 2026-09-06, with the PDF figures that
+needed it ([260906a](../plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md), stage D).
+Until then the step downloaded every image, hashed it, put it in the bucket and wrote a manifest —
+and not one byte of it was ever served, so every reader was still hot-linking the publisher's CDN.
+
+Three pieces, and all three are **generic**: they serve *an article's images*, and a PDF's figures
+are the first kind to flow through them.
+
+- [`src/asset-delivery.ts`](../../src/asset-delivery.ts) — which stored object a URL names, and how
+  the URL is spelled. It searches both collections in the manifest.
+- `GET /api/asset/:slug/:hash.:ext` ([`src/routes.ts`](../../src/routes.ts) § `sendArticleAsset`) for
+  the owner, and `GET /api/public/asset/…` ([`src/public/routes.ts`](../../src/public/routes.ts))
+  for a visitor, which re-asks the visibility question on every request.
+  **The key is rebuilt from the manifest entry, never from the path** — the bucket is shared by every
+  article and every reader, so a hash absent from *this* article's manifest is a 404 even for its
+  owner.
+- [`src/web/rehost.ts`](../../src/web/rehost.ts) — the rewrite, in the browser, **after**
+  `sanitizeArticle`. It has to be after: `stripOwnApiUrls` deletes any `src` resolving to our own
+  API, deliberately. **Both footings fetch the bytes and put a `blob:` in the `src`** — an owner
+  because an `<img>` cannot carry a bearer token, a visitor because a `src` nobody checked is a
+  broken rectangle when the answer is a 404. The file's header has the trade that buys and its cost.
+
+**What is switched on is PDF figures and nothing else.** Greg's sequencing, 2026-09-06: build the
+mechanism generic, land it PDF-only, prove it, then flip the article's own images on — which is stage
+E, and is one addition to `rehost.ts` rather than a route.
+
 ## Why host them rather than hot-link
 
 Three reasons, and the third is the one that made it worth doing:
@@ -66,6 +94,22 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
   and passing it as that fetch's own `maxBytes` means the bytes in flight can never exceed what is
   left. The caps are `MAX_IMAGE_BYTES`, `MAX_ARTICLE_BYTES` and `MAX_IMAGES` in
   [`src/collect-assets.ts`](../../src/collect-assets.ts).
+- **The PDF half has its own clock, its own article budget, and its own words for a failure.**
+  [`src/collect-pdf-figures.ts`](../../src/collect-pdf-figures.ts) recovers no bytes over a network,
+  so none of the machinery above applies to it — but the *shapes* do, and it copies them rather than
+  inventing parallel ones: `PDF_FIGURES_BUDGET_MS` races the whole run and finalises every marker the
+  race left behind, and `MAX_ARTICLE_FIGURE_BYTES` bounds what one document may store, because
+  capping the marker count and the per-figure size still let 100 × 12 MiB through. Both numbers match
+  their `collect-assets.ts` counterparts deliberately: the two halves are **alternatives**, since a
+  PDF-made article has no `<img>` and a web article has no PDF, so an article costs at most one of
+  them. The reasons are a vocabulary rather than a catch-all — `no-source`, `unreadable-pdf`,
+  `storage`, `budget` and `out-of-time` say *whose* problem it is, for the reason `AssetFailure`
+  keeps `storage` apart from `network`: the two need different people. All four were once spelled
+  `out-of-time` (GPT Sol, C-4).
+- **A figure ref carried by two elements refuses both.** The manifest is keyed by ref, so one entry
+  is all there is; keeping the first meant the same picture appeared under two different captions —
+  a fabricated claim about the paper the reader cannot detect. Both `pdfFigureMarkersIn` walks now
+  count first and drop every occurrence (GPT Sol, C-5).
 - **The politeness gate is global, and it is all the politeness there is.** There is no per-host
   throttle anywhere in this repo; job concurrency was 1 and that was the entire story until one
   article became up to 200 requests. `GATE` admits two at a time *across the process* — not two per
@@ -73,9 +117,17 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
 
 ## Freshness
 
-`assets` is one of the stages fingerprinted on a content hash, and its hash input is **the blocks
-alone** — honestly so: it fetches the images the blocks name, and has no prompt and no head.
+`assets` is one of the stages fingerprinted on a content hash, and its hash input is **the image
+URLs and the PDF figure refs in the blocks, and nothing else** — `assetsInputHash` in
+[`src/collect-assets.ts`](../../src/collect-assets.ts).
 [architecture.md § Conventions](architecture.md#conventions).
+
+It was `hashBlocks` until 2026-09-06, which reads like the same claim and is not: that hash covers a
+block's `id`, `text`, `role` and `treatment` and **not** its `html`, so it could not see a PDF figure
+marker arrive and a carried-forward empty manifest would have gone on reporting itself current for
+ever. Stamping what the step actually consumes is the rule `articleFingerprint` states and three
+other stages had already broken —
+[260906a](../plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md).
 
 ## See also
 

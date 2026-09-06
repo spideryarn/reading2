@@ -221,6 +221,10 @@ export const loadDebate = reader.loadDebate.bind(reader);
    contracts.ts for what `null` means and what it deliberately does not. */
 export const loadSource = reader.loadSource.bind(reader);
 export const loadArc = reader.loadArc.bind(reader);
+/* The manifest on its own, for the route that serves one asset's bytes. See
+   `ArticleReader.loadAssets` in contracts.ts for why it is not
+   `loadArticle(slug).assets`, and for what `undefined` means. */
+export const loadAssets = reader.loadAssets.bind(reader);
 
 /**
  * The reader's own state: conversations, saved searches, checked terms.

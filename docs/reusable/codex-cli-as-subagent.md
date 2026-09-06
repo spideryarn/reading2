@@ -9,7 +9,9 @@ different model family reviewing a change catches different bugs, and delegating
 cheaper per unit of work than doing it in the orchestrator.
 
 The canonical path is the wrapper script [`scripts/run-codex.ts`](../../scripts/run-codex.ts).
-Use it rather than calling `codex exec` yourself — see [Why a wrapper](#why-a-wrapper).
+Use it rather than calling `codex exec` yourself — see [Why a wrapper](#why-a-wrapper). Its mirror
+image is [claude-cli-as-subagent.md](claude-cli-as-subagent.md), for reaching Opus from something
+that is not a Claude session; the two wrappers share a spawn core.
 
 > **Provenance.** Adapted 2026-08-24 from `coding-agent-instructions/docs/CODEX_CLI_AS_SUBAGENT.md`
 > in the MindstoneRebel repo, cut down to the parts that travel (that doc is wired into a
@@ -369,6 +371,14 @@ The wrapper captures that log to a file and prints only its path. The answer its
 that's what you asked for, and making the caller shell out a second time to `cat` it buys nothing —
 but capped, so a runaway answer can't do what the activity log would have. Pass `--stream` when a
 *human* is watching a terminal; leave it off for orchestrated runs.
+
+`--stream` gives up one more guarantee than it looks like, and this is the whole of it: it hands
+codex the caller's own descriptors, so the wrapper no longer owns the pipes and cannot let go of
+them. A helper the run leaves behind — detached into its own process group, past the group kill —
+then holds the *caller's* stdout open after the wrapper has exited, and a script capturing that
+output waits for it (measured 2026-09-06, GPT Sol). Every other mode bounds this; `--stream` cannot
+without owning and re-emitting both streams, which is the one thing it exists not to do. So it stays
+as it is, and stays wrong for an orchestrated run for a second reason.
 
 If you ever do run raw `codex exec` from an orchestrator, redirect it
 (`codex exec … > /tmp/codex.log 2>&1`) and read only the `-o` file.

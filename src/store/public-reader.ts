@@ -45,6 +45,8 @@
 
 import { and, asc, eq, sql } from "drizzle-orm";
 
+import type { Assets } from "../assets.js";
+import { storedAssetFor } from "../asset-delivery.js";
 import { getDb } from "../db/client.js";
 import { articleRevisions, articles, comments, revisionBlocks, searchRuns } from "../db/schema.js";
 import { headingTitleOf } from "../library-scalars.js";
@@ -55,6 +57,8 @@ import { sanitizeStoredBlocks } from "../sanitize.js";
 import { isStale } from "../search-stale.js";
 import { hashBlocks } from "../source-hash.js";
 import { isSlug } from "../ingest.js";
+import { blobStore } from "./blobs.js";
+import { canonicalKey } from "../source.js";
 import { publicSlug } from "./public-slug.js";
 import { publicArticle } from "../public/dto.js";
 
@@ -112,9 +116,43 @@ export interface PublicHead {
   canonical: string | null;
 }
 
+/**
+ * One of a shared article's own pictures, as bytes.
+ *
+ * **Not a wire type.** `src/public/routes.ts` writes these two fields into a
+ * response and throws the object away; nothing here is JSON and nothing here is
+ * ever put in `src/public-types.ts`, which is the contract with the client.
+ */
+export interface PublicAsset {
+  bytes: Uint8Array;
+  /** Sniffed from the bytes when they were stored, never claimed by a URL. */
+  contentType: string;
+}
+
 export interface PublicArticleReader {
   loadArticle(slug: string): Promise<PublicArticle>;
   loadHead(slug: string): Promise<PublicHead>;
+
+  /**
+   * **One picture of a shared article** — the public twin of
+   * `sendArticleAsset` in src/routes.ts, and the only read in this file whose
+   * answer is bytes.
+   *
+   * `null` is *this article holds no such object*, and it deliberately covers
+   * four situations at once: no manifest, a hash that is not in it, a hash that
+   * is in it as a failure, and a hash under a different extension. Every one of
+   * them is a 404, and the caller must not be able to tell them apart.
+   *
+   * A **thrown 404** is the other answer, and it is a different one: the
+   * article is not shared, or does not exist. That is `notShared`, exactly as
+   * the two reads above it — a stranger asking about a private article and a
+   * stranger asking about no article get one reply.
+   *
+   * `sha256` and `ext` are the caller's text and are only ever *compared*: what
+   * reaches the bucket is `canonicalKey` rebuilt from the manifest entry. GPT
+   * Sol, I-5, and src/asset-delivery.ts states the rule at length.
+   */
+  loadAsset(slug: string, sha256: string, ext: string): Promise<PublicAsset | null>;
 }
 
 /**
@@ -334,6 +372,25 @@ const PUBLIC_PROJECTIONS = {
    * reader's link is a person clicking through to the piece and keeps it.
    * src/urls.ts § `publicSourceUrl` weighs the two against each other.
    */
+  /**
+   * **One column, for the route that serves one picture's bytes.**
+   *
+   * The twin of `REVISION_PROJECTIONS.assets` in [pg.ts](pg.ts), and here for
+   * the same reason: a shared article with eight figures asks this eight times
+   * on one page load, and the `article` projection above carries the whole
+   * tree, the blocks' worth of artefacts and seven `jsonb` documents. A visitor
+   * fetching pictures must not pay for the article again per picture.
+   *
+   * It goes through `publicCurrentRevisionQuery` like everything else in this
+   * file, which is what puts `where publicSlug(slug)` on it — the clause the
+   * whole feature rests on, asked **again** on every image request rather than
+   * inherited from the page load. Making an article private has to take effect
+   * on the next request, not on the next reload.
+   */
+  asset: {
+    id: articleRevisions.id,
+    assets: articleRevisions.assets,
+  },
   head: {
     id: articleRevisions.id,
     title: articleRevisions.title,
@@ -774,6 +831,41 @@ export const pgPublicReader: PublicArticleReader = {
         gist: found.revision.rootGist,
         canonical: found.revision.finalUrl,
       };
+    });
+  },
+
+  /**
+   * One picture of a shared article — see the contract.
+   *
+   * **Two refusals, in this order, and neither may be skipped.** First: is this
+   * article shared *right now*? That is `publicCurrentRevisionQuery`'s
+   * `where publicSlug(slug)`, asked afresh on every image request rather than
+   * inherited from the page load, because making an article private has to take
+   * effect on the next request. Second: does this article's own manifest name
+   * this object? That is `storedAssetFor`, and it is what stops a visitor
+   * reading an arbitrary object out of a bucket that is shared by every article
+   * and every reader.
+   *
+   * **A manifest naming an object the store has not got is a 500**, on
+   * `sendSource`'s reasoning: this is a dangling reference rather than an
+   * absence, and telling a reader their picture does not exist because a bucket
+   * is misconfigured is the wrong sentence. `scrubbed` lets it through because
+   * it carries its own `status`.
+   */
+  async loadAsset(slug: string, sha256: string, ext: string): Promise<PublicAsset | null> {
+    requireSlug(slug);
+    return scrubbed("asset", async () => {
+      const [found] = await publicCurrentRevisionQuery(getDb(), slug, "asset");
+      if (!found) throw notShared(slug);
+
+      const entry = storedAssetFor((found.revision.assets as Assets | null) ?? undefined, sha256, ext);
+      if (!entry) return null;
+
+      const bytes = await blobStore().get(canonicalKey(entry.sha256, entry.ext));
+      if (!bytes) {
+        throw Object.assign(new Error("That image could not be read back."), { status: 500 });
+      }
+      return { bytes, contentType: entry.contentType };
     });
   },
 };

@@ -73,7 +73,7 @@ import {
   type ActivationIdentity,
   type AutoRunTarget,
 } from "./activation.js";
-import { recordLog } from "./log-buffer.js";
+import { nameOfThrown, recordLog } from "./log-buffer.js";
 import { captureClientFailure } from "./monitoring.js";
 
 interface BoundaryProps {
@@ -242,18 +242,11 @@ class FeatureErrorBoundary extends Component<BoundaryProps, BoundaryState> {
        cannot. The **name only**: `error.message` is not sent for the same
        reason it is not rendered. src/web/log-buffer.ts § ClientErrorLogEntry.
 
-       Derived defensively because the parameter is typed `Error` and the
-       runtime value need not be one: React hands `componentDidCatch` the thrown
-       value unchanged, and `throw null` or `throw "nope"` are real things a
-       component can do. A getter on it could throw too, hence the `try`. */
-    let name = "Error";
-    try {
-      const candidate = (error as unknown as { name?: unknown } | null)?.name;
-      if (typeof candidate === "string") name = candidate;
-    } catch {
-      /* Keep the default. A diagnostic must not replace the failure it records. */
-    }
-    recordLog({ kind: "client-error", source: "boundary", name });
+       Not `error.name`: the parameter is typed `Error` and the runtime value
+       need not be one, so the read is `nameOfThrown`'s job and not this file's
+       — src/web/log-buffer.ts § nameOfThrown, which is where F10 above now
+       lives. */
+    recordLog({ kind: "client-error", source: "boundary", name: nameOfThrown(error) });
   }
 
   private retry = (): void => {

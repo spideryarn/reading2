@@ -29,7 +29,7 @@ import { describe, expect, it } from "vitest";
 import type { ChatMessage, ChatThread } from "../src/types.js";
 import type { ChatInput, ChatState } from "../src/web/chat/model.js";
 import { asOpId, initialState } from "../src/web/chat/model.js";
-import { project } from "../src/web/chat/project.js";
+import { project, storedSpoken } from "../src/web/chat/project.js";
 import { twice } from "./helpers/chat-reduce.js";
 
 const SLUG = "a-piece";
@@ -310,7 +310,7 @@ describe("when it lands", () => {
 });
 
 describe("when the server refuses it", () => {
-  it("takes the rows back off the screen and goes and looks", () => {
+  it("keeps provisional rows while it goes and checks whether the write landed", () => {
     /* A 409 has three causes and only the server can say which: somebody typed
        into this conversation, somebody edited a turn away, or *this very
        request already succeeded* and its response was lost. The third is why
@@ -325,8 +325,8 @@ describe("when the server refuses it", () => {
       error: "This conversation has moved on",
       repair: { id: REPAIR },
     });
-    expect(project(state)[0]?.messages, "the drawn rows survived a refusal").toHaveLength(2);
-    expect(state.error).toBe("This conversation has moved on");
+    expect(project(state)[0]?.messages, "the repair owns the provisional copy").toHaveLength(4);
+    expect(state.error).toBeNull();
     expect(commands).toEqual([
       { type: "repair", opId: REPAIR, slug: SLUG, threadId: "spya-thra01" },
     ]);
@@ -415,5 +415,59 @@ describe("the gate", () => {
     });
     expect(state.base[0]?.messages).toHaveLength(4);
     expect(commands).toEqual([]);
+  });
+});
+
+
+describe("confirming an uncertain spoken append", () => {
+  const operation = () => {
+    const op = twice(withTypedTurn(), started()).state.operations.get(SPOKEN);
+    if (op?.kind !== "spoken") throw new Error("Missing spoken operation");
+    return op;
+  };
+
+  it("requires the exact adjacent pair after the claimed tail, including metadata", () => {
+    const op = operation();
+    expect(storedSpoken(stored, op)).toBeTruthy();
+    expect(storedSpoken(stored, { ...op, expectedTailId: "spya-absent" })).toBeNull();
+    expect(storedSpoken(stored, { ...op, expectedTailId: null })).toBeNull();
+    for (const patch of [
+      { text: "Different answer" }, { role: "user" as const }, { status: "pending" as const },
+      { interrupted: true }, { passages: [{ blockIds: ["spya-aaa222"], why: "different" }] },
+      { tools: [{ name: "search_web", label: "looked elsewhere", status: "done" as const }] },
+    ]) {
+      const changed = { ...stored, messages: stored.messages.map((m, i) => i === 3 ? { ...m, ...patch } : m) };
+      expect(storedSpoken(changed, op), JSON.stringify(patch)).toBeNull();
+    }
+  });
+
+  it("compares the metadata the route stores, including bounded labels and discarded timing", () => {
+    const op = operation();
+    const long = "x".repeat(450);
+    const reply = { ...op.reply, interrupted: true,
+      passages: [{ blockIds: ["spya-aaa222"], why: long }],
+      tools: [{ name: "search_web", label: long, detail: long, status: "done" as const, ms: 20 }],
+    };
+    const persisted = { ...stored, messages: stored.messages.map((m, i) => i === 3 ? { ...m,
+      interrupted: true,
+      passages: [{ why: long.slice(0, 400), blockIds: ["spya-aaa222"] }],
+      tools: [{ status: "done" as const, detail: long.slice(0, 400), label: long.slice(0, 400), name: "search_web" }],
+    } : m) };
+    expect(storedSpoken(persisted, { ...op, reply })).toBeTruthy();
+  });
+
+  it("hands provisional rows over atomically and keeps the existing stale-read guard", () => {
+    const registered = twice(withTypedTurn(), started()).state;
+    const refused = twice(registered, {
+      type: "spoken.refused", opId: SPOKEN, error: "Moved on", repair: { id: REPAIR },
+    }).state;
+    expect(project(refused)[0]?.messages).toHaveLength(4);
+    const landed = twice(refused, { type: "repair.succeeded", opId: REPAIR, thread: stored }).state;
+    expect(project(landed)[0]?.messages.map((m) => m.id)).toEqual(stored.messages.map((m) => m.id));
+    expect(landed.error).toBeNull();
+    const touched = { ...refused, base: refused.base.map((t) => ({ ...t, title: "My newer name" })) };
+    const ignored = twice(touched, { type: "repair.succeeded", opId: REPAIR, thread: stored }).state;
+    expect(ignored.base).toBe(touched.base);
+    expect(ignored.operations.size).toBe(0);
   });
 });

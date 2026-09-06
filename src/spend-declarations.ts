@@ -367,6 +367,13 @@ export const UNMETERED_SPEND: readonly UnmeteredSpend[] = [
     why: "It spawns `codex exec` as a subprocess rather than making a request, so there is no HTTP call to route through a seam and no response body to meter. The provider scan cannot see it either — it names neither a provider host nor one of the inference credentials — so before this entry it was in no list anywhere.",
     since: "2026-09-02",
   },
+  {
+    file: "scripts/run-claude.ts",
+    account: "whichever credential the machine itself resolves (--auth machine, the default): a claude.ai login, an apiKeyHelper, or a cloud provider — Greg's Max subscription on the laptop, the box's separate one there. --auth env instead passes ANTHROPIC_AUTH_TOKEN, ANTHROPIC_API_KEY and CLAUDE_CODE_OAUTH_TOKEN, and refuses unless `claude auth status` confirms one of them is what will be billed. Each run prints what that probe said.",
+    what: "A Claude subagent dispatched from outside a Claude session: a delegated implementation, or a second opinion with a clean context. An Opus run at --effort high is not free, and the CLI reports what it cost in the status line (total_cost_usd) even on a subscription.",
+    why: "The same reason as run-codex.ts above — it spawns another vendor's CLI as a subprocess rather than making a request, so there is no HTTP call for declaredFetch to wrap and no response body to meter. It is in this table rather than only in the test's ALLOWED map because a green test is not a register.",
+    since: "2026-09-06",
+  },
 ];
 
 export function declarationFor(id: string): Declaration {

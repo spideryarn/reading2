@@ -98,6 +98,7 @@ describe("the reserved attribute namespace", () => {
       RESERVED_ATTRS.callout,
       RESERVED_ATTRS.wasId,
       RESERVED_ATTRS.wasName,
+      RESERVED_ATTRS.pdfFigure,
     ];
     for (const attr of used) expect(attr.startsWith(RESERVED_PREFIX)).toBe(true);
     expect(new Set(used).size).toBe(used.length); // no two families sharing a name

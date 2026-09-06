@@ -1,5 +1,10 @@
 # Architecture
 
+**Never read this code before?** Start with
+[docs/tutorials/architecture.html](../tutorials/architecture.html) — the same system explained
+end to end, with diagrams and one article followed all the way through, for somebody who knows
+the product and has not opened the repository. This file is the reference; that one is the way in.
+
 ## Intent
 
 From the brief (Greg, 2026-08-24), verbatim:

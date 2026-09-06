@@ -86,6 +86,17 @@
  * tag, the raw PDF's sha256, the page, the figure's ordinal on that page and a
  * digest of the caption, so an exact-match lookup fails closed until extraction
  * runs again. Sol D1-5.
+ *
+ * ## 5. The reader pays for every pixel, so the pixels are cut down first
+ *
+ * A filter-0 PNG of a photograph is enormous — the ball-lightning paper's
+ * page-3 figure is 2067 × 1741 of photographic RGB and encoded to **9,355,050
+ * bytes** (measured 2026-09-06). The usual answer is a lossy encoder and we
+ * cannot have one: `@napi-rs/canvas` is 34 MB of Vercel bundle and
+ * tests/pdf-bundle-trace.test.ts refuses it by name. So `downscaleRaster`
+ * throws away the resolution nobody was going to see, before `encodeFigurePng`
+ * is asked to compress it, and the picture arrives at a size a reader can
+ * afford. The filter and the alpha trap it walks into are on that function.
  */
 import { createHash } from "node:crypto";
 import { promisify } from "node:util";
@@ -267,6 +278,193 @@ function isFullyTransparent(data: Uint8Array): boolean {
     if (data[at] !== 0) return false;
   }
   return true;
+}
+
+/* ------------------------------------------------------------------ *
+ * The downscale
+ * ------------------------------------------------------------------ */
+
+/**
+ * The longest side, in pixels, that a recovered figure is allowed to keep.
+ *
+ * **Greg's call, 2026-09-06**, and the arithmetic behind it is the whole
+ * justification: a figure renders at roughly **700 px of CSS width** in the
+ * reading view, so 1400 px is already a pixel per device pixel on a 2× display
+ * and 1600 leaves room for a wider column without anybody having to think about
+ * it again. Everything above that is resolution the reader downloads and never
+ * sees.
+ *
+ * > downscale instead
+ * >
+ * > — Greg, 2026-09-06, choosing this over a 16 MiB delivery cap
+ *
+ * It is a bound on the **longest side**, not on the area, because the shape of
+ * a figure varies wildly here — the corpus holds a 1190 × 159 strip and a
+ * 563 × 1536 column — and a megapixel budget would leave a tall figure
+ * unreadably narrow.
+ */
+export const MAX_FIGURE_EDGE = 1600;
+
+/**
+ * Shrink a raster until its longest side is inside `maxEdge`, by averaging the
+ * source pixels that fall under each destination pixel.
+ *
+ * **A box filter over an integer scale factor**, and each of those three words
+ * is a decision:
+ *
+ * - *Box*, not nearest-neighbour. These are mostly diagrams, and dropping three
+ *   pixels in four takes whole gridlines and hairline strokes out of a chart —
+ *   a plot that quietly loses its axes looks broken rather than small. A box
+ *   filter cannot lose a line; it can only make it fainter.
+ * - *Not bilinear or Lanczos.* Those exist to invent detail that is not there,
+ *   which is an upscaling problem. On the way down, averaging the pixels you
+ *   are discarding **is** the correct answer, and it needs no kernel, no
+ *   window and nothing to tune.
+ * - *Integer factor*, so every destination pixel is a whole number of source
+ *   pixels and there is no phase term to get wrong. The last row and column may
+ *   be a partial box where the factor does not divide evenly; they are averaged
+ *   over what is actually there, so no source pixel is discarded.
+ *
+ * **Only ever down.** A raster already inside the bound comes back as the same
+ * object — not a copy, not a re-encode — so a small figure costs nothing and
+ * `downscaled === raster` is the cheap proof that nothing touched it.
+ *
+ * ## The alpha trap, which is the reason this function has tests of its own
+ *
+ * These rasters carry real transparency: the corpus's `RGBA_32BPP` figures run
+ * 32–67% opaque, so most of them have an edge between drawn pixels and
+ * fully-transparent ones. Averaging the colour channels *without* weighting by
+ * alpha reads the colour bytes underneath a transparent pixel — which are
+ * usually zero, because nothing wrote them — and mixes black into every such
+ * edge. The result is a dark fringe around everything, and it looks like a
+ * rendering fault rather than like a resize.
+ *
+ * So the colour average here is **weighted by alpha**: `Σ(c·a) / Σa`, with
+ * alpha itself the plain mean. That is arithmetically identical to
+ * premultiply-average-un-premultiply, which is how the trap is usually
+ * described, and it is written in the weighted form because it does the same
+ * thing in one rounding step instead of two.
+ *
+ * A destination pixel with no opaque source under it keeps alpha 0 and colour
+ * 0. Its colour cannot be observed — there is nothing to weight the average by
+ * and nothing will draw it — so zero is as good an answer as any, and it is the
+ * one that compresses.
+ *
+ * `maxEdge` is a parameter so a test can force a known factor over a raster
+ * small enough to average by hand. Callers in the pipeline take the default.
+ */
+export function downscaleRaster(raster: DecodedRaster, maxEdge: number = MAX_FIGURE_EDGE): DecodedRaster {
+  if (!isPositiveWholeNumber(maxEdge)) {
+    throw new Error(`pdf-figures: a downscale bound must be a positive whole number, got ${maxEdge}`);
+  }
+  const longest = Math.max(raster.width, raster.height);
+  if (longest <= maxEdge) return raster;
+
+  /* The smallest whole factor that brings the longest side inside the bound.
+     `Math.ceil` on the destination sides rather than `Math.floor` so the
+     remainder rows and columns survive as a partial box instead of being cut
+     off; both sides stay inside `maxEdge` because `longest / factor <= maxEdge`
+     and `maxEdge` is a whole number. Aspect ratio is preserved to within the
+     one pixel that integer sides allow. */
+  const factor = Math.ceil(longest / maxEdge);
+  const width = Math.max(1, Math.ceil(raster.width / factor));
+  const height = Math.max(1, Math.ceil(raster.height / factor));
+
+  const out = new Uint8Array(width * height * CHANNELS[raster.kind]);
+  const box: Box = { source: raster.data, sourceWidth: raster.width, factor, out, width };
+
+  /* One `at` for the whole image, rewritten per destination pixel, rather than
+     a fresh object each time — which on a figure this size is a million
+     allocations to describe four numbers. Timed on the corpus's largest raster
+     (2067 × 1741) on 2026-09-06 the two were **indistinguishable**: this box is
+     shared and the run-to-run spread was wider than the difference, so this is
+     the allocation avoided on principle, not a measured win. It is safe because
+     the object never escapes the loop it is declared beside. */
+  const at: BoxAt = { top: 0, bottom: 0, left: 0, right: 0, x: 0, y: 0 };
+  for (let y = 0; y < height; y++) {
+    at.y = y;
+    at.top = y * factor;
+    at.bottom = Math.min(at.top + factor, raster.height);
+    for (let x = 0; x < width; x++) {
+      at.x = x;
+      at.left = x * factor;
+      at.right = Math.min(at.left + factor, raster.width);
+      if (raster.kind === "rgb") averageRgb(box, at);
+      else averageRgba(box, at);
+    }
+  }
+
+  return { kind: raster.kind, width, height, data: out };
+}
+
+/** Everything the two averagers need that does not change per pixel. */
+interface Box {
+  source: Uint8Array;
+  sourceWidth: number;
+  factor: number;
+  out: Uint8Array;
+  width: number;
+}
+
+/** Which source pixels one destination pixel covers, and where it goes. */
+interface BoxAt {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+  x: number;
+  y: number;
+}
+
+/** The plain mean of every channel. No alpha, so nothing to weight by. */
+function averageRgb(box: Box, at: BoxAt): void {
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  for (let sy = at.top; sy < at.bottom; sy++) {
+    for (let sx = at.left; sx < at.right; sx++) {
+      const from = (sy * box.sourceWidth + sx) * 3;
+      r += box.source[from] as number;
+      g += box.source[from + 1] as number;
+      b += box.source[from + 2] as number;
+    }
+  }
+  const count = (at.right - at.left) * (at.bottom - at.top);
+  const to = (at.y * box.width + at.x) * 3;
+  box.out[to] = Math.round(r / count);
+  box.out[to + 1] = Math.round(g / count);
+  box.out[to + 2] = Math.round(b / count);
+}
+
+/**
+ * `Σ(c·a) / Σa` for the colour and the plain mean for the alpha — the trap
+ * described on `downscaleRaster`, and the only line here worth reading twice.
+ */
+function averageRgba(box: Box, at: BoxAt): void {
+  let weightedR = 0;
+  let weightedG = 0;
+  let weightedB = 0;
+  let alpha = 0;
+  for (let sy = at.top; sy < at.bottom; sy++) {
+    for (let sx = at.left; sx < at.right; sx++) {
+      const from = (sy * box.sourceWidth + sx) * 4;
+      const a = box.source[from + 3] as number;
+      weightedR += (box.source[from] as number) * a;
+      weightedG += (box.source[from + 1] as number) * a;
+      weightedB += (box.source[from + 2] as number) * a;
+      alpha += a;
+    }
+  }
+  /* Nothing opaque under this pixel: alpha 0, and the colour bytes stay the
+     zeroes `out` was allocated with. Reading the source's colours here — which
+     is what an unweighted average does — is exactly the bug above. */
+  if (alpha === 0) return;
+  const count = (at.right - at.left) * (at.bottom - at.top);
+  const to = (at.y * box.width + at.x) * 4;
+  box.out[to] = Math.round(weightedR / alpha);
+  box.out[to + 1] = Math.round(weightedG / alpha);
+  box.out[to + 2] = Math.round(weightedB / alpha);
+  box.out[to + 3] = Math.round(alpha / count);
 }
 
 /* ------------------------------------------------------------------ *

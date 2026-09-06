@@ -212,6 +212,18 @@ highest-value deferred item rather than a nicety.**
 Group one is *not* impossible: the second article produced **1 direct row**. So the rule admits real
 reception; the extract is what usually stops it.
 
+> **Correction, 2026-09-06 — "fifty years of citation" was the wrong yardstick.** Hand-verified web
+> research for [260906b](260906b-an-evaluation-for-debate-mode-and-what-it-finds.md)'s corpus found
+> that the web around *Cargo Cult Science* is saturated with pages that **quote and admire** it, and
+> that genuine argument *with* it is rare and mostly academic. **Volume of citation is not volume of
+> response**, so an empty group one here is a good deal more defensible than the sentence above
+> makes it sound, and the piece is a **precision** test rather than a recall one.
+>
+> The measurement is unaffected: `unverifiedSource` and not `directnessUnverified` is still what
+> emptied the group, and the extract is still the binding constraint. What changes is where the
+> *recall* question should be asked — of Carr's *Is Google Making Us Stupid?*, which does have a
+> stable ecosystem of named argumentative replies, and where an empty group one would be damning.
+
 ### 4. `valence` is systematically measuring the wrong thing — the one user-visible bug
 
 Three of the seven Feynman rows point valence at the **source's own subject** rather than at the row's
@@ -239,6 +251,95 @@ and re-run**; it is not measurable any other way.
   this tree**, so the cause is unresolved. `whyUnusable("debate", …)` and `isDebateDocument` both
   accept a one-direct-row document, so the shared validators are not it. To settle it: run the step
   with no other dev server up, or read the logs of whichever server claimed the job.
+
+  > **Settled, 2026-09-06, and it was neither guess.** The requeue machinery is fine: `settleExpired`
+  > (`src/store/pg-jobs.ts`) omits `draft_revision_id` from its `UPDATE`, so a lapsed lease keeps the
+  > draft exactly as `pauseForDeadline` does — reproduced by assembling the state an OOM kill leaves
+  > and watching a second attempt publish. The claiming process was not another checkout either: the
+  > step's own `detail` string exists only in this branch. What refused the write was
+  > `PublishRefused` with an undeclared `FailureKind`, landing in `runStep`'s generic fallback —
+  > [260905f](../postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md),
+  > whose query independently names this job's own slug, and whose fix landed **fifty minutes after
+  > this job failed**. Detail in
+  > [260906b](260906b-an-evaluation-for-debate-mode-and-what-it-finds.md) § The write failure.
+
+## Stage A of the eval — the first journalled runs, 2026-09-06
+
+Three articles through [`evals/debate/`](../../evals/debate/), which calls `generateDebate` directly
+rather than through the queue, journals every attempted pass, and bills to `scope_kind: 'eval'`.
+**$0.6384 over six calls**, confirmed against `spideryarn.ai_calls`.
+
+| article | words | kept direct | kept claims | searches | cost | elapsed |
+|---|---|---|---|---|---|---|
+| `cargocult-spya-rz663q` | 3,822 | 0 of 2 reported | 3 | 10 | $0.2759 | 73 s |
+| `writes` (PG) | 561 | **1** of 2 reported | 6 | 6 | $0.1473 | 44 s |
+| `claudes-constitution-spya-cr8bzk` | 3,295 | **1** of **6** reported | 4 | 6 | $0.2150 | 75 s |
+
+**Cost is lower than the 2026-09-05 runs and scales with length**, as expected: $0.15 on a 561-word
+essay against $0.28 on a 3,822-word one. All three sit inside the plan's ≤$0.40 median.
+
+### 6. Fetching the full page rescues real rows — **recovered 6 of 6**
+
+The question [260906b](260906b-an-evaluation-for-debate-mode-and-what-it-finds.md) was written to
+answer, and it is now answered. Of the quotations the model reported that were **missing from the
+provider's extract**, every one that could be fetched **was found in the full page**:
+
+| | quotations missing the extract | fetched | recovered | not recovered | not attempted |
+|---|---|---|---|---|---|
+| Cargo Cult | 2 | 0 | — | — | **2** (one 403, one PDF) |
+| `writes` | **0** | — | — | — | — |
+| Claude's Constitution | 6 | 5 pages | **6** | **0** | 0 |
+
+**The model was not paraphrasing. The slice was too small.** Finding 3 above is confirmed and its
+repair is justified: Stage F is worth building.
+
+**Three things this measurement would have got wrong if the instrument were naïve:**
+
+- **Cargo Cult's `0 of 2` is not evidence.** Both pages were unfetchable — one returned 403, the
+  other is a PDF (Gelman's, a genuine academic response). A tool that folded those into *"not
+  recovered"* would have printed a clean zero and deferred the right build for a network refusal.
+  They are counted `not attempted`, in their own column.
+- **`writes` had zero observed failures at all** — all four of its quotations were in the extract. So
+  *"the extract is the binding constraint"* is **article-dependent, not universal**; on this piece the
+  row that failed did so at `namesArticle` instead.
+- **PDFs are a recurring case for group one, not an edge one.** On an academic subject the genuine
+  responses are papers. `fetchDocument` returns `text: null` for a PDF, and Stage F records that
+  `unsupported` — so as specified it would still lose Gelman. The repo has a PDF text path
+  (`src/pdf-read.ts`); wiring it in is a real question rather than a nicety.
+
+**And it settles Stage F's haystack, which was an open design choice.** Readability extracts *the
+article* and discards the rest:
+
+| found in | count |
+|---|---|
+| whole document's visible text | **6 of 6** |
+| Readability's text | 2 of 6 |
+| whole-body only (Readability discarded that section) | **4** |
+| Readability only | 0 |
+
+Readability alone would have recovered two. **Whole-body visible text it is** — with the precision
+question (a quotation matching a *"you may also like"* blurb) left to be measured rather than
+assumed, since nothing here exercised it.
+
+### 7. The decoy is real, and Stage F would make it six times worse
+
+`claudes-constitution-spya-cr8bzk` is the **superseded May 2023 post** — its own first block says
+*"Update, Jan 21, 2026: We've published a new version of Claude's constitution."* All six direct rows
+the model reported answer the **January 2026 document at a different URL**. Two are established from
+their own quoted words: Zvi's names *"the official version of what we previously were calling its
+'soul document'"*, and Matt Glassman's says *"It's completely different in approach to the previous
+Claude constitution."* **A row that explicitly distinguishes the two documents was reported as a
+response to the older one.**
+
+The rules cut six to one — `directnessUnverified 4`, `unverifiedSource 1` — so **one false positive
+reached the kept set**, and it survived by the accident of where a search engine cut its extract
+rather than by any rule noticing. `namesArticle` cannot tell them apart: the URL branch is an
+accelerator rather than a gate, and *"Claude's Constitution"* is 21 characters against
+`MIN_TITLE_EVIDENCE_CHARS = 20`, so the title alone is accepted.
+
+**The two findings compound, and that is the thing to carry away.** Full-page fetching raises recall
+on a rule whose precision is already broken here: on this article it would take group one from **one**
+wrong row to **six**. Stage F must not land alone.
 
 ---
 
