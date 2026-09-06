@@ -18,16 +18,39 @@
  * and an unlabelled icon — and nothing on a wide screen, where the visible word
  * names the button perfectly well, would ever show that it had been deleted.
  *
- * This mounts `FeedbackButton` directly, which
+ * This mounts the trigger directly, inside its host, which
  * tests/feedback-button-visibility.test.tsx deliberately does not: that file is
- * about *where* the button is mounted, which only the real `App` can answer.
- * This one is about what the button itself renders.
+ * about *where* the triggers are mounted, which only the real `App` can answer.
+ * This one is about what a trigger itself renders.
+ *
+ * **The host is not scenery.** `FeedbackTrigger` reads `open()` off a context
+ * and renders **nothing** when there is none — that is how a signed-out reader
+ * gets no button without every mount site carrying a gate (FeedbackButton.tsx
+ * § Who sees it). So a version of this file that rendered the trigger bare
+ * would find no element at all and fail on every line, which is the right
+ * failure but not an informative one; the wrapper is here to make the subject
+ * of the file the button rather than the context.
+ *
+ * ## Both shapes, because they are one component with a variant
+ *
+ * The corner button and the bar's button differ in three things — their
+ * classes, which side their card opens on, and whether the card is allowed to
+ * flip to the cross axis — and share the name, the icon and the word. Splitting
+ * the assertions by variant is what stops a change to one silently taking the
+ * other with it: the accessible name in particular is carried by `aria-label`
+ * on both, and both hide their visible word at some width, by two entirely
+ * different mechanisms (the 731px query, and § the bar's fit ladder).
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { FeedbackButton } from "../src/web/FeedbackButton.js";
+import {
+  FEEDBACK_SHAPE,
+  FeedbackHost,
+  FeedbackTrigger,
+  type FeedbackVariant,
+} from "../src/web/FeedbackButton.js";
 
 /* The dialog is mounted for the life of the page whether or not it is open
    (FeedbackDialog.tsx), and it reaches for a Supabase session and a microphone
@@ -53,11 +76,39 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 let host: HTMLDivElement;
 let root: Root;
 
+/** Which shape is on screen, set by `mount` and read by `theButton`. */
+let variant: FeedbackVariant = "corner";
+/** The class the trigger wears in each shape. */
+const SELECTOR: Record<FeedbackVariant, string> = {
+  corner: ".fb-button",
+  dock: ".dock-feedback",
+};
+
+/**
+ * Render one shape, inside its host.
+ *
+ * Called by each case rather than done in `beforeEach`, because the variant is
+ * a property of the case and an inner `beforeEach` would run *after* the outer
+ * one — so the render would always have used whatever the previous case left
+ * behind. Cheap to get wrong quietly: the corner shape is the default, so a
+ * "dock" case would have gone green against a corner button.
+ */
+function mount(v: FeedbackVariant): void {
+  variant = v;
+  act(() =>
+    root.render(
+      <FeedbackHost>
+        <FeedbackTrigger variant={v} />
+      </FeedbackHost>,
+    ),
+  );
+}
+
 beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  act(() => root.render(<FeedbackButton />));
+  mount("corner");
 });
 
 afterEach(() => {
@@ -65,7 +116,14 @@ afterEach(() => {
   host.remove();
 });
 
-const theButton = () => host.querySelector(".fb-button") as HTMLElement;
+const theButton = () => {
+  const el = host.querySelector(SELECTOR[variant]);
+  /* Not an optional chain onto `null`: `FeedbackTrigger` renders nothing when
+     it cannot find a host, so a broken context would otherwise show up as
+     `undefined` assertions failing one by one rather than as the one fact. */
+  expect(el, `no ${variant} trigger on screen`).not.toBeNull();
+  return el as HTMLElement;
+};
 
 /**
  * Open the card the way a pointer does.
@@ -138,5 +196,67 @@ describe("the Feedback button", () => {
     // At narrow widths `.fb-button-text` is `display: none`, so the visible
     // word is not available to name it and the `aria-label` is all there is.
     expect(theButton().getAttribute("aria-label")).toBe("Feedback");
+  });
+});
+
+/**
+ * **The same button in the bottom bar**, since 2026-09-06.
+ *
+ * Three of these are about the trap Fable and GPT Sol both named: the corner
+ * button is `position: fixed` in the top-right with a `--feedback-w` width, so
+ * a version that reused `.fb-button` in the bar would **paint in the corner**
+ * while a "one trigger per route" test went green over a visibly wrong bar.
+ * Nothing in jsdom can see paint, so what is asserted instead is the three
+ * things the paint follows from: the classes it wears, the class it does not,
+ * and the class its word wears — which is what decides whether § the bar's fit
+ * ladder can take it or whether the 731px query does.
+ */
+describe("the Feedback button, in the bar", () => {
+  it("wears the bar's own classes and none of the corner's", () => {
+    mount("dock");
+    const btn = theButton();
+    expect(btn.classList.contains("dock-btn")).toBe(true);
+    /* The corner class is the failure mode, not a stylistic preference: it
+       carries `position: fixed; top; right; width: var(--feedback-w)`. */
+    expect(btn.classList.contains("fb-button")).toBe(false);
+    expect(host.querySelector(".fb-button")).toBeNull();
+  });
+
+  it("puts its word under the fit ladder rather than under the 731px query", () => {
+    mount("dock");
+    const word = theButton().querySelector("span");
+    expect(word?.textContent).toBe("Feedback");
+    /* `.dock-btn-label` is what every rung's selector is written against;
+       `.fb-button-text` is what the narrow-window query hides. GPT Sol, G7. */
+    expect(word?.className).toBe("dock-btn-label");
+  });
+
+  /**
+   * **The one thing here jsdom cannot see, asserted against the table
+   * instead.**
+   *
+   * A `bottom` card on this button would be drawn *under* the bar it belongs
+   * to, and a `keepSide` one would refuse to flip out of the way. Neither is
+   * visible without layout: floating-ui resolves both against rects that are
+   * all zeroes here, and nothing it renders records which side it chose. So
+   * what is checked is `FEEDBACK_SHAPE`, which is the value the component
+   * passes — and the classes asserted above are what prove the component reads
+   * the row it is being checked against. A browser pass is still the only thing
+   * that can say the card lands where it should.
+   */
+  it("is declared to open upwards, and to be free to flip", () => {
+    expect(FEEDBACK_SHAPE.dock.placement).toBe("top");
+    expect(FEEDBACK_SHAPE.dock.keepSide).toBe(false);
+    /* The corner beside it, so this is a difference rather than a coincidence:
+       it opens downwards, and it may not flip, because it is hard against the
+       right edge with the article's title to its left. */
+    expect(FEEDBACK_SHAPE.corner.placement).toBe("bottom");
+    expect(FEEDBACK_SHAPE.corner.keepSide).toBe(true);
+  });
+
+  it("carries the same name and no title, exactly as the corner does", () => {
+    mount("dock");
+    expect(theButton().getAttribute("aria-label")).toBe("Feedback");
+    expect(theButton().getAttribute("title")).toBeNull();
   });
 });

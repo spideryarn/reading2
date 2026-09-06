@@ -238,6 +238,16 @@ describe("the orderings that corrupt a transcript", () => {
 });
 
 describe("interruption", () => {
+  it.each(["failed", "cancelled", "incomplete"])("marks a %s provider answer as unfinished", (status) => {
+    const ledger = new ExchangeLedger();
+    const out = feed(ledger, [
+      userItem("u1"), transcribed("u1", "Q1"), responseCreated("r1"), spoke("A partial answer"),
+      { type: "response.done", response: { id: "r1", status, output: [{ type: "message" }] } },
+    ]);
+    expect(out).toMatchObject([{ question: "Q1", answer: "A partial answer", interrupted: true }]);
+    expect(ledger.pending()).toBe(0);
+  });
+
   it("marks the turn rather than editing what was said", () => {
     /* The transcript cannot be corrected — the server truncates the audio and
        keeps the text whole — so the only honest thing is to say so. */

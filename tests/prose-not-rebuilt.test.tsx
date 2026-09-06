@@ -108,6 +108,7 @@ function propsFor(loaded: LoadedArticle, over: Record<string, unknown> = {}) {
     blocks: loaded.blocks,
     tree: loaded.tree,
     assets: undefined,
+    navLabelStatus: "ready",
   };
   const geometry = buildGeometry(article.tree, article.blocks);
   /* The gist columns are every column but the leaf, as App.tsx derives them. */

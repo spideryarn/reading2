@@ -1,6 +1,19 @@
 # Make some docs reusable, and write a documentation policy
 
-**Status: done, 2026-09-06.** Docs only, no code. Reviewed by GPT Sol —
+**Status: done, 2026-09-06**, apart from one decision that needs Greg — see
+[§ What is left](#what-is-left-and-it-needs-greg). Docs only, no code.
+
+**Landed as `4173c5d0`**, merged with `origin/dev` and pushed as `19deb999`. That SHA closes the
+*live pre-commit* candidate the review below was given, which named a tree rather than bytes.
+
+**Evidence.** `npm run typecheck` clean, all three projects, 1,403 files covered.
+`tests/doc-links.test.ts` 14/14 after the merge. The full `npm test` came back 7 failed / 734 passed;
+all seven were re-run alone against the merged tree and **all seven passed** — the batch was
+contention (load average 82, sixteen users) plus a peer's uncommitted `SiteFooter.tsx` and
+`ContactPage.tsx` sitting in the shared working tree while `tests/site-footer.test.tsx` ran. No
+source file was touched by this work.
+
+Reviewed by GPT Sol —
 [review](260906e-make-some-docs-reusable-and-write-a-documentation-policy-review-sol.md).
 
 Greg, 2026-09-06:

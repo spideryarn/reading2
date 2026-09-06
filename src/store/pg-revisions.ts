@@ -244,6 +244,16 @@ export const REVISION_CARRY_POLICY: Record<
      unreadable article) but to refuse the publication. `publishRevision`. */
   tree: "carry",
   labels: "carry",
+  /* **Carries with the two above, and it has to be those two it travels with.**
+     It is a fact about the labels — where they are in their life — so a
+     `{ steps: ["blocks"] }` job that copies `labels` forward and leaves this
+     behind would publish a revision holding last run's labels under this run's
+     default. `derive` is the wrong shape for it (there is nothing to recompute
+     it from: an empty labels map is what *both* "no labels yet" and "no
+     labellable leaves" look like), and `mint` would reset every draft of a
+     `pending` article back to `ready` and lose the fact that a run is owed.
+     src/db/schema.ts § `navLabelStatus`. */
+  navLabelStatus: "carry",
   arc: "carry",
 
   /* The image manifest carries, and the reason is the one thing about it that

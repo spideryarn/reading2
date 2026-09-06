@@ -1271,6 +1271,8 @@ export function recentHistory(history: ChatMessage[], turns = HISTORY_TURNS): Ch
    * An interrupted one's is not: the realtime server truncates the audio the
    * reader never heard and keeps the transcript whole, so its tail is words
    * that were generated and never spoken to anybody.
+   * Provider failures and early hangups use the same flag, so their incomplete
+   * replies cannot become apparently complete model history either.
    *
    * The pair is **dropped**, not transformed. A synthetic "the reader
    * interrupted here" line would be assistant text the model never said, which

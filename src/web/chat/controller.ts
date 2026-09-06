@@ -35,7 +35,7 @@ import type {
 } from "./model.js";
 import { asOpId, initialState, recoveringIds } from "./model.js";
 import type { SpokenOutcome, TurnSink } from "./effects.js";
-import { project } from "./project.js";
+import { project, storedSpoken } from "./project.js";
 import { reduce } from "./reduce.js";
 
 /**
@@ -52,6 +52,8 @@ import { reduce } from "./reduce.js";
  * has passed with room to spare, and only then call it a failure.
  */
 const RECOVER_GAP_MS = 3_000;
+/** A spoken handoff waits for this one read, so it must also have an ending. */
+const SPOKEN_REPAIR_MS = 10_000;
 
 /**
  * The server's deadline for one turn, which is `CHAT_TIMEOUT_MS` in
@@ -115,7 +117,7 @@ export function recoverUntil(): number {
  * once, at the gate, instead of having a second copy in a `catch`.
  */
 export interface ChatEffects {
-  loadThreads(slug: string): Promise<ThreadsOutcome>;
+  loadThreads(slug: string, signal?: AbortSignal): Promise<ThreadsOutcome>;
   renameThread(slug: string, threadId: string, title: string): Promise<WriteOutcome>;
   deleteThread(slug: string, threadId: string): Promise<WriteOutcome>;
   /** Open one turn's stream and tell the sink every frame. */
@@ -158,9 +160,9 @@ export interface ChatEffects {
  *
  * `conflict` is kept separate from an ordinary failure because it means
  * something different to the caller. A failure is "those words are not saved";
- * a conflict is "they may well be saved, and the conversation on screen is
- * about to be re-read" — so a live session ends rather than retrying, and the
- * repair the reducer started is what puts the reader's transcript right.
+ * a conflict is "the repaired conversation could not confirm this pair". The
+ * waiter stays pending while that repair reads; an exact stored pair resolves
+ * successfully with the server's tail, and an unresolved conflict ends Live.
  */
 export type SpokenLanded =
   | { ok: true; threadId: string; tailId: string }
@@ -392,24 +394,7 @@ export class ChatController {
         this.#write(command);
         return;
       case "repair":
-        /* One conversation, because the screen is wrong about that one. The
-           narrowing is not tidiness: replacing the whole list put a snapshot
-           taken before an unrelated send over the top of that send's rows, and
-           every later frame then patched a row that was not there — an answer
-           that arrives nowhere. A 409 in one conversation has nothing to say
-           about another. Found by a GPT-5.6 review, 2026-08-26. */
-        this.#settle(
-          this.#effects.loadThreads(command.slug),
-          (outcome) =>
-            outcome.ok
-              ? {
-                  type: "repair.succeeded",
-                  opId: command.opId,
-                  thread: outcome.threads.find((t) => t.id === command.threadId) ?? null,
-                }
-              : { type: "repair.failed", opId: command.opId, error: outcome.error },
-          (error) => ({ type: "repair.failed", opId: command.opId, error }),
-        );
+        this.#repair(command);
         return;
       case "recover":
         void this.#recover(command.opId, command.slug, command.threadId, command.messageId, command.until);
@@ -499,16 +484,11 @@ export class ChatController {
             );
             return;
           }
-          this.dispatch(
-            outcome.conflict
-              ? {
-                  type: "spoken.refused",
-                  opId,
-                  error: outcome.error,
-                  repair: { id: asOpId(mintId()) },
-                }
-              : { type: "spoken.failed", opId, error: outcome.error },
-          );
+          if (outcome.conflict || outcome.uncertain) {
+            this.#checkSpoken(opId, outcome.error);
+            return;
+          }
+          this.dispatch({ type: "spoken.failed", opId, error: outcome.error });
           this.#landed(opId, { ok: false, conflict: outcome.conflict, error: outcome.error });
         },
         (e: Error) => {
@@ -518,10 +498,62 @@ export class ChatController {
              becoming a second one, and above all so the waiter is still told.
              A promise nobody resolves is a live session holding a microphone
              for ever. */
-          this.dispatch({ type: "spoken.failed", opId, error: e.message });
-          this.#landed(opId, { ok: false, conflict: false, error: e.message });
+          this.#checkSpoken(opId, e.message);
         },
       );
+  }
+
+  /** A refusal or a lost response needs the same one read before we can decide. */
+  #checkSpoken(opId: OpId, error: string): void {
+    const repairId = asOpId(mintId());
+    const state = this.dispatch({ type: "spoken.refused", opId, error, repair: { id: repairId } });
+    // A deleted/superseded append cannot register a repair, but its caller
+    // still needs an answer. Otherwise the repair owns the waiter now.
+    if (!state.operations.has(repairId)) this.#landed(opId, { ok: false, conflict: true, error });
+  }
+
+  /** One conversation only; a spoken append keeps its waiter until this read lands. */
+  #repair(command: Extract<ChatCommand, { type: "repair" }>): void {
+    const operation = this.state.operations.get(command.opId);
+    const spoken = operation?.kind === "repair" ? operation.spoken : undefined;
+    const result = (outcome: ThreadsOutcome): ChatEvent => outcome.ok
+      ? { type: "repair.succeeded", opId: command.opId,
+          thread: outcome.threads.find((t) => t.id === command.threadId) ?? null }
+      : { type: "repair.failed", opId: command.opId, error: outcome.error };
+    if (!spoken) {
+      this.#settle(this.#effects.loadThreads(command.slug), result,
+        (error) => ({ type: "repair.failed", opId: command.opId, error }));
+      return;
+    }
+    const abort = new AbortController();
+    let finished = false;
+    const finish = (outcome: ThreadsOutcome) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(deadline);
+      // Project the authoritative rows before releasing the live copy. The
+      // reducer's existing identity guard still refuses stale repair snapshots.
+      this.dispatch(result(outcome));
+      const fresh = outcome.ok ? outcome.threads.find((t) => t.id === command.threadId) : undefined;
+      const current = this.state.base.find((t) => t.id === command.threadId);
+      const answer = storedSpoken(fresh, spoken.operation);
+      const landed = answer && storedSpoken(current, spoken.operation);
+      // Only the recovered answer belongs to this live model's history. Later
+      // server turns must still trip the next append's existing tail guard.
+      this.#landed(spoken.operation.id, landed
+        ? { ok: true, threadId: command.threadId, tailId: answer.id }
+        : { ok: false, conflict: true, error: outcome.ok ? spoken.error : outcome.error });
+    };
+    const deadline = setTimeout(() => {
+      finish({ ok: false, error: "Couldn’t confirm that the spoken exchange was saved in time. Your words are still here." });
+      abort.abort();
+    }, SPOKEN_REPAIR_MS);
+    // Catch synchronous throws as well as rejected effects, and ignore a late
+    // response after timeout so it cannot replace the restored live words.
+    void Promise.resolve().then(() => this.#effects.loadThreads(command.slug, abort.signal)).then(
+      finish,
+      (error: Error) => finish({ ok: false, error: error.message }),
+    );
   }
 
   /** One turn's stream, every frame of it an event carrying this turn's id. */

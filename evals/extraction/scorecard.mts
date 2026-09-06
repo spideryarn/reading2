@@ -1772,11 +1772,29 @@ function provenanceForm(
    *
    * ## The algorithm, and what it costs
    *
-   * Greedy earliest-admissible, in output order. For each run, take the earliest
-   * position at or after the cursor that its **owner** could supply, and advance
-   * the cursor past it. Greedy is optimal here by the usual exchange argument:
-   * taking the earliest admissible occurrence never rules out a later run that a
-   * later occurrence would have allowed.
+   * Greedy earliest-admissible, in output order. For each run, take the admissible
+   * placement that **ends** earliest, and advance the cursor to that end.
+   *
+   * **Earliest end, not earliest start**, and the distinction is not pedantry —
+   * getting it wrong is what condemned a container that repeats its child's phrase
+   * (§ the ninth review, at the bottom of this walk). The exchange argument is
+   * unchanged in substance: the only thing a placement hands to the runs after it
+   * is the cursor, feasibility is monotone in the cursor — anything placeable from
+   * `c` is placeable from any `c' ≤ c` — so taking the smallest reachable cursor
+   * never rules out a completion. What changes is which quantity that is. Where a
+   * placement is an exact span its length is fixed, so earliest start *is* earliest
+   * end and the two readings coincide; where it is a subsequence permitting
+   * dropped children (`placeInSpan`) they come apart, and it is the end that the
+   * argument is about.
+   *
+   * **What is not proven optimal** is the placement `coverOf` finds *within* one
+   * stretch: it anchors at the earliest chunk it can and then takes the longest
+   * run at each step, which is not guaranteed to be the cover that ends soonest.
+   * Making it so would mean a search over chunk boundaries for a gain nothing has
+   * yet needed — the candidates are compared by end, so the ordering between the
+   * owner and the subtree is right, and only a subtree holding the same phrase
+   * twice at chunk granularity could be placed later than necessary. Recorded
+   * because the next false red of this family will start here.
    *
    * The owner is the run's element resolved by stamp — its **own text**, which
    * may be several pieces with other elements' text between them, and which a run
@@ -1816,6 +1834,13 @@ function provenanceForm(
     if (INVISIBLE_TAGS.has(el.tagName)) return;
     const { id, how } = sourceRefOf(el);
     const owner = (how === "direct" || how === "ancestor") && id ? owners.get(id) : undefined;
+    /**
+     * **A generated node's admissible set is its ancestor's whole subtree**, and
+     * the ancestor's own text is only part of it — the rest is whatever children
+     * the flattening kept. Looked up once per element rather than once per run;
+     * `undefined` for every other resolution, which is what turns the branch off.
+     */
+    const subtree = how === "ancestor" && id ? subtrees.get(id) : undefined;
     for (const node of Array.from(el.childNodes)) {
       if (node.nodeType === 1) {
         walk(node as Element);
@@ -1826,90 +1851,89 @@ function provenanceForm(
       if (!run) continue;
       judged += 1;
       const placed = placeRun(pageText, run, cursor, owner);
-      if (placed.span) { cursor = placed.span[1]; continue; }
-      if (placed.behind) { reordering(run, id ? `source element ${id}` : "the page"); continue; }
+      let span = placed.span;
 
       /**
-       * **The owner could not supply this run at all, and this branch used to
-       * drop it in silence** — on the reasoning that attribution had already
-       * rejected it. GPT Sol's eighth review: attribution deliberately judges a
-       * generated node against the *whole page*, so it had passed it, and the run
-       * simply vanished from the alignment. His case is a `<div s1>A <i s2>X</i>
-       * B</div>` flattened to `<div s1><p>A X B</p></div>`: the `<p>` resolves to
-       * ancestor `s1`, whose own text is only `AB`, so the `AXB` run was omitted —
-       * and moving that whole `<div>` after a later paragraph produced a card
-       * *identical* to the correct one.
+       * **The ancestor's subtree, as an alignment rather than an exact match.**
+       * See the two shapes above. The window stops at the owner's own placement
+       * because a subtree placement is only worth having if it **ends earlier**:
+       * the end is the whole of what the cursor carries forward, and bounding
+       * the window by it is also what keeps this linear — the windows telescope,
+       * one per step the cursor takes.
        *
-       * **Fail open into a tighter set, not closed.** Failing closed would
-       * condemn that flattening, which is a correct extraction: a node
-       * Readability builds out of a subtree carries the ancestor's own text *and*
-       * its children's, and no element owns that combination. Measured
-       * 2026-09-06, this branch is taken **zero times** across all fifteen
-       * shipped extractions, so the corpus could never have found it and cannot
-       * price the choice either — which is the argument for reasoning about the
-       * shape rather than the count.
-       *
-       * The retry is the ancestor's **subtree**, not the whole page: that is
-       * where a flattened node's text provably came from, it is one contiguous
-       * stretch, and it is strictly tighter than the page. `descendant` and
-       * unstamped runs already use the page and are unaffected.
-       *
-       * ## KNOWN DEFECT — this retry is an exact match, not an alignment
-       *
-       * **It does not do what the walk's own docstring above says**, and the
-       * gap is stated here rather than left to be inferred. `placeRun` looks for
-       * the run as a *substring* of the subtree; the documented rule is earliest
-       * *admissible* placement over the candidate set. GPT Sol's ninth review
-       * reproduced two correct extractions that this condemns:
-       *
-       * - **partial flattening** — `<div s1>A <i s2>X</i> B <button s3>nav</button> C</div>`
-       *   extracted as `<div s1><p>A X B C</p></div>` fails, because `AXBC` is
-       *   neither the own text `ABC` nor a substring of the subtree
-       *   `AXBnavC`, although every retained character is in order;
-       * - **repeated text** — `<div s1><i s2>Alpha</i>Alpha</div>` extracted as
-       *   `<div s1><p>Alpha</p>Alpha</div>` fails, because the generated
-       *   paragraph takes the *later* occurrence in the own text and the direct
-       *   run left behind then reads as reordered.
-       *
-       * **The direction matters more than the size**: every other defect this
-       * gate has had let a bad extraction through, and this one condemns a good
-       * one. A red from this branch is a reason to suspect the ruler first.
-       *
-       * The subtree is the right *spatial* boundary and that part stands. What it
-       * cannot be is an **exact-match fallback after owner matching**: the fix is
-       * subtree-local monotone placement that permits legitimate child deletion
-       * and takes the earliest result across valid placements. Recorded as a limit
-       * in § B rather than fixed, because no fixture produces either shape and the
-       * change belongs with the shape corpus that could test it.
+       * When the owner could not place the run at all — including when its only
+       * occurrence is behind the cursor — the window is the whole subtree, which
+       * is the branch GPT Sol's eighth review opened; the fifteen **shipped**
+       * extractions take it zero times, one degenerate arm does, and the note at
+       * the bottom of this walk says which.
        */
-      if (how === "ancestor" && id) {
-        const bounds = subtrees.get(id);
-        if (bounds) {
-          /* Cut here rather than for every element up front — see `subtrees`. */
-          const subtree: Ownership = {
-            own: pageText.slice(bounds.from, bounds.to),
-            pieces: [{ at: 0, len: bounds.to - bounds.from, global: bounds.from }],
-          };
-          const again = placeRun(pageText, run, cursor, subtree);
-          if (again.span) { cursor = again.span[1]; continue; }
-          if (again.behind) { reordering(run, `the subtree of source element ${id}`); continue; }
-        }
+      if (subtree) {
+        const lo = Math.max(cursor, subtree.from);
+        const hi = Math.min(subtree.to, span ? span[1] : subtree.to);
+        const inSubtree = lo < hi ? placeInSpan(pageText, run, lo, hi) : null;
+        if (inSubtree) span = inSubtree;
+      }
+
+      if (span) { cursor = span[1]; continue; }
+      if (placed.behind) { reordering(run, id ? `source element ${id}` : "the page"); continue; }
+      if (subtree && placeInSpan(pageText, run, subtree.from, subtree.to)) {
+        reordering(run, `the subtree of source element ${id}`);
+        continue;
       }
 
       /**
-       * **Nowhere its owner, its subtree or the page could supply it — and that
-       * is named rather than skipped.**
+       * **Nothing above could place this run.** Kept as a named red rather than
+       * a silent skip — the two branches that lead here are worth stating,
+       * because both were bugs.
        *
-       * This is text the page does not have, so attribution has reported it too,
-       * and two reds for one fault is the cost. It is deliberate: *"assume
-       * another check caught it"* is the shape of every hole this gate has had,
-       * and a redundant red is cheaper than a silent skip. Measured zero across
-       * the fifteen.
+       * **The owner could not supply it, and that used to drop it in silence**
+       * on the reasoning that attribution had already rejected it. GPT Sol's
+       * eighth review: attribution deliberately judges a generated node against
+       * the *whole page*, so it had passed it, and the run simply vanished from
+       * the alignment. `<div s1>A <i s2>X</i> B</div>` flattened to
+       * `<div s1><p>A X B</p></div>` resolves to ancestor `s1`, whose own text is
+       * only `AB`, so the `AXB` run was omitted — and moving that whole `<div>`
+       * after a later paragraph produced a card *identical* to the correct one.
+       *
+       * **And the retry was an exact match rather than an alignment**, which is
+       * GPT Sol's ninth, and the only defect this gate has had that condemned a
+       * *correct* extraction rather than passing a bad one. `placeRun` looked for
+       * the run as a substring of the subtree, so a flattening that legitimately
+       * drops a child — `A <i>X</i> B <button>nav</button> C` becoming `AXBC` —
+       * matched neither the own text `ABC` nor the subtree `AXBnavC`; and,
+       * because the subtree was reached only *after* the owner, a container that
+       * repeats its child's phrase placed the generated node at the owner's
+       * later occurrence and then called the direct run left behind a reordering.
+       *
+       * The subtree was the right *spatial* boundary and that part stood. It is
+       * a **cover** inside that boundary now — the same in-order, run-floored
+       * subsequence `coverOf` gives attribution, so a dropped child costs a join
+       * and nothing else — and it is one candidate among the placements rather
+       * than a fallback behind one. See `placeInSpan`, and the tests named for
+       * the ninth review in `tests/extraction-scorer.test.ts`.
+       *
+       * **Reaching here means nowhere its owner, its subtree or the page could
+       * supply it.** This is text the page does not have, so attribution has
+       * reported it too, and two reds for one fault is the cost. It is
+       * deliberate: *"assume another check caught it"* is the shape of every hole
+       * this gate has had, and a redundant red is cheaper than a silent skip.
+       * Measured zero across the fifteen **shipped** extractions — but not zero
+       * across the run: `drop-every-short-block` on `pmc-article` removes the
+       * `<a>here</a>` from the bot wall's *"Click here if you are not
+       * automatically redirected"*, and until this was fixed the card said this
+       * run was invented while the attribution gate beside it said it was not.
+       * The one thing this red is *not* is proof of invention on its own: a run
+       * whose retained pieces are all present but in the wrong order inside the
+       * subtree arrives here too, so the message below names both possibilities
+       * rather than asserting the one the old wording asserted.
        */
       order.push(
         `${JSON.stringify(run.slice(0, 60))} could not be placed in the source at all — the ` +
-          "order gate can say nothing about where it belongs, and attribution should have " +
-          "reported the same text as invented",
+          "order gate can say nothing about where it belongs" +
+          (subtree
+            ? `: the subtree of source element ${id} does not have it in this order, so either ` +
+              "the words were invented or a generated node is saying what another container said"
+            : ", and attribution should have reported the same text as invented"),
       );
     }
   };
@@ -2039,6 +2063,61 @@ function placeRun(
     return { span: [globalOf(owner, k), globalOf(owner, k + run.length - 1) + 1], behind: false };
   }
   return { behind: owner.own.includes(run) };
+}
+
+/**
+ * **Where this run sits inside one stretch of the page, allowing for children
+ * the extraction dropped.** `null` when it does not sit there at all.
+ *
+ * The caller is the `ancestor` branch of the order walk: a node Readability
+ * built by flattening a subtree carries the ancestor's own text *and* whichever
+ * children survived, and **no element owns that combination**, so an exact match
+ * — against the own text or against the subtree — condemns a correct extraction.
+ * That was the ninth review's finding, in both of its shapes.
+ *
+ * So the question asked here is `coverOf`'s: **is every character of the run
+ * inside a run of at least `MIN_RUN_IN_ELEMENT` characters that this stretch
+ * has, in this stretch's own order?** A dropped child costs one join and nothing
+ * else, which is exactly the property the attribution gate is already built on,
+ * so there is one mechanism here rather than a second one — and a *rearrangement*
+ * of the retained children still fails, because a cover is a subsequence in
+ * order.
+ *
+ * `MIN_RUN_IN_ELEMENT` rather than `MIN_RUN`, because the haystack is one
+ * element's subtree rather than the page: the floor is what makes a match
+ * evidence, and a coincidental one is far less likely here. Invention is not
+ * this function's question in any case — attribution asks that of a generated
+ * node against the whole page, at the 24-character floor.
+ *
+ * **The window is cut here, and only here.** Storing every element's subtree
+ * text up front is quadratic in the nesting and killed the corpus run at 4 GB —
+ * `gutenberg-pride` has 3,542 stamped elements inside 589,000 characters. The
+ * caller passes `[lo, hi)` bounded by where the cursor is and by the placement
+ * it already has, so what is cut is the distance the cursor travels rather than
+ * a subtree apiece. Measured 2026-09-06, whole `score()` calls, warm, mean of
+ * three: `gutenberg-pride` 587 → 598 ms, `python-docs-itertools` 371 → 393 ms,
+ * `pg-greatwork` 65 → 103 ms — the last is where the 216 generated leaves are,
+ * and 38 ms is what asking this question of every one of them costs.
+ *
+ * **The floor is not pinned by any test**, said out loud because this file's
+ * rule is that a check nobody has seen fail is not evidence: dropping it to 1,
+ * which turns the cover into a bare character subsequence, leaves all 66 cases
+ * in `tests/extraction-scorer.test.ts` green (measured 2026-09-06, with the six
+ * other mutations of this branch all caught). No shape anybody has written
+ * distinguishes the two, and finding one belongs with C0's shape corpus.
+ */
+function placeInSpan(
+  pageText: string,
+  run: string,
+  lo: number,
+  hi: number,
+): [number, number] | null {
+  if (hi <= lo) return null;
+  const cover = coverOf(pageText.slice(lo, hi), run, MIN_RUN_IN_ELEMENT);
+  /* `from < 0` is a cover made entirely of forgiven fragments — nothing was
+     actually matched, so there is no position to claim. */
+  if (cover.uncovered !== null || cover.from < 0) return null;
+  return [lo + cover.from, lo + cover.to];
 }
 
 /**

@@ -1,6 +1,6 @@
 # The labels leave the blocking step
 
-**Status: reviewed, stages agreed, stage 1 in progress.** Written 2026-09-06, out of
+**Status: stage 1 landed and reviewed; stage 2 next.** Written 2026-09-06, out of
 [260904d](260904d-deepen-fat-sections.md) § *Question 5*, where a measured run found that the thing
 blowing the ingest deadline was not the feature that plan was building.
 
@@ -117,10 +117,19 @@ ideas, notes or diagrams. Surveyed 2026-09-06, it reaches a reader through exact
 | spine hover card ([`Spine.tsx`](../../src/web/Spine.tsx):912) | **yes**, but hover-only | ≤ 5 (`MAX_CHILDREN`) | falls to `title`, then `""`; empty rows are filtered out, so the row **disappears** |
 | outline mode rung 5 ([`outline.ts`](../../src/web/outline.ts):118) | opt-in mode, current section only | ≤ 8 (`PARAGRAPH_CAP`) | `rowText` returns `null`, **row not drawn** |
 | `Paragraphs` column ([`TableView.tsx`](../../src/web/TableView.tsx):985) | opt-in, never auto-fit | whole article in the DOM | `{navLabel ?? title}` → **a visible blank cell** |
-| outline mode's leaf column | it *is* the view | whole article | as above |
+| outline mode's leaf column | ~~it *is* the view~~ **unreachable** | — | — |
 
 Default mode is `plain` ([`src/modes.ts`](../../src/modes.ts):179) and draws none of it. Across the
 eight articles in `data/`, 853 of 888 depth-3 nodes carry a label (~96%).
+
+**The fourth row of that table was wrong and is struck through above.** The table's own outline mode
+— `showText` false, the leaf column as the whole view — cannot be reached: nothing sets that flag any
+more, and `?text=0` is rewritten at boot to `?mode=outline`, which is the *band*
+([`OutlinePanel.tsx`](../../src/web/OutlinePanel.tsx)) and a different feature.
+[browser-testing.md](../project/browser-testing.md) already said so; this survey did not check it, and
+stage 1 built a whole arm of the client against a state no reader can be in before a browser found
+out. So the `Paragraphs` column reaches a reader by exactly two routes — the pill, and a `?cols=`
+naming the leaf depth — and both are opt-in.
 
 **The one visible regression risk is the blank cell**, and [`tree.ts`](../../src/web/tree.ts):161
 already documents the hazard — "a run of forty blank leaf cells".
@@ -349,6 +358,108 @@ Checkpoint rows survive the split unchanged — `batchFingerprint` contains no s
 stored row and buy the next run nothing. My own guess said the same; the difference is that this one
 names the condition under which it stops being true.
 
+## What stage 1 landed <a id="stage1"></a>
+
+Built 2026-09-06. **No behaviour change**: everything writes `ready`, which is what every existing
+revision already is.
+
+- **The column.** `article_revisions.nav_label_status`, `text not null default 'ready'` with a CHECK,
+  in [`drizzle/20260906070017_nav_label_status.sql`](../../drizzle/20260906070017_nav_label_status.sql).
+  Applied to the local database; **222 existing rows all read `ready`**, which is true of them — the
+  `hierarchy` step could not finish without producing the labels. Nothing was backfilled and no null
+  exists to be read as a fourth state. `revision_step_runs_step` is untouched: this adds no step.
+- **The type.** `NavLabelStatus` in [`src/types.ts`](../../src/types.ts), beside a note on
+  `TreeNode.navLabel` saying what an absence there does and does not mean.
+- **The write, and it is the seam stage 2 edits rather than invents.** `writeArtefacts`
+  ([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts)) sets the status in the same `UPDATE` as the
+  artefacts whenever a step writes `labels` — keyed on the **artefact**, not on the step's name,
+  which is the half stage 2 changes. Atomic with the artefact, so a revision cannot publish saying
+  `ready` over labels that did not land.
+- **`carry` in `REVISION_CARRY_POLICY`**, beside `tree` and `labels`.
+- **Both DTOs**, each with the enum and nothing else — no reason, no provider message.
+- **The client**, in [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts): one rule, `=== "ready"`
+  so an unrecognised value withholds rather than draws. The `Paragraphs` pill is *replaced by* the
+  sentence rather than disabled with it in a tooltip (a touch reader cannot open one); Outline's rung
+  5 is simply not climbed, because nobody asked for it.
+
+### The bug a browser found, and the jsdom test that did not
+
+The withheld leaf cell was drawn whenever the status was not `ready`, with no test that the leaf
+column was one of the table's columns — and by default it is not. `<colgroup>` allocates one `<col>`
+per column plus one for the prose, so the extra `<td>` took the **prose** column's width: `td.text`
+came out 0px wide and off the right edge of the window, and **every article's body was invisible** in
+the default reading view. Nothing threw, nothing logged, and the jsdom suite was green — it asserted
+what the cell contained and never that the row still fitted the table.
+
+Fixed by a `columns.includes(leafDepth)` guard in `withheldLeafCell`, with a case that counts `<td>`s
+against `<col>`s ([`tests/paragraph-labels-withheld.test.tsx`](../../tests/paragraph-labels-withheld.test.tsx)),
+watched red on the unguarded code. The lesson for stage 2 is the one in
+[silent-success.md](../reusable/silent-success.md): a renderer test that only inspects the element it
+added cannot see the element it displaced.
+
+### What the stage 1 review found <a id="stage1-review"></a>
+
+GPT Sol, 2026-09-06, at `high`, on the live pre-commit tree, closed against commit `bea197dc`.
+**No P0 and no P1 — it would not refuse the stage.** Two P2s, both real when checked and both fixed:
+
+- **F1 — the drift test did not pin what it claimed.** `NavLabelStatus` and `NAV_LABEL_STATUSES`
+  were *independent* declarations, and `readonly NavLabelStatus[]` proves only that every value
+  listed belongs to the union — never that the list exhausts it. A fourth member added to the union
+  and forgotten in the list would have compiled, and the drift test built on that list would then
+  have compared the migration against an incomplete set and passed. Worse, the test read only
+  `drizzle/` and never the **second** hand-kept CHECK literal in
+  [`schema.ts`](../../src/db/schema.ts) — whose own comment already claimed the test compared the
+  two. Fixed by deriving the union from an `as const` list, so the two cannot disagree, and by a case
+  that reads the `schema.ts` literal as text. Watched red by adding a fourth value to that literal.
+- **F2 — a withheld column that was already open could not be closed.** `toggle` in
+  [`App.tsx`](../../src/web/App.tsx) is the only caller of `setCols`, so replacing the `Paragraphs`
+  pill with the notice removed the only way to *close* the leaf column as well as the only way to
+  open it. The column can already be open without the pill — a `?cols=` naming the leaf depth,
+  shared or bookmarked — and that reader was left with a wide column of one repeated sentence and
+  nothing to shut it with, **for ever if the status is `failed`**. Unreachable through stage 1's
+  writes, which is why it is a P2; user-visible the moment stage 2 writes `pending`.
+
+  Fixed by `paragraphPill(status, leafOn)` in [`nav-labels.ts`](../../src/web/nav-labels.ts): the
+  notice stands in only while the column is **shut**, which is the case it was written for; once the
+  column is open the pill returns, because the column is already carrying the sentence. Extracting it
+  from the ternary is what makes it testable at all — Sol's own note was that the existing test
+  renders `TableView` directly and so *"cannot catch this integration issue"*.
+
+**Two answers worth keeping.** First, the review is right that *"no behaviour change"* was broader
+than the truth: both article JSON responses gain a field, and the reader's export gains
+`navLabelStatus: "ready"` through the whole-row `content/revision.json`. Nothing **rendered** changes.
+
+Second, it correctly refused my evidence for the migration: the query I sent reported *statuses*, not
+label contents, so it could not establish that all 225 rows actually hold completed labels. I had
+measured that separately and after sending the prompt, so it is recorded here instead — grouped by
+status and by whether `labels` is null:
+
+```
+  published   labels present   ready    94    (39 current)
+  draft       labels present   ready     2
+  draft       no labels        ready     5
+  failed      labels present   ready     4
+  failed      no labels        ready   120
+```
+
+**Every published revision has its labels**, and reachable false-`ready` — published or current, with
+no labels — is **0**. The 125 rows where `ready` is untrue are all failed or draft and none is
+current, so the no-backfill decision is measured rather than argued.
+
+**And it independently confirmed the stage 2 trap** I had found in the write seam: artefact presence
+cannot remain the discriminator, because both the stamped-empty manifest and the completed one
+contain `parts.labels`. Stage 2 needs an explicit producer-to-status decision, *"otherwise any mapped
+future writer of `labels` implicitly claims `ready`, exposing incomplete labels as article
+structure."*
+
+### Both suite failures were the box, not the change
+
+The full suite came back `2 failed / 737 passed`. Run alone, `tests/step-failure-seam.test.ts` passes
+and `tests/admin-store.test.ts` passes (3/3) — the latter had failed on a **20 s timeout** rather
+than an assertion, at load average 61.5 on 16 cores. Neither touches this change.
+The standing rule held again: on this box, re-run each failure alone before
+believing a red batch — [testing.md](../project/testing.md).
+
 ## What this deliberately does not fix
 
 Moving the label pass out of the blocking step **moves the cost rather than removing it**: 450–680 s
@@ -393,3 +504,112 @@ in this plan's scope unless the review says otherwise:
 - **Leave it and raise the deadline.** Rejected: `DEFAULT_JOB_CONCURRENCY = 3` means a step that is
   marginal alone is not marginal under load, and the lease exists to stop a wedged job holding a
   claim for ever.
+
+## Groundwork for stage 2, established before any code <a id="stage2-groundwork"></a>
+
+Researched 2026-09-06, against the code rather than from memory. Read this before starting stage 2;
+several of these reverse an assumption the stages above were written on.
+
+### The P0 is satisfied by omission, not by a guard
+
+**The discriminator is one ternary**, [`routes.ts`](../../src/routes.ts):7927 — `request.url === undefined`
+takes the free arm (`queue({})`), anything else goes through `withIngestSlot`. Nothing downstream
+re-derives it; the only durable fact is `jobs.ingest_event_id`, and for a slug-scoped rerun it is
+null because `EnqueueRequest.ingestEventId` is simply absent. `settleReservation`'s first line is
+`if (!ingestEventId) return;`, so a free job settles nothing on every ending.
+
+So **you have to work to charge**, and there are exactly two ways to do it by accident: route the
+successor through a body carrying a `url`, or copy the parent's `ingestEventId` onto it. The second
+is refused by `jobs_ingest_event_unique` — but it surfaces as *"Too many articles already called X"*
+after twenty allocation passes, which is safe and completely unintelligible. **Write the test that
+names it.**
+
+Note `Job.url` cannot be asked the billing question: `enqueue` fills it from `urlForSlug(slug)`
+([`jobs.ts`](../../src/jobs.ts):3043), so a free rerun's row carries a URL too. That normalisation is
+why the wall lives in the route rather than in `enqueue`
+([`admission.ts`](../../src/billing/admission.ts):8).
+
+### Enqueueing inside the publication transaction does not exist yet
+
+`tryEnqueue` ([`pg-jobs.ts`](../../src/store/pg-jobs.ts):219) opens `const db = getDb()` and inserts on
+the **pool**. It is the only thing in the codebase that inserts a `jobs` row, and the file's
+`type Executor = Db | Tx` doctrine (:97) is drawn deliberately around *transitions* — `settleIn` can
+pass its transaction to `finishIn` and `releaseStepIn`, and `enqueueOrGet` is pointedly not on that
+list. The recorded reason is that `enqueueOrGet` takes a **second pooled connection** and
+`DATABASE_POOL_MAX` is 5 — an argument against calling it while holding the billing lock, **not**
+against inserting on an executor you already hold.
+
+**There is no precedent for a job spawning a job.** Two production callers of `enqueue` (the routes
+and `retryJob`), no post-publication hook of any kind. Stage 2 invents this pattern, so there is no
+existing test and no written failure mode to copy.
+
+What it needs is a narrow `enqueueSuccessorIn(tx, …)` of roughly thirty lines rather than threading
+`tx` through `enqueue`'s 320. The successor's shape is the simplest one `enqueue` supports:
+`reservesName: false`, `urlKey` null, no `ingestEventId`, no `retryOf`. `drive()`/`pump` stays
+**outside** the transaction and is a no-op on Vercel anyway. Lock order is already article-then-job
+and this adds none.
+
+### "One job per slug" is gone, and the successor is never refused
+
+The index that would have blocked this was **deleted on 2026-09-02** and split three ways
+([`schema.ts`](../../src/db/schema.ts):2085), precisely so a second request for one article queues
+rather than 409s. The successor is inserted `queued`, so it collides with none of the four surviving
+indexes; the only conflict it can hit is `jobs_active_work`, which resolves to `sameWork` — the
+dedupe we want. And because the parent's `finishIn` runs in the same transaction as the insert, a
+claimant arriving after commit sees no predecessor.
+
+**One thing in our favour that the stages above did not know:** `STEP_BUDGET_MS` is consulted only
+for the *next* step after one has finished ([`jobs.ts`](../../src/jobs.ts):2411). The first runnable
+step of any claim runs ungated, so a one-step `labels` job **always gets the full 740 s deadline**
+whatever number goes in the table. The measured worst case is 682 s. It fits — only just, and only
+because it starts its own claim.
+
+### The hand-kept registrations, which are where this will drift
+
+Compiler-enforced and therefore safe: `StepName`, `STEP_ORDER`, `STEPS`, `STEP_BUDGET_MS`,
+`STORAGE`, `STEP_STORAGE`, `STAMP_SOURCE`, `STAGE_ICONS`. `labels` is **already** an `ArtifactKind`
+and already a `Task`, so no `SHAPE` row, no DTO change, no export line.
+
+The ones nothing checks:
+
+- **The `revision_step_runs_step` CHECK** — a migration plus a hand-copied literal at
+  [`schema.ts`](../../src/db/schema.ts):2294. **It has drifted three times.** Its comment currently
+  says *"`labels` is deliberately NOT here"*; that sentence becomes false and must be replaced.
+- **`FORCE_ONLY_WHEN_NAMED`** ([`pipeline.ts`](../../src/pipeline.ts):366) — a bare `ReadonlySet`.
+  Omitting `labels` leaves it in the positional cascade, so forcing `hierarchy` sweeps it in. Decide
+  it, with a comment, either way.
+- **`DEFAULT_INGEST_STEPS`** — `labels` must not be added, and nothing checks that.
+- **`isCurrent`'s switch** ([`pg.ts`](../../src/store/pg.ts):2488) — falling through to `default: true`
+  makes the step report itself current for ever, on the one page whose job is to say otherwise. It
+  has already happened to `ideas` and to `sketch`.
+- **`STEP_TIMING`** ([`job-state.ts`](../../src/job-state.ts):417) — falls back to 180 s, so a 680 s
+  labels run raises a false alarm every time.
+
+### What `arc` actually cost, since it is the rehearsal
+
+From [260829f](260829f-defer-arc-and-rename-hierarchy.md). Two lessons, and the second is the one
+that bites us:
+
+1. **The freshness check came first, while the step was still in the defaults**, and the removal from
+   `DEFAULT_INGEST_STEPS` happened only afterwards, in one commit with `FORCE_ONLY_WHEN_NAMED`. The
+   order was forced by review. *"Its position **is** the signal, and this change removes its
+   position."*
+2. **Every existing artefact went stale the day it shipped** — *"the visitor problem arriving for the
+   whole existing library at once."* That is F4/F5 in this plan, and `arc` walked straight into it.
+
+Also: **a test's name was the old specification.** `tests/jobs.test.ts` § *"keeps `arc` in the
+cascade, because it cannot check itself"* had to be rewritten, and four other assertions in the same
+file silently expected the positional sweep. Grep `tests/jobs.test.ts` for `labels` before starting.
+
+### The open question that must be settled before any code <a id="two-steps-one-stamp"></a>
+
+**Two steps would read their stamp off the same artefact.** This plan keeps
+`STAMP_SOURCE.hierarchy = "labels"` ([§ the stamp route](#stamp-route)) *and* adds a `labels` step
+that also writes the `labels` column. Nobody has thought that through against `assertStampAgrees`,
+`recordStamp` and `stampForStep`'s `StampDisagrees` throw — which is the very mechanism this plan
+measured producing 409s on 14 live articles. **It deserves its own pass, first.** If it does not
+hold, the stamp route has to be reopened rather than patched.
+
+Two smaller undecideds: whether the successor should carry a `profile` (the route resolves it from
+the reader today, and a server-enqueued job has no route), and whether `enqueueSuccessorIn` belongs
+in `pg-jobs.ts` or as a bespoke insert in `pg-session.ts`.

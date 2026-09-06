@@ -83,15 +83,18 @@
  *    from their own transcript. GPT Sol's finding 7.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
 
 import type { SpokenExchange } from "../useChat.js";
 import type { SpokenLanded } from "../chat/controller.js";
 import { claimMicrophone, releaseMicrophone, type MicClaim } from "../mic-lock.js";
+import { audioConstraint, labelled, rememberedDevice } from "../mic-devices.js";
+import { useAudioLevel } from "../useAudioLevel.js";
 import { ExchangeLedger, type Exchange } from "./exchanges.js";
 import { LiveMeter, responseReport, transcriptionReport } from "./meter.js";
 import { resolvePlacement, type ResolvedPlacement } from "./mic-placement.js";
 import { apiWiring, type LiveWiring } from "./wiring.js";
+import { ToolResponses } from "./tool-responses.js";
 
 /** Where the connection is. `failed` carries a sentence in `error`. */
 export type LivePhase = "idle" | "connecting" | "live" | "closing" | "failed";
@@ -127,12 +130,23 @@ export interface LiveApi {
   error: string | null;
   /** Both sides, in the order their turns began. */
   lines: LiveLine[];
+  /** A failed append left words available locally; retrying must retain them. */
+  hasUnsavedLines: boolean;
   pointers: LivePointer[];
   tools: LiveToolRun[];
   /** Is the reader being heard right now? Server VAD's opinion, not ours. */
   hearing: boolean;
   /** Is the model talking right now? */
   speaking: boolean;
+  inputLevel: MutableRefObject<number>;
+  measuringInput: boolean;
+  quietInput: boolean;
+  deviceLabel: string | null;
+  notice: string | null;
+  playbackBlocked: boolean;
+  enableAudio: () => Promise<void>;
+  thinking: boolean;
+  pendingTools: { callId: string; name: string }[];
   /** Every event type seen, and how many. The instrument — see the header. */
   seen: Record<string, number>;
   /**
@@ -185,7 +199,7 @@ export interface LiveOptions {
    */
   tailNow?: (threadId: string) => string | null;
   /** The URL's `?thread=` follows, when the server overrules the id. */
-  onThreadId?: (id: string) => void;
+  onThreadId?: (id: string, startedThreadId: string) => void;
 }
 
 /**
@@ -258,6 +272,22 @@ const SESSION_CAP_MS = 20 * 60_000;
  * on something going *wrong* rather than on the network being quick.
  */
 const SEED_TIMEOUT_MS = 15_000;
+const TOOL_TIMEOUT_MS = 60_000;
+const DISCONNECT_GRACE_MS = 8_000;
+
+function startupMessage(error: unknown): string {
+  if (error instanceof DOMException) {
+    if (error.name === "NotAllowedError") return "Microphone access was blocked. Allow it in your browser, then try Live again, or carry on typing.";
+    if (error.name === "NotFoundError") return "No microphone is available. Connect one and try Live again, or carry on typing.";
+    if (error.name === "NotReadableError") return "The microphone could not be opened. Check whether another app is using it, then try again.";
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  if (/\[live-(?:not-set-up|upstream)\]|OPENAI_API_KEY|fetch|network|load failed/i.test(message)) {
+    console.error("[live] voice startup failed", error instanceof Error ? error.name : "unknown");
+    return "Live voice is unavailable right now. Try again, or carry on typing or dictation.";
+  }
+  return message;
+}
 
 /**
  * A track that carries silence, so an offer can have audio in it with no
@@ -268,8 +298,7 @@ const SEED_TIMEOUT_MS = 15_000;
  * never audible, which is a real `MediaStreamTrack` from the peer connection's
  * point of view and costs the reader nothing because there is no reader.
  */
-function silentTrack(): MediaStreamTrack {
-  const ctx = new AudioContext();
+function silentTrack(ctx: AudioContext): MediaStreamTrack {
   const dest = ctx.createMediaStreamDestination();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -285,16 +314,52 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
   const [phase, setPhase] = useState<LivePhase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [lines, setLines] = useState<LiveLine[]>([]);
+  const [hasUnsavedLines, setHasUnsavedLines] = useState(false);
+  const unsaved = useRef(false);
   const [pointers, setPointers] = useState<LivePointer[]>([]);
   const [tools, setTools] = useState<LiveToolRun[]>([]);
   const [hearing, setHearing] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [seen, setSeen] = useState<Record<string, number>>({});
   const [placement, setPlacement] = useState<ResolvedPlacement | null>(null);
+  const [inputTrack, setInputTrack] = useState<MediaStreamTrack | null>(null);
+  const [inputContext, setInputContext] = useState<AudioContext | null>(null);
+  const inputMeter = useAudioLevel(inputTrack, inputContext);
+  const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [playbackBlocked, setPlaybackBlocked] = useState(false);
+  const [responding, setResponding] = useState(false);
+  const [pendingTools, setPendingTools] = useState<{ callId: string; name: string }[]>([]);
+  const toolResponses = useRef(new ToolResponses());
+  const toolRequests = useRef(new Set<AbortController>());
+  const startup = useRef<{ timer: ReturnType<typeof setTimeout>; abort: AbortController } | null>(null);
+  const connectionDeadline = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const context = useRef<AudioContext | null>(null);
+  const lineState = useRef<LiveLine[]>([]);
+  const handedOff = useRef(new Set<string>());
+  const startedThread = useRef<string>("");
+  const updateLines = useCallback((change: (previous: LiveLine[]) => LiveLine[]) => {
+    lineState.current = change(lineState.current);
+    setLines(lineState.current);
+  }, []);
 
   const pc = useRef<RTCPeerConnection | null>(null);
   const dc = useRef<RTCDataChannel | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
+  const enableAudio = useCallback(async () => {
+    const ctx = context.current;
+    if (ctx?.state === "suspended") {
+      try { await ctx.resume(); } catch { /* Playback below still offers recovery. */ }
+    }
+    const player = audio.current;
+    if (!player?.srcObject) return;
+    try {
+      await player.play();
+      if (audio.current === player && !closing.current) setPlaybackBlocked(context.current?.state === "suspended");
+    } catch {
+      if (audio.current === player && !closing.current) setPlaybackBlocked(true);
+    }
+  }, []);
   /** Call ids already claimed by `answerTool`. See the note there. */
   const answered = useRef<Set<string>>(new Set());
   /**
@@ -424,7 +489,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
   /** Fold one turn's text in, creating the line the first time we hear of it. */
   const put = useCallback(
     (id: string, role: LiveLine["role"], text: string, mode: "append" | "set", done: boolean) => {
-      setLines((prev) => {
+      if (handedOff.current.has(id)) return;
+      updateLines((prev) => {
         const i = prev.findIndex((l) => l.id === id);
         if (i === -1) return [...prev, { id, role, text, done }];
         const next = [...prev];
@@ -433,12 +499,25 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         return next;
       });
     },
-    [],
+    [updateLines],
   );
 
   const send = useCallback((msg: unknown) => {
     const channel = dc.current;
     if (channel?.readyState === "open") channel.send(JSON.stringify(msg));
+  }, []);
+
+  const continueAfterTools = useCallback(() => {
+    if (closing.current || dc.current?.readyState !== "open") return;
+    if (toolResponses.current.takeContinuation(midSentence.current)) send({ type: "response.create" });
+    setResponding(toolResponses.current.responding);
+  }, [send]);
+
+  const failSession = useCallback((message: string, reason: string) => {
+    setError(message);
+    failed.current = true;
+    endedBecause.current = reason;
+    void stopRef.current();
   }, []);
 
   /**
@@ -473,6 +552,11 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         if (failing.current) return;
         const thread = boundThread.current;
         if (!thread) return;
+        const liveCopy = lineState.current.filter((line) => exchange.itemIds.includes(line.id));
+        for (const id of exchange.itemIds) handedOff.current.add(id);
+        updateLines((previous) => previous.filter((line) => !exchange.itemIds.includes(line.id)));
+        // speak synchronously installs provisional chat rows. The live copy
+        // transfers now, before the network wait, and is restored on failure.
         const landed = await speak({
           threadId: thread,
           question: exchange.question,
@@ -492,6 +576,10 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           ...(exchange.interrupted ? { interrupted: true } : {}),
         });
         if (!landed.ok) {
+          for (const id of exchange.itemIds) handedOff.current.delete(id);
+          updateLines((previous) => [...liveCopy, ...previous]);
+          unsaved.current = true;
+          setHasUnsavedLines(true);
           setError(landed.error);
           failing.current = true;
           /* **Ended, and not from inside the queue.** `stop` awaits
@@ -512,15 +600,13 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         if (landed.threadId !== boundThread.current) {
           boundThread.current = landed.threadId;
           setThreadId(landed.threadId);
-          wired.current.onThreadId?.(landed.threadId);
+          wired.current.onThreadId?.(landed.threadId, startedThread.current);
         }
-        /* The live copy comes off now that the stored one is in the thread.
-           Both would otherwise be on screen at once and the reader would watch
-           their own question duplicate itself the instant it was saved. */
-        setLines((prev) => prev.filter((l) => !exchange.itemIds.includes(l.id)));
+        // Drop any repeated terminal event that arrived during persistence too.
+        updateLines((prev) => prev.filter((l) => !exchange.itemIds.includes(l.id)));
       });
     }
-  }, []);
+  }, [updateLines]);
 
   /**
    * A tool the model asked for.
@@ -536,7 +622,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
    * way out of.
    */
   const answerTool = useCallback(
-    async (callId: string, name: string, rawArgs: string) => {
+    async (callId: string, name: string, rawArgs: string, responseId: string) => {
+      if (closing.current) return;
       /**
        * **Which session asked for this**, captured before anything is awaited.
        *
@@ -565,6 +652,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          pass. */
       if (answered.current.has(callId)) return;
       answered.current.add(callId);
+      toolResponses.current.called(responseId, callId);
+      setPendingTools((previous) => [...previous, { callId, name }]);
 
       const started = Date.now();
       let args: Record<string, unknown> = {};
@@ -580,6 +669,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
            wanted, and there is no conversation left for the model to say it
            into. */
         if (!sameSession()) return;
+        setPendingTools((previous) => previous.filter((tool) => tool.callId !== callId));
         setTools((t) => [
           ...t,
           { callId, name, label, detail, ms: Date.now() - started },
@@ -601,7 +691,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
            itself after a function output — without this the model has the
            answer and never says it, which looks exactly like a model that
            decided not to reply. */
-        send({ type: "response.create" });
+        toolResponses.current.finishedCall(callId);
+        continueAfterTools();
       };
 
       if (name === "show_passage") {
@@ -621,15 +712,26 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         return;
       }
 
+      const request = new AbortController();
+      toolRequests.current.add(request);
+      const timeout = setTimeout(() => request.abort(), TOOL_TIMEOUT_MS);
       try {
-        const out = await (wired.current.wiring ?? apiWiring).runTool(slug, name, args);
+        const out = await Promise.race([
+          (wired.current.wiring ?? apiWiring).runTool(slug, name, args, request.signal),
+          new Promise<never>((_, reject) => {
+            request.signal.addEventListener("abort", () => reject(new Error("The tool took too long. Try again.")), { once: true });
+          }),
+        ]);
         finish(out.content, out.label, out.detail);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         finish(`That tool failed: ${message}`, name, `failed — ${message}`);
+      } finally {
+        clearTimeout(timeout);
+        toolRequests.current.delete(request);
       }
     },
-    [send, slug],
+    [send, slug, continueAfterTools],
   );
 
   /**
@@ -667,6 +769,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       const type = String(e.type ?? "");
       setSeen((s) => ({ ...s, [type]: (s[type] ?? 0) + 1 }));
 
+      const response = e.response as { id?: string; status?: string; status_details?: { error?: { message?: string } }; output?: { type?: string; call_id?: string }[] } | undefined;
+
       /* **The seeding barrier.** While it is up the microphone track is
          disabled, so VAD creates no items and nothing but our own seeds is in
          this stream. The moment every seeded item has been acknowledged,
@@ -694,6 +798,9 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           return;
         }
         if (id && seeding.current.ids.has(id)) return;
+        if (id && role === "user" && !lineState.current.some((line) => line.id === id)) {
+          put(id, "reader", "", "set", false);
+        }
       }
 
       /* **Everything else goes to the ledger, and the ledger decides what is a
@@ -702,9 +809,15 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          arrival order writes an answer with no question. See exchanges.ts. */
       if (seeding.current.done) commit(ledger.current.push(e));
 
-      /* The reader's own words. `completed` is the only one that carries a
-         transcript worth showing — the deltas on this one are the transcriber's
-         partial guesses and they rewrite themselves. */
+      if (type === "conversation.item.input_audio_transcription.delta") {
+        // Provisional only. The completed event replaces this text, and the
+        // ledger persists only that final transcription.
+        put(String(e.item_id ?? ""), "reader", String(e.delta ?? ""), "append", false);
+        return;
+      }
+
+      /* The final wording replaces the provisional transcription; only this
+         completed transcript is handed to the persistence ledger. */
       if (type === "conversation.item.input_audio_transcription.completed") {
         /* **And it is also a bill.** `gpt-live-transcribe` is a second model on
            a second rate card, billed per audio minute, and this event is the
@@ -745,6 +858,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       if (type === "input_audio_buffer.speech_started") lastHeard.current = Date.now();
 
       if (type === "input_audio_buffer.speech_started") {
+        toolResponses.current.interrupt();
         /* **The reader started talking, and whether that is an interruption is
            the ledger's question, not ours.** It marks the turn only when an
            answer is still being assembled — which is the honest reading of
@@ -767,13 +881,14 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           String(e.call_id ?? ""),
           String(e.name ?? ""),
           String(e.arguments ?? "{}"),
+          String(e.response_id ?? ""),
         );
         return;
       }
 
       if (type === "error") {
         const detail = e.error as { message?: string } | undefined;
-        setError(detail?.message ?? "the live session reported an error [live-event]");
+        failSession(detail?.message ?? "The live session reported an error. Try again or carry on typing.", "provider-error");
         return;
       }
 
@@ -785,6 +900,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         const id = (e.response as { id?: unknown } | undefined)?.id;
         if (typeof id === "string" && id !== "") {
           responseStarts.current.set(id, new Date().toISOString());
+          toolResponses.current.created(id);
+          setResponding(true);
         }
       }
 
@@ -804,7 +921,10 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          still in flight has not been appended yet, so the list cannot answer
          "have we started this one?" at all. */
       if (type === "response.done") {
-        setSpeaking(false);
+        toolResponses.current.done(
+          response?.id ?? "", response?.status === "completed",
+          (response?.output ?? []).filter((item) => item.type === "function_call" && item.call_id).map((item) => item.call_id!),
+        );
         /* **The usage is on this event and nowhere else, and until Stage 2B it
            was read for its function calls and thrown away.** Every turn — a
            spoken answer, a cancelled one the reader talked over, a
@@ -817,15 +937,22 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         if (typeof id === "string") responseStarts.current.delete(id);
         meterEvent(responseReport(e, { startedAt, finishedAt: new Date().toISOString() }));
 
+        if (response?.status === "failed") {
+          const detail = response.status_details?.error?.message;
+          failSession(`The voice response failed.${detail ? ` ${detail}` : ""} Try Live again, or carry on typing.`, "response-failed");
+          return;
+        }
+
         const output = (e.response as { output?: unknown[] } | undefined)?.output ?? [];
         for (const item of output) {
           const it = item as { type?: string; call_id?: string; name?: string; arguments?: string };
           if (it.type !== "function_call" || !it.call_id) continue;
-          void answerTool(it.call_id, it.name ?? "", it.arguments ?? "{}");
+          void answerTool(it.call_id, it.name ?? "", it.arguments ?? "{}", response?.id ?? "");
         }
+        continueAfterTools();
       }
     },
-    [answerTool, put, commit, meterEvent],
+    [answerTool, put, commit, meterEvent, failSession, continueAfterTools],
   );
 
   /**
@@ -869,6 +996,23 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
        abandons rather than opening a connection behind this teardown. */
     epoch.current += 1;
     setPhase("closing");
+    if (connectionDeadline.current) clearTimeout(connectionDeadline.current);
+    connectionDeadline.current = null;
+    if (startup.current) {
+      clearTimeout(startup.current.timer);
+      startup.current.abort.abort();
+      startup.current = null;
+    }
+    for (const request of toolRequests.current) request.abort();
+    toolRequests.current.clear();
+    setPendingTools([]);
+    setResponding(false);
+    setPlaybackBlocked(false);
+    setInputTrack(null);
+    setInputContext(null);
+    const oldContext = context.current;
+    context.current = null;
+    if (oldContext && oldContext.state !== "closed") void oldContext.close?.().catch(() => {});
 
     const finish = (async () => {
       /* **Zero: let a sentence in progress finish, before the device goes.**
@@ -944,6 +1088,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       /* The audio element too. A paused element holding a dead stream keeps a
          decoder alive and, on some browsers, the tab's "playing audio" chrome. */
       if (audio.current) {
+        audio.current.pause?.();
         audio.current.srcObject = null;
         audio.current = null;
       }
@@ -963,13 +1108,11 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       }
 
       setSpeaking(false);
-      /* **`idle` only if nothing else has claimed the outcome.** `start`'s
-         catch tears the session down and *then* reports, so a hang-up that is
-         part of a failure must not overwrite `failed` with `idle` on its way
-         out — which it did, and the symptom was a session that had refused to
-         start reading as ready to start. A ref rather than the phase, because
-         the phase is state and has not re-rendered yet. */
-      if (!failed.current) setPhase("idle");
+      setResponding(false);
+      setPlaybackBlocked(false);
+      // Both ordinary hangup and failure must leave a retryable phase. Merely
+      // skipping idle on failure used to leave the disabled button in closing.
+      setPhase(failed.current ? "failed" : "idle");
       closing.current = null;
     })();
 
@@ -1058,11 +1201,26 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
 
   const start = useCallback(
     (opts: { threadId: string; microphone?: boolean }) => {
+      // A duplicate gesture cannot replace resources still owned by a session
+      // or a hangup that is preserving its final words.
+      if (startup.current || closing.current || pc.current || claim.current) return;
       const microphone = opts.microphone ?? true;
       setPhase("connecting");
       setError(null);
       setSeen({});
-      setLines([]);
+      const preserveWords = startedThread.current === opts.threadId && unsaved.current;
+      updateLines((previous) => preserveWords ? previous.filter((line) => line.text.trim() !== "") : []);
+      unsaved.current = preserveWords;
+      setHasUnsavedLines(preserveWords);
+      handedOff.current.clear();
+      startedThread.current = opts.threadId;
+      setDeviceLabel(null);
+      setNotice(null);
+      setPlaybackBlocked(false);
+      setResponding(false);
+      setPendingTools([]);
+      toolResponses.current = new ToolResponses();
+      seeding.current = { expected: 0, ids: new Set(), done: false };
       setPointers([]);
       setTools([]);
       /* A new session mints new call ids, but clearing is what stops this
@@ -1101,7 +1259,30 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
        * attempt noticed it was stale would be a worse bug than the one this
        * fixes.
        */
-      const mine = (epoch.current += 1);
+      epoch.current += 1;
+      const mine = epoch.current;
+      const abort = new AbortController();
+      const timer = setTimeout(() => {
+        if (mine !== epoch.current) return;
+        failSession("The live session did not finish starting. Check microphone permission, then try again or carry on typing.", "startup-timeout");
+      }, SEED_TIMEOUT_MS);
+      startup.current = { timer, abort };
+      // Create/resume Web Audio inside the initiating gesture. It measures the
+      // acquired track and never opens a second capture or plays local audio.
+      let ctx: AudioContext | null = null;
+      try {
+        const AudioCtor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtor) {
+          ctx = new AudioCtor();
+          if (ctx.state === "suspended") void ctx.resume().catch(() => {});
+          context.current = ctx;
+          setInputContext(ctx);
+        } else {
+          setNotice("The microphone level meter is unavailable in this browser.");
+        }
+      } catch {
+        setNotice("The microphone level meter is unavailable in this browser.");
+      }
       let conn: RTCPeerConnection | null = null;
       let track: MediaStreamTrack | null = null;
       let channel: RTCDataChannel | null = null;
@@ -1127,6 +1308,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         track?.stop();
         channel?.close();
         conn?.close();
+        if (ctx && ctx !== context.current && ctx.state !== "closed") void ctx.close?.().catch(() => {});
         if (pc.current === conn) pc.current = null;
         if (dc.current === channel) dc.current = null;
         if (micTrack.current === track) micTrack.current = null;
@@ -1162,12 +1344,13 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
              microphone permission has been granted once for this origin. So the
              very first connection on a new origin falls back, and every one
              after it guesses properly. */
-          const where = await resolvePlacement();
+          const preferred = rememberedDevice();
+          const where = await resolvePlacement(preferred);
           if (stale()) return abandon();
           setPlacement(where);
 
           const wiring = wired.current.wiring ?? apiWiring;
-          const ticket = await wiring.ticket(slug, opts.threadId, where.placement);
+          const ticket = await wiring.ticket(slug, opts.threadId, where.placement, abort.signal);
           /* **The tail travels with the history it belongs to**, and the first
              exchange claims exactly this. Read separately they would be a claim
              about a conversation that never existed. */
@@ -1200,15 +1383,23 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           pc.current = conn;
           /* **The connection dying is the session ending.** A failed ICE
              negotiation or a channel the far end closed leaves a page that
-             looks live and hears nothing, holding the microphone. `disconnected`
-             is deliberately not in here: it is transient and recovers, and
-             hanging up on a two-second network blip would be worse than the
-             blip. */
+             looks live and hears nothing, holding the microphone. A transient
+             disconnection gets a short grace period before the same failure. */
           conn.addEventListener("connectionstatechange", () => {
             const state = conn?.connectionState;
+            if (stale()) return;
+            if (connectionDeadline.current) clearTimeout(connectionDeadline.current);
+            connectionDeadline.current = null;
+            if (state === "disconnected") {
+              connectionDeadline.current = setTimeout(() => {
+                if (!stale() && conn?.connectionState === "disconnected") {
+                  failSession("The live connection was lost. Try Live again or carry on typing.", "connection-lost");
+                }
+              }, DISCONNECT_GRACE_MS);
+            }
             if (state === "failed" || state === "closed") {
               endedBecause.current = "connection-lost";
-              if (!stale()) void stopRef.current();
+              if (!stale()) failSession("The live connection was lost. Try Live again or carry on typing.", "connection-lost");
             }
           });
 
@@ -1216,17 +1407,22 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           el.autoplay = true;
           audio.current = el;
           conn.ontrack = (ev) => {
-            el.srcObject = ev.streams[0] ?? null;
+            if (stale()) return;
+            el.srcObject = ev.streams[0] ?? new MediaStream([ev.track]);
+            void enableAudio();
           };
 
           channel = conn.createDataChannel("oai-events");
           dc.current = channel;
-          channel.addEventListener("message", onEvent as EventListener);
+          channel.addEventListener("message", (event) => {
+            // Keep grace-window events, but never feed an old channel into a
+            // replacement session's ledger or tool queue.
+            if (dc.current === channel) onEvent(event as MessageEvent<string>);
+          });
           /* The far end hung up. Without this the page stays `live`, holding
              the microphone, with nothing arriving and nothing saying why. */
           channel.addEventListener("close", () => {
-            endedBecause.current = "channel-closed";
-            if (!stale() && !closing.current) void stopRef.current();
+            if (!stale() && !closing.current) failSession("The live connection ended. Try Live again or carry on typing.", "channel-closed");
           });
 
           /* **The last check before the session can hear anything.** The tail
@@ -1242,7 +1438,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
                branch that calls it in `onEvent` runs only while `done` is
                false. */
             seeding.current = { ...seeding.current, done: true };
-            clearTimeout(seedBy);
+            clearTimeout(timer);
+            if (startup.current?.abort === abort) startup.current = null;
             const now = wired.current.tailNow?.(opts.threadId);
             if (now !== undefined && now !== ticket.tailId) {
               setError(
@@ -1252,7 +1449,10 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
               void stopRef.current();
               return;
             }
-            if (micTrack.current) micTrack.current.enabled = true;
+            if (micTrack.current) {
+              micTrack.current.enabled = true;
+              setInputTrack(micTrack.current);
+            }
             setPhase("live");
           };
           /**
@@ -1276,18 +1476,11 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
            * to open the microphone anyway, which is the amnesia bug the barrier
            * exists to prevent, arriving silently.
            */
-          const seedBy = setTimeout(() => {
-            if (seeding.current.done) return;
-            setError("The live session did not finish starting. Try again.");
-            failed.current = true;
-            endedBecause.current = "seed-timeout";
-            void stopRef.current();
-          }, SEED_TIMEOUT_MS);
-
           /* Captured, so the seeding closure below cannot be re-narrowed by a
              later assignment to the mutable local. */
           const opened = channel;
           opened.addEventListener("open", () => {
+            if (stale()) return;
             /* **A minted token is not a conversation**, and this is the event
                that tells the two apart. A reader can press Live and change
                their mind, and a denominator built on issued sessions would
@@ -1373,10 +1566,22 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
             if (stale()) return abandon();
           }
 
-          track =
-            (microphone
-              ? (await navigator.mediaDevices.getUserMedia({ audio: true })).getAudioTracks()[0]
-              : silentTrack()) ?? null;
+          if (microphone) {
+            if (!navigator.mediaDevices?.getUserMedia) throw new Error("This browser cannot open a microphone. Use a supported browser or carry on typing.");
+            let stream: MediaStream;
+            try {
+              stream = await navigator.mediaDevices.getUserMedia(audioConstraint(preferred));
+            } catch (error) {
+              if (stale()) return abandon();
+              if (!preferred || !(error instanceof DOMException) || !["OverconstrainedError", "NotFoundError"].includes(error.name)) throw error;
+              setNotice("Your chosen microphone is unavailable. Using the browser's default microphone.");
+              stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            }
+            track = stream.getAudioTracks()[0] ?? null;
+          } else {
+            if (!ctx) throw new Error("This browser cannot create the test audio track.");
+            track = silentTrack(ctx);
+          }
           if (stale()) return abandon();
           if (!track) throw new Error("no microphone track [live-no-track]");
           /* **Created disabled, and that is the seeding barrier.** "Sent before
@@ -1390,6 +1595,10 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           if (microphone) {
             track.enabled = false;
             micTrack.current = track;
+            setDeviceLabel(labelled(track));
+            track.addEventListener?.("ended", () => {
+              if (!stale()) failSession("The microphone disconnected. Choose an available input and try Live again.", "microphone-ended");
+            });
           }
           conn.addTrack(track);
 
@@ -1405,15 +1614,15 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           const answer = await fetch("https://api.openai.com/v1/realtime/calls", {
             method: "POST",
             body: offer.sdp,
+            signal: abort.signal,
             headers: {
               Authorization: `Bearer ${ticket.token}`,
               "Content-Type": "application/sdp",
             },
           });
           if (!answer.ok) {
-            throw new Error(
-              `OpenAI refused the connection (${answer.status}): ${(await answer.text()).slice(0, 200)}`,
-            );
+            console.error(`[live] OpenAI refused the connection (${answer.status})`);
+            throw new Error("Live voice is unavailable right now. Try again, or carry on typing.");
           }
           if (stale()) return abandon();
           await conn.setRemoteDescription({ type: "answer", sdp: await answer.text() });
@@ -1448,12 +1657,12 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
              here is waiting on a reader: the microphone was handed back in
              `stop`'s first step. */
           await stopRef.current();
-          setError(err instanceof Error ? err.message : String(err));
+          setError(startupMessage(err));
           setPhase("failed");
         }
       })();
     },
-    [onEvent, slug],
+    [onEvent, slug, updateLines, failSession, enableAudio],
   );
 
   const say = useCallback(
@@ -1462,10 +1671,11 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       if (trimmed === "") return;
       /* Rendered locally rather than waiting for it to come back: a typed turn
          has no input transcription event, because nothing was transcribed. */
-      put(`typed-${Date.now()}`, "reader", trimmed, "set", true);
+      const id = `typed-${Date.now()}`;
+      put(id, "reader", trimmed, "set", true);
       send({
         type: "conversation.item.create",
-        item: { type: "message", role: "user", content: [{ type: "input_text", text: trimmed }] },
+        item: { id, type: "message", role: "user", content: [{ type: "input_text", text: trimmed }] },
       });
       send({ type: "response.create" });
     },
@@ -1532,7 +1742,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
        having a conversation, not abandoning one, and hanging up on them would
        be the rudest possible reading of "hidden". */
     const leaving = () => {
-      if (!(pc.current || dc.current)) return;
+      if (!(pc.current || dc.current || claim.current || startup.current || context.current)) return;
       endedBecause.current = "pagehide";
       /* **The hint, and it has to come first.** `stop` below is a chain of
          awaits — a settle window, a grace window, the write queue — and a page
@@ -1563,7 +1773,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          that could close it. GPT Sol, reviewing the built code. */
       epoch.current += 1;
       endedBecause.current = "unmounted";
-      if (pc.current || dc.current || claim.current) void stopRef.current();
+      if (pc.current || dc.current || claim.current || startup.current || context.current) void stopRef.current();
     };
   }, []);
 
@@ -1571,10 +1781,20 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     phase,
     error,
     lines,
+    hasUnsavedLines,
     pointers,
     tools,
     hearing,
     speaking,
+    inputLevel: inputMeter.level,
+    measuringInput: phase === "live" && inputMeter.measuring,
+    quietInput: phase === "live" && inputMeter.quiet,
+    deviceLabel,
+    notice,
+    playbackBlocked,
+    enableAudio,
+    thinking: (responding || pendingTools.length > 0) && !speaking,
+    pendingTools,
     seen,
     placement,
     threadId,

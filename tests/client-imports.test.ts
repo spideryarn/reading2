@@ -110,6 +110,11 @@ const SHARED = new Set([
      after somebody has talked for two minutes.
      See src/dictation-limits.ts. */
   "dictation-limits.js",
+  // The server caps spoken passage/tool labels before saving them. Live's
+  // lost-response repair compares those saved fields with the same cap, so it
+  // must share the rule. Extracted from routes.ts into this import-free leaf;
+  // the purity check below keeps server dependencies out of the client.
+  "spoken-label.js",
   /* What a bug report may carry — the diagnostics blob's shape and the two
      image formats a pasted screenshot may be. On the list for the same reason
      `monitoring-scrub.js` is, and it is the same argument one seam over: the

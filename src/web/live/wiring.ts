@@ -72,12 +72,13 @@ export interface LiveToolResult {
 
 export interface LiveWiring extends MeterTransport {
   /** Mint a session for this conversation, and get its history with it. */
-  ticket(slug: string, threadId: string, placement: MicPlacement): Promise<LiveTicket>;
+  ticket(slug: string, threadId: string, placement: MicPlacement, signal?: AbortSignal): Promise<LiveTicket>;
   /** Run one chat tool the model asked for. */
   runTool(
     slug: string,
     name: string,
     args: Record<string, unknown>,
+    signal?: AbortSignal,
   ): Promise<LiveToolResult>;
   /* The three accounting calls come from `MeterTransport` in ./meter.ts, which
      is where the queue that drives them lives. Extended rather than restated,
@@ -139,13 +140,14 @@ async function post(path: string, body: unknown, keepalive: boolean): Promise<Po
  * that, and it releases the microphone before it reports.
  */
 export const apiWiring: LiveWiring = {
-  async ticket(slug, threadId, placement) {
+  async ticket(slug, threadId, placement, signal) {
     const res = await apiFetch(
       `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/live`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ placement }),
+        ...(signal ? { signal } : {}),
       },
     );
     if (!res.ok) throw await failure(res);
@@ -171,11 +173,12 @@ export const apiWiring: LiveWiring = {
     };
   },
 
-  async runTool(slug, name, args) {
+  async runTool(slug, name, args, signal) {
     const res = await apiFetch(`/api/chat/${encodeURIComponent(slug)}/live-tool`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, args }),
+      ...(signal ? { signal } : {}),
     });
     if (!res.ok) throw await failure(res);
     const out = await readJson<Partial<LiveToolResult>>(res);

@@ -142,45 +142,26 @@ The format, the reasoning, and the one way to get range checks silently wrong ar
 
 ## How we write docs here
 
-A doc under `docs/project/` is two things: **intent** — Greg's directions, the goals, the
-constraints, the decisions and why they were made, mostly in his own words — and **signposts** to
-the other docs and to the code. Not descriptions of code, which the code already provides.
-A portable counterpart to these conventions, including its audience guidance, is
-[documentation-policy.md](docs/reusable/documentation-policy.md).
+**The policy is [documentation-policy.md](docs/reusable/documentation-policy.md)** — who each kind of
+doc is written for, one home per fact, cite don't restate, less is more, signpost heavily, writing
+down what a future reader would otherwise have to reverse-engineer, and why an agent-facing doc holds
+intent rather than descriptions of code. Read it once.
 
-- **Less is more.** Where Greg gave instructions, follow them rather than embroidering. Say each
-  thing once, briefly, and leave the next agent room to use its judgment.
-- **Update the docs as you go.** If you change what something does, fix the doc in the same piece of
-  work.
-- **Every doc has a parent.** New doc under `docs/project/` ⇒ add a line for it to the entry-point
-  doc that owns it, and link back up. Only the seven are listed in this file, and
-  `tests/doc-links.test.ts` fails if a doc has no owner or two.
-- **Editing a doc whose wording is a rule** — this file above all, the seven entry points,
-  anything in `docs/reusable/` — goes one approved set of changes at a time, with the before and
-  after shown: [edit-important-docs.md](docs/reusable/edit-important-docs.md).
-  **Signposting is not a rule**, so adding a new doc's line under its entry point, or tweaking a
-  pointer's wording, needs no approval — just do it. Greg, 2026-09-02.
-- **File names are lower-case kebab-case**, everywhere under `docs/`, even when copied in from
-  somewhere that shouted. Rename on sight and fix the links.
-- **Quote Greg directly** — his exact wording, in a blockquote, attributed and dated. The phrasing
-  carries intent that a paraphrase loses. If you find you've flattened a quote into your own voice,
-  put his back.
-- **Signpost heavily**, both directions, deep-linking to sections, and out to the code
-  (e.g. [`src/blocks.ts`](src/blocks.ts)). **Cite, don't restate.** Give a fact one home. For facts
-  held in code, cite the defining file and stable name — `` `src/models.ts` § `STAGE_EFFORT` `` —
-  rather than copying a value or line number. For inventories, record the command, scope and run
-  date; treat its output as a dated example. Otherwise record the source, date and confidence or
-  status. [Why](docs/research/260903b-facts-that-were-wrong.md).
+Four things are ours:
+
+- **Quote Greg directly** — his exact wording, in a blockquote, attributed and dated. A paraphrase
+  loses the intent. If you've flattened one into your own voice, put his back.
+- **Every doc has a parent.** New doc under `docs/project/` ⇒ a line under the entry point that owns
+  it, and a link back up. `tests/doc-links.test.ts` fails if a doc has no owner or two.
+- **Editing a doc whose wording is a rule** — this file above all, the seven entry points, anything
+  in `docs/reusable/` — goes one approved set at a time, before and after shown:
+  [edit-important-docs.md](docs/reusable/edit-important-docs.md). **Signposting is not a rule**, so a
+  new doc's line under its entry point, or a pointer's wording, needs no approval. Greg, 2026-09-02.
 - **Record decisions where they belong.** When something in
-  [open-questions.md](docs/project/open-questions.md) gets decided, write it into the relevant doc
-  and delete the question. That file should shrink.
-- **Harness memory is not where knowledge lives.** An agent's own auto-memory is for its
-  preferences, machine-local state, and a pointer to a thread left open. Anything a future reader
-  would need — a trap, a decision, a rule — goes in the doc that owns it, where Greg and the other
-  agents can see it too.
-- **Write down anything a future reader would otherwise have to reverse-engineer** — especially why
-  a design went one way rather than the obvious other way, and *especially* where the decision went
-  against the recommendation written down at the time.
+  [open-questions.md](docs/project/open-questions.md) gets decided, write it into the doc that owns
+  it and delete the question. That file should shrink. The same goes for anything you learn: your own
+  auto-memory is for preferences and machine-local state, not for knowledge Greg and the other agents
+  need.
 - **Keep this file short.** Detail goes in the doc; this file gets a line.
 
 ## Working agreements for agents
@@ -314,10 +295,9 @@ nothing else has a copy of.
   just the prose. Check each finding yourself; some are wrong. And check a verdict actually arrived,
   exit code *and* answer file, because a review that returned nothing looks exactly like one that
   found nothing. [codex-cli-as-subagent.md](docs/reusable/codex-cli-as-subagent.md).
-- **Root-cause every bug in a subagent, and write it up** under `docs/postmortems/`: the real cause
-  rather than the line that broke, **the class it belongs to, named**, which commit introduced it,
-  the fix that's right for the long term, and what would have caught the whole class of it — ranked
-  by ease and value where there is more than one.
+- **Root-cause every bug in a subagent, and write it up** under `docs/postmortems/`. The point is
+  never the incident, it is **the class it belongs to, named** —
+  [write-postmortem.md](docs/reusable/write-postmortem.md) is the five things one has to say.
 - **"Close this tab if successful" means exactly that** — close it with the recipe in
   [iterm.md](docs/reusable/iterm.md), and only once the work in that conversation is actually done
   and its checks passed. If anything failed or is unfinished, leave the tab open and say why.
@@ -339,6 +319,10 @@ nothing else has a copy of.
   is that. And no subagent is read-only by construction — an `Explore` lacks `Edit` and `Write` but
   keeps an unrestricted `Bash`, so "don't edit" is a brief you write, not a boundary you get
   ([engineering-manager.md § Delegate](docs/reusable/engineering-manager.md#delegate)).
+- **From outside a Claude session** — a script, a cron job, a Codex-primary run, the box — dispatch
+  Claude with [`scripts/run-claude.ts`](scripts/run-claude.ts) rather than `claude -p`:
+  [claude-cli-as-subagent.md](docs/reusable/claude-cli-as-subagent.md). Inside a session, an
+  ordinary subagent is cheaper and better, because it inherits the harness.
 - **When you rename anything, hunt down everything that names it.** A rename is never one edit. Send
   a cheap subagent to sweep the whole repo — code, docs, plans, tests, fixtures, scripts,
   `package.json` — and grep for fragments as well as the whole name, since a `camelCase` rename and
