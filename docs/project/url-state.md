@@ -235,6 +235,20 @@ unrecognised-value rule landing it on a default that happened to be the view it 
 What is left of that rule is still true and still worth having: **an unrecognised mode lands on the
 default**, so a link from a future version degrades to the article rather than to an error page.
 
+**And `?mode=` decides which passages are marked, totally.** Five bands publish `Found[]` up to
+`Reader` — Ideas, Quotes, Timeline, Referee and Search — and which of those five slots the prose,
+the ring and the rail are drawn from is `selectPassages` in
+[`reader/passages.ts`](../../src/web/reader/passages.ts): one function, exhaustive over `Mode` with a
+`never` default, returning the marks and the open key **together** so they cannot come from
+different bands. The nine modes with no passage producer get the shared empty constant by name. It
+was two parallel ternary chains inside `Reader` until 2026-09-06, and both ended in Search's slot —
+so `?mode=plain` was drawing Search's, correct only for as long as the outgoing band cleared it on
+the way out (earlier the same day that clear became a layout cleanup, which is what stopped it
+painting a frame). A fifteenth mode is now a compile error there rather than another inheritor
+([new-mode.md](new-mode.md),
+[260906c](../plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md)
+§ Stage 4b).
+
 Modes push history, because a mode is where you are rather than a glance. Each
 carries its own parameters — `?thread=` for the open conversation, `?term=` for the selected glossary
 term, `?run=` for the saved search being shown, all `replace` because stepping between them is

@@ -46,6 +46,9 @@ const searchMode = await readFile(path.join(ROOT, "src/web/modes/search/SearchMo
    and have called through since 2026-09-06 — so the "before the paint" half of
    the assertions below is now a fact about this file. */
 const lifecycle = await readFile(path.join(ROOT, "src/web/passage-lifecycle.ts"), "utf8");
+/* And which slot the page is drawing from, which left `Reader` as a pair of
+   ternary chains and arrived here as one total function on the same day. */
+const passages = await readFile(path.join(ROOT, "src/web/reader/passages.ts"), "utf8");
 const glossaryPanel = await readFile(path.join(ROOT, "src/web/GlossaryPanel.tsx"), "utf8");
 const quotesPanel = await readFile(path.join(ROOT, "src/web/QuotesPanel.tsx"), "utf8");
 const searchPanel = await readFile(path.join(ROOT, "src/web/SearchPanel.tsx"), "utf8");
@@ -291,7 +294,64 @@ describe("the quotes band's marks", () => {
     expect(lifecycle).toMatch(
       /useLayoutEffect\(\(\) => \{\s*onFound\(found\);\s*if \(kind === "derived"\) onOpenKey\(/,
     );
-    /* `Reader` holds the key, and since 2026-09-06 `Reader` is its own file. */
-    expect(reader).toMatch(/mode === "quotes"\s*\?\s*quoteOpenKey/);
+    /* **`Reader` holds the key, and the marks it goes with come from the same
+       slot.** Since 2026-09-06 that is two files: `Reader` puts the pair into
+       one `quotes` slot, and `selectPassages` hands that whole slot back for
+       quotes mode. It was a pair of ternary chains until then —
+       `mode === "quotes" ? quoteOpenKey : …` beside `… ? quoteFound : …` — which
+       is the shape this used to match and the shape that let the ring and the
+       washes come from different bands. Both halves are asserted, because
+       either one alone is satisfied by a `Reader` that builds the slot and a
+       selection that never reads it. */
+    expect(reader).toMatch(/quotes:\s*\{ found: quoteFound, openKey: quoteOpenKey \}/);
+    expect(passages, "selectPassages must answer quotes mode with the quotes slot").toMatch(
+      /case "quotes":\s*return slots\.quotes;/,
+    );
+  });
+});
+
+/**
+ * **The one thing in the band dispatch that a mutation proved nothing was
+ * watching.**
+ *
+ * `key={mode}` on `ConversationBand` is correctness rather than tidiness: one
+ * component is mounted by two modes, chat and Remember-recall, and without the
+ * key React reuses the instance across the switch — so the reader arrives in
+ * Remember carrying chat's open conversation, focus nonce and stance
+ * (`ConversationModes.tsx`, and 260906c § Stage 2). Removing it on 2026-09-06
+ * left `conversation-band-send-new`, `remember-url-rules`, `public-network-trace`
+ * and the reader-level marks harness **all green**, so this is the guard written
+ * because that hole was measured rather than guessed.
+ *
+ * Same honest label as the blocks above: it reads source text. The behavioural
+ * version would have to mount two modes and compare a conversation's per-visit
+ * state across the switch, which is a bigger test than the fact deserves — but
+ * a fact with nothing at all watching it is how a `key` gets deleted by somebody
+ * tidying a switch.
+ *
+ * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md
+ * § Stage 4b.
+ */
+describe("the band dispatch", () => {
+  it("keys the conversation band on the mode that mounted it", () => {
+    expect(reader).toMatch(/<ConversationBand\s*\n\s*key=\{mode\}/);
+  });
+
+  it("makes a fifteenth mode a compile error rather than an empty band", () => {
+    /* The `never` default, which is the whole reason the seventeen `&&`
+       expressions became a switch. Asserted here as well as by the typecheck
+       because a `default:` that returned `null` would compile forever and open
+       an empty band for the mode nobody wrote a case for. */
+    const at = reader.indexOf("function band(): ReactNode");
+    expect(at, "band() must exist in Reader.tsx to be checked").toBeGreaterThan(-1);
+    const body = reader.slice(at, reader.indexOf("\n  return (", at));
+    expect(body).toMatch(/switch \(mode\) \{/);
+    expect(body).toMatch(/const unhandled: never = mode;/);
+    /* And the two modes that deliberately have no band say so in their own case
+       rather than falling through to the default. Each is asked for separately,
+       because whether they share one arm or take two is a formatting choice and
+       this is not a test about formatting. */
+    expect(body).toMatch(/case "plain":[\s\S]{0,60}return null;/);
+    expect(body).toMatch(/case "hierarchy":[\s\S]{0,60}return null;/);
   });
 });

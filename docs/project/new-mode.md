@@ -36,13 +36,16 @@ rest.** A fifteenth word there is red until it has a row in each of these totals
 | `MODES_UI`, via `ModesMissingFromDock` | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) — an ordered array, because the order is Greg's; the type check stands in for the `Record`. **The row carries a required `experimental: boolean`**, so adding a mode means deciding whether it is finished enough to draw for everybody — [experimental-features.md](experimental-features.md). Say why in the table there either way |
 | `POLICY` | [`src/web/visitor.ts`](../../src/web/visitor.ts) — what a visitor may see; there is no fall-through any more, a missing row is a typecheck error |
 | `BAND_SAYS` | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) |
+| `band()`'s `switch` | [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) — **which band the mode opens**, and it is a `switch` with a `never` default rather than a `Record`, because each arm is JSX with its own gates. A mode with no arm is a compile error; a mode that deliberately has no band says `return null` in its own case, as `plain` and `hierarchy` do |
+| `selectPassages` | [`src/web/reader/passages.ts`](../../src/web/reader/passages.ts) — **which passage slot the prose marks, the ring and the rail are drawn from.** Same `never` default. A mode with no passage producer answers `NO_FOUND` explicitly; nine do |
 
 Then the residue, which is why this page exists:
 
-- **The band branch**: the `mode === "…"` if-chain near the bottom of `Reader` in
-  [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx), whose own header comment records why it
-  is still a chain and
-  not a table. *Nothing; this list.*
+- ~~**The band branch**~~ — **it left this list on 2026-09-06.** It was seventeen sibling
+  `{mode === "…" && <Band/>}` expressions that nothing checked, so a mode with no branch opened an
+  empty band and errored nowhere; it is now the `band()` switch in the table above, and so is the
+  passage selection beside it. Both are compiler-checked, and what a fifteenth mode makes red is
+  written out below.
 - **The mode's URL params**, [`params.ts`](../../src/web/params.ts) — [url-state.md](url-state.md).
   *Nothing.*
 - **A resolver in [`search-hits.ts`](../../src/web/search-hits.ts)** if the mode marks passages;
@@ -192,6 +195,28 @@ use" — that clause was written and then cut for exactly this reason.
 The dock, the visitor's view, the exported bundle and the offline copy each have a test that
 walks `MODES` or `STEP_ORDER`; if yours went green without a new row somewhere, one of the residue
 items above is the reason — [silent-success.md](../reusable/silent-success.md).
+
+**What a fifteenth mode makes red, measured rather than remembered.** Adding one word to `MODES` and
+running `npm run typecheck` gives exactly six source errors and one test error — no more, and the
+list is the checklist above with a compiler behind it. Measured 2026-09-06, on
+[260906c](../plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md)
+§ Stage 4b:
+
+| Red | What it is asking for |
+|---|---|
+| [`src/title-text.ts`](../../src/title-text.ts) § `MODE_LABEL` | the word a person sees |
+| [`src/messages.ts`](../../src/messages.ts) § `OWNER_MODE_NOTE` | the owner's one-line note |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) § `ModesMissingFromDock` | a row in the bar, with `experimental:` decided |
+| [`src/web/visitor.ts`](../../src/web/visitor.ts) § `POLICY` | what a visitor may see |
+| [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `band()` | the band, or an explicit `null` |
+| [`src/web/reader/passages.ts`](../../src/web/reader/passages.ts) § `selectPassages` | the passage slot, or `NO_FOUND` |
+| [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) § `BAND_SAYS` | what a visitor's band says, asserted against the network |
+
+One test also goes red without the typecheck being run at all:
+[`tests/every-mode-says-which-passages-it-marks.test.ts`](../../tests/every-mode-says-which-passages-it-marks.test.ts)
+walks `MODES` and requires the new mode to be named a producer or a non-producer — which is the
+guard against the cheap wrong fix, quietly adding it to the `NO_FOUND` arm to make the compiler
+stop.
 
 ---
 

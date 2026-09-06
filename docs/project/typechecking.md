@@ -145,7 +145,9 @@ the moment they land, which is the whole shadcn model. Fix the file.
   where an object was meant. If one of them ever starts costing something, that is it working.
 - **`exactOptionalPropertyTypes`** — "absent" and "present but undefined" stop being the same thing.
   This found a live bug the day it went on: `setAt(blockId, { history: "push", limitUrlUpdates:
-  undefined })` in [`src/web/App.tsx`](../../src/web/App.tsx) was meant to cancel the position
+  undefined })` — in `App.tsx` then, in
+  [`src/web/reader/useReadingPosition.ts`](../../src/web/reader/useReadingPosition.ts) since
+  2026-09-06 — was meant to cancel the position
   debounce so a spine click isn't sluggish, and cancelled nothing — nuqs resolves that option with
   `??`, so an explicit `undefined` falls straight through to `atParam`'s `debounce(...)`. It is
   `throttle(0)` now. See [url-state.md](url-state.md).

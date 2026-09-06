@@ -1,6 +1,6 @@
 # Separate article access, reader composition and mode controllers
 
-Status: **stages 1–3 built and committed; stage 4 in progress.** Worktree
+Status: **stages 1–4 built and committed.** Worktree
 `a1-a3-reader-composition`, branch `worktree-a1-a3-reader-composition`, off `0977d6f6`
 (origin/dev, 2026-09-06).
 
@@ -14,7 +14,9 @@ article-access unit under `src/web/article/`.
 | 1a — Timeline, Quotes, Debate, Glossary | `f103698b` | 5,236 |
 | 1b — Search, Summary, Diagram, Referee | `1360ec84` | 4,150 |
 | 2 — Chat and Remember, as one file | `2d82c0e7` | 3,599 |
-| 3 — `Reader`, the position hooks, then the access unit | *(this commit)* | **407** |
+| 3 — `Reader`, the position hooks, then the access unit | `f8903313` | **407** |
+| 4a — one passage lifecycle helper for six producers | `14c1d79c` | 407 |
+| 4b — `selectPassages` and the `band()` switch | *(this commit)* | 407 |
 
 This is items **A1** and **A3** of
 [the main app architecture review](260905e-main-app-architecture-review.md#a1-extract-responsibilities-that-already-have-distinct-lifetimes),
@@ -138,8 +140,12 @@ undo that.
 Today `passages` and `openPassage` are two independent ternary chains that agree only because both
 test `mode` in the same order, and both end `: found` / `: openHit`. Ten modes reach that last arm and
 only one of them, Search, owns it — so **nine modes** inherit Search's results by position in the
-chain. That is visible: leaving Search for Plain unmounts `SearchBand`, whose clear is a *passive*
-unmount cleanup, so the prose paints Search's marks for one frame in a mode that has no search in it.
+chain. It was visible until stage 4a: leaving Search for Plain unmounted `SearchBand`, whose clear
+was a *passive* unmount cleanup, so the prose painted Search's marks for one frame in a mode with no
+search in it. **Stage 4a's layout cleanup already removed that frame** — which leaves the nine modes
+correct only because a producer in another file clears its slot on the way out. That is the point of
+this stage: the nine stop *depending* on Search's goodbye and answer `NO_FOUND` themselves, and the
+two chains that could pick the marks from one band and the ring from another become one.
 
 ```ts
 export function selectPassages(mode: Mode, slots: PassageSlots): { found: Found[]; openKey: string | null }
@@ -432,9 +438,39 @@ edit rather than to a second one racing it.
 
 ### Stage 4b — A3: the selection and the dispatch
 
-- `selectPassages` in `src/web/reader/passages.ts`, total over `Mode`, `NO_FOUND` for the nine
-  non-producers, with unit tests over every mode.
-- The seventeen `&&` siblings become the local `band()` switch with the `never` default.
+**Built, 2026-09-06.** What landed, and the two things it turned up:
+
+- `src/web/reader/passages.ts` — `selectPassages(mode, slots)` returning one `PassageSlot`
+  (`{ found, openKey }`), exhaustive over `Mode` with the `never` default. Every producer arm
+  returns the **whole slot** rather than a field of one, so the marks and the ring cannot come from
+  different bands; the nine non-producers share one `NOTHING` object built on the exported
+  `NO_FOUND`, and `tests/every-mode-says-which-passages-it-marks.test.ts` asserts that by identity,
+  mode by mode, with a coverage arm driven from `MODES`.
+- `Reader`'s seventeen sibling `&&` expressions became the local `band()` switch, threading zero
+  props, with every gate preserved — the owner/visitor pairs and their `artefacts?.x` tests, the
+  single-branch `access` shape, the `FeatureBoundary` around Ideas, and `key={mode}` on
+  `ConversationBand`. `<VisitorBand gap={gap}>` stayed above it. Only one branch can render per
+  mode and no two modes return the same top-level component type, so the single child slot cannot
+  reuse another mode's instance.
+- `tests/the-marks-in-the-prose-belong-to-the-mode-showing.test.tsx` is the F1 harness: the whole
+  app mounted at an article's address as its owner, driving **Ideas → Timeline → Search with its
+  saved-run request still outstanding → Criteria ↔ Claims → Plain → Back**, once plainly, once under
+  `StrictMode`, and once across A → B → A. Each producer marks its own paragraph and no other, and
+  three projections are asserted together at every commit: the phrase marks, the ring, and the
+  paragraph bars plus the rail's ticks. **Proved by Sol's own mutation** — `TimelineBand
+  onFound={setIdeaFound}` — which fails only here, with
+  `timeline: the phrase marks: expected [] to deeply equal [ 'spya-cccccc' ]`, while
+  `passage-mode-cleanup` and the selection unit test both stay green. That is F1 reproduced rather
+  than taken on trust.
+- Two things the build corrected. The **one stale frame cannot be observed from a React test**:
+  `act` flushes the commit and the passive cleanup together, so the frame between them is not a
+  state a harness can stand in — the removal is proved by the unit test over the nine, and the
+  harness's job is the settled truth at every step. And **`?crits=spya-krit34` is not an id**: the
+  charset excludes `i`, so the criterion never switched on while its rows still drew, which is the
+  silent-success shape this repo keeps meeting.
+
+What the stage was specified as:
+
 - **A Reader-level wiring test, not only the band-level harness.** This is the part a pure
   `selectPassages` test and a miniature-reader cleanup harness both miss:
   `<TimelineBand onFound={setIdeaFound} …/>` compiles, passes the band test, passes the selection
@@ -456,6 +492,16 @@ edit rather than to a second one racing it.
 Done when: adding a mode makes every required policy decision visible, and the article-access and
 reading-position code is untouched by having done it.
 
+**The acceptance, run rather than argued.** A fifteenth word in `MODES` gives exactly six source
+typecheck errors and one test one — `MODE_LABEL`, `OWNER_MODE_NOTE`, `ModesMissingFromDock`,
+`POLICY`, `band()`, `selectPassages`, and `BAND_SAYS` in `public-network-trace` — plus one test that
+goes red without a typecheck at all, the `MODES` coverage arm of
+`every-mode-says-which-passages-it-marks`, which is the guard against quietly adding the new mode to
+the `NO_FOUND` list to silence the compiler. The table is in
+[new-mode.md § Before you call it finished](../project/new-mode.md#before-you-call-it-finished), and
+the band branch has left that page's residue list for its table of compiler-checked totals.
+`url-state.md` records that the mode → passage-slot mapping is now total.
+
 ## What this deliberately does not do
 
 - **No `readerContext`, no whole-app context, no `<ModeBands>` with twenty-one props.** Explicit props
@@ -466,8 +512,9 @@ reading-position code is untouched by having done it.
   review says so; a table is viable once the controllers have stable interfaces.
 - **No lazy-loading of mode code.** A4 kept it eager on purpose and
   [`tests/eager-client-graph.test.ts`](../../tests/eager-client-graph.test.ts) holds that line.
-- **No behaviour change anywhere**, except the Referee slot fix if it reproduces, and the one frame of
-  stale Search marks that `selectPassages` removes.
+- **No behaviour change anywhere**, except the Referee slot fix if it reproduces. The one frame of
+  stale Search marks belongs to stage 4a's layout cleanup, not to `selectPassages`; 4b's change is
+  that the nine modes no longer depend on another file's cleanup to be right.
 - **No touching another job's ground**: `useColumnContext.ts`, `rows.ts`, `fonts.ts`, `scroll.ts` and
   `position.ts` are A8's; `styles.css`, `tailwind.css` and `/design` are A10's; `ChatPanel.tsx`,
   `SearchPanel.tsx` and `useVisualViewport.ts` are A5's. This job moves the **controllers** that use

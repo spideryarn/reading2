@@ -15,6 +15,7 @@
 
 import {
   type CSSProperties,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -105,6 +106,7 @@ import { useRenderCount } from "../perf.js";
 import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "../feedback-context.js";
 import { useWindowWidth, useRootFontPx } from "./measure.js";
 import { useReadingPosition } from "./useReadingPosition.js";
+import { selectPassages } from "./passages.js";
 
 /**
  * The owner's `marked` map: nothing is marked, and it is one object for the
@@ -145,20 +147,25 @@ const EMPTY_DEPTHS: number[] = [];
  *
  * ## A known follow-up, measured rather than guessed
  *
- * `noExcessiveCognitiveComplexity` scores this function **54** against a
- * threshold of 25. It was **38** before the capability seam and **49** after
- * it, and over the threshold at every one of those, so this is not a line that
- * was crossed here — but the gates are worth a number and the number keeps
- * going up. Slice 1b added the last five: three `!owner && mode === "…" &&
- * artefacts?.x` branches, and the two narrowings above them.
+ * `noExcessiveCognitiveComplexity` scores this function **46** against a
+ * threshold of 25. It was **38** before the capability seam, **49** after it and
+ * **54** by the time the dispatch was extracted, and over the threshold at every
+ * one of those, so this is not a line that was crossed here — but the gates are
+ * worth a number and the number keeps going up. `band()` below took eight off
+ * it and is scored **46** in its own right, which is the honest arithmetic: a
+ * switch over fourteen modes is not simpler than fourteen `&&`s to a counter of
+ * branches. What it is instead is *checked*, and that was the point.
  *
- * The extraction that would pay it back is the **mode band dispatch**: the nine
- * `mode === "…"` branches near the bottom become one `<ModeBands>`, which takes
- * about sixteen props. Greg's team lead weighed it on 2026-08-28 and said leave
- * it — a sixteen-prop extraction made late and under time pressure is how a
- * lint number becomes a bug. Worth revisiting deliberately rather than at the
- * end of a slice. Recorded here rather than in a plan file because this is
- * where somebody will be standing when they wonder.
+ * The extraction this docblock proposed was a `<ModeBands>` component taking
+ * about sixteen props, and it is **not** what happened. The audit priced it
+ * properly — twenty-one props with the passage state bundled, thirty-four
+ * without — and a sixteen-value bag is not a smaller interface than sixteen
+ * arguments. What landed on 2026-09-06 is `band()` below: a local function with
+ * an exhaustive `switch (mode)`, closing over this scope, threading **zero**
+ * props, calling no hooks. `selectPassages` (reader/passages.ts) is the same
+ * move for the other half of the dispatch. Recorded here rather than in a plan
+ * file because this is where somebody will be standing when they wonder.
+ * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md.
  */
 export function Reader({
   slug,
@@ -836,28 +843,25 @@ export function Reader({
      paragraph bar and the rail must all be about the same passages, and the way
      to guarantee that is for one expression to decide and everything else to
      read it — the same "compute once, hand to both" rule the panel and the
-     prose already follow. The two modes are mutually exclusive, so this is a
-     pick rather than a merge. */
-  const passages =
-    mode === "ideas"
-      ? ideaFound
-      : mode === "quotes"
-        ? quoteFound
-        : mode === "timeline"
-          ? timelineFound
-          : mode === "referee"
-            ? refereeFound
-            : found;
-  const openPassage =
-    mode === "ideas"
-      ? openOccurrence
-      : mode === "quotes"
-        ? quoteOpenKey
-        : mode === "timeline"
-          ? openTimelineKey
-          : mode === "referee"
-            ? openRefereeKey
-            : openHit;
+     prose already follow. The modes are mutually exclusive, so this is a pick
+     rather than a merge.
+
+     **One call rather than two ternary chains, since 2026-09-06.** The chains
+     agreed only because both tested `mode` in the same order, and both ended in
+     Search's slot — so the nine modes with no passage producer were reading
+     Search's, and were correct only for as long as `SearchBand`'s unmount
+     cleared it. (That clear became a layout cleanup earlier the same day, which
+     is what removed the frame this used to paint on the way into Plain.)
+     `selectPassages` is total over `Mode` and hands back one slot's *pair*, so
+     the marks and the ring cannot come from different bands.
+     reader/passages.ts. */
+  const { found: passages, openKey: openPassage } = selectPassages(mode, {
+    ideas: { found: ideaFound, openKey: openOccurrence },
+    quotes: { found: quoteFound, openKey: quoteOpenKey },
+    timeline: { found: timelineFound, openKey: openTimelineKey },
+    referee: { found: refereeFound, openKey: openRefereeKey },
+    search: { found, openKey: openHit },
+  });
   /* **One ramp for the whole of Referee mode**, read here because this is where
      the marks are built. `?refscale=` and not `referee_criteria.scale`: the two
      ramps put red at opposite ends of the truth, so a per-criterion choice
@@ -1321,6 +1325,332 @@ export function Reader({
     next.has(d) ? next.delete(d) : next.add(d);
     setCols([...next].sort((a, b) => a - b));
   };
+
+  /**
+   * **The band the modes take turns in — one switch, and the compiler checks
+   * it.**
+   *
+   * It was seventeen sibling `{mode === "…" && <Band/>}` expressions until
+   * 2026-09-06, which is a dispatch nothing checks: a mode added to `MODES`
+   * simply had no branch, and a reader pressing its button got an empty band
+   * and no error anywhere. The `never` default below is what makes that a
+   * compile error instead — the idiom in visitor.ts § `visitorGap`, and the
+   * same one `selectPassages` uses for the other half of this decision.
+   *
+   * **A local function rather than a `<ModeBands>` component**, which the
+   * docblock at the top of this file used to propose and the audit priced at
+   * twenty-one props if the passage state were bundled and thirty-four if not.
+   * This closes over `Reader`'s scope, so it threads **zero** props; it calls no
+   * hooks, so it is not a component and the rules-of-hooks question does not
+   * arise. Every gate below is the one the sibling expression had — the
+   * owner/visitor pairs and their `artefacts?.x` tests, the single `access`
+   * branch, the owner-only bands, and `key={mode}` on `ConversationBand`, which
+   * is correctness rather than tidiness.
+   *
+   * `plain` and `hierarchy` return `null` explicitly: they are modes with no
+   * band, not a default that would silently accept a fifteenth mode.
+   *
+   * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md
+   * § Stage 4b, and docs/project/new-mode.md.
+   */
+  function band(): ReactNode {
+    switch (mode) {
+      /* **The two modes with no band at all**, said rather than fallen into.
+         Plain is the way out to the article and the hierarchy is the gist
+         columns; neither has anything to put in the middle. */
+      case "plain":
+      case "hierarchy":
+        return null;
+      case "chat":
+        /* One component, mounted by two modes, keyed so that switching between
+           them starts clean rather than carrying the other's open conversation,
+           focus nonce and stance across. See ConversationBand. */
+        return owner ? (
+          <ConversationBand
+            key={mode}
+            slug={slug}
+            blocks={blockText}
+            onJump={jumpTo}
+            kind="chat"
+            onMode={setMode}
+          />
+        ) : null;
+      /* **Remember is two bands behind one mode**, and the choice between them
+         is `?remember=`. The wrapper exists so that the parameter and its
+         collision with `?thread=` are decided in one place rather than in each
+         half — see `RememberBand`. */
+      case "remember":
+        return owner ? (
+          <RememberBand slug={slug} blocks={blockText} onJump={jumpTo} onMode={setMode} />
+        ) : null;
+      case "glossary":
+        /* `glossaryRead ?` rather than `owner ?`, and it is the same test: the
+           read is non-null exactly when the article is yours. Written this way
+           because it is also the narrowing the band needs — a band with no read
+           to hand it has nothing to draw.
+
+           The visitor's arm is one of **the visitor's three bands, and they are
+           the slice.** Each is the same panel as the owner's with its data
+           injected and no hooks behind it — the list arrived in this page's own
+           payload, so there is nothing to fetch and nothing to poll. A separate
+           component per mode because a hook cannot be called conditionally,
+           which is the same reason `OwnedReader` exists one level up; a separate
+           *panel* would be two designs for one list. reader-capability.ts, and
+           GlossaryPanel.tsx § GlossaryOwner.
+
+           Gated on the artefact itself rather than on `available`, so the branch
+           that renders the band and the flag that decides the sentence cannot
+           disagree: an absent key means `visitorGap` said `not-built` and the
+           `VisitorBand` above is showing instead. */
+        if (glossaryRead)
+          return (
+            <GlossaryBand
+              slug={slug}
+              read={glossaryRead}
+              onJump={jumpTo}
+              onSelected={setTerm}
+              onMode={setMode}
+            />
+          );
+        return artefacts?.glossary ? (
+          <VisitorGlossaryBand
+            glossary={artefacts.glossary}
+            onJump={jumpTo}
+            onSelected={setTerm}
+          />
+        ) : null;
+      /* No owner/visitor pair, and that is the point rather than an omission:
+         the outline is drawn from the tree in the payload every reader already
+         holds, reaches no artefact, and costs nothing — so a visitor gets the
+         whole of it, exactly as they get the table of contents. `visitorGap`
+         has to be told that explicitly, because it fails closed. */
+      case "outline":
+        return (
+          <OutlinePanel
+            root={outlineRoot}
+            supplementOf={geometry.supplementOf}
+            arcByRow={arcCells}
+            focusRow={outlineLive.focusRow}
+            /* `modeW` is 0 exactly when the band covers the prose instead of
+               sitting beside it (layout.ts), which is iPad portrait. That is the
+               condition paragraph rows are not permissible under, so it is read
+               from the layout rather than from a width guessed here. */
+            proseBeside={fit.modeW > 0}
+            onJump={jumpTo}
+          />
+        );
+      case "summary":
+        return <SummaryBand article={article} onJump={jumpTo} />;
+      /* **Mounted for a visitor too, since 2026-09-04** — one branch rather
+         than the owner/visitor pair the artefact modes have, because there is
+         no artefact to carry and no second component to build: the default
+         picture is drawn from the tree the page already holds. What differs is
+         the `access` prop, which pins the picture to Force and turns off all
+         three of the panel's fetching hooks.
+         docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
+      case "diagram":
+        return (
+          <DiagramBand
+            /* The visitor arm carries the drawing itself, out of the payload —
+               `artefacts.sketch` is absent when nobody has drawn one, which is the
+               ordinary case and is a sentence rather than a missing picture.
+               docs/plans/260904c-more-modes-on-a-shared-link.md § Sketch. */
+            access={owner ? { kind: "owner" } : { kind: "visitor", sketch: artefacts?.sketch }}
+            /* Which of the five picture chips the row draws — the same answer the
+               bar below is given, from the same hook, so the two cannot disagree
+               about what this reader is being shown.
+               DiagramPanel.tsx § `visibleKinds`. */
+            experimental={experimental.on}
+            slug={slug}
+            article={article}
+            at={at}
+            onJump={jumpTo}
+          />
+        );
+      /* **The first mode that may break on its own.** One boundary around both
+         Ideas branches — the controller as well as its panel, which is why the
+         controller had to leave this file — so a throw in there costs the
+         reader Ideas and not the article.
+         docs/plans/260905h-a-mode-failure-should-leave-the-article-readable.md.
+
+         **Inside the case, so the boundary exists only where it can catch
+         anything.** Wrapping the two branches while leaving the element itself
+         unconditional worked, but it put a live activation subscription in the
+         other thirteen modes for no reason. That gate is also why `mode` is
+         **not** in the key: it cannot change while this boundary is alive, and
+         a feature that has a genuine sub-mode would not change the top-level
+         `mode` either — so it appends that sub-mode's own identity here, not
+         this. Sol, 2026-09-06, F18. */
+      case "ideas":
+        return (
+          <FeatureBoundary
+            name="Ideas"
+            slug={slug}
+            /* A visitor's band never auto-runs, so there is no press to retire. */
+            target={owner ? "ideas" : null}
+            resetKey={`${slug}|${owner ? "owner" : "visitor"}`}
+            onPlain={() => void setMode("plain")}
+          >
+            {owner && (
+              <IdeasBand
+                slug={slug}
+                blocks={article.blocks}
+                onJump={jumpTo}
+                onFound={setIdeaFound}
+                openKey={openOccurrence}
+                onOpenKey={setOpenOccurrence}
+              />
+            )}
+            {!owner && artefacts?.ideas && (
+              <VisitorIdeasBand
+                ideas={artefacts.ideas}
+                blocks={article.blocks}
+                onJump={jumpTo}
+                onFound={setIdeaFound}
+                openKey={openOccurrence}
+                onOpenKey={setOpenOccurrence}
+              />
+            )}
+          </FeatureBoundary>
+        );
+      case "quotes":
+        if (owner)
+          return (
+            <QuotesBand
+              slug={slug}
+              blocks={article.blocks}
+              onJump={jumpTo}
+              onFound={setQuoteFound}
+              onOpenKey={setQuoteOpenKey}
+            />
+          );
+        return artefacts?.quotes ? (
+          <VisitorQuotesBand
+            quotes={artefacts.quotes}
+            blocks={article.blocks}
+            onJump={jumpTo}
+            onFound={setQuoteFound}
+            onOpenKey={setQuoteOpenKey}
+          />
+        ) : null;
+      /* **The owner/visitor pair the ideas and the quotes have, since
+         2026-09-04.** It was one branch until then, and the comment here said
+         there was deliberately no `VisitorTimelineBand` waiting for a payload
+         field that did not exist. The field exists now.
+         docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
+
+         Gated on the artefact itself rather than on `available`, like the
+         glossary above: an absent key means `visitorGap` said `not-built` and
+         the `VisitorBand` is showing instead, so the branch that renders and
+         the flag that decides the sentence cannot disagree. */
+      case "timeline":
+        if (owner)
+          return (
+            <TimelineBand
+              slug={slug}
+              blocks={article.blocks}
+              onJump={jumpTo}
+              onFound={setTimelineFound}
+              openKey={openTimelineKey}
+              onOpenKey={setOpenTimelineKey}
+            />
+          );
+        return artefacts?.timeline ? (
+          <VisitorTimelineBand
+            timeline={artefacts.timeline}
+            blocks={article.blocks}
+            onJump={jumpTo}
+            onFound={setTimelineFound}
+            openKey={openTimelineKey}
+            onOpenKey={setOpenTimelineKey}
+          />
+        ) : null;
+      /* **The owner alone, and there is deliberately no visitor twin yet.**
+         Debate is meant to be shared — it is the artefact whose whole value is
+         that somebody else can check it — but a visitor's row must pass
+         `publicCitationUrl` at the boundary, where a refusal drops the whole
+         row, and that contract is Stage 4. Building the branch first is what a
+         GPT Sol review (F23) refused. Until then `POLICY.debate` is
+         `owners-only`, so a visitor meets the boundary sentence rather than an
+         empty band.
+         docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4. */
+      case "debate":
+        return owner ? <DebateBand slug={slug} onJump={jumpTo} /> : null;
+      /* **The owner/visitor pair, since 2026-09-04.** It was the owner alone
+         until then, because search is the one mode where the reader's own
+         question is the artefact. Greg drew the line at *making* one: a
+         visitor gets the list, the ticks and the marks, and no way to ask.
+         docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
+
+         Not gated on there being any, unlike the artefact modes above: an
+         article nobody has searched is an article nobody has searched, which
+         is a sentence the panel draws rather than a missing artefact
+         `visitorGap` should be standing in front of.
+         src/public-types.ts § PublicArticle.searches. */
+      case "search":
+        return owner ? (
+          <SearchBand
+            slug={slug}
+            blocks={article.blocks}
+            onJump={jumpTo}
+            onFound={setFound}
+            openHit={openHit}
+            onOpenHit={setOpenHit}
+          />
+        ) : (
+          <VisitorSearchBand
+            searches={searches}
+            blocks={article.blocks}
+            onJump={jumpTo}
+            onFound={setFound}
+            openHit={openHit}
+            onOpenHit={setOpenHit}
+          />
+        );
+      /* **The owner alone, like every other mode that spends money**, and it is
+         the gate rather than a decoration: Criteria, Claims and Mirror all
+         call a model, so a band a visitor could open would be
+         spend on somebody else's paper with nobody's press behind it. `visitorGap`
+         fails closed and already answers `owners-only` for this mode, so a
+         visitor pressing the button gets the boundary sentence and not a blank
+         band. src/web/visitor.ts. */
+      case "referee":
+        return owner ? (
+          <RefereeBand
+            slug={slug}
+            blocks={article.blocks}
+            /* **The byline, for Candidates and for nothing else** — the one call
+               in Referee mode that legitimately sees who wrote the paper, and only
+               so that they can be left out of its own suggestions.
+               docs/project/referee-mode.md, rule 4. */
+            byline={article.meta.byline}
+            /* **The referee's own placements, for Criteria and for nothing
+               else** — the ones carrying a `criterionId`. Passed rather than
+               fetched again so the panel and the gutter cannot disagree about a
+               judgement; `useComments` is already mounted for the page.
+               docs/project/referee-mode.md § the referee's own mark. */
+            comments={comments}
+            onJump={jumpTo}
+            onFound={setRefereeFound}
+            /* Which marked passage the referee last pressed, so the prose rings
+               the exact phrase rather than washing the whole block. Search's
+               `openHit` exactly, and threaded rather than held in the band for the
+               same reason that one is: `TableView` draws the ring and it lives up
+               here. */
+            openKey={openRefereeKey}
+            onOpenKey={setOpenRefereeKey}
+          />
+        ) : null;
+      default: {
+        /* The compiler being made to say that every mode has been given a band
+           or an explicit `null`. A fifteenth mode in `MODES` goes red here
+           rather than opening an empty band nobody notices — which is the whole
+           reason this stopped being seventeen `&&` expressions. */
+        const unhandled: never = mode;
+        return unhandled;
+      }
+    }
+  }
 
   return (
     <div
@@ -1798,10 +2128,7 @@ export function Reader({
 
       {/* The mode band. Rendered only in its mode, which is what keeps the
           fetch inside it from being charged to every reader of every article —
-          see ConversationBand. */}
-      {/* One component, mounted by two modes, keyed so that switching between
-          them starts clean rather than carrying the other's open conversation,
-          focus nonce and stance across. See ConversationBand. */}
+          see ConversationBand. Which band that is, is `band()` above. */}
       {/* **A visitor gets one band and it is a sentence.** Not a dimmed button
           that answers a press with nothing, and not a tooltip — NN/G's rule is
           that a tooltip may never be the only place needed information lives,
@@ -1821,267 +2148,7 @@ export function Reader({
           never ran for this piece, and the ones that cost a model call —
           `POLICY` in visitor.ts says which, so no count lives here. */}
       {!owner && gap && <VisitorBand gap={gap} signedIn={signedIn} />}
-      {owner && mode === "chat" && (
-        <ConversationBand
-          key={mode}
-          slug={slug}
-          blocks={blockText}
-          onJump={jumpTo}
-          kind="chat"
-          onMode={setMode}
-        />
-      )}
-      {/* **Remember is two bands behind one mode**, and the choice between them
-          is `?remember=`. The wrapper exists so that the parameter and its
-          collision with `?thread=` are decided in one place rather than in each
-          half — see `RememberBand`. */}
-      {owner && mode === "remember" && (
-        <RememberBand slug={slug} blocks={blockText} onJump={jumpTo} onMode={setMode} />
-      )}
-      {/* `glossaryRead &&` rather than `owner &&`, and it is the same test: the
-          read is non-null exactly when the article is yours. Written this way
-          because it is also the narrowing the band needs — a band with no read
-          to hand it has nothing to draw. */}
-      {glossaryRead && mode === "glossary" && (
-        <GlossaryBand
-          slug={slug}
-          read={glossaryRead}
-          onJump={jumpTo}
-          onSelected={setTerm}
-          onMode={setMode}
-        />
-      )}
-      {/* **The visitor's three bands, and they are the slice.** Each is the same
-          panel as the owner's with its data injected and no hooks behind it —
-          the list arrived in this page's own payload, so there is nothing to
-          fetch and nothing to poll. A separate component per mode because a
-          hook cannot be called conditionally, which is the same reason
-          `OwnedReader` exists one level up; a separate *panel* would be two
-          designs for one list. reader-capability.ts, and
-          GlossaryPanel.tsx § GlossaryOwner.
-
-          Gated on the artefact itself rather than on `available`, so the branch
-          that renders the band and the flag that decides the sentence cannot
-          disagree: an absent key means `visitorGap` said `not-built` and the
-          `VisitorBand` above is showing instead. */}
-      {!owner && mode === "glossary" && artefacts?.glossary && (
-        <VisitorGlossaryBand
-          glossary={artefacts.glossary}
-          onJump={jumpTo}
-          onSelected={setTerm}
-        />
-      )}
-      {/* No `owner &&` twin, and that is the point rather than an omission: the
-          outline is drawn from the tree in the payload every reader already
-          holds, reaches no artefact, and costs nothing — so a visitor gets the
-          whole of it, exactly as they get the table of contents. `visitorGap`
-          has to be told that explicitly, because it fails closed. */}
-      {mode === "outline" && (
-        <OutlinePanel
-          root={outlineRoot}
-          supplementOf={geometry.supplementOf}
-          arcByRow={arcCells}
-          focusRow={outlineLive.focusRow}
-          /* `modeW` is 0 exactly when the band covers the prose instead of
-             sitting beside it (layout.ts), which is iPad portrait. That is the
-             condition paragraph rows are not permissible under, so it is read
-             from the layout rather than from a width guessed here. */
-          proseBeside={fit.modeW > 0}
-          onJump={jumpTo}
-        />
-      )}
-      {mode === "summary" && <SummaryBand article={article} onJump={jumpTo} />}
-      {/* **Mounted for a visitor too, since 2026-09-04** — one branch rather
-          than the owner/visitor pair the artefact modes have, because there is
-          no artefact to carry and no second component to build: the default
-          picture is drawn from the tree the page already holds. What differs is
-          the `access` prop, which pins the picture to Force and turns off all
-          three of the panel's fetching hooks.
-          docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */}
-      {mode === "diagram" && (
-        <DiagramBand
-          /* The visitor arm carries the drawing itself, out of the payload —
-             `artefacts.sketch` is absent when nobody has drawn one, which is the
-             ordinary case and is a sentence rather than a missing picture.
-             docs/plans/260904c-more-modes-on-a-shared-link.md § Sketch. */
-          access={owner ? { kind: "owner" } : { kind: "visitor", sketch: artefacts?.sketch }}
-          /* Which of the five picture chips the row draws — the same answer the
-             bar below is given, from the same hook, so the two cannot disagree
-             about what this reader is being shown.
-             DiagramPanel.tsx § `visibleKinds`. */
-          experimental={experimental.on}
-          slug={slug}
-          article={article}
-          at={at}
-          onJump={jumpTo}
-        />
-      )}
-      {/* **The first mode that may break on its own.** One boundary around both
-          Ideas branches — the controller as well as its panel, which is why the
-          controller had to leave this file — so a throw in there costs the
-          reader Ideas and not the article.
-          docs/plans/260905h-a-mode-failure-should-leave-the-article-readable.md. */}
-      {/* **Gated on the mode, so the boundary exists only where it can catch
-          anything.** Wrapping the two branches while leaving the element itself
-          unconditional worked, but it put a live activation subscription in the
-          other thirteen modes for no reason. That gate is also why `mode` is
-          **not** in the key: it cannot change while this boundary is alive, and
-          a feature that has a genuine sub-mode would not change the top-level
-          `mode` either — so it appends that sub-mode's own identity here, not
-          this. Sol, 2026-09-06, F18. */}
-      {mode === "ideas" && (
-        <FeatureBoundary
-          name="Ideas"
-          slug={slug}
-          /* A visitor's band never auto-runs, so there is no press to retire. */
-          target={owner ? "ideas" : null}
-          resetKey={`${slug}|${owner ? "owner" : "visitor"}`}
-          onPlain={() => void setMode("plain")}
-        >
-          {owner && (
-            <IdeasBand
-              slug={slug}
-              blocks={article.blocks}
-              onJump={jumpTo}
-              onFound={setIdeaFound}
-              openKey={openOccurrence}
-              onOpenKey={setOpenOccurrence}
-            />
-          )}
-          {!owner && artefacts?.ideas && (
-            <VisitorIdeasBand
-              ideas={artefacts.ideas}
-              blocks={article.blocks}
-              onJump={jumpTo}
-              onFound={setIdeaFound}
-              openKey={openOccurrence}
-              onOpenKey={setOpenOccurrence}
-            />
-          )}
-        </FeatureBoundary>
-      )}
-      {owner && mode === "quotes" && (
-        <QuotesBand
-          slug={slug}
-          blocks={article.blocks}
-          onJump={jumpTo}
-          onFound={setQuoteFound}
-          onOpenKey={setQuoteOpenKey}
-        />
-      )}
-      {!owner && mode === "quotes" && artefacts?.quotes && (
-        <VisitorQuotesBand
-          quotes={artefacts.quotes}
-          blocks={article.blocks}
-          onJump={jumpTo}
-          onFound={setQuoteFound}
-          onOpenKey={setQuoteOpenKey}
-        />
-      )}
-      {/* **The owner/visitor pair the ideas and the quotes have, since
-          2026-09-04.** It was one branch until then, and the comment here said
-          there was deliberately no `VisitorTimelineBand` waiting for a payload
-          field that did not exist. The field exists now.
-          docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
-
-          Gated on the artefact itself rather than on `available`, like the
-          glossary above: an absent key means `visitorGap` said `not-built` and
-          the `VisitorBand` is showing instead, so the branch that renders and
-          the flag that decides the sentence cannot disagree. */}
-      {owner && mode === "timeline" && (
-        <TimelineBand
-          slug={slug}
-          blocks={article.blocks}
-          onJump={jumpTo}
-          onFound={setTimelineFound}
-          openKey={openTimelineKey}
-          onOpenKey={setOpenTimelineKey}
-        />
-      )}
-      {!owner && mode === "timeline" && artefacts?.timeline && (
-        <VisitorTimelineBand
-          timeline={artefacts.timeline}
-          blocks={article.blocks}
-          onJump={jumpTo}
-          onFound={setTimelineFound}
-          openKey={openTimelineKey}
-          onOpenKey={setOpenTimelineKey}
-        />
-      )}
-      {/* **`owner &&` alone, and there is deliberately no visitor twin yet.**
-          Debate is meant to be shared — it is the artefact whose whole value is
-          that somebody else can check it — but a visitor's row must pass
-          `publicCitationUrl` at the boundary, where a refusal drops the whole
-          row, and that contract is Stage 4. Building the branch first is what a
-          GPT Sol review (F23) refused. Until then `POLICY.debate` is
-          `owners-only`, so a visitor meets the boundary sentence rather than an
-          empty band.
-          docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4. */}
-      {owner && mode === "debate" && <DebateBand slug={slug} onJump={jumpTo} />}
-      {/* **The owner/visitor pair, since 2026-09-04.** It was `owner &&` alone
-          until then, because search is the one mode where the reader's own
-          question is the artefact. Greg drew the line at *making* one: a
-          visitor gets the list, the ticks and the marks, and no way to ask.
-          docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
-
-          Not gated on there being any, unlike the artefact modes above: an
-          article nobody has searched is an article nobody has searched, which
-          is a sentence the panel draws rather than a missing artefact
-          `visitorGap` should be standing in front of.
-          src/public-types.ts § PublicArticle.searches. */}
-      {owner && mode === "search" && (
-        <SearchBand
-          slug={slug}
-          blocks={article.blocks}
-          onJump={jumpTo}
-          onFound={setFound}
-          openHit={openHit}
-          onOpenHit={setOpenHit}
-        />
-      )}
-      {!owner && mode === "search" && (
-        <VisitorSearchBand
-          searches={searches}
-          blocks={article.blocks}
-          onJump={jumpTo}
-          onFound={setFound}
-          openHit={openHit}
-          onOpenHit={setOpenHit}
-        />
-      )}
-      {/* **`owner &&`, like every other mode that spends money**, and it is
-          the gate rather than a decoration: Criteria, Claims and Mirror all
-          call a model, so a band a visitor could open would be
-          spend on somebody else's paper with nobody's press behind it. `visitorGap`
-          fails closed and already answers `owners-only` for this mode, so a
-          visitor pressing the button gets the boundary sentence and not a blank
-          band. src/web/visitor.ts. */}
-      {owner && mode === "referee" && (
-        <RefereeBand
-          slug={slug}
-          blocks={article.blocks}
-          /* **The byline, for Candidates and for nothing else** — the one call
-             in Referee mode that legitimately sees who wrote the paper, and only
-             so that they can be left out of its own suggestions.
-             docs/project/referee-mode.md, rule 4. */
-          byline={article.meta.byline}
-          /* **The referee's own placements, for Criteria and for nothing
-             else** — the ones carrying a `criterionId`. Passed rather than
-             fetched again so the panel and the gutter cannot disagree about a
-             judgement; `useComments` is already mounted for the page.
-             docs/project/referee-mode.md § the referee's own mark. */
-          comments={comments}
-          onJump={jumpTo}
-          onFound={setRefereeFound}
-          /* Which marked passage the referee last pressed, so the prose rings
-             the exact phrase rather than washing the whole block. Search's
-             `openHit` exactly, and threaded rather than held in the band for the
-             same reason that one is: `TableView` draws the ring and it lives up
-             here. */
-          openKey={openRefereeKey}
-          onOpenKey={setOpenRefereeKey}
-        />
-      )}
+      {band()}
 
       {/* Last in the DOM as well as topmost in z-index: the bar and its drawer
           are drawn over everything, and matching source order to paint order is
