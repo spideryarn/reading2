@@ -350,6 +350,34 @@ The one exception is **clicking a gist to jump**, which pushes. That is a scroll
 deliberate act — you flung yourself across the article and may well want that undone. The override is
 per-call in `App.tsx`, not in the parser.
 
+#### The pushed entry says where you came from
+
+Since 2026-09-06 a jump does not only push: it also **rewrites the entry it is leaving** so that
+`?at=` names where the reader was actually standing, and puts a stamp on `history.state` naming that
+same place. That is what lets [`ReturnChip.tsx`](../../src/web/ReturnChip.tsx) offer *↩ back to
+&lt;section&gt;* on a home-screen PWA, where there is no browser Back to press —
+[260906g](../plans/260906g-back-to-where-you-jumped-from.md).
+
+Three things about it are worth knowing before you touch anything near here:
+
+- **The origin is measured, not read.** `?at=` is the wrong thing to stamp, in three separate ways:
+  it is absent at the top, it deliberately holds a stale fine block while the reader moves inside one
+  section (§ The unit is a section), and a jump's `throttle(0)` *cancels* the write queued behind the
+  300ms debounce rather than flushing it. `measureOrigin` ([`keynav.ts`](../../src/web/keynav.ts))
+  asks the layout instead.
+- **Both writes belong to `watchHistoryWrites`** ([`router.ts`](../../src/web/router.ts)), not to the
+  caller, and that is not a stylistic choice: nuqs keeps pending updates in a `Map` keyed by
+  parameter name, so two `setAt` calls in one tick are not a transaction — the second overwrites the
+  first, one push lands, and the predecessor rewrite silently never happens.
+- **A push strips the stamp unless a jump armed it.** nuqs hands `pushState` the *current* entry's
+  state verbatim, so without the strip a `cols` or `mode` toggle after a jump would inherit that
+  jump's origin and the chip would promise a return it cannot make.
+
+Nothing about it rides along in a shared link: the record lives on `history.state`, per entry, which
+is why it is not a `?from=` parameter. The stamp is not a parameter and so is not in § The
+parameters; the one place it is written down is
+[`jump-history.ts`](../../src/web/jump-history.ts).
+
 ### Debounced, not throttled
 
 Greg's suggestion, and the right one. Mid-flick the URL is of no use to anybody, so there is nothing

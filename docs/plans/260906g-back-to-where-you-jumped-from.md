@@ -1,7 +1,8 @@
 # Back to where you jumped from
 
-Status as of 2026-09-06: **Stages A and B built**; B2, C and the docs are not — evidence:
-`src/web/ReturnChip.tsx` exists, and `goToComment` in `App.tsx` still pushes nothing.
+Status as of 2026-09-06: **Stages A, B, B2 and the docs are built**; Stage C is not — evidence:
+`src/web/ReturnChip.tsx` and `src/web/comment-jump.ts` exist, and nothing draws a mark in the spine
+for a jump origin.
 **Four cross-family reviews, four refusals** — [round 1](260906g-plan-review-sol.md) and
 [round 2](260906g-plan-review2-sol.md) on the plan, [round 3](260906g-stage-a-review-sol.md) on
 Stage A's code and [round 4](260906g-stage-b-review-sol.md) on Stage B's. What each changed is in
@@ -460,25 +461,64 @@ kind of thing that goes wrong quietly. And a section whose title is empty draws
 **"↩ back to where you were"** rather than nothing — the return is valid and only its *name* is
 missing, which is not the case F2 refused to suppress.
 
-### Stage B2 — opening a question is a jump; stepping between them is not
+### Stage B2 — opening a question is a jump; stepping between them is not — **built, 2026-09-06**
 
-Both paths call `goToComment` today, and F9 is that they are two different intents wearing one
-function. Splitting them is the whole stage.
+Both paths called `goToComment`, and F9 is that they are two different intents wearing one
+function. Splitting them was the whole stage.
 
-- [ ] **Opening a question from the drawer is an arbitrary jump** and goes through the transaction
+- [x] **Opening a question from the drawer is an arbitrary jump** and goes through the transaction
       when it moves the page. The call sites are the two `onOpenComment` closures in
       [`App.tsx`](../../src/web/App.tsx) (the owner's and the visitor's).
-- [ ] **The dialog's Prev/Next do not push** — the four `onPrev`/`onNext` closures in the same file.
+- [x] **The dialog's Prev/Next do not push** — the four `onPrev`/`onNext` closures in the same file.
       They keep replacing `?note=` and scrolling, exactly as
       [comments.md § Reading order](../project/comments.md#reading-order) says: *"Like keynav.ts, it
       writes no position state of its own"*. Twenty questions must not cost twenty presses of Back.
-- [ ] **The stamp survives those replaces**, which is what makes the split better than either half:
+- [x] **The stamp survives those replaces**, which is what makes the split better than either half:
       after stepping through several questions the chip still points at the place the reader
       **entered** the traversal from, not at the previous question.
-- [ ] When the target is already on screen, nothing moves and nothing is pushed — the existing
+- [x] When the target is already on screen, nothing moves and nothing is pushed — the existing
       deliberate behaviour, and the reason two comments in one paragraph do not jolt.
-- [ ] Tests: drawer selection of an off-screen question adds **one** entry; **ten** off-screen
+- [x] Tests: drawer selection of an off-screen question adds **one** entry; **ten** off-screen
       Prev/Next steps add **none**, and the chip still names where the traversal began.
+      [`tests/comment-jump.test.ts`](../../tests/comment-jump.test.ts), eight of them, red first
+      against the unsplit behaviour. Three mutations of the finished code, each caught: the drawer
+      scrolling instead of jumping (four red), dropping the `isBlockOnScreen` guard (two), and the
+      arrows writing an entry of their own (two, including the stamp one).
+
+#### What was built, and the three things the code says that the plan could not
+
+The two behaviours are [`src/web/comment-jump.ts`](../../src/web/comment-jump.ts) rather than two
+closures in `App.tsx`, because **the only assertion that can tell them apart is the entry count**,
+and a test of a closure written out again in the test file would have proved nothing about the app.
+`App.tsx` keeps two one-line `useCallback`s, `openCommentFromDrawer` and
+`stepToNeighbouringComment`, and the six call sites the plan named were all six there.
+
+**There is a *third* `onOpenComment`, and it is not a call site of this.** `TableView`'s, wired to
+`openCommentDialog` — the `Bookmark` in the gutter beside a commented block. It only sets `?note=`
+and never moves the page, which is right: the reader pressed a control attached to the block, so
+the block is on screen by construction. Left alone. (Its declared parameter is `BlockId` while what
+it is handed is a *comment* id. Harmless — both are spideryarn ids and `parseAsBlockId` is
+`createParser<string>` — but the type is a lie, and worth a minute the next time anything near it
+moves.)
+
+**`?note=` and `?at=` land on one entry only because they are set in the same tick**, and that is
+nuqs's queue rather than anything this code does: pending updates are merged into one flush and any
+push option upgrades the whole flush to a push. Across two ticks a drawer selection would cost two
+presses of Back, with the first taking the reader to a dialog about a paragraph they can no longer
+see. § puts the note and the position on the same entry is the test, and it checks the *predecessor*
+after a step back rather than only the entry count.
+
+**The drawer inherits F10's trade, in one reachable case.** A comment on a paragraph tall enough to
+be crossing the reading line with its top above the viewport is *not* `isBlockOnScreen`, so the old
+code scrolled to it; `beginJump` now aborts the whole jump, because origin and target are the same
+block and moving the reader irreversibly is the thing F10 refused. So choosing that comment from the
+drawer opens its dialog and moves nothing. Same trade, same reason, and the same fix if it ever
+matters: a finer origin than a block id.
+
+**Stepping cannot push, structurally — but nothing stops the wiring changing.** `stepToComment` has
+no `jumpTo` in scope, so no edit *inside* it can reintroduce F9. What no type can refuse is
+`App.tsx` calling `jumpToComment` from an arrow closure instead, and the test suite pins the module
+rather than the wiring. The comment at the call sites says so; a reviewer is the check.
 
 ### Stage C — one tick in the spine
 
@@ -489,12 +529,24 @@ function. Splitting them is the whole stage.
 
 ### Docs
 
-- [ ] [url-state.md § Position replaces history](../project/url-state.md#position-replaces-history-deliberate-acts-push)
-      gains the transaction and the chip: the same section, because it is the same rule. It must say
-      that `?at=` is *rewritten* at jump time, which is new and surprising.
-- [ ] [reading-view-overview.md](../project/reading-view-overview.md) gains a line for the chip.
-- [ ] [comments.md](../project/comments.md) if Stage B2 changes what stepping between questions
-      means for Back.
+- [x] [url-state.md § Position replaces history](../project/url-state.md#position-replaces-history-deliberate-acts-push)
+      gains the transaction and the chip: the same section, because it is the same rule. Done as a
+      sub-section under the gist-jump exception, since that exception is the thing it extends. It
+      says the three things a future reader would otherwise reverse-engineer — that the origin is
+      *measured* rather than read, that both writes belong to the wrapper because two nuqs setters in
+      one tick are not a transaction, and that a push strips the stamp unless a jump armed it.
+- [x] **[reading-view-overview.md](../project/reading-view-overview.md): nothing, deliberately.**
+      That file is a map of *docs*, and this feature has no doc of its own — its facts live in
+      `url-state.md` and in [`jump-history.ts`](../../src/web/jump-history.ts)'s header, which is one
+      home each. Its existing line for `url-state.md` already promises "which push history and which
+      replace", which is exactly where a reader looking for this would go. Adding a second home for
+      the same fact is what [documentation-policy.md](../reusable/documentation-policy.md) refuses,
+      and an entry point's wording is a rule needing Greg's approval — not worth spending on a line
+      that would restate a link already there.
+- [x] [comments.md](../project/comments.md) if Stage B2 changes what stepping between questions
+      means for Back. It did, for half of it: § Reading order gained
+      [§ Opening a question is a jump](../project/comments.md#opening-is-a-jump), which says which
+      half of the old sentence still holds and which no longer does.
 
 ## Deliberately not in this plan
 
