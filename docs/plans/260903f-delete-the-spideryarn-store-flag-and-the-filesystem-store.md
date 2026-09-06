@@ -5771,6 +5771,33 @@ and Preview himself; a hinge that threw on *any* value would break the next depl
 Stage I retires it. A permanent validated no-op preserves the false impression that store selection
 still means something.
 
+## Tripped over here, and where each one went
+
+Not part of deleting the store. Found while running this job's gates over and over, which is the
+only reason they were seen at all — an intermittent needs a lot of runs before it is more than a
+rumour. **Recorded here because chat is not memory**: both of these were flagged in conversation
+first, and a grep of this file for either would have come back empty, which is the same failure
+stage G's review called F2.
+
+### The gate that fails with no failing test — `nuqs` after jsdom teardown
+
+Seen three times during this job: the `unit` project reports every test passing and the process
+still exits non-zero, on an unhandled `ReferenceError: location is not defined` attributed to
+`tests/conversation-band-send-new.test.tsx`. **Zero failing tests and a red gate is the worst
+diagnostic shape there is** — there is nothing to open.
+
+The file arrived whole in `748f1161` (2026-08-28), so the defect had been in the tree nine days.
+Reproduced, root-caused and fixed on 2026-09-06 — **and it was two files, not one**: measuring what
+was still queued when each jsdom file ended found a second, `tests/glossary-band-selection.test.tsx`,
+that had never been seen to fail. Everything is in
+[260906c-a-url-write-outlived-the-page-that-asked-for-it.md](../postmortems/260906c-a-url-write-outlived-the-page-that-asked-for-it.md),
+and the rule it produced is in [testing.md](../project/testing.md).
+
+The other item flagged in the same breath — `tests/a-claim-that-lost-its-draft.test.ts` claiming
+*"no step here writes to a disk, and this proves it"* over a `mkdtemp` nothing read back — **was
+already fixed in stage G** and recorded in place at the top of that file. It was listed as
+outstanding here in error.
+
 ## What "done" looks like
 
 `SPIDERYARN_STORE` appears nowhere in `src/`, `tests/`, `scripts/`, `evals/`, `vite.config.ts`,
