@@ -119,7 +119,13 @@ export function Library({
   const [show, setShow] = useQueryState("show", libraryShowParam);
 
   /**
-   * Whether the table is showing every row or only the first `SHELF_ROW_CAP`.
+   * Whether the shelf is showing every row or only the first `SHELF_ROW_CAP`.
+   *
+   * **One flag for both views, not one each.** The two views are the same list
+   * painted twice (url-state.md), so if the list is "all of them" in one
+   * painting it is all of them in the other; a per-view flag would quietly make
+   * the view switch a filter as well. There is no "show fewer", so the only
+   * thing two flags would buy is pressing the button a second time.
    *
    * **Deliberately not in the URL**, unlike every other bit of state on this
    * page. The rule in docs/project/url-state.md is that the query string says
@@ -298,10 +304,10 @@ export function Library({
   /* Whichever column is sorted first decides what a card says about itself. */
   const note = CARD_NOTES[sorting[0]?.id ?? ""] ?? ADDED_NOTE;
 
-  /* The table's first fifty, and whether there is a "show all" to offer. Taken
+  /* What this view draws, and whether there is a "show all" to offer. Taken
      from `sorted`, which is after both `sinkLast` passes — capping before the
      sort would pick its fifty out of the wrong order. lib/row-cap.ts. */
-  const capped = capRows(sorted, SHELF_ROW_CAP, expanded);
+  const capped = capRows(sorted, SHELF_ROW_CAP[view], expanded);
 
   return (
     <main className="tw:mx-auto tw:max-w-4xl tw:px-6 tw:py-10 tw:font-sans">
@@ -477,11 +483,14 @@ export function Library({
           resolved above this line, so neither view can disagree with the other
           about what is on the shelf or what order it is in — see
           ShelfControls.tsx. */}
-      {/* **The first fifty, and a button for the rest.** Greg, 2026-09-06:
+      {/* **The first few, and a button for the rest.** Greg, 2026-09-06:
 
           > the table should by default only show the top 50? or so Articles,
           > with a button at the bottom to show all. Eventually we might consider
           > paging, but probably that's overkill for now
+
+          He asked for the table and then asked for the cards too, so both are
+          capped — at different numbers, for the reason under `SHELF_ROW_CAP`.
 
           Sliced **here**, after both `sinkLast` passes, rather than inside
           `DataTable`: the cap is caller policy, which is the same reason
@@ -490,27 +499,38 @@ export function Library({
           is /admin's list of accounts (AdminPage.tsx), and "Show all 213
           articles" is not a sentence a shared component can write.
 
-          Slicing before the sort would cap the wrong fifty. */}
-      {sorted.length > 0 && view === "table" && (
+          Slicing before the sort would cap the wrong fifty.
+
+          **The button is outside the view switch, drawn once.** It was inside
+          the table branch while the table was the only capped view, and the
+          obvious way to cap the cards was to write it a second time next to the
+          `<ul>` — two copies of one rule, which is the thing lib/row-cap.ts
+          exists to stop happening. Here the branch chooses a renderer and
+          nothing else, so a capped view without its button is not a shape this
+          JSX can take. */}
+      {sorted.length > 0 && (
         <>
-          <DataTable table={table} rows={capped.shown} caption="Your articles" />
-          {/* The button is drawn exactly when `revealTotal` is a number, and
-              that number is the only count it can print — see lib/row-cap.ts on
-              why the slice and the button come from one call rather than two
-              conditions that agree until somebody edits one of them. */}
+          {view === "table" ? (
+            <DataTable table={table} rows={capped.shown} caption="Your articles" />
+          ) : (
+            <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
+              {capped.shown.map((row) => (
+                <li key={row.id}>
+                  <ShelfCard entry={row.original} shelf={shelf} note={note(row.original, now)} />
+                </li>
+              ))}
+            </ul>
+          )}
+          {/* Drawn exactly when `revealTotal` is a number, and that number is
+              the only count it can print — see lib/row-cap.ts on why the slice
+              and the button come from one call rather than two conditions that
+              agree until somebody edits one of them. Note it is a sibling of
+              the `<ul>` rather than a child: a bare `<button>` inside a list is
+              invalid HTML, and the list has semantics a screen reader reads. */}
           {capped.revealTotal !== null && (
             <ShowAllRows total={capped.revealTotal} onShowAll={() => setExpanded(true)} />
           )}
         </>
-      )}
-      {sorted.length > 0 && view === "cards" && (
-        <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
-          {sorted.map((row) => (
-            <li key={row.id}>
-              <ShelfCard entry={row.original} shelf={shelf} note={note(row.original, now)} />
-            </li>
-          ))}
-        </ul>
       )}
 
       {/* The passages obey the Unread chip too. Without that, turning Unread on
@@ -575,11 +595,24 @@ const EMPTY: LibraryEntry[] = [];
  * kind, so the affordance that keeps the back button, the footer and a sense of
  * place is a button you press once.
  *
- * The cards view is uncapped. It has the same problem and Greg asked for the
- * table, so it is left alone until he wants otherwise — the same two lines at
- * the same call site.
+ * **Two numbers, because the cap is a page-height budget rather than a row
+ * count.** A card is a title, a byline, a blurb and five buttons — call it four
+ * table rows — so fifty of them is a page five times longer than the fifty rows
+ * this cap exists to prevent, which would be the cap defeating its own purpose.
+ * Twenty is roughly the same amount of page.
+ *
+ * Keyed by view rather than two loose constants: both numbers sit on one line,
+ * there is no ternary at the call site, and the type refuses a view with no cap.
+ *
+ * The **fifty** is Greg's ("50? or so"); the **twenty** is Fable's, 2026-09-06,
+ * and is the one to move first if this feels wrong.
+ *
+ * Nothing on screen says either number — `ShowAllRows` prints the *total*, which
+ * is the same in both views — so switching views never changes a count. All the
+ * reader sees is that a shelf of, say, thirty articles offers the button in
+ * cards and not in the table, which is the cap working rather than a bug.
  */
-const SHELF_ROW_CAP = 50;
+const SHELF_ROW_CAP = { cards: 20, table: 50 } as const;
 
 /**
  * **"Show all 213 articles"** — the count is in the label rather than in a
