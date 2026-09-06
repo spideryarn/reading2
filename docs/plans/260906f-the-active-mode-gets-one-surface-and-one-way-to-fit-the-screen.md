@@ -38,7 +38,7 @@ meaning. Piloted in **Search** and **Chat**, then the remaining ten mode panels 
 **The viewport fit is specified here and deliberately not built.** § A5 requires a real iOS
 reproduction *before* choosing the arithmetic, and no iOS device is reachable from this box. What
 lands instead is the instrument that gets the measurement and the reviewed arithmetic waiting for
-it — [Stage 4](#stage-4--the-fit-the-instrument-that-unblocks-it-and-the-arithmetic-that-waits).
+it — [Stage 4](#stage-4-the-fit-the-instrument-that-unblocks-it-and-the-arithmetic-that-waits).
 Shipping unverified viewport geometry would be inventing a bug and a fix for it in one motion.
 
 ## Design decisions
@@ -104,23 +104,30 @@ oversight, and it gets a test that says so. Sol F4, 2026-09-06.
 
 `VisitorBand` has no such role and migrates normally.
 
-### There is a `foot` slot, and four panels want it today
+### There is a `foot` slot, and six panels want it today
 
 An earlier draft dropped `foot` on the grounds that no band has a composer the band itself can place.
 That reasoning was right about Chat and wrong as a generalisation. Chat's composer really is built
 inside `Conversation`, which owns the scroller ref, the stick-to-bottom logic and the draft, and
 returns transcript and composer as one fragment — so Chat keeps `Conversation` whole in `children`,
-as a documented exception. But **four panels already render a pinned footer row as a direct child of
-the band**: `.gloss-foot`, `.ideas-again`, `.quotes-foot`, `.tl-again`. § A5 names header/content/
-footer slots, and those four are what it is naming. Sol F5.
+as a documented exception. But **six panels already render a pinned footer row as a direct child of
+the band**: `.gloss-foot`, `.ideas-again`, `.quotes-foot`, `.tl-again`, and — missed by the first
+inventory — Debate's `.dbt-again` and Quiz's `.quiz-rewrite`. § A5 names header/content/footer slots,
+and those six are what it is naming. Sol F5, corrected from four to six by Sol F22 on 2026-09-06;
+`debate.css` says of `.dbt-again` in as many words, "Pinned under the scroller rather than at the end
+of it, like `.tl-again`".
 
 ```tsx
 interface ModeSurfaceProps {
   label: string;
-  feature: string;
+  /* Optional: `PublicChrome`'s visitor band and `FeatureBoundary`'s fallback
+     are both a bare `<aside className="mode-band">`, with no hook class. */
+  feature?: string | undefined;
   head?: ReactNode;
   children: ReactNode;
   foot?: ReactNode;
+  /* For `OutlinePanel`, plus a narrowed passthrough of standard attributes. */
+  ref?: Ref<HTMLElement>;
 }
 ```
 
@@ -176,11 +183,23 @@ The Chrome baseline (2026-09-06, `-baseline.md`) turned up two things that would
 
 ### The surface has to carry what Outline puts on the band
 
-`OutlinePanel` sets a `ref`, a `data-outline-rung` attribute, its own `padding` and two custom
-properties **on the band element itself**, and Chat's class and label are both conditional. So
-`ModeSurface` forwards a ref and a narrow passthrough of `style` and standard element attributes.
+`OutlinePanel` sets a `ref` and a `data-outline-rung` attribute **on the band element itself**
+([`OutlinePanel.tsx:307`](../../src/web/OutlinePanel.tsx)), and Chat's class and label are both
+conditional. So `ModeSurface` forwards a ref and a passthrough of standard element attributes.
 Anything it cannot carry is a band it cannot migrate, which would leave the copies it exists to
 remove.
+
+**An earlier version of this paragraph also said Outline sets its own `padding` and two custom
+properties there. It does not** — those are in `src/web/styles/outline-mode.css` under
+`.mode-band.outln`, and no mode panel writes `style` on its band today. So the passthrough is not
+justified by a `style` requirement that does not exist; what it is actually for is `data-outline-rung`,
+which `{...rest}` is the only thing carrying to the DOM. GPT Sol F19, 2026-09-06, checked against
+the source.
+
+The passthrough is narrowed rather than open: `dangerouslySetInnerHTML` is omitted because `children`
+is required and React throws when both are set, and `role` is omitted because the labelled
+`complementary` landmark is the point of the `label` prop and `role="presentation"` would silently
+remove it. Sol F18.
 
 ### `fitView` stays the horizontal authority
 
@@ -209,9 +228,16 @@ Nothing about the rendered page may change.
 
 1. **Baseline first**, because § A5 says to capture behaviour rather than invent a bug a test then
    pretends to fix, and because jsdom cannot measure a band (`referee-band-fits.test.ts` § what this
-   file cannot do). Two halves, both recorded in the companion `-baseline.md`: the current markup of
-   every band in jsdom, and `getBoundingClientRect` for the band and its children in Chrome on this
-   box at 390×844, 844×390, 1280×720 and at 24px root font size.
+   file cannot do). Two halves, in two places:
+   - **Geometry** in the companion `-baseline.md` — `getBoundingClientRect` for the band and its
+     children in Chrome on this box at 390×844, 844×390, 1280×720 and at 24px root font size, **for
+     Search and Chat only**, those being the two panels this stage migrates.
+   - **Markup** in `tests/mode-surface-changes-no-markup.test.tsx`, as literals.
+
+   **An earlier wording of this step said the baseline records "the current markup of every band in
+   jsdom". It does not, and never did** — it covers the two piloted panels. That matters because
+   stage 2's acceptance below refers to "their baseline DOM", so the missing capture would have been
+   discovered as an unmet precondition halfway through a twelve-band migration. Sol F21, 2026-09-06.
 2. `ModeSurface.tsx` with `label`, `feature`, `head`, `children`, `foot`, the ref and the attribute
    passthrough. **No viewport subscription and no viewport style** — none at all, not even an inert
    one, because `keyboardInsetStyle` emits `--kb-inset: 0px` wherever `visualViewport` exists and
@@ -223,8 +249,16 @@ and `npm run check` green.
 
 ### Stage 2 — the remaining bands
 
+0. **Capture each band's pre-migration shape before editing that band** — its root attributes, its
+   ordered child signatures and its header's children, recorded as literals in
+   `tests/mode-surface-changes-no-markup.test.tsx` in the same way stage 1's five shapes are. Not
+   afterwards, and not from the migrated code: a literal read off the code you just wrote is the
+   implementation agreeing with itself. This is a step rather than a note because stage 1 shipped
+   without it for the other ten and Sol found the gap (F21).
 1. Migrate the other ten mode panels and `VisitorBand`, in batches, including visitor, empty and
-   error variants. `foot` adopted by Glossary, Ideas, Quotes and Timeline.
+   error variants. `foot` adopted by Glossary, Ideas, Quotes, Timeline, **Debate and Quiz**.
+   `BandShape.attrs` is per-shape for exactly this: Outline legitimately carries `data-outline-rung`
+   on the band, so the oracle must not hardcode the two attributes every other band has.
 2. **`FeatureBoundary`'s fallback stays raw**, with a test that makes `ModeSurface` throw and asserts
    the feature fallback, the prose and the dock survive while `AppBoundary`'s fallback does not
    appear. That test is what stops a later tidy-up from re-introducing Sol F4.
@@ -409,3 +443,51 @@ F1–F5, F7 and F8 were accepted as fixed. **All of F9–F14 are accepted**; dis
 
 Sol also caught a mistake in my review prompt rather than in the plan: I wrote "untracked: none" while
 the baseline and the round-one review were both untracked. They are committed with this revision.
+
+### Stage 1 code, round 1 — GPT Sol, 2026-09-06
+
+Verdict: **refuse as written**, no P0 or P1.
+[The review](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-review-stage1-sol.md) ·
+[the prompt](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-review-stage1-prompt.md).
+
+Sol confirmed from the scoped pre/post diff that **both migrations preserve their DOM** in every
+branch — Search's owner/visitor and meaning/words conditionals, Chat's open/list, `chat remember`,
+error ordering, the `ArmedDelete` key and the keyed `Conversation` — that the added fragments
+introduce no DOM, that `FeatureBoundary` stays raw, and that there is no viewport code. The findings
+are all about the surface's edges and about the evidence, not about the migration.
+
+| ID | Finding | Disposition |
+|----|---------|-------------|
+| F15 | The empty-head guard excludes `null`, `undefined` and `false` but **not `true`**, which React also renders as nothing — so `head={someBoolean}` still yields an empty `.band-head`, and the comment claiming "all four nothing values" covered three | **Accepted.** The guard is `typeof head !== "boolean" && head != null`, which is a fact about React rather than a list of remembered cases. `""` and `[]` are explicitly **not** treated as absent, and the reason is written into the code: a fragment of `null`s is equally empty and no runtime check distinguishes it, so a rule with a stated edge beats one that catches some empties and not others. |
+| F16 | The acceptance oracle misses the changes it exists to catch: a wrapper *around* the `<aside>`, added text nodes (anonymous flex items), and any extra attribute such as `style` | **Accepted in full, and the best finding of the round** — these generalise to every shape, which the per-shape literals do not. `expectShape` now asserts the band is the panel's entire output, that its attribute set is exactly `class` and `aria-label`, and that no non-whitespace text sits directly inside it. All three were watched going red. |
+| F17 | The docstring claims every literal came from the Chrome baseline; the baseline records only Search/words and Chat/open, and no `aria-label` at all | **Accepted.** The claim was false and is now split into two labelled provenances — *measured* for the two baseline shapes, *read from the pre-migration source at `369699af~1`* for the labels, Remember, and the two shapes added here. Two extra shapes are pinned (Search visitor, Chat list) because they change the band's own children; the other dozen are not, because transcribing code written an hour ago is agreement with the implementation rather than a check on it. |
+| F18 | `PassThrough` admits `dangerouslySetInnerHTML` — a type-valid call React throws on, since `children` is required — and `role`, which can remove the landmark the component says it owns | **Accepted.** Both omitted. Sol also confirmed the spread order is right and that moving `{...rest}` after the owned props would be worse. |
+| F19 | The Outline rationale describes code that does not exist: `OutlinePanel` writes no padding and no custom properties on the band, only a ref and `data-outline-rung` | **Accepted**, and it was in this plan as well as in the component — both corrected. The real seam is `data-outline-rung`, which only `{...rest}` carries to the DOM. |
+
+Both of the defects listed under F15 and in the test's own docstring were found **before** this
+review, by reading rather than by a failing caller, and neither had a caller in stage 1 — they were
+waiting for stage 2. That is the argument for migrating the remaining bands only behind this test.
+
+### Stage 1 code, round 2 — GPT Sol, 2026-09-06
+
+Verdict: **refuse as written**, no P0 or P1.
+[The review](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-review-stage1-sol-2.md) ·
+[the prompt](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-review-stage1-prompt-2.md).
+
+Sol judged F15, F17 and F19 fixed, F18's two props fixed with an adjacent hole (F23), and F16 only
+partly fixed (F20). **Discovery closes here** — two rounds, then settle, per
+[engineering-manager.md](../reusable/engineering-manager.md). **All of F20–F24 are accepted**; there
+is nothing to overrule.
+
+| ID | Finding | Disposition |
+|----|---------|-------------|
+| F20 | The oracle records only each child's *class*, so a `<form class="chat-composer">` becoming a `<div>`, an attribute appearing on a child, a changed header row, or text beside the `<aside>` all still pass | **Accepted, and it was the round's best finding.** Children are now compared as `tag.class[attrs]` signatures, the whole-output check reads `childNodes` rather than `children`, and the header's own children are pinned. The signatures immediately proved the point: `.chat-composer` is a `<form>`, `.chat-threads` an `<ol>`, `.srch-hits` a `<ul>`, `.srch-legend` a `<p>` — four tag changes a class-only check could not have seen. Each tag was verified against the panels at `369699af~1` before being recorded. |
+| F21 | The plan claims the baseline holds "the current markup of every band in jsdom"; it holds Search and Chat geometry only, and stage 2's acceptance depends on baselines that do not exist | **Accepted.** The stage-1 wording was false and is corrected. Stage 2 gains a step 0: capture each band's shape *before* editing it. `BandShape.attrs` is now per-shape so Outline's `data-outline-rung` does not force the oracle to be relaxed for everyone. |
+| F22 | Six panels render a pinned footer row, not four — Debate's `.dbt-again` and Quiz's `.quiz-rewrite` were missed | **Accepted.** Verified by hand: both are direct children after the scrolling child, and `debate.css` describes `.dbt-again` as "Pinned under the scroller… like `.tl-again`". Corrected in the plan and in the component. |
+| F23 | `PassThrough` still admits `aria-hidden` and `aria-labelledby`, which undo the landmark and the accessible name that `label` exists to guarantee | **Accepted.** Both omitted. Omitting `role` while leaving those was half a rule. |
+| F24 | Three comments still assert false things: a leftover "all four values are transcribed from the baseline", the plan's interface block still showing `feature: string` required, and the empty-head rationale | **Accepted.** The first two were stale text left behind by the round-1 fixes — the same class of error as F17 and F19, which is why the round-1 log now says to weight it. On the third, Sol is right that the boundary is better justified as **sentinel versus content** than as "a rule with an edge"; the decision stands and the reason is rewritten. |
+
+Sol also confirmed, established, that **no remaining band needs an extra wrapper or a new slot**:
+Visitor, Summary and Outline omit `head`, Outline uses the existing ref and passthrough, the other
+fixed header rows fit `head`, and the six pinned rows fit `foot`. So the interface is stage-2 ready;
+what stage 2 still owes is the per-band evidence, which is now its step 0.

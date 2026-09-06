@@ -480,8 +480,8 @@ export function ChatPanel({
           stick-to-bottom logic and the draft, and returns the transcript and
           the composer as one fragment — so `Conversation` goes into `children`
           whole rather than being cut in half to fill a slot.
-          docs/plans/260906f-…-one-way-to-fit-the-screen.md § There is a `foot`
-          slot. */}
+          § There is a `foot` slot, in
+          docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md */}
       {error && <p className="chat-error">{error}</p>}
 
       {open ? (
