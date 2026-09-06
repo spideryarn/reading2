@@ -2122,6 +2122,14 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
 
 .spine-match {
   position: absolute;
+  /* Clamped like `.spine-here` and `.spine-from`, and it was the last of the
+     three to get it: `min-height` grows the box downward, so a hit in the
+     article's final block grew past the rail's own bottom and `overflow:
+     hidden` cut the floor away — leaving a sliver, or nothing at all when the
+     final block is short. Measured in a browser at `top: 798.9, bottom: 801.9`
+     against a rail ending at 800. `--match-top` is set inline; Spine.tsx says
+     why it is a custom property rather than a `calc()` there. */
+  top: min(var(--match-top), 100% - 3px);
   /* `--lane-w` is the *pitch*; the mark is a pixel narrower, and the pixel is
      the gap that keeps two adjacent lanes reading as two marks rather than as
      one wider one. It was a leftward `box-shadow`, which did not work and did

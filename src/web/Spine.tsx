@@ -687,13 +687,14 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
    * this component is careful about: `jumpOriginSnapshot` caches the object it
    * returns, so the `?at=` replace the scroll spy makes about once a second
    * fires the store's listener and changes nothing. What re-renders the rail is
-   * a jump, a Back, or a dismissal — a few times a minute at most.
+   * a change in the *effective stamp* — typically a jump, a Back or Forward, a
+   * push that strips it, or a dismissal — which is a few times a minute at most.
    *
    * **Only while the chip is up, and never the other way round** — the same
-   * `readStamp` is behind both, and the two cases where the chip stands without
-   * a mark are deliberate: an origin of `{ kind: "top" }`, which is no block
-   * and which the chip carries in words as "back to the beginning" (GPT Sol
-   * F8); and a stamp this page cannot resolve, where the chip is gone as well.
+   * `readStamp` is behind both. Two cases draw no mark, and they are not the
+   * same case: an origin of `{ kind: "top" }`, where the **chip remains** and
+   * says "back to the beginning" in words because there is no block to mark
+   * (GPT Sol F8); and a stamp this page cannot resolve, where **both** go.
    * spine-marks.ts § `jumpOriginMark` owns all three rules.
    */
   const jumpOrigin = useJumpOrigin();
@@ -925,9 +926,20 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
               <div
                 key={m.key}
                 className="spine-match"
+                /* `--match-top` rather than `top`, for the reason `.spine-here`
+                   and `.spine-from` do it: the stylesheet clamps the number so
+                   the 3px floor cannot grow out of `.spine { overflow: hidden }`
+                   for a hit in the article's last block. Found in a browser on
+                   an article whose final block is a short citation — the mark
+                   was drawn at `top: 798.9, bottom: 801.9` against a rail ending
+                   at 800, so two thirds of it was outside. GPT Sol F31 has the
+                   precise statement: what the overflow removes is the *floor*,
+                   cutting the box back to the row's own proportional height, so
+                   a short enough final block loses its mark entirely and a
+                   slightly taller one is left as a sliver. 2026-09-06. */
                 style={
                   {
-                    top: pct(m.top),
+                    "--match-top": pct(m.top),
                     height: pct(m.height),
                     "--lane": m.lane,
                     "--h": m.rgb,

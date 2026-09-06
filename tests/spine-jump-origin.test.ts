@@ -132,6 +132,13 @@ beforeEach(() => {
   document.body.innerHTML = "";
   history.replaceState(null, "", "/read/x");
   clearArmedJump();
+  /* **And take the stamp off, which the line above does not.** A same-path
+     replace *preserves* the stamp on purpose (router.ts § the wrapper's three
+     rules), so resetting the address leaves the previous test's origin sitting
+     on the entry and the next test mounts with a mark already drawn. Found by
+     running this file with `--sequence.shuffle.tests` — GPT Sol F27,
+     2026-09-06, and it was true of three suites rather than this one. */
+  dismissJumpOrigin();
 
   const table = document.createElement("table");
   const tbody = document.createElement("tbody");
@@ -285,6 +292,31 @@ describe("the mark for where the reader jumped from", () => {
       dismissJumpOrigin();
     });
     expect(marks()).toHaveLength(0);
+  });
+
+  /**
+   * **A search mark is placed down the rail, and by the clamped property.**
+   *
+   * `.spine-match` used to set `top` inline, which meant its 3px floor grew
+   * past the bottom of `.spine { overflow: hidden }` for a hit in the article's
+   * final block — measured in a browser at `top: 798.9, bottom: 801.9` against
+   * a rail ending at 800. It now sets `--match-top` and the stylesheet clamps
+   * it, like `.spine-here` and `.spine-from`.
+   *
+   * This test exists because that change is otherwise **invisible to the
+   * suite**: misspell the property and every rule reading it falls back to
+   * `top: auto`, which stacks every search hit at the top of the rail — a
+   * total, obvious, reader-facing break that no assertion in this repo would
+   * have caught. jsdom applies no stylesheet, so the clamp itself cannot be
+   * asserted here; what can be, and is, is that the number goes to the property
+   * the clamp reads and to no other.
+   */
+  it("places a search mark by the clamped custom property, not by top", async () => {
+    await mount(MATCHES);
+    const first = host.querySelector<HTMLElement>(".spine-match");
+    expect(first, "the fixture should draw a search mark").toBeTruthy();
+    expect(first?.style.getPropertyValue("--match-top")).toMatch(/^\d/);
+    expect(first?.style.top, "top is the stylesheet's, computed from --match-top").toBe("");
   });
 
   it("takes no search lane, and moves no search mark sideways", async () => {
