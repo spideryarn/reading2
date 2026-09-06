@@ -32,6 +32,8 @@ import type { Claim, ClaimsRun } from "../referee-claims.js";
 import { isStale } from "../search-stale.js";
 import { apiFetch, failure, readJson } from "./lib/api.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
+import { useOrderedRead } from "./useOrderedRead.js";
+import { type ArtefactStatus, useAutoRun } from "./useAutoRun.js";
 import { describeFetchFailure } from "./useComments.js";
 
 export interface ClaimsApi {
@@ -95,8 +97,68 @@ export function useClaims(slug: string): ClaimsApi {
    */
   const current = useRef(slug);
 
+  /**
+   * **The read, lifted out of the effect** so that it can be asked a second
+   * time — the automatic run needs a way back from a GET that *failed*
+   * (useAutoRun.ts § A failed read is not an answer), and there was none.
+   *
+   * **Through `useOrderedRead`, not a bare callback.** A second read is a second
+   * request in the air, and two requests about one paper can land out of order —
+   * which is exactly the bug that module exists for, and which every other
+   * artefact reader in this app already routes around
+   * (tests/artefact-read-race.test.tsx). Doing it by hand here would be the
+   * ninth copy of a race nobody won the first eight times. GPT Sol, 2026-09-06.
+   *
+   * `current()` is asked after the `await` and before any `set`, which is that
+   * module's one requirement of a caller.
+   */
+  const load = useCallback(
+    async (current: () => boolean) => {
+      await apiFetch(url(slug))
+        .then((r) => readJson<{ run?: ClaimsRun | null; sourceHash?: string; error?: string }>(r))
+        .then((body) => {
+          if (!current()) return;
+          if (body.error) {
+            setError(body.error);
+            setLoadFailed(true);
+          } else {
+            setRun(body.run ?? null);
+            /* **Unconditionally, including when the field is missing.** A reply
+               that got here is the server's answer about this paper, so
+               `undefined` is not silence — it is "we checked and cannot tell",
+               which `isStale` counts as stale. That is the whole point of the
+               wrapper on `fingerprint`, and it is reachable only from here: the
+               server sends `sourceHash: undefined` for a paper whose blocks it
+               could not read, `JSON.stringify` deletes the key outright, and
+               `"sourceHash" in body` was therefore false for exactly the case the
+               state exists to carry. Silence is the *error* branch below, which
+               leaves the fingerprint `null`. */
+            setFingerprint({ hash: body.sourceHash });
+            /* **Cleared on a read that worked**, which matters only to `reload`:
+               a first read that failed left `loadFailed` true, and a second that
+               succeeded has to take it back or the panel goes on showing the
+               failure over a paper it has now read. The opening read cannot reach
+               this — the effect below has just set it false. */
+            setLoadFailed(false);
+            setError(null);
+          }
+          setLoaded(true);
+        })
+        .catch((e: Error) => {
+          if (!current()) return;
+          setError(describeFetchFailure(e));
+          setLoadFailed(true);
+          setLoaded(true);
+        });
+    },
+    [slug],
+  );
+
+  /* `discard` is what fences a superseded generation — see the effect below,
+     which calls it before starting the next paper's read. */
+  const { reload, discard } = useOrderedRead(load);
+
   useEffect(() => {
-    let live = true;
     current.current = slug;
     /* A stream still in the air belongs to the previous article and is no longer
        allowed to write; the guard above stops it, and this lets the reader start
@@ -106,39 +168,12 @@ export function useClaims(slug: string): ClaimsApi {
     setLoaded(false);
     setLoadFailed(false);
     setFingerprint(null);
-    apiFetch(url(slug))
-      .then((r) => readJson<{ run?: ClaimsRun | null; sourceHash?: string; error?: string }>(r))
-      .then((body) => {
-        if (!live) return;
-        if (body.error) {
-          setError(body.error);
-          setLoadFailed(true);
-        } else {
-          setRun(body.run ?? null);
-          /* **Unconditionally, including when the field is missing.** A reply
-             that got here is the server's answer about this paper, so
-             `undefined` is not silence — it is "we checked and cannot tell",
-             which `isStale` counts as stale. That is the whole point of the
-             wrapper on `fingerprint`, and it is reachable only from here: the
-             server sends `sourceHash: undefined` for a paper whose blocks it
-             could not read, `JSON.stringify` deletes the key outright, and
-             `"sourceHash" in body` was therefore false for exactly the case the
-             state exists to carry. Silence is the *error* branch below, which
-             leaves the fingerprint `null`. */
-          setFingerprint({ hash: body.sourceHash });
-        }
-        setLoaded(true);
-      })
-      .catch((e: Error) => {
-        if (!live) return;
-        setError(describeFetchFailure(e));
-        setLoadFailed(true);
-        setLoaded(true);
-      });
-    return () => {
-      live = false;
-    };
-  }, [slug]);
+    void reload();
+    /* **Every reply still in the air is now about the previous paper.** The
+       teardown rather than a `live` flag, because `useOrderedRead` is the thing
+       that knows which generation a reply belongs to. */
+    return discard;
+  }, [slug, reload, discard]);
 
   const pull = useCallback(() => {
     if (running.current) return;
@@ -217,6 +252,53 @@ export function useClaims(slug: string): ClaimsApi {
       }
     })();
   }, [slug]);
+
+  /**
+   * **The referee pressed Claims and this paper has never been asked — ask it.**
+   *
+   * Greg's rule about opening a mode (src/web/useAutoRun.ts), one level down:
+   * the press is minted by the chip in `RefereeViews` (App.tsx), and arriving
+   * here any other way — a pasted `?referee=claims`, a Back step, the mode button
+   * on a URL that already said `claims` — spends nothing.
+   *
+   * **The first target with no job behind it.** A claims run is one SSE stream
+   * rather than a pipeline step (src/web/auto-run-targets.ts), so `pull` takes
+   * the place of `ensure`. The hook does not care: it asks *is there anything
+   * there* and *did the reader press it*, and this file decides what running
+   * means.
+   *
+   * The four states, and the order is load-bearing:
+   *
+   *  - `!loaded` → **loading**, and the press waits for it;
+   *  - `loadFailed` → **error**, which is not an answer, so the press is kept and
+   *    `reload` asks again — tested before `run`, because after a `reload` the
+   *    two are not exclusive and a failure the referee can see must not be
+   *    hidden by a run from before it;
+   *  - a `run` → **ready**, so the press retires having spent nothing;
+   *  - otherwise **none**, and the press starts the stream.
+   *
+   * `pull` already refuses a second run while one is in flight — the `running`
+   * ref above — which is also what makes `<StrictMode>`'s double effects safe
+   * here. And `pull` installs a `{status:"pending"}` row synchronously, so the
+   * very next render reads `ready`: the press cannot be spent twice even in
+   * principle.
+   */
+  const status: ArtefactStatus = !loaded
+    ? "loading"
+    : loadFailed
+      ? "error"
+      : run !== null
+        ? "ready"
+        : "none";
+  useAutoRun(
+    slug,
+    "claims",
+    status,
+    async () => pull(),
+    async () => {
+      await reload();
+    },
+  );
 
   const stale = useMemo(
     () => (run === null || fingerprint === null ? false : isStale(run, fingerprint.hash)),

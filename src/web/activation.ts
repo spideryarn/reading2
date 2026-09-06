@@ -3,11 +3,27 @@
  * are in a position to know it, and read by the panel that is about to decide
  * whether to spend a model call.
  *
- * Five surfaces start a paid pipeline step on their own when the reader opens
- * them with nothing there yet — Glossary, Ideas, Quotes, Timeline, and the
- * Sketch picture inside Diagram. Greg's rule is
- * *"if the user **clicks** a mode that hasn't been run yet, automatically run
- * it"*, and the word that carries the money is **clicks**.
+ * **Twelve controls start a paid run on their own**, between them arming
+ * **eleven** targets — the two numbers differ because Diagram's bar button and
+ * its Sketch chip are two gestures that arm the same picture. The controls: the
+ * Glossary, Ideas, Quotes, Timeline, Debate and Diagram buttons in the bar; the
+ * Sketch and Illustrated chips inside Diagram; the Quiz half of Remember; the
+ * Claims and Candidates chips inside Referee; and the Tweets link, which does
+ * not open a mode at all. Greg's rule is *"if the user **clicks** a mode that
+ * hasn't been run yet, automatically run it"*, and the word that carries the
+ * money is **clicks**.
+ *
+ * That started as five surfaces in 2026-09-02 and reached this list on
+ * 2026-09-06, when Greg asked for the rest of them:
+ *
+ * > By opening the mode, the user is implicitly indicating that they want
+ * > what's already generated, or to generate it if needed.
+ *
+ * **What did not change is which gesture counts.** Every one of the five that
+ * arrived that day went through the same token rather than firing from a mount,
+ * for the reason the next section gives — and two of them, Tweets and
+ * Candidates, had been cut back to a button precisely because an earlier version
+ * fired on mount. docs/plans/260906b-opening-a-mode-starts-it-generating.md.
  *
  * ## Why a mount is not a click
  *
@@ -115,57 +131,48 @@
  * *the reader pressed this control, once, just now*. Whether that costs
  * anything is the panel's own question, answered against its own GET, and
  * capped by `jobEngine.beginAutoAttempt` — one automatic attempt per
- * `(slug, step)` per tab session, so a failure cannot loop.
+ * `(slug, target)` per tab session, so a failure cannot loop.
  *
  * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 2b.
  */
 import type { Mode } from "../modes.js";
-import type { StepName } from "../types.js";
+import type { AutoRunTarget } from "./auto-run-targets.js";
+import type { RefereeView } from "./referee-views.js";
 import { jobEngine } from "./jobEngine.js";
 
 /**
- * The seven surfaces a press can start.
- *
- * Spelt as `StepName`s because that is what they are — the step each panel's
- * job runs — which is also what `beginAutoAttempt` is keyed on. Naming them
- * twice, once for the token and once for the guard, is how the two would come
- * to disagree.
- *
- * **Two of them are chips inside Diagram rather than modes**, and they were the
- * two that spend the most until `debate` arrived: `sketch` and `illustrated`.
- * See `MODE_TARGET` below for why the mode itself arms nothing.
+ * The vocabulary moved to [`auto-run-targets.ts`](./auto-run-targets.ts) on
+ * 2026-09-06 and is re-exported here, so every importer that already says
+ * `from "./activation.js"` is unchanged. It had to move because
+ * `jobEngine.beginAutoAttempt` is keyed on the same union and cannot import this
+ * module, which imports it.
  */
-export type AutoRunTarget = Extract<
-  StepName,
-  "glossary" | "ideas" | "quotes" | "timeline" | "sketch" | "illustrated" | "debate"
->;
+export type { AutoRunTarget };
 
 /**
- * Which mode's button arms which target, and the four that do.
+ * Which mode's button arms which target, and the six that do.
  *
- * **`diagram` is not here**, and that is right — and it matters more since
- * 2026-09-04, when Diagram came out from behind the experimental-features
- * switch and its default picture became the Sketch. Opening Diagram still costs
- * nothing: with no sketch drawn it lands on an empty state that says the price
- * and the wait and draws nothing (SketchView.tsx). Adding `diagram: "sketch"`
- * to this table would turn every press of a bar button that is now in front of
- * every reader into a ~$0.20, two-minute job. The Sketch chip inside the mode
- * arms `sketch` itself, because it is the chip that is the gesture — and the
- * Illustrated chip beside it arms `illustrated` for the same reason and a
- * dearer one: $0.40–$0.65 a press.
+ * **`diagram` is deliberately not a row here**, and since 2026-09-06 that is no
+ * longer because pressing it spends nothing — it does. It is because the picture
+ * a Diagram press lands on is whatever `?diagram=` says, so a *fixed* target
+ * would be a lie about half the presses. `armActivationForDiagram` below is the
+ * row, written as a function.
  *
- * **`debate` is here and is the dearest mode press in the app** — two metered
- * calls that each go out to the open web, up to ~$0.27 and rising with the
- * length of the article. It is here rather than left off because the mode is
- * *only* an artefact: with nothing stored, Debate has nothing whatever to draw,
- * so a press that armed nothing would be a button that does nothing — which is
- * the case Diagram is not in, its default picture being free. What keeps the
- * price honest is that the mode is behind the experimental-features switch, so
- * the button is not in front of every reader, and that the blurb on it says so.
+ * **`debate` is the dearest mode press in the app** — two metered calls that
+ * each go out to the open web, up to ~$0.27 and rising with the length of the
+ * article. What keeps the price honest is that the mode is behind the
+ * experimental-features switch, so the button is not in front of every reader,
+ * and that the blurb on it says so.
  *
- * Everything else in `MODES` is either free (Plain, Hierarchy, Outline,
- * Summary — they read the tree that is already there) or stores nothing at all
- * (Search, Chat, Referee, Remember).
+ * `tweets` is not here because it is not a mode: it is its own page, and the
+ * press is on a `DockLink`. See `armActivationForTweets` below.
+ *
+ * The rest of `MODES` is either free (Plain, Hierarchy, Outline, Summary — they
+ * read the tree that is already there) or stores nothing at all (Search, Chat).
+ * Referee and Remember arm nothing *as modes* — both land on a sub-mode that
+ * waits on the reader's own words. Their chips arm for themselves: Referee's
+ * through `REFEREE_TARGET` below, Remember's inline in `RememberSubModeToggle`
+ * (QuizPanel.tsx), which is the same call `DiagramPanel`'s picture chips make.
  */
 const MODE_TARGET: Partial<Record<Mode, AutoRunTarget>> = {
   glossary: "glossary",
@@ -173,6 +180,31 @@ const MODE_TARGET: Partial<Record<Mode, AutoRunTarget>> = {
   quotes: "quotes",
   timeline: "timeline",
   debate: "debate",
+};
+
+/**
+ * **Referee's chips that arm something**, which is `MODE_TARGET` one level down.
+ *
+ * `criteria` and `mirror` are absent because neither has anything to generate
+ * until the referee has written a criterion or left a comment — there is no
+ * empty artefact for a press to fill. The two that are here both reach a third
+ * party, and `candidates` reaches one the band's own notice cannot cover: a
+ * first turn may run a web search, which sends terms drawn from an unpublished
+ * manuscript to a search engine.
+ *
+ * **The disclosure for that is not on this chip's tooltip**, and must not be:
+ * this repo has already written down, after a browser pass, that *a tooltip is
+ * not read by anybody in a hurry, which is what a referee is*
+ * (docs/project/referee-mode.md). It is `REFEREE_CANDIDATES_REACHES_SEARCH`,
+ * drawn above the chips and outside the notice's collapse, so it is on screen
+ * before any chip has been pressed. If that line goes, this row goes with it.
+ * CandidatesPanel.tsx § `startBrief` carries the whole argument.
+ *
+ * docs/plans/260906b-opening-a-mode-starts-it-generating.md § Stage 4.
+ */
+const REFEREE_TARGET: Partial<Record<RefereeView, AutoRunTarget>> = {
+  claims: "claims",
+  candidates: "candidates",
 };
 
 /**
@@ -240,6 +272,79 @@ export function armActivation(slug: string, target: AutoRunTarget): void {
 export function armActivationForMode(slug: string, mode: Mode): void {
   const target = MODE_TARGET[mode];
   if (target) armActivation(slug, target);
+}
+
+/**
+ * **A press on the bar's Diagram button arms the picture it is about to land
+ * on**, which is whatever `?diagram=` currently says — `sketch` by default, and
+ * two of the five pictures cost anything at all.
+ *
+ * This is a function rather than a `MODE_TARGET` row, and the reason is a bug a
+ * fixed row would have. GPT Sol found it in the plan for this change, 2026-09-06:
+ *
+ *  1. open Diagram and press the Illustrated chip, so `?diagram=illustrated`;
+ *  2. leave for Plain — `?diagram=` survives, it is query state;
+ *  3. press Diagram in the bar. A row saying `diagram: "sketch"` mints a
+ *     **sketch** token, but `IllustratedView` is what mounts, so nothing claims
+ *     it and it stays in the map, unowned;
+ *  4. walk **Back** to a history entry whose `?diagram=` was `sketch`;
+ *  5. `SketchView` mounts, finds an unowned token, claims it, and spends $0.20
+ *     on a navigation nobody made a press for.
+ *
+ * Nothing expires an unclaimed token — `claimActivation` retires one only when a
+ * *different* mount asks — so the fix has to be at the mint: arm the target that
+ * is going to mount, and it is claimed on the next commit like every other.
+ *
+ * **The three geometries arm nothing** and want nothing armed: Force, Drift and
+ * Trail are drawn from the tree that is already there, cost nothing and are
+ * instant. Only `sketch` and `illustrated` are model calls, and both are named
+ * in `AutoRunTarget`, so this narrowing is the same one `DiagramPanel`'s chips
+ * make — a sixth picture that spends money cannot be armed here until it is a
+ * target there.
+ *
+ * @param kind which picture the reader will be looking at after the press —
+ *   **already degraded** by `diagramInSearch` (params.ts), so an unrecognised
+ *   `?diagram=` arrives as `sketch`, exactly as `diagramParam` would open it.
+ *   Handing this the raw query value is a bug rather than a shortcut: a link
+ *   from August saying `?diagram=tree` would arm nothing while the mode opened
+ *   the Sketch, so the press would do nothing at all. The bar does the reading,
+ *   so this module needs to know nothing about URLs.
+ */
+export function armActivationForDiagram(slug: string, kind: string): void {
+  if (kind === "sketch" || kind === "illustrated") armActivation(slug, kind);
+}
+
+/**
+ * The same, for a press on one of Referee's four sub-mode chips. Two of them
+ * arm nothing — `REFEREE_TARGET` says which and why.
+ *
+ * Called from the chip's own `onClick` in `RefereeViews`, and from nowhere
+ * else. **Not from the `?referee=` setter beside it**, which is what
+ * Back and Forward move: retracing your steps through the chips must not buy a
+ * claims run. Same rule, same reason, as `armActivationForMode`.
+ */
+export function armActivationForRefereeView(slug: string, view: RefereeView): void {
+  const target = REFEREE_TARGET[view];
+  if (target) armActivation(slug, target);
+}
+
+/**
+ * A press on the bar's **Tweets** link.
+ *
+ * Its own function rather than a row in `MODE_TARGET`, because the thread is
+ * not a mode: it is `/read/<slug>/tweets`, a page of its own, and the control
+ * is a `DockLink` rather than a radio button. There is nothing to look up — the
+ * one caller already knows which link was pressed — so this is `armActivation`
+ * with the target spelled once, in the module that owns the vocabulary, rather
+ * than in the bar.
+ *
+ * **The caller must be `Link`'s `onNavigate`, not its `onClick`.** A ⌘-click
+ * opens a new tab and this one stays where it is, and a token minted for a
+ * navigation that did not happen would sit pending until something arrived to
+ * spend it. Link.tsx § `onNavigate` is the seam and carries the rest.
+ */
+export function armActivationForTweets(slug: string): void {
+  armActivation(slug, "tweets");
 }
 
 /**

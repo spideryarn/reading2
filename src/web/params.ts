@@ -877,10 +877,12 @@ export const confParam = createParser<number>({
  * about which reader they are.
  *
  * **This costs nothing to arrive at.** `sketch` is never drawn until it is
- * asked for, so an owner opening Diagram with no picture yet meets an
- * invitation carrying the price and the wait (SketchView.tsx § the empty
- * state); only a press on the chip or that button spends anything
- * (src/web/activation.ts). The old default, `force`, was chosen for the
+ * asked for — and since 2026-09-06 it is also what a press on the bar's Diagram
+ * button *starts*, because this parser is what decides which picture that press
+ * lands on (src/web/activation.ts § MODE_TARGET). An owner who arrives without
+ * pressing — a pasted link, a Back step — still meets the invitation carrying
+ * the price and the wait (SketchView.tsx § the empty state), and spends nothing
+ * until they press. The old default, `force`, was chosen for the
  * opposite property — it was the only one that drew something real *before* its
  * model call landed — which was the right rule while it was the picture
  * everybody saw.
@@ -894,12 +896,44 @@ export const confParam = createParser<number>({
  * somebody pasted in August, saying `?diagram=strata` or `?diagram=tree`, from
  * opening a broken page.
  */
+/**
+ * **Sketch**, named once so that `diagramParam` and `diagramInSearch` below
+ * cannot come to disagree about what a missing or unrecognised `?diagram=`
+ * means. Why it is Sketch rather than Force is
+ * [diagram.md](../../docs/project/diagram.md#why-force-was-the-default-and-why-sketch-is-now).
+ */
+const DEFAULT_DIAGRAM: DiagramKind = "sketch";
+
 export const diagramParam = createParser<DiagramKind>({
   parse: (v) => (DIAGRAMS.includes(v as DiagramKind) ? (v as DiagramKind) : null),
   serialize: (v) => v,
 })
-  .withDefault("sketch")
+  .withDefault(DEFAULT_DIAGRAM)
   .withOptions({ history: "push" });
+
+/**
+ * **Which picture a reader with this query string is looking at**, degraded the
+ * way `diagramParam` degrades it — the same rule, from the same two constants,
+ * for a caller that has a search string rather than a mounted `useQueryState`.
+ *
+ * One caller: the bottom bar, which arms the picture a press on Diagram is about
+ * to open ([`Dock.tsx`](./Dock.tsx), `src/web/activation.ts` §
+ * `armActivationForDiagram`). It cannot use the hook — it is not inside the
+ * mode, and the value it needs is the one that *will* apply after the press.
+ *
+ * **It exists because reading the raw parameter is wrong in a way that is easy
+ * to miss.** A link from August saying `?diagram=tree` names a picture that was
+ * cut; `diagramParam` opens the Sketch, and a bar that armed the raw word armed
+ * nothing at all — so the mode opened on an empty state and the press did
+ * nothing, which is the behaviour this whole change exists to remove. GPT Sol,
+ * reviewing the built code, 2026-09-06.
+ */
+export function diagramInSearch(search: string): DiagramKind {
+  const named = new URLSearchParams(search).get("diagram");
+  return named !== null && DIAGRAMS.includes(named as DiagramKind)
+    ? (named as DiagramKind)
+    : DEFAULT_DIAGRAM;
+}
 
 /**
  * What sideways means on the Drift picture.
