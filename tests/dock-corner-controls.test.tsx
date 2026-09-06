@@ -196,7 +196,6 @@ const OWNED: Article = {
   assets: undefined,
   navLabelStatus: "ready",
   meta: { slug: SLUG, title: "A piece", byline: "Somebody" },
-  navLabelStatus: "ready",
 };
 
 const SHARED: PublicArticle = {
