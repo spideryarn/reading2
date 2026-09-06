@@ -9,8 +9,9 @@ Greg, 2026-09-06:
 >
 > Then proceed autonomously using engineering-manager.md to get this working well.
 
-**Status:** planning, revised after GPT Sol's round-one refusal
-([the review](260906b-plan-review-sol.md), F34–F46). The mode itself is
+**Status:** planning complete, two GPT Sol rounds absorbed
+([round one](260906b-plan-review-sol.md) F34–F46, [round two](260906b-plan-review-sol-2.md) F47–F57).
+Both refused; all twenty-four findings accepted, none overruled. The mode itself is
 [260905f](260905f-debate-mode-what-the-web-says-about-this-piece.md); its measurements are
 [the spike results](260905f-debate-mode-stage-0-spike-results.md).
 
@@ -22,370 +23,420 @@ run), and all of the moving web. The reading decides which rows are written and 
 `valence` and `applies` say about them.
 
 Almost everything worth tuning is in the reading. Almost all the reasons an eval is hard are in the
-search. So the eval splits along that seam rather than along "articles" or "arms", and the split is
-what makes the moving web a non-problem for the part we actually want to iterate on.
+search. So the eval splits along that seam rather than along "articles" or "arms".
 
 > Nearly everything you want to tune is in the reading; nearly all the nondeterminism is in the
 > search.
 >
 > — Fable, 2026-09-06
 
+**And the thing that seam cannot buy you:** freezing the evidence freezes *engagement* too, so a
+frozen comparison can rank readings and can never rank discovery. Sol's F48. Both halves are in the
+plan for that reason, and neither is allowed to answer the other's question.
+
 ## What the live runs left us with
 
-Three findings from [Stage 3½](260905f-debate-mode-stage-0-spike-results.md):
-
-1. **The valence bug.** Three of seven Cargo Cult rows point `valence` at the source's own subject
-   rather than at the row's target. `relation` and `applies` are correctly targeted on the same
-   rows; only `valence` drifts. On screen that is a red **Critical** chip over a source that
+1. **The valence bug.** Three of seven Cargo Cult rows label `valence` from the source's own subject
+   rather than the row's target. On screen that is a red **Critical** chip over a source that
    supports the article.
-2. **Group one is empty for a reason nobody hardened against.** Both Cargo Cult direct rows died at
+2. **Group one is empty for a reason nobody hardened against.** Both direct rows died at
    `unverifiedSource` — the model's quotations were not in the *search extract*, a 236–4,945
    character slice the engine chose. `directnessUnverified` was zero, so the article-naming rule two
    review rounds were spent on never fired.
-3. **The $0.6252 bought no replayable evidence.** Only *kept* rows are stored. The two lost direct
-   rows — their URLs, their quotes, the extracts they were checked against — are gone.
+3. **The $0.6252 bought no replayable evidence.** Only *kept* rows are stored.
 
 ### The overlap between `relation` and `valence`, and what it is not
 
 **Round one of this plan claimed `disputes`+`positive` and `corroborates`+`negative` are
 contradictions, and built a metric, a production coercion and a stopping rule on that. Sol's F35
-refused it, and is right.** The claim is recorded here as a reversal rather than quietly removed,
-because it is the sort of thing a later reader will re-derive.
+refused it, and is right.** Recorded as a reversal rather than quietly removed.
 
 `relation` names the argumentative move; `valence` is drawn as **Supportive** / **Critical**
 ([`VALENCE_APPEARANCE`](../../src/web/DebatePanel.tsx)) and summarises overall stance toward the
-row's target. Those genuinely can diverge, one honest example per group:
+row's target. Those genuinely diverge, one honest example per group:
 
 - **group two** — *"The stated 10% is wrong; it is at least 30%, which makes the warning stronger."*
   Truthfully `disputes` + `positive`.
 - **group one** — *"The reported figures are right, but the conclusion drawn from them is
   indefensible."* Truthfully `corroborates` + `negative`.
 
-So the pairing is **a screen, not a gate**. Rows where the two fields point opposite ways are routed
-to the judge; the flag rate is a diagnostic to interpret, never a pass mark. On the one real sample
-we have it flagged three rows and all three were genuinely mis-targeted — which is n=3, a hypothesis
-about where to look, and not a rate.
+So the pairing is **an inspection mark, and not even a router** (F55 tightened this further: every
+packet is judged anyway, so it routes nothing). It is printed as `N / all packets` beside the full
+`relation` × `valence` contingency table including `unclear` and `unknown`, and **nothing is ordered,
+coloured or selected by it** — because an arm that answered `unclear` everywhere would produce no
+opposite pairs at all, and must not thereby look better.
 
-**Sol's F9 is untouched by any of this.** F9 refused *deriving* valence from relation, and its
-example was `follow-up`, which F19 has since cut. Nothing here derives anything: valence stays an
-independent field with its shipped meaning.
+**Sol's F9 is untouched.** F9 refused *deriving* valence from relation, and its example was
+`follow-up`, which F19 has since cut. Nothing here derives anything.
+
+### And what the judge can measure, which is less than the bug
+
+**Sol's F47, and it is the decisive finding of round two.** An arm emits a categorical `valence` and
+nothing else — no subject, no reasoning. So a blinded judge labelling stance toward the *correct*
+target can only measure **disagreement**:
+
+- an arm can evaluate the wrong subject and coincidentally return the right label — counted correct;
+- an arm can evaluate the right subject and misread it — counted as a mis-target.
+
+The metric is therefore **valence disagreement with the blinded judge**, never "wrong-target rate".
+The judge's guess at *the subject it appears to describe instead* is qualitative diagnosis, printed
+and never put in a rate. Sol also closed the obvious escape: an explicit "which target did you
+evaluate?" field would prove only that the model copied the target back, not that it reasoned about
+it.
 
 ### A second prompt defect, found while checking the first
 
-[`src/debate.ts`](../../src/debate.ts) § `READING` scopes the two fields to different subjects:
+[`src/debate.ts`](../../src/debate.ts) § `READING` scopes the two fields to different subjects —
+`relation` to the outside **page**, `valence` to the **quoted passage** — so they do not even share a
+subject. Both should be about the quoted passage, which is the only thing the reader is shown and the
+only thing the row's evidence supports.
 
-    relation  what the outside PAGE does to the thing it is answering
-    valence   which way the QUOTED PASSAGE leans toward this row's target
+**It is a contract change, not a prompt tweak** (F54). `DebateRelation`'s docblock in
+[`src/types.ts`](../../src/types.ts) says *"What the outside page does to what it is answering"*, and
+the parent plan's § 4 says the same. So the instruction is exactly:
 
-A page and the one sentence quoted from it are not the same thing, so the fields do not even share a
-subject. **Both should be about the quoted passage**, which is the only thing the reader is shown
-and the only thing the row's evidence supports. This does not rescue any of the three wrong rows —
-in all three the page and the passage agree with each other, and both differ from what `valence`
-reported — and it does not make the screen a gate, since Sol's counterexamples are single passages.
-It is a separate defect that the prompt work should fix in the same pass.
+    relation  what the QUOTED PASSAGE does to this row's target:
+
+and **if that arm lands, the same commit changes** the `DebateRelation` docblock, the parent plan's
+§ 4 wording, and the panel's explanatory prose. Group-one eligibility and `articleReferenceQuote`
+stay page-level; only `relation` and `valence` become passage-level; `applies` and `limits` keep
+their outside-piece meaning.
+
+### A bug in shipped code, found by building the corpus
+
+`namesArticle` compares titles with `collapse(...).toLowerCase().includes(...)` — whitespace and case
+only. [`src/quote-match.ts`](../../src/quote-match.ts) § `FOLD`, which every other comparison in this
+mode goes through, additionally folds curly quotes, the three dashes and the non-breaking space,
+deliberately length-preserving.
+
+The stored title of one corpus article is `Claude’s Constitution`, with a curly apostrophe. So:
+
+- a source page writing the straight form does **not** match, and an honest row is lost as
+  `directnessUnverified` — naming exactly the failure the rule exists to prevent;
+- a source page writing the curly form matches, and passes on title length alone.
+
+Which way any page falls is decided by whose CMS smart-quoted what. This is general to any title
+carrying curly punctuation. **The fix is to ask the matcher everything else asks** —
+`findQuote(witness, title, undefined, "spaced") !== null`, `findQuote` rather than `locate` because
+`locate` additionally applies `isSubstantiveQuote` and a short title is precisely the case the byline
+branch exists for. Red test first; Stage B.
 
 ## Two things to do before the eval, both nearly free
-
-Fable's strongest note, and it reorders the work:
 
 > The eval is the right second move, not the first.
 >
 > — Fable, 2026-09-06
 
-### The two-curl experiment
+### The two-curl experiment, on the path Stage F would ship
 
-**Fetch the pages group one lost, and look for the model's quotations in the full text.** If they are
-there, the extract is the constraint and full-page fetching rescues real rows. If they are not, the
-model paraphrased or invented, fetching rescues nothing, and the repair is in the prompt. Two
-outcomes, opposite builds, and nobody should build either before knowing which.
+**Fetch the pages group one lost and look for the model's quotations in the full text.** If they are
+there, the extract is the constraint; if not, the model paraphrased and the repair is in the prompt.
 
-It cannot be run on the runs already made (finding 3), so it needs one fresh pass A on Cargo Cult —
-about $0.10 — which is also the first capture the next item produces.
+**It only decides anything if it exercises the exact path Stage F will ship** (F53), and
+`fetchDocument` does not hand back page prose: `FetchedDocument.text` is decoded **HTML markup**, and
+`null` for a PDF. Matching raw markup would miss a quotation split across tags and accept words out
+of a `<script>` or a meta tag. So the experiment — and Stage F — run
+`fetchDocument` → **bounded HTML-to-visible-text extraction** → `findQuote`, and a PDF is either
+taken through an existing bounded PDF-text path or recorded `unsupported`. **`text: null` is never
+read as an empty page.**
 
-### Capture, at the provider-response boundary
+The result is reported as *"recovered X of Y observed failures"*. **One recovery establishes the
+fallback can fix the observed class; zero recoveries defers Stage F and does not establish that
+full-page fetching can never help.**
 
-Every attempted pass from here writes one append-safe record. **Sol's F40 moved where it is taken**,
-and the reasoning is the point: `runPass` throws before returning on an unreadable answer, a bad
-`finish_reason` or a zero search count, and `admissible` is already downstream of
-`collectSearchEvidence` and the `selfSource` filter. A sink handed `{text, admissible}` would
-therefore capture *nothing at all* for the paid failure that motivated capture in the first place,
-and could never replay the collection it sits after.
+### Capture, as a two-event journal
 
-So the record is taken immediately after the provider answers, before any validation, and holds:
+Every attempted pass writes to an append-only journal keyed by an attempt id. **Round one put a
+single record after the provider answered, and Sol refused it twice** — F40 because `runPass` throws
+before returning on an unreadable answer, a bad `finish_reason` or a zero search count, so the paid
+failure that motivated capture would have been captured as nothing; F52 because one immutable record
+written *after* the answer cannot represent an abort before any answer, cannot survive process death,
+and cannot also carry a classification decided later.
 
-| | |
-|---|---|
-| pass kind | `direct` / `claims` |
-| raw assistant text | before `parsePass` |
-| **raw annotations** | before `collectSearchEvidence` and before the self-source filter |
-| raw usage, finish reason, model | before the allowlist |
-| provider and search configuration | engine, `max_total_results`, `max_results` |
-| sha256 of the exact system and user prompts | so an arm cannot be confused with another |
-| article `inputFingerprint` and identity | § the corpus |
-| status | `ok` / `aborted` / classified error — **a failed paid pass is captured too** |
+| event | when | carries |
+|---|---|---|
+| `attempt-started` | **before dispatch** | pass kind, provider and search configuration, sha256 of the exact system and user prompts, article identity and `inputFingerprint` |
+| `provider-response` | at the gateway boundary, **after bytes arrive, before status, JSON or debate validation** | raw assistant text, **raw annotations** (before `collectSearchEvidence` and the self-source filter), raw usage, finish reason, model |
+| terminal outcome | in `catch`/`finally` | `ok` / `aborted` / classified error |
 
-`admissible` is *derived during replay*, never stored as raw input. **No change to what is stored on
-the article** — a reader's artefact is not a debugging record.
+An abort with no response has metadata and an abort outcome and **no invented response fields**. **An
+unmatched start means the process died or the outcome is unknown** — which is exactly what happened
+on 2026-09-05, when an OOM kill between the two passes billed pass A and wrote nothing. Reports
+reconcile starts, responses, terminal outcomes and spend records, and never describe an unmatched
+attempt as captured successfully.
+
+`admissible` is derived at replay, never stored as raw input. **Nothing changes about what is stored
+on the article** — a reader's artefact is not a debugging record.
 
 ## What the eval measures, and what it refuses to
 
 | quality | scored how | why |
 |---|---|---|
-| **Attribution** — quotes real, located | loss-reason counts, free | already enforced in code and unit-tested; a judge would be paid to re-check a `String.includes` |
-| **Interpretation — valence target** | the cross-field screen routes rows; **the judge decides** | the bug. The screen is free and catches the obvious half; the judge is the only thing that can see a mis-target inside a legitimate pair |
-| **Engagement** — does the source passage actually answer the claim? | judge | **the only relationship the code cannot check.** `claimQuote` is in the block and `sourceQuote` is in the extract, and neither fact says they are about the same thing |
-| **Discovery** — did the search find the famous replies? | live, against a hand-verified gold URL list | only measurable live, and only where reception is settled |
-| **Usefulness of `applies`** | **not scored** | Greg reading two rendered panels. A rubric for "does this send the reader back into the prose with a sharper question" is our arithmetic dressed as judgment — [quotes.md](../project/quotes.md)'s objection |
+| **Attribution** — quotes real, located | loss-reason counts, free | already enforced in code and unit-tested |
+| **Interpretation — valence agreement** | blinded judge labels stance toward the packet's explicit target; deterministic code compares with each arm's raw `valence` | the closest observable proxy for the bug. **Not a targeting rate** — F47 |
+| **Engagement** — does the source passage answer the claim? | judged **once, as a corpus audit** in Layer 2; **per arm only on the live path** | frozen packets share one target, quotation and haystack, and the judge sees no arm output, so its engagement answer is identical for every arm. Printing it per arm would duplicate a corpus property under several names — F48 |
+| **Discovery** — did the search find the famous replies? | live, against a hand-verified gold URL list | only measurable live |
+| **Usefulness of `applies`** | **not scored** | Greg reading two rendered panels — [quotes.md](../project/quotes.md)'s objection |
 
-**The judge sees every row.** Round one excluded `qualifies` and `extends` from the interpretation
-score as ambiguous, and Sol's F37 caught the contradiction: the same table claimed the judge would
-catch a mis-target *inside* `qualifies`. An arm can reach a clean screen while pointing every
-`qualifies` valence at the wrong subject. So **only the mechanical screen is stratified by relation**;
-the judged targeting and engagement metrics cover every frozen packet, with denominators printed per
-relation.
+**No metric is stratified by relation.** Round one excluded `qualifies` and `extends` as ambiguous
+while the same table claimed the judge would catch a mis-target *inside* `qualifies` (F37). Every
+packet is judged; denominators are printed per relation.
 
-**Every rate prints its numerator over its denominator, and an undersized denominator is
-`not measured`** — never a zero that reads like a pass (F42).
+### Coverage, before any quality figure
+
+Sol's F50, and it closes a hole the round-one wording opened. Before anything is computed, **each
+arm's output and the judge's output must be an exact permutation of the expected packet ids** — every
+id exactly once, nothing missing, duplicated, foreign or malformed. An invalid arm cannot qualify; an
+invalid judge run reports no judged metric. `unknown` and `unclear` are **valid answers and stay in
+the denominator**.
+
+**Every arm's denominator is the full set of distinct non-anchor packet ids.** Repeats and other arms
+are reported separately and never pooled — seven ids across three arms is seven evidence cases, not
+twenty-one.
 
 ## The moving web, and why it stops being a problem
 
 ### Layer 1 — replay the validation, no model at all
 
-Stored raw records → `collectSearchEvidence` → `parsePass` → `readDirectGroup` / `readClaimGroup`.
-Deterministic, free, millisecond. It is the regression test for every change to the validation layer,
-and the only thing that can tell you a rule change dropped rows that used to survive.
+Journal records → `collectSearchEvidence` → `parsePass` → `readDirectGroup` / `readClaimGroup`.
+Deterministic, free, millisecond. The regression test for every change to the validation layer.
 
 ### Layer 2 — one reading per frozen packet, no search, no choosing
 
-**Sol's F36 rebuilt this, and the version it replaced would have rewarded an arm for answering
-less.** If each arm picks its own URLs, quotes and claims, an arm that returns two easy rows beats
-one that returns seven hard ones on any absolute count, and `incumbent-repeat` measures sampling
-noise rather than that selection bias.
+**Sol's F36 rebuilt this**, because arms picking their own rows rewards the arm that answers less.
+Each packet fixes its id, pass, article identity, URL, source title, exact `sourceQuote`, target
+(article identity, or `blockId` + `claimQuote`), exact evidence haystack, and hashes of every input.
+**Every arm returns exactly one reading for every packet.** Arms select nothing.
 
-So Layer 2 runs over a **manifest of frozen row packets**. Each packet fixes: its id, its pass, the
-article identity, the URL, the source title, the exact `sourceQuote`, the target (article identity,
-or `blockId` + `claimQuote`), the exact evidence haystack, and hashes of every input. **Every arm
-returns exactly one reading for every packet.** Missing, duplicated or foreign packet ids invalidate
-the run. Arms select nothing. Every report prints packet coverage *before* any quality figure.
-
-Cheap (~$0.05–0.15 per arm over the whole manifest), and it is where prompt arms are compared.
-
-**The caveat, stated once and carried into every results file:** this is not production's path.
-Production searches inside the generation, so the model reads the extracts in the same breath it
-chose them. Layer 2 measures the reading prompt under a different frame — acceptable *precisely
-because* it is the search half being held still, but a Layer 2 winner is confirmed by one live run
-before it lands.
+The caveat, carried into every results file: this is not production's path — production searches
+inside the generation. Layer 2 ranks readings; it cannot rank discovery, and per F49 it lands
+nothing on its own.
 
 ### Layer 3 — the live sweep
 
-Five articles, two repeats each, ~$3. Scored **only on things no judge is needed for**:
-`returnedSources`, kept rows per group, losses by reason, gold-URL hits, `webSearches`, cost,
-elapsed. One repeat is not a comparison at 2.4× cost variance.
-
-Run at most once per `PROMPT_VERSION` bump or search-side change. Not a place for small-effect
-tuning: the changes worth making to the search half are large-effect (fetch or don't; Exa or the
-default engine), and honest statistics on anything smaller are not affordable here.
+The production path, on the corpus. `returnedSources`, kept rows per group, losses by reason,
+gold-URL hits, `webSearches`, cost, elapsed — **and, from Stage E, judged group-two rows**, because
+engagement is only an arm's property here.
 
 ### Layer 0 — deterministic packets, and only deterministic ones
 
-Hand-built `(rows, GroupInput)` pairs handed straight to the group readers. No model, no network, so
-they live in `tests/`, not `evals/`. **Sol's F45 removed one of them:** *"a same-topic page that
-answers no claim"* is not a shape production can deterministically refuse — that is the engagement
-question, which is exactly what the plan says code cannot check. It moves to the judged corpus.
-
-What is left is deterministic:
+Hand-built `(rows, GroupInput)` pairs handed to the group readers. No model, no network, so they live
+in `tests/`. **F45 removed one:** *"a same-topic page that answers no claim"* is not deterministically
+refusable — that is the engagement question. It moved to the judged corpus.
 
 | # | shape | must come out as |
 |---|---|---|
-| **P3** | `articleReferenceQuote` locatable in the extract but naming no article | `directnessUnverified` |
-| **P4** | `sourceQuote` present in the full page, absent from the extract | `unverifiedSource` today; **kept** once Stage F exists |
+| **P3** | `articleReferenceQuote` locatable but naming no article | `directnessUnverified` |
+| **P4** | `sourceQuote` in the full page, absent from the extract | `unverifiedSource` today; **kept** once Stage F exists |
 | **P5** | two genuine quotations from an *unrelated* returned page | `directnessUnverified` — Sol's F24, which passed the code for a day |
-| **P6** | the article citing itself, everything else valid | `selfSource`, **not** `uncited` — the ordering in `readShared` is load-bearing |
-| **P7** | out-of-vocabulary `relation` and `valence` | `unclear` / `unknown`, and **the row kept** |
+| **P6** | the article citing itself, everything else valid | `selfSource`, **not** `uncited` |
+| **P7** | out-of-vocabulary `relation` and `valence` | `unclear` / `unknown`, **row kept** |
+| **P8** | title spelled with the opposite apostrophe | **kept** — the typography bug above |
 
 **P4 earns its keep twice**: today it pins the loss; after Stage F it is the only thing that could
-tell a working fetch from a fetch that silently hands back the extract again.
+tell a working fetch from one that silently hands back the extract again.
 
 **P7 is the one the prompt work could break.** If an arm's answer vocabulary changes and the mapping
 is not extended, `RELATIONS.has` / `VALENCES.has` fall through and **every row silently becomes
-`unclear`/`unknown`** — every panel goes grey with nothing red. That is the
-[silent-success](../reusable/silent-success.md) shape exactly, and it is why no prompt lands without
-this packet.
+`unclear`/`unknown`** — every panel goes grey with nothing red. Exactly the
+[silent-success](../reusable/silent-success.md) shape.
 
 ## The corpus
 
-Five articles. Four are already on the shelf with blocks and a tree, which matters: a fresh ingest
-costs the whole pipeline and can exceed the debate run it exists to feed.
+**Four of the five roles I first assigned were wrong**, and the corrections came from hand-verified
+web research rather than from assumption. Verified means: fetched the page and read the sentence in
+which it names the article.
 
-| slug | words | what it is for |
-|---|---|---|
-| `writes` — PG, *Writes and Write-Nots* | 561 | **the cheapest group-one gold.** Famous, heavily replied to, and small enough that pass B costs almost nothing |
-| `cargocult-spya-rz663q` — Feynman | 3,822 | **the control**, already measured. Carries every failure mode at once |
-| `claudes-constitution-spya-cr8bzk` | 3,295 | recent and much discussed; also the article whose run failed to write (§ below) |
-| `revistes-ub-30977` — *Forms of Memory in Post-colonial Australia* | 3,106 | **the honesty case.** Real, obscure, argumentative: pass B has claims to search, pass A must come back empty |
-| Carr, *Is Google Making Us Stupid?* (2008) | ~4,000 | **needs an ingest.** The canonical settled reception — Shirky's and Cascio's replies are named in named venues and have not moved in fifteen years |
+| slug | words | role | why |
+|---|---|---|---|
+| Carr, *Is Google Making Us Stupid?* (2008) — **needs an ingest** | ~4,000 | **the recall test** | the only one with a decades-stable ecosystem of named argumentative replies. Three verified (Batson 2009, the 40-contributor Edge.org roundtable, Gizmodo 2010); Shirky, Cascio and Sanger attested but their hosts are dead or blocked |
+| `writes` — PG, *Writes and Write-Nots* | 561 | **recall test 2, and the cheapest run in the corpus** | three verified direct rebuttals (Shipper, Sullivan, Isham), each naming the essay in its first paragraph. A small high-quality target set |
+| `cargocult-spya-rz663q` — Feynman | 3,822 | **a precision test, not a recall test** | the web is saturated with pages that quote and admire it; genuine argument with it is rare and academic. **Volume of citation is not volume of response**, and the debrief's "fifty years of citation and it kept nothing" was unfair to it on exactly that confusion |
+| `claudes-constitution-spya-cr8bzk` | 3,295 | **the decoy test** | see below |
+| `revistes-ub-30977` | 3,106 | **the honesty case** | searched properly; nothing found, cleanly |
 
-**Pinned by production's own fingerprint, not by two file hashes** (Sol's F41). Round one pinned
-`blocks.json` and `tree.json`; pass A searches the web for the article's **URL**, and every returned
-citation is compared against it, so metadata could change while the corpus gate stayed green and
-produce a different search under the same corpus identity. Each entry pins
-`inputFingerprint(blocks, tree, meta)` — [`src/debate.ts`](../../src/debate.ts), the blocks, the tree
-and the cited head. The loader recomputes it and refuses drift before generation or replay, and every
-capture records the same `sourceHash`.
+**The decoy, and it is the most valuable entry.** Established from the article's own first block:
+this is the *superseded* post, which says *"Update, Jan 21, 2026: We've published a new version of
+Claude's constitution."* Essentially all the commentary on the web — Lawfare, the New Yorker, Zvi,
+Oxford — answers the **January 2026 document at a different URL**, which is longer and substantively
+different. And `namesArticle`'s URL branch is an **accelerator, not a gate**: absent a URL match it
+falls through to the title, and *"Claude's Constitution"* is 21 characters against
+`MIN_TITLE_EVIDENCE_CHARS = 20`. So a 2026 commentary is kept as a response to a document it has never
+discussed, with every counter clean.
 
-**Two slugs are poison and are named so nobody reaches for them.** `scaling-hypothesis` and every
-`evalcost-*` carry `https://cost-eval.invalid/…` as their URL, so pass A would search the web for a
-domain that does not exist. Several others (`openai-huggingface`, the ball-lightning copies) have no
-URL at all, which changes what pass A can even ask.
+Whether that is *fixable* is a real question — an article and its successor sharing a title is
+genuinely ambiguous, and demanding a URL match would empty group one much further. It is not this
+plan's job to answer it. It is this plan's job to stop it being **unknown**.
+
+**Pinned by production's own fingerprint** (F41): each entry pins
+`inputFingerprint(blocks, tree, meta)` — blocks, tree and the cited head — because pass A searches for
+the article's URL and every citation is compared against it, so metadata could drift while a
+two-file-hash gate stayed green. The loader recomputes and refuses drift; every journal record carries
+the same `sourceHash`.
+
+**Two slugs are poison**: `scaling-hypothesis` and every `evalcost-*` carry
+`https://cost-eval.invalid/…`, so pass A would search for a domain that does not exist.
 
 **One gap, worth filling rather than skipping:** an article whose author published a later correction
-on a separate page — the row type § 4 of the parent plan calls the most valuable the mode can
-produce. No confident candidate yet.
+on a separate page — the row type the parent plan calls the most valuable the mode can produce.
 
-## The prompt arm
+## The arms, and the rule for choosing between them, declared before generation
 
-**Keep valence's product meaning and name its target in the question**, per Sol's F35(b) — group-specific,
-because group one has no quoted claim to point at:
+| arm | what it is |
+|---|---|
+| `incumbent` | production's prompts, unchanged |
+| `incumbent-repeat` | the variance control. **Never a candidate for landing** |
+| `targeted` | valence's target named per group, plus passage-scoped `relation` |
 
-- group one — *"Overall, is the quoted passage supportive of this article, critical of it, neither,
-  or impossible to classify?"*
-- group two — *"Overall, is the quoted passage supportive of the quoted claim, critical of it,
-  neither, or impossible to classify?"*
+Group one — *"Overall, is the quoted passage supportive of this article, critical of it, neither, or
+impossible to classify?"* Group two — the same with *"of the quoted claim"*. Group-specific because
+group one has no quoted claim to point at. Mapped to `positive`/`negative`/`neutral`/`unknown`, with
+P7 covering the mapping.
 
-Mapped to `positive` / `negative` / `neutral` / `unknown`, with P7 covering the mapping.
+**The selection rule, per F56, recorded now and not revised after seeing the tables:** `targeted`
+replaces `incumbent` **only if `targeted` passes every gate and `incumbent` fails at least one**. If
+both pass, keep the incumbent. If `targeted` fails, production is unchanged.
 
-**Fable's version is recorded and not taken.** It proposed reframing the field as agreement —
-*agrees / disagrees / mixed / cannot tell*. Refused because the chips a reader sees say **Supportive**
-and **Critical**: putting agreement into a field drawn as support changes its meaning without
-changing its name or its UI. If agreement is what we actually want, the field and the chips get
-renamed together, which is a product change and not this job's.
+**Fable's version is recorded and not taken.** It proposed reframing the field as agreement — *agrees
+/ disagrees / mixed / cannot tell*. Refused because the chips a reader sees say **Supportive** and
+**Critical**: putting agreement behind them changes a field's meaning without changing its name or
+its UI. If agreement is what we want, field and chips are renamed together, which is Greg's call.
 
-The same pass makes `relation` a property of the quoted passage rather than of the page, so the two
-fields at least share a subject.
+## The anchors are a precondition, not evidence
+
+**Sol's F51, and it is the finding that would have quietly invalidated the result.** The seven Cargo
+Cult rows motivated the targeted wording — so counting them as evidence that the wording generalises
+is training on the test set.
+
+- Anchors live in a **separate pinned manifest** with exact ids, input hashes and expected judgments.
+  The loader asserts its exact cardinality and every expected anchor must come back exactly once.
+- **Anchors are excluded from every arm metric, denominator and winner decision.**
+- The ≥20 stopping denominator is **non-anchor packets that were used neither to devise the targeted
+  arm nor to label the anchors** — so no Cargo Cult packet counts toward it, and the manifest is
+  built from the other four articles' captures. If it comes up short, the honest answer is
+  `not measured` and a sixth article, never a relaxed denominator.
+- The gate itself stays strict — **every anchor classified correctly** (F39: six of seven permits a
+  miss on one of only three known wrong-target cases, a 33% false-negative rate on the defect the
+  judge exists to find). The report prints the anchor confusion matrix, not a fraction. It is a
+  sanity gate and not evidence about the judge's population error.
 
 ## The write failure, folded in here rather than left open
 
-The second live run generated `1 about this piece, 5 about what it claims` and then errored on the
-write, losing $0.1948. Job `spya-ttcxz7`, `requeues: 1`.
-
-**The "another worktree claimed it" story is probably wrong**, and the evidence is worth recording:
-
-- The step's `detail` string exists only in this branch's `src/pipeline.ts`, so the claiming process
-  had recent code.
-- The step finished the same second as its last `ai_calls` row, so both passes completed and the
-  failure is in the write.
-- The first attempt was an OOM-killed background process. An OOM kill does not unwind, so the requeue
-  came from a **lapsed lease**, not from `pauseForDeadline` — and it is `pauseForDeadline` whose
-  docblock promises *"the job goes back to queued on its own row with its draft intact"*.
+Job `spya-ttcxz7` generated `1 about this piece, 5 about what it claims` and errored on the write,
+losing $0.1948. **The "another worktree claimed it" story is probably wrong:** the step's `detail`
+string exists only in this branch's `src/pipeline.ts`, so the claiming process had recent code; the
+step finished the same second as its last `ai_calls` row, so both passes completed; and the first
+attempt was an OOM-killed process, which does not unwind — so the requeue came from a **lapsed
+lease**, not from `pauseForDeadline`, whose docblock is the one promising *"the job goes back to
+queued on its own row with its draft intact"*.
 
 **Refined hypothesis: a lease-lapse requeue can leave a job unable to write its artefact.** If true
-that is a product bug costing a reader a whole purchase, it is not debate-specific, and it gets a
-postmortem. Repro: enqueue, kill the driver mid-step, let the lease lapse, watch the second attempt.
+that costs a reader a whole purchase, it is not debate-specific, and it gets a postmortem. Repro:
+enqueue, kill the driver mid-step, let the lease lapse, watch the second attempt.
 
 ## Stages
 
-Each ends with the suite green and the tree safe to commit.
+Each ends with the suite green and the tree safe to commit. **Nothing lands in production before
+Stage E.**
 
-### Stage A — capture, and the two-curl verdict
+### Stage A — the journal, the runner, and the two-curl verdict
 
-- The capture record above, taken at the provider-response boundary, including failed passes.
-- `evals/debate/` with a runner that calls `generateDebate` directly — **never the queue**, so no
+- The two-event capture journal above.
+- `evals/debate/` with a runner calling `generateDebate` directly — **never the queue**, so no
   artefact is clobbered and no product-spend row is written — under `withLedger("eval", …)`.
-- **Cost identity per run** (Sol's F43). `generateDebate` returns searches and elapsed, not money,
-  and `withLedger` prints an aggregate it does not return. So the runner derives each run's cost from
-  the spend collector's `SpendRecord`s through `totalSpend`, records the contributing call ids and
-  the `unpriced` count, and **asserts a completed run contains exactly its two search calls**. Never
-  dollars from token `Usage`. A run with any unpriced call reports `not measured`, with the count.
-- One fresh pass A on Cargo Cult with capture on, then fetch each reported URL and look for the
-  model's quotations in the full page.
+- **Cost identity per run** (F43): cost from the spend collector's `SpendRecord`s via `totalSpend`,
+  contributing call ids and the `unpriced` count recorded, an assertion that a completed run holds
+  **exactly its two search calls**. Never dollars from token `Usage`; any unpriced call makes the
+  figure `not measured`.
+- One fresh pass A on Cargo Cult with the journal on, then the fetch → extract → `findQuote` path
+  over each reported URL.
 - The write-failure repro.
 
-**Done looks like:** a numbered answer to *"would full-page fetching rescue rows?"*, written into the
-spike-results doc, and one captured run on disk that Layer 1 can replay. ~$0.15.
+**Done:** *"recovered X of Y"*, written into the spike-results doc, and one journal on disk Layer 1
+can replay. ~$0.15.
 
-### Stage B — the free instrument
+### Stage B — the free instrument, and one shipped bug
 
-- `evals/debate/score.ts`: loss-reason table, the cross-field screen, kept-per-returned, gold-URL
-  hits. Deterministic, no IO, **unit-tested in `tests/debate-eval-score.test.ts`**.
-- Layer 1 replay over captured records, starting from the raw annotations.
-- Layer 0's five packets, as tests, each watched red before its fix.
+- `evals/debate/score.ts`: loss-reason table, the contingency table and opposite-pair mark,
+  kept-per-returned, gold-URL hits. No IO, **unit-tested in `tests/debate-eval-score.test.ts`**.
+- Layer 1 replay from raw annotations.
+- Layer 0's six packets as tests, each watched red first.
+- **The `namesArticle` typography fix**, red test first.
 - The corpus manifest, pinned by `inputFingerprint`.
 
-**Done looks like:** free, repeatable numbers over Stage A's capture. No money.
+**Done:** free repeatable numbers over Stage A's journal, and one real bug closed. No money.
 
-### Stage C — the arms, generated and scored, landing nothing
+### Stage C — the capture sweep, and the frozen comparison
 
-- Arms as data: `incumbent`, `incumbent-repeat` (the floor), `targeted` (the group-specific question
-  above, plus the passage-scoped `relation`).
-- The frozen packet manifest, built from Stage A's capture plus the stored Cargo Cult rows.
-- Layer 2: every arm returns exactly one reading for every packet; coverage printed first.
-- **Every arm is scored on its raw output.** No production repair is applied before scoring, and
-  there is no coercion to apply — F35 removed it.
+- `incumbent` live once over the five corpus articles, journalled. This buys two things at once: the
+  **non-anchor packet manifest** (≥20 packets from the four non-Cargo-Cult articles) and the
+  incumbent's live baseline.
+- Layer 2: every arm answers every packet; coverage checked as an exact permutation before any
+  quality figure; every arm scored on **raw** output, with no production repair applied.
 
-**Done looks like:** a table of arms against the screen and the free measures, and **no prompt
-landed**. Sol's F37: the metric that can identify the winner does not exist until Stage D.
+**Done:** an arm table, and **nothing landed**. Sol's closing note: the frozen comparison is necessary
+evidence, not a disposable stage. ~$1.50.
 
-### Stage D — the judge, and only then the landing
+### Stage D — the judge, and a provisional arm
 
-- GPT Sol through `codexJudge`, blinded, empty sandbox — the house pattern.
-- **The judge never sees the arm's `relation`, `valence` or `applies`** (Sol's F38). Ordering
-  questions inside one request is not blinding: the model reads the whole prompt before answering,
-  and the summaries eval records that limitation in as many words. From the target, the quotation and
-  the extract it independently returns engagement, the passage's stance toward the target, and —
-  where mis-targeted — **the subject it appears to describe instead**. Deterministic code compares
-  that with the arm's output afterwards.
-- Per packet the judge sees: article title and byline; the row's target; the source's title and host;
-  the `sourceQuote`; **and the full stored extract**. Without the extract it is guessing at the page's
-  subject with exactly the information the model had, and the Geller row is invisible.
-- **The anchor gate.** The seven Cargo Cult rows hand-labelled (three wrong-target, four right) plus
-  the synthetic packets. **Every anchor must be classified correctly** — Sol's F39: six of seven
-  permits a miss on one of only three known wrong-target cases, a 33% false-negative rate on the
-  defect the judge exists to find, and the summaries precedent is `MAX_ANCHOR_INVERSIONS = 0`. The
-  report prints the anchor confusion matrix including wrong-target recall, not a fraction. It is a
-  sanity gate, not evidence that the judge's population error is below anything.
-- Then, and only then, the winning prompt lands and `PROMPT_VERSION` bumps. **If no arm passes,
-  production is unchanged.**
+- GPT Sol through `codexJudge`, blinded, empty sandbox.
+- **The judge never sees the arm's `relation`, `valence` or `applies`** (F38): ordering questions
+  inside one request is not blinding, because the model reads the whole prompt before answering, and
+  the summaries eval records that limitation in as many words.
+- Per packet it sees article title and byline, the row's target, the source's title and host, the
+  `sourceQuote`, **and the full stored extract** — without which it is guessing at the page's subject
+  with exactly the information the model had, and the Geller row is invisible.
+- The anchor precondition above. Engagement judged **once**, as a corpus audit.
+- **Selects a provisional arm and lands nothing.**
 
-### Stage E — the live sweep, and the docs
+### Stage E — the live confirmation, and only then the landing
 
-Five articles × two repeats. `returnedSources`, kept, losses, gold hits, searches, cost, elapsed, on
-the same cost identity as Stage A. Re-measure `STEP_BUDGET_MS` (120 s is a guess; a real run took
-146.7 s). Write `evals/results/debate/` and the section in `evals/README.md`; update the parent plan
-and [the spike results](260905f-debate-mode-stage-0-spike-results.md). ~$3.
+**Sol's F49.** Round one landed in Stage D and swept in Stage E, so the promised live confirmation
+came *after* the landing — and stopping rule 2 needs a judgment on the obscure article, which a
+sweep that does no judging cannot produce.
 
-### Stage F — full-page verification fetch, **only if Stage A says yes**
+- The **provisional arm only**, through the live production path, over the five articles, two
+  repeats.
+- **Every kept live group-two row is judged**, which is the only place an arm's effect on engagement
+  is observable.
+- The complete stopping rule applied, obscure-article clause included.
+- **Only then** does the prompt land and `PROMPT_VERSION` bump — and if it lands, the same commit
+  carries F54's contract changes. If live judging is incomplete, a denominator insufficient, or the
+  obscure case `not exercised`, **production is unchanged**.
+- Re-measure `STEP_BUDGET_MS` (120 s is a guess; a real run took 146.7 s). Write
+  `evals/results/debate/` and the section in `evals/README.md`; update the parent plan and the spike
+  results. ~$2.
 
-Our own fetch of the URLs the model reported rows for, fed to `findQuote` and **never to a model**.
-The parent plan's "second injection surface" objection applies to a fetch a model reads and not to
-one only a string matcher reads.
+### Stage F — full-page verification fallback, **only if Stage A recovered something**
 
-**But injection was not the only risk** (Sol's F44, the one P0). The URL is still untrusted network
-input: a public result can redirect to loopback or private space, return an unbounded body, or hold
-the connection open. And "≤12 URLs" was wrong — the caps are 12 **per pass**, so up to 24 per run.
+**Verification order matters**: the provider extract first, and only a quotation that misses there
+invokes the fallback. **A fetch or extraction failure never removes a row already verified from the
+extract** (F53).
 
-So: through [`fetchDocument`](../../src/fetch.ts), never bare `fetch`, keeping its HTTP(S)-only rule,
-its private-address and DNS-pinning checks on every redirect, its redirect cap, byte cap, type sniff
-and deadline — plus an explicit whole-run concurrency, byte and elapsed budget. Fetched text is a
-verification haystack and enters no prompt. The capture records the final URL, the content hash, the
-fetch outcome and the exact bounded haystack, so Layer 1 stays network-free.
+Through [`fetchDocument`](../../src/fetch.ts) → bounded HTML-to-visible-text → `findQuote`, never
+bare `fetch` and never raw markup as the haystack, keeping its HTTP(S)-only rule, private-address and
+DNS-pinning checks on every redirect, redirect cap, byte cap, type sniff and deadline, plus an
+explicit whole-run concurrency, byte and elapsed budget. **12 per pass and 24 per run** — round one
+said 12 per run, and the caps are per pass (F44). Fetched text is a haystack and enters no prompt.
+The journal records final URL, content hash, outcome and the exact bounded haystack, so Layer 1 stays
+network-free.
 
 ## Stopping rule, declared before the runs
 
-1. **Wrong-target valence ≤ 1 in 20**, over **at least 20 structurally valid judged packets**. Every
-   rate prints numerator over denominator; an undersized denominator is `not measured` and cannot
-   satisfy a gate.
-2. **Group-two engagement ≥ 80%** over its printed denominator. The obscure article requires **at
-   least one kept and judged row and zero `no` judgments**; if it returns no rows the report says
-   **`not exercised`**, never *"zero no"* (Sol's F42 — empty output is valid here, so the round-one
-   wording could have passed over nothing).
+1. **Valence disagreement with the blinded judge ≤ 1/20**, over at least 20 **distinct, non-anchor**
+   packet ids. Every rate prints numerator over denominator; an undersized denominator is
+   `not measured` and cannot satisfy a gate.
+2. **Group-two engagement ≥ 80%** over its printed denominator, on the **live** rows. The obscure
+   article requires at least one kept and judged row and zero `no` judgments; if it returns no rows
+   the report says **`not exercised`**, never *"zero no"* (F42 — empty output is valid here, so the
+   round-one wording could have passed over nothing).
 3. Carr and `writes` keep ≥ 1 direct row in both repeats — and if that is unreachable even after
    fetching, **that is a product answer, not a tuning target**.
 4. Median run ≤ $0.40, worst ≤ $0.60 — a disclosure figure, not a gate, and `not measured` if any
    contributing call is unpriced.
 5. Greg reads two rendered panels and is happy.
 
-*Good enough to ship as experimental* is 1, 2 and 5. Do not chase `applies` wording or a sixth
-article.
+*Good enough to ship as experimental* is 1, 2 and 5.
 
 ## The one product question, held for Greg
 
@@ -397,46 +448,66 @@ article.
 >
 > — Fable, 2026-09-06
 
-Held rather than built, and brought back **with the live sweep's numbers under it**.
+Held, and brought back **with the live sweep's numbers under it**. The corpus research has already
+softened one half of its premise: Cargo Cult has famous *citations* rather than famous *replies*, so
+an empty group one there is more defensible than it looked.
 
 ## Deliberately not in this job
 
-- **Pairwise arm-vs-arm comparison on live runs.** n=2 at 2.4× variance supports a large-effect call
-  and nothing finer.
-- **Scoring `applies`.** See the table.
-- **Coercing an inconsistent valence.** Proposed in round one and removed by F35: the premise was
-  that the pair was impossible, and it is not.
-- **Renaming `valence` to `agreement`.** A product change, and Greg's.
-- **An admin page that runs evals.** None exists for any of the eleven evals in the tree.
-- **Stage 4 of the parent plan** — the shared link. Still unbuilt, still worth building for a mode
-  that produces something worth sharing, and that proposition is what this job settles.
+- **Pairwise arm-vs-arm comparison on live runs** — n=2 at 2.4× variance supports a large-effect
+  call and nothing finer.
+- **Scoring `applies`.**
+- **Coercing an inconsistent valence** — proposed in round one, removed by F35: the premise was that
+  the pair was impossible, and it is not.
+- **Renaming `valence` to `agreement`** — a product change, and Greg's.
+- **Deciding what to do about the decoy** — measured here, decided elsewhere.
+- **An admin page that runs evals** — none exists for any of the eleven evals in the tree.
+- **Stage 4 of the parent plan** — the shared link, still unbuilt, and worth building for a mode that
+  produces something worth sharing, which is the proposition this job settles.
 
 ## The simpler option passed over
 
 **Just fix the valence prompt and re-run twice.** Genuinely less work, and it would probably improve
 the bug. Refused because the same two runs would tell us nothing about *engagement* — whether a
 source passage really answers the claim it is filed under — which is the one relationship no code in
-this mode can check, and the one a reader's trust actually rests on. A mode that files a plausible
-stranger under a claim it does not address fails quietly, forever, and no amount of re-running spots
-it.
+this mode can check, and the one a reader's trust rests on. A mode that files a plausible stranger
+under a claim it does not address fails quietly, forever, and no amount of re-running spots it.
 
 ## Review ledger — GPT Sol, round 1, 2026-09-06
 
-[The review](260906b-plan-review-sol.md). Verdict: **refuse as written**, on F35, F37, F38, F40, F41
-and F42. All thirteen were checked against the tree before acting; all thirteen accepted.
+[The review](260906b-plan-review-sol.md). **Refused**; all thirteen accepted.
 
 | ID | Finding | Disposition |
 |---|---|---|
-| F34 | P1 — coercion could manufacture the stopping-rule result | **moot, and the rule kept.** Coercion removed by F35; "score raw output, never a repaired projection" kept as a standing rule |
-| F35 | P1 — the "impossible" pairs are not impossible under the shipped contract | **accepted, and it is the reversal.** The metric is a screen, not a gate; coercion cut; Fable's agreement rewording refused for changing a field's meaning under unchanged chips |
-| F36 | P1 — Layer 2 could compare different rows and reward omission | **accepted.** Frozen row packets; every arm answers every packet; coverage printed before any quality figure |
-| F37 | P1 — landing a winner before the metric that identifies it, and a contradiction at the `qualifies` exclusion | **accepted.** Only the screen is stratified by relation; Stage C lands nothing; Stage D judges and decides |
-| F38 | P1 — ordering questions inside one request is not blinding | **accepted.** The judge never sees the arm's labels; deterministic comparison afterwards |
-| F39 | P1 — six of seven cannot calibrate a 1-in-20 claim | **accepted.** Every anchor must be right; confusion matrix printed |
-| F40 | P1 — capture sat downstream of the failures it claimed to preserve | **accepted.** Capture moved to the provider-response boundary, raw annotations, failed passes included |
-| F41 | P1 — the corpus pin omitted a production input | **accepted.** Pinned on `inputFingerprint(blocks, tree, meta)` |
-| F42 | P1 — two stopping clauses could pass over nothing | **accepted.** Denominators printed; `not measured` and `not exercised` are outcomes |
-| F43 | P1 — no specified source for per-run cost | **accepted.** Cost from `SpendRecord`s via `totalSpend`, call ids recorded, two-call assertion, never from `Usage` |
-| F44 | **P0** — Stage F removed injection but specified no safe network path; and the cap is 12 per pass, not per run | **accepted.** `fetchDocument` with every check kept, plus a whole-run budget; 24 per run |
-| F45 | P2 — one "no-model" packet needed semantic judgment | **accepted.** Moved to the judged corpus; Layer 0 is deterministic only |
-| F46 | P3 — the candidate inventory was incomplete | **accepted.** `.tmp-debate-fixture.mts` named in the round-two prompt |
+| F34 | coercion could manufacture the stopping-rule result | **moot** (coercion cut by F35); the rule *score raw output, never a repaired projection* kept |
+| F35 | the "impossible" pairs are not impossible under the shipped contract | **accepted — the reversal.** A mark, not a gate; coercion cut; Fable's rewording refused |
+| F36 | Layer 2 could compare different rows and reward omission | **accepted.** Frozen packets; every arm answers every packet |
+| F37 | landing a winner before the metric that identifies it; contradiction at the `qualifies` exclusion | **accepted.** No metric stratified by relation |
+| F38 | ordering questions inside one request is not blinding | **accepted.** The judge never sees the arm's labels |
+| F39 | six of seven cannot calibrate a 1-in-20 claim | **accepted.** Every anchor must be right; confusion matrix printed |
+| F40 | capture sat downstream of the failures it claimed to preserve | **accepted**, then superseded by F52 |
+| F41 | the corpus pin omitted a production input | **accepted.** Pinned on `inputFingerprint` |
+| F42 | two stopping clauses could pass over nothing | **accepted.** `not measured` and `not exercised` are outcomes |
+| F43 | no specified source for per-run cost | **accepted.** `SpendRecord`s via `totalSpend`; two-call assertion |
+| F44 | **P0** — Stage F specified no safe network path; cap is per pass | **accepted.** `fetchDocument` with every check; 24 per run |
+| F45 | one "no-model" packet needed semantic judgment | **accepted.** Layer 0 is deterministic only |
+| F46 | the candidate inventory was incomplete | **accepted** |
+
+## Review ledger — GPT Sol, round 2, 2026-09-06
+
+[The review](260906b-plan-review-sol-2.md). **Refused again**; all eleven accepted, none overruled.
+Discovery closes here, per [engineering-manager.md](../reusable/engineering-manager.md).
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F47 | **the judge cannot measure "wrong-target valence"** | **accepted — the decisive one.** The metric is *valence disagreement with the blinded judge*; the apparent-other-subject answer is qualitative and never a rate |
+| F48 | Layer 2 engagement cannot distinguish the arms | **accepted.** Engagement judged once as a corpus audit; an arm's effect on it is live-only |
+| F49 | the plan still landed before its promised live confirmation | **accepted.** Stage D selects provisionally and lands nothing; Stage E confirms live, judges live rows, then lands |
+| F50 | "structurally valid" could recreate omission bias; 21 cells could be called 20 packets | **accepted.** Exact-permutation coverage; denominators are distinct non-anchor ids; repeats never pooled |
+| F51 | the anchor rows were also the evaluation rows | **accepted.** Separate pinned manifest, cardinality asserted, excluded from every arm metric; no Cargo Cult packet counts toward the ≥20 |
+| F52 | the capture still promised records it could not produce | **accepted.** Two-event append-only journal; unmatched start means the process died |
+| F53 | `fetchDocument` does not itself produce the verification haystack | **accepted.** Extract first, fallback second; HTML-to-visible-text; PDFs `unsupported`; *"recovered X of Y"* |
+| F54 | passage-scoped `relation` changes an authoritative contract | **accepted.** Exact instruction text fixed; the landing commit carries the docblock, parent § 4 and panel prose |
+| F55 | the mark could still make abstention look like improvement | **accepted.** Printed beside the full contingency table; never orders, colours or selects |
+| F56 | "winning prompt" had no declared selection rule | **accepted.** Recorded before generation: `targeted` lands only if it passes every gate and `incumbent` fails one |
+| F57 | the candidate had already landed | **accepted.** `43e9fc41` from base `538e5191`, inspected through merge `bafebbc3` |
