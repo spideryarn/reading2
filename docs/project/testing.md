@@ -32,6 +32,52 @@ them out of the stages it checks. They are not unchecked, though: they have a pr
 [`tests/tsconfig.json`](../../tests/tsconfig.json), because vitest strips their types without
 looking at them — see [typechecking.md](typechecking.md).
 
+## A run is not the only thing on the machine
+
+**One suite gets half the cores, not all of them.** Vitest's default is `availableParallelism() - 1`,
+decided by each run in ignorance of every other — fine on a machine running one suite, and not what
+either of ours is. On 2026-09-06 eight concurrent runs put 76 fork workers on the 16-core box and
+made it unusable for everybody, including the agents whose tests they were. The numbers, the cost of
+the cap and the options passed over are in
+[260906h](../plans/260906h-cap-vitest-workers-so-one-box-can-hold-ten-suites.md).
+
+It matters here rather than only in `top`, because this file already argues one of its consequences:
+the 30s `testTimeout` below is set "because this box is never idle", after a `npm run check` came
+back with seven failures of which six were contention and one was real — and the six hid the one for
+an extra pass. **Contention does not only make the suite slow; it makes the suite lie.**
+
+Three layers, in [`vitest.config.ts`](../../vitest.config.ts) (`resolveParallelWorkers`), which is
+the one place every invocation passes through — `npm test`, `npm run check`, and the bare
+`npx vitest run tests/foo.test.ts` an agent types:
+
+| | says | set by |
+| --- | --- | --- |
+| `VITEST_MAX_WORKERS=8 npm test` | this run is alone, go faster | you, per run |
+| `~/.config/spideryarn/vitest-max-workers` | this machine is crowded | `infra/hetzner/provision.sh` writes `3` |
+| half the cores, at least 2 | everywhere else | the default |
+
+A *file* for the middle one, because the obvious environment variable never arrives: nothing in the
+`env` block of `~/.claude/settings.json` reaches a Claude Bash tool call — measured, including the
+`CLAUDE_CODE_SCROLL_SPEED` that has been in it since the box was built. `vitest --maxWorkers=N` still
+works too, which is why the cap sits at the config root and not on the projects.
+
+### Why the config takes that variable away from vitest
+
+Vitest reads `VITEST_MAX_WORKERS` itself — in `resolveConfig`, **after** the line that turns
+`fileParallelism: false` into `maxWorkers: 1`, and for every project. Setting it therefore
+**de-serialises the private-postgres lane**, whose files share one database and one job-queue
+singleton and which is serial on purpose. A flag meaning "use less of this machine" silently changed
+what the suite tests, and bought back the nondeterministic red that
+[260903e](../plans/260903e-a-private-test-database-so-the-suite-stops-racing-dev-servers.md) exists
+to remove. It had already been typed in good faith: 260906f records
+`VITEST_MAX_WORKERS=4 npm run check` as a "reduced-contention full gate".
+
+So `resolveParallelWorkers()` reads the variable and `delete`s it, which is the only lever a config
+file has — everything vitest does with it happens later.
+[`tests/vitest-worker-caps.test.ts`](../../tests/vitest-worker-caps.test.ts) pins **vitest's**
+behaviour as well as ours, so a release that fixes the ordering upstream turns red here instead of
+leaving behind a defence nobody dares delete.
+
 ## Three lanes, and which one your test is in
 
 `npm test` runs **three disjoint vitest projects**. You do not choose; the lane is a property of the
