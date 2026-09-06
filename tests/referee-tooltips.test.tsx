@@ -339,7 +339,7 @@ function expectEarnsItsHover(card: Card, control: string): void {
 describe("the four sub-mode chips say what their sub-mode is", () => {
   function paint(view: RefereeView = "criteria"): void {
     act(() => {
-      root.render(createElement(RefereeViews, { view, onView: () => {} }));
+      root.render(createElement(RefereeViews, { slug: "a-piece", view, onView: () => {} }));
     });
   }
 

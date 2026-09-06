@@ -166,7 +166,17 @@ prompt.
 ## The artefact, and the batch every mark binds to
 
 `quiz` is a pipeline step like `ideas` or `timeline` — off the default list, run on demand by a
-button in the band, cached per article and stamped. Its fingerprint is
+button in the band — and, since 2026-09-06, by pressing the **Quiz** chip itself,
+which is Greg's rule that opening a mode is the reader asking for it
+([260906a](../plans/260906a-opening-a-mode-starts-it-generating.md);
+[`activation.ts`](../../src/web/activation.ts)). The chip arms whether or not the
+sub-mode changes, so pressing Quiz while already in Quiz is how a reader asks
+again after a read that failed. `useQuiz` grew a second verb for it: **`ensure`**
+is unforced and is what both the automatic run and the empty state's button call,
+**`write`** is forced and is what *Write them again* calls. They must not be
+confused — `work_key` includes `force`, so the two are different requests and a
+reader who pressed the button beside an automatic run would pay for both.
+It is cached per article and stamped. Its fingerprint is
 `articleWithIdsFingerprint` (blocks, tree, and a head including the URL), shared with `ideas` and
 `sketch`. [architecture.md § Storage](architecture.md#storage) has the family.
 

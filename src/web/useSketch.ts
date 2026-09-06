@@ -198,9 +198,12 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     [queue],
   );
 
-  /* **Armed by the Sketch chip, not by opening Diagram.** Opening the mode
-     costs nothing and lands on a picture drawn from the tree; picking this
-     picture is the gesture that spends. src/web/DiagramPanel.tsx. */
+  /* **Armed by the Sketch chip, and since 2026-09-06 by the bar's Diagram
+     button too** — but only when `?diagram=` says `sketch`, which is its
+     default and therefore the ordinary case. The bar arms the picture the press
+     will land on rather than a fixed one, so a press that opens Illustrated
+     cannot leave a sketch token behind for a later Back step to spend:
+     src/web/activation.ts § `armActivationForDiagram`. */
   const auto = useAutoRun(slug, "sketch", status, ensure, reload);
 
   return {

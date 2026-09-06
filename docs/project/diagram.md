@@ -161,9 +161,10 @@ no picker at all, and `/api/similar/:slug` and `/api/projection/:slug` sit behin
 
 **What this does and does not change about spend.** It changes discoverability,
 not authority. Every article owner could already start unlimited paid Sketch
-reruns and still can; a shared visitor is still Force-only; entering the mode or
-following a link still buys nothing, because only a chip *gesture* arms an
-automatic run ([`activation.ts`](../../src/web/activation.ts)). There is no
+reruns and still can; a shared visitor is still Force-only; *following a link*
+still buys nothing, because only a **gesture** arms an automatic run — a chip
+inside the mode, or, since 2026-09-06, the bar's own Diagram button
+([`activation.ts`](../../src/web/activation.ts), and the section below). There is no
 per-owner or cumulative spend cap in this repo, which was true before this change
 and is why the empty state has to stay cheap — see the next section.
 
@@ -174,14 +175,37 @@ picture everybody can see, and a default most readers cannot see would be an odd
 thing to keep. It is `sketch` whether the switch is on or off — one default
 rather than two, so a pasted link and a fresh arrival land on the same picture.
 
-**Arriving costs nothing**, and that is the whole safety of the move. A Sketch
-nobody has drawn is an empty state that says what it costs and what it takes and
-draws nothing until asked ([`SketchView.tsx`](../../src/web/SketchView.tsx));
-`diagram` is deliberately absent from `MODE_TARGET` in
-[`activation.ts`](../../src/web/activation.ts), so pressing the mode button arms
-no run. `tests/public-network-trace.test.tsx` asserts the GET settles and no job
-is posted, for an owner arriving at `?mode=diagram` and at
+**Arriving still costs nothing. Pressing the button no longer does**, and the two
+halves of that sentence separated on 2026-09-06.
+
+*Arriving* — a pasted link, a bookmark, a Back or Forward step, a link in from
+the metadata page — lands on an empty state that says what it costs and what it
+takes and draws nothing ([`SketchView.tsx`](../../src/web/SketchView.tsx)).
+`tests/public-network-trace.test.tsx` asserts the GET settles and no job is
+posted, for an owner arriving at `?mode=diagram` and at
 `?mode=diagram&diagram=sketch`.
+
+*Pressing Diagram in the bar* now draws the picture it is about to open, which
+makes it the dearest button in the bar that is in front of every reader: about
+$0.20 and two minutes. Greg's rule
+([260906a](../plans/260906a-opening-a-mode-starts-it-generating.md)):
+
+> By opening the mode, the user is implicitly indicating that they want what's
+> already generated, or to generate it if needed.
+
+**The picture it arms is the one `?diagram=` names**, not a fixed `sketch`, and
+that is not a nicety —
+[`activation.ts`](../../src/web/activation.ts) § `armActivationForDiagram` has the
+five-step sequence a fixed target would have paid for, in which a press that
+opens Illustrated leaves a sketch token nobody claims and a later **Back** step
+spends it. `tests/modes-that-start-themselves.test.tsx` § *spends nothing on a
+Back step after opening a picture it did not arm* is the only thing in the suite
+that notices.
+
+The three geometries arm nothing, because they cost nothing. Illustrated is
+armed by a bar press only if it is the picture the reader is already on; with no
+Sketch drawn, that press is retired unspent by `useIllustrated`'s own gate rather
+than enqueuing a job the server would refuse.
 
 Force held the default until then, on the opposite argument:
 

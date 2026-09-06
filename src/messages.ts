@@ -3814,6 +3814,39 @@ export const REFEREE_TEXT_ALREADY_SENT_SHORT =
 export const REFEREE_DECLARE_IT =
   "Venues that permit AI assistance nearly always require you to say that you used it.";
 
+/**
+ * **The third fact, and the only one in the future tense.**
+ *
+ * Everything else in this notice is about something that has already happened —
+ * the article's text reached a model provider when it was added. This is about
+ * something that has *not*, and that the referee is one press away from causing:
+ * Candidates is the only control in the mode that reaches a **search engine**,
+ * which is a different third party from the model provider, at a different time.
+ *
+ * **It is here, above the chips, rather than on the chip's tooltip**, and that
+ * placement is the whole point. Candidates used to sit behind a labelled button
+ * whose *visible words* named both parties before either was reached; on
+ * 2026-09-06 the chip itself started the run, which moved the disclosure on that
+ * button to after the fact. A `ControlTip` is not a replacement —
+ * docs/project/referee-mode.md § Four labels changed says it outright, *"a
+ * tooltip is not read by anybody in a hurry"*, which is what a referee is. So
+ * the sentence moved to the one place that is on screen before any chip has been
+ * pressed.
+ *
+ * **Never behind the collapse, and drawn above it.** The two sentences it sits
+ * over fold away into `REFEREE_TEXT_ALREADY_SENT_SHORT`; this one does not,
+ * because folding a warning about something that has not happened yet is
+ * dismissing it. It is *above* them rather than below because the box is a
+ * 40%-height scroller, and underneath them an expanded notice pushes this out of
+ * sight while the Candidates chip stays on screen.
+ *
+ * If Candidates ever goes back behind a button, this line goes with it.
+ * docs/plans/260906a-opening-a-mode-starts-it-generating.md § Stage 4.
+ */
+export const REFEREE_CANDIDATES_REACHES_SEARCH =
+  "Opening Candidates may send terms drawn from this paper to a search engine, which is a " +
+  "different third party from the model provider.";
+
 /* ------------------------------------------------------------- feedback -- */
 
 /**
