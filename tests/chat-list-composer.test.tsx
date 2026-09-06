@@ -204,11 +204,10 @@ describe("the composer under the conversation list", () => {
     expect(composer()).toBeNull();
   });
 
-  /* An empty list that really is empty. The + in the header and the empty
-     panel's own button are what that state is for. */
-  it("is absent over a list the fetch brought back empty", () => {
+  /* After closing an unused first thread, typing and Live must remain reachable. */
+  it("is available over a list the fetch brought back empty", () => {
     paint([], null, true);
-    expect(composer()).toBeNull();
+    expect(composer()).not.toBeNull();
   });
 
   /* The `?thread=` states are where the first version went wrong, and they are

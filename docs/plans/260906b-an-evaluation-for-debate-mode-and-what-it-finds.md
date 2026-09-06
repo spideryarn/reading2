@@ -522,19 +522,155 @@ network-free.
 
 *Good enough to ship as experimental* is 1, 2 and 5.
 
-## The one product question, held for Greg
+## The two product questions — answered by Greg, decided 2026-09-06
 
-> the reliable product is *what the web says about what this piece claims*, and direct responses are
-> a bonus that fires on famous pieces. But the bonus is not optional, because a reader trying the
-> mode for the first time will try it on something famous, and an empty "About this piece" on *Cargo
-> Cult Science* — a piece with a Wikipedia article named after it — reads as broken, not honest. So:
+Greg, after seeing the decoy measurement:
+
+> 1 Maybe there's a way to clarify the phrasing to be clearer what it does and why it didn't find
+> any? Or combine them somehow? Not sure. Maybe there's a better approach.
+>
+> 2 I think it's important that the commentary be about the article being read here. However, it's
+> not always obvious whether different urls are hosting the exact same version as possible. So
+> perhaps report some kind of score for "how sure we are that this is about this particular exact
+> version", with a tooltip for each showing the reasons for the score? And then the user can
+> threshold by that in the "Prioritised" sub-mode?
+>
+> — Greg, 2026-09-06
+
+### 2 — a level that *is* one of the facts, not a score over them
+
+**My reading was half wrong and Fable caught the wrong half.** I argued Greg's score escapes both of
+this plan's refusals because its inputs are facts we computed rather than model opinions. It escapes
+§ 3 — a fact about our own evidence is not a verdict handed to a reader mid-read. It does **not**
+escape [quotes.md](../project/quotes.md), and re-reading the sentence I had cited shows why:
+
+> Both raw numbers are on a prioritised row and the composite never is — that is our arithmetic
+> dressed as the model's judgment.
+
+The raw scores there are on screen and checkable too. **What was refused is the combination**, because
+the weights are ours and a `0.7` means nothing a reader can verify. `link = 0.5, byline = 0.2,
+quote = 0.3` fails that identically. *"Every input is checkable"* saves the inputs; it does not save
+the arithmetic.
+
+So what survives is narrower and better: **the level is the name of the strongest evidence found.** No
+weights, no sum — a lookup, not arithmetic.
+
+```ts
+identifies:
+  | { kind: "linked"; url: string }
+  | { kind: "quoted"; quote: string; blockId: BlockId }
+  | { kind: "named"; by: "title" | "title-and-byline"; witness: string }
+```
+
+A row may have several; the level is the best, and **the tooltip lists every one found** — which is
+the tooltip Greg asked for, and it is the evidence rather than a gloss on it. Artefacts written before
+the field read as `named` with the existing `articleReferenceQuote` as witness, so nobody pays for a
+re-run.
+
+**And it is not called confidence.** The signals establish *how a page identifies this piece*, not
+*which version its author read*; calling it confidence invites the percentage we just refused.
+
+#### The quoting signal, measured before it was chosen
+
+The one signal that separates the decoy per row: **does the page quote words that are actually in this
+article?** We hold the article; the extract is in the journal; `findQuote` already exists. No model
+judgment — we *find* the span, and the span goes in the tooltip.
+
+Fable's caveat was that 2026 phrases might turn up in the 2023 text, which would make the signal
+weaker than hoped. **Checked, at its proposed floor of 8-word windows over 40 characters:**
+
+| corpus | windows | result |
+|---|---|---|
+| Claude's Constitution (the decoy) | 2,308 | **0 hits on all eight third-party commentaries.** The only hit is anthropic.com's own other page |
+| `writes` (Paul Graham) | 349 | **5 of 7 sources quote it** — 1.4%, 2.6%, 4.9%, 22.3%, and two at 100% |
+
+So it does not leak, and it has real positive power on ordinary replies out of extracts as short as
+765 characters.
+
+**The two at 100% are the finding that was not in anybody's design.** `archive.ph` and
+`www.paulgraham.com` matched *every window* — they are copies of the essay, not responses to it. Raw
+hit count would rank a mirror above every genuine reply: maximal identification, minimal reason to
+show it. It is `selfSource` wearing a new hat, and `sameTarget` does not catch it because a `www.`
+host and an archive are different addresses.
+
+**So the measure carries a ceiling as well as a floor**, and the numbers give both: a page reproducing
+essentially all of the article is a copy and is refused, not ranked. The band that matters is the one
+real commentary lives in — a few per cent to a quarter.
+
+#### What is built, and what is cut
+
+| signal | decision |
+|---|---|
+| links the exact URL (`sameTarget`) | **keep, free** — already computed inside `namesArticle`; surface which branch fired |
+| quotes text that is in this article | **build** — shingles, model-free, floor 8 words / 40 chars, **ceiling for mirrors** |
+| title + byline vs title alone | **tooltip detail, not a level** — free, but Anthropic is the byline of both versions, so it does not discriminate here |
+| source date vs article date | **cut.** `SearchEvidence` carries no date; it would need Stage F plus meta parsing, and the decoy's commentary is *later* than both documents, so it never fires |
+| the article announcing a successor | **cut as a detector** — no reliable structure, and a heuristic banner is the shape [silent-success](../reusable/silent-success.md) warns about. Six rows all at the bottom level *is* the tell |
+| same host, different path | **cut** — anthropic.com hosts both versions; zero information |
+
+#### The bar, and what "Prioritised" turns out to mean
+
+One checkable fact is not a composite, so the `prioritised` refusal does not apply — **but this is not
+Prioritised either.** It is the same threshold bar Glossary, Quotes and Search already share
+([`src/web/threshold.ts`](../../src/web/threshold.ts)), on one fact, filtering direct rows only; claim
+rows carry no level and are never under it. Three stops labelled with the words rather than digits,
+per Quotes' *"the stops are the data, not a grid"*. New `?name` in the URL state.
+
+**Default: hide `named`-only rows.** Greg's own reason — *"important that the commentary be about the
+article being read here"* — and on the decoy the alternative is six wrong rows with a small chip on
+each, which a first-time reader takes for reception. Hidden rows say so through the existing
+`hiddenNote`, unchanged. **The default is re-measured on the corpus**: if `writes` or Carr lose a
+verified reply at it, the default moves, and that is a product fact worth knowing.
+
+### 1 — combine them, because the empty section was the symptom
+
+**Fable's answer, adopted:** the two-group split exists because two metered passes are what let us say
+*"no reply found"* truthfully. That is **our epistemics, not the reader's question**, and on Cargo
+Cult it currently produces two headings, two blurbs, an empty-state paragraph and two foot lines
+stacked over zero rows, followed by the three rows that are the actual product.
+
+**One list.** Direct rows first, then claim rows, search order within each — `DEBATE_NO_RANKING`
+stands, and it is **not** sorted by level, because the chip already says it. Each row self-labels:
+direct rows carry the identification chip, claim rows carry `On what it claims` and their existing
+*Answering "…"* line. Not grouped by `relation`, either: a section heading is a claim we stand behind,
+and relation is fenced as the model's reading. **Structure by what we can verify; keep the model's
+readings inside rows.**
+
+The empty first section becomes one sentence at the top:
+
+- nothing returned: *"No page the search found responds to this piece by name. What follows takes up
+  what it argues."*
+- returned but all lost: *"The search found 4 pages that might respond to this piece, but none could
+  be checked against the words it returned. What follows takes up what it argues."*
+- all hidden by the bar: nothing extra — `hiddenNote` already says it.
+
+On a famous article that reads as a finding rather than a broken panel, which is the honest empty
+state Greg asked for said in the reader's terms instead of ours.
+
+### Where this sits in the order of work
+
+It is **not** an eval stage, and it now gates one. Sequence: the `identifies` field and the shingle
+matcher, then the panel's one list, then the bar, and **only then Stage F** — fetching widens the
+haystack for `linked` and `quoted` as much as for recall, and the default threshold is what contains
+the precision it costs.
+
+**The simpler option passed over**, recorded because it is the obvious one: tighten `namesArticle` to
+require link-or-quote and drop title-only rows into `directnessUnverified`. Same default screen,
+fewer parts — and worse, because the rows become an invisible counter and Greg asked to *see* them
+with their reasons. The level plus a default threshold is that gate with a slider on it.
+
+## ~~The one product question, held for Greg~~ — asked and answered above
+
+Fable's original framing, kept because the decision above went further than it:
+
 > lead the panel with group two, show group one as a short line above it.
 >
 > — Fable, 2026-09-06
 
-Held, and brought back **with the live sweep's numbers under it**. The corpus research has already
-softened one half of its premise: Cargo Cult has famous *citations* rather than famous *replies*, so
-an empty group one there is more defensible than it looked.
+Greg's answer was *"combine them somehow… maybe there's a better approach"*, and the better approach
+is § 1 above: **one list**, with the two-pass distinction on each row and in a single sentence rather
+than in two sections of chrome. Reordering the sections would have kept the structure that was the
+problem.
 
 ## Deliberately not in this job
 

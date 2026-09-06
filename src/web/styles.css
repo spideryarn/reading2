@@ -189,19 +189,37 @@
    * for why it could not have it).
    */
   --bar-hide: 0px;
-  /* The wordmark fixed in the top-left corner — HomeLogo.tsx. A token because
-     three rules need the same number: the logo's own width, and the left
-     padding the masthead and the controls bar reserve so that a narrow window
-     (where the spine has been shrunk or dropped by layout.ts) does not paint
-     the article's title underneath it. Change it here or the other two go
-     silently wrong. */
+  /* The wordmark fixed in the top-left corner — HomeLogo.tsx.
+
+     **It sizes one control and reserves nothing, since 2026-09-06.** It used to
+     be read by three rules — the logo's own width, and the left padding the
+     masthead and the controls bar held so a narrow window could not paint the
+     article's title underneath the wordmark — and the comment here warned that
+     changing it without the other two was how a control ended up on top of the
+     one thing the page is for. Both bars are on the reading view, the reading
+     view draws `.dock-home` in the bottom bar instead (Dock.tsx), and there is
+     nothing left in that corner to hold the title clear of. What is left is
+     `.logo-home`'s own `width`, on the pages that still draw it, and the
+     narrower value § a narrow window gives it when the word goes.
+     docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md
+     § Stage 2.
+
+     **Kept rather than inlined, and the alternative is real**: `width: 8.5rem`
+     on `.logo-home` and `width: 2.6rem` in the query would be two declarations
+     where this is three, with no indirection at all. It loses because the
+     shrink is *one* decision about *two* controls — the wordmark and the
+     Feedback button give up their words in the same breath, for the same reason
+     — and this is the one place that is said, in one `:root` block under one
+     comment. Inlined, its two halves would sit in two different blocks of the
+     same media query nearly three thousand lines apart, each beside the
+     `display: none` it follows from, with nothing left saying they are the same
+     decision. */
   --logo-w: 8.5rem;
-  /* Its mirror image in the other corner — FeedbackButton.tsx. A token for the
-     same reason and with the same trap: the button's own width, and the right
-     padding the masthead and the controls bar reserve so that a long article
-     title does not run underneath it. Change it here or the other two go
-     silently wrong, and the way they go wrong is a control sitting on top of
-     the one thing the page is for. */
+  /* Its mirror image in the other corner — FeedbackButton.tsx, and the same
+     story: the button's own width and nothing else, now that neither bar
+     reserves a right-hand gutter for a trigger that is in the Dock. See the
+     note above, which carries the whole of it including why both stayed
+     tokens. */
   --feedback-w: 7.5rem;
   /* **The table head's height, and it is zero on purpose since 2026-09-05.**
      Greg: *"I'm even wondering if we can get rid of the row of
@@ -472,37 +490,42 @@ body {
      than to a `top`, so the title still scrolls away completely — a masthead
      that stopped `--safe-top` short of the edge would leave a band of page
      colour behind it that nothing ever covers. */
-  padding: calc(1.25rem + var(--safe-top)) 1.5rem 0.9rem;
-  /* Room for the corner wordmark, but only when there is not already room.
-     This bar starts at `left: --spine-w + --mode-w`, so the logo reaches
-     `--logo-w` minus that offset into it; once a mode band is open the term is
-     negative and the ordinary 1.5rem wins. That is the whole mechanism — see
-     HomeLogo.tsx for why the corner is otherwise free.
+  /* **The ordinary gutter on both sides, and that is new on 2026-09-06.** This
+     bar used to hold its left open for the corner wordmark
+     (`max(1.5rem, calc(--logo-w + 1.5rem - --spine-w - --mode-w))`) and its
+     right for the Feedback button (`--feedback-w + 1.5rem`), because both were
+     `position: fixed` over it and an unreserved corner puts a control on top of
+     the article's own title. Both are in the Dock now, this bar is drawn only
+     on the reading view, and the reading view has no corner controls left — so
+     what the two terms reserved was 148px on the left and 144px on the right of
+     empty page, against an ordinary gutter of 24px. Measured before it came
+     out, and the number that shows is the 800px window: the title started at
+     x=160 with its own prose at x=54, because that is the width below which the
+     centred-column rules have no margin left to give the reservation back.
+     docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md
+     § Stage 2.
 
-     The `+ 1.5rem` is not slack. Without it the title starts at exactly the
-     wordmark's right edge, which does not overlap and still reads as broken:
-     it is the ordinary gutter this bar has everywhere else, kept rather than
-     eaten. */
-  /* **Named, because the title has to be placed against them.** This bar is
-     asymmetric — the wordmark reserves the left, the Feedback button the right
-     — and § the title over the column has to undo that asymmetry to land the
-     title on the prose's own left edge. Two declarations reading one number
-     each, rather than the arithmetic being written out twice.
-     `.controls` below still carries the same two expressions of its own: it
-     needs the same numbers here and *different* ones on a phone (§ a narrow
-     window gives it a 0.75rem right gutter and this bar 1rem), so one shared
-     pair would be a claim that is false at the width it matters most. */
-  --masthead-pad-l: max(1.5rem, calc(var(--logo-w) + 1.5rem - var(--spine-w) - var(--mode-w)));
-  padding-left: var(--masthead-pad-l);
-  /* And the same again on the other side, for the Feedback button. Simpler
-     than its mirror, deliberately: both bars are *positioned* at
-     `left: --spine-w + --mode-w`, so the wordmark only reaches into them by
-     what is left after that — while nothing insets them from the right but
-     `--safe-right`, which the button sits inside too. So the button reaches
-     exactly `--feedback-w` in, and there is nothing to subtract.
-     FeedbackButton.tsx § The bars have to reserve the space. */
-  --masthead-pad-r: calc(var(--feedback-w) + 1.5rem);
-  padding-right: var(--masthead-pad-r);
+     **Still two names, and the two may differ.** § the title over the column
+     places the title against this bar's gutter and carries both terms
+     explicitly, so it is correct for any pair — and it needs to be, because
+     § a narrow window makes them unequal: a phone's left gutter is the prose's
+     own inset while its right is an ordinary one.
+
+     They were briefly equal, and the expression below was briefly simplified to
+     assume it. That was correct arithmetic and the wrong move, and it is worth
+     one sentence so nobody does it again: **simplifying an expression by
+     assuming a fact declared somewhere else turns an identity into a
+     precondition nobody knows the rule has.** The pair is still written
+     together, in one shorthand, at both widths (§ a narrow window redefines the
+     pair rather than overriding the padding, which is what used to leave these
+     two describing a desktop the bar was not drawing).
+
+     Four-value shorthand — top, right, bottom, left — so there is one padding
+     declaration on this bar rather than a shorthand and two rules undoing part
+     of it. */
+  --masthead-pad-l: 1.5rem;
+  --masthead-pad-r: 1.5rem;
+  padding: calc(1.25rem + var(--safe-top)) var(--masthead-pad-r) 0.9rem var(--masthead-pad-l);
 }
 
 .masthead-inner { max-width: 62rem; }
@@ -715,19 +738,21 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  /* **One gutter, both sides, since 2026-09-06.** This bar carried its own
+     copies of the masthead's two reservations — `--logo-w` on the left,
+     `--feedback-w` on the right — and they went with the masthead's, for the
+     reason § shell gives above: neither corner has a control in it on the one
+     page this bar is drawn on.
+
+     The copies were copies rather than a shared pair on purpose, and that
+     reasoning goes with them rather than being kept for a term that no longer
+     exists: the two bars needed the same numbers here and different ones on a
+     phone, so a shared pair would have been a claim that was false at the width
+     it mattered most. What survives of it is the invariant it protected —
+     **whatever gutter this bar has, the masthead has**, or the granularity
+     pills stop lining up with the title above them. 1.5rem here and 1.5rem
+     there; § a narrow window moves both to 1rem. */
   padding: 0 1.5rem;
-  /* Same expression as .masthead above, and for the same reason. Both bars are
-     inset by the spine, so both need it, and it has to be the same number in
-     both or the title and the granularity pills stop lining up. */
-  padding-left: max(1.5rem, calc(var(--logo-w) + 1.5rem - var(--spine-w) - var(--mode-w)));
-  /* And the same again on the other side, for the Feedback button. Simpler
-     than its mirror, deliberately: both bars are *positioned* at
-     `left: --spine-w + --mode-w`, so the wordmark only reaches into them by
-     what is left after that — while nothing insets them from the right but
-     `--safe-right`, which the button sits inside too. So the button reaches
-     exactly `--feedback-w` in, and there is nothing to subtract.
-     FeedbackButton.tsx § The bars have to reserve the space. */
-  padding-right: calc(var(--feedback-w) + 1.5rem);
   background: var(--page);
   border-bottom: 1px solid var(--rule-strong);
   font-family: var(--font-ui);
@@ -3768,7 +3793,13 @@ td.text.has-hit[data-hues="8"] {
 
 /* The way home, fixed in the very top-left of the window — HomeLogo.tsx.
    Height matches `--bar-h` so it sits on the same line as the reading view's
-   controls bar rather than floating above it. */
+   controls bar rather than floating above it.
+
+   **Not on the pages that mount a `Dock` since 2026-09-06** — the article, its
+   metadata and tweets pages, and the three visitor stand-ins draw `.dock-home`
+   in the bottom bar instead (Dock.tsx § the way home is back). This rule is for
+   everywhere else: the shelf-adjacent pages, `/privacy`, the article's loading
+   and error screens, and the two refusal pages. */
 .logo-home {
   position: fixed;
   /* Fixed in the corner the phone rounds off, so both insets apply. `--safe-top`
@@ -3780,7 +3811,18 @@ td.text.has-hit[data-hues="8"] {
   padding: 0 0.7rem;
   /* Above the spine (45) and the controls bar (40), and below the drawer's dim
      (92). The drawer is modal — while it is open, leaving the page is not one
-     of the things you are being offered, and Escape or the dim closes it. */
+     of the things you are being offered, and Escape or the dim closes it.
+
+     **That rule is now local to this corner, and it was reversed for the copy
+     in the bar.** `.dock` is z-index 96, deliberately above the dim, so
+     `.dock-home` *stays* operable while the drawer is open — leaving the page
+     is one of the things being offered there. The flip was accepted rather than
+     overlooked (GPT Sol's G-note, Fable's item 4): the bar is already how you
+     shut the drawer and already carries Metadata, which is itself a link off
+     this page. Nothing about this rule changed; what changed is that it no
+     longer describes every copy of the wordmark, so this paragraph exists to
+     stop the next reader finding two files asserting opposite things.
+     § the bar's fit ladder and .dock above. */
   z-index: 60;
   text-decoration: none;
   /* Opacity rather than a second colour: the wordmark is already `--highlight`
@@ -4934,9 +4976,10 @@ td.text.has-hit[data-hues="8"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.65rem;
+  gap: 0.3rem;
+  min-width: 1.65rem;
   height: 1.65rem;
-  padding: 0;
+  padding: 0 0.35rem;
   border: 1px solid var(--rule-strong);
   border-radius: 5px;
   background: transparent;
@@ -4966,13 +5009,13 @@ td.text.has-hit[data-hues="8"] {
 }
 .chat-live-label {
   font-size: 0.88rem;
-  color: var(--ink-faint);
+  color: inherit;
   white-space: nowrap;
 }
 /* The label follows the button, so "Listening…" carries the same signal the
    colour does — said twice, for the one control in this app worth being
    unambiguous about. */
-.chat-live:has(.chat-live-btn.on) .chat-live-label { color: var(--highlight-ink); }
+.chat-live:has(.chat-live-btn.on) .chat-live-label { color: var(--page); }
 .chat-live-mic select {
   padding: 0.1rem 0.2rem;
   border: 1px solid var(--rule);
@@ -4983,6 +5026,36 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.83rem;
 }
 .chat-live-mic select:disabled { opacity: 0.5; }
+
+.chat-live-status {
+  flex-basis: 100%;
+  min-width: 0;
+  order: 7;
+  border: 1px solid var(--rule-strong);
+  border-radius: 7px;
+  padding: 0.65rem;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: 0.85rem/1.45 var(--font-ui);
+}
+.chat-live-status-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
+.chat-live-transcript-toggle { display: inline-flex; align-items: center; gap: 0.25rem; margin-left: auto; color: var(--ink-faint); }
+.chat-live-device { margin: 0.4rem 0; color: var(--ink-faint); overflow-wrap: anywhere; }
+.chat-live-device-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0.45rem 0; }
+.chat-live-device-picker select { min-width: 0; flex: 1 1 8rem; max-width: 100%; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 0.2rem; font: inherit; }
+.chat-live-device-picker small { flex-basis: 100%; color: var(--ink-faint); }
+.chat-live-notice { margin: 0.4rem 0; color: var(--ink-soft); }
+.chat-live-error { margin: 0.5rem 0; color: var(--destructive); overflow-wrap: anywhere; }
+.chat-live-transcript { max-height: 11rem; overflow: auto; overscroll-behavior: contain; margin: 0.5rem 0; border-top: 1px solid var(--rule); }
+.chat-live-line { margin: 0.5rem 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.chat-live-line strong { color: var(--ink-faint); font-weight: 500; }
+.chat-live-transcript-empty { color: var(--ink-faint); margin: 0.5rem 0; }
+.chat-live-tools { padding-left: 1rem; color: var(--ink-soft); max-height: 5rem; overflow: auto; }
+.chat-live-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.chat-live-status button { border: 1px solid var(--rule-strong); border-radius: 4px; color: var(--ink); background: var(--panel); padding: 0.2rem 0.4rem; font: inherit; cursor: pointer; }
+.chat-live-status button:hover:not(:disabled) { border-color: var(--highlight); color: var(--highlight-ink); }
+.chat-live-status button:disabled { opacity: 0.5; cursor: default; }
+.chat-live-status button:focus-visible, .chat-live-status select:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
 
 /* **What a spoken answer pointed at**, in place of the citations it cannot
    make: it is forbidden to say a block id aloud and uses `show_passage`
@@ -6200,6 +6273,38 @@ td.text.note-open {
 }
 .dock-modes .dock-btn.on { box-shadow: none; }
 
+/* **The wordmark at the left-hand end of the bar** — `DockHome` in Dock.tsx,
+   which has the argument for why it is here at all and why it is not a
+   fourteenth mode.
+
+   **`.dock-home` and deliberately not `.dock-btn`.** The one thing that would
+   make this read as a mode is the wash: `.dock-btn:hover` paints
+   `var(--panel)`, and in this bar a wash means hovered-or-selected. So it takes
+   `.logo`'s colour and metrics (§ the wordmark, far above — same glyph, same
+   `--highlight`, same 0.82rem as the corner copy on every other page) and this
+   rule supplies the box. Fable's call, 2026-09-06.
+
+   It hovers by opacity instead, which is `.logo-home`'s answer to the same
+   question and for the same reason: the wordmark is already `--highlight`, and
+   every other colour in the palette would be a step *down* from it.
+
+   `padding` matches `.dock-btn`'s 0.6rem so it sits on the row's rhythm; rung 3
+   tightens it alongside the buttons (§ the bar's fit ladder). */
+.dock-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.6rem;
+  text-decoration: none;
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+.dock-home:hover { opacity: 1; }
+.dock-home:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: -2px;
+}
+
 /* The focus ring goes on the segment, inset, so it is not clipped by the
    frame's `overflow: hidden`.
 
@@ -6223,8 +6328,9 @@ td.text.note-open {
    list until it does not, and puts the class here.
 
    **There was a pixel breakpoint here and it went stale, which is the whole
-   reason this is JavaScript.** `@media (max-width: 1100px)` did rung 1's job,
-   and the 1100 was chosen against a measured 1046 when there were six modes.
+   reason this is JavaScript.** `@media (max-width: 1100px)` did what is rung 2's
+   job now, and the 1100 was chosen against a measured 1046 when there were six
+   modes.
    At thirteen the spelled-out row wants 1416px, so every window from 1101px to
    1416px showed its labels *and* ran the last buttons off the right-hand edge —
    which is where Greg found it, at two thirds of a laptop screen, 2026-09-02.
@@ -6243,33 +6349,74 @@ td.text.note-open {
    overflows honestly and § a narrow window scrolls it, which is the floor under
    this ladder rather than another rung: a phone in portrait cannot give fifteen
    buttons a pressable width, and Greg chose scrolling over shrinking further
-   (§ a coarse pointer). */
+   (§ a coarse pointer).
 
-/* Rung 1 — the modes go to glyphs and the other three keep their words.
-   Square-ish once the text is gone, so thirteen icons read as one segmented
-   control rather than as loose glyphs.
+   **The rungs renumbered on 2026-09-06**, when the wordmark and the Feedback
+   button moved off the top corners into this bar and a new rung went in *above*
+   the old rung 1 to pay for them. What was rung 1 is rung 2 and what was rung 2
+   is rung 3; the numbers in the prose here and in dock-fit.ts have all been
+   moved with them, so a rung number written down anywhere older than that date
+   is one lower than it should be.
+   docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md. */
+
+/* Rung 1 — **the app cluster gives up its words, and never gets them back.**
+   The wordmark and Feedback, at the two ends of the row; every mode keeps its
+   label. Measured before it was built: with the default nine modes rung 0 needs
+   1206px today and both words would take it to roughly 1420, so 1280 and 1366 —
+   two of the commonest laptop widths — would otherwise drop straight to a bar
+   of glyphs to keep two words that pay least. dock-fit.ts § the rungs has the
+   table and the argument Fable got half right.
+
+   **Listed at all three rungs rather than at rung 1 alone**, because a bar
+   wears exactly one rung class: a rule written only for rung 1 would let
+   `Spideryarn` and `Feedback` reappear at rung 2, which is the opposite of what
+   this rung is for. Rung 3's `.dock-btn-label` sweep does catch `.dock-feedback`
+   (it is a `.dock-btn`) but not `.dock-home` (it is not), so both are spelled
+   out at every rung and nothing depends on noticing that asymmetry.
+
+   No padding change here. The two are at the ends of the row, where 0.15rem
+   buys nothing the words did not already, and the rungs below tighten
+   everything anyway. */
+.dock.dock-fit-1 .dock-home .dock-btn-label,
+.dock.dock-fit-1 .dock-feedback .dock-btn-label,
+.dock.dock-fit-2 .dock-home .dock-btn-label,
+.dock.dock-fit-2 .dock-feedback .dock-btn-label,
+.dock.dock-fit-3 .dock-home .dock-btn-label,
+.dock.dock-fit-3 .dock-feedback .dock-btn-label { display: none; }
+
+/* Rung 2 — the modes go to glyphs, and what is left with a word is Comments,
+   Tweets and Metadata. **Not "the other three":** the app cluster's two words
+   went at rung 1 and do not come back, and the experimental switch has never
+   carried one. Square-ish once the text is gone, so fourteen icons read as one
+   segmented control rather than as loose glyphs. **This was rung 1 until
+   2026-09-06** and is still the old `max-width: 1100px` rule's job.
 
    **Two selectors because the bar has two shapes.** On the reading view the
    modes are one `.dock-modes` segment; on the metadata and tweets pages they
    are thirteen loose `DockLink`s with no segment around them (Dock.tsx). A rung
    that only knew the segment did nothing on those pages, so the ladder skipped
-   past it to rung 2 and took every label. GPT Sol found it in the design. */
-.dock.dock-fit-1 .dock-modes .dock-btn-label,
-.dock.dock-fit-1 .dock-mode .dock-btn-label { display: none; }
-.dock.dock-fit-1 .dock-modes .dock-btn,
-.dock.dock-fit-1 .dock-mode { padding-inline: 0.6rem; }
+   past it to the next rung and took every label. GPT Sol found it in the
+   design. */
+.dock.dock-fit-2 .dock-modes .dock-btn-label,
+.dock.dock-fit-2 .dock-mode .dock-btn-label { display: none; }
+.dock.dock-fit-2 .dock-modes .dock-btn,
+.dock.dock-fit-2 .dock-mode { padding-inline: 0.6rem; }
 
-/* Rung 2 — every button in the bar, not just the modes. Tighter than rung 1 by
+/* Rung 3 — every button in the bar, not just the modes. Tighter than rung 2 by
    0.15rem, and that is not cosmetic: measured at thirteen icons, 0.55rem
    brought the row to 401px against 390 of bar, and closing an 11px gap exactly
    would have reopened it the moment the Comments count reached three digits.
 
-   These selectors are shorter than rung 1's and come after them, which is what
+   `.dock-home` is named beside `.dock-btn` because it is not one — see
+   `.dock-home` in § the mode switch for why it stays out of that class.
+
+   These selectors are shorter than rung 2's and come after them, which is what
    Biome's `noDescendingSpecificity` warns about. It cannot bite: a bar wears
    one rung class at a time, so the two blocks can never both match. */
 /* biome-ignore-start lint/style/noDescendingSpecificity: mutually exclusive rungs — see above */
-.dock.dock-fit-2 .dock-btn-label { display: none; }
-.dock.dock-fit-2 .dock-btn { padding-inline: 0.45rem; }
+.dock.dock-fit-3 .dock-btn-label { display: none; }
+.dock.dock-fit-3 .dock-btn,
+.dock.dock-fit-3 .dock-home { padding-inline: 0.45rem; }
 /* biome-ignore-end lint/style/noDescendingSpecificity: mutually exclusive rungs */
 
 /* The exception, on every rung — `keepLabel` in Dock.tsx for which and why.
@@ -6278,10 +6425,18 @@ td.text.note-open {
    source order is what makes it win. That is why the mode-link selector above
    is `.dock-mode .dock-btn-label` and not `.dock-btn.dock-mode
    .dock-btn-label`: the extra class made the hide (0,5,0) against this rule's
-   (0,4,0), and Plain lost its word on the metadata page at rung 1 while keeping
-   it at rung 2. Caught in a browser pass, 2026-09-02. */
+   (0,4,0), and Plain lost its word on the metadata page at one rung while
+   keeping it at the next. Caught in a browser pass, 2026-09-02.
+
+   **Rung 1 is in the list even though nothing there hides a `keepLabel` word.**
+   It costs nothing, it keeps "on every rung" a true sentence rather than one
+   with a footnote, and it keeps the tie: the app cluster's hides above are four
+   classes at every rung, so an `.always` rule missing a rung would be
+   out-specified there the moment somebody gave `.dock-home` a `keepLabel`
+   sibling. tests/dock-fit.test.ts checks exactly that. */
 .dock.dock-fit-1 .dock-btn-label.always,
-.dock.dock-fit-2 .dock-btn-label.always { display: inline; }
+.dock.dock-fit-2 .dock-btn-label.always,
+.dock.dock-fit-3 .dock-btn-label.always { display: inline; }
 
 /* **And the mode you are actually in keeps its word, on every rung.**
    Greg, 2026-09-05: *"I think we can rely on the bottom bar to tell us what
@@ -6292,7 +6447,7 @@ td.text.note-open {
    screenshot showed and no unit check could.
 
    A band is 400px of the window, so opening one is itself what pushes the bar
-   onto rung 1 — where every mode label except Plain's is hidden. So in Summary
+   onto the rung where every mode label except Plain's is hidden. So in Summary
    at 1440×900 the band no longer said "Summary" and the bar had never said it
    either: the only thing naming the open mode was a highlighted glyph. The
    sighted reader who wanted the word had to hover for a tooltip.
@@ -6307,17 +6462,24 @@ td.text.note-open {
    just above is a rule that was accidentally *longer* than the one meant to
    win. This one is meant to win.
 
-   **Rung 1 only, and rung 2 was tried and measured first.** Past the last rung
-   the bar overflows and scrolls (§ a coarse pointer), and at 390×844 in a band
-   mode it already does: measured 2026-09-05, `scrollWidth` 617 against a
-   `clientWidth` of 390. Adding this word there took it to 758 — 141px more of a
-   row the reader already has to drag sideways, to reveal a word that is only
-   legible *after* they drag. A bar that scrolls cannot tell you anything you
-   have not scrolled to, so at rung 2 this rule is pure cost and no benefit, and
-   the reader on a phone has in any case just pressed the icon themselves. At
-   rung 1 it is free: all four band modes measured `scrollWidth === clientWidth
-   === 1440` with the word shown, on the same rung they were already on. */
-.dock.dock-fit-1 .dock-btn.on .dock-btn-label { display: inline; }
+   **Rung 2 only — the first rung that takes a mode's word — and the rung below
+   it was tried and measured first.** Past the last rung the bar overflows and
+   scrolls (§ a coarse pointer), and at 390×844 in a band mode it already does:
+   measured 2026-09-05, `scrollWidth` 617 against a `clientWidth` of 390. Adding
+   this word there took it to 758 — 141px more of a row the reader already has
+   to drag sideways, to reveal a word that is only legible *after* they drag. A
+   bar that scrolls cannot tell you anything you have not scrolled to, so at the
+   last rung this rule is pure cost and no benefit, and the reader on a phone
+   has in any case just pressed the icon themselves. Here it is free: all four
+   band modes measured `scrollWidth === clientWidth === 1440` with the word
+   shown, on the same rung they were already on.
+
+   **This rule was written for `dock-fit-1` and is `dock-fit-2` since
+   2026-09-06**, when a new rung went in above it. Both measurements above were
+   taken against the old numbering and are unchanged by the renumber: they are
+   about the rung that hides the mode labels, which is this one. Rung 1 hides no
+   mode label, so there is nothing there for this rule to put back. */
+.dock.dock-fit-2 .dock-btn.on .dock-btn-label { display: inline; }
 
 
 /* --------------------------------------------------------- § search mode ----
@@ -12274,20 +12436,25 @@ td.text.kind-heading .blk-gutter[data-open] {
 /* spine-width-check: GIST_MIN + PROSE_MIN + SPINE_W - 1 */
 @media (max-width: 731px) {
   :root {
-    /* The wordmark gives up its word. Both sticky bars reserve `--logo-w` as
-       left padding (§ shell), so this one token was pushing the article's title
-       136px into a 390px window — and HomeLogo.tsx is explicit that changing the
-       logo's size without changing the token is how a wordmark ends up sitting
-       on top of the title. Both, in the same query. */
+    /* The wordmark gives up its word, and the token has to follow or the corner
+       link is a 136px hit area around a 20px glyph. **It used to be worth more
+       than that**: both sticky bars read this as left padding, so leaving it at
+       8.5rem pushed the article's title 136px into a 390px window. Those two
+       reservations went on 2026-09-06 (§ shell, § tokens), so what is left here
+       is the control's own width on the pages that still draw it — the shelf,
+       the profile, `/privacy` and the article's own error screens, none of which
+       has a masthead to push anything into.
+
+       Still one decision about two controls, which is why they are two lines of
+       one block: the word goes and the width follows, on both sides at once. */
     --logo-w: 2.6rem;
-    /* And the Feedback button gives up its word for the same reason and in the
-       same breath — FeedbackButton.tsx renders the label in a span this query
-       hides, leaving the icon and the `aria-label` (the `title` it used to lean
-       on became a hover card on 2026-09-03, and `display: none` takes the word
-       out of the accessibility tree as well as off the screen). Both bars
-       reserve this as right
-       padding (§ shell), so leaving it at 7.5rem here would cost the title a
-       fifth of a 390px screen for a word nobody can see. */
+    /* And the Feedback button gives up its word in the same breath —
+       FeedbackButton.tsx renders the label in a span this query hides, leaving
+       the icon and the `aria-label` (the `title` it used to lean on became a
+       hover card on 2026-09-03, and `display: none` takes the word out of the
+       accessibility tree as well as off the screen). Same story as its mirror
+       above: it sized a reservation until 2026-09-06 and now sizes only the
+       button. */
     --feedback-w: 2.4rem;
   }
   .logo-text { display: none; }
@@ -12356,17 +12523,36 @@ td.text.kind-heading .blk-gutter[data-open] {
     /* The bar is 44px tall with no room for a scrollbar inside it, and this is
        a touch surface where scrollbars are overlays anyway. */
     scrollbar-width: none;
-    /* **`--feedback-w`, because this rule is the third one that overrode the
-       reservation and lost it.** § shell holds `--feedback-w + 1.5rem` of right
-       padding on `.bar` for the corner button; a flat `0.75rem` here replaced it,
-       and this bar is `overflow-x: auto` at this width — so the last control does
-       not merely sit under the button, it *scrolls* under it, which is worse
-       because the reader can see there is something there and cannot reach it.
-       The masthead has the same story on the line above and on the left-hand side
-       (see its `padding-left` note below, and HomeLogo.tsx): a shorthand or a flat
-       override throws the term away, and nothing announces it.
-       Found by GPT Sol's review of the UI, 2026-09-01. */
-    padding-right: calc(var(--feedback-w) + 0.75rem);
+    /* **This was `calc(--feedback-w + 0.75rem)`, and it became wrong rather
+       than merely unnecessary on 2026-09-06.** The term was there because a flat
+       `0.75rem` had once replaced § shell's reservation and lost it, and on an
+       `overflow-x: auto` bar the last control did not merely sit under the
+       corner button, it *scrolled* under it — visible and unreachable. There is
+       no corner button now, so the term reserves 2.4rem of gutter against
+       nothing, on the width with the least of it to spare: 54px of a 390px
+       screen, on a bar that is already scrolling.
+
+       What replaces it is the masthead's own pair at this width, one rule below
+       — § shell's invariant is that these two bars share a gutter or the
+       granularity pills stop lining up with the title above them, and this is
+       the width where they had drifted apart (53.6px against 37.6px, measured,
+       because the two rules spelled the same expression with different
+       constants).
+
+       **Asymmetric, and it has to be**, which is a change from the flat
+       `1rem` this rule carried for half a day on 2026-09-06. The masthead's
+       left gutter is the prose's own inset there (see the rule below for why),
+       so a flat gutter here would put the pills 19.2px left of the title —
+       trading the step this stage removed for a new one, one line lower down
+       the screen. GPT Sol, U1.
+
+       Written out rather than reading `--masthead-pad-*`: those two are
+       declared *on* `.masthead`, so they do not reach this bar, and lifting the
+       pair to `:root` to share them would make two bars with genuinely
+       different vertical padding look like one thing. The invariant is the two
+       numbers, and it is asserted rather than left to the eye —
+       tests/prose-centred-in-its-cell.test.ts. */
+    padding: 0 1rem 0 var(--text-pad-l);
   }
   .controls::-webkit-scrollbar { display: none; }
   /* Nothing in the bar may shrink; that is what turned `.dock-modes` into a
@@ -12381,34 +12567,51 @@ td.text.kind-heading .blk-gutter[data-open] {
      already getting (App.tsx § the controls bar), so the two widths now agree
      by construction rather than by a list somebody has to maintain. */
 
-  /* The masthead's left padding follows `--logo-w` on its own (§ shell), but its
-     generous vertical padding does not, and it is the first thing between the
-     reader and the article. */
-  .masthead { padding: calc(0.85rem + var(--safe-top)) 1rem 0.7rem; }
-  /* **And then the left is given back, because the shorthand above throws away
-     the one term that was holding the title clear of the wordmark.**
+  /* A tighter gutter and much less vertical padding: this bar is the first
+     thing between the reader and the article, and § shell's desktop breathing
+     room is a luxury on a 390px screen.
 
-     § shell sets `padding-left: max(1.5rem, calc(var(--logo-w) + 1.5rem -
-     var(--spine-w) - var(--mode-w)))` — the subtraction being the point: the
-     rail already pushes the title right, so the masthead only has to make up the
-     difference. The shorthand here replaces all four sides with a flat `1rem`
-     and the compensation goes with it, which was survivable at a 24px rail and
-     is not at 12px. Measured at a 16px root, where `--logo-w` is 2.6rem = 41.6px
-     in this query: the title used to start at 24 + 16 = 40px against a wordmark
-     reaching 41.6px, and now starts at 12 + 16 = 28px — thirteen pixels of the
-     article's title underneath the way home. GPT Sol found it reviewing the
-     halving, 2026-08-28.
+     **Two rules used to follow this one, giving back a term the shorthand ate,
+     and both became wrong on 2026-09-06 rather than merely unnecessary.** The
+     left was `max(1rem, calc(--logo-w + 0.5rem - --spine-w - --mode-w))` and
+     the right `calc(--feedback-w + 1rem)`; each held its side open for a corner
+     control, and each still resolved *above* the gutter after the controls left
+     — 37.6px and 54.4px, measured, against 16px — so leaving them would have
+     gone on pushing the title in on the width with the least room for it. Their
+     history is worth one line, because it is the trap this file has been caught
+     by three times: a shorthand replaces all four sides silently, and a term
+     written into `padding-left` above it disappears with no error. GPT Sol found
+     that happening here on 2026-08-28 and again in `.controls` on 2026-09-01.
 
-     Same shape as § shell's rule, with this query's tighter 1rem gutter rather
-     than 1.5rem: 41.6 + 8 − 12 = 37.6px, so the title starts at 49.6px and
-     clears the wordmark by 8px. It follows `--spine-w`, so it cannot go stale
-     the next time the rail moves. */
+     **The gutter is a pair of tokens now, and the shorthand reads them**, so
+     this width can no longer disagree with what `--masthead-pad-*` say — which
+     is exactly what it did until today, leaving § the title over the column
+     doing arithmetic with two numbers that described a bar it was not looking
+     at. */
+  /* **The left gutter is the prose's own inset, and the right is an ordinary
+     one.** On a phone this bar is `.text-alone`, so § the title over the column
+     never runs and nothing is centring anything: the title simply starts at the
+     bar's content edge. Give that edge the ordinary 1rem and it lands 19px left
+     of the first line of the article, which on a 390px screen reads as two
+     competing left margins rather than as a choice.
+
+     **That step is new and it is this change's own doing**, which is the reason
+     to fix it here rather than to argue it is fine. Until 2026-09-06 this
+     padding was `max(1rem, calc(--logo-w + 0.5rem - --spine-w - --mode-w))` —
+     room held for the corner wordmark — which came to 37.6px against a prose
+     inset of 35.2px, so the two edges lined up to within about two pixels *by
+     accident*. Taking the reservation away took the alignment with it. Naming
+     `--text-pad-l` makes it deliberate and makes it track: the inset is a
+     `--blk-slot` of icons plus its padding (§ text), and it has moved twice
+     already this month.
+
+     The right side stays a plain gutter. The prose's own right inset is
+     `--text-pad-r`, 0.9rem here, and matching it would be symmetry for its own
+     sake — nothing lines up against that edge, because the title wraps. */
   .masthead {
-    padding-left: max(1rem, calc(var(--logo-w) + 0.5rem - var(--spine-w) - var(--mode-w)));
-    /* The right is given back for the same reason as the left, one line up: the
-       `padding: … 1rem …` shorthand above replaced all four sides, and the room
-       § shell was holding for the Feedback button went with it. */
-    padding-right: calc(var(--feedback-w) + 1rem);
+    --masthead-pad-l: var(--text-pad-l);
+    --masthead-pad-r: 1rem;
+    padding: calc(0.85rem + var(--safe-top)) var(--masthead-pad-r) 0.7rem var(--masthead-pad-l);
   }
   h1 { font-size: 1.25rem; }
 
@@ -12419,7 +12622,8 @@ td.text.kind-heading .blk-gutter[data-open] {
      A floor that only exists on a phone is not a floor. */
 
   /* **The labels are not dropped here any more.** Every button losing its text,
-     and the 0.45rem that goes with it, is rung 2 of § the bar's fit ladder —
+     and the 0.45rem that goes with it, is the ladder's last rung — rung 3
+     since 2026-09-06, rung 2 before it —
      measured rather than keyed to this width, because at thirteen modes the row
      stops fitting a long way above 731px and did so silently. This query used to
      carry a second copy of those three rules, and a second copy is a thing
@@ -12864,14 +13068,26 @@ td.text.kind-heading .blk-gutter[data-open] {
   .dock-modes { flex: 8 0 auto; }
   .dock > .dock-btn { flex: 1 0 auto; }
   .dock-modes .dock-btn { flex: 1 0 auto; }
+  /* **And the wordmark grows with them**, which is a decision rather than a
+     consequence — it is not a `.dock-btn`, so it would otherwise have been the
+     one item left at its content width while everything to its right spread
+     across a tablet's bar, huddled against the left end. It is the same kind of
+     control as the ones beside it here (something you press with a thumb), and
+     the reason it is not a `.dock-btn` is about the hover wash, not about size.
+     Fable's item 4. */
+  .dock > .dock-home { flex: 1 0 auto; }
 
   /* The floor — 40px, Apple's 44pt minimum less the hairline it shares with its
      neighbour — and the centring that makes growth look deliberate: without it
      a button that grew would hold its icon at the left and the row would read
      as ragged rather than as spread out. A min-width is a floor and not a cap,
      which is what lets the Comments button carry a two-digit count without
-     anything being clipped. */
-  .dock-btn {
+     anything being clipped.
+
+     `.dock-home` takes both, for the reason above: a grown box that held its
+     glyph at the left would be the one ragged thing in a spread-out row. */
+  .dock-btn,
+  .dock-home {
     min-width: 2.5rem;
     justify-content: center;
   }
@@ -13005,29 +13221,31 @@ td.text.kind-heading .blk-gutter[data-open] {
    of a window it no longer shares with anything — the prose's own width, and
    auto margins to put it on the prose's own axis.
 
-   **It tracks the prose from about 1009px of window upwards, and not below**,
-   which is a smaller claim than the obvious one and the measurements are in
-   docs/plans/plain-mode-and-the-way-out.md § Centring the column. This bar
-   reserves `--logo-w` on its left for the corner wordmark and `--feedback-w` on
-   its right for the button (§ header), and under that width the reservation is
-   wider than the margin the centred column leaves — so `max-width` stops
-   controlling anything and the title stays where it has always been while the
-   prose slides left towards it. The gap closes smoothly and there is no jump;
-   measured 2026-09-04, the title is 54.7px right of the prose at a 900px window
-   and 4.7px right at 1000. **That misalignment is not new and it is not this
-   rule's** — the title was at 160 and the prose at 46 before any of this, and
-   correcting it would mean this rule doing the arithmetic with the bar's two
-   reservations in it, which is what the sibling rule below has to do and is
-   the reason it is the longer of the two. GPT Sol asked for the claim to say
-   where it holds, 2026-09-03; it is the claim that was wrong rather than the
-   rule.
+   **It tracks the prose from about 780px of window upwards, and not below**,
+   which is a smaller claim than the obvious one; the original measurements are
+   in docs/plans/plain-mode-and-the-way-out.md § Centring the column. Under that
+   width this bar has less room than the measure, so `max-width` stops
+   controlling anything and the title stays at the gutter while the prose slides
+   towards it. The gap closes smoothly and there is no jump.
 
-   Above that, measured 2026-09-05: the title lands **4.766px right** of the
-   first line of prose, and the number breaks cleanly into two halves that were
-   each predicted separately — 2.762px from the weight axis (the `font-size`
-   below says why) and 2.0px because this bar's own padding is 148px on the left
-   against 144px on the right, so centring in it is 2px right of centring in the
-   window. 4.762 predicted against 4.766 measured. It used to be 4px *left* of
+   **That crossover was ~1009px until 2026-09-06 and the reservations were why.**
+   This bar held `--logo-w` open on its left for the corner wordmark and
+   `--feedback-w` on its right for the button — 292px of the two together — so
+   the bar ran out of room to centre in long before the window did, and between
+   731 and ~1009px the title sat where it had always sat while the prose walked
+   away from it: measured 2026-09-04, 54.7px apart at a 900px window. Both
+   controls are in the Dock now (§ shell), the gutter is 24px a side, and the
+   whole of that band is gone — measured at an 800px window, 2026-09-06, the
+   title starts 6.3px *left* of the first line of prose where it used to start
+   107.6px right of it.
+
+   Above the crossover, measured 2026-09-06: the title lands **2.76px right** of
+   the first line of prose. It was 4.766px, and the difference is exactly the
+   term this stage removed: the number always broke into 2.762px from the weight
+   axis (the `font-size` below says why) and 2.0px from this bar's own padding
+   being 148px on the left against 144px on the right, so that centring in it
+   was 2px right of centring in the window. The bar is symmetric now and what is
+   left is the weight axis alone. It used to be 4px *left* of
    the prose, and then **22.5px left of it for as long as it took to merge two
    changes and photograph the result** — the day
    `.prose` started dividing the leftover in its cell (§ text) and the day the
@@ -13115,27 +13333,39 @@ td.text.kind-heading .blk-gutter[data-open] {
    the reader's eye enters that view anyway. `.text-alone` is excluded because
    the rule above already has that case and does it with the cap instead.
 
-   **Not `margin-inline: auto`**, which is what the alone rule can afford. Auto
-   margins centre inside this bar's *content* box, and the box is 24px in on
-   the left in a mode against 144px on the right for the Feedback button — so
-   auto would have put the title 60px left of the prose. So the left margin is
-   stated: the prose's own inset (`--text-pad-l` plus half the room the centring
-   divides) measured from the bar's edge, less the padding this margin is
-   already inside. `100%` is the content box, so the bar's full width is
-   `100% + --masthead-pad-l + --masthead-pad-r`.
+   **Not `margin-inline: auto`**, which is what the alone rule can afford, and
+   the reason survives the bar becoming symmetric. Auto margins would centre
+   this box in the bar, but the prose is *not* centred in the reading cell — the
+   cell's own padding is lopsided (`--text-pad-l` is a gutter of icons,
+   `--text-pad-r` is trailing space), so the prose sits half that difference
+   right of centre. So the left margin is stated: the prose's own inset
+   (`--text-pad-l` plus half the room the centring divides) measured from the
+   bar's content edge, which is where a margin starts.
 
-   `max(0px, …)` is the same self-limiting as everywhere else in this change,
-   and it is what holds below roughly 1050px: the bar's reservations are wider
-   than the margin the centring leaves, the term goes negative, and the title
-   stays exactly where it has always been while the prose slides towards it.
-   The same caveat the alone rule states at length, for the same reason and at
-   about the same width. Below 844px the question does not arise — a mode band
-   with no room hides this bar outright (§ a band with no room). That is also
-   what keeps § a narrow window honest: it overrides this bar's padding directly
-   with a 1rem gutter and leaves `--masthead-pad-*` describing the desktop, and
-   the two only ever disagree at a width where this rule is already clamped to
-   zero or the bar is not drawn. GPT Sol asked for the divergence to be named
-   rather than left to be found, 2026-09-04. */
+   **The bar's own padding is in this sum, and it was taken out and put back on
+   the same day.** It reconstructs the bar's full width from the content box
+   (`100% + --masthead-pad-l + --masthead-pad-r`) and then subtracts its way
+   back in, because the prose divides the *whole* cell while a margin starts at
+   the bar's content edge.
+
+   When the two reservations came out (§ shell) the two sides became equal, at
+   which point the gutter cancels exactly — the `+ G` inside the halved sum and
+   the `− G` outside it are the same number — and the expression was simplified
+   to drop both terms. **That was correct and it was still the wrong thing to
+   do**, because it turned an identity into a *precondition*: the rule then
+   silently required `--masthead-pad-l === --masthead-pad-r`, and the very next
+   fix needed them unequal, so § a narrow window could give the phone's title
+   the left gutter its prose has without breaking a rule two hundred lines away.
+   The long form is one term wider and true for any pair. Simplifying an
+   expression by assuming a fact declared somewhere else is how a rule acquires
+   a precondition nobody knows it has.
+
+   `max(0px, …)` is the same self-limiting as everywhere else in this change:
+   below the width at which the bar has less room than the measure the term goes
+   negative, and the title stays at the gutter while the prose slides towards
+   it. That width is much lower than it was, the reservations having been the
+   thing that raised it. Below 844px the question does not arise anyway — a mode
+   band with no room hides this bar outright (§ a band with no room). */
 .reader:has(table.only-prose):not(.text-alone) .masthead-inner {
   /* `65ch` measured in the article's face rather than the chrome's — the same
      line, and the same reason, as `font-size` on `.blk-gutter` (§ the gutter).
@@ -13153,12 +13383,26 @@ td.text.kind-heading .blk-gutter[data-open] {
   font-size: var(--reading-size);
   max-width: var(--reading-measure);
   margin-left: max(
-    0px,
+    /* **The floor is the prose's own inset, not zero** — and zero is what it
+       was for half a day on 2026-09-06, which is how this was found. Below the
+       width at which the centring term survives, the title used to sit at the
+       bar's gutter while the prose stayed inset by `--text-pad-l`, and the two
+       left edges were a step apart. Nobody had noticed because the *reservation*
+       was accidentally paying for it: the masthead's left padding was
+       `--logo-w`-derived and landed within a couple of pixels of the prose's
+       inset, so removing the reservation is what exposed it. Measured at 1024 in
+       a band mode: title at 436 against a first line of prose at 447.
+
+       `--text-pad-l - --masthead-pad-l` because this is a margin from the bar's
+       *content* edge, and the bar's content edge is already `--masthead-pad-l`
+       in from the reading cell's. The outer `max` with `0px` is for a root size
+       where the gutter grows past the prose's inset; the term would go negative
+       and pull the title left of its own bar. GPT Sol, T1. */
+    max(0px, calc(var(--text-pad-l) - var(--masthead-pad-l))),
     calc(
-      (
-          100% + var(--masthead-pad-l) + var(--masthead-pad-r) - var(--text-pad-l) -
-            var(--text-pad-r) - var(--reading-measure)
-        ) / 2 + var(--text-pad-l) - var(--masthead-pad-l)
+      (100% + var(--masthead-pad-l) + var(--masthead-pad-r) - var(--text-pad-l) -
+          var(--text-pad-r) - var(--reading-measure)) / 2 + var(--text-pad-l) -
+        var(--masthead-pad-l)
     )
   );
   margin-right: auto;
@@ -14733,13 +14977,25 @@ td.text.kind-heading .blk-gutter[data-open] {
    docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.
 
    `fb-*` classes rather than Tailwind: the house convention for dialogs, and
-   this one is a form with a dozen elements whose spacing has to agree. */
+   this one is a form with a dozen elements whose spacing has to agree.
+
+   **`.fb-button` is one of two shapes the trigger wears since 2026-09-06.** The
+   other is `.dock-feedback`, a button in the bottom bar, which needs no rule of
+   its own: it is a `.dock-btn` and § the bar's fit ladder owns its word. This
+   corner is what every page *without* a `Dock` still draws. */
 
 /* The mirror of `.logo-home` in the other corner, and the same three numbers:
    `--safe-*` insets, `--bar-h` so it sits on the controls bar's line rather
    than floating above it, and a z-index above the spine (45) and the bars (40)
    but below the drawer's dim (92) — while the drawer is open, filing a report
-   is not one of the things being offered. */
+   is not one of the things being offered.
+
+   **And that last clause is now true of this corner only.** The bar's copy sits
+   at `.dock`'s z-index 96, above the dim and operable by design, so moving the
+   trigger into the bar reverses the decision this line records. Accepted, with
+   the same reasoning `.logo-home` carries: the bar is how the drawer is shut,
+   and it already holds a link off the page. Said in both places so the next
+   reader does not find one file contradicting the other. */
 .fb-button {
   position: fixed;
   top: var(--safe-top);
@@ -15152,8 +15408,10 @@ td.text.kind-heading .blk-gutter[data-open] {
 
 @media (max-width: 731px) {
   /* The word goes and the icon stays — § tokens shrinks `--feedback-w` to match,
-     and the two have to move together or the bars reserve room for a label that
-     is not being drawn. */
+     and the two still have to move together, though what goes wrong if they do
+     not is smaller than it was: until 2026-09-06 the bars reserved room for a
+     label nobody was drawing, and now it is only this button's own hit area
+     that is three times the glyph in it. */
   .fb-button-text { display: none; }
   .fb-button { justify-content: center; padding: 0; }
 }
