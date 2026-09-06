@@ -1,8 +1,11 @@
 # Back to where you jumped from
 
 Status as of 2026-09-06: **planned, not built** — evidence: no `jump-history.ts` in `src/web/`.
-Revised after [a cross-family review that refused the first draft](260906g-plan-review-sol.md) on
-four established P1s; what changed is in [§ What the review changed](#what-the-review-changed).
+Revised twice, after two cross-family reviews that each refused the draft before them —
+[round 1](260906g-plan-review-sol.md) on four established P1s,
+[round 2](260906g-plan-review2-sol.md) on three more. What changed is in
+[§ What the reviews changed](#what-the-reviews-changed). Discovery is now closed: twelve findings,
+all accepted, none overruled.
 
 A reader clicks a glossary term, lands three thousand words away, and cannot find their way home.
 On a desktop browser they press Back and it mostly works. Added to an iOS home screen — which is
@@ -82,7 +85,7 @@ already draws the line Greg would otherwise have to draw by hand:
   the article's own internal links, the diagram panel.
 
 So the *policy* — which movements are undoable — is already implemented, tested and documented, and
-that is the thing not to rebuild. What is missing is three smaller things, and the review found all
+that is the thing not to rebuild. What is missing is three smaller things, and the reviews found all
 three:
 
 1. **A Back the reader can press** in a `"display": "standalone"` shell
@@ -122,11 +125,17 @@ The single-mark version earns its place, because it answers something the chip's
 up.** Same datum as the chip, so nothing to keep in sync, no new colour, no decay curve, no second
 lane. That is Stage C.
 
-## What the review changed
+## What the reviews changed
 
-[260906g-plan-review-sol.md](260906g-plan-review-sol.md) — GPT Sol, high effort, 2026-09-06.
-**Verdict: refuse**, on F1–F4. Every finding was checked against the source before being acted on;
-all seven are accepted, and the two that changed the design most are F1 and F4.
+Two rounds, both **refusals**, twelve findings, all twelve accepted after being checked against the
+source. Nothing was overruled. Round two settled the one question round one left open — how the
+transaction can be atomic against nuqs's setter queue — by reading the queue rather than reasoning
+about it, which is why F11 specifies a code shape and not a principle.
+
+### Round 1 — [260906g-plan-review-sol.md](260906g-plan-review-sol.md)
+
+GPT Sol, high effort, 2026-09-06. **Verdict: refuse**, on F1–F4. The two that changed the design
+most are F1 and F4.
 
 | ID | Finding | Disposition |
 |----|---------|-------------|
@@ -142,6 +151,26 @@ Sol also considered and dismissed two of my own suspicions: `settleAddress`/`lif
 rewriting the address on arrival is *not* a defect, because preserving an entry-bound stamp across a
 same-path canonical rewrite is correct; and it could not establish a path where a stamp survives
 while its predecessor entry alone disappears. `tests/url-state.test.ts` passed 67/67 in its sandbox.
+
+### Round 2 — [260906g-plan-review2-sol.md](260906g-plan-review2-sol.md)
+
+**Verdict: refuse**, on F8 and F10 as established P1s, with F9 a third unless reversing the
+documented behaviour of comment stepping were an explicit product decision. It is not, so F9 is
+accepted too.
+
+| ID | Finding | Disposition |
+|----|---------|-------------|
+| F8 | P1 — **jumping from the top returns you below the top.** At `scrollY = 0` every row is below the reading line, but `measureRow()` still answers `0`, because `activeSectionIndex` initialises to zero and clamps there. So the predecessor would be rewritten to the first block, and Back would `scrollToBlock` it — aligning that row under the sticky chrome instead of restoring the actual top, losing the masthead | **Accepted.** The origin becomes `{ kind: "top" } \| { kind: "block"; blockId }` — the house's "let the types catch it" rule rather than a guard. `top` removes `?at=` from the predecessor rather than setting it |
+| F9 | P1 — **Stage B2 as written turns Prev/Next into the scroll-history the contract rejects.** Twenty questions spread through an article would make roughly twenty entries. [comments.md § Reading order](../project/comments.md#reading-order) says the arrows *"write no position state of their own"*, explicitly like `keynav.ts` | **Accepted**, and verified in that doc before acting. The two intents split: selecting a question from the drawer is an arbitrary jump and pushes; the dialog's arrows do not. The stamp survives their replaces, so after stepping through several questions the chip still returns to where the reader **entered** the traversal — which is a better answer than either half alone |
+| F10 | P1 — **"same block" does not mean "no movement".** `jumpTo` does the history write and `scrollToBlock` as independent statements, so suppressing only the push still moves the reader. A tall paragraph can cross the reading line with its top well above the viewport, and search deliberately calls `onJump` even when the result is visible | **Accepted.** The whole jump aborts — before `synced`, before the setter, before `scrollToBlock`. The visible cost is that clicking a search result for the paragraph you are already reading now does nothing, which is deliberate |
+| F11 | P2 — **the atomic shape was still unspecified, and both shapes I had offered were broken.** nuqs stores pending updates by key with `Map.set`, so a second `setAt` in one tick *overwrites* the first rather than queueing; any push option upgrades the combined flush to a push; and `throttle(0)` still schedules the flush for a later task. Two setters would have produced one destination push and silently **no** predecessor rewrite | **Accepted**, and this is the finding that saved the stage. The wrapper now owns the pair — see Stage A. Note it also softened the plan's wording: the History API cannot roll back if the second native call throws, so this is *"performed synchronously as one wrapper-owned operation"*, not *"written together or not at all"* |
+| F12 | P2, reasoned — **the chip can persist for the rest of a long reading session**, since ordinary scrolling replaces the entry while preserving its stamp. Truthful, but on a phone it permanently occupies reading space after the reader has chosen to go on | **Accepted.** A small dismiss control that strips only the current entry's stamp with a `replaceState`. Explicit dismissal cannot re-create F2, because no valid return disappears without the reader asking |
+
+On my three round-2 suspicions: rewriting `?at=` at jump time is **defensible and strengthens**
+"the URL is always current" — it records a truthful, finer block immediately before leaving, and
+adds nothing shareable; the `isBlockOnScreen` guard is **not** enough for comment stepping (F9); and
+never hiding the chip is semantically sound, but explicit dismissal is safer than any distance- or
+section-based rule that would try to guess.
 
 ## What the research turned up
 
@@ -178,28 +207,61 @@ The predecessor entry must name where the reader actually was, and the stamp mus
 
 - [ ] New `src/web/jump-history.ts`: pure functions over an opaque history-state object — read our
       stamp, write it, strip it while preserving foreign state. No React, no DOM.
-- [ ] **The origin is measured, not read.** At the moment of a jump, take the block crossing the
-      reading line — `measureRow()` in [`keynav.ts`](../../src/web/keynav.ts) already returns
-      exactly this, over every `tr[data-block]` rather than only section rows. **Not `?at=`**, for
-      the three reasons in F1.
-- [ ] **One transaction.** Replace the current entry's `?at=` with the measured origin, *then* push
-      the destination with that same origin in its state. The predecessor's URL and its stamp must
-      always agree — they are written together or not at all, never as two independently queued
-      nuqs setters.
+- [ ] **The origin is measured, not read**, and it is **not always a block**:
+
+      ```ts
+      type JumpOrigin = { kind: "top" } | { kind: "block"; blockId: BlockId };
+      ```
+
+      At the moment of a jump, take the block crossing the reading line — `measureRow()` in
+      [`keynav.ts`](../../src/web/keynav.ts) returns exactly this, over every `tr[data-block]`
+      rather than only section rows. **Not `?at=`**, for the three reasons in F1. But **if
+      `window.scrollY <= stickyOffset()` the origin is `top`** and the predecessor rewrite *removes*
+      `?at=` rather than setting it — F8, because `measureRow()` answers `0` at the top of the
+      article whether or not any row has reached the line, and a `scrollToBlock` on the first block
+      lands under the sticky chrome rather than at the top.
+
+- [ ] **One transaction, owned by the wrapper** (F11). `jumpTo` arms `{ pathname, origin, target }`
+      and makes **exactly one** nuqs call — the destination push. When `watchHistoryWrites`
+      intercepts the matching armed push it synchronously calls its **captured inner**
+      `replaceState` to rewrite the current entry to the origin, then its **captured inner**
+      `pushState` with the destination and the stamped state; it consumes the arm in a `finally` and
+      emits `NAVIGATED` once after the pair rather than once per call. The arm is matched against
+      its expected pathname and target, so an unrelated push cannot consume it.
+
+      **Two `setAt` calls would not have worked**, which is why this is spelled out: nuqs keys
+      pending updates with `Map.set`, so the second overwrites the first, any push option upgrades
+      the combined flush to a push, and `throttle(0)` still defers the flush to a later task. The
+      result would have been one destination push and no predecessor rewrite — a silent success of
+      exactly the shape [silent-success.md](../reusable/silent-success.md) is about.
+
+      "Captured inner", because calling `history.replaceState` here would recurse through our own
+      wrapper. And this is *synchronous and wrapper-owned* rather than atomic: the History API
+      offers no rollback if the second native call throws.
 - [ ] **Every same-path push strips the inherited stamp** and adds one only when a jump has just
       armed an origin (F3). An unarmed push clears rather than inherits.
 - [ ] `replaceState` preserves the current entry's stamp — free, via nuqs, but pinned by a test so
       it stays free.
 - [ ] A pathname change clears: an excursion belongs to one article.
-- [ ] **No push at all when the measured origin is the target block** (F6b) — a jump to where you
-      already are should not cost a history entry.
+- [ ] **When the measured origin is the target block, abort the whole jump** — before `synced`,
+      before the setter, before `scrollToBlock` (F6b, sharpened by F10). Suppressing only the
+      history write would still move the reader, because those are independent statements today and
+      a tall paragraph can cross the reading line with its top well above the viewport. The visible
+      consequence is that clicking a search result for the paragraph you are already reading does
+      nothing; that is deliberate and wants a comment at the abort saying so, or somebody will
+      "fix" it.
 - [ ] The wrapper is `watchHistoryWrites` ([`router.ts`](../../src/web/router.ts)), which is the
       single choke point for both nuqs's writes and `navigate`'s. `navigate` currently hardcodes
       `null` state; it stops doing that.
 - [ ] Tests, red first — `tests/jump-history.test.ts`: strip-and-preserve, the arm-and-consume
       handshake, a `cols`/`mode`/`sort` push after a jump carrying **no** stamp, a replace after a
-      jump carrying **one**, jumping from the very top of the article, jumping within a section
-      after manual scrolling, and jumping while the 300ms position replace is pending.
+      jump carrying **one**, jumping within a section after manual scrolling, jumping while the
+      300ms position replace is pending, and both variants of `JumpOrigin` round-tripping through
+      the stamp. Two of them assert more than a stamp's existence:
+      - **from the top**: the predecessor URL has **no** `?at=`, and the final `scrollY` is `0`
+      - **the F10 abort**: `scrollToBlock` was **not called**, not merely that no entry appeared
+- [ ] Mutate the finished code at the end of the stage and check the suite notices — red-first only
+      tests the diff ([silent-success.md](../reusable/silent-success.md)).
 
 ### Stage B — the chip
 
@@ -215,23 +277,40 @@ The predecessor entry must name where the reader actually was, and the stamp mus
       `useReadingPosition` already does the scroll.
 - [ ] A stamped block the article no longer has (re-extraction) hides the chip rather than pointing
       at nothing — the same graceful nothing `scrollToBlock` gives a stale `?at=`.
-- [ ] Tests: the gate, the label, and that a `cols` push after a jump draws no chip.
+- [ ] An origin of `{ kind: "top" }` reads **"↩ back to the beginning"** rather than naming a
+      section (F8).
+- [ ] **A dismiss control** (F12): a small × that strips only the current entry's stamp with a
+      `replaceState`. The chip is otherwise honest for as long as the stamp is on the entry, which
+      can be the rest of a long session — and an *inferred* hide rule is what F2 already refused, so
+      the escape has to be one the reader asks for.
+- [ ] Tests: the gate, the label (both origin variants), that a `cols` push after a jump draws no
+      chip, and that dismissing strips the stamp without adding a history entry.
 - [ ] Browser check in a Sonnet subagent at phone width, per
       [browser-control.md](../project/browser-control.md).
 
-### Stage B2 — comment navigation joins the transaction
+### Stage B2 — opening a question is a jump; stepping between them is not
 
-- [ ] `goToComment` ([`App.tsx`](../../src/web/App.tsx)) routes through the jump transaction **when
-      it actually moves the page** — that is, when `isBlockOnScreen` is false. When the target is
-      already visible it must keep holding still, which is the existing deliberate behaviour and the
-      reason two comments in one paragraph do not jolt.
-- [ ] `?note=` keeps replacing. Only the position pushes.
-- [ ] Tests: the drawer's selection and the dialog's Prev/Next both leave a stamp when they move and
-      none when they do not.
+Both paths call `goToComment` today, and F9 is that they are two different intents wearing one
+function. Splitting them is the whole stage.
+
+- [ ] **Opening a question from the drawer is an arbitrary jump** and goes through the transaction
+      when it moves the page. The call sites are the two `onOpenComment` closures in
+      [`App.tsx`](../../src/web/App.tsx) (the owner's and the visitor's).
+- [ ] **The dialog's Prev/Next do not push** — the four `onPrev`/`onNext` closures in the same file.
+      They keep replacing `?note=` and scrolling, exactly as
+      [comments.md § Reading order](../project/comments.md#reading-order) says: *"Like keynav.ts, it
+      writes no position state of its own"*. Twenty questions must not cost twenty presses of Back.
+- [ ] **The stamp survives those replaces**, which is what makes the split better than either half:
+      after stepping through several questions the chip still points at the place the reader
+      **entered** the traversal from, not at the previous question.
+- [ ] When the target is already on screen, nothing moves and nothing is pushed — the existing
+      deliberate behaviour, and the reason two comments in one paragraph do not jolt.
+- [ ] Tests: drawer selection of an off-screen question adds **one** entry; **ten** off-screen
+      Prev/Next steps add **none**, and the chip still names where the traversal began.
 
 ### Stage C — one tick in the spine
 
-- [ ] A single faint mark at the origin block, drawn only while the chip is up, through the rail's
+- [ ] A single faint mark at the origin block, drawn only while the chip is up, and none at all for a `{ kind: "top" }` origin (F8), through the rail's
       existing mark machinery ([`spine-marks.ts`](../../src/web/spine-marks.ts)).
 - [ ] It must not take a search lane or move the search marks sideways.
 - [ ] Test the arithmetic, not the pixels — that is what `spine-marks.ts` is a separate module for.
