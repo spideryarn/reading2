@@ -165,6 +165,38 @@ export function toggleSort<T>(table: Table<T>, columnId: string, shift: boolean)
 /** See `defaultColumn` below. One object, so its identity is not render-scoped. */
 const DEFAULT_COLUMN = { sortUndefined: false } as const;
 
+/**
+ * The horizontal inset on every cell, header and body alike.
+ *
+ * Written once because a header and its column have to agree: 12px inside, and
+ * 16px against the two outer edges so the text is not sitting on the border.
+ * It was a flat `px-2` (8px) until 2026-09-06 — which read as cramped only
+ * *after* the vertical column rules stopped being drawn over the top of it
+ * (styles.css § the head with no row). Research band for a dense table is
+ * 12–16px horizontal against 8px vertical.
+ */
+const CELL_X = "tw:px-3 tw:first:pl-4 tw:last:pr-4";
+
+/**
+ * The one fluid column: absorbs leftover width, truncates rather than widening,
+ * and **will not collapse to nothing in a narrow window.**
+ *
+ * `w-full max-w-0` is the absorbing half, and its trap is in `DataTable`'s doc
+ * comment. `min-w-56` is the other half. Without it, a window narrower than the
+ * fixed columns need squeezes the *fluid* column instead of scrolling: the dates
+ * and counts keep their `whitespace-nowrap` widths and the title gets whatever
+ * is left. Measured at 390px before this line: a **53px** article column reading
+ * "Antl…", beside date columns at full width. The table was already scrolling —
+ * it was just scrolling with nothing worth reading in it.
+ *
+ * A minimum beats a maximum in CSS, so this wins against `max-w-0` exactly where
+ * it should and is inert everywhere else: a wide window never reaches it.
+ */
+const FLUID_CELL = "tw:w-full tw:max-w-0 tw:min-w-56";
+
+/** Everything a non-fluid cell gets: its own width, on one line, quieter than the title. */
+const FIXED_CELL = "tw:whitespace-nowrap tw:text-xs tw:text-muted-foreground";
+
 export function useSortedTable<T>({
   data,
   columns,
@@ -397,11 +429,8 @@ export function DataTable<T>({
                 return (
                   <td
                     key={cell.id}
-                    className={`tw:px-2 tw:py-2 ${
-                      // `w-full max-w-0` on the fluid column: see the doc above.
-                      meta?.fluid
-                        ? "tw:w-full tw:max-w-0"
-                        : "tw:whitespace-nowrap tw:text-xs tw:text-muted-foreground"
+                    className={`${CELL_X} tw:py-2 ${
+                      meta?.fluid ? FLUID_CELL : FIXED_CELL
                     } ${meta?.numeric ? "tw:text-right tw:tabular-nums" : ""}`}
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -451,8 +480,13 @@ function HeaderCell<T>({ table, header }: { table: Table<T>; header: Header<T, u
     <th
       scope="col"
       aria-sort={primary && sorted ? (sorted === "asc" ? "ascending" : "descending") : undefined}
-      className={`tw:whitespace-nowrap tw:px-2 tw:py-2 tw:text-xs tw:font-medium ${
-        meta?.fluid ? "tw:w-full" : "tw:w-0"
+      /* `CELL_X` rather than its own padding, so a header and the column under
+         it cannot drift apart by one of the two being edited. The minimum on
+         the fluid column is repeated here for the same reason: a table sizes a
+         column from every cell in it, header included, so a `min-w` on the body
+         cells alone is half a constraint. */
+      className={`tw:whitespace-nowrap ${CELL_X} tw:py-2 tw:text-xs tw:font-medium ${
+        meta?.fluid ? "tw:w-full tw:min-w-56" : "tw:w-0"
       } ${meta?.numeric ? "tw:text-right" : "tw:text-left"}`}
     >
       {sortable ? (

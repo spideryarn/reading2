@@ -55,6 +55,7 @@ import type { LibraryEntry, LibraryHit } from "../types.js";
 import { AddArticle } from "./AddArticle.js";
 import { ADDED_NOTE, CARD_NOTES, CHIP_ORDER, DEFAULT_BY, libraryColumns } from "./library-columns.js";
 import { DataTable, naturalDirections, useSortedTable } from "./lib/DataTable.js";
+import { capRows } from "./lib/row-cap.js";
 import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
 import { fold, foldWithMap, libraryHitHref, queryTerms } from "./library-hits.js";
@@ -116,6 +117,26 @@ export function Library({
   const [rawDir, setDir] = useQueryState("dir", sortDirParam);
   const [view, setView] = useQueryState("view", libraryViewParam);
   const [show, setShow] = useQueryState("show", libraryShowParam);
+
+  /**
+   * Whether the table is showing every row or only the first `SHELF_ROW_CAP`.
+   *
+   * **Deliberately not in the URL**, unlike every other bit of state on this
+   * page. The rule in docs/project/url-state.md is that the query string says
+   * *how you are looking at* the shelf, and this is nearer to a scroll position
+   * than to a view: nobody wants to send somebody a link to the first fifty.
+   *
+   * **And deliberately here rather than inside `DataTable`.** As component-local
+   * state it would reset every time that component unmounted — which is on every
+   * switch to cards and every search that matches nothing — so "show all" would
+   * have quietly undone itself in exactly the places a reader would notice.
+   * GPT Sol, 2026-09-06.
+   *
+   * It does *not* reset when the search changes, which is the other half of the
+   * same choice: "show me all of them" reads as a standing preference, not as an
+   * answer to one query.
+   */
+  const [expanded, setExpanded] = useState(false);
 
   const query = rawQuery ?? "";
 
@@ -276,6 +297,11 @@ export function Library({
 
   /* Whichever column is sorted first decides what a card says about itself. */
   const note = CARD_NOTES[sorting[0]?.id ?? ""] ?? ADDED_NOTE;
+
+  /* The table's first fifty, and whether there is a "show all" to offer. Taken
+     from `sorted`, which is after both `sinkLast` passes — capping before the
+     sort would pick its fifty out of the wrong order. lib/row-cap.ts. */
+  const capped = capRows(sorted, SHELF_ROW_CAP, expanded);
 
   return (
     <main className="tw:mx-auto tw:max-w-4xl tw:px-6 tw:py-10 tw:font-sans">
@@ -451,8 +477,31 @@ export function Library({
           resolved above this line, so neither view can disagree with the other
           about what is on the shelf or what order it is in — see
           ShelfControls.tsx. */}
+      {/* **The first fifty, and a button for the rest.** Greg, 2026-09-06:
+
+          > the table should by default only show the top 50? or so Articles,
+          > with a button at the bottom to show all. Eventually we might consider
+          > paging, but probably that's overkill for now
+
+          Sliced **here**, after both `sinkLast` passes, rather than inside
+          `DataTable`: the cap is caller policy, which is the same reason
+          `DataTable` takes its rows as a prop rather than reading them off the
+          table. It also could not carry the label — `DataTable`'s other consumer
+          is /admin's list of accounts (AdminPage.tsx), and "Show all 213
+          articles" is not a sentence a shared component can write.
+
+          Slicing before the sort would cap the wrong fifty. */}
       {sorted.length > 0 && view === "table" && (
-        <DataTable table={table} rows={sorted} caption="Your articles" />
+        <>
+          <DataTable table={table} rows={capped.shown} caption="Your articles" />
+          {/* The button is drawn exactly when `revealTotal` is a number, and
+              that number is the only count it can print — see lib/row-cap.ts on
+              why the slice and the button come from one call rather than two
+              conditions that agree until somebody edits one of them. */}
+          {capped.revealTotal !== null && (
+            <ShowAllRows total={capped.revealTotal} onShowAll={() => setExpanded(true)} />
+          )}
+        </>
       )}
       {sorted.length > 0 && view === "cards" && (
         <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
@@ -514,6 +563,49 @@ const slugOf = (entry: LibraryEntry) => entry.slug;
 
 /** One frozen empty array, so a shelf that has not loaded does not rebuild the table each render. */
 const EMPTY: LibraryEntry[] = [];
+
+/**
+ * How many rows the table draws before it asks.
+ *
+ * Fifty is the middle of what real products pick — GitHub's API pages at 30,
+ * Gmail at 50, Notion offers 10/25/50/100 — and it is a reveal rather than
+ * pagination on purpose. NN/g's own framing is that infinite scroll and its
+ * relatives suit "homogeneous items with no particular task or goal", and hurt
+ * anything you need to *find or return to*; a personal library is the second
+ * kind, so the affordance that keeps the back button, the footer and a sense of
+ * place is a button you press once.
+ *
+ * The cards view is uncapped. It has the same problem and Greg asked for the
+ * table, so it is left alone until he wants otherwise — the same two lines at
+ * the same call site.
+ */
+const SHELF_ROW_CAP = 50;
+
+/**
+ * **"Show all 213 articles"** — the count is in the label rather than in a
+ * caption above it.
+ *
+ * Notion's "Load N more" is the one shape among the candidates that was verified
+ * against a shipped product, and it is the more actionable of the two: a reader
+ * who wants the rest presses the thing that says how many the rest are. A
+ * separate "showing 50 of 213" line would also be the *second* count on this
+ * page — `narrowed` above already prints one whenever the search box or the
+ * Unread chip is hiding something, and two counts that mean different things,
+ * one above the table and one below it, is a worse page than either.
+ *
+ * Full width and quiet: it is the foot of the list, not a call to action.
+ */
+function ShowAllRows({ total, onShowAll }: { total: number; onShowAll: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onShowAll}
+      className="tw:mt-2 tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-transparent tw:px-4 tw:py-2 tw:text-xs tw:text-muted-foreground tw:transition-colors tw:hover:border-highlight/50 tw:hover:bg-highlight/5 tw:hover:text-foreground"
+    >
+      Show all {total.toLocaleString()} articles
+    </button>
+  );
+}
 
 /* ------------------------------------------------------------- searching -- */
 
