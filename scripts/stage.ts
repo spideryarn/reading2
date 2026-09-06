@@ -94,12 +94,12 @@ import path from "node:path";
 
 import { loadEnvLocal } from "../src/env.js";
 
-/* **Before the dynamic imports below, and that is the point.** `src/store/live.ts`
-   reads `SPIDERYARN_STORE` once, at first import, and `src/store/blobs.ts` picks
-   between Supabase Storage and `data/_blobs/` from two credentials — so a module
-   graph loaded before `.env.local` has been applied makes a *different* storage
-   selection from the server, writes bytes nothing else can find, and reports
-   success (docs/postmortems/260831e-a-write-path-with-no-reader.md). Static
+/* **Before the dynamic imports below, and that is the point.** `src/store/blobs.ts`
+   picks between Supabase Storage and `data/_blobs/` from two credentials, and
+   `src/store/index.ts` checks Supabase credentials in its own module body — so a
+   module graph loaded before `.env.local` has been applied makes a *different*
+   storage selection from the server, writes bytes nothing else can find, and
+   reports success (docs/postmortems/260831e-a-write-path-with-no-reader.md). Static
    imports are hoisted above every statement in a module, so the only way to put
    a call before them is to make them dynamic. */
 loadEnvLocal();

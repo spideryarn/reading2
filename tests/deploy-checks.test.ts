@@ -35,7 +35,6 @@ import {
   migratorUrlFrom,
   missingGateFixtures,
   readLogQuery,
-  retiredNotes,
   rollbackAdvice,
   sawSmokeLine,
   scanSql,
@@ -1168,52 +1167,3 @@ describe("postApplyProblems", () => {
   });
 });
 
-/**
- * **The nag that retires the tombstone**, and the two things that make it a
- * sensor rather than furniture.
- *
- * `SPIDERYARN_STORE` decides nothing since 2026-09-05. Stage I of
- * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
- * deletes the tombstone that reads it, and cannot start until the variable is
- * gone from Vercel — which needs a credential only the deploy machine has.
- * This is what tells that machine, on every deploy, that the chore is pending.
- */
-describe("retiredNotes", () => {
-  it("says nothing about a deployment with nothing left to retire", () => {
-    expect(retiredNotes(healthy)).toEqual([]);
-  });
-
-  /* The field is omitted, not emptied, when there is nothing to say
-     (src/vercel-health.ts § `RETIRED`) — so absent is the case that matters,
-     and an older deployment that predates the field looks exactly like it. */
-  it("says nothing when the field is not there at all", () => {
-    expect(retiredNotes({ ok: true })).toEqual([]);
-  });
-
-  it("names the variable and carries the instruction through", () => {
-    const notes = retiredNotes({
-      ...healthy,
-      retired: [{ name: "SPIDERYARN_STORE", why: "run `vercel env rm SPIDERYARN_STORE production`" }],
-    });
-
-    expect(notes).toHaveLength(1);
-    expect(notes[0]).toContain("SPIDERYARN_STORE");
-    expect(notes[0]).toContain("vercel env rm");
-  });
-
-  /**
-   * **The line that keeps it out of the gate.** Everything `judgeHealth`
-   * returns fails the deploy; a variable that decides nothing must not. Move
-   * this reporting into `judgeHealth` and this reddens — which is the point,
-   * because the failure mode it guards is a red that is not a fault, and those
-   * are the reds people learn to force past.
-   */
-  it("is not a deploy-blocking problem", () => {
-    const withLeftover = {
-      ...healthy,
-      retired: [{ name: "SPIDERYARN_STORE", why: "remove it" }],
-    };
-
-    expect(judgeHealth(withLeftover, { commit: SHA })).toEqual([]);
-  });
-});

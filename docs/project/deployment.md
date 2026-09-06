@@ -609,7 +609,7 @@ is read by nothing.
 
 | | |
 |---|---|
-| `SPIDERYARN_STORE=postgres` | **Take this out.** It chose which store served reads until 2026-09-05; there is one store now and [`src/store/live.ts`](../../src/store/live.ts) throws on any value but `postgres`, so it is tolerated rather than needed. Removing it from Preview and Production is what unblocks stage I of [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md), and only Greg can do it |
+| ~~`SPIDERYARN_STORE=postgres`~~ | **Gone from Preview and Production, 2026-09-06.** It chose which store served reads until 2026-09-05; a tombstone tolerated `postgres` and threw on anything else while it was still set, and removing it is what unblocked stage I of [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md), which deleted the tombstone, the `retired` sensor and the deploy nag. Do not set it again: it is read by nothing |
 | `DATABASE_URL` | **set on Production, 2026-08-27** — `/api/health` reports `store: postgres` and reads work. Supabase's **transaction** pooler, port 6543. See [database.md § Connecting to the remote](database.md#connecting-to-the-remote) for why that one and not the other two. **Production only, deliberately, as of 2026-08-27** — there is one remote database and no staging copy, so putting it on Preview would point every branch build at the real data. A preview therefore still has no database, so it fails at the store rather than serving an empty shelf. That is the intended failure until somebody decides otherwise |
 | `PGSSLROOTCERT=certs/supabase-ca.crt` | **required here, unlike locally** — see [the certificate](#the-certificate-moved-and-nothing-would-have-said-so) |
 | `NODE_OPTIONS=--experimental-require-module` | see [require(ESM)](#the-runtime-has-requireesm-turned-off). **Set on Production and, since 2026-08-27, Preview.** It was Production-only until then (measured 2026-08-26), which meant a preview deployment used to check anything failed for a reason unrelated to whatever you were checking |
@@ -673,40 +673,45 @@ Not every variable is required, deliberately. `breaks: null` means one of two th
 - **Something else already says it better.** A missing `DATABASE_URL` is reported by the `ssl` block
   with its reason attached; a missing `PGSSLROOTCERT` surfaces as `TLS mode is …, not verified`,
   which is the truer statement, since the certificate can also be present and unused. `EXPECTED` has
-  had no entry for `SPIDERYARN_STORE` since 2026-09-05; there is one store, and the flag is now
-  reported by the `retired` block below instead.
+  had no entry for `SPIDERYARN_STORE` since 2026-09-05, and there is nothing left to report about it
+  at all since 2026-09-06.
 
 The rule, then: **warn here only about what nothing else notices.** Warning twice about one fault
 teaches whoever reads the list to skim it, and then the next real line gets skimmed too — which is
 how a `false` sat in this response for a day.
 
-### `retired`: the mirror of `env`, and it is not a warning
+### `retired`: the sensor that retired itself
 
-`EXPECTED` asks *"is this set, and what breaks if it is not"*. Since 2026-09-05 there is a second,
-much shorter list — `RETIRED` in [`src/vercel-health.ts`](../../src/vercel-health.ts) — asking the
-opposite: *"is this **still** set, and what should be done about it"*. It has one entry,
-`SPIDERYARN_STORE`, and the field naming it looks like this:
+**Gone as of 2026-09-06, and the shape is worth keeping even though the code is not.** `EXPECTED`
+asks *"is this set, and what breaks if it is not"*. For one deployment there was a second, much
+shorter list — `RETIRED` in [`src/vercel-health.ts`](../../src/vercel-health.ts) — asking the
+opposite: *"is this **still** set, and what should be done about it"*. It had one entry,
+`SPIDERYARN_STORE`, and it put a `retired` field beside `warnings` in the health body, which
+[`scripts/deploy.ts`](../../scripts/deploy.ts) printed as a `still to remove:` line on the one
+machine holding a Vercel credential.
 
-```json
-{ "ok": true, "warnings": [],
-  "retired": [{ "name": "SPIDERYARN_STORE", "why": "…run `vercel env rm SPIDERYARN_STORE production`…" }] }
-```
+Three things about it were deliberate, and the first two are the reusable part:
 
-Two things about it are deliberate and easy to get wrong:
-
-- **It never goes in `warnings`.** Anything in `warnings` 503s this endpoint and
+- **It never went in `warnings`.** Anything in `warnings` 503s that endpoint and
   [`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) turns it into a deploy-blocking
-  problem — so a leftover variable that decides nothing would take production unhealthy and stop
-  every deploy until somebody with a Vercel credential was free. A red that is not a fault is a red
-  people learn to force past.
-- **Absent is silent, not empty.** The field is omitted entirely when there is nothing to retire, so
-  **its disappearance is the signal**: when `npm run deploy` stops printing its `still to remove`
-  line, stage I of
-  [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) can start
-  and the tombstone comes out.
+  problem — so a leftover variable that decides nothing would have taken production unhealthy and
+  stopped every deploy until somebody with a Vercel credential was free. A red that is not a fault
+  is a red people learn to force past.
+- **Absent was silent, not empty**, so its disappearance was meant to be the signal. Greg ran
+  `vercel env rm` on both environments on 2026-09-06 and stage I of
+  [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) started
+  the same afternoon — but **the line went on printing**, and correctly. A deployment's environment
+  is baked at build time, so `/api/health` reports what *that build* was given; the sensor could
+  only have gone quiet after a redeploy, and the redeploy would have carried stage I, which deletes
+  the field. The evidence was the two `vercel env rm` results. A sensor that has to be redeployed
+  to report its own retirement cannot confirm it.
+- **It went out with what it was watching**, in that same stage — `RETIRED`, `retiredNotes`, the
+  field and the deploy line. A sensor for a chore that has been done is furniture, and the next
+  reader would take it for a live check.
 
-Adding an entry is one line. Do it whenever a variable stops deciding anything but is still set on
-Vercel, and delete the entry in the same commit that stops tolerating it.
+**If you need this again**, build it the same way and delete it the same way: a list of names beside
+`EXPECTED`, reported and never warned about, omitted rather than emptied, and removed in the commit
+that stops tolerating the thing it watched.
 
 ### Three ways the first version of that table still lied
 
