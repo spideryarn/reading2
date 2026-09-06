@@ -53,6 +53,11 @@ What changed: the eleven pages, the eight present-tense references in `src/web/p
 `scripts/live-spike.ts`, and that one asserted link. `tests/gutter-target-size.test.ts:28` is *not*
 a reference — it names a `preview-gutter.html` in order to say no such file exists.
 
+**The naming passed over:** dropping the `preview-` prefix inside the new folder, so the pages would
+be `preview/callout.html` rather than `preview/preview-callout.html`. It reads better and it was
+rejected, because it breaks the one-to-one name match with `src/web/preview-callout.tsx` — and that
+match is the whole reason the pair is findable by grep, which is how anybody arrives at either file.
+
 **Smoke-tested rather than assumed**, which was Sol's condition: a real dev server, all eleven URLs
 requested, each answer checked for its own entry module rather than for a 200 — Vite's SPA fallback
 returns `index.html` with a 200 and would otherwise have hidden a 404. 11/11 served, and the old
