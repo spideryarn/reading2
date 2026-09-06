@@ -425,6 +425,100 @@ each go red.
 - `touch.md`, `tooltips.md`, `reading-view-overview.md` get their `styles.css §` pointers updated
   to name the file that now owns the rule.
 
+### Stage 4, part 2 — the owner sweep, 2026-09-06 (`ffa12f4e`)
+
+`tests/every-mode-draws-its-surface.test.tsx`, 28 tests. One harness, two phases, as Sol's F6
+required: phase A with every artefact 404 checks `SPENDS`; phase B with **twelve populated,
+deliberately asymmetric fixtures** checks `DRAWS`. Each `says` is a string invented for that mode
+alone, never a heading, count or button label.
+
+Three mutations, all red, all restored — and the third is the one the nullable table would have
+missed:
+
+```
+quotes: the band drew no body:
+  expected '1 quoteYour profileChoose them again'
+  to contain 'before anybody could say what it would measure'
+```
+
+The shell, the `band-head` count (*"1 quote"*), the empty/stale chrome and the hidden copies were
+all still on the page. Only the body was gone, and the assertion caught it.
+
+Adding a fifteenth word to `MODES` is now red at `SPENDS` and `DRAWS` as well as `MODE_LABEL`,
+`OWNER_MODE_NOTE`, `MODES_UI`, `POLICY`, `MODE_TARGET` and `BAND_SAYS`.
+
+Three fixture facts worth keeping: Illustrated can only be armed on an article that already has a
+Sketch (`useIllustrated.ts`); `quotes`' `says` is the quoted line rather than the model's `reason`,
+because the panel draws the line; and `hierarchy` needs `?cols=1`, since an absent `cols` means
+*whatever fits* and nothing fits in jsdom.
+
+### The merge, 2026-09-06 (`1da61575`)
+
+The collision this plan was shaped around. `origin/dev` added 139 lines to `styles.css` in three
+places while this branch made it a manifest. Resolved by moving **their** hunks into the sheets
+that now own those regions — the origin line to `shell.css`, the PDF figure note to `prose.css`,
+`.tip-soon-head` to `dock.css` — anchored on the run of context lines each follows rather than on
+line numbers, since line numbers are what the split changed.
+
+**Verified by position, not by size.** A hunk dropped into the wrong file still builds, is still
+the right length, and still passes every test. So: concatenating the 37 sheets in import order with
+the headers stripped reproduces `origin/dev`'s `styles.css` from line 29 on — all **15,629 lines**,
+exactly.
+
+### Stage 5 — the docs, 2026-09-06
+
+83 references to `styles.css` found across `docs/`; **53 repointed** at the sheet that now owns the
+rule, 30 deliberately left at the entry point under a stated rule (a *section or selector* → the
+owning file; the *entry point, the import, the layering, the load order* → `styles.css`, which is
+still exactly right).
+
+Four stale facts corrected, three of them made stale by this change and one merely exposed by it:
+
+- **`tailwind.css` said "the four narrower blocks in styles.css"** — `grep -rc "prefers-reduced-motion"`
+  finds **18 across 13 files**. Wrong by more than four times, for long enough that nobody can say
+  when it drifted.
+- **`design-css-overview.md`'s z-index inventory command** pointed at `styles.css` and so returned
+  **nothing at all** after the split — a documented command that answers zero without erroring.
+  Repointed, re-run, re-dated: 31 declarations.
+- **`web-client.md` and `browser-testing.md` both said `styles.css` is 1,212 lines.** A proportion
+  pinned to two absolute numbers ("about 1,060 of 1,212") goes stale twice as fast as one.
+- **`design-css-overview.md`'s own line count**, which the sweep set to 15,812 and the merge then
+  made 15,951 within the same day — a good illustration of why these carry a command and a date.
+
+`new-mode.md`'s compiler-checked table gained `MODE_TARGET`, `SPENDS` and `DRAWS`, and its residue
+list lost the activation entry. **The residue list shrinking was the deliverable**, and it shrank.
+
+#### `/design` — the shared band, in its real states (`61fdf6a5`)
+
+Eight bands, using the **real** `JobProgress`, the real `.mode-band` / `.band-head` markup and the
+real `.gloss-*` bodies — nothing that imitates a component, because a design page drawing its own
+approximation goes on looking right after the component changes.
+
+**Four of the brief's six state names are real; two are not**, and the page says so. `loading`,
+`none` (= *missing*), `ready` (= *success*) and `error` are `ArtefactStatus` in `useAutoRun.ts`.
+*Stale* is not a status — it is a boolean beside a `ready` one — and *running* is a `Job` on
+screen, which is `JobProgress`'s business. Two more were added that the code has and the brief did
+not name: **built-and-empty** (`builtButEmpty`, used by three panels) and the long-label case.
+
+**And it immediately did its job — two real defects, both pre-existing, neither mine:**
+
+1. **A long run-button label overflows the band by 71px.** shadcn's `Button` is
+   `whitespace-nowrap` and `shrink-0`, so `.gloss-run`'s `flex-wrap` cannot rescue it. `.band-head h2`
+   beside it truncates correctly, which is why nobody had seen this: the half that fails is the half
+   nobody made long.
+2. **At a 20px root the controls grow and the band does not.** The chip goes 28 → 34px and
+   `size="sm"` 32 → 40px while the band stays 288px, because the band's width is in `px`
+   (`MODE_MIN`) and the controls are in `rem`.
+
+Both are recorded rather than fixed: they are product-visible geometry, outside A10's ground, and
+[design-css-overview.md § Controls](../project/design-css-overview.md) is where a fix would need to
+argue itself.
+
+One deviation, flagged by the implementer and worth acting on later: `--mode-w: 288px` mirrors
+`MODE_MIN` in CSS rather than importing it, because importing `layout.ts` into `DesignPage` would
+require a line in `SHARED_WITH_READER` (`tests/eager-client-graph.test.ts`) — which that agent was
+barred from touching. `App.tsx` already loads `layout.ts` eagerly, so adding it is free.
+
 ## Reviews
 
 GPT Sol on this plan before any code, and at the end of every stage. Two rounds each, then settle
@@ -468,6 +562,39 @@ identical* to the current output. He also declined my two offered retreats: no r
 **Discovery is now closed** (two rounds). F5's and F6's final fixes were not in the round-two
 snapshot, so they get a narrowly scoped check *of those fixes* when stage 4's code goes for review —
 not a reopening of the plan.
+
+### Round 1, on the code — [260906d-code-review-sol.md](260906d-code-review-sol.md)
+
+Verdict: **refuse**, on four established P1s. Sol found no evidence the split changed the compiled
+cascade — *"but its guards are weaker than claimed"*, which is the sentence that matters, and it
+was right. **He reproduced every one of the nine by mutating and running**, which is exactly what a
+plan-stage review could not have done.
+
+The P2s, all in guards I wrote or touched, all fixed and each verified **mutation-first** —
+reproduce, watch it pass, fix, watch it fail (`05ca1d21`, `e5b3772f`):
+
+| ID | Finding | Mutation: before → after |
+|---|---|---|
+| F15 | **The manifest guard sorted both sides**, so it never checked import order — the one thing it exists to protect. Moving `glossary.css` below `timeline.css` left all four tests green, reversing the `.gloss-quiet` / `.tl-thin` overrides | PASS → **FAIL**. Now compared against a hand-written ordered `MANIFEST`: the list is the expectation, the file the implementation |
+| F16 | `startsWith("@import")` accepted an external URL, a path outside `src/web/styles/`, the typo `@important;`, and **`@import "./styles/table.css" print;`** — which makes every table rule print-only | PASS → **FAIL**, and the `print` qualifier alone also fails. Exact shapes now, as an allowlist |
+| F17 | The resolver emitted each sheet at the *first* mention with one global `seen` set, so it was neither positional nor duplicate-preserving. Appending `@import "./spine.css"` to `table.css` left 194 tests green while the real build emitted Spine **twice** | PASS → **FAIL** in 7 of 8 suites, plus a new duplicate branch |
+| F18 | The aimed-column guard let arbitrary selector suffixes through; `.never` on all eight `[data-aim]` selectors — none of which can match any DOM — stayed green | PASS → **FAIL** |
+| F19 | The hue guard checked only `Math.max`. Deleting rules 1–7 and keeping 8 left all 50 annotate tests green | PASS → **FAIL**: `expected [ 8 ] to deeply equal [ 1..8 ]` |
+
+**Two places Sol was wrong, both found by running rather than reading** — the reason CLAUDE.md says
+to check each finding yourself:
+
+- **F17's premise.** Sol said the tree has no nested relative imports, which made "ban them all"
+  look safe. `styles/tokens.css` imports `./colourscales.css`, and `readerSheets()` walks it. The
+  ban landed narrowed to *no relative `@import` under `src/web/styles/`*, plus no file visited
+  twice anywhere, with an error message that names which case you are in.
+- **A docblock I wrote.** It claimed no relative import in this tree carries a `layer()` suffix.
+  `tailwind.css`'s `@import "./styles.css" layer(app)` does, and it is the entire layering
+  mechanism this job rests on.
+
+F18's fix also needed `aimed-column.test.ts` moved to the jsdom environment, which broke its
+`new URL(…, import.meta.url)` reads — jsdom hands back an `http` `import.meta.url` — so those
+became cwd-relative, matching the sibling style tests.
 
 ## What actually happened
 

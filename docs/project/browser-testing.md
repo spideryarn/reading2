@@ -770,9 +770,11 @@ class present in the DOM.
 
 **A utility that does nothing means the *layer order* is wrong, not that Tailwind failed to install.**
 Everything Tailwind emits sits inside a cascade layer, and unlayered declarations beat layered ones
-whatever the order and whatever the specificity. `styles.css` is 1,212 lines of descendant rules
-covering exactly the elements chrome components go on, so an unlayered `styles.css` outranks every
-utility, silently. The guard is the `@import "./styles.css" layer(app)` in
+whatever the order and whatever the specificity. The hand-written sheets are thousands of lines of
+descendant rules covering exactly the elements chrome components go on
+(`wc -l src/web/styles.css src/web/styles/*.css` — 15,951 over 38 files, 2026-09-06), so an
+unlayered `styles.css` outranks every utility, silently. The guard is the
+`@import "./styles.css" layer(app)` in
 [`src/web/tailwind.css`](../../src/web/tailwind.css)
 ([web-client.md § Four guards](web-client.md#four-guards-all-in-tailwindcss)). To check it, look at
 the emitted CSS, not the page:

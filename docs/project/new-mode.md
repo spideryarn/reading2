@@ -35,7 +35,9 @@ rest.** A fifteenth word there is red until it has a row in each of these totals
 | `OWNER_MODE_NOTE` | [`src/messages.ts`](../../src/messages.ts) |
 | `MODES_UI`, via `ModesMissingFromDock` | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) — an ordered array, because the order is Greg's; the type check stands in for the `Record`. **The row carries a required `experimental: boolean`**, so adding a mode means deciding whether it is finished enough to draw for everybody — [experimental-features.md](experimental-features.md). Say why in the table there either way; moving one later is [§ Moving a mode in or out of the switch](#moving-a-mode-in-or-out-of-the-switch) |
 | `POLICY` | [`src/web/visitor.ts`](../../src/web/visitor.ts) — what a visitor may see; there is no fall-through any more, a missing row is a typecheck error |
-| `BAND_SAYS` | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) |
+| `BAND_SAYS` | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) — what a **visitor** is shown |
+| `MODE_TARGET` | [`src/web/activation.ts`](../../src/web/activation.ts) — **whether pressing it spends money.** Total since 2026-09-06, over a tagged union: `fixed` carries the target, `delegated` carries **an arming function** (Diagram, whose target is whatever `?diagram=` says), `none` carries the reason in a sentence. A `delegated` row holding a *name* rather than a function was the first draft and GPT Sol refused it — nothing consumes a string, so a mode could claim delegation with no arming path anywhere |
+| `SPENDS` and `DRAWS` | [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx) — what an **owner's** press buys, and what the band actually draws. Both independently written, never derived from the tables above; `DRAWS` is total over `Exclude<Mode, NO_BAND_MODES>` with **neither field nullable**, so a bandless mode is a deliberate edit rather than an omission |
 
 Then the residue, which is why this page exists:
 
@@ -51,12 +53,13 @@ Then the residue, which is why this page exists:
   [`useStepJob.ts`](../../src/web/useStepJob.ts), rather than a ninth copy of either. *Nothing.*
 - **Opening it for the first time starts it.** A mode the reader opens with nothing in it generates
   it, rather than offering a button and waiting — so a new artefact-backed mode wants a name in
-  [`auto-run-targets.ts`](../../src/web/auto-run-targets.ts), a row in `MODE_TARGET`
-  ([`activation.ts`](../../src/web/activation.ts)), and `useAutoRun` in its hook, called with the
-  **unforced** verb. The traps, and the one mode deliberately left out, are
+  [`auto-run-targets.ts`](../../src/web/auto-run-targets.ts) and `useAutoRun` in its hook, called
+  with the **unforced** verb. The traps, and the one mode deliberately left out, are
   [260906b](../plans/260906b-opening-a-mode-starts-it-generating.md).
   *[`tests/modes-that-start-themselves.test.tsx`](../../tests/modes-that-start-themselves.test.tsx)
-  for the modes already in it; nothing for a new one.*
+  for the modes already in it, and since 2026-09-06
+  [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx)
+  § `SPENDS` for a new one — an independently written table of what each press buys.*
 - **The band's chrome**: the scroller is documented in
   [`styles/mode-band.css`](../../src/web/styles/mode-band.css) § mode band. A `.band-head` title row is **optional, and
   the default is not to have one** — since 2026-09-05 it must not carry the mode's own name, because

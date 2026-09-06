@@ -180,7 +180,11 @@ place in an order that already exists than 40 lines of CSS that simply state the
 **What is staying hand-written, and always will be:** the spine, the table geometry and its
 `rowSpan` arithmetic, the sticky-bar ladder and its z-index order, the reading measure, `mark.cmt`
 and the annotation layer, the modeless comment shell, and the runtime pixel geometry
-[`layout.ts`](../../src/web/layout.ts) computes. That is about 1,060 of `styles.css`'s 1,212 lines.
+[`layout.ts`](../../src/web/layout.ts) computes. That is the large majority of the hand-written
+CSS — `wc -l src/web/styles.css src/web/styles/*.css` was 15,951 lines over 38 files on 2026-09-06.
+*(This said "about 1,060 of `styles.css`'s 1,212 lines" until then, which was right when it was
+written and had been wrong by an order of magnitude for a while: a proportion pinned to two
+absolute numbers goes stale twice as fast as one.)*
 **So there are two ways of styling here, permanently** — utilities for chrome, semantic CSS for
 everything utilities cannot express. Nobody is going to convert the rest, and nobody should try.
 
