@@ -128,9 +128,11 @@ One element, not a class on fifty:
 
 ```
 {hereRing && (
-  <div className="spine-here" style={{ top: pct(hereRing.top), height: pct(hereRing.height) }} />
+  <div className="spine-here" style={{ "--here-top": pct(hereRing.top), height: pct(hereRing.height) }} />
 )}
 ```
+
+(`--here-top` rather than `top`, for the reason under **A `min-height`** below.)
 
 placed immediately after the `metrics.l1.map(...)` parts and **before the `.spine-tick`s** — the
 hairlines must paint *above* the ring, or the ring hides its own top boundary and stops reading as
@@ -155,6 +157,32 @@ short section in a long article. The ring should take **2px**, matching the view
 proportionality would let the current section vanish exactly when the reader most needs it, and the
 rail already accepts this trade four times over. The 95%-L1 fixture will not exercise it; a very
 short L2 in a long article is what to screenshot.
+
+**And the floor is worth nothing at the end of the article without a clamp.** `min-height` grows the
+box *downward* from a fixed `top`, and the last L2 of a piece begins at very nearly 100% — so those
+two pixels grow straight out of `.spine { overflow: hidden }` and are clipped away, and the ring
+disappears exactly where the reader has finished. GPT Sol found this at code review; the corpus says
+it is a real shape. Measuring every L2's share of its article's text across the thirteen local trees,
+**two of thirteen end in a section worth 0.12%** — `scaling-hypothesis`, and `fowler-phrenology`'s
+"Colophon and Catalogue Mark" — against the ~0.22% that 2px of a ~900px rail costs. So the top is
+clamped inward, in CSS:
+
+```css
+.spine-here { top: min(var(--here-top), 100% - 2px); }
+```
+
+**Why a custom property and not `calc(min(…))` in the inline style.** Because jsdom's CSSOM parses
+`calc(min(30%, 100% - 2px))` into `calc(min(3000% * , - 2px))` — measured, not assumed. Every
+assertion in `spine-here.test.ts` would then be comparing one mangled string with another and would
+stay green through almost any change to the geometry. A custom property is stored verbatim, so the
+number stays checkable in jsdom and the clamp sits in the stylesheet next to the floor it corrects.
+This is the [silent-success](../reusable/silent-success.md) shape exactly: the obvious way to write
+it and the obvious check agree with each other and with nothing else.
+
+The *middle*-section case Sol also raised — a 0.5px section painting 2px and spilling into its
+neighbour — is left alone deliberately. That is the same two pixels of lie the hit, the mark and the
+viewport band already tell, and correcting it would mean the rail had two rules about short bands
+instead of one.
 
 ### What the stale-measure guard does and does not buy
 
@@ -235,7 +263,11 @@ What to assert:
 - **DOM order**, because JSDOM cannot see paint: part → ring → tick → matches → hit → viewport. This
   is the assertion that catches the `.spine-hit` mistake if somebody re-introduces it later;
 - **render counts unchanged** — `tests/spine-scroll.test.ts` already pins one render per L2 crossing
-  and zero per scroll frame.
+  and zero per scroll frame;
+- **the ring publishes `--here-top` and leaves `top` unset** (added after code review). The clamp
+  that keeps the final section's floor inside the rail lives in CSS and holds only while the
+  component hands the raw number over; setting `top` here would put the bug back, and nothing else
+  in the file would notice.
 
 Then `npm test`, `npm run typecheck`, `npm run check`.
 
@@ -251,6 +283,9 @@ The thing to look for: the ring is the brightest *fill*, and the viewport edges 
 crispest *line*. The two active opacities are the numbers most likely to need tuning per theme —
 read them off a screenshot, especially in light mode, where dark advances and 0.8 of a muted orange
 may become the heaviest thing on the page.
+
+*(That pass has since run — **What the browser pass found**, below. The light-mode worry above turned
+out to be backwards, and the one real tension was somewhere nobody had thought to look.)*
 
 ## Two decisions recorded rather than made
 
@@ -283,6 +318,69 @@ biggest L1 in each article has 2–41. The reduction the ring buys, worst case f
 Nagel itself could not be checked: it is in the production database, and this machine has no
 production credentials. Every article here says the ring lands somewhere useful, and `todo`'s 35% is
 the honest worst case — a two-section part is a part the ring can only halve.
+
+## What the browser pass found
+
+Playwright against system Chrome, on `noema-mythology-of-conscious-ai` (56% dominant part) and
+`read` (77%), plus `fowler-phrenology` for the nine-part case. Contrast figures are WCAG ratios
+computed by compositing the actual token colours on a canvas, **not sampled from screenshots**,
+because judging a tint by eye on a near-black page is the specific thing
+[colour-scales.md](../project/colour-scales.md) says cannot be done.
+
+- **The thing this was built for works.** On a dominant part the ring is unambiguous — ring against
+  the panel 4.37:1, ring against the quiet part 1.97:1. It says *where you are* on exactly the shape
+  where the old whole-part wash could not.
+- **The floor works.** Forcing a live ring to `height: 0%` and reading its rect back gave exactly
+  2px, visible.
+- **Search marks stay legible over the ring**, confirming the DOM-order argument in the flesh and
+  not only in jsdom.
+- **The L2 hairline is *not* swallowed by the ring**, which the design comment had worried about: a
+  dark tick is 2.88:1 against the ring versus 1.65:1 against the quiet part, so it reads *better*
+  there.
+- **The 2px inset reads as nesting, not as a rendering gap.**
+- **The clamp resolves, and it was worth measuring rather than assuming.** Mid-document the ring and
+  the `aria-current` hit come back byte-identical (`top: 440.40625, height: 101.625`), and
+  `getComputedStyle` gives the ring a real pixel `top` resolved from `--here-top` — so the `var()`
+  is engaging rather than failing to `auto`, which is the way that change could have gone wrong
+  while still looking like a plausible rail. Forced to the end of `fowler-phrenology`, the clamp
+  computes `min(149.3px, 148px) = 148px` and the ring is a full 2px flush with the rail's bottom
+  edge instead of clipped.
+
+**And a pre-existing gap found on the way, which is not this ticket's to fix.** Getting the final
+section to be *current* at all took a 150px-tall viewport. `READING_LINE` is 0.35, so the anchor sits
+0.65 × viewport-height above the bottom of the screen — 585px at a 900px window — and an article has
+only ~40px of trailing padding after its last row. **So the last ~0.65 viewport-heights of every
+article can never reach the reading line**, and the rail cannot say *you are here* about them: not
+by scrolling, and not via the Cmd+Down jump to the end, which goes through the same anchor. Measured
+on `fowler-phrenology`: "Colophon and Catalogue Mark" only becomes current at a viewport height of
+about 183px or less.
+
+This predates the ring — it governs `hereHit`, so `aria-current="location"` on the hit buttons has
+always had the same blind spot, and a screen reader has been as affected as the eye. It is worth its
+own ticket, and it means the clipping bug the clamp fixes was **less reachable in practice than the
+0.12% figure above suggests**: the clamp is still correct, still two tokens of CSS, and would start
+mattering the moment the anchor gains an end-of-document case. Recorded rather than fixed here
+because changing where the reading line sits is a change to how the whole rail tracks the reader,
+and that is not a visual ticket.
+
+**One genuine tension, deferred rather than fixed.** The viewport band's edges are `--highlight` and
+are meant to be the crispest lines on the rail; against the bare page they are 7.29:1, but against
+the ring they fall to **1.55:1** — and the viewport band sits inside the current section almost by
+definition, so this is the common case, not an edge one. It degrades to *less crisp*, never to
+invisible, so the ring is still the right change to ship. The fix, when it is worth it, is to the
+viewport band and not to the ring's opacity: a 2px edge where it overlaps, or a `color-mix` against
+`--depth-1`. Left out under *simplest version first*.
+
+Two other numbers, recorded so they are not rediscovered:
+
+- Active versus inactive part fill is now 1.39:1 — thin. But the parts were always told apart by
+  their `border-top` hairline rather than by the fill step, before this change as much as after, so
+  this is a note and not a regression to act on.
+- There is **no light theme** (dark-only, Greg's call 2026-08-24), so "check both" was not
+  answerable. Simulated on an inverted ground, the ring gets *weaker*, not heavier — ring against
+  the quiet part falls to 1.36:1 — because `--depth-1` is a lightness-forward colour tuned to
+  advance out of near-black. If light mode is ever built, it needs its own token rather than these
+  ones at a different alpha. Same principle as *every published scale is upside down*.
 
 ## References
 
