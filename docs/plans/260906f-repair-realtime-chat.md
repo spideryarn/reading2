@@ -1,6 +1,6 @@
 # Repair realtime chat
 
-Status: repair complete and reviewed; landing pending. Initially based on `28096583db9a5cbee322e0f0936e54aeaaea86eb`; fetched and merged again to `39282f8ca7e616a212720a7469e1b680cdf874e3`, then `f0a614e479f2b0e5b2684e7548cb2e947d696603` on 2026-09-06 before final checks. The full gate is not green: unrelated job tests still report database contention. Feature checks, typecheck, builds and the final Sol reviews passed.
+Status: landed on `dev` on 2026-09-06. Repair commit `7eb8f2a0`, pushed through merge `e018edee` after integrating `818ccd41` from the latest remote. The full gate is not green: unrelated job tests still report database contention. Feature checks, typecheck, builds and the final Sol reviews passed. This worktree was initially based on `28096583`, then merged `39282f8c` and `f0a614e4` before final checks.
 
 > I should be able to use that button to start a new conversation, or resume an existing one, and when I hang up I should be able to resume or switch to typing/dictation.
 >
@@ -27,13 +27,13 @@ The simpler alternative was just adding a tooltip and error sentence. Passed ove
 - [x] Write a subagent-rooted postmortem naming the failure class, introducing commits, and implemented prevention. The postmortem was renamed to [A working transport mistaken for a working conversation](../postmortems/260906f-a-working-transport-mistaken-for-a-working-conversation.md) so its filename names the class. Update [live-conversation.md](../project/live-conversation.md).
 - [x] Run `npm test`, `npm run typecheck`, touched-file lint and `npm run check`; verify real browser UI and real provider wire where possible. Distinguish synthetic input evidence from actual microphone/speaker evidence. Results and remaining unrelated failures are in the [final validation](260906f-repair-realtime-chat-final-validation.md).
 - [x] Sol review of scoped diff and recorded evidence; verify and fix findings. Both the [code follow-up](260906f-repair-realtime-chat-code-review-followup-sol.md) and [gate follow-up](260906f-repair-realtime-chat-gate-review-sol.md) returned READY with exit 0 and substantive answers.
-- [ ] Commit the repair stage.
+- [x] Commit the repair stage: `7eb8f2a0`.
 
 ## Landing stage
 
-- [ ] Fetch `origin/dev` again and merge if needed; resolve any conflicts only after the repo-required proposal.
-- [ ] Recheck integration as needed; push `HEAD:dev`, verify remote contains commit.
-- [ ] Run `npm run worktree:check` before removing the worktree; preserve any unique evidence.
+- [x] Fetch `origin/dev` again and merge if needed: `818ccd41` changed only non-overlapping documentation; merge `e018edee` needed no conflict resolution.
+- [x] Recheck integration as needed: all 14 doc-link tests passed, and the merge changed no source or test file. Push `HEAD:dev`: the remote advanced `818ccd41..e018edee` and contains repair commit `7eb8f2a0`.
+- [x] Run `npm run worktree:check`: exit 0, SAFE TO REMOVE at `e018edee`, with no unique data or environment changes. Retain the worktree because the unrelated full gate is still red.
 
 Retain this worktree while the unrelated database-contention gate remains red. Physical microphone
 capture and audible speaker output could not be confirmed by the browser automation; the real
