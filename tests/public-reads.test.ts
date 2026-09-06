@@ -31,6 +31,7 @@ import { lockedArticleQuery } from "../src/store/pg-visibility.js";
 
 const articleQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "article").toSQL();
 const headQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "head").toSQL();
+const assetQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "asset").toSQL();
 const article = articleQuery.sql;
 const headSql = headQuery.sql;
 const blocks = publicBlocksQuery(new QueryBuilder() as never, "rev-1").toSQL().sql;
@@ -56,6 +57,13 @@ describe("the public revision read", () => {
          exactly the shape that acquires an unfiltered query — it is not the
          reading view, so nobody pictures a stranger on it. */
       ["head", headQuery],
+      /* The asset read joined the loop the day it was written, 2026-09-06, for
+         the reason stated one line up — and it matters more here than on either
+         of the others: this is the read that hands a stranger *bytes*, and it is
+         asked once per picture rather than once per page, so an unfiltered
+         version of it would go on serving a private article's figures after the
+         page that pointed at them had stopped being served. */
+      ["asset", assetQuery],
     ] as const) {
       expect(q.sql, name).toMatch(/"articles"\."slug" = \$1 and "spideryarn"\."articles"\."visibility" = \$2/);
       expect(q.params, name).toEqual(["a-slug", "public", 1]);
@@ -71,6 +79,24 @@ describe("the public revision read", () => {
   it("does not mention owner_id at all", () => {
     expect(article).not.toContain("owner_id");
     expect(headSql).not.toContain("owner_id");
+    expect(assetQuery.sql).not.toContain("owner_id");
+  });
+
+  /**
+   * **The asset read takes the manifest and nothing else.**
+   *
+   * A projection of its own rather than a reuse of `article`, because a shared
+   * article with eight figures asks it eight times on one page load — and the
+   * article projection carries the whole tree and seven `jsonb` documents. The
+   * absences *are* the projection: the day this starts selecting the tree, a
+   * visitor is paying for the article again once per picture and nothing else
+   * anywhere would say so.
+   */
+  it("asks for the manifest, and not for the article around it", () => {
+    expect(assetQuery.sql).toContain('"assets"');
+    for (const column of ['"tree"', '"glossary"', '"ideas"', '"quotes"', '"tweets"', '"sketch"', '"title"']) {
+      expect({ column, taken: assetQuery.sql.includes(column) }).toEqual({ column, taken: false });
+    }
   });
 
   /**

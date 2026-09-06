@@ -639,7 +639,11 @@ export function publicArticle(row: {
        by field like the tree and the arc beside it. Nothing in an `Assets` is
        about a person: the URLs are the publisher's own and are already in the
        `blocks` in this same payload, and the rest of each entry is a hash, a
-       format, a byte count, or the reason an image was not stored.
+       format, a byte count, or the reason an image was not stored. The same is
+       true of `pdfFigures`, added 2026-09-06 — a page number, an opaque ref
+       that is already in the `blocks` here too, dimensions, a hash and a
+       bounded reason, and no object key or bucket path anywhere in it.
+       GPT Sol, I-9; src/assets.ts § `PdfFigureEntry`.
 
        `?? undefined` rather than a conditional spread, because
        `PublicArticle.assets` is a required key holding `Assets | undefined` —

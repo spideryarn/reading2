@@ -51,6 +51,9 @@
 import { useMemo, type ReactNode } from "react";
 import { ArrowLeft, ExternalLink, FileQuestion, Globe, Lock, Upload } from "lucide-react";
 import {
+  SHARING_BADGE,
+  SHARING_MARK_HOW_PRIVATE,
+  SHARING_MARK_HOW_PUBLIC,
   SHARING_MARK_NAME_PRIVATE,
   SHARING_MARK_NAME_PUBLIC,
   SHARING_MARK_PRIVATE,
@@ -67,7 +70,7 @@ import { Link } from "./Link.js";
 import { SourceLink, webSource } from "./SourceLink.js";
 import { carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
-import { Tooltip } from "./Tooltip.js";
+import { ControlTip, Tooltip } from "./Tooltip.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
 
 interface Props {
@@ -142,13 +145,18 @@ export function Masthead({ article, slug, onRenamed }: Props) {
   const source = webSource(meta);
 
   /**
-   * The heading, and the one mark beside it saying where the piece came from.
+   * The heading, and the one mark beside it saying who can read the piece.
    *
    * A fragment rather than a lone `<h1>` because both wrappers below lay their
    * children out in a flex row — `EditableTitle`'s is the row the pencil sits
    * in — so the mark lands beside the title without either of them being told
    * about it. Outside the `<h1>` on purpose: `h1 a` in styles.css underlines on
    * hover, which on an icon-only link is a stray dash under a glyph.
+   *
+   * **A second mark stood here until 2026-09-06** — `OriginMark`, an ↗ or a ⬆
+   * saying where the piece came from. It is `OriginLine` below now, under the
+   * title and in words, because a glyph is not what Greg asked this feature for
+   * either time he asked for it: see that component's header.
    */
   const heading = (
     <>
@@ -161,24 +169,11 @@ export function Masthead({ article, slug, onRenamed }: Props) {
           meta.title
         )}
       </h1>
-      {/* **`onRenamed !== undefined` is what makes the second branch honest**,
-          and it is not a decoration — see `OriginMark`. This masthead cannot
-          otherwise tell "uploaded, so there is no address" from "a visitor, so
-          we did not send them one". Same stand-in for *is this yours* that
-          `SeeTheOriginal` below uses, asked once. */}
-      <OriginMark
-        source={source}
-        /* **`meta.source` is the evidence; the absent URL is only the
-           occasion.** See `OriginMark` — an owner can hold a *web* article with
-           no URL (a lost `meta.json`, an import that carried neither), and
-           calling that an upload is a false sentence about their library. */
-        origin={onRenamed === undefined ? null : meta.source === "pdf" ? "upload" : "unrecorded"}
-      />
       {/* **Owner-only, twice over.** `article.visibility` is on the owner's
           payload and on no other, so a visitor's article has nothing to draw
           from — and the gate is written out anyway, on the same
           `onRenamed !== undefined` stand-in for *is this yours* that
-          `OriginMark` above uses. Two guards for one fact because the cost of
+          `OriginLine` below uses. Two guards for one fact because the cost of
           the second is a term and the cost of being wrong is the owner's
           sentence about their own library shown to a stranger, over a link to
           a page that stranger cannot open. */}
@@ -236,6 +231,29 @@ export function Masthead({ article, slug, onRenamed }: Props) {
           <div className="tw:flex tw:min-w-0 tw:items-baseline tw:gap-2">{heading}</div>
         )}
 
+        {/* **Where the piece came from, directly under the title** — the
+            address itself when there is one, and words when there is not. See
+            `OriginLine`.
+
+            Above the facts line rather than inside it: the byline and the
+            counts are things about the article, and this is the one line that
+            says the article is a copy of something that exists elsewhere.
+
+            **`onRenamed !== undefined` is what makes the second argument
+            honest**, and it is not a decoration — this masthead cannot
+            otherwise tell "uploaded, so there is no address" from "a visitor,
+            so we did not send them one". Same stand-in for *is this yours* that
+            `SeeTheOriginal` below and `SharingMark` above use, asked once.
+
+            **`meta.source` is the evidence; the absent URL is only the
+            occasion.** An owner can hold a *web* article with no URL (a lost
+            `meta.json`, a revision published with neither address), and calling
+            that an upload is a false sentence about their library. */}
+        <OriginLine
+          source={source}
+          origin={onRenamed === undefined ? null : meta.source === "pdf" ? "upload" : "unrecorded"}
+        />
+
         <p className="facts">
           {facts.map((f, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: static line, rebuilt whole, no child state
@@ -290,7 +308,8 @@ export function Masthead({ article, slug, onRenamed }: Props) {
 }
 
 /**
- * **Where the article came from, as one glyph beside the title.**
+ * **Where the article came from, said in words under the title — the address
+ * itself when there is one.**
  *
  * Greg, 2026-08-30, on opening a piece he had uploaded and looking for the link
  * back to where he got it:
@@ -303,7 +322,34 @@ export function Masthead({ article, slug, onRenamed }: Props) {
  * the whole problem: a link that looks exactly like a heading tells you nothing
  * when it is *absent*. An article with no web address was silently
  * indistinguishable from one whose title you had simply never thought to click.
- * So both states get a mark, and the absent one gets words.
+ * So both states get a line, and both of them get words.
+ *
+ * ## Why this is a line and not the ↗ glyph it was
+ *
+ * It was a 28px icon beside the title from 2026-08-30 until 2026-09-06 —
+ * `OriginMark`, an ↗ out to the publisher or a ⬆ meaning uploaded, with the
+ * sentence in a `title` attribute. Greg, 2026-09-06:
+ *
+ * > Show the url from which the original came (if there is one) right
+ * > underneath the title in the masthead. I know we have the view-the-original
+ * > button, but I think it's important that we are prominent about the origin.
+ *
+ * Both of his instructions on this feature ask for the same thing and the glyph
+ * answered neither. *"Make it clear that it was uploaded"* was answered with a
+ * shape whose meaning is only in a tooltip; *"prominent about the origin"* is
+ * not something a 14px arrow can be. A reader who wants to know whose page this
+ * is — the question that decides how much of it to believe — should not have to
+ * hover anything to find out.
+ *
+ * So the glyph went rather than gaining a third sibling. The URL case would
+ * otherwise have had three affordances for one address within two lines: the
+ * title, the mark, and the line. The title stays a link because it always has
+ * been and costs nothing; this is the one that *says* where you are going.
+ *
+ * The address is drawn host-first with the path faded after it, because the
+ * host is the part that answers the question and the path is the part that
+ * runs off the end of a narrow window. Truncation is the path's, in CSS, so
+ * the host is never the thing that gets cut (styles.css § `.origin`).
  *
  * ## The link is for everybody; the *word* "uploaded" is not
  *
@@ -324,9 +370,9 @@ export function Masthead({ article, slug, onRenamed }: Props) {
  * version is the same one that fixes the narrow version, which is the argument
  * for having written it against the reason rather than against the symptom.
  *
- * A visitor in that case gets no mark rather than a wrong one. The alternative —
- * a third "we cannot say" glyph — would be chrome explaining our projection
- * layer to somebody reading an essay.
+ * A visitor in that case gets no line at all rather than a wrong one. The
+ * alternative — a third "we cannot say" state — would be chrome explaining our
+ * projection layer to somebody reading an essay.
  *
  * ## And "owner + no URL" is still not "uploaded"
  *
@@ -337,7 +383,7 @@ export function Masthead({ article, slug, onRenamed }: Props) {
  * `requested_url` and `final_url` are both nullable (src/db/schema.ts), which is
  * what `src/store/import.ts` relied on before it was deleted on 2026-09-01 and
  * what publication relies on still. Either gives an owner a perfectly ordinary web
- * article with no address, and the mark would have told them they had uploaded
+ * article with no address, and the line would have told them they had uploaded
  * it — a claim about something they did, made out of a gap in our own files.
  *
  * So the evidence is `meta.source === "pdf"`, which is a fact stage 2 wrote
@@ -350,7 +396,7 @@ export function Masthead({ article, slug, onRenamed }: Props) {
  * and links to the file itself; this one is about *where the piece is from*.
  * An uploaded PDF shows both, and they say different things.
  */
-function OriginMark({
+function OriginLine({
   source,
   origin,
 }: {
@@ -368,55 +414,169 @@ function OriginMark({
    */
   origin: "upload" | "unrecorded" | null;
 }) {
-  /* The pencil's 28px square and `mt-1`, so title, mark and pencil sit on one
-     line at any title length — IconButton.tsx says why a stated size rather
-     than padding round a glyph. Not `IconButton` itself: that is a `<button>`
-     with an `onClick`, and one of these two is a link and the other is not a
-     control at all. */
-  const box =
-    "tw:mt-1 tw:inline-flex tw:size-7 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-md tw:text-ink-faint";
-
   if (source) {
-    /* `""` when the address will not parse, which `webSource` has already made
-       impossible — and the fallback is here rather than a `!` because a throw in
-       render takes the whole reading view down through AppBoundary.tsx. */
-    const host = hostOf(source);
-    const label = host ? `View the original at ${host}` : "View the original";
+    /* `null` when the address will not parse — see `addressParts`, which is
+       also the reason the raw string is never printed. */
+    const parts = addressParts(source);
+    /* **The link's *name*, which is deliberately not what it says.** The visible
+       text is an address, and an address read aloud is a string of syllables
+       that does not announce it goes anywhere. The tooltip is the `describedby`
+       (Tooltip.tsx § `useRole`) and this is the name, kept shorter than it —
+       the same split `SharingMark` makes below, and for the same reason. */
+    const label = parts ? `View the original at ${parts.host}` : "View the original";
     return (
-      <a
-        href={source}
-        target="_blank"
-        rel="noreferrer noopener"
-        /* Both, and they are not the same thing — the same rule IconButton
-           states: `title` is the hover tooltip, `aria-label` is the name. An
-           icon-only link with neither is a link called "". */
-        title={label}
-        aria-label={label}
-        className={`${box} tw:no-underline tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground`}
-      >
-        <ExternalLink size={14} strokeWidth={1.75} />
-      </a>
+      <p className="origin">
+        <Tooltip
+          placement="bottom"
+          /* A single trigger with plenty of room, but it sits hard against the
+             left edge of the window on a narrow screen, which is the case
+             `keepSide` exists for — Tooltip.tsx says why the default `flip`
+             throws a too-wide card onto the cross axis. */
+          keepSide
+          className="tip-soon"
+          content={
+            <ControlTip
+              head={parts?.host ?? "The original"}
+              what="The page this article was made from. What you are reading is our copy of its prose, its headings and its figures — the site around them is not here."
+              how="Opens the publisher's page in a new tab. It was read once, when the article was added, so what is there now may have changed, moved or gone behind a paywall."
+            />
+          }
+        >
+          <a
+            href={source}
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label={label}
+            className="origin-link"
+          >
+            <ExternalLink size={13} strokeWidth={1.75} className="origin-icon" />
+            {/* The words rather than the address when there is no address a
+                reader could read — `addressParts` says why the malformed value
+                itself does not go on the page. */}
+            <span className="origin-host">{parts ? parts.host : "View the original"}</span>
+            {parts && <span className="origin-path">{parts.rest}</span>}
+          </a>
+        </Tooltip>
+      </p>
     );
   }
 
   if (origin === null) return null;
 
-  const label =
+  /* **Both `how`s say the thing the visible words cannot**, which is
+     `ControlTip`'s rule and the one an earlier draft broke twice: the upload's
+     restated *there is nowhere to go back to*, and the unrecorded one promised
+     that re-adding the piece from its URL would fill the field in — which is
+     not true of an existing row, since deduplication has nothing to match it
+     against and would adopt or create a different article. GPT Sol, 2026-09-06. */
+  const said =
     origin === "upload"
-      ? "Uploaded from a file — there is no web address to go back to."
-      : "No web address was recorded for this article.";
-  /* `role="img"`, because this one goes nowhere: it is a statement, and a
-     screen reader offered it as a control would be offered a control that does
-     nothing. No hover colour for the same reason. */
+      ? {
+          icon: <Upload size={13} strokeWidth={1.75} className="origin-icon" />,
+          text: "Uploaded from a file",
+          head: "Uploaded",
+          what: "This one arrived as a file rather than a web address, so there is no publisher's page to go back to.",
+          how: "The file itself is still here — for a PDF, the note below this line is the way to open it. What is missing is only the page it came from.",
+        }
+      : {
+          icon: <FileQuestion size={13} strokeWidth={1.75} className="origin-icon" />,
+          text: "No web address was recorded",
+          head: "No web address",
+          what: "We have no record of where this article came from — which is a statement about our files rather than about the article.",
+          how: "It does not mean you uploaded it: we would say so if you had. It means the address was never written down, or was lost between one revision and the next.",
+        };
+
+  /* **Not a control, and two shapes were rejected for it.** `tabIndex` on a
+     plain element is what biome refuses (`a11y/noNoninteractiveTabindex`), and
+     a `<button>` promises that Enter does something, which this does not. So it
+     is a `<span>` with `cursor-help`, and what it gains instead is the
+     `sr-only` sentences below — the same three-way decision `AccessSharing`'s
+     inventory chips made, and for the same reasons.
+
+     **What that costs, stated rather than glossed over:** a sighted keyboard
+     user cannot open this card, because there is nothing here to focus. GPT
+     Sol, 2026-09-06. The state itself is visible text, so what they miss is the
+     two sentences of context and not the fact — which is why this is the state
+     the whole redesign moved *out* of a tooltip. If a third of these ever needs
+     the card badly enough, the answer is a focusable trigger with a
+     focus-visible ring, not a `title`. */
   return (
-    <span role="img" title={label} aria-label={label} className={box}>
-      {origin === "upload" ? (
-        <Upload size={14} strokeWidth={1.75} />
-      ) : (
-        <FileQuestion size={14} strokeWidth={1.75} />
-      )}
-    </span>
+    <p className="origin">
+      <Tooltip
+        placement="bottom"
+        keepSide
+        className="tip-soon"
+        content={<ControlTip head={said.head} what={said.what} how={said.how} />}
+      >
+        <span className="origin-said">
+          {said.icon}
+          {said.text}
+          {/* **Both sentences, permanently in the accessibility tree.**
+              `useRole` gives the panel an `aria-describedby` only while it is
+              *open*, and a screen-reader user moving by virtual cursor never
+              opens it — so the explanation would otherwise be announced to
+              nobody. It carries the `how` as well as the `what`, because the
+              `how` is the half that is not already visible above it. */}
+          <span className="tw:sr-only">
+            {" — "}
+            {said.what} {said.how}
+          </span>
+        </span>
+      </Tooltip>
+    </p>
   );
+}
+
+/**
+ * **The address in two pieces — the half that answers the question, and the
+ * half that may be cut** — or `null` when it will not parse.
+ *
+ * Not in src/urls.ts, which is where every *decision* about a URL lives. This is
+ * a decision about type: it exists so the host can be the part that survives a
+ * narrow window, and it has one caller.
+ *
+ * ## Three things it gets right that the first version did not
+ *
+ * **The trailing slash is stripped from the path and from nothing else.** It was
+ * stripped from the whole concatenation, so `example.com/a?next=/` displayed as
+ * `example.com/a?next=` — a *different query* from the one the link carries,
+ * which is the one thing a line about provenance may not do. Same for a fragment
+ * ending in a slash. GPT Sol, 2026-09-06.
+ *
+ * **A non-default port survives, in the second half.** `hostOf` reports
+ * `URL.hostname`, which drops it, so `example.com:8443/p` would have been drawn
+ * as `example.com/p` — again a different address from the `href`. It rides with
+ * the path rather than with the host because that is where `hostOf`'s cut falls,
+ * and one spelling of the `www.` rule is worth more than the port's position in
+ * the line. `URL.port` is `""` for a scheme's default, so the common case adds
+ * nothing.
+ *
+ * **`null` rather than the raw string when it will not parse.** `webSource`'s
+ * allowlist is a `/^https?:\/\//` regex, not a parse, so `http://[bad` reaches
+ * here — and the first version printed it, which made this line a visible-text
+ * sink for a malformed value an *imported* article's metadata can carry
+ * (src/web/SourceLink.tsx § `webSource`). React escapes it, so it was never
+ * markup; it could still be a screenful of bidi controls under the title. The
+ * link stays, because a `javascript:` value cannot get this far and the reader
+ * is entitled to the way out — only the *printing* goes.
+ */
+function addressParts(url: string): { host: string; rest: string } | null {
+  /* The shared one, so this is not the fourth copy of the `www.` rule the
+     header of src/urls.ts asks nobody to write. It returns `""` for anything
+     `new URL` refuses, which for an `http(s)` string is the only way its
+     hostname can be empty — so this is also the parse check. */
+  const host = hostOf(url);
+  if (!host) return null;
+  try {
+    const u = new URL(url);
+    const port = u.port ? `:${u.port}` : "";
+    return { host, rest: `${port}${u.pathname.replace(/\/$/, "")}${u.search}${u.hash}` };
+  } catch {
+    /* Unreachable — `hostOf` has already parsed it. Here rather than a `!`
+       because a throw in render takes the whole reading view down through
+       AppBoundary.tsx. */
+    return null;
+  }
 }
 
 /**
@@ -447,21 +607,32 @@ function OriginMark({
  *
  * ## Absence is the third state, and it draws nothing
  *
- * `undefined` means *nobody could tell us*, never *private*. The filesystem
- * store has no visibility column (src/api.ts § `loadArticle`), so on that
- * store this is silent — and silent is the only honest thing it can be. A lock
- * is a claim, and a lock drawn over a store that was never asked would tell an
- * owner that only they can read an article nobody enquired about. That is the
- * one sentence this control must never get wrong, which is the rule
- * `AccessSharing` was rebuilt around and the class in
+ * `undefined` means *nobody could tell us*, never *private*. It is a visitor's
+ * payload, which carries no `visibility` at all, and it was also the filesystem
+ * store, which had no visibility column — that store went on 2026-09-05
+ * (docs/project/database.md) and the field is still optional, so the state is
+ * still reachable and still has to draw nothing. Silent is the only honest
+ * thing it can be: a lock is a claim, and a lock drawn over a source that was
+ * never asked would tell an owner that only they can read an article nobody
+ * enquired about. That is the one sentence this control must never get wrong,
+ * which is the rule `AccessSharing` was rebuilt around and the class in
  * docs/reusable/silent-success.md.
  *
- * ## Why a `Tooltip` here when `OriginMark` above uses a bare `title`
+ * ## Why a `Tooltip` rather than a `title`, and why a `ControlTip` inside it
  *
  * Because Greg asked for a clear one, and a `title` attribute is not: it waits
  * about a second, it is a system font in a system box, and it opens on hover
  * only — so a reader who tabs onto the link never sees it. The `Tooltip` fixes
  * all three, and `useFocus` is the half that matters most.
+ *
+ * The card inside it was a **bare string** until 2026-09-06, which had two
+ * costs. `.tooltip` sets no font-size on purpose, so unclassed content inherits
+ * `body`'s 1rem and this one panel came out visibly larger than every other
+ * tooltip in the app (Tooltip.tsx § `TipNote`). And a sentence with no head has
+ * nowhere to put the state: *Shared* or *Private* is the word the reader came
+ * for, and it was the fourth word of a paragraph. `ControlTip`'s shape — the
+ * state, what it means, then the thing you cannot work out by pressing — is
+ * what this control wanted all along.
  *
  * **It does not fix touch, and an earlier version of this comment claimed it
  * did.** On a touch device the tap that would open the tooltip is the tap that
@@ -469,11 +640,6 @@ function OriginMark({
  * `aria-label` and the destination are what a touch reader actually gets. GPT
  * Sol, 2026-09-04. Real touch help would need a deliberate reveal or visible
  * text, and neither is worth a second control beside the title.
- *
- * The two marks beside each other therefore behave slightly differently on
- * hover, which is a real inconsistency and the smaller of the two —
- * `OriginMark` is a statement and this is a control with a sentence attached to
- * it. Worth levelling up rather than down if anybody touches the pair.
  *
  * `Link`, not `IconButton`: this navigates, so it has to be an `<a>` with a
  * real `href` — command-click opens the metadata page in a tab, and the status
@@ -495,6 +661,13 @@ function SharingMark({
      holding the same sentence is announced twice. */
   const tip = shared ? SHARING_MARK_PUBLIC : SHARING_MARK_PRIVATE;
   const name = shared ? SHARING_MARK_NAME_PUBLIC : SHARING_MARK_NAME_PRIVATE;
+  /* The state as a word, which is what a reader hovering this actually came for
+     — `SHARING_BADGE` because the shelf already calls it that, and an owner who
+     has met *Shared* on a card should not meet a synonym here. */
+  const head = shared ? SHARING_BADGE : "Private";
+  /* The half a reader cannot work out by pressing — `ControlTip`'s rule. Both
+     are about what *stopping* or *starting* does not do. */
+  const how = shared ? SHARING_MARK_HOW_PUBLIC : SHARING_MARK_HOW_PRIVATE;
 
   /* The view state carried across, so stepping out to the switch and coming
      back returns the reader to the paragraph they left — the same
@@ -505,7 +678,12 @@ function SharingMark({
   const href = readHref(slug, carriedSearch(location.search), "metadata");
 
   return (
-    <Tooltip content={tip} placement="bottom">
+    <Tooltip
+      content={<ControlTip head={head} what={tip} how={how} />}
+      placement="bottom"
+      keepSide
+      className="tip-soon"
+    >
       <Link
         href={href}
         /* The tooltip is the sentence a sighted reader gets; `aria-label` is
@@ -515,10 +693,15 @@ function SharingMark({
            moved to a component that can style it, and the name kept distinct
            from the description. */
         aria-label={name}
-        /* `OriginMark`'s box, to the pixel, so the two marks and the pencil sit
-           on one line at any title length. `text-highlight` when it is out in
-           the world, matching the shelf's own `SharedBadge` (ShelfEntry.tsx) —
-           one article, one colour, whichever page you meet it on. */
+        /* The pencil's 28px square and `mt-1`, so title, mark and pencil sit on
+           one line at any title length — IconButton.tsx says why a stated size
+           rather than padding round a glyph. Not `IconButton` itself: that is a
+           `<button>` with an `onClick`, and this is a link. (`OriginMark` used
+           to sit beside it in the same box; it is `OriginLine` above now, and
+           this is the only mark left in the row.) `text-highlight` when it is
+           out in the world, matching the shelf's own `SharedBadge`
+           (ShelfEntry.tsx) — one article, one colour, whichever page you meet
+           it on. */
         className={`tw:mt-1 tw:inline-flex tw:size-7 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-md tw:no-underline tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground ${
           shared ? "tw:text-highlight" : "tw:text-ink-faint"
         }`}

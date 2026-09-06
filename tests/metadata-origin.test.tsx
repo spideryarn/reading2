@@ -19,7 +19,7 @@
  *
  * The owner's page also says something the visitor's must not: *uploaded*. That
  * claim needs `meta.source === "pdf"` as evidence and never a missing URL —
- * src/web/Masthead.tsx § `OriginMark` has the two ways the absence lies, and
+ * src/web/Masthead.tsx § `OriginLine` has the two ways the absence lies, and
  * tests/masthead-origin.test.tsx holds the masthead's copy of the same rule.
  */
 import { act, createElement } from "react";

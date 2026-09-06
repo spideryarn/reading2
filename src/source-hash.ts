@@ -172,8 +172,9 @@ export function hashBlocks(blocks: readonly BlockFingerprint[]): string {
  *
  * **Why a second hash exists at all**, which is the thing to read before
  * ignoring it: `StepStamp` in src/store/artifacts.ts says the late stages
- * *"all read the tree as well as the blocks"*, and `inputHashFor` in
- * src/pipeline.ts hashes only the blocks. Section boundaries can move without a
+ * *"all read the tree as well as the blocks"*, while the blocks-only hash they
+ * used to stamp — `inputHashFor` in src/pipeline.ts, deleted 2026-09-06 —
+ * hashed only `hashBlocks` above. Section boundaries can move without a
  * single block changing, and a stage that judges what is load-bearing from the
  * skeleton is then answering a different question against an input it reports
  * as unchanged. `ideas` is the first stage to fold this in — see

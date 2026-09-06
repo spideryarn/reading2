@@ -108,7 +108,7 @@ export interface PublicMeta {
    *
    * **Absent does not mean "uploaded".** It also means the address would not
    * survive the policy, and a visitor cannot tell those apart; only a reader who
-   * owns the article may turn an absence into that sentence. `OriginMark` in
+   * owns the article may turn an absence into that sentence. `OriginLine` in
    * src/web/Masthead.tsx is the one place that does, and says so.
    */
   url?: string;

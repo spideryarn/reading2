@@ -660,8 +660,13 @@ export interface StepStamp {
    * warning until 2026-08-31. It is now a fact about two groups rather than a
    * hazard:
    *
-   * - `assets` hashes the blocks alone (`hashBlocks`, src/source-hash.ts),
-   *   because a list of images to fetch is all it is built from.
+   * - `assets` hashes **its own inputs and nothing else** — the image URLs and
+   *   the PDF figure refs in the blocks (`assetsInputHash`,
+   *   src/collect-assets.ts). It hashed the blocks alone until 2026-09-06, and
+   *   that was the same fault as the one below wearing a narrower coat:
+   *   `hashBlocks` does not cover `block.html`, so the step could not see a PDF
+   *   figure marker arrive and would have gone on reporting an empty manifest
+   *   current for ever.
    * - Every stage whose prompt reads the article hashes the blocks, the tree
    *   **and its own prompt head** — and there are two heads, so there are two
    *   functions (src/source-hash.ts). `arc`, `tweets`, `glossary` and
