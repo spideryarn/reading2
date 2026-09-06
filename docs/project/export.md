@@ -190,7 +190,19 @@ one. [block-ids.md](block-ids.md).
 ## What is left out, and why
 
 Image bytes and the original PDF/HTML, both Greg's calls — `content/assets.json` still names every
-image, its hash, type and source URL, so the bundle *names* everything. Earlier revisions: they
+image, its hash and type, so the bundle *names* everything.
+
+**But "named" stopped meaning "recoverable" on 2026-09-06**, and the manifest's own sentences said
+otherwise until then. They told an importer that the URLs are the originals so most images can be
+re-fetched, and that the original document is easy to fetch again. Both are true of a web article
+and **neither is true of an uploaded PDF**: a figure recovered from one
+([article-images.md](article-images.md)) never had a source URL — it is named by a page, a content
+hash and an opaque ref — and the uploaded file itself exists nowhere else. For those articles this
+bundle names what it cannot give back, and `CONTENT_OMISSIONS` in
+[`src/store/export-bundle.ts`](../../src/store/export-bundle.ts) now says so in the manifest rather
+than leaving an importer to discover it.
+
+Earlier revisions: they
 exist and carry lineage, so this is a product decision, not an impossibility. `ai_calls`, whose
 `article_id` is nullable, so a per-article total would be quietly **wrong** rather than merely
 absent. And the pipeline tables — `checkpoints`, `jobs`, `queue_state`, `revision_step_runs` —

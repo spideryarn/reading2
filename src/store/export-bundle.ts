@@ -180,21 +180,30 @@ interface Omission {
  * importer can check what it is missing rather than guess from absent files.
  */
 const CONTENT_OMISSIONS: readonly Omission[] = [
+  /* **These two sentences were true until 2026-09-06 and are not any more**, which
+     is worth stating rather than quietly rewriting: both promised the importer
+     that what is missing can be fetched back from the web, and a figure cut out
+     of an uploaded PDF can be fetched back from nowhere. It never had a source
+     URL — `content/assets.json`'s `pdfFigures` names a content hash, a page and
+     an opaque ref, and the bytes are in our bucket or they are gone.
+     docs/plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md. */
   {
     kind: "content",
     what: "image-bytes",
     why:
-      "content/assets.json names every image the article referenced — source URL, " +
-      "content hash, type and size — but the bytes are not in the zip. The URLs are " +
-      "the originals, so most images can be re-fetched.",
+      "content/assets.json names every image the article referenced — content hash, " +
+      "type and size — but the bytes are not in the zip. An image the article " +
+      "hot-linked carries its source URL and can be re-fetched. A figure recovered " +
+      "from an uploaded PDF has no source URL and cannot: it is named by its page " +
+      "and content hash only.",
   },
   {
     kind: "content",
     what: "original-document",
     why:
-      "The PDF or web page as it was fetched. Left out because you already have the " +
-      "URL and the original is easy to fetch again; content/stamped.html is the " +
-      "version Spideryarn actually read.",
+      "The PDF or web page as it was fetched. content/stamped.html is the version " +
+      "Spideryarn actually read. A web article can be fetched again from its URL; " +
+      "an uploaded PDF cannot, so for those this is the one copy and it is not here.",
   },
   {
     kind: "content",
