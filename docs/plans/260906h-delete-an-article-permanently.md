@@ -80,10 +80,20 @@ Five product calls, all Greg's, 2026-09-06.
    `raw_sources` § *No lifecycle, on purpose* records Greg choosing in 2026-08-27. Overruled by Greg
    on 2026-09-06: "permanently delete" over a PDF still sitting in our bucket is a claim the privacy
    page cannot make honestly.
-   **Reopened 2026-09-06 after Sol's review.** Reference counting as described is unsafe — counting
-   and then removing is a race a second owner can lose — and doing it safely means a blob catalogue
-   with locking and a durable cleanup queue, which is plausibly larger than the rest of this feature.
-   Greg is choosing again with the cost visible. See Stage E.
+   **Reopened and re-confirmed, 2026-09-06.** Sol's F1 showed the reference counting as first
+   described is unsafe — counting and then removing is a race a second owner can lose — and that
+   doing it safely means a blob catalogue with locking and a durable cleanup queue, plausibly larger
+   than the rest of this feature. Fable then found that the honesty argument runs the other way:
+   [`PrivacyPage.tsx:441`](../../src/web/PrivacyPage.tsx) has said since 2026-09-02 that *"we keep
+   the original downloaded file, stored under a fingerprint of its own contents rather than under
+   your name, so that if somebody else added the same document it is the same file and deleting your
+   copy cannot take theirs"* — so the page never claimed the bytes go, and orphans would have kept a
+   promise rather than broken one. Fable recommended withdrawing the decision.
+   **Greg chose again, with the cost and that finding in front of him: build the catalogue.** The
+   decision stands and Stage E is the catalogue. One consequence to carry: the privacy paragraph
+   above becomes false in the other direction and must be rewritten — deleting your copy still
+   cannot take somebody else's, but we will no longer keep the file when nobody is left referring
+   to it.
 5. **Deleting must not change what the reader owes.** `ingest_events.article_id` is `on delete set
    null` and quota is recomputed live from `coalesce(a.visibility,'private') = 'public'`, so today a
    delete would silently re-price a public article's ledger rows from half a unit to a full one and
@@ -227,11 +237,11 @@ a permanently leaked quota slot, and an article that could come back from the de
 
 | ID | Finding | Severity | Disposition |
 |----|---------|----------|-------------|
-| F1 | Stage E's count-then-remove can delete a blob another owner committed a reference to in between | P0 | **Open — Greg's call.** See Stage E |
+| F1 | Stage E's count-then-remove can delete a blob another owner committed a reference to in between | P0 | **Accepted** — Greg chose to build the catalogue, 2026-09-06. Stage E rewritten |
 | F2 | Stage B stamped the price at *charge* time, which `billing.md` explicitly rejects; share-later and unshare-later would both misprice | P0 | **Fixed** — stamp at *delete* time instead, Stage B rewritten |
 | F3 | Stage C deleted active jobs, leaking their reservation for ever — reservations deliberately never expire | P0 | **Fixed** — refuse on a broad predicate, never delete an active job. Stage C 4–5 rewritten |
 | F4 | Enqueue can race the delete and `lockOrCreateArticle` resurrects the article | P1 | **Fixed** — enqueue must lock the article row; barrier test. New Stage C item |
-| F5 | Storage cleanup misses illustrated plates and upload staging keys, and a crash mid-loop is unknowable | P1 | **Open with F1** — same decision |
+| F5 | Storage cleanup misses illustrated plates and upload staging keys, and a crash mid-loop is unknowable | P1 | **Accepted with F1** — durable cleanup tasks per object class, Stage E |
 | F6 | Cache invalidation far too narrow, and the failure re-read can be answered from the offline copy and lie | P1 | **Fixed** — `forgetUser`, and a network-authoritative re-read. Stage D rewritten |
 
 Two of Sol's open decisions are now settled and no longer open questions:
@@ -389,42 +399,70 @@ No UI. The whole of the destruction, reachable only by an API call.
       recommendation was overruled.
 - [ ] Sol review. Commit.
 
-### Stage E — the bytes — **blocked on a product decision**
+### Stage E — the bytes, by way of a blob catalogue
 
-Last, and separately reviewed, because this is the only stage that can damage another reader's
-library. **Sol's F1 and F5 say the design in the first draft is unsafe and the safe version is
-large**, so this stage is not startable until Greg picks a route. Stages B, C and D do not depend on
-the answer; only Stage D's copy does, and only in one sentence.
+Last, and separately reviewed, because this is the only stage where a bug damages a reader who did
+not ask for anything. **Greg confirmed decision 4 on 2026-09-06 knowing the cost**, so this is the
+catalogue, not orphans.
 
-The problem, in one paragraph. Blobs are content-addressed and deduplicated **across owners**, and
-bytes are written before and outside the transaction that records the reference
-(`src/store/artifacts-pg.ts:1015`). So counting references and then removing the object is a race
-Alice can lose to Bob: Alice counts zero, Bob ingests identical bytes and commits a reference, Alice
-removes the object, Bob's article now points at nothing. `src/store/blobs.ts:375` already documents
-this exact class and says the seam has no serialisation to fix it with. Article images, PDF figures
-and illustrated plates make it worse: they have **no catalogue row at all**, only `assets` manifests
-inside `article_revisions`, so there is nothing to count and nothing to lock.
+**Big enough that it may want its own plan doc and its own Sol review before a line is written.**
+Sketch the schema first, send *that* to Sol, and only then build. What follows is the shape F1(b)
+and F5(b) prescribe, not a finished design.
 
-The two routes:
+Why counting is not enough, in one paragraph. Blobs are content-addressed and deduplicated **across
+owners**, and bytes are written before and outside the transaction that records the reference
+([`src/store/artifacts-pg.ts:1015`](../../src/store/artifacts-pg.ts)). So count-then-remove is a race
+Alice loses to Bob: Alice counts zero, Bob ingests identical bytes and commits a reference, Alice
+removes the object, Bob's article points at nothing.
+[`src/store/blobs.ts:375`](../../src/store/blobs.ts) already documents this exact class and says the
+seam has no serialisation to fix it with. Article images, PDF figures and illustrated plates make it
+worse: they have **no catalogue row at all**, only `assets` and `illustrated` manifests inside
+`article_revisions`, so there is nothing to count and nothing to lock.
 
-- **Safe and small — leave the bytes, and say so.** Delete every row; leave the objects as orphans.
-  This is what the archive post-mortem originally recommended: *"orphans are the safe failure;
-  cross-owner deletion is the unsafe one."* Cost: near zero. Price: decision 4 is withdrawn and the
-  copy must not claim the bytes are gone, only the article and everything the reader did with it.
-- **Safe and large — build the catalogue.** One catalogue/ref table covering every canonical blob
-  class (raw sources, assets, PDF figures, illustrated plates). Writers and deleters lock the same
-  catalogue row; the deleting transaction marks the last-reference object `pending_delete` and
-  commits a durable cleanup task; a writer may never commit a reference to an object marked
-  `pending_delete`. A barrier test races a second owner's write against the delete. This also
-  answers F5 — upload staging keys and illustrated plates get cleanup tasks instead of being
-  abandoned, and a failed removal is pending work rather than a discarded log line.
-
-Whichever way it goes: [`privacy.md`](../project/privacy.md) has to say what is true, and the
-`raw_sources` header currently says nothing ever deletes one.
+- [ ] **One catalogue for every canonical blob class** — raw sources, article assets, PDF figures,
+      illustrated plates — not one per class. A second refs table records which revision refers to
+      which object. `raw_sources` becomes a view onto it or is folded into it; its header says rows
+      are never deleted, so changing that is a decision to record rather than a detail.
+- [ ] **Writers and deleters lock the same catalogue row.** The catalogue row must be inserted or
+      locked in the *same transaction* that commits the reference — which means moving the reference
+      commit and the catalogue write together, since today the bytes land first and outside.
+- [ ] **No free-standing count followed by `remove`.** When the deleting transaction retires the last
+      reference it marks the object `pending_delete` and commits a durable cleanup task in the same
+      transaction. A writer that meets `pending_delete` waits or retries after ensuring the bytes are
+      restored, and may **never** commit a reference to an object still scheduled for deletion.
+- [ ] **The cleanup queue is durable and idempotent** (F5). A crash after commit and before removal
+      must leave retryable work, not an unknowable partial state. A storage failure is pending work,
+      never a discarded logged orphan. Every object class gets a task: the raw source, every stored
+      asset and PDF figure, every successful illustrated plate
+      ([`schema.ts:851`](../../src/db/schema.ts),
+      [`src/illustrated-image.ts:107`](../../src/illustrated-image.ts)), and the upload staging key —
+      which Stage C must therefore hand over rather than abandon, since deleting the `uploads` row
+      destroys the only mapping to it ([`pg-uploads.ts:221`](../../src/store/pg-uploads.ts)). Staging
+      keys wait for the existing upload-grant sweep predicate to say removal is safe.
+- [ ] **Backfill by scanning the manifests** — that is what scanning is for. It is a migration and a
+      consistency check, never the live arbitration mechanism.
+- [ ] **The barrier test is the point of the stage.** Race a second owner's reference commit against
+      a delete and prove every committed reference still resolves. The sequential two-owner test in
+      the first draft cannot exercise this and is not sufficient on its own — keep it as the cheap
+      case and add the race.
+- [ ] If cleanup is asynchronous, the API and the UI must distinguish *article access deleted;
+      storage cleanup pending* from *every retained server copy removed*, rather than claiming the
+      second while doing the first.
+- [ ] Docs: [`privacy.md`](../project/privacy.md) and
+      [`PrivacyPage.tsx:441`](../../src/web/PrivacyPage.tsx) — the live page currently promises we
+      keep the original file for ever, which this stage makes false; rewrite it to say the file goes
+      once nobody refers to it, and that deleting your copy still cannot take somebody else's. Plus
+      the `raw_sources` header and the `article_revisions_raw_source_fk` comment
+      (`schema.ts:1047`, `:2338`).
+- [ ] Sol review of the schema **before** building, and again of the code. Commit, push, and check
+      the worktree is safe to remove.
 
 ## Open questions
 
-- **Stage E: orphans or a catalogue?** The one live decision. See Stage E.
+None blocking. Settled since the first draft: the public link 404s rather than 410s; a private delete
+needs no audit row; and decision 4 was reopened after Sol's F1 and Fable's privacy-page finding, and
+re-confirmed by Greg — Stage E builds the catalogue. All three are recorded under *What Sol's plan
+review found* and in decision 4.
 
-Settled since the first draft: the public link 404s, and a private delete needs no audit row — both
-recorded under *What Sol's plan review found* above.
+Carried into Stage E rather than answered here: whether it wants its own plan doc, and whether
+`raw_sources` becomes a view onto the new catalogue or is folded into it.
