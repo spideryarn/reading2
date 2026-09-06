@@ -90,7 +90,8 @@ listed here; the names under each are files in `docs/project/`.
   `feedback-reports.md` (and what an agent does with one afterwards) ·
   `hetzner-remote-server-box.md` (the always-on box, and `gjd-remote`) ·
   `changelog.md` (turning deploys into the public `/changelog`) ·
-  `worktrees.md` (one tree per agent, and how to start one)
+  `worktrees.md` (one tree per agent, and how to start one) ·
+  `cron-scheduler.md` (there is no scheduler, and what that keeps costing us)
 
 Two of those are worth reading before you touch anything they bear on:
 **[granularity-zoom.md](docs/project/granularity-zoom.md)**, the feature this whole app is for, and
