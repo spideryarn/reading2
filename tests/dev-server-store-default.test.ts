@@ -17,8 +17,9 @@
  * spelled but what the shell did with it: unset had to become `postgres`, and an
  * explicit value had to survive. There is one store since the hinge, and no
  * assignment in any script, so those cases have nothing left to ask. The
- * variable's remaining behaviour is the tombstone, and
- * `tests/store-selection.test.ts` is where that is asserted.
+ * variable has no behaviour left at all since 2026-09-06, when stage I deleted
+ * the tombstone that validated it; `tests/one-store-only.test.ts` is where its
+ * absence is asserted.
  *
  * What is left is a **source guard**, and it is honest about being one: a boot
  * probe inside a Vite config cannot be imported and called from here. It pins

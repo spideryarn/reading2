@@ -333,10 +333,9 @@ nothing else has a copy of.
 ### Writing code
 
 - **The store is Postgres and Supabase Storage, and there is only one.** The filesystem store and
-  `SPIDERYARN_STORE` are gone as of 2026-09-05; setting the flag now throws
-  ([`src/store/live.ts`](src/store/live.ts)) rather than being ignored. **That includes your
-  laptop**: the suite needs a database rather than a flag. A feature exercised only on files was a
-  feature that shipped broken, which happened once and is why the second store went.
+  `SPIDERYARN_STORE` are gone — the store on 2026-09-05, the flag on 2026-09-06. **That includes
+  your laptop**: the suite needs a database rather than a flag. A feature exercised only on files
+  was a feature that shipped broken, which happened once and is why the second store went.
   [database.md](docs/project/database.md); the move is
   [260831b-finish-the-database-move.md](docs/plans/260831b-finish-the-database-move.md) and its
   finish is

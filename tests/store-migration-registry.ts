@@ -1732,8 +1732,8 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * then fans out across the condemned filesystem modules — but this file
    * `vi.mock`s `src/store/index.js` outright, so the hinge module is never
    * evaluated and not one of them is ever loaded, let alone called. Witness 1
-   * buckets it `flag-selection-only` with no path that avoids a flag reader,
-   * which is the mildest reach it records.
+   * bucketed it `flag-selection-only`, the mildest reach it recorded, before
+   * that bucket went with the flag on 2026-09-06.
    */
   "tests/feedback-dictation-vocabulary.test.tsx": {
     category: "shared-mechanism-collateral",

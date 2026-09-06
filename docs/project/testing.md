@@ -987,18 +987,22 @@ A guard whose whole job is a **side effect at module load** — a boot check, a 
 registration — is only in the program while something imports it. Delete the last consumer of a
 symbol it exports and the module goes with it, silently: the compiler removes an unused import, it
 never demands one. That is what happened to the `SPIDERYARN_STORE` tombstone, and **its own two
-tests stayed green the whole time**, because both `import { refuseTheStoreFlag }` and call it.
+tests stayed green the whole time**, because both imported its refusal function and called it.
 Loading a module by hand and asking whether the function works cannot see whether anything else
 loads it — the check shares an assumption with the bug, and the assumption is *that the guard is
 reachable at all*.
 
+(**All three files are gone.** Stage I of
+[260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) deleted the
+tombstone and both tests on 2026-09-06, once Greg had taken the variable out of Vercel. The recipe
+below is the reason this section survives them, so it is written without live links.)
+
 So when a test is about something that happens at import:
 
-- **One test for the rule**, calling the function, which is where the cases live
-  ([`tests/store-selection.test.ts`](../../tests/store-selection.test.ts)).
+- **One test for the rule**, calling the function, which is where the cases live (this was
+  `tests/store-selection.test.ts`).
 - **One test for the wiring**, which has to be a **child process** importing *the module a server
-  imports* and asserting the child dies
-  ([`tests/store-flag-refused-at-boot.test.ts`](../../tests/store-flag-refused-at-boot.test.ts)).
+  imports* and asserting the child dies (this was `tests/store-flag-refused-at-boot.test.ts`).
   In-process is not an option: the module under test is already loaded in the worker and a module is
   evaluated once.
 - **Two controls on the child**, because *"it died"* and *"it never ran"* are the same observation
