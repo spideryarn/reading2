@@ -86,6 +86,7 @@ function article(meta: Partial<Meta>): Article {
       },
     ],
     assets: undefined,
+    navLabelStatus: "ready",
     tree: {
       version: "t",
       generator: "t",

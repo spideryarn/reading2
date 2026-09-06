@@ -1,12 +1,44 @@
 # Repair realtime chat
 
-Status: landed on `dev` on 2026-09-06. Repair commit `7eb8f2a0`, pushed through merge `e018edee` after integrating `818ccd41` from the latest remote. The full gate is not green: unrelated job tests still report database contention. Feature checks, typecheck, builds and the final Sol reviews passed. This worktree was initially based on `28096583`, then merged `39282f8c` and `f0a614e4` before final checks.
+Status as of 2026-09-06: **important work left** — implementation landed; physical microphone capture and audible playback remain unverified. Repair commit `7eb8f2a0`, pushed through merge `e018edee` after integrating `818ccd41` from the latest remote; landing receipt `0475c59a`. The full gate is not green: unrelated job tests still report database contention. Feature checks, typecheck, builds and the final Sol reviews passed. This worktree was initially based on `28096583`, then merged `39282f8c` and `f0a614e4` before final checks.
 
 > I should be able to use that button to start a new conversation, or resume an existing one, and when I hang up I should be able to resume or switch to typing/dictation.
 >
 > optimise for capability, then latency, then cost
 >
 > — Greg, 2026-09-06
+
+## Debrief — 2026-09-06
+
+The goal is a dependable spoken conversation about an article, continuing in the same Chat through
+voice, typing or dictation. Implementation covers the requested controls, feedback, transcripts,
+tools and recovery. [Browser evidence](260906f-repair-realtime-chat-browser-results.md) distinguishes
+actual Chat UI checks from the provider run with synthetic input; neither proves physical audio.
+The cost of stopping before that check is leaving the original inability to hear or be heard
+potentially unresolved on the reader's actual devices.
+
+The surprise was missing lifecycle and persistence handling around a working provider connection.
+The repair expanded to cover uncertain saves, microphone handoff and partial answers because the
+[code review](260906f-repair-realtime-chat-code-review-sol.md) found concrete failures. This remains
+within the original reliability goal. Code quality is supported by reproduced regressions and the
+[final review](260906f-repair-realtime-chat-code-review-followup-sol.md); reusing the existing
+transport, store and microphone components kept the added machinery bounded. Session and save
+ordering remain the main maintenance burden. A tooltip-only repair would leave the failures intact.
+
+**Next priority: verify the physical experience, then stop expanding this repair.** A clean smoke
+test should take roughly 10–20 minutes once microphone permission and someone able to speak and
+listen are available; this is an estimate, not a fix budget if it fails. This debrief judges that
+acceptance check more valuable than further implementation.
+
+- [ ] In actual Chat with a physical microphone, confirm input level, recognized speech and an
+  audible reply; hang up, resume the same saved conversation, then continue by typing and dictation.
+- [ ] Record the result here, and diagnose any failure before estimating further code changes.
+
+The [remaining full-gate failures](260906f-repair-realtime-chat-final-validation.md#final-capped-gate-after-the-test-only-fixes)
+are separate shared-database test debt. Repeated full runs have diminishing value while that
+contention persists; investigate it separately rather than broadening this voice repair. No model
+or transport change is justified by the evidence so far. This debrief changes the acceptance status,
+not the landed implementation; the earlier validation describes its recorded source snapshot.
 
 ## Evidence and choice
 

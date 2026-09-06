@@ -63,6 +63,29 @@ none: it is written down, so it looks handled — [written-down-is-not-checked.m
 **Say what you rejected and why.** That is the half nobody can reconstruct afterwards, and the half
 that stops the next person proposing it again.
 
+### Pitch it at the class, and put it where the class lives
+
+A countermeasure aimed at the instance reads as concrete and prevents nothing. The test: **if you
+could rename the function and the recommendation would stop making sense, it is aimed at the
+instance.** *Check that this id does not include the package name* is an instance; *verify identifier
+contracts at the boundary that mints them* is the class.
+
+Three levels, and the level decides where it goes:
+
+| Level | Where it goes |
+|---|---|
+| **The instance** — this field, this line | A comment at the site. The postmortem is the documentation; don't propose a doc change as well. |
+| **The class** — the same mistake with other names | The doc that owns that area — or better, a check that fails on it. |
+| **A principle** — true across areas | The rules doc, and rarely. |
+
+**Mechanise before you write prose.** A type that makes the bad state unrepresentable, a lint rule, a
+test, a CI gate — each of those can fail, and prose cannot. A targeted rule stays true; a doc bullet
+erodes.
+
+**The file every agent loads on every turn is the expensive place to put anything**, because a line
+there is paid for by every session afterwards. The bar is not "this matters" but "most sessions would
+be better for reading it". Everything else belongs in the doc that owns the area.
+
 ## A structure that works
 
 Not a template to fill in — sections earn their place — but this order has held up:
@@ -72,7 +95,7 @@ Not a template to fill in — sections earn their place — but this order has h
 | Opening paragraph | What happened, what it cost, and **whether anything reached a user**. Say "nothing reached a reader" plainly if so; it changes how the rest is read. |
 | **What happened** | The narrative, short, with the actual error text or output. Enough for someone to recognise it, not a transcript. |
 | **The class, named** | A `##` heading that *is* the class. Often the only section a future reader needs. |
-| **Why nothing went red** | The most valuable section in most postmortems. Every check that ran and agreed, and why each was satisfied. |
+| **Why nothing went red** | The most valuable section in most postmortems. Every check that ran and agreed, and why each was satisfied — including a reviewer who *did* raise it and was talked round, which is a different class from nobody seeing it, and a different fix. |
 | **What would have caught it, ranked** | Above. |
 | **The fix that is right for the long term** | And how it differs from what shipped. |
 | **The thing I would tell myself** | One paragraph, first person, no hedging. What you actually knew at the time and decided wrongly. |
@@ -96,6 +119,11 @@ That last section is the one people skip and the one people read.
 
 - **Reproduce it with a failing test before you fix it**, and watch it go red. A test that was never
   red proves nothing about the bug it claims to cover.
+- **Make the countermeasure fail on the original shape.** When you build the guard the postmortem
+  asked for, watch it go red on the incident *as it happened*, not on your tidied-up version of it —
+  a guard proved against the abstraction can pass on the exact shape it was written to block. If the
+  fix knowingly leaves part of the class open, say which part and where it is tracked; half a class
+  closed and filed as done is how the other half ships next month.
 - **Do the digging in a subagent** and ask for the write-up back, not the trail. The investigation is
   large and the conclusion is small; only one of them belongs in the main context.
 - **Write it while the confusion is fresh.** The specific wrong belief you held — the reason the bug
@@ -126,3 +154,9 @@ That last section is the one people skip and the one people read.
 - [documentation-policy.md](documentation-policy.md) — one home per fact, and who each doc is for.
 - [postmortems.md](../project/postmortems.md) — this repo's directory, its naming command, and what
   is true here in particular.
+
+Three of the sharper points above — pitching a countermeasure at the class rather than the instance,
+proving the guard against the original shape, and separating *nobody saw it* from *somebody raised it
+and was waved through* — are adapted from the `CHIEF_PATHOLOGIST` bug-postmortem workflow in Greg's
+MindstoneRebel repo, read 2026-09-06. The corpus machinery around it — controlled vocabularies, a
+stamper, a weekly report — answers a question we don't ask, and was left there.

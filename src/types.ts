@@ -173,7 +173,16 @@ export interface TreeNode {
    * apply to a line the model is free not to write.
    */
   question?: string;
-  /** Leaves only. Navigation chrome for the ToC and spine; never reading content. */
+  /**
+   * Leaves only. Navigation chrome for the ToC and spine; never reading content.
+   *
+   * **Absence here means "deliberately unlabelled" and nothing else** — a
+   * pull-quote, a caption, a rule, anything `isStructural` is false for
+   * (src/hierarchy.ts). *Not yet written* is a different fact and does not live
+   * on the node: it is `NavLabelStatus` below, one value for the whole
+   * revision. Reading a missing field as either one is the overloading
+   * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md § 5 names.
+   */
   navLabel?: string;
   summary?: string;
   sourceHeading?: string;
@@ -234,6 +243,65 @@ export interface Tree {
    */
   provisional?: "headings";
 }
+
+/**
+ * **Where a revision's paragraph nav labels are in their life** — one value for
+ * the whole revision, never per node.
+ *
+ * `TreeNode.navLabel` above already has a legal absence, and it means
+ * *deliberately unlabelled*: a caption, a pull-quote, a rule. This is the other
+ * question, the one absence cannot answer —
+ * [hierarchy.ts](hierarchy.ts) put it in as many words long before there was a
+ * field for it: deferring the labels *"needs a state that says 'still arriving'
+ * rather than an absence that says nothing."*
+ *
+ * - `pending` — a run is expected and has not landed. **The whole paragraph
+ *   label layer is withheld** rather than drawn empty (src/web/nav-labels.ts),
+ *   because a column of blank cells reports accidental absence as article
+ *   structure.
+ * - `ready` — the labels are as good as they are going to get. Individual
+ *   leaves may still carry none, and that is the deliberate kind of absence.
+ * - `failed` — the run happened and did not produce them. Same withholding as
+ *   `pending`; what differs is only what the reader is told, and **the enum is
+ *   the whole of what crosses** — no provider message, on either DTO
+ *   (docs/project/copy.md § Never repeat what the provider said).
+ *
+ * **Revision-scoped and stored as a column**, not on the `Tree`, because a
+ * failure has to outlive the draft that failed: a labels job that dies must
+ * mark the revision the reader is actually looking at, and a candidate tree is
+ * discarded. GPT Sol's F6,
+ * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
+ *
+ * Everything writes `ready` today. Stage 2 of that plan is what starts writing
+ * the other two.
+ */
+export type NavLabelStatus = (typeof NAV_LABEL_STATUSES)[number];
+
+/**
+ * The three, as a runtime list — **and it is the source, not a copy of one.**
+ * `NavLabelStatus` above is derived from it with `(typeof …)[number]`, which is
+ * the whole point: the two used to be independent declarations, and
+ * `readonly NavLabelStatus[]` proves only that every value listed *belongs to*
+ * the union — never that the list *exhausts* it. A fourth member added to the
+ * union and forgotten here would have compiled, and then the drift test built
+ * on this list would have checked the migration against an incomplete set and
+ * passed. One declaration cannot disagree with itself. GPT Sol's F1 on stage 1,
+ * 2026-09-06.
+ *
+ * It exists at runtime for one job: the CHECK expression is a hand-kept literal
+ * in **two** places that no compiler reads — the migration under `drizzle/` and
+ * the copy in [`src/db/schema.ts`](db/schema.ts) — so something has to be able
+ * to enumerate the union and compare against both.
+ * `tests/nav-label-status.test.ts` is that something.
+ *
+ * **No `isNavLabelStatus` beside it**, and that is a decision rather than an
+ * omission: a runtime parse would have no caller. The database's CHECK is what
+ * keeps a fourth value out, and the one place a stray value could still do harm
+ * — the client deciding whether to draw the paragraph layer — is written
+ * `=== "ready"` precisely so that anything it does not recognise withholds
+ * (src/web/nav-labels.ts). A guard nobody calls is a guard nobody maintains.
+ */
+export const NAV_LABEL_STATUSES = ["pending", "ready", "failed"] as const;
 
 /**
  * One article-level sentence per part: where the argument stands there.
@@ -1390,6 +1458,23 @@ export interface Article {
    * hot-link exactly as before rather than read it as "every image failed".
    */
   assets: Assets | undefined;
+
+  /**
+   * **Where the paragraph nav labels are** — `NavLabelStatus` above, off
+   * `article_revisions.nav_label_status`.
+   *
+   * **A required key, like `assets` and unlike `visibility`**, and for the same
+   * reason `assets` is: there is exactly one thing the client does with this,
+   * and it is decide whether to draw the paragraph label layer at all. Optional,
+   * a projection that forgot it would typecheck perfectly and the reader would
+   * go on getting a run of blank leaf cells — the feature reporting success by
+   * doing nothing (docs/reusable/silent-success.md, and src/web/tree.ts § "a run
+   * of forty blank leaf cells").
+   *
+   * There is no *we cannot say* answer to make it `| undefined`: the column is
+   * `not null` with a default, and there is one store.
+   */
+  navLabelStatus: NavLabelStatus;
 
   /**
    * **May a stranger read this** — the owner's copy of `articles.visibility`,
