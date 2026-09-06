@@ -9,12 +9,24 @@ one sentence, written into `converse.ts` at 00:27 on 2026-08-26, corrected in pl
 found, and copied verbatim — comment included — into six more files over six days. Three of the six
 findings against quiz mode were that sentence.
 
-**Done, 2026-09-04.** All seven production callers and the eval go through
-[`classifyEnd`](../../src/ai-call.ts); no local re-implementation of the stream-end judgement
-survives anywhere. `grep -rn openRouterStream --include=*.ts` over the tree that day found eight call
-sites and no ninth. The contract now lives in
+**Done, and landed on `dev` 2026-09-06** (`fc1d64f6`). All seven production callers and the eval go
+through [`classifyEnd`](../../src/ai-call.ts); no local re-implementation of the stream-end
+judgement survives anywhere. `grep -rn openRouterStream --include=*.ts` over the tree on 2026-09-04
+found eight call sites and no ninth. The contract now lives in
 [ai-gateway.md § How a stream ends](../project/ai-gateway.md#stream-end), which is where a reader
 should be sent rather than at any one caller.
+
+**This header said "Done, 2026-09-04" for two days and was written before the review**, which is
+worth leaving a mark about in a plan whose whole subject is a claim that outlived its evidence. What
+followed that sentence: a postmortem that found the fold's bug was the third of its class in one file
+(Stage G), and a cross-family review of the built code that **refused**, on two P1s it had reproduced
+by running harnesses — one of them a bug **older than this migration**, sitting in the shared
+classifier and true of all seven callers (Stage H). A stage marked ✅ is not the same as a stage
+reviewed.
+
+**One thing is deliberately still open, and it is Greg's**, not an oversight: `src/web/ChatPanel.tsx`
+says a truncated answer *"stopped mid-sentence"*, which claims more than the wire can support. See
+Stage H § F6 for the wording GPT Sol proposed.
 
 ## What is actually duplicated
 

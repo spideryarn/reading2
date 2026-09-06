@@ -338,12 +338,15 @@ nothing else has a copy of.
 
 ### Writing code
 
-- **The store is moving from files to the database, and it is nearly done.** Anything new — a
-  feature, a store, a test — goes to Postgres and Supabase Storage, and **that includes your
-  laptop**: run with `SPIDERYARN_STORE=postgres` rather than against the filesystem default. A
-  feature exercised only on files is a feature that ships broken, which has already happened once.
-  [database.md](docs/project/database.md); the move itself is
-  [260831b-finish-the-database-move.md](docs/plans/260831b-finish-the-database-move.md).
+- **The store is Postgres and Supabase Storage, and there is only one.** The filesystem store and
+  `SPIDERYARN_STORE` are gone as of 2026-09-05; setting the flag now throws
+  ([`src/store/live.ts`](src/store/live.ts)) rather than being ignored. **That includes your
+  laptop**: the suite needs a database rather than a flag. A feature exercised only on files was a
+  feature that shipped broken, which happened once and is why the second store went.
+  [database.md](docs/project/database.md); the move is
+  [260831b-finish-the-database-move.md](docs/plans/260831b-finish-the-database-move.md) and its
+  finish is
+  [260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md](docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md).
 - **Prefer boring.** One server process, TypeScript + ESM, `tsx` to run,
   no framework churn while the ideas are still moving. Two exceptions exist, both Greg's, both
   weighed rather than slipped past: **Postgres** (a single writable disk is what serverless doesn't
@@ -368,8 +371,9 @@ nothing else has a copy of.
   `npm run typecheck` as you go, not only at the end, and `npm run check` before you commit
   ([static-analysis.md](docs/project/static-analysis.md)).
 - **Every stage stays runnable on its own** against a slug, so any one can be re-run without the
-  others. Cache anything expensive on a content hash — two stages of seven do; copy *their* choice
-  of hash input rather than only the idea ([architecture.md](docs/project/architecture.md#conventions)).
+  others. Cache anything expensive on a content hash — twelve of the fifteen steps in `STEP_ORDER`
+  do, and the exceptions are `fetch`, `extract` and `blocks`; copy *their* choice of hash input
+  rather than only the idea ([architecture.md](docs/project/architecture.md#conventions)).
 - **Hierarchy — the deeply-nested table of contents — and the granularity-zoom tree are
   [the same structure](docs/project/granularity-zoom.md#the-tree)**, produced by stages 4 and 5
   together. They must not diverge into two trees.
