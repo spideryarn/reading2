@@ -32,7 +32,12 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { type AstNode, parseSource, walkAst } from "./helpers/ts-ast.js";
+import {
+  type AstNode,
+  parseSource,
+  refuseUntraceableImportsInSource,
+  walkAst,
+} from "./helpers/ts-ast.js";
 
 import { CLAIMS_UNUSABLE } from "../src/referee-claims-run.js";
 import {
@@ -166,6 +171,24 @@ function declaredNames(ast: AstNode): Set<string> {
   return names;
 }
 
+/**
+ * Parse one module, refusing any dynamic `import()` this cannot name.
+ *
+ * Both derivations below decide what a file is by reading the specifiers it
+ * imports, so an edge with no name is a file that quietly stops being a referee
+ * surface — the same hole GPT Sol found in three graph guards on 2026-09-06
+ * (F21). tests/helpers/ts-ast.ts § `refuseUntraceableImports` has the argument.
+ */
+function moduleAst(full: string): AstNode {
+  const text = readFileSync(full, "utf8");
+  refuseUntraceableImportsInSource(
+    text,
+    relative(ROOT, full),
+    "tests/referee-copy-is-about-the-model.test.ts",
+  );
+  return parseSource(text) as unknown as AstNode;
+}
+
 /** `localName` → specifier, for every `import` in one module. */
 function importedNames(ast: AstNode): Map<string, string> {
   const found = new Map<string, string>();
@@ -203,7 +226,7 @@ function componentsRenderedBy(ast: AstNode, fnName: string): string[] | null {
 
 /** The mode controller: the band, the chips, and the switch over the sub-modes. */
 const CONTROLLER = join(WEB, "modes", "referee", "RefereeMode.tsx");
-const BAND = parseSource(readFileSync(CONTROLLER, "utf8")) as unknown as AstNode;
+const BAND = moduleAst(CONTROLLER);
 const BAND_IMPORTS = importedNames(BAND);
 
 /** Rule one: the controller itself, and the panels the referee band puts on screen. */
@@ -235,7 +258,7 @@ const RENDERED_BY_THE_BAND: string[] = (() => {
 /** Rule two: anything under src/web, at any depth, that speaks the referee domain. */
 const IMPORTS_THE_DOMAIN: string[] = clientComponents(WEB)
   .filter((full) => {
-    const ast = parseSource(readFileSync(full, "utf8")) as unknown as AstNode;
+    const ast = moduleAst(full);
     for (const specifier of importedNames(ast).values()) {
       if (/^(referee-|injection-scan)/.test(basename(specifier))) return true;
     }

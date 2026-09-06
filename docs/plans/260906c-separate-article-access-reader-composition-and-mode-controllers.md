@@ -462,12 +462,21 @@ edit rather than to a second one racing it.
   `timeline: the phrase marks: expected [] to deeply equal [ 'spya-cccccc' ]`, while
   `passage-mode-cleanup` and the selection unit test both stay green. That is F1 reproduced rather
   than taken on trust.
-- Two things the build corrected. The **one stale frame cannot be observed from a React test**:
-  `act` flushes the commit and the passive cleanup together, so the frame between them is not a
-  state a harness can stand in — the removal is proved by the unit test over the nine, and the
-  harness's job is the settled truth at every step. And **`?crits=spya-krit34` is not an id**: the
+- Two things the build corrected. **A stale frame cannot be observed from a React test at all**:
+  `act` flushes the commit and its cleanups together, so the frame between them is not a state a
+  harness can stand in — which is why the nine non-producers are asserted by the unit test over
+  `selectPassages`, and the harness's job is the settled truth at every step. And **`?crits=spya-krit34` is not an id**: the
   charset excludes `i`, so the criterion never switched on while its rows still drew, which is the
   silent-success shape this repo keeps meeting.
+- **And a third, found while committing: the stale frame was not this stage's to remove.**
+  Stage 4a put `SearchBand` on `usePassageLifecycle`, whose rule 3 is a *layout* cleanup, so from
+  `14c1d79c` onwards Search's marks leave the prose in the mutation phase and no frame of them is
+  ever painted in Plain. The first draft of this section, the commit message, `passages.ts`'s
+  docblock, `Reader`'s comment, `url-state.md` and two test docblocks all credited the frame to
+  `selectPassages` — seven places, all now corrected. What 4b actually removes is subtler and wears
+  worse: the nine non-producers were correct **only for as long as a band in another file cleared
+  its slot on the way out**. Now they answer for themselves. This is Sol's F24 (2), found in its
+  stage 3+4a review and confirmed against the code rather than taken from the finding.
 
 What the stage was specified as:
 
@@ -501,6 +510,30 @@ the `NO_FOUND` list to silence the compiler. The table is in
 [new-mode.md § Before you call it finished](../project/new-mode.md#before-you-call-it-finished), and
 the band branch has left that page's residue list for its table of compiler-checked totals.
 `url-state.md` records that the mode → passage-slot mapping is now total.
+
+## Review ledger — stage 4b, and the guards Sol found holes in
+
+**Sol on stage 4b** (`260906c-stage4b-review-sol.md`, prompt beside it). No P1. It confirmed the
+things the stage rests on: `selectPassages` is exhaustive and correct over all fourteen modes and the
+real publishers are exactly Ideas, Quotes, Timeline, Search and Referee's pair; `band()` kept every
+owner/visitor and artefact gate and the single `FeatureBoundary`; no two modes return the same
+top-level type, so one child slot cannot reuse another mode's instance; the `NO_FOUND` identity
+claim is real, all four memos key on it; and the article-access and position files are byte-untouched.
+
+| # | Finding | Verdict |
+|---|---|---|
+| F1 | P2 — "Search **with pending work**" could stop being pending and stay green. The handler replaced a dummy `releaseSearch` only if `/api/search/` really arrived, nothing asserted that it had, and the arm's marks come from `findLiteral` regardless of the reply. | **Accepted and fixed.** Three booleans (`wanted`/`made`/`settled`) replace the nullable function: the test now asserts the GET was made, is unsettled on the way out of Search, is still unsettled at the end, and settles only when the test lets it. Proved by making the handler answer at once — *"the saved-run GET was never made — nothing is pending"*, two arms red. |
+| F2 | P3 — the new `key={mode}` guard protects a no-op and its explanation is false. Chat returns `ConversationBand` and Remember returns `RememberBand`; different top-level types remount either way, which Sol proved against the installed React. | **Accepted.** The green mutation was not a coverage hole. The key was load-bearing when written (`2dd63119` mounted one band from `mode === "chat" \|\| mode === "review"`) and stopped being so when Remember grew a wrapper; the comment did not keep up. Assertion removed, `Reader`'s comment now says the key is inert and names the edit that would make it matter again. The key itself is kept — it costs nothing and the condition can come back in one line. |
+| F3 | P3 — the A → B → A arm exercises only Ideas and Timeline, not "the same again". | **Accepted**, claim narrowed rather than the arm widened: see below. |
+
+**Sol on stages 3 and 4a** (`260906c-stage34a-review-sol.md`) left four findings, all applied here.
+
+| # | Finding | What landed |
+|---|---|---|
+| F21 | P2 — a non-literal dynamic import bypasses **every** import guard. `const target = "../../App.js"; void import(target);` in `IdeasMode.tsx` passed all three direction tests and Vite built it — a hole in the guard that is this job's acceptance criterion. | `refuseUntraceableImports` in `tests/helpers/ts-ast.ts`: any dynamic `import()` whose specifier is not a string literal (or a substitution-free template) fails the guard by name and line. Wired into `reader-import-direction`, `eager-client-graph`, `referee-copy-is-about-the-model`, `client-imports` and `helpers/import-graph`. All four guards now refuse Sol's line at `IdeasMode.tsx:262`; a repo-wide scan found exactly one non-literal dynamic import in 1,369 files, in a store test no graph guard reads, so there is no allowlist. |
+| F22 | P2 — the footer mount inventory counted commented-out JSX; `{/* <SiteFooter /> */}` left all fifteen tests green. | It counts `JSXOpeningElement` nodes now. Red on the same mutation: *"expected { …(6) } to deeply equal { …(7) }"*. |
+| F23 | P2 — the `ADMIN_EMAIL` guard only recognised named imports; `import * as reviewAdmin from "../admin.js"` walked past it. | An AST walk resolving what each import of `admin.js` binds, then asking whether the module reaches the constant under any name. Named, aliased, namespace-plus-member and re-export all caught; a namespace import that never reads it is not. Both the namespace and the aliased spellings proved red. |
+| F24 | P3 — three stale facts. | Stage 3 was one commit, not several. **The stale Search frame was stage 4a's to remove, not 4b's** — seven places corrected, above. `TimelineMode.tsx`'s "five effects below" and its siblings: outstanding, see below. |
 
 ## What this deliberately does not do
 

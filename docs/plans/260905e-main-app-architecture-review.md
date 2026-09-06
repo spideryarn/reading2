@@ -608,19 +608,19 @@ both would apply to any future schema change here.
 
 ### Stage: Separate article access, reader composition and mode controllers
 
-- [ ] Move `ArticleAccess`/`resolveAccess`/`useArticleAccess`/article-view composition as one unit,
+- [x] Move `ArticleAccess`/`resolveAccess`/`useArticleAccess`/article-view composition as one unit,
   preserving identity fences and the shared article fetch across reading/metadata/tweets.
-- [ ] Move `Reader` and its position hook, leaving `App` as route/session composition. Keep
+- [x] Move `Reader` and its position hook, leaving `App` as route/session composition. Keep
   `useJobSession` above all route returns and loading/error boundaries that replace pages.
-- [ ] Move Timeline, Quotes, Glossary, Search and Referee controllers in small batches. Keep the
+- [x] Move Timeline, Quotes, Glossary, Search and Referee controllers in small batches. Keep the
   current access union and data hooks. Move shared helpers only after identifying their callers.
-- [ ] Extract Chat/Remember last as the counterexample: preserve draft, send-new URL update,
+- [x] Extract Chat/Remember last as the counterexample: preserve draft, send-new URL update,
   anchored conversations, detached operation handling and live-conversation lifecycle.
-- [ ] Replace mode dispatch with an exhaustive switch and add the narrow passage lifecycle/paired
+- [x] Replace mode dispatch with an exhaustive switch and add the narrow passage lifecycle/paired
   selection from A3. Retain separate slots unless a tested single-owner alternative is simpler.
 - [ ] Sweep tests/docs/imports for each old exported band name and filename. Remove temporary
   re-exports after the caller census is empty. Assert feature files cannot import `App.tsx`.
-- [ ] Update [new-mode](../project/new-mode.md), [web-client](../project/web-client.md),
+- [x] Update [new-mode](../project/new-mode.md), [web-client](../project/web-client.md),
   [URL state](../project/url-state.md) and feature signposts. Acceptance: adding a fixture mode
   makes all required policy decisions visible, and leaves article access/position code untouched.
 

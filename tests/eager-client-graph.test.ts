@@ -43,13 +43,21 @@
  * A local specifier this cannot resolve fails the test loudly rather than being
  * dropped. A resolver that silently drops an edge is how a guard stops being a
  * guard, and it would drop the edge that matters on exactly the day somebody
- * introduces it.
+ * introduces it. `import.meta.glob` is refused below for the same reason, and
+ * so is a dynamic `import()` whose specifier is not a literal — that one is
+ * GPT Sol's F21, 2026-09-06, and the refusal lives in
+ * [`refuseUntraceableImports`](helpers/ts-ast.ts).
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { type AstNode, parseSource, walkAst } from "./helpers/ts-ast.js";
+import {
+  type AstNode,
+  parseSource,
+  refuseUntraceableImports,
+  walkAst,
+} from "./helpers/ts-ast.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const WEB = path.join(ROOT, "src", "web");
@@ -219,6 +227,14 @@ function edgesOf(file: string): Edges {
      `errorRecovery`, out of the module-scope walk below, which is loud. */
   const errors = ast.errors ?? [];
   if (errors.length > 0) parseFailures.push(`${path.relative(ROOT, file)}: ${errors[0]}`);
+  /* A computed `import()` is an edge with no name, and this walker records
+     dynamic edges by name — so it would drop it. F21, and the argument is with
+     the helper. */
+  refuseUntraceableImports(
+    ast.program,
+    path.relative(ROOT, file),
+    "tests/eager-client-graph.test.ts",
+  );
   const out: Edges = { staticLocal: [], dynamic: [], external: [] };
 
   const record = (spec: string, kind: "static" | "dynamic") => {

@@ -48,12 +48,27 @@
  * stopped walking answers correctly every time, the positive controls below
  * assert that files were found, that imports were found in them, and that a
  * known-present edge is among them.
+ *
+ * **A dynamic `import()` whose specifier is not a literal is refused for the
+ * same reason**, and that one is not hypothetical: GPT Sol put
+ * `const target = "../../App.js"; void import(target);` into `IdeasMode.tsx` on
+ * 2026-09-06 and all three assertions below stayed green while the criterion
+ * this file exists to enforce was being broken on the line above (F21). The
+ * refusal, and the repo-wide scan that says no legitimate one is in the way,
+ * are in [`refuseUntraceableImports`](helpers/ts-ast.ts).
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { type AstNode, lineOf, parseSource, walkAst } from "./helpers/ts-ast.js";
+import {
+  type AstNode,
+  lineOf,
+  parseSource,
+  refuseUntraceableImports,
+  untraceableDynamicImports,
+  walkAst,
+} from "./helpers/ts-ast.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const WEB = path.join(ROOT, "src", "web");
@@ -180,6 +195,11 @@ for (const file of files) {
   const ast = parseSource(readFileSync(file, "utf8"));
   const errors = ast.errors ?? [];
   if (errors.length > 0) parseFailures.push(`${path.relative(ROOT, file)}: ${errors[0]}`);
+  refuseUntraceableImports(
+    ast.program,
+    path.relative(ROOT, file),
+    "tests/reader-import-direction.test.ts",
+  );
   walkAst(ast.program, (n) => {
     const edge = edgeAt(n);
     if (!edge) return;
@@ -256,5 +276,55 @@ describe("which way the reading view's imports point", () => {
       offenders.join("\n"),
       "two features that need the same code are one feature, or the shared piece belongs in src/web/",
     ).toBe("");
+  });
+});
+
+/**
+ * **The refusal, asked directly** — because the sweep above reads real files,
+ * and today no file in the governed tree has a computed dynamic import, so it
+ * passes without ever exercising the case it was added for.
+ *
+ * This is the hole GPT Sol drove through on 2026-09-06 (F21), stated as data:
+ * the accepted spellings and the refused ones side by side, so that softening
+ * the rule turns something red rather than quietly widening what a guard cannot
+ * see.
+ */
+describe("a dynamic import whose specifier cannot be named is refused", () => {
+  const spellings = (code: string) => untraceableDynamicImports(parseSource(code).program);
+
+  it("accepts the two forms that are statically known", () => {
+    expect(spellings('void import("../../App.js");')).toEqual([]);
+    // A template with no substitutions is a literal wearing different quotes.
+    expect(spellings("void import(`../../App.js`);")).toEqual([]);
+    // And a file with no dynamic import at all raises nothing — no false red.
+    expect(spellings("const x: unknown = 1;\nvoid x;")).toEqual([]);
+  });
+
+  it("refuses every form that is not", () => {
+    // Sol's, verbatim.
+    expect(spellings('const t = "../../App.js";\nvoid import(t);')).toEqual([
+      { line: 2, argType: "Identifier" },
+    ]);
+    expect(spellings('void import("../.." + "/App.js");')).toEqual([
+      { line: 1, argType: "BinaryExpression" },
+    ]);
+    expect(spellings("void import(`../../${name}.js`);")).toEqual([
+      { line: 1, argType: "TemplateLiteral" },
+    ]);
+    expect(spellings("void import(cond ? a : b);")).toEqual([
+      { line: 1, argType: "ConditionalExpression" },
+    ]);
+  });
+
+  it("names the file, the line and the guard to teach", () => {
+    /* The message is the whole product of a fail-closed check: somebody reading
+       it has to know which line to open and where the decision lives. */
+    expect(() =>
+      refuseUntraceableImports(
+        parseSource('const t = "../../App.js";\nvoid import(t);').program,
+        "src/web/modes/ideas/IdeasMode.tsx",
+        "tests/reader-import-direction.test.ts",
+      ),
+    ).toThrow(/IdeasMode\.tsx:2 \(import\(<Identifier>\)\)/);
   });
 });

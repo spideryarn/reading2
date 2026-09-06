@@ -311,32 +311,30 @@ describe("the quotes band's marks", () => {
 });
 
 /**
- * **The one thing in the band dispatch that a mutation proved nothing was
- * watching.**
+ * **The two things in the band dispatch that only a compiler and a switch can
+ * hold, asserted here as well.**
  *
- * `key={mode}` on `ConversationBand` is correctness rather than tidiness: one
- * component is mounted by two modes, chat and Remember-recall, and without the
- * key React reuses the instance across the switch — so the reader arrives in
- * Remember carrying chat's open conversation, focus nonce and stance
- * (`ConversationModes.tsx`, and 260906c § Stage 2). Removing it on 2026-09-06
- * left `conversation-band-send-new`, `remember-url-rules`, `public-network-trace`
- * and the reader-level marks harness **all green**, so this is the guard written
- * because that hole was measured rather than guessed.
+ * The seventeen sibling `&&` expressions at the bottom of `Reader` became one
+ * `switch (mode)` on 2026-09-06 (260906c § Stage 4b). The `never` default is
+ * what makes a fifteenth mode a compile error instead of an empty band nobody
+ * notices, and `plain` and `hierarchy` say `return null` in their own arms
+ * rather than falling off the end — both are the point of the change rather
+ * than decoration, so both get an assertion.
  *
- * Same honest label as the blocks above: it reads source text. The behavioural
- * version would have to mount two modes and compare a conversation's per-visit
- * state across the switch, which is a bigger test than the fact deserves — but
- * a fact with nothing at all watching it is how a `key` gets deleted by somebody
- * tidying a switch.
+ * Same honest label as the blocks above: it reads source text. The typecheck is
+ * the real gate for the `never`; this is here so somebody running the suite
+ * alone still finds out.
  *
- * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md
- * § Stage 4b.
+ * **What is deliberately not asserted: `key={mode}` on `ConversationBand`.** A
+ * first draft of this block did assert it, on the strength of a mutation that
+ * deleted the key and left every test green. GPT Sol showed the mutation was
+ * green because the key is inert — chat and Remember return different top-level
+ * component types, so React discards the outgoing subtree either way — and a
+ * guard on a no-op is a guard that will one day be defended for the wrong
+ * reason. The history, and the condition that would make the key matter again,
+ * are in `reader/Reader.tsx` at the `case "chat"` arm.
  */
 describe("the band dispatch", () => {
-  it("keys the conversation band on the mode that mounted it", () => {
-    expect(reader).toMatch(/<ConversationBand\s*\n\s*key=\{mode\}/);
-  });
-
   it("makes a fifteenth mode a compile error rather than an empty band", () => {
     /* The `never` default, which is the whole reason the seventeen `&&`
        expressions became a switch. Asserted here as well as by the typecheck

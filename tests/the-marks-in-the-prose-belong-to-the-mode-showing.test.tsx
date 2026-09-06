@@ -18,7 +18,18 @@
  * criterion names:
  *
  * **Ideas → Timeline → Search with pending work → Criteria ↔ Claims → Plain →
- * Back**, then the same again under an article change, A → B → A.
+ * Back**, and then, under an article change, **A → B → A over Ideas and
+ * Timeline only**.
+ *
+ * That third arm is deliberately the short one, and saying so is GPT Sol's F3
+ * on this file — an earlier draft of this header called it "the same again",
+ * which it is not. What it is for is that a slot carries nothing across an
+ * article boundary, and two producers with distinguishable marks answer that;
+ * driving the whole sequence three times over would roughly double the file's
+ * runtime to re-prove wiring the first two arms already hold. The cost of the
+ * choice is real and belongs here rather than in a footnote: **an
+ * article-scoped wiring mistake in Search, Criteria or Claims specifically
+ * would not be caught by this variant.**
  *
  * ## How a wrong wiring is made visible
  *
@@ -373,7 +384,30 @@ const trace: { url: string; method: string }[] = [];
  * rather than only after one, and the release afterwards asserts a reply that
  * lands in another mode cannot put marks back.
  */
-let releaseSearch: (() => void) | null = null;
+/**
+ * **Whether the held request was ever actually made, and whether it is still
+ * held** — three booleans rather than one nullable function, because the
+ * function alone could not tell the two failures apart.
+ *
+ * It was `let releaseSearch: (() => void) | null`, armed with a `() => {}` that
+ * the handler replaced only if `/api/search/` really arrived. GPT Sol's stage 4b
+ * review (P2) pointed out what that cannot see: the marks in this arm come from
+ * `findLiteral` and do not depend on the reply at all, so if the GET stopped
+ * being made — or started resolving at once — every visible assertion would
+ * still have the same answer and the release at the end would call the dummy.
+ * "Search **with pending work**" would have quietly become "Search". So the
+ * pending-ness is asserted directly: made, still unsettled, and settled only
+ * when this test says so.
+ */
+const heldSearch = {
+  /** Set before entering Search. False means answer the GET immediately. */
+  wanted: false,
+  /** True once the handler has been reached and the reply withheld. */
+  made: false,
+  /** True once the reply has actually been let go. */
+  settled: false,
+  release: null as (() => void) | null,
+};
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -420,9 +454,13 @@ function reply(url: string, method: string): Promise<Response> {
   }
   if (path.startsWith("/api/search/")) {
     const answer = json({ searches: [], sourceHash: "h" });
-    if (releaseSearch === null) return Promise.resolve(answer);
+    if (!heldSearch.wanted) return Promise.resolve(answer);
+    heldSearch.made = true;
     return new Promise<Response>((go) => {
-      releaseSearch = () => go(answer);
+      heldSearch.release = () => {
+        heldSearch.settled = true;
+        go(answer);
+      };
     });
   }
   if (path.startsWith("/api/comments/")) return Promise.resolve(json({ comments: [] }));
@@ -448,7 +486,10 @@ const OWNER = { id: "owner-1", email: "a@example.com" };
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   trace.length = 0;
-  releaseSearch = null;
+  heldSearch.wanted = false;
+  heldSearch.made = false;
+  heldSearch.settled = false;
+  heldSearch.release = null;
   who.set(OWNER);
   activation.resetActivations();
   resetExperimental();
@@ -594,8 +635,14 @@ async function readingSession(strict: boolean): Promise<void> {
   agree("timeline", [P_TIME], [P_TIME]);
 
   /* ---- Search, with its saved-run request still outstanding. */
-  releaseSearch = () => {};
+  heldSearch.wanted = true;
   await press(MODE_LABEL.search);
+  /* **That the request is pending is asserted, not assumed.** Everything below
+     would read the same over a Search that never asked or was answered at once,
+     because these marks come from the literal matcher — so the state this arm
+     claims to be testing has to be checked directly. Sol, stage 4b, P2. */
+  expect(heldSearch.made, "the saved-run GET was never made — nothing is pending").toBe(true);
+  expect(heldSearch.settled, "the held reply landed before the reader had left Search").toBe(false);
   const rows = [...host.querySelectorAll<HTMLButtonElement>(".srch-hit-btn")];
   expect(rows, "the literal matcher found nothing to list").toHaveLength(1);
   agree("search, request pending", [P_FIND], []);
@@ -642,9 +689,14 @@ async function readingSession(strict: boolean): Promise<void> {
   agree("back, in referee", [P_CRIT], []);
 
   /* The held reply lands in a mode that is not Search. Nothing may come back:
-     the band is unmounted, and `selectPassages` would not read its slot anyway. */
-  releaseSearch?.();
+     the band is unmounted, and `selectPassages` would not read its slot anyway.
+     Held all the way here, and let go by this line rather than by a timeout —
+     both halves asserted, so "the reply arrived late" cannot become "the reply
+     arrived on time and this line did nothing". */
+  expect(heldSearch.settled, "the held reply settled on its own, somewhere above").toBe(false);
+  heldSearch.release?.();
   await settle();
+  expect(heldSearch.settled, "releasing the held reply did nothing").toBe(true);
   agree("after the held search reply landed", [P_CRIT], []);
 }
 
@@ -668,6 +720,8 @@ describe("the marks in the prose belong to the mode showing", () => {
   });
 
   it("carries nothing across an article change, A → B → A", async () => {
+    /* **Ideas and Timeline only, on purpose** — the header says why, and what
+       this therefore does not cover. Sol, stage 4b, F3. */
     await open(A, false);
     await press(MODE_LABEL.ideas);
     agree("A, ideas", [P_IDEA], [P_IDEA]);

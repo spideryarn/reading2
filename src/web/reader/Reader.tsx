@@ -1362,9 +1362,24 @@ export function Reader({
       case "hierarchy":
         return null;
       case "chat":
-        /* One component, mounted by two modes, keyed so that switching between
-           them starts clean rather than carrying the other's open conversation,
-           focus nonce and stance across. See ConversationBand. */
+        /* **The key is inert today, and it is kept for the day it is not.**
+           It was written when one `ConversationBand` was mounted by two modes
+           — `{(mode === "chat" || mode === "review") && <ConversationBand
+           key={mode} …/>}`, commit 2dd63119 — where it is what stopped Remember
+           inheriting chat's open conversation, focus nonce and stance. Remember
+           has had a wrapper of its own since, so this arm renders for one mode
+           and `mode` is the constant `"chat"`; the arms return different
+           top-level types, so React discards the outgoing subtree with or
+           without it. GPT Sol proved that against the installed React on
+           2026-09-06 (stage 4b, F2) after a mutation that deleted the key left
+           every test green — which was not a hole in the tests, because there
+           was nothing to catch.
+
+           Left in place rather than deleted because a constant key costs
+           nothing and the condition that made it matter can come back in one
+           edit: the moment two modes return `<ConversationBand>` from this
+           switch, the reader carries the other conversation across. See
+           ConversationBand. */
         return owner ? (
           <ConversationBand
             key={mode}

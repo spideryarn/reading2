@@ -27,6 +27,8 @@ import { readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { refuseUntraceableImportsInSource } from "./helpers/ts-ast.js";
+
 const ROOT = path.resolve(import.meta.dirname, "..");
 const WEB = path.join(ROOT, "src", "web");
 
@@ -415,6 +417,13 @@ interface Imported {
 /** Every import one file makes — `import` and `export … from` alike. */
 function scan(file: string): Imported[] {
   const text = readFileSync(file, "utf8");
+  /* **A dynamic `import()` with a computed specifier is refused**, not skipped.
+     Every rule below reads a list of specifiers, so an edge with no name is an
+     edge that passes every one of them — GPT Sol, 2026-09-06, F21, which showed
+     the same hole in three graph guards at once. The refusal, and the repo-wide
+     scan behind it, are in tests/helpers/ts-ast.ts; it parses only when the
+     text could contain one. */
+  refuseUntraceableImportsInSource(text, path.relative(ROOT, file), "tests/client-imports.test.ts");
   const found: Imported[] = [];
   /* The middle capture is everything between the keyword and `from`, which is
      what decides `typeOnly`: ` type { X } ` says yes, ` { type A, b } ` says
