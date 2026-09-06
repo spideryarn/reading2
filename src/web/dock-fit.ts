@@ -77,19 +77,68 @@ import { onFontsChanged } from "./fonts.js";
  * top-down and stopping at the first fit correct — and each is exactly what a
  * media query used to do:
  *
- *  - `dock-fit-1`: the modes lose their labels (all but `keepLabel`), and close
- *    up to 0.6rem. The old `max-width: 1100px` rule. Measured need: ~808px.
- *  - `dock-fit-2`: *every* button loses its label and closes to 0.45rem. What
- *    § a narrow window did at 731px. Measured need: ~551px.
+ *  - `dock-fit-1`: **the app cluster's words only** — the wordmark's and
+ *    Feedback's (`.dock-home`, `.dock-feedback`). Every mode keeps its label.
+ *  - `dock-fit-2`: the modes lose their labels too (all but `keepLabel`), and
+ *    close up to 0.6rem. The old `max-width: 1100px` rule.
+ *  - `dock-fit-3`: *every* button loses its label and closes to 0.45rem. What
+ *    § a narrow window did at 731px.
+ *
+ * **Rung 1 is new on 2026-09-06 and the rungs below it shifted down one**, when
+ * the wordmark and the Feedback button moved off the top corners and into this
+ * bar (docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md).
+ * Fable asked for it and its stated reason was wrong; the corrected one is
+ * this. Measured before anything was built, by binary search on the viewport
+ * width at which each rung stops fitting:
+ *
+ *  | modes drawn | rung 0 | rung 1 (old) | rung 2 (old) |
+ *  |---|---|---|---|
+ *  | 9 — the default reader | 1206px | 815px | ≤ 740px |
+ *  | 14 — experimental on   | 1647px | 992px | ≤ 740px |
+ *
+ * Fable argued that a 1440 laptop would shed fourteen mode words to keep two
+ * app-level ones. It would not: with fourteen modes the bar is *already* past
+ * rung 0 at 1440, because rung 0 wants 1647. The reader this rung actually
+ * protects is the **default** one, whose rung 0 need is 1206 and would go to
+ * roughly 1420 with both words added — so 1280 and 1366, two of the commonest
+ * laptop widths, would drop a rung they hold today. Two words that pay least,
+ * shed before fourteen that pay most.
+ *
+ * **And measured again once it was built**, the same way, on the same article
+ * and the same box, so the two tables can be compared line by line:
+ *
+ *  | modes drawn | rung 0 | rung 1 | rung 2 | rung 3 |
+ *  |---|---|---|---|---|
+ *  | 9 — the default reader | 1397px | 1263px | 872px | ≤ 740px |
+ *  | 14 — experimental on   | 1838px | 1702px | 1048px | ≤ 740px |
+ *
+ * Two words cost rung 0 about 190px, close to the ~1420 predicted, and the new
+ * rung needs 1263 — so a **1280 and a 1366 laptop keep every mode label** and
+ * give up only `Spideryarn` and `Feedback`, which is exactly the band the rung
+ * was put in for. The mode rung moved by ~57px (815→872, 992→1048), which is
+ * the two extra glyphs, and the last rung did not move at all: it is the floor,
+ * and the floor is the phone.
+ *
+ * **The app cluster's words do not come back at any lower rung**, which is a
+ * decision rather than a consequence of how the selectors happened to be
+ * written: rung 1 exists precisely because they are the words worth losing
+ * first, so a rung below it that showed them again would be undoing its own
+ * argument. styles.css § the bar's fit ladder spells all three rungs out.
  *
  * Past the last rung the row simply overflows, and § a narrow window makes it
  * scroll rather than clip — the floor under this ladder, and deliberately so:
  * fifteen buttons cannot share a phone in portrait at a pressable size, and
  * Greg chose scrolling over shrinking further (styles.css § a coarse pointer).
  *
- * A new rung goes here and gets a rule in styles.css. Nothing else changes.
+ * A new rung goes here and gets a rule in styles.css — **and if it goes in
+ * anywhere but the bottom, that is a rename and it gets a rename's sweep.**
+ * Adding rung 1 on 2026-09-06 shifted two class names and every prose mention
+ * of a rung by number, in this file, in styles.css and in tests/dock-fit.test.ts.
+ * Grep for `dock-fit-` and for "rung", and read the sentences as well as the
+ * selectors: a comment naming the wrong rung is not a compile error and not a
+ * failing test. docs/reusable/rename-or-move.md.
  */
-export const DOCK_FIT_CLASSES = ["", "dock-fit-1", "dock-fit-2"] as const;
+export const DOCK_FIT_CLASSES = ["", "dock-fit-1", "dock-fit-2", "dock-fit-3"] as const;
 
 /** Every class this module owns, so `applyDockFit` can clear the others. */
 const ALL = DOCK_FIT_CLASSES.filter((c) => c !== "");
@@ -103,8 +152,9 @@ function applyDockFit(el: HTMLElement, level: number): void {
 /**
  * The narrowest rung the bar needs, left applied to `el` when this returns.
  *
- * Walks from rung 0 down, applying each and asking the browser. Up to three
- * forced reflows on an eighteen-element row, and only when something changed.
+ * Walks from rung 0 down, applying each and asking the browser. Up to four
+ * forced reflows — one per rung — on a twenty-element row, and only when
+ * something changed.
  *
  * `current` is returned unchanged when the element has no layout at all
  * (`clientWidth` 0 — detached, `display: none`, or jsdom, which has no layout

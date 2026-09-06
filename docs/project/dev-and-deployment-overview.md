@@ -43,6 +43,13 @@ is the one worth knowing unprompted: a bad tree draws a *wrong article* rather t
 
 ## The docs
 
+**If you have never done any of this here, start with the tutorial rather than the reference.**
+[260906a-deployment-and-infrastructure.html](../tutorials/260906a-deployment-and-infrastructure.html)
+explains the whole of it to somebody who has not opened the code — the four machines, `npm run
+deploy` step by step, what a serverless host takes away, and why most of the deploy script is not
+deploying but refusing to believe a green light. Open it in a browser. Everything below is the
+reference, and is authoritative wherever the two disagree.
+
 - **[setup-dev.md](setup-dev.md)** — the long version of the above: the four env variables without
   which you get a blank page, and **which model each job uses** — two tiers, and three spellings of
   a model id of which only one is a name.

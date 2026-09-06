@@ -4,6 +4,11 @@
 into. Everything after it is depth: what each secret is for, which model does
 which job, how to run one pipeline stage on its own. You do not need any of that to start.
 
+For the *why* behind any of it — what the Docker stack is standing in for, what shipping looks like,
+and what the production host takes away that your laptop gives you for free — read
+[260906a-deployment-and-infrastructure.html](../tutorials/260906a-deployment-and-infrastructure.html)
+in a browser. It is written for somebody who has never opened the code.
+
 ## Quickstart
 
 ### What you need first

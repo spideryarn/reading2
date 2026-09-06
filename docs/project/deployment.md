@@ -1157,6 +1157,10 @@ Vercel.
 
 ## See also
 
+- [260906a-deployment-and-infrastructure.html](../tutorials/260906a-deployment-and-infrastructure.html)
+  — the tutorial version of this page, for somebody who has not opened the code: the four machines,
+  `npm run deploy` step by step, and the failures below retold as one pattern rather than five
+  incidents. Open it in a browser; this page is authoritative wherever they disagree
 - [260825d-deploy-and-repo-move.md](../plans/260825d-deploy-and-repo-move.md) — the plan, the
   domain move, and the beta gate
 - [database.md](database.md) — the roles, the three hosts, and the enforced SSL

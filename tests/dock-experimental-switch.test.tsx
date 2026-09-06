@@ -468,8 +468,11 @@ describe("the tooltip", () => {
  */
 describe("the fit signature", () => {
   const noop = () => {};
+  /* The last argument is whether the bar draws a Feedback trigger, held
+     constant here so that every difference below is the switch's — that term
+     has its own file, tests/dock-corner-controls.test.tsx § the fit signature. */
   const sig = (variant: ExperimentalVariant | null) =>
-    fitSignature(visibleModes(false, "plain"), "plain", noop, undefined, null, variant);
+    fitSignature(visibleModes(false, "plain"), "plain", noop, undefined, null, variant, true);
 
   it("no switch is a different bar from a switch", () => {
     expect(sig(null)).not.toBe(sig("ready"));

@@ -1,0 +1,1193 @@
+<!doctype html>
+<html lang="en">
+<!--
+    TUTORIAL REQUEST
+
+    User prompt: "Write a docs/tutorial/ with write-tutorial.md about deployment
+    and infrastructure, and signpost to it from setup-dev.md, README.md, etc"
+    — Greg, 2026-09-06.
+
+    Generated: 2026-09-06
+    Audience:  a product manager or engineer who knows Spideryarn and has never read the code
+    Complexity: medium-complex — four machines, one deploy command, and a long list of
+                things that report success while being wrong
+    Written to: docs/reusable/write-tutorial.md
+
+    Source files read:
+      docs/project/dev-and-deployment-overview.md   the entry point and the command table
+      docs/project/deployment.md                    the whole process side, 1173 lines
+      docs/project/vercel-hosting-deployment.md     the inspection side and the three log traps
+      docs/project/setup-dev.md                     the quickstart, the secrets, the ports
+      docs/project/supabase-local.md                the Docker stack, the ports, the quiet failures
+      docs/project/database.md                      roles, poolers, the migration that migrated the laptop
+      docs/project/sentry-error-monitoring.md       what reaches it, and the two gaps
+      docs/project/debugging.md                     which of the three places answers what
+      docs/project/changelog.md                     a version is a deploy
+      docs/project/hetzner-remote-server-box.md     the disposable server, the persistent volume
+      docs/project/worktrees.md                     the trunk flip, and why deploy refuses `main`
+      scripts/deploy.ts                             the seven steps, and the reasoning in its header
+      scripts/deploy-checks.ts                      DEPLOY_SOURCE_BRANCHES, TRUNK_BRANCH, the judgements
+      api/index.js                                  why it is JavaScript, why the import is inside
+      vercel.json                                   the rewrites, the regions, the headers
+      infra/hetzner/variables.tf                    server type, node_major, the volume
+      package.json                                  the scripts
+
+    Numbers measured on 2026-09-06 rather than remembered, and the command for each
+    is in the appendix:
+      79 migrations in drizzle/ · 29 tables · production on Node v24.18.0, region lhr1,
+      14 articles, ssl "verified", migrations applied 79 = expected 79. Read live from
+      https://www.spideryarn.com/api/health at 2026-09-06, deployment dpl_5CkF27c3GPHGz47wiHd1EsReP1YP,
+      commit 39282f8c.
+
+    Discrepancies found between the docs and the tree, reported to Greg rather than
+    silently fixed here (deployment.md and setup-dev.md are large owned docs, and
+    supabase-local.md's opening is a rule-shaped sentence):
+      - Node major gap. infra/hetzner/variables.tf pins node_major = 26 with the
+        reasoning "a major-version gap between the two is where 'works on my machine'
+        comes from" — about laptop vs box. Production runs v24.18.0 (measured), so
+        there is a two-major gap between every dev machine and production. That is
+        exactly the axis ERR_REQUIRE_ESM fell down. Neither doc says so.
+      - supabase-local.md opens "The reading app still reads and writes JSON files
+        under data/" — stale since 2026-09-05, when the filesystem store went.
+      - api/index.js says the bundle is 3.4 MB; deployment.md says 3.5 MB. One of
+        them is stale and neither cites a command.
+    This tutorial carries the measured figures and names the command beside each.
+
+    Diagrams: three hand-authored inline SVGs, checked in a browser (Playwright
+    against system Chrome on the Hetzner box), light and dark, at 1280 and 900 wide,
+    twice. The first pass found one fault invisible in the markup — figure 1's
+    "transaction pooler" caption overlapping the Supabase box's left border in all four
+    combinations — and one systemic: a 980-unit viewBox rendering into a ~931px column
+    downscales every label, putting the smallest class at ~11px effective. Captions
+    re-worded to fit their 100-unit gaps, every SVG text class +1px, re-measured by
+    glyph bounding box rather than by computed style.
+
+    Residual, stated rather than papered over: the smallest class measures ~12.4px
+    effective at a 1280px viewport and ~11.1px at 900px, because the downscaling gets
+    worse as the column narrows. 1280 is the laptop the guideline is about; a 900px
+    window is still slightly under it. Fixing that properly means a narrower viewBox
+    or letting figures break out of the text column, and neither was worth doing to
+    one tutorial rather than to the shared house style all four of them use.
+
+    Reviewed by GPT Sol (gpt-5.6-sol, high effort) 2026-09-06: 16 findings, every one
+    checked against the code before applying, and all 16 applied. Seven were confident
+    wrong claims rather than omissions, and they are worth knowing because each would
+    have sent a reader to the wrong conclusion:
+      - "migrations here are additive" (said in four places). Six of the 79 drop a
+        column, and scripts/deploy.ts:918 reports destructive SQL as "a report, not a
+        gate - Greg's call". The schema-first order is safe only while the particular
+        migration stays backward-compatible, which is a weaker claim than the one made.
+      - "That is precisely the axis the ERR_REQUIRE_ESM bug fell down." It is not:
+        deployment.md says it reproduced on none of Node 22/24/26, so the cause was the
+        host's runtime config. The page's own section 4 said so, so it contradicted itself.
+      - "does the page render" as one of the deploy's five checks. verifyPage()
+        (deploy.ts:1247) fetches the HTML and every asset it names and scans them for
+        secrets; it never executes the bundle. A module-load crash passes all five - which
+        the page then admitted thirteen lines later.
+      - "one declared exception in an offline evaluation" for the AI gateway, and
+        "npm run cost can see every penny". Live conversation is a real product path going
+        browser-to-OpenAI on a separate bill that npm run cost cannot see.
+      - "one bucket, uploaded PDFs". It also holds fetched HTML and article images, and
+        uploads go from the browser STRAIGHT to Storage because Vercel refuses a body over
+        4.5 MB - a route the topology diagram did not show at all.
+      - GitHub was inside the diagram group labelled "called by the running function". It
+        is in the deploy path; the running function never calls it.
+      - "every request pays for everything the bundle imports". Once per cold start, not
+        once per request.
+    Four were omissions of load-bearing machinery: the cross-worktree deploy lock (drizzle
+    takes none of its own), the migration-history check, the app-role read privilege check
+    after migrating, and the served-asset secret scan. Three were understatements: the
+    Hetzner box is a server somebody patches with ssh open by default, its real cost is
+    nearer EUR 38 than EUR 30, and one local Supabase stack is shared by every agent on a
+    machine. One was an undefined internal noun ("claim"), now defined and in the glossary.
+
+    State of the tree when written: dev at f31dea63; production serving 39282f8c.
+-->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="How a commit becomes www.spideryarn.com: the four machines, the seven steps of npm run deploy, what a serverless host takes away, and the failures that report success.">
+<title>Shipping Spideryarn</title>
+<style>
+  :root {
+    --bg: #fbfaf8;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --ink-soft: #5b6470;
+    --rule: #e2e0dc;
+    --accent: #db8a45;
+    --link: #1a5fb4;
+
+    --c-client: #6d28d9;  --c-client-fill: #eee9fd;
+    --c-server: #0f766e;  --c-server-fill: #dcf5f1;
+    --c-db:     #1d4ed8;  --c-db-fill:     #e2ebfe;
+    --c-ext:    #b45309;  --c-ext-fill:    #fdf1dc;
+    --c-ok:     #15803d;  --c-ok-fill:     #ddf5e3;
+    --c-warn:   #b3261e;  --c-warn-fill:   #fdeaea;
+    --c-dead:   #8b929c;  --c-dead-fill:   #ececec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --panel: #1e2128; --ink: #e6e6e3; --ink-soft: #a3adba;
+      --rule: #333842; --link: #7fb4ff;
+      --c-client: #b79cf5; --c-client-fill: #271e3d;
+      --c-server: #63d3c1; --c-server-fill: #10302c;
+      --c-db:     #8fb6ff; --c-db-fill:     #1b2740;
+      --c-ext:    #f0b167; --c-ext-fill:    #3a2c17;
+      --c-ok:     #7fd396; --c-ok-fill:     #142b1c;
+      --c-warn:   #f38b84; --c-warn-fill:   #351a19;
+      --c-dead:   #7b828c; --c-dead-fill:   #2a2e35;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2.5rem 1.25rem 6rem;
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 62rem; margin-inline: auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 2.1rem; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 .4rem; }
+  h2 {
+    font-size: 1.42rem; line-height: 1.25; letter-spacing: -0.01em;
+    margin: 3.2rem 0 .8rem; padding-bottom: .35rem; border-bottom: 2px solid var(--rule);
+  }
+  h3 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+  h4 { font-size: .96rem; margin: 1.4rem 0 .4rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+  p, li { max-width: 46rem; }
+  a { color: var(--link); text-decoration-color: color-mix(in srgb, var(--link) 40%, transparent); text-underline-offset: 2px; }
+  a:hover { text-decoration-color: currentColor; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .875em;
+         background: color-mix(in srgb, var(--ink) 7%, transparent); padding: .1em .35em; border-radius: 3px; }
+  pre { background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--rule);
+        border-radius: 6px; padding: .85rem 1rem; overflow-x: auto; font-size: .84rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; font-size: 1em; }
+  .lede { font-size: 1.06rem; color: var(--ink-soft); max-width: 44rem; }
+  .meta { font-size: .84rem; color: var(--ink-soft); margin: .6rem 0 2rem; }
+  .meta strong { color: var(--ink); font-weight: 600; }
+
+  .callout { border: 1px solid var(--rule); border-left: 4px solid var(--accent);
+             background: var(--panel); border-radius: 5px; padding: .9rem 1.1rem; margin: 1.2rem 0; }
+  .callout p { margin: .4rem 0 0; }
+  .callout .title { font-weight: 650; }
+  .callout.warn { border-left-color: var(--c-warn); background: var(--c-warn-fill); }
+  .callout.key  { border-left-color: var(--c-server); background: var(--c-server-fill); }
+  .callout.model { border-left-color: var(--c-client); background: var(--c-client-fill); }
+
+  .toc { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 1rem 1.4rem; margin: 1.6rem 0; }
+  .toc ol { margin: .4rem 0; padding-left: 1.3rem; }
+  .toc li { margin: .18rem 0; }
+  .paths { margin-top: 1rem; padding-top: .9rem; border-top: 1px dashed var(--rule); font-size: .93rem; }
+  .paths p { margin: .35rem 0; }
+
+  figure { margin: 1.6rem 0; }
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px;
+            background: var(--panel); padding: .6rem; }
+  svg { display: block; width: 100%; min-width: 700px; height: auto; }
+  figcaption { font-size: .85rem; color: var(--ink-soft); margin-top: .5rem; max-width: 46rem; }
+
+  .s-client { fill: var(--c-client-fill); stroke: var(--c-client); }
+  .s-server { fill: var(--c-server-fill); stroke: var(--c-server); }
+  .s-db     { fill: var(--c-db-fill);     stroke: var(--c-db);     }
+  .s-ext    { fill: var(--c-ext-fill);    stroke: var(--c-ext);    }
+  .s-ok     { fill: var(--c-ok-fill);     stroke: var(--c-ok);     }
+  .s-warn   { fill: var(--c-warn-fill);   stroke: var(--c-warn);   }
+  .s-dead   { fill: var(--c-dead-fill);   stroke: var(--c-dead);   }
+  .s-panel  { fill: var(--panel);         stroke: var(--rule);     }
+  .box { stroke-width: 1.5; rx: 6; }
+  .t   { fill: var(--ink); font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .t-s { fill: var(--ink-soft); font: 13.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .t-b { fill: var(--ink); font: 14.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 650; }
+  .t-m { fill: var(--ink); font: 13.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .t-ms { fill: var(--ink-soft); font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .t-hd { fill: var(--ink-soft); font: 13px -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; letter-spacing: .1em; }
+  .ln { stroke: var(--ink-soft); stroke-width: 1.5; fill: none; }
+  .ln-dash { stroke: var(--ink-soft); stroke-width: 1.3; fill: none; stroke-dasharray: 5 4; }
+  .ln-warn { stroke: var(--c-warn); stroke-width: 1.5; fill: none; }
+
+  .key { display: flex; flex-wrap: wrap; gap: .35rem 1.1rem; font-size: .84rem; color: var(--ink-soft); margin: .6rem 0 0; }
+  .key span { display: inline-flex; align-items: center; gap: .4rem; }
+  .key i { width: .8rem; height: .8rem; border-radius: 3px; border: 1.5px solid; display: inline-block; }
+  .k-client { background: var(--c-client-fill); border-color: var(--c-client); }
+  .k-server { background: var(--c-server-fill); border-color: var(--c-server); }
+  .k-db     { background: var(--c-db-fill);     border-color: var(--c-db); }
+  .k-ext    { background: var(--c-ext-fill);    border-color: var(--c-ext); }
+
+  table { border-collapse: collapse; width: 100%; max-width: 54rem; margin: 1.1rem 0; font-size: .92rem; }
+  th, td { text-align: left; vertical-align: top; padding: .5rem .7rem; border-bottom: 1px solid var(--rule); }
+  th { font-weight: 650; font-size: .82rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); }
+
+  details { border: 1px solid var(--rule); border-radius: 6px; background: var(--panel);
+            padding: .35rem .9rem; margin: 1rem 0; }
+  details[open] { padding-bottom: .9rem; }
+  summary { cursor: pointer; font-weight: 600; padding: .5rem 0; }
+  summary::marker { color: var(--accent); }
+  details > *:not(summary) { max-width: 46rem; }
+
+  .pass { display: inline-block; font-size: .74rem; letter-spacing: .08em; text-transform: uppercase;
+          color: var(--accent); font-weight: 700; border: 1px solid currentColor;
+          border-radius: 3px; padding: .1em .5em; vertical-align: .25em; margin-right: .5rem; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; }
+</style>
+</head>
+<body>
+
+<h1>Shipping Spideryarn</h1>
+<p class="lede">A commit on somebody's laptop becomes <code>www.spideryarn.com</code>. This is what
+sits in between — four machines, one command, and a long list of things that report success while
+being wrong.</p>
+<p class="meta"><strong>8 minutes</strong> to skim · <strong>~30</strong> to read everything ·
+written 2026-09-06, against <code>dev</code> at <code>f31dea63</code>, with production serving
+<code>39282f8c</code></p>
+
+<h2 id="tldr">TL;DR</h2>
+
+<p>One command ships: <code>npm run deploy</code>. It runs the tests against a
+<em>clean copy of the exact commit</em> rather than against the files on your disk, applies any pending database
+migrations to production, pushes that commit to <code>main</code> — which is the only thing Vercel
+watches — waits for the build, and then asks the live site a series of questions whose answers it
+compares against the commit it just shipped.</p>
+
+<p>There are three long-lived pieces of infrastructure and they are all rented:
+<strong>Vercel</strong> runs the app in London as one serverless function,
+<strong>Supabase</strong> holds the Postgres database and the stored files in eu-west-2, and a
+<strong>Hetzner</strong> box exists so that AI coding sessions keep working when a laptop sleeps.
+Only that last one is a machine anybody has to administer, and it serves no reader.</p>
+
+<p>The interesting part is not the pipeline. It is that a serverless host takes away three things a
+program normally assumes — a writable disk, memory between requests, and a runtime you can test on —
+and that nearly every failure this has caused arrived <em>reporting success</em>. Most of the deploy
+script is not deploying. It is refusing to believe a green light.</p>
+
+<h2 id="models">Four ways to picture it</h2>
+
+<div class="callout model">
+  <p class="title">1 · Two computers that disagree about what your code is</p>
+  <p>Your laptop knows about every file on its disk. Vercel's build machine only knows about the
+  files in the commit. Those are different programs, and the second one is the one that ships.
+  <code>main</code> has been broken three times by a commit that imported a file still sitting
+  untracked on somebody's disk — the build was green locally every time.</p>
+</div>
+
+<div class="callout model">
+  <p class="title">2 · A hotel room, not a flat</p>
+  <p>The production app runs in a rented room that is cleaned between guests. There is no writable
+  disk that survives a request, no shelf to leave something on for the next one, and you may get a
+  different room each time. Anything that must persist goes to Postgres or to file storage. This is
+  not a detail: it is why adding an article on the live site was broken for three days, and why
+  <code>/tmp</code> — which really is writable — is not the shortcut it looks like.</p>
+</div>
+
+<div class="callout model">
+  <p class="title">3 · A pre-flight checklist for a plane whose instruments sometimes lie</p>
+  <p>Every item on the deploy checklist exists because something once said <em>OK</em> while being
+  wrong: a build that succeeded and shipped a function failing on every request; a health check that
+  returned green with the fault printed four lines lower; a migration command that printed
+  <code>✓ migrations applied</code> having migrated the wrong database. So the checks are written to
+  be <em>hard to please</em>, and an empty result is treated as a failure rather than as good news.</p>
+</div>
+
+<div class="callout model">
+  <p class="title">4 · One front door and three peepholes</p>
+  <p>When something is wrong in production there are exactly three places to look and they answer
+  different questions. <code>/api/health</code> says what the deployment <em>is</em>, right now.
+  Vercel's logs say what happened during a request, for one day. Sentry says something broke while
+  nobody was watching, for thirty days. Going in that order is most of the skill.</p>
+</div>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#pass1">The whole thing, in one page</a></li>
+    <li><a href="#pieces">The pieces, and what each one is for</a></li>
+    <li><a href="#worked">One commit, followed all the way to the live site</a></li>
+    <li><a href="#serverless">What the host takes away</a></li>
+    <li><a href="#broken">The failures that reported success</a></li>
+    <li><a href="#judgment">Trade-offs, risks and open questions</a></li>
+    <li><a href="#faq">FAQ</a></li>
+    <li><a href="#appendix">Appendix: file map, commands, glossary</a></li>
+  </ol>
+  <div class="paths">
+    <p><strong>If you care most about cost and dependency</strong> — read
+      <a href="#pieces">§2</a> and <a href="#judgment">§6</a>.</p>
+    <p><strong>If you care most about how safe shipping is</strong> — read
+      <a href="#worked">§3</a>, then the risks in <a href="#judgment">§6</a>.</p>
+    <p><strong>If something is broken right now</strong> — <a href="#faq">§7</a>'s first three
+      questions, then <a href="#broken">§5</a>.</p>
+    <p><strong>If you want to know why the product's ingest was broken in production for three
+      days</strong> — <a href="#serverless">§4</a>.</p>
+  </div>
+</div>
+
+<h2 id="pass1"><span class="pass">Pass 1</span> The whole thing, in one page</h2>
+
+<p>Three machines matter, and they are in three different places.</p>
+
+<figure>
+  <div class="scroll">
+  <svg viewBox="0 0 980 500" role="img" aria-label="Three machines: your machine, Vercel in London, Supabase in eu-west-2, plus the external services the running app calls.">
+    <defs>
+      <marker id="a1" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0,0.5 L8.5,4.5 L0,8.5 z" fill="var(--ink-soft)"/>
+      </marker>
+    </defs>
+
+    <text class="t-hd" x="15" y="26">WHERE YOU WORK</text>
+    <text class="t-hd" x="365" y="26">WHERE IT RUNS</text>
+    <text class="t-hd" x="715" y="26">WHERE THE DATA IS</text>
+
+    <!-- column 1 -->
+    <rect class="box s-client" x="15" y="42" width="250" height="228"/>
+    <text class="t-b" x="32" y="68">Your machine</text>
+    <text class="t-s" x="32" y="88">a laptop, or the Hetzner box</text>
+    <line class="ln" x1="32" y1="102" x2="248" y2="102" stroke-opacity=".35"/>
+    <text class="t-m" x="32" y="126">npm run dev — one process</text>
+    <text class="t-s" x="32" y="146">port 5273, and it must be 5273</text>
+    <text class="t-m" x="32" y="176">Supabase in Docker</text>
+    <text class="t-s" x="32" y="196">the whole stack, ~2 GB of images</text>
+    <text class="t-m" x="32" y="226">.env.local</text>
+    <text class="t-s" x="32" y="246">gitignored; beats your shell</text>
+
+    <!-- column 2 -->
+    <rect class="box s-server" x="365" y="42" width="250" height="228"/>
+    <text class="t-b" x="382" y="68">Vercel</text>
+    <text class="t-s" x="382" y="88">region lhr1 (London)</text>
+    <line class="ln" x1="382" y1="102" x2="598" y2="102" stroke-opacity=".35"/>
+    <text class="t-m" x="382" y="126">dist/</text>
+    <text class="t-s" x="382" y="146">the client bundle, served static</text>
+    <text class="t-m" x="382" y="176">api-dist/vercel.js</text>
+    <text class="t-s" x="382" y="196">one function, ~3.5 MB, Node 24</text>
+    <text class="t-m" x="382" y="226">www.spideryarn.com</text>
+    <text class="t-s" x="382" y="246">apex 308s to it</text>
+
+    <!-- column 3 -->
+    <rect class="box s-db" x="715" y="42" width="250" height="228"/>
+    <text class="t-b" x="732" y="68">Supabase</text>
+    <text class="t-s" x="732" y="88">region eu-west-2</text>
+    <line class="ln" x1="732" y1="102" x2="948" y2="102" stroke-opacity=".35"/>
+    <text class="t-m" x="732" y="126">Postgres 17.6</text>
+    <text class="t-s" x="732" y="146">29 tables, 79 migrations</text>
+    <text class="t-m" x="732" y="176">Storage: sources</text>
+    <text class="t-s" x="732" y="196">PDFs, fetched HTML, images</text>
+    <text class="t-m" x="732" y="226">auth.users</text>
+    <text class="t-s" x="732" y="246">who is signed in</text>
+
+    <!-- arrows between columns -->
+    <text class="t-s" x="315" y="140" text-anchor="middle">you push;</text>
+    <text class="t-s" x="315" y="157" text-anchor="middle">Vercel builds</text>
+    <line class="ln" x1="268" y1="180" x2="358" y2="180" marker-end="url(#a1)"/>
+
+    <text class="t-s" x="665" y="134" text-anchor="middle">SQL, over the</text>
+    <text class="t-s" x="665" y="151" text-anchor="middle">transaction</text>
+    <text class="t-s" x="665" y="168" text-anchor="middle">pooler</text>
+    <line class="ln" x1="618" y1="180" x2="708" y2="180" marker-end="url(#a1)"/>
+
+    <!-- migrations path -->
+    <path class="ln-dash" d="M140,273 L140,318 L840,318 L840,278" marker-end="url(#a1)"/>
+    <text class="t-s" x="490" y="340" text-anchor="middle">…except migrations, which npm run deploy applies from your machine, before it pushes anything</text>
+
+    <!-- external -->
+    <rect class="box s-ext" x="15" y="368" width="950" height="112"/>
+    <text class="t-hd" x="32" y="394">AND FOUR OUTSIDE SERVICES</text>
+    <text class="t-m" x="32" y="424">OpenRouter</text>
+    <text class="t-s" x="32" y="444">every paid model call —</text>
+    <text class="t-s" x="32" y="461">pipeline, chat, search, explain</text>
+    <text class="t-m" x="270" y="424">Stripe</text>
+    <text class="t-s" x="270" y="444">subscriptions, and a webhook</text>
+    <text class="t-s" x="270" y="461">that grants quota</text>
+    <text class="t-m" x="530" y="424">Sentry</text>
+    <text class="t-s" x="530" y="444">errors nobody watched,</text>
+    <text class="t-s" x="530" y="461">kept 30 days</text>
+    <text class="t-m" x="760" y="424">GitHub</text>
+    <text class="t-s" x="760" y="444">in the build, not runtime:</text>
+    <text class="t-s" x="760" y="461">main is production</text>
+  </svg>
+  </div>
+  <figcaption>The three machines and the four services. The first three services are called by the
+  running function; GitHub is not — it is in the deploy path, cloned by Vercel's build machine. Two
+  arrows are missing on purpose and are drawn later: a reader's browser uploading a PDF
+  <em>straight</em> to Supabase Storage, bypassing the function, and the request path in
+  <a href="#serverless">§4</a>.</figcaption>
+  <div class="key">
+    <span><i class="k-client"></i> your machine</span>
+    <span><i class="k-server"></i> where it runs</span>
+    <span><i class="k-db"></i> where the data is</span>
+    <span><i class="k-ext"></i> outside services</span>
+  </div>
+</figure>
+
+<p>The path from an edit to a live site is short. You commit on <code>dev</code> — the trunk, which
+several agents push to all day and which builds nothing. When a batch of work is ready, one person
+runs <code>npm run deploy</code>. That command is the only thing that writes to <code>main</code>,
+and <code>main</code> is the only branch Vercel deploys. So a deploy is a deliberate act, and every
+other push is free.</p>
+
+<div class="callout key">
+  <p class="title">A version is a deploy, and there is no version number</p>
+  <p>No semver, no tag, nothing in <code>package.json</code> to bump. One production deploy is one
+  version and its name is its timestamp. That has a consequence worth knowing: <em>git alone cannot
+  tell you which commits were deploy points</em>, because <code>main</code> is fast-forwarded one sha
+  at a time. Vercel's own deployment list is the only record. Deploys are frequent — twenty in the
+  42 hours to 2026-09-06, most of them containing nothing a reader would notice.</p>
+</div>
+
+<p>If you stop reading here, the three things to carry away are: <strong>what ships is the commit,
+not your disk</strong>; <strong>the database schema moves before the code does</strong>, deliberately,
+because code arriving ahead of its schema is the failure, and the reverse usually is not; and <strong>the
+checks after the deploy are anchored to the commit</strong>, not to whether the site is up — because
+almost any check you could write passes happily over a perfectly healthy deployment that is three
+commits old.</p>
+
+<h2 id="pieces"><span class="pass">Pass 2</span> The pieces, and what each one is for</h2>
+
+<p>Seven things, and only three of them cost real money.</p>
+
+<table>
+  <tr><th>Piece</th><th>What it does</th><th>What happens without it</th></tr>
+  <tr>
+    <td><strong>Vercel</strong><br><span style="color:var(--ink-soft)">Pro plan</span></td>
+    <td>Serves the client bundle from its edge and runs the whole API as <em>one</em> serverless
+      function in London. Watches <code>main</code> and builds on push.</td>
+    <td>No app. This is the host.</td>
+  </tr>
+  <tr>
+    <td><strong>Supabase</strong><br><span style="color:var(--ink-soft)">Postgres + Storage + Auth</span></td>
+    <td>Every article, block, note, chat message and account. Also the file storage for uploaded
+      PDFs, and the sign-in system.</td>
+    <td>No data and no accounts. The function fails at the store rather than serving an empty shelf —
+      deliberately.</td>
+  </tr>
+  <tr>
+    <td><strong>OpenRouter</strong></td>
+    <td>Nearly every paid model call goes through it. Two declared exceptions: an offline
+      evaluation, and — the one that matters — <em>live conversation</em>, a real product feature
+      whose audio goes from the reader's browser straight to OpenAI on a separate bill.</td>
+    <td>Articles already imported still read perfectly. Nothing new can be imported, and selecting a
+      passage returns an error.</td>
+  </tr>
+  <tr>
+    <td><strong>Stripe</strong></td>
+    <td>Subscriptions. A webhook tells the app when somebody has paid.</td>
+    <td>Everybody is on the free tier. That is a supported state, not an outage.</td>
+  </tr>
+  <tr>
+    <td><strong>Sentry</strong><br><span style="color:var(--ink-soft)">free tier</span></td>
+    <td>Keeps errors for 30 days, past Vercel's one day, and groups the thousandth occurrence with
+      the first.</td>
+    <td>You lose any bug a reader hit more than a day ago. See the two gaps below.</td>
+  </tr>
+  <tr>
+    <td><strong>Hetzner box</strong><br><span style="color:var(--ink-soft)">~€38/month all in</span></td>
+    <td>An always-on machine that runs AI coding sessions in <code>tmux</code> so they survive a
+      closed laptop. <em>It runs no part of the product</em> — but it is the one machine here somebody
+      patches.</td>
+    <td>Development gets slower. Nothing a reader can see changes.</td>
+  </tr>
+  <tr>
+    <td><strong>Docker, on each dev machine</strong></td>
+    <td>A whole Supabase stack in containers, so a developer needs no cloud account at all. One stack
+      per <em>machine</em>, shared by every checkout and every agent on it.</td>
+    <td>The dev server refuses to start, by design, naming the command to fix it.</td>
+  </tr>
+</table>
+
+<details>
+  <summary>Vercel, in more depth — one function, and why the API is not TypeScript</summary>
+  <p>The whole API is a single serverless function. Vercel's file-system routing would ordinarily
+  give you one function per file under <code>api/</code>, but there is exactly one file there and it
+  is plain JavaScript. Two reasons, both learned by shipping the alternative:</p>
+  <p><strong>Vercel's builder compiles any TypeScript it finds under <code>api/</code> with this
+  repo's own TypeScript, which it cannot drive.</strong> It prints an error, then <em>succeeds</em>,
+  then uploads a function that fails on every request with the reason in no log at all. So the real
+  handler lives in <code>src/</code> and is compiled by the same tool that compiles the client.</p>
+  <p><strong>A file called <code>[...path].js</code> is not a catch-all here.</strong> Vercel treats
+  every bracketed filename as exactly one path segment; the <code>...</code> is a Next.js convention
+  and is not honoured. Measured on a real deployment: <code>/api/library</code> arrived,
+  <code>/api/article/writes</code> and <code>/api/jobs/abc/retry</code> returned a platform 404 —
+  which is nearly every route in the app, failing before any of our code ran and therefore appearing
+  in no log we write. The catch-all is an explicit rewrite in <code>vercel.json</code> instead, which
+  smuggles the real path through in a query parameter that the function puts back together.</p>
+  <p>One more deliberate oddity: the single file imports the compiled bundle <em>inside</em> the
+  request handler rather than at the top. A module-level import that throws takes the function down
+  before anything of ours runs, and you get an opaque platform error. Inside a <code>try</code>, the
+  same failure produces a stack you can read. That is the only reason the Node-runtime bug below was
+  ever found.</p>
+</details>
+
+<details>
+  <summary>Supabase, in more depth — two roles, three ways to connect, and one bucket</summary>
+  <p>There are two database roles that matter. <code>postgres</code> applies migrations, from a
+  laptop, over the <em>session</em> pooler. <code>spideryarn_app</code> is what the running server
+  uses, over the <em>transaction</em> pooler, and it can do data operations on our schema and nothing
+  else — it cannot read the auth tables, cannot create objects, and is invisible to Supabase's own
+  auto-generated REST API. Only that second credential is ever given to Vercel.</p>
+  <p>A third role, <code>spideryarn_migrator</code>, exists and is unused. It was meant to be the one
+  that applies migrations, and it cannot be: seven columns reference Supabase's own
+  <code>auth.users</code> table, granting that permission needs a grant option nobody can reach, and
+  <strong>Postgres answers a grant you lack the option for with a warning rather than an
+  error</strong>. The statement is correct SQL that the platform will never obey. It was caught only
+  by asking afterwards whether the permission had actually arrived.</p>
+  <p>File storage is one bucket called <code>sources</code>, and it holds more than its name
+  suggests: uploaded PDFs, the raw HTML of every page the pipeline fetched, and the images an article
+  came with. A single object may be 50 MiB, which is the free plan's ceiling and also the product's.</p>
+  <p><strong>A reader's upload never passes through the app.</strong> Vercel refuses a request body
+  over 4.5 MB before any of our code runs, so the browser asks the API for a short-lived signed URL
+  and then <code>PUT</code>s the file straight to Supabase Storage. That is why an upload can fail
+  with a perfectly healthy app — and it is the failure the missing-bucket story below describes.</p>
+  <p>The bucket's settings are declared in a config file, and that file <em>creates</em> a bucket that does not exist while doing nothing at all to one
+  that does — anywhere, including locally. Editing it is therefore not a change to any running
+  system. That has cost real outages twice, so there is now a read-only checker that prints which
+  project it reached above its verdict, and the deploy refuses to proceed if the live bucket and the
+  file disagree.</p>
+</details>
+
+<details>
+  <summary>The local stack — why a developer needs no accounts at all</summary>
+  <p>Setting this up is <code>npm run setup</code>, and the only true prerequisites are Node, Docker
+  running, and an OpenRouter key. There is no cloud project to create, no <code>supabase link</code>,
+  and no remote credentials: the Supabase CLI mints its own keys and the database is a container.</p>
+  <p>The one awkward part is a chicken-and-egg: seeding the account needs keys that do not exist
+  until the stack has started, so the stack goes up first, three values get copied into
+  <code>.env.local</code>, and then setup runs. Sign-in is an email and a password that a script
+  generates and prints — no Google step, nothing to click on a dashboard, which is what makes a
+  machine you can only reach over ssh usable at all.</p>
+  <p>Two things bite. The dev server <strong>must</strong> be on port 5273, because that port is
+  baked into the auth redirect allow-list; if it is taken, Vite silently picks 5274 and sign-in fails
+  for a reason unrelated to your code. And <code>.env.local</code> deliberately beats what your shell
+  exported, so <code>FOO=… npm run dev</code> does not do what it looks like.</p>
+</details>
+
+<details>
+  <summary>The Hetzner box — a disposable server bolted to a permanent disk</summary>
+  <p>It exists for one reason: a Claude Code session that dies when the laptop sleeps is not much use.
+  Sessions run in <code>tmux</code> so they survive disconnection, one session each, driven by a
+  single command from the laptop.</p>
+  <p>The shape worth knowing is that <strong>the server is disposable and the volume is not</strong>.
+  A separate volume is mounted over <code>/home</code>, so checkouts, agent state and browser profiles
+  survive destroying and recreating the machine. The machine itself is described in Terraform and
+  built by a provisioning script that is safe to re-run — which is the point: a change to the box is
+  supposed to be a change to a file, not a thing somebody typed once.</p>
+  <p>The server is €29.49/month net and there is nothing above it in that line —
+  the next rung with more memory is nine times the price. So the plan when it is outgrown is to swap
+  the server under the volume rather than expect a bigger one.</p>
+</details>
+
+<h2 id="worked"><span class="pass">Pass 3</span> One commit, followed all the way to the live site</h2>
+
+<p>Take the deploy that is live as this is written: commit <code>39282f8c</code>, built at
+09:49 UTC on 2026-09-06, deployment <code>dpl_5CkF27c3GPHGz47wiHd1EsReP1YP</code>. Somebody on
+<code>dev</code>, with the work committed and pushed, typed:</p>
+
+<pre><code>npm run deploy</code></pre>
+
+<p>Seven steps follow. Four of them happen before anything at all has shipped.</p>
+
+<figure>
+  <div class="scroll">
+  <svg viewBox="0 0 980 620" role="img" aria-label="The seven steps of npm run deploy, top to bottom, with what each one checks.">
+    <defs>
+      <marker id="a2" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0,0.5 L8.5,4.5 L0,8.5 z" fill="var(--ink-soft)"/>
+      </marker>
+    </defs>
+
+    <text class="t-hd" x="20" y="24">NOTHING HAS SHIPPED YET</text>
+    <line class="ln-dash" x1="20" y1="34" x2="960" y2="34"/>
+
+    <rect class="box s-panel" x="20" y="48" width="320" height="50"/>
+    <text class="t-b" x="38" y="70">1 · Preflight</text>
+    <text class="t-s" x="38" y="88">is this machine allowed to deploy at all?</text>
+    <text class="t-s" x="368" y="68">On branch dev — not main, which is production only.</text>
+    <text class="t-s" x="368" y="86">Level with origin/main and origin/dev. Local database up.</text>
+    <line class="ln" x1="180" y1="98" x2="180" y2="118" marker-end="url(#a2)"/>
+
+    <rect class="box s-panel" x="20" y="120" width="320" height="50"/>
+    <text class="t-b" x="38" y="142">2 · Gates</text>
+    <text class="t-s" x="38" y="160">build · fixtures · typecheck · test</text>
+    <text class="t-s" x="368" y="140">Run in a throwaway copy of the exact commit, not in your tree.</text>
+    <text class="t-s" x="368" y="158">This is the only check that catches a missing committed file.</text>
+    <line class="ln" x1="180" y1="170" x2="180" y2="190" marker-end="url(#a2)"/>
+
+    <rect class="box s-panel" x="20" y="192" width="320" height="50"/>
+    <text class="t-b" x="38" y="214">3 · Storage</text>
+    <text class="t-s" x="38" y="232">do the live file buckets still match the file?</text>
+    <text class="t-s" x="368" y="212">Read-only. Refuses to go on if they have drifted, because</text>
+    <text class="t-s" x="368" y="230">that drift is invisible until a reader's upload fails.</text>
+    <line class="ln" x1="180" y1="242" x2="180" y2="262" marker-end="url(#a2)"/>
+
+    <rect class="box s-db" x="20" y="264" width="320" height="50"/>
+    <text class="t-b" x="38" y="286">4 · Migrations</text>
+    <text class="t-s" x="38" y="304">read production's own ledger, then apply</text>
+    <text class="t-s" x="368" y="284">The pending list comes from the remote, never from your laptop.</text>
+    <text class="t-s" x="368" y="302">The schema moves BEFORE the code. That order is deliberate.</text>
+    <line class="ln" x1="180" y1="314" x2="180" y2="340" marker-end="url(#a2)"/>
+
+    <line class="ln-dash" x1="20" y1="330" x2="960" y2="330"/>
+    <text class="t-hd" x="368" y="324">↓ FROM HERE IT IS REAL</text>
+
+    <rect class="box s-ok" x="20" y="342" width="320" height="50"/>
+    <text class="t-b" x="38" y="364">5 · Push</text>
+    <text class="t-m" x="38" y="383">git push origin &lt;sha&gt;:refs/heads/main</text>
+    <text class="t-s" x="368" y="362">By name, not "push main" — several agents commit into this tree,</text>
+    <text class="t-s" x="368" y="380">so the sha that was gated must be the sha that ships.</text>
+    <line class="ln" x1="180" y1="392" x2="180" y2="412" marker-end="url(#a2)"/>
+
+    <rect class="box s-server" x="20" y="414" width="320" height="50"/>
+    <text class="t-b" x="38" y="436">6 · Wait, then verify</text>
+    <text class="t-s" x="38" y="454">health · body · gate · page · robots.txt</text>
+    <text class="t-s" x="368" y="434">Every answer is compared with the commit and the deployment id,</text>
+    <text class="t-s" x="368" y="452">because "the site is up" is true of the previous build too.</text>
+    <line class="ln" x1="180" y1="464" x2="180" y2="484" marker-end="url(#a2)"/>
+
+    <rect class="box s-server" x="20" y="486" width="320" height="50"/>
+    <text class="t-b" x="38" y="508">7 · Logs</text>
+    <text class="t-s" x="38" y="526">find the one line we know we caused</text>
+    <text class="t-s" x="368" y="506">It makes its own request with a unique path, then polls for it.</text>
+    <text class="t-s" x="368" y="524">An empty log is a failed check here, never a quiet pass.</text>
+
+    <rect class="box s-warn" x="20" y="558" width="940" height="46"/>
+    <text class="t-s" x="38" y="580">A failure at 1–4 ships nothing. A failure at 5 or 6 may leave the schema ahead of the code —</text>
+    <text class="t-s" x="38" y="597">usually survivable, and the one thing not to do is roll the schema back. Not always: six migrations drop columns.</text>
+  </svg>
+  </div>
+  <figcaption>Seven steps. The dashed line is the point of no return, and everything above it is
+  refusable for free.</figcaption>
+</figure>
+
+<h3 id="step-detail">What each step is really asking</h3>
+
+<p><strong>Preflight</strong> asks whether this machine should be deploying at all. It refuses any
+branch but <code>dev</code>. It refuses a commit that is behind <code>origin/main</code>, and
+separately one that is behind <code>origin/dev</code> — two different questions since the trunk moved
+off <code>main</code>, and collapsing them would let somebody promote a commit missing the last two
+days of work while every light stayed green. It also asks Vercel a question nobody would think of:
+<em>are you still assigning production domains automatically?</em> A rollback turns that off, and
+until somebody promotes a deployment, every push builds and goes live nowhere, silently.</p>
+
+<p><strong>The gates</strong> are the interesting one. They run <code>build</code>,
+<code>typecheck</code> and <code>test</code> — but not in your working directory. The script makes a
+throwaway clean copy of the exact commit and runs them there, which costs about two seconds and is
+the only check that can catch the failure that has broken <code>main</code> three times: a committed
+file importing something whose definition is still uncommitted on somebody's disk. Locally it builds
+perfectly, because locally the file is there.</p>
+
+<p><strong>The copy is of the source, not of the machine</strong>, and the difference is worth being
+honest about. The tracked files and the test fixtures come from the commit; your
+<code>.env.local</code> is linked in from this machine — the documented remaining honesty limit — and
+so, normally, are the installed dependencies, which are only reinstalled when the lockfile changed. So
+the gate answers "does this commit hold together", not "would this pass on a machine that is not
+yours".</p>
+
+<div class="callout warn">
+  <p class="title">The gate needs a corpus, and for a day it could not go green</p>
+  <p>The test suite is not hermetic — it reads article fixtures from disk — and a clean copy of a
+  commit has none of the gitignored files. For its first day the gate copied only half of what the
+  tests read, producing 13 failures at every single commit, which meant the only way anybody deployed
+  was by forcing the test gate. The fixtures now live in git and are copied out of the gate's own
+  copy, so a commit that deletes a fixture cannot pass on the strength of your laptop still having
+  one. The real cost of a genuinely fresh clone was measured at 50 failures — two smaller numbers
+  were in circulation and <em>both described something else</em>, which is why they agreed with each
+  other and neither was right.</p>
+</div>
+
+<p><strong>Migrations</strong> is where a specific piece of discipline lives. The list of pending
+migrations is read from <em>production's own ledger</em>, never inferred from your laptop. On
+2026-09-02 somebody counted local rows and told Greg the deploy would apply four migrations; it
+applied fifteen, because production was a long way further behind than the laptop was. The answer was arrived at honestly.
+It was just the wrong database's rows. So: never quote a pending count for production from anything
+local, and read the <code>Target:</code> line the migration command prints rather than its success
+line.</p>
+
+<p><strong>Four checks the summary above skipped</strong>, because each guards something a reader
+should know is guarded. Before anything else the script takes a <em>lock covering every checkout on
+the machine</em> — the migration tool takes no lock of its own, so two agents deploying at once would
+both find the same pending migrations and both try to apply them. Preflight asks the migration tool
+whether the history itself is consistent, which catches two agents having generated migrations from a
+diverged snapshot. After migrating, it checks that the application's own database role can actually
+<em>read every table</em> — a migration succeeds for the migrating role and leaves a table the running
+app cannot see, and those two look identical from the migrator's side. And it compares the resulting
+ledger entry by entry rather than counting rows.</p>
+
+<p><strong>Push, verify, logs.</strong> The push names the commit explicitly rather than pushing a
+branch, because several agents commit into this tree and a plain push would gate one commit and ship
+another. Then the script waits for Vercel and asks the live site five questions: is it healthy, does
+a POST body arrive intact, does an unauthenticated API request get refused, is the page our own
+<code>index.html</code> rather than Vercel's failure page, and does <code>robots.txt</code> answer as
+a real file. It also downloads every asset that page names and scans it for a leaked secret. Note what
+it does not do: it never <em>runs</em> the bundle, so a client that throws at module load passes every
+one of these. And finally it reads the logs — but not for
+errors. It makes its own request with a unique path first, and looks for <em>that line</em>; only
+once it is found does the absence of errors beside it mean anything.</p>
+
+<h3 id="what-arrived">And this is what arrived</h3>
+
+<p>One <code>curl</code>, no authentication, answers most of "did it work":</p>
+
+<pre><code>$ curl -sL https://www.spideryarn.com/api/health
+
+{ "ok": true, "warnings": [],
+  "node": "v24.18.0", "region": "lhr1",
+  "build": { "commit": "39282f8c…", "builtAt": "2026-09-06T09:49:54Z",
+             "deploymentId": "dpl_5CkF27c3GPHGz47wiHd1EsReP1YP" },
+  "store": { "name": "postgres", "articles": 14 },
+  "schema": { "tables": 29, "missing": [] },
+  "migrations": { "expected": 79, "applied": 79, "missing": [], "ahead": 0 },
+  "ssl": { "mode": "verified", "why": "verified against certs/supabase-ca.crt" } }</code></pre>
+
+<p>Four things that reading tells you which a green "Ready" badge does not: reads are coming from
+Postgres rather than an empty disk; the database is holding <em>exactly</em> the migrations this
+commit expects, neither behind nor ahead; the connection to it is being <em>checked</em> rather than
+merely encrypted; and the commit running is the one you think it is.</p>
+
+<div class="callout warn">
+  <p class="title">And one thing it cannot tell you: whether the page renders</p>
+  <p><code>/api/health</code> is served by the API. The reading view is a separate bundle, and it has
+  thrown at module load — a completely blank site — while every line of that response stayed green.
+  A healthy health check and a blank site are perfectly compatible. <strong>Load it in a
+  browser.</strong></p>
+</div>
+
+<h2 id="serverless"><span class="pass">Pass 4</span> What the host takes away</h2>
+
+<p>This is the part with product consequences, so it is not behind a fold.</p>
+
+<p>A serverless host gives you a program that starts fresh, runs for a moment, and disappears. Three
+assumptions ordinary code makes are false there, and each one has cost this project real time:</p>
+
+<h3>1 · There is no writable disk</h3>
+
+<p>The pipeline that turns a URL into a readable article was written to write files. On the live site
+step one said <code>ENOENT: no such file or directory, mkdir '/var/data'</code> and stopped — for
+every URL and every PDF, for three days. Adding an article, the product's central action, did not work
+in production while everything else did.</p>
+
+<p><code>/tmp</code> looks like the fix and is not, and this is written down because it is the first
+idea everybody has. <code>/tmp</code> genuinely is writable — but each pipeline step runs in a
+<em>separate</em> HTTP request, so step 2 lands somewhere else and finds nothing. Worse, on a reused
+instance it would sometimes find a <em>stale</em> file and skip real work, which is the failure you
+cannot see.</p>
+
+<p>What actually fixed it, on 2026-08-30, was not the storage rewrite everyone had been pointing at
+for three days: the working directory became explicit and scoped to one job rather than derived from
+where a bundled file happened to sit; one <em>claim</em> — a lease on the job, taken in the database
+so that only one server may work it — now walks the whole job in a single invocation, so the
+steps share a scratch directory; and the result is published <em>in the same transaction that
+finishes the job</em> — because until then a job could report <code>done</code> having published
+nothing at all, and nothing noticed.</p>
+
+<p><strong>What is still broken, stated plainly:</strong> re-running one step against an existing
+article. That gets its own job and therefore its own empty scratch space, and fails. The article
+reads fine without it, which is why this is a known limitation rather than an outage.</p>
+
+<div class="callout warn">
+  <p class="title">And a fourth: a request may not run for more than 800 seconds</p>
+  <p>That ceiling is set as high as the platform allows and is still a ceiling. It shapes the product
+  rather than the plumbing: an ingest has to fit inside it, or be cut into steps that each fit, and no
+  amount of fixing the storage problem above makes an arbitrarily long job possible in one go. A
+  longer article, a slower model, or a step that retries can all walk into it.</p>
+</div>
+
+<h3>2 · There is nothing left over between requests</h3>
+
+<p>One instance serves several requests at once, so there is no "current request" at module scope —
+a logger created once at the top of a file would attribute lines to the wrong article, intermittently.
+And there is no affinity between requests: a warm instance is an optimisation, never a place to keep
+something.</p>
+
+<h3>3 · You cannot test the runtime you ship to</h3>
+
+<p>A dependency chain three libraries deep threw <code>ERR_REQUIRE_ESM</code> in the deployed function
+and <strong>worked on every version of Node available to test locally</strong> — 22, 24 and 26 alike.
+The difference was Vercel's runtime configuration, not the code, and nothing on a laptop will ever
+reproduce it. The fix is one environment variable. The lesson is the shape: some faults exist only in
+production, so a deployment has to be able to tell you what it is, from the inside.</p>
+
+<figure>
+  <div class="scroll">
+  <svg viewBox="0 0 980 430" role="img" aria-label="What one production request passes through: browser, Vercel edge rewrite, the JavaScript entry file, the compiled bundle, routes and auth gate, Postgres.">
+    <defs>
+      <marker id="a3" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0,0.5 L8.5,4.5 L0,8.5 z" fill="var(--ink-soft)"/>
+      </marker>
+    </defs>
+
+    <text class="t-s" x="250" y="42" text-anchor="middle">GET /api/library</text>
+    <text class="t-s" x="555" y="42" text-anchor="middle">rewritten to /api/index?__spy_path=library</text>
+
+    <rect class="box s-client" x="20" y="56" width="190" height="76"/>
+    <text class="t-b" x="38" y="84">A reader's browser</text>
+    <text class="t-s" x="38" y="106">the client bundle,</text>
+    <text class="t-s" x="38" y="122">served from the edge</text>
+
+    <line class="ln" x1="212" y1="94" x2="284" y2="94" marker-end="url(#a3)"/>
+
+    <rect class="box s-server" x="290" y="56" width="230" height="76"/>
+    <text class="t-b" x="308" y="84">Vercel's edge</text>
+    <text class="t-s" x="308" y="106">one rewrite rule sends every</text>
+    <text class="t-s" x="308" y="122">/api/* path to one file</text>
+
+    <line class="ln" x1="522" y1="94" x2="584" y2="94" marker-end="url(#a3)"/>
+
+    <rect class="box s-server" x="590" y="56" width="230" height="76"/>
+    <text class="t-m" x="608" y="84">api/index.js</text>
+    <text class="t-s" x="608" y="106">plain JS, on purpose.</text>
+    <text class="t-s" x="608" y="122">Starts a stopwatch.</text>
+
+    <line class="ln" x1="705" y1="134" x2="705" y2="204" marker-end="url(#a3)"/>
+    <text class="t-s" x="722" y="160">await import — ~3.5 MB.</text>
+    <text class="t-s" x="722" y="178">The server's own clock</text>
+    <text class="t-s" x="722" y="196">starts AFTER this.</text>
+
+    <rect class="box s-server" x="590" y="206" width="230" height="76"/>
+    <text class="t-m" x="608" y="234">src/vercel.ts</text>
+    <text class="t-s" x="608" y="256">puts the real URL back</text>
+    <text class="t-s" x="608" y="272">together, decoding once</text>
+
+    <line class="ln" x1="584" y1="244" x2="526" y2="244" marker-end="url(#a3)"/>
+
+    <rect class="box s-server" x="290" y="206" width="230" height="76"/>
+    <text class="t-m" x="308" y="234">routes.ts + the gate</text>
+    <text class="t-s" x="308" y="256">401 unless signed in —</text>
+    <text class="t-s" x="308" y="272">our code, not Vercel's</text>
+
+    <line class="ln" x1="284" y1="244" x2="216" y2="244" marker-end="url(#a3)"/>
+
+    <rect class="box s-db" x="20" y="206" width="190" height="76"/>
+    <text class="t-b" x="38" y="234">Postgres</text>
+    <text class="t-s" x="38" y="256">transaction pooler,</text>
+    <text class="t-s" x="38" y="272">TLS verified</text>
+
+    <rect class="box s-panel" x="20" y="320" width="940" height="86"/>
+    <text class="t-hd" x="38" y="345">ANSWERED BEFORE THE GATE — DELIBERATELY, AND WORTH KNOWING</text>
+    <text class="t-s" x="38" y="370">/api/health  · so you can ask an unhealthy deployment what is wrong</text>
+    <text class="t-s" x="38" y="390">/read/:slug · /api/public/* · the Stripe webhook, which authenticates itself with a signature instead</text>
+  </svg>
+  </div>
+  <figcaption>One request. The vertical arrow is the whole cold-start cost, and it happens before any
+  timing the server logs about itself.</figcaption>
+</figure>
+
+<p>That vertical arrow is worth a product sentence. A log line reading
+<code>GET /api/library 200 10ms</code> is true and is <em>not</em> the wait: the clock starts after
+the bundle has loaded. Everything any of the ~200 modules in that bundle imports at the top level is
+paid for by the first request to a fresh instance, whether or not the request could ever use it.
+Three libraries have been moved to load only when something needs them, which took about 940 ms off a
+~2,400 ms module import, measured. Two more are deliberately left at the top — the database driver,
+because the shelf's own query needs it, and error reporting, because it has to be up before the code
+that might fail.</p>
+
+<h2 id="broken">The failures that reported success</h2>
+
+<p>Every item here said <em>OK</em> while being wrong. They are grouped because the shape repeats, and
+recognising the shape is worth more than remembering any one of them.</p>
+
+<details>
+  <summary>The health check that was green with the fault printed four lines lower</summary>
+  <p>The health endpoint listed environment variables as booleans, and <em>nothing ever compared one
+  of those booleans against anything</em>. So production served
+  <code>{ "ok": true, "warnings": [], "env": { "SUPABASE_SERVICE_ROLE_KEY": false } }</code> for a
+  day. Healthy on line one; the fault in full on line four; the endpoint had no opinion about the
+  contradiction.</p>
+  <p>A boolean nobody reads is not a check — it is a report that looks like one, which is worse,
+  because that list is exactly what you scroll to in order to reassure yourself. Each entry now
+  carries a description of <em>what stops working</em> without it, and anything in
+  <code>warnings</code> makes the endpoint return 503 rather than 200. A cross-family review of the
+  fix then found three more lies in it: a required <em>need</em> is not a required <em>name</em> (a
+  variable with a legitimate fallback was being demanded); presence is not correctness (one variable
+  has to be the exact string <code>0</code>); and a <em>wrong</em> consequence is worse than none,
+  because it sends you to the wrong file.</p>
+</details>
+
+<details>
+  <summary>The migration command that migrated the laptop and printed success</summary>
+  <p><code>DATABASE_URL=&lt;remote&gt; npm run db:migrate</code> applied migrations to the local Docker
+  container and printed <code>✓ migrations applied</code>, while the remote it named stayed four
+  migrations behind. The cause: <code>.env.local</code> deliberately beats the shell — right for the
+  app — so the URL you typed was replaced before the "am I pointed at production?" guard ever ran. The
+  guard agreed with itself and the wrong database moved forward.</p>
+  <p>The fix is structural and generalisable: <strong>the target of a command is an argument, not
+  configuration</strong>, so the few scripts whose target is a real argument now read the shell first,
+  and every one of them prints a password-stripped <code>Target:</code> line whatever happens. Read
+  that line, not the tick.</p>
+</details>
+
+<details>
+  <summary>The URL that was public the whole time the dashboard said "Protected"</summary>
+  <p>Vercel's deployment protection was on and working: per-deployment URLs redirected to a login.
+  But Vercel generates <em>two</em> automatic production hostnames and only one had been removed, and
+  production hostnames cannot be covered by that protection on this plan at all. So the setting
+  reported itself as enabled, and was, while the app was served to anybody with the second address.
+  The dashboard said "Protected". The per-deployment URL really did ask for a login. The obvious check
+  shared its assumption with the thing it was checking.</p>
+  <p>It was found with an unauthenticated <code>curl</code> from outside — the check nobody had run.
+  The real answer, and the one that made a custom domain safe, is that authentication is enforced by
+  the application itself, which no hosting plan can take away.</p>
+</details>
+
+<details>
+  <summary>The file storage bucket that was declared, never created, and discovered by a reader</summary>
+  <p>Uploading a PDF puts bytes in a bucket that a config file declares. That file creates the bucket
+  locally and does nothing at all to the remote project. Nothing checks for it at boot: the API mints
+  a perfectly valid-looking signed upload URL against a bucket that is not there, and the browser's
+  upload is what discovers it. The reader sees an upload failure on a file that is fine.</p>
+  <p>It happened twice. The second time, production had been refusing every image upload for five
+  days while the checking script — run by somebody explicitly asking whether production had drifted —
+  answered <code>✓ every declared bucket matches the running project</code>, because it had quietly
+  been talking to the Docker container on the asker's laptop.</p>
+</details>
+
+<details>
+  <summary>The three log traps, one of which answers an outage with silence</summary>
+  <p><strong>Vercel's error dashboard does not show application failures.</strong> It reports
+  uncaught errors — the ones that became a 5xx. A failed pipeline step here is caught, recorded on
+  the job, and answered with HTTP 200, deliberately: the call did what it was asked, and returning
+  500 would make the client retry a recorded application failure as though it were a network blip. So
+  the dashboard listed one cluster from two days earlier and nothing else, while every ingest on the
+  site was dying at step 1. Use it to rule things in, never to rule them out.</p>
+  <p><strong>Never filter logs by level.</strong> Filtering for errors returns <em>nothing</em> over a
+  window containing lines whose body reads <code>"level":"error"</code> — because everything goes to
+  standard output and Vercel classifies the stream, not our JSON. Search for the string instead. This
+  is the dangerous one: it answers a real outage with silence, and silence reads as health.</p>
+  <p><strong>Scope every query to a deployment or it times out and returns no logs</strong>, which
+  looks exactly like finding nothing.</p>
+</details>
+
+<div class="callout key">
+  <p class="title">The shape, in one sentence</p>
+  <p>In every case the check shared an assumption with the thing it was checking, so it agreed. The
+  practical rule the project runs on: <strong>a check you have never seen fail is not
+  evidence</strong> — and an empty result is a failed check, not a quiet pass.</p>
+</div>
+
+<h2 id="judgment">Trade-offs, risks and open questions</h2>
+
+<h3>Trade-offs, where reasonable people could choose differently</h3>
+
+<table>
+  <tr><th>The choice</th><th>What it buys</th><th>What it costs</th></tr>
+  <tr>
+    <td><strong>One rented serverless host</strong> rather than a server we run</td>
+    <td>Nothing to patch, nothing to monitor, no on-call. Global edge for free. For a beta with a
+      small readership this is close to the right answer by default.</td>
+    <td>Everything in <a href="#serverless">§4</a>. A pipeline that would be trivial on one machine
+      with a disk cost three days of production breakage, and one part of it is still broken. There is
+      an <em>always-on box already paid for</em> that could run this work — using it would mean a
+      second deployment target and a second thing to keep alive.</td>
+  </tr>
+  <tr>
+    <td><strong>Migrations applied before the push</strong></td>
+    <td>Code never arrives ahead of the schema it needs, which is the failure that actually hurts.</td>
+    <td>A failure between the migration and a successful deploy leaves production one build behind a
+      newer schema. That is harmless <em>only while the migration is backward-compatible with the old
+      code</em>, and six of the 79 migrations drop a column. The deploy prints destructive statements
+      and ships anyway — a report, not a gate, deliberately. So the trade-off is real and the wrong
+      instinct is still to roll the schema back.</td>
+  </tr>
+  <tr>
+    <td><strong>One production database and no staging copy</strong></td>
+    <td>No second environment to keep in sync, no drift between them, no cost. Preview deployments
+      deliberately have no database at all, so they fail loudly rather than serving an empty shelf.</td>
+    <td>There is nowhere to rehearse a migration against real data, and a preview build cannot
+      exercise anything that touches the database. Every risky change is rehearsed against a laptop's
+      container, which is a different shape of data.</td>
+  </tr>
+  <tr>
+    <td><strong>Deploying is one person's command, not automatic on merge</strong></td>
+    <td>The trunk (<code>dev</code>) stays free — thirteen agents can push all day and nothing builds.
+      A deploy is a deliberate act with a checklist attached.</td>
+    <td>It only happens when somebody runs it, and the checklist takes minutes. In practice deploys
+      are frequent enough (twenty in 42 hours) that this has not bitten.</td>
+  </tr>
+  <tr>
+    <td><strong>Everything through one AI gateway</strong></td>
+    <td>One key, one bill, one place to set a spending cap, and model choice becomes configuration.
+      <code>npm run cost</code> can read every call that goes through it.</td>
+    <td>A single point of failure for the entire product — and the word "everything" is already false.
+      Live conversation goes direct to OpenAI on a separate account, so it is invisible to
+      <code>npm run cost</code> and uncovered by the OpenRouter spend cap; capping it means a second
+      dashboard.</td>
+  </tr>
+</table>
+
+<h3>Risks and fragilities</h3>
+
+<ul>
+  <li><strong>Nothing alerts.</strong> Sentry receives errors and waits for somebody to open a
+  dashboard. On 2026-08-28 every ingest on the live site had been failing for hours and the way it
+  was found was Greg trying to read an article. This is the largest open gap on this page and the fix
+  is small.</li>
+
+  <li><strong>The health check cannot see the error monitor.</strong> The monitoring DSN is not in the
+  list of variables the health endpoint reports, and monitoring returns silently when it is absent.
+  So "monitoring is switched off" and "monitoring found nothing" are the same picture from outside.
+  One entry would fix it.</li>
+
+  <li><strong>Vercel's logs are kept one day.</strong> Long enough for "I deployed and something is
+  wrong", useless for "a reader hit a bug on Tuesday" — and a failed pipeline step's diagnostic
+  sentence exists <em>only</em> in that log, by design. Thirty-day retention is a paid add-on that has
+  not been bought.</li>
+
+  <li><strong>Development runs Node 26 and production runs Node 24.18.</strong> The infrastructure
+  config pins the box to match the laptop with the note <em>"a major-version gap between the two is
+  where 'works on my machine' comes from"</em> — and there is now a two-major gap between every
+  development machine and production. Nothing states it. Note what this is <em>not</em> evidence of:
+  the <code>ERR_REQUIRE_ESM</code> bug below reproduced on none of Node 22, 24 or 26, so that incident
+  was the host's runtime configuration rather than the version gap. The risk here is the plainer one —
+  a whole major version of behaviour that no test on any of our machines exercises.</li>
+
+  <li><strong>The development box is the one machine somebody has to look after.</strong> It runs no
+  reader traffic, so it is absent from every risk list above — but it is an Ubuntu server whose ssh
+  and mosh ports default to the whole internet (a dynamic home IP is why, and narrowing it is one
+  config change), whose single account is shared by every agent, and whose persistent volume holds the
+  checkouts, the agent state and the credentials pushed to it. Nothing a reader can see depends on it;
+  quite a lot of what a developer can reach does.</li>
+
+  <li><strong>One local database per machine, shared by every agent on it.</strong> Several sessions
+  work the same box at once, and they share one Supabase stack, one job queue and one set of ports. A
+  lease serialises the commands that take part, but it cannot exclude a running dev server — so tests
+  go red for reasons that are not yours, and telling those apart from a real failure costs time.</li>
+
+  <li><strong>Anybody with the address can read the app shell.</strong> Not the data — application
+  authentication stands in front of that, and an unauthenticated API request returns 401. But the
+  automatic <code>.vercel.app</code> hostnames cannot be protected on this plan without a $150/month
+  add-on, so the shell is public, and <code>robots.txt</code> is a request rather than a fence.</li>
+
+  <li><strong>Re-running a single pipeline step against an existing article still fails in
+  production.</strong> Known, written down, and the article reads fine without it.</li>
+
+  <li><strong>One person can deploy.</strong> Deploying needs a Vercel credential and the ability to
+  reach the production database; the docs are explicit that some machines have neither. That is a
+  bus-factor question rather than a technical one.</li>
+</ul>
+
+<h3>Open questions</h3>
+
+<ul>
+  <li><strong>Should preview deployments get a database?</strong> Today they have none and fail at the
+  store — deliberately, since pointing them at the one real database would let every branch build
+  write to readers' data. A second Supabase project would make previews genuinely useful and would
+  add a schema to keep in sync.</li>
+
+  <li><strong>Is the log retention gap worth paying for?</strong> The step-failure diagnostic exists
+  in exactly one place for exactly one day. Thirty days is an add-on. This is a cost question with a
+  clear product consequence: how often a reader's bug report can actually be diagnosed.</li>
+
+  <li><strong>Where should the pipeline run?</strong> The serverless constraint has been worked around
+  rather than removed, and the workaround is one job per invocation with a shared scratch space. A
+  long-lived worker would make the whole class go away, and would be a second thing to operate.</li>
+
+  <li><strong>Alerting on failed steps.</strong> The events are structured and tagged. Nothing reads
+  them.</li>
+</ul>
+
+<h2 id="faq">FAQ</h2>
+
+<h3>Something is broken in production. Where do I look?</h3>
+<p>In this order. <code>curl -sL https://www.spideryarn.com/api/health</code> — one command, rules
+out the commonest and dullest cause and tells you which commit is running, which has been the answer
+more than once. Then Vercel's runtime logs, scoped to the deployment id that health response gave
+you, searching for a string rather than filtering by level. Then Sentry, for anything older than a
+day. And check the deployment doc's list of what is <em>known</em> to be broken before debugging
+something already written down.</p>
+
+<h3>How do I roll back?</h3>
+<p>Carefully, and usually you should not. A Vercel rollback silently turns off automatic assignment of
+production domains, so until a deployment is promoted, every subsequent push builds and goes live
+nowhere. The deploy script checks for exactly this state before it touches anything. Rolling the
+<em>schema</em> back is the more dangerous instinct: a schema ahead of the code is usually survivable,
+and reversing it is what turns a half-deploy into an outage. "Usually" is doing work — six migrations
+drop a column, and the old code may want it. The deploy names destructive statements in its plan; read
+that list rather than assuming.</p>
+
+<h3>Can I deploy something that is not committed?</h3>
+<p>Yes — <code>vercel deploy --prod</code> uploads your working directory. It is kept for exactly
+that reason. Know what it means: whatever is on disk ships, <em>including somebody else's
+half-finished edit</em>, since several agents work in the same tree. It also skips every gate and
+every migration.</p>
+
+<h3>Why is the whole API one function instead of one per route?</h3>
+<p>Because the platform's per-file routing does not support the path shapes this app has — a
+bracketed filename is one segment, not a catch-all — and because the platform's TypeScript builder
+cannot compile this repo's TypeScript, and reports success rather than failing when it tries. One
+hand-written JavaScript entry file and an explicit rewrite avoids both. The cost is that every
+<em>cold start</em> pays for everything that file's bundle imports at the top level — once per fresh
+instance, not once per request.</p>
+
+<h3>What does it cost to run?</h3>
+<p>Vercel Pro and a Supabase project, plus the Hetzner box — €29.49 net for the server, nearer €38
+once its 50 GB volume and UK VAT are in — plus
+usage-based AI spend through OpenRouter which is the variable and the one that matters —
+<code>npm run cost</code> reads it back per month. Sentry is on the free tier.</p>
+
+<h3>Do I need any of this to work on the app?</h3>
+<p>No. Node, Docker running, and an OpenRouter key. No accounts on anybody's dashboard, no cloud
+project, no Vercel. The database is a container that mints its own keys and the sign-in account is
+seeded by a script that prints its own password.</p>
+
+<h2 id="appendix">Appendix</h2>
+
+<h3>The commands</h3>
+
+<table>
+  <tr><th>Command</th><th>What it does</th></tr>
+  <tr><td><code>npm run setup</code></td><td>The database half of a fresh checkout: containers up, migrations applied, account seeded, a shelf with something on it. Stops at the first failure saying what to do. It is not the first thing you run — <code>npm install</code>, a copied <code>.env.local</code> and three keys out of the started stack come before it.</td></tr>
+  <tr><td><code>npm run dev</code></td><td>Client and API in one process on port 5273. <code>dev:pretty</code> for readable logs.</td></tr>
+  <tr><td><code>npm run build</code></td><td>The client into <code>dist/</code>, then the API into <code>api-dist/</code>. The same command Vercel runs. Run the whole thing — building only the API half refuses after a commit, on purpose.</td></tr>
+  <tr><td><code>npm run deploy</code></td><td>Everything in <a href="#worked">§3</a>.</td></tr>
+  <tr><td><code>npm run deploy -- --dry-run</code></td><td>Read-only. Every local gate, and it does reach out — Vercel's project, the live storage buckets, and production's own migration ledger — but writes nothing and pushes nothing. This is how you find out what a deploy <em>would</em> do.</td></tr>
+  <tr><td><code>npm run deploy -- --verify-only</code></td><td>Check what is live right now; deploy nothing.</td></tr>
+  <tr><td><code>npm run db:migrate</code></td><td>Apply migrations. Read the <code>Target:</code> line it prints, not the success line.</td></tr>
+  <tr><td><code>npm run cost</code></td><td>What the model calls have cost this month.</td></tr>
+  <tr><td><code>npx vercel env ls production</code></td><td>Which variables are set. Names and dates only; values stay encrypted. This has twice been the whole bug.</td></tr>
+</table>
+
+<h3>The file map</h3>
+
+<table>
+  <tr><th>File</th><th>Why you would open it</th></tr>
+  <tr><td><code>scripts/deploy.ts</code></td><td>The seven steps. Its header is the short version of this tutorial's §3.</td></tr>
+  <tr><td><code>scripts/deploy-checks.ts</code></td><td>Every judgement the deploy makes, separated out so each can be tested against the broken state rather than only the working one.</td></tr>
+  <tr><td><code>api/index.js</code></td><td>The only file Vercel routes to. Its comment explains all three reasons it is shaped the way it is.</td></tr>
+  <tr><td><code>vercel.json</code></td><td>The rewrites (including the catch-all), the region, the response headers.</td></tr>
+  <tr><td><code>src/vercel-health.ts</code></td><td>What <code>/api/health</code> checks, and what it deliberately does not.</td></tr>
+  <tr><td><code>supabase/config.toml</code></td><td>The local stack: ports, Postgres version, the auth redirect allow-list, the storage bucket.</td></tr>
+  <tr><td><code>infra/hetzner/</code></td><td>Terraform and the provisioning script for the development box.</td></tr>
+  <tr><td><code>.env.example</code></td><td>Every variable, commented, with no values. The only env file in git.</td></tr>
+</table>
+
+<h3>The docs this was written from</h3>
+
+<p>All under <code>docs/project/</code>, and each is the authoritative version of anything it and
+this page disagree about:
+<code>dev-and-deployment-overview.md</code> is the entry point;
+<code>deployment.md</code> is the process side and is long;
+<code>vercel-hosting-deployment.md</code> is the inspection side;
+<code>debugging.md</code> is the front door when something is broken;
+<code>setup-dev.md</code> and <code>supabase-local.md</code> are the local machine;
+<code>database.md</code> has the roles, the poolers and the migration traps;
+<code>sentry-error-monitoring.md</code>, <code>logging.md</code> and <code>changelog.md</code> are the
+rest. <code>docs/postmortems/</code> holds the honest account of each failure in §5.</p>
+
+<h3>Glossary of internal nouns</h3>
+
+<table>
+  <tr><td><strong>the trunk</strong></td><td><code>dev</code>. Everyone pushes here; nothing builds. <code>main</code> is production and is written only by the deploy command.</td></tr>
+  <tr><td><strong>a gate</strong></td><td>A check the deploy refuses to continue past. Overriding one is possible, must be named individually, and is printed in red in the summary.</td></tr>
+  <tr><td><strong>the build stamp</strong></td><td>The commit, build time and deployment id compiled into <em>both</em> artefacts, so a check can ask "is this the code I shipped" rather than "is the site up". Two stamps rather than one, because the failure worth catching is them disagreeing: an old page in front of a new API loads perfectly and calls endpoints that have moved.</td></tr>
+  <tr><td><strong>the gate (auth)</strong></td><td>Application-level authentication. Distinct from a deploy gate; the word is overloaded in the docs.</td></tr>
+  <tr><td><strong>the pooler</strong></td><td>Supabase's connection multiplexer. Two of them: the <em>session</em> pooler for migrations, the <em>transaction</em> pooler for the running app. Using the wrong one fails in ways that read as a wrong password.</td></tr>
+  <tr><td><strong>silent success</strong></td><td>The project's name for something reporting success while doing nothing, with the obvious check agreeing because it shares an assumption with the code. Most of §5.</td></tr>
+  <tr><td><strong>a claim</strong></td><td>A lease on a queued job, held in the database, so that only one server works it at a time. Before there was one, several servers ran the same job — which cost about a third of all the AI spend the project has ever made.</td></tr>
+  <tr><td><strong>a worktree</strong></td><td>A second checkout of the same repository on one machine, so agents do not edit each other's files. The deploy gates use a throwaway one.</td></tr>
+</table>
+
+<hr>
+
+<p class="meta">Written 2026-09-06 against <code>dev</code> at <code>f31dea63</code>. Live figures read
+from <code>/api/health</code> the same day. A tutorial goes stale quietly and nothing in the repo will
+tell you — check the date against the code before trusting a number here, and prefer
+<code>docs/project/</code> wherever the two disagree.</p>
+
+</body>
+</html>
