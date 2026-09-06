@@ -167,10 +167,9 @@ import {
   type Usage,
   explainAbort,
   providerFailedMidAnswer,
-  readerAborted,
   stoppedByReader,
 } from "./openrouter-stream.js";
-import { ProviderRefused, openRouterStream } from "./ai-call.js";
+import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
 import { ENDED_UNFINISHED, NOT_CONFIGURED, PROVIDER_UNREADABLE, saidNothing } from "./messages.js";
 import { modelFor } from "./models.js";
 import { findQuote } from "./quote-match.js";
@@ -1516,13 +1515,16 @@ export async function* mirrorStream({
 
   let text = "";
   let used = model;
-  let finishReason: string | null = null;
   /* Local, NOT module-scope: two referees running this at once run two of these
      generators in one process, and a shared accumulator would report one
      session's token counts against the other's log line. */
   let usage: Usage | undefined;
   const end: StreamEnd = { terminated: false };
-  let stopped = false;
+  /* No `finishReason` and no `stopped` declared here any more. Both are read
+     once from `classifyEnd` after the loop — see the switch below and
+     docs/plans/260901g-one-stream-end-classification-shared-by-five-callers.md.
+     `stopped` used to be a flag set in two places, which is how the throwing
+     path and the clean-end path came to say different things about one event. */
 
   try {
     for await (const chunk of openRouterStream(MIRROR_JOB, request, {
@@ -1540,7 +1542,10 @@ export async function* mirrorStream({
       // failure. It arrives as data, not as a broken connection.
       if (chunk.error) throw providerFailedMidAnswer();
       const choice = chunk.choices?.[0];
-      if (choice?.finish_reason) finishReason = choice.finish_reason;
+      /* No `finish_reason` scrape here any more: `openRouterStream` writes it
+         onto `end` for every caller, and `classifyEnd` below is what reads it.
+         This line was one of seven identical copies —
+         docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md. */
       const piece = choice?.delta?.content;
       if (typeof piece === "string" && piece.length > 0) {
         text += piece;
@@ -1552,12 +1557,12 @@ export async function* mirrorStream({
     }
   } catch (err) {
     if (stoppedByReader(err, signal, deadline, stall.signal)) {
-      stopped = true;
+      /* The referee gave up. Not an error, and not logged as one. **Nothing is
+         said or decided here**: this falls through to `classifyEnd`, which
+         reaches `abandoned` from the same signals, so the throwing path and the
+         clean-end path cannot come to say different things about one event.
+         They used to be two branches, and only one of them logged. */
       clearTimeout(stallTimer);
-      line.info(
-        { model: used, ms: since(started), chars: text.length },
-        answered ? `mirror from ${used} was abandoned` : `mirror was abandoned before ${model} replied`,
-      );
     } else if (err instanceof ProviderRefused) {
       /* The status, not the body. OpenRouter's error text is the one place a
          provider might echo part of what we sent back at us, and what we sent
@@ -1587,32 +1592,104 @@ export async function* mirrorStream({
     clearTimeout(stallTimer);
   }
 
-  /* An abort can end the loop *cleanly* too — `sseChunks` cancels the reader on
-     abort and a cancelled read resolves `{done: true}` rather than throwing. See
-     the long account of both of these guards in src/explain.ts, which is where
-     the bugs behind them were found. */
-  if (!stopped && readerAborted(signal, deadline, stall.signal)) stopped = true;
+  /* **How did this stream end?** One question with one true answer, asked of
+     the shared classifier rather than re-derived here from three signals, a
+     boolean and a string. This file used to do that re-derivation in the same
+     order as six others, with the same broken guard in it —
+     docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md.
 
-  if (!stopped && (deadline.aborted || stall.signal.aborted)) {
-    line.error(
-      {
-        model: used,
-        ms: since(started),
-        timedOut: deadline.aborted,
-        stalled: stall.signal.aborted,
-        chars: text.length,
-      },
-      `stream from ${used} was cut off`,
-    );
-    throw explainAbort(new Error("aborted"), deadline, stall.signal, timeoutMs, stallMs);
-  }
+     What each ending *means* is still Mirror's. It differs from quiz's in the
+     one way that matters: the payload is a single JSON object, so a reply that
+     stopped early usually fails the strict parse below and is caught there,
+     with a sentence about the answer rather than about the stream. */
+  const outcome = classifyEnd(end, { signal, deadline, stalled: stall.signal });
+  const finishReason = end.finishReason ?? null;
+  /* One reading of the classifier's answer rather than a flag set in two
+     places. Everything below that steps aside for a disconnected referee reads
+     this. */
+  const stopped = outcome.kind === "abandoned";
 
-  if (!stopped && !end.terminated && finishReason === null) {
-    line.error(
-      { model: used, ms: since(started), chars: text.length },
-      `stream from ${used} ended without finishing`,
-    );
-    throw new Error(ENDED_UNFINISHED.message);
+  switch (outcome.kind) {
+    case "abandoned":
+      /* **This line is new on one of the two paths, and that is the point.** A
+         referee-abort that *threw* was logged in the catch; one that ended the
+         loop cleanly — `sseChunks` cancels its reader, and a cancelled read
+         resolves `{ done: true }` — set a flag and said nothing. Same event,
+         two paths, one of them silent. So a clean abort can now produce this
+         line *and* one of the specific abandonment lines below it; that pairing
+         is not new, it is what the throwing path always did. */
+      line.info(
+        { model: used, ms: since(started), chars: text.length },
+        answered ? `mirror from ${used} was abandoned` : `mirror was abandoned before ${model} replied`,
+      );
+      break;
+
+    case "timed-out":
+    case "went-quiet":
+      line.error(
+        {
+          model: used,
+          ms: since(started),
+          timedOut: deadline.aborted,
+          stalled: stall.signal.aborted,
+          chars: text.length,
+        },
+        `stream from ${used} was cut off`,
+      );
+      throw explainAbort(new Error("aborted"), deadline, stall.signal, timeoutMs, stallMs);
+
+    case "provider-failed":
+      /* The same failure as the `chunk.error` throw in the loop, arriving in a
+         field instead of as data — so the same sentence, deliberately. This is
+         the one behaviour this migration changed: under the old guard a
+         non-null reason could only make the conjunction *less* likely to fire,
+         so a provider that said `error` had its half-answer handed to
+         `parseHits` and reported, if it happened to parse, as a finished run. */
+      line.error(
+        { model: used, ms: since(started), chars: text.length, finishReason },
+        `the provider gave up mid-mirror from ${used}`,
+      );
+      throw providerFailedMidAnswer();
+
+    case "unterminated":
+      line.error(
+        { model: used, ms: since(started), chars: text.length },
+        `stream from ${used} ended without finishing`,
+      );
+      throw new Error(ENDED_UNFINISHED.message);
+
+    case "truncated":
+    case "filtered":
+      /* **Left to the parse below, which is a better witness here than the
+         reason is.** A mirror reply is one JSON object: cut it off anywhere and
+         it does not parse, and the referee gets `ANSWER_OVERFLOWED_FIXED_ASK`,
+         which names the actual problem. A `length` that lands *after* the object
+         closed is a legitimately short answer, and refusing it would throw away
+         remarks that are already good. Quiz refuses both because a mark is prose
+         with no parse to fail. */
+      break;
+
+    case "unknown-finish-reason":
+      /* Accepted as a clean stop, on the deny-list reasoning quiz-mark spells
+         out: a gateway spelling `stop` as `end_turn` would otherwise fail every
+         mirror run for that model. The reason is on the success log line. */
+      break;
+
+    case "wants-tools":
+      /* This request sends no tools — see `request` above, where the reason is
+         given — so a model asking for one is a provider oddity, not an
+         instruction. */
+      break;
+
+    case "finished":
+      break;
+
+    default: {
+      /* The point of the union. A tenth way for a stream to end becomes a
+         compile error here rather than a branch somebody forgot. */
+      const never: never = outcome;
+      throw new Error(`unhandled stream outcome: ${JSON.stringify(never)}`);
+    }
   }
 
   if (text.trim() === "") {

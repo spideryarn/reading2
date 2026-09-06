@@ -93,7 +93,8 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
-const { IdeasBand, QuotesBand, TimelineBand } = await import("../src/web/App.js");
+const { QuotesBand, TimelineBand } = await import("../src/web/App.js");
+const { IdeasBand } = await import("../src/web/modes/ideas/IdeasMode.js");
 const { CriteriaBand } = await import("../src/web/CriteriaPanel.js");
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`, and `?idea=`, `?event=`

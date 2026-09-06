@@ -484,6 +484,15 @@ quoting numbers the code no longer produces is worse than a doc quoting none.
    - the test really is about **the adapter** — that is stage G's cohort, and the answer is in
      [`store-migration-registry.ts`](../../tests/store-migration-registry.ts).
 
+**And if it seeds a reader, put the file's name in the address.** `auth.users` has a unique partial
+index on `email`, and `seedAuthUser`'s `onConflictDoNothing` is `on conflict (id)` — so a *different*
+row already holding that address is not a conflict it knows about, and the insert fails on the email
+instead. Two suites sharing `bob@example.invalid` under two ids did exactly that on 2026-09-05, and
+the interesting half is where it landed: **it reddened the file that ran second**, which had done
+nothing wrong and passed when re-run alone. `bob-link-preview@example.invalid` cannot collide with
+anything. [`tests/fixture-ids.test.ts`](../../tests/fixture-ids.test.ts) catches the *id* half of
+this; nothing yet catches the email half, which is why it is written down here.
+
 ## Rendering a component, without a testing library
 
 `tests/job-failure.test.ts` renders `JobProgress` with **`renderToStaticMarkup` from

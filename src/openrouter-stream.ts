@@ -348,6 +348,18 @@ export interface Usage {
      bug prompt caching was introduced to fix. */
   prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
   cache_write_tokens?: number;
+  /**
+   * **What the reasoning cost**, on the models that reason — declared since
+   * 2026-09-05, when `link-summary` became the first job on the quick tier.
+   *
+   * It matters there and nowhere else yet: Luna reasons by default, the
+   * allocation is billed against `max_completion_tokens` with a documented
+   * 1,024-token floor, and `reasoning: { effort: "low" }` is a request rather
+   * than a guarantee. A number far above the floor is how somebody finds out the
+   * effort was not honoured — a call that costs several times what it should and
+   * looks, from the answer, exactly right. src/link-summary.ts logs it.
+   */
+  completion_tokens_details?: { reasoning_tokens?: number };
 }
 
 interface Annotation {

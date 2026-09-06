@@ -477,16 +477,13 @@ rebuilt for Postgres when the question came up. What it would take is written do
 [260826o-streaming-the-slow-two.md](../plans/260826o-streaming-the-slow-two.md).
 
 > [!WARNING]
-> **A stream can end by simply stopping, and that looks exactly like finishing.** `[DONE]` is the
-> only clean end an SSE response has, so a connection cut two paragraphs in would be stored as a
-> complete answer with no error anywhere. `finish_reason` counts as a second witness. This is
-> [silent-success.md](../reusable/silent-success.md) and the check is in `explainStream`.
->
-> **And an abort can end it cleanly too.** `sseChunks` cancels the reader on abort, and a cancelled
-> read resolves `{ done: true }` rather than throwing — so a 45-second silence exited the loop with
-> no error at all and was filed as "the answer stopped arriving before it was finished". Both
-> sentences end in "try again", so no reader would ever notice; the loss is the log line, which is
-> the only thing that says whether to blame the network or the provider.
+> **A stream can end by simply stopping, and that looks exactly like finishing** — and an abort can
+> end it cleanly too, because `sseChunks` cancels the reader and a cancelled read resolves
+> `{ done: true }` rather than throwing. Both are one shared judgement now, `classifyEnd` in
+> [`src/ai-call.ts`](../../src/ai-call.ts):
+> [ai-gateway.md § How a stream ends](ai-gateway.md#stream-end) is where it is written down, and
+> `explainStream` is one of its callers rather than the place the check lives. The sentence that
+> used to be here — *"`finish_reason` counts as a second witness"* — was the bug, not the rule.
 
 The `begin` frame carries the whole comment, and that is the point of it: `CommentStore.create`
 re-mints an id that is malformed or collides, and a stream has no response body to carry the real one
@@ -648,11 +645,44 @@ The answer is rendered as **text**, never as HTML: there is no `dangerouslySetIn
 path and there should never be one. It is model output landing beside the author's prose, and it
 must not be able to dress itself up as the article.
 
+## The drawer that lists them, and what kind of thing it is <a id="the-drawer"></a>
+
+The Comments button in the bottom bar raises a drawer with the list in it — the one panel the dock
+still has ([`Dock.tsx`](../../src/web/Dock.tsx)). Its interaction contract was settled by a browser
+pass on 2026-09-06 rather than argued from the CSS, and it is worth writing down because the markup
+used to claim the opposite:
+
+- **Modeless with respect to the dock.** `.dock` sits at `z-index: 96`, above the scrim's 92, so the
+  bar stays visible and clickable with the drawer open — pressing a mode changes the mode and leaves
+  the drawer up.
+- **Pointer-blocking over the reader beneath the dock:** the fixed scrim intercepts
+  pointer events over the prose and the other reader chrome below it. Nothing behind it
+  is inert or hidden from keyboard or assistive-technology navigation.
+- **Focus moves in on open** — to the drawer's close button, since `DockTab` otherwise left it on the
+  bar and a keyboard reader tabbed straight past the thing they had just opened — **and back to the
+  opener on every close path**: Escape, the scrim, the ×, and the same tab pressed again.
+- **Choosing a comment is the fifth close path**, and it hands focus on rather than back:
+  [`CommentDialog`](../../src/web/CommentDialog.tsx) carries the same lifecycle, so the dialog takes
+  focus as it opens and returns it to the Comments button when it closes. React flushes the drawer's
+  cleanup before the dialog's setup, which is what makes the hand-off land on a stable control.
+  [`tests/opening-a-comment-moves-focus-into-its-dialog.test.tsx`](../../tests/opening-a-comment-moves-focus-into-its-dialog.test.tsx).
+- **Tab is deliberately not trapped**, because the bar behind it is meant to stay reachable. So the
+  drawer keeps a labelled `role="dialog"` and carries **no `aria-modal`**: that attribute tells
+  assistive technology the rest of the page does not exist, which was a false statement about a bar
+  that is visible, operable and Tab-reachable. It said `true` until 2026-09-06.
+
+[`tests/the-dock-drawer-is-not-a-modal.test.tsx`](../../tests/the-dock-drawer-is-not-a-modal.test.tsx)
+holds all of it; the reproduction is in
+[260905h](../plans/260905h-a-mode-failure-should-leave-the-article-readable.md#stage-2-the-docks-real-focus-contract-reproduced).
+Escape's capture-phase handler in `Dock` is untouched by any of this, and must stay that way — it is
+what stops one press closing `CommentDialog` underneath the dim.
+
 ## Where the code is
 
 | File | What it does |
 |---|---|
 | [`src/web/selection.ts`](../../src/web/selection.ts) | mouse selection → `{ blockId, quote, start }`, clamped to one block |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the drawer the list lives in, and its focus contract — [§ The drawer](#the-drawer) |
 | [`src/web/annotate.ts`](../../src/web/annotate.ts) | re-find a quote, and draw the `<mark>` runs over it |
 | [`src/web/AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) | **what a selection opens**: the quote, a Copy button, a box, and the tick-box |
 | [`src/web/useComments.ts`](../../src/web/useComments.ts) | fetch / create / edit / retry / delete, and the client-minted id |

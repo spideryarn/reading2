@@ -143,7 +143,9 @@ that are decisions rather than formatting:
   [`src/blocks.ts`](../../src/blocks.ts) repairs `href="#note"` at ingest and deliberately leaves
   `href="https://this.article/#section"` alone, so one arrives here looking external.
 
-  **The test is `sameTarget`, and deliberately not `urlKey`.** `urlKey` is the *shelf's* notion of
+  **The test is `sameTarget` ([`src/urls.ts`](../../src/urls.ts)), and deliberately not `urlKey`.**
+  *It lived in `chat-tools.ts` until 2026-09-05 and moved at its second caller — the link-preview
+  cache, whose key is the same question.* `urlKey` is the *shelf's* notion of
   sameness and it is generous on purpose — it folds `http` into `https`, `www.` into the bare host,
   and drops tracking parameters, because two spellings of one address should be one row on a
   bookshelf. Every one of those is a false positive here, and a false positive is this tool telling

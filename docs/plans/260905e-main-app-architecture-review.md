@@ -494,6 +494,14 @@ local classification in `referee-claims-run.ts`, `referee-criteria-run.ts`, `ref
 new stream. Classify each provider round and fold all rounds of a conversation; the last round's
 finish reason must not erase an earlier truncation. Preserve feature-specific stop/persist policy.
 
+**Done, 2026-09-05.** All four migrated, in
+[260901g](260901g-one-stream-end-classification-shared-by-five-callers.md) § Stages D, E and F.
+Both requirements above are met and tested: `converse` classifies once per round and folds, so a
+`length` on round two no longer vanishes when round three ends cleanly; every caller kept its own
+stop/persist policy, each now a written `case` with a comment rather than an absence. The one
+behaviour change is that `finish_reason: "error"` throws in all four, as it already did for the same
+event arriving as `chunk.error` data.
+
 ### A10. Organise styles and extension checks around ownership
 
 **Proved shared stylesheet and edit surface; maintainability judgement.** The semantic CSS model
@@ -581,21 +589,21 @@ both would apply to any future schema change here.
 
 ### Stage: Establish the behavioural baseline and contain one mode failure
 
-- [ ] Refresh this source snapshot and check which earlier work has since landed. Record a scoped
+- [x] Refresh this source snapshot and check which earlier work has since landed. Record a scoped
   manifest, source SHA and relevant test names; do not reuse this audit's counts as current facts.
-- [ ] Run existing access, public-network, mode-entry, passage and offline-remount tests before
+- [x] Run existing access, public-network, mode-entry, passage and offline-remount tests before
   extraction. Capture the real request trace of Plain, Ideas and Chat on one fixture article.
-- [ ] Extract Ideas' existing owner/visitor controller without changing its props, sorting or
+- [x] Extract Ideas' existing owner/visitor controller without changing its props, sorting or
   lifecycle. Leave a deliberate import compatibility shim only while named tests are moved.
-- [ ] Write a failing shell-level test that throws inside that controller: prose and navigation
+- [x] Write a failing shell-level test that throws inside that controller: prose and navigation
   should survive, and choosing Plain should work. Add the local feature boundary and pass it.
-- [ ] Test explicit retry and an article/account change; neither should leave a stuck fallback or
+- [x] Test explicit retry and an article/account change; neither should leave a stuck fallback or
   cause an automatic paid request. Extend the throw to mode-only computation, not only its panel.
-- [ ] Add exact-token retirement for a failed initial render before `useAutoRun` claims its press.
+- [x] Add exact-token retirement for a failed initial render before `useAutoRun` claims its press.
   Test throw → Plain → Back/retry and a racing newer press, without effects in the failed child.
-- [ ] Audit the Dock's real focus contract; if a defect is established, reproduce it first and
+- [x] Audit the Dock's real focus contract; if a defect is established, reproduce it first and
   apply the smallest semantic/focus correction described in A6.
-- [ ] Update [web-client](../project/web-client.md), [copy](../project/copy.md) and the relevant
+- [x] Update [web-client](../project/web-client.md), [copy](../project/copy.md) and the relevant
   mode doc. Acceptance: one independently failing feature, still a usable reader.
 
 ### Stage: Separate article access, reader composition and mode controllers
@@ -618,15 +626,15 @@ both would apply to any future schema change here.
 
 ### Stage: Cut secondary-route startup cost
 
-- [ ] Record an emitted import graph and a production network trace for signed-out landing,
+- [x] Record an emitted import graph and a production network trace for signed-out landing,
   signed-in shelf, Plain reader and direct Admin/Design routes. Use the same source/config/device.
-- [ ] Lazy-load Admin and Design with local loading/error handling. If a shared import retains the
+- [x] Lazy-load Admin and Design with local loading/error handling. If a shared import retains the
   heavy graph, move only that shared constant/type to a small existing home and verify again.
-- [ ] Keep reader/shelf/mode code eager in this tranche. Test in-tab offline navigation and first
+- [x] Keep reader/shelf/mode code eager in this tranche. Test in-tab offline navigation and first
   cached-mode activation before accepting a bundle reduction.
-- [ ] Test a failed chunk load with a usable escape; session engines survive pending/rejected
+- [x] Test a failed chunk load with a usable escape; session engines survive pending/rejected
   imports, and loading a module emits zero generation requests.
-- [ ] Record before/after initial requested JS and time-to-readable-prose, not just the largest
+- [x] Record before/after initial requested JS and time-to-readable-prose, not just the largest
   emitted chunk. Update [performance](../project/performance.md). Stop if no meaningful gain.
 
 ### Stage: Make the common mode surface fit and behave consistently
@@ -658,17 +666,33 @@ both would apply to any future schema change here.
 
 ### Stage: Optimise annotation inputs, if measurements warrant it
 
-- [ ] Use a fixture matrix: short essay; a long article; many comments and overlapping glossary/
-  search marks; figures; footnotes/supplement blocks; RTL/non-Latin prose where fixtures support it.
-- [ ] Measure comment/term selection, changing a search, hover, scroll and a streaming answer.
-  Verify nonzero block/row counts and a changed-input control before accepting zero-work results.
-- [ ] Split anchor resolution from selection; then add bounded per-block input reuse only if the
-  first extraction leaves significant repeated work. Keep the existing HTML output identity cache.
-- [ ] Test changed content under the same block ID, removed blocks, article/access changes,
-  overlapping marks, figures and note navigation. Pair parse/render counters with DOM identity and
-  visible correctness. Avoid brittle assertions about every React render in StrictMode.
-- [ ] Record the commands, fixture, source SHA, build kind and at least three comparable runs for
-  noisy timings. Update [performance](../project/performance.md); no claimed percentage from one run.
+**Done, 2026-09-06** — [260905i](260905i-measure-annotation-computation-before-optimising-it.md).
+The measurement warranted it: ~30ms of attributable annotation per gesture on 551 blocks against a
+precommitted 8ms budget. **But it is 10–14% of the gesture, and removing nearly all of it moved
+end-to-end time by ~6%** — the rest is this review's A8 ground, and the write-up says so rather than
+implying the sluggishness is fixed.
+
+- [x] Fixture matrix — **partly, and deliberately.** The committed corpus covers the short essay,
+  figures and footnotes; no fixture has RTL/non-Latin prose. The heavy synthetic cohorts were
+  **not** built: the real 551-block article convicted on its own, and the plan's asymmetry rule
+  allows an *optimise* verdict on the light workload where a *defer* would have required the heavy
+  one. The recipe and its acceptance criteria are kept in 260905i § Stage 1b if a defer is ever
+  revisited.
+- [x] Measured comment/term selection, a search keystroke and hover, with nonzero row/mark counts
+  reported before every timing and flat controls proving the instrument live. **Streaming is the
+  gap**: the comment-answer path is unreachable without seeding, so what was measured was the chat
+  path (0.2% duty cycle). Stage 2 removes the case by construction — a body-only delta changes no
+  block's marks — and there is a test for it, but it is untested against a real comment stream.
+- [x] Split anchor resolution from selection, then added per-block input reuse. The existing
+  `{ __html }` identity cache is kept and still does its own job.
+- [x] Tested changed content under the same block id, removed blocks, article swap, overlapping
+  marks, figures and note navigation, in jsdom and then in a real browser on the built app. Counters
+  paired with DOM identity and with visible correctness. No StrictMode render assertions.
+- [x] Commands, slug, source SHAs, build kind and raw per-repetition vectors recorded, and the
+  throwaway harness promoted to [`scripts/measure-annotation.ts`](../../scripts/measure-annotation.ts)
+  so the numbers can be re-taken. Before/after is an A/B of two builds in one session with distinct
+  bundle hashes, not a comparison against an earlier table.
+  [performance.md](../project/performance.md) updated.
 
 ### Stage: Consolidate geometry only after the preceding baseline
 

@@ -37,6 +37,13 @@
  * rather than `blockingMs`, which is a headline and not the measurement.
  */
 
+import {
+  annotationCost,
+  resetAnnotationCost,
+  setAnnotationCostMode,
+  startAnnotationCost,
+} from "./annotation-cost.js";
+
 /** One bucket of counts. There are two, and which one you land in is decided
  *  by `document.visibilityState` at the moment of the event. */
 type Bucket = {
@@ -337,6 +344,13 @@ export function startPerf(): void {
   if (!wanted) return;
   state.on = true;
   reset();
+  /* The annotation pipeline's own counters, which are a separate switch for a
+     separate reason (annotation-cost.ts): they sit in code that runs thousands
+     of times per render, so they are off unless asked for — and `?perf=1` is
+     the asking, in a browser. `"counts"` is the default and the mode the
+     decision is made in; `__perf.setAnnotationCostMode("full")` adds the leaf
+     timers for a diagnostic run whose absolute numbers are not the decision. */
+  startAnnotationCost();
 
   const realTimeout = window.setTimeout;
   const realInterval = window.setInterval;
@@ -410,7 +424,15 @@ export function startPerf(): void {
   document.addEventListener("visibilitychange", settleClock);
 
   const globals = window as unknown as Record<string, unknown>;
-  globals.__perf = { report, reset, spin, state };
+  globals.__perf = {
+    report,
+    reset,
+    spin,
+    state,
+    annotationCost,
+    resetAnnotationCost,
+    setAnnotationCostMode,
+  };
   // console rather than the app's logger on purpose: this is a developer tool
   // talking to a developer's devtools, not the server talking to an operator.
   // See the logging rule in CLAUDE.md — the rule is the destination.

@@ -588,3 +588,579 @@ prompt half — make them easier — needs none of it and is being built.
   tokens and the plan defers longer depth-2 gists anyway.
 - A full run is 49 calls, roughly 660k input and 50k output tokens. Prompt caching does not help: the
   system block differs per arm and comes first, so each arm re-reads the article.
+
+
+## The result: the gate held, and it is anchor 2 that tripped it
+
+Run `output/summaries-runs/2026-09-05T18-04-46`, seven arms, seven documents, three judging repeats,
+854 of 854 calls returned, $2.5853 all in.
+
+**No ranking is reported**, and that is the declared outcome rather than a disappointment. The
+calibration gate is `MAX_ANCHOR_INVERSIONS = 0`, written down before the run, and the run produced
+fifteen inversions across three repeats.
+
+**But the shape of the failure is the finding.** Fourteen of the fifteen are one anchor:
+
+| anchor | its designed defect | where the judge put it (r1 / r2 / r3 of 12) |
+|---|---|---|
+| 1 | fabricated count — "(6 arguments)" where the text says four | **12th / 12th / 12th**, fidelity `1` every time |
+| 3 | answer-leaking | 10th / 10th / 10th, leakage 4–5 |
+| 5 | the gist with a `?` on it | 11th / 11th / 11th, leakage 5 |
+| 4 | title-only | 8th / 9th / 9th — clean in two of three |
+| **2** | *"neutral lookup question"* | **4th / 2nd / 4th**, scored `5,5,5,5,5` with leakage `1`|
+
+So the judge caught, three times out of three, exactly the two traps `anchors.ts` names as the ones
+that matter — the lines that are *most informative* and therefore most tempting to a judge measuring
+information instead of triage value. It also put the fabricated count at the bottom of every lineup
+with a fidelity of 1, which is the check that the judge is reading the prose rather than the label.
+
+It simply does not agree that anchor 2 is bad. Anchor 2 is
+
+> `Computational functionalism: what four arguments does the section cover?`
+
+and on inspection **it is not a bad line**: the count is right, the topic is named, nothing leaks, and
+a reader can decide from it whether to descend. It was labelled a wall at design time on a theory
+about lookup questions. The judge is scoring it as a door, and the judge is closer to right.
+
+**The gate is not being relaxed, and the run is not being re-scored.** `anchors.ts` says the
+tolerance is *"declared before any run rather than argued after one"*, and reclassifying an anchor
+after seeing where it landed is precisely the argument that rule forbids. The legitimate repair is to
+rewrite or drop anchor 2 **before** the next run — a genuine lookup question is one with no content
+at all in it, e.g. *"What does this section discuss?"*, and anchor 2 has four arguments and a named
+theory in it.
+
+Which means: **the eval spent $2.59 and returned no ranking, and the money was not wasted.** It
+established that this judge, on this criterion, ranks answer-leaking and fabricated lines last with
+perfect consistency — which is the property a future run needs and could not previously assume.
+
+### What the run does say, without the judge
+
+The shape table is observational and survives the gate failure. Against Greg's three asks:
+
+- **His example shape is V4's, near verbatim.** He wrote *"Computational functionalism — why isn't
+  computation sufficient for consciousness? (4 arguments)"*. V4 produced, unprompted, for that exact
+  node: *"Computational functionalism — why might computation not be sufficient for consciousness?
+  (four arguments)"*. V1 has the same content with the hint in front instead.
+- **V4 needs the one-line `questionFor` patch** (`variants.md` § *The code change V4 needs*), because
+  its hint follows the question mark and `questionFor` would otherwise append a second one.
+- **V3 is out on its own evidence**: 39% of its questions are yes/no, against 13–20% everywhere else.
+  A yes/no question is a door with the answer painted on it.
+- **Length runs the wrong way for the rest of the brief.** Incumbent's median question is 10 words;
+  V1 is 16, V4 is 18. Greg also asked for *simpler* language and a *briefer* top-level line, and the
+  variants that hit his shape are the longest ones on the page.
+
+### The lines themselves, which is what the decision should be made on
+
+`noema-mythology-of-conscious-ai`, six depth-1 sections, one judge-free comparison:
+
+| section | incumbent | V1 | V4 |
+|---|---|---|---|
+| n0001 | Could AI ever really be conscious, and why does the answer matter? | conscious AI (an argument): why is machine consciousness unlikely, and what should we do about AI that merely seems conscious? | Conscious AI — could machines ever really be conscious, and how should that shape what we do? (an argument and a set of recommendations) |
+| n0020 | Why do we so readily assume intelligent AI must be conscious? | temptations of conscious AI (several biases): why are we so tempted to see consciousness in AI? | The temptations of conscious AI — why do we keep imagining AI is conscious when it may not be? (six psychological temptations) |
+| n0048 | Why might computation alone never be enough to produce consciousness? | computational functionalism (four arguments): why is computation not sufficient for consciousness? | Computational functionalism — why might computation not be sufficient for consciousness? (four arguments) |
+| n0133 | How should we act ethically given uncertainty about machine consciousness? | what to do (a recommendation): how should we act given uncertainty about machine consciousness? | Conscious AI's uncertainty — what should we do about it given we can't be sure either way? (a set of recommendations) |
+| n0155 | What should we learn about ourselves from the myth of conscious AI? | soul machine (a closing argument): what does mistaking machines for conscious beings cost us, and how do we reclaim our own nature? | Conscious AI's implications — what does the pursuit of machine consciousness reveal about what we value in being human? (a closing reflection) |
+
+**Nothing is being shipped off the back of this.** Greg's own instruction was *"Don't push tooooo
+hard towards this Socratic-question approach if it's going to make things less valuable for the
+user"*, and n0155 is the row that shows the cost: the incumbent line is short and clean, and both
+variants talk more while saying about as much. n0048 is the row that shows the gain, and it is the row
+he wrote the brief from.
+
+The remaining two-thirds of his brief — simpler language, a briefer root line, longer leaf lines —
+are untouched by any of this and are a separate, cheaper change.
+
+
+## The other two-thirds of the brief, which the eval was never going to settle
+
+Greg asked for three things and the eval only ever addressed the first:
+
+> I sometimes wish the language was slightly simpler. And the coarser top-level summary should be
+> briefer, and the more granular-level summaries be a bit longer.
+
+### The defect, measured on 1,239 real gists
+
+Every gist in every published tree on the local database — 38 articles, 1,239 internal nodes:
+
+| depth | nodes | mean words | min | max |
+|---|---|---|---|---|
+| 0 (the root — the coarsest line, the shelf blurb) | 38 | **28.8** | 17 | 53 |
+| 1 | 247 | 23.1 | 11 | 47 |
+| 2 | 852 | 20.1 | 4 | 58 |
+| 3 | 102 | 14.9 | 8 | 28 |
+
+**Monotonically the opposite of what he asked for.** The coarsest line is the longest in the tree and
+they shorten all the way down.
+
+**And the cause is one line of prompt.** `GISTS` said *"Exactly ONE sentence"* and said it at every
+depth. A root sentence has a whole article to cover, so it grows clauses until it fits; a depth-3
+sentence covers two paragraphs and does not. Nobody chose this gradient — it fell out of applying one
+rule to four jobs.
+
+### The variant already written for this does not work
+
+`variants.md` § *The GISTS block* — the `gists-only` arm of the eval — was written specifically to
+make the root briefer, and gave root brevity **a mechanism rather than a word count**, which its own
+notes call *"the part worth keeping"*.
+
+Measured against the incumbent over the same seven documents in the run above:
+
+| | root mean | all nodes mean |
+|---|---|---|
+| incumbent | 22.9 | 23.7 |
+| `gists-only` | **25.1** | **26.0** |
+
+It made the root **longer**, on five of the seven articles. Its one clear win — noema, 32 → 22 — is
+the single article the rule was written against, which is what overfitting looks like when you can
+see it. **So the mechanism is dropped and a number is used**, which is the boring option the variant
+was written to avoid.
+
+*(Note also that the eval's roots average 22.9 words while the stored roots average 28.8. The bakeoff
+does not reproduce the production gradient, because production asks for structure, titles, gists and
+questions in **one** long-context response and the bakeoff asks only for wording over a fixed tree.
+So the eval could never have found this defect; only the stored data could.)*
+
+### What changed — `toc/6` and `expand/3`
+
+- **A ceiling per depth, stated as running the opposite way to intuition**: root ≤18 words, depth 1
+  ≤25, deeper 22–32 *"and use them"*. The reasoning is given to the model rather than only the
+  number: a fine gist is read **instead of** the paragraphs under it, so it can afford a subordinate
+  clause the root cannot.
+- **The no-meta-narration rule** — *"never 'the essay opens by', 'this section explores', 'the author
+  then turns to'"*. [granularity-zoom.md:215](../project/granularity-zoom.md) has listed this as a
+  rule for some time and **the prompt did not contain it**; the doc is now true.
+- **"Where a shorter, commoner word loses nothing, use it"** for the simpler-language ask. The
+  existing *"plainer than the article, never further from it"* stays; this sharpens it.
+- The same three, adapted, in `EXPAND_SYSTEM` (`src/hierarchy-expand.ts`) — the deepening cascade
+  writes the fine gists, so a change that skipped it would have produced a tree obeying two budgets.
+
+### Two costs, named at the point of choosing
+
+- **Token headroom.** `TOKENS_PER_NODE` is 175 against a worst observed per-node cost of 145
+  (re-measured 2026-09-04). Longer deep gists eat into that 30-token cushion, and 852 of the 1,239
+  nodes are at the depth being lengthened. This is why the ask is 22–32 words rather than the two
+  sentences the earlier plan deferred, and it is being **re-measured on the produced trees** rather
+  than assumed.
+- **The expansion prefix crossed the caching floor.** `EXPAND_SYSTEM` was 893 estimated tokens and is
+  now 1,022, against a `CACHE_FLOOR_TOKENS` of **1,024**. So the prefix was never cacheable before and
+  now becomes cacheable the moment there is any outline at all — a small win, and a **two-token
+  margin**, which is not a comfortable distance. `tests/hierarchy-expand.test.ts` now asserts the
+  margin directly, because the case that used to prove `estimatedCacheable` *false* can no longer be
+  produced by any caller and pretending otherwise would have meant inventing a fixture.
+
+### Where a longer fine gist actually lands
+
+Checked rather than assumed, because "a bit longer" is only safe if something renders it.
+
+- **Summary mode does not clamp.** `.summ-text` has no `line-clamp`, so the mode Greg was looking at
+  when he asked shows the whole sentence however long it is.
+- **The gist column does clamp, adaptively.** `.ctx-clamp` takes `--ctx-lines` from `landmarkLines`
+  (`context.ts`) — one line where the level is long, up to four where it is short. So a longer deep
+  gist shows more clipped text in the fisheye, and the clamp is already the mechanism that decides
+  how much. Not a blocker; the trade is that the column shows a smaller fraction of a longer line.
+- **The shelf card takes the root gist**, which is the line getting shorter, so that one improves.
+
+### Measured, and one half of it did nothing
+
+Two arms over four documents at depth 2 — `gists-toc5` carrying the block as it stood, `gists-toc6`
+carrying the new one **character-for-character from the live `SYSTEM`** (1,417 characters both sides,
+asserted in a test watched red by changing "18 words" to "17"). Sonnet 5, no judge, $0.6717.
+
+**A trap avoided, and worth recording:** the harness's `incumbent` arm slices the *live* `SYSTEM`, so
+once `src/hierarchy.ts` changed it became byte-identical to the new block. Running it would have
+bought a second sample of the after and no before. Hence a pinned `gists-toc5`.
+
+| arm | depth | budget | nodes | mean | max | over | **under 22** |
+|---|---|---|---|---|---|---|---|
+| stored (the database) | 0 | ≤18 | 3 | 35.7 | 49 | 3 | — |
+| stored | 1 | ≤25 | 31 | 24.9 | 38 | 15 | — |
+| stored | 2 | 22–32 | 134 | 22.6 | 39 | 9 | 54 (40%) |
+| `gists-toc5` | 0 | ≤18 | 3 | 25.3 | 35 | 3 | — |
+| `gists-toc5` | 1 | ≤25 | 31 | 22.1 | 33 | 7 | — |
+| `gists-toc5` | 2 | 22–32 | 134 | 20.9 | 34 | 1 | 68 (51%) |
+| **`gists-toc6`** | **0** | **≤18** | 3 | **19.7** | 23 | 2 | — |
+| **`gists-toc6`** | **1** | **≤25** | 31 | **20.0** | 27 | 3 | — |
+| **`gists-toc6`** | **2** | **22–32** | 134 | **21.0** | 31 | 0 | **63 (47%)** |
+
+**The inversion is gone.** The gradient runs 19.7 / 20.0 / 21.0 against the stored trees'
+35.7 / 24.9 / 22.6 — the direction Greg asked for, and the root is 45% shorter.
+
+**The root ceiling is overshot by about two words** (19.7 against ≤18, two of three over). Accepted
+rather than tightened: the thing that mattered was the inversion, and the same block forbids a topic
+label two lines earlier, so squeezing a root below 18 risks trading a long claim for a short label.
+
+**And the depth-2 half did nothing at all: 20.9 → 21.0.** The diagnosis is the sentence to keep:
+
+> A ceiling the model can satisfy by writing *less* is not a floor.
+
+*"22-32 words, and use them"* reads to a model as an upper bound with some scenery. Nothing in the
+block penalised a short gist, so 63 of 134 stayed under 22 — barely different from `gists-toc5`'s 68.
+One of them was *"The work is labelled simply as 'A Lecture.'"*, eight words.
+
+**So the rule was rewritten to state the floor as a floor**, name it as the half that will feel
+wrong, and give the model somewhere to put the words — *"give them the claim AND the ground it
+stands on"* — with an escape hatch that is also a structural hint: *"if 22 words cannot be filled
+honestly, the section was too slight to be its own node."*
+
+### The token cost, which turned out to be the easy part
+
+> **Superseded.** These numbers are the *ceiling-only* draft's, and the cushion they claim did not
+> survive the floor — see § *Two claims of mine that were wrong* below. Kept because the method is
+> the one still being used, not because the figures hold.
+
+
+Mean gist characters per node: stored **163** → `toc/5` **146** → `toc/6` **149**. So `toc/6` is
+**+0.8 estimator tokens per node** over `toc/5` and **fourteen characters below what is already in the
+database**. Worst-document per-node reconstruction: `toc/6` at 0.93× the stored trees, ≈135 on the
+145 scale, against a `TOKENS_PER_NODE` of 175.
+
+**With the caveat stated rather than buried:** the reconstruction reads 90.8 for the worst of 31
+exported trees where the documented figure is 145, because that figure came off a real call's answer
+tokens. The absolute numbers are ~1.6× apart and **only the ratios transfer.** The one document
+`toc/6` inflates is `fowler-phrenology`, ×1.11 — short stored gists getting longer, which is the
+change working — and if that ratio landed on the worst-cost document it would be ≈161, still under
+175.
+
+### The cache floor moved again, and this time comfortably
+
+The floor rewrite lengthened `EXPAND_SYSTEM` further: **893 → 1,022 → 1,058** estimated tokens
+against `CACHE_FLOOR_TOKENS` of 1,024. The two-token margin is gone and there are now thirty tokens
+of daylight. `tests/hierarchy-expand.test.ts` pins the margin rather than the boundary, because the
+boundary test's padding length went negative and there is no honest fixture for the `false` branch
+any more: every caller's prefix contains `EXPAND_SYSTEM`.
+
+### Stated as a floor, it is obeyed — and the model still refuses to pad an empty node
+
+Same four documents, same depth, `gists-toc6` re-run against the unchanged `gists-toc5` numbers.
+$0.4054, running total $1.077.
+
+| arm | depth 2 mean | max | over 32 | **under 22** |
+|---|---|---|---|---|
+| stored (the database) | 22.6 | 39 | 9 | 54 (40%) |
+| `gists-toc5` | 20.9 | 34 | 1 | 68 (51%) |
+| `toc/6`, ceiling only | 21.0 | 31 | 0 | 63 (47%) |
+| **`toc/6`, floor stated** | **23.4** | **32** | **0** | **33 (25%)** |
+
+**And the root got shorter rather than longer**: 19.7 → **18.0**, exactly the ceiling, one of three
+over instead of two. Depth 1 moved 20.0 → 21.0 with its max and over-count unchanged — the direction
+a leak would take, but one word on n=31 with no noise floor for the pair is not signal.
+
+**The 33 still under the floor are two populations and only one is a miss.** Fourteen are apparatus
+— *Bibliography*, *Backlinks*, *Persistent URL*, *Publisher's Address*, *License and attribution* —
+where there is no 22-word claim to be made, and the model did not invent one. That is the escape
+clause working: *"if 22 words cannot be filled honestly, the section was too slight to be its own
+node."* The rest sit at 17–21 words, a word or two short rather than a category error.
+
+**The lines were read, not only counted**, because a word count cannot tell substance from padding
+and a floor is exactly the rule that invites padding. Checked against the source text:
+
+- *"…unexpectedly reaches a cluster that cannot be grown further after 9 steps"* (21) →
+  *"…unexpectedly produces a cluster that cannot be extended further after 9 steps, **akin to a
+  puzzle's halting state**"* (29). The article says *"It's a bit like what might happen in a puzzle
+  or a game … here a halting state."* The addition is the piece's own sentence.
+- *"Even great men have flaws paired with their gifts, and Phrenology exposes the hypocrisy of those
+  who appear virtuous only when watched…"* (27, from 21) — Byron and Scott lame, Homer blind,
+  Napoleon's will his undoing; and *"more honest when watched"*. Both halves grounded.
+- *"States the lecture's title, 'Utility of Phrenology.'"* — **seven words, unchanged**. The best
+  line in the report: asked for a floor, the model left the empty node empty.
+
+One that is still not right: *"Article Overview"* went from *"This is a brief introductory
+overview."* to *"The article introduces bugs as a subject for a ruliological theory…"* — better, and
+still faintly narrating. The meta-narration ban catches the stock phrases and not the habit.
+
+### The two things to watch, recorded rather than fixed
+
+- **`fowler-phrenology` inflates most**, ×1.154 per-node against the stored tree (was ×1.110 before
+  the floor) — it is the article whose stored gists were shortest, so it has the most to gain. If
+  that ratio ever landed on the worst-cost document it would be ≈167 against a `TOKENS_PER_NODE` of
+  175: an eight-token cushion rather than thirty. It does not today, and `fowler` is nowhere near the
+  worst-cost document. It is the direction to watch if the floor rises again.
+- **Two of thirteen live calls came back as unparseable JSON**, both on `toc/6`, none on `toc/5`,
+  breaking mid-answer at 1,174 of 9,107 and 460 of 9,165 characters — not truncations. The numbers
+  are far too small to attribute to the longer prompt, and both re-ran clean. But it is the same
+  failure shape twice, **production's hierarchy call parses the same way, and nothing keeps the raw
+  text**, so there would be no evidence to diagnose it from if it happened to a reader. Worth its own
+  look; not a reason to hold this.
+
+### The review, and the three things it stopped
+
+[260905f-gist-length-review-sol.md](260905f-gist-length-review-sol.md). Verdict:
+
+> The core change is sound. The hard universal floor, its structural escape hatch, and the
+> now-stale cost claim are not ready.
+
+**1. The escape hatch was the serious one, and it is deleted.** *"If 22 words cannot be filled
+honestly, the section was too slight to be its own node"* looked like a graceful way to stop the
+model padding. It is not:
+
+> The same model call chooses boundaries and writes gists, so … it tells it to merge or avoid a
+> legitimate section to satisfy a prose constraint. The fixed-tree eval cannot reveal this
+> interaction by construction.
+
+A word-count rule was being handed the power to redesign the article's structure, and the harness
+that measured it holds the structure fixed, so no number it produced could ever have caught it.
+*(It also means the two paths were not mirrored after all: `EXPAND_SYSTEM` never had the hatch.
+Deleting it makes them match.)*
+
+**2. The hard floor is now normative.** *"Never pad, never invent support, and never change a
+boundary to reach a word count"*, with 22–30 as what a **substantive** node normally takes and an
+explicit licence to be shorter when *"the range holds no second substantive element"*. Sol's argument
+is that "claim AND ground" fits an argumentative section and not a definition, an event, a list, a
+transition or a bibliography — and that 22–32 words in exactly one sentence pushes toward the clause
+chaining the root rule forbids, which also works against *"slightly simpler language"*.
+
+**3. The root ceiling went 18 → 20, because the root evidence was three nodes and not four.**
+`scaling-hypothesis`'s root is silently skipped when its stored range does not resolve wholly inside
+the body (`evals/summaries/generate.ts:94`). Sol also notes the observed minimum of 17 is not a
+quality boundary, only one unconstrained generation that happened to be short. 20 is still a ~30% cut
+from 28.8 without forcing every article into headline copy. *"The one claim the piece makes"* became
+*"the central claim or governing move"* — some works have neither a single claim nor a thesis.
+
+**Two smaller ones, both taken:** the *"length runs the opposite way to what you would expect"*
+framing is model psychology that adds salience without specifying behaviour, so the interface reason
+is given instead (shelf card / chapter orientation / substitutes for the prose); and the
+meta-narration ban no longer forbids bare **"then"** and **"next"**, because *"if X, then Y"* can be
+the claim.
+
+### Two claims of mine that were wrong, corrected
+
+- **The token cushion.** The paragraph above measured the *pre-floor* wording. Mean gist characters
+  actually rose 148.9 → **163.3**, and per-document ratios ran to **×1.186** — so by my own
+  ratio-transfer method `145 × 1.186 ≈ 172`, leaving about **three** tokens under `TOKENS_PER_NODE`
+  = 175, not thirty. Not proof of imminent truncation (the estimator over-counts nodes heavily, and
+  expansion budgets separately at 200 tokens per child) but **the cushion claim is no longer
+  established**, and it is being re-measured on the current wording rather than restated.
+  Sol also notes the count was wrong: *"deeper than depth 1"* is **954** of 1,239 stored nodes, not
+  852, across two different call paths.
+- **The cache floor.** *"Never cacheable → always cacheable"* is false, and I wrote it in three
+  places. `EXPAND_SYSTEM` alone was under the floor, but `EXPAND_SYSTEM + outline` could already
+  clear it — which is exactly what the old test padded an outline to demonstrate. What changed is
+  that eligibility went from **outline-dependent to estimated-always**, which is a smaller thing.
+  And `estimatedCacheable` means our four-characters-per-token *estimate* clears the floor, not that
+  the provider took the prefix or that any call got a hit. Corrected at the test, which is where
+  somebody would read it.
+
+### Deferred, on the record
+
+Sol's § 7 lists eight further measurements — full production structure calls with two draws per arm
+against within-arm boundary noise, human paired review of the root ceiling stratified by genre,
+faithfulness checks for qualifications lost at the root, a padding analysis, a cascade root-gist
+ablation (current / shortened / omitted / deliberately misleading), real answer tokens and stop
+reasons, and a lexical simplicity measure. **None of it is being done here.** Greg filed these as
+*"other minor requests"*; that programme is a research project, and the honest position is that this
+change is verified for instruction-following on four documents and one draw per arm, and for nothing
+else.
+
+**The cascade interaction is the one worth naming separately**, because Sol is right that it is real
+and unmeasured: the root gist is carried into every descendant's ancestor chain
+(`src/hierarchy-deepen.ts`, `src/hierarchy-expand.ts` § `chainRung`), so a much shorter root could in
+principle change child boundaries, titles and verdicts. The clean experiment is the four-way ablation
+above. Not run.
+
+### Draft C measured: half the gain given back, and almost none of it where it mattered
+
+Sol's normative floor, same four documents, third draw. The measurement that makes this readable is
+**a split by how many words of prose the node's range actually covers** — the block's own criterion,
+made countable, instead of a judgment about "substantive".
+
+| draft | depth-2 mean | **under 22** | of which range &lt;40w | 40–120w | **&gt;120w** |
+|---|---|---|---|---|---|
+| stored | 22.6 | 54 (40%) | 14 | 11 | 29 |
+| `gists-toc5` | 20.9 | 68 (51%) | 16 | 16 | 36 |
+| A — ceiling only | 21.0 | 63 (47%) | 15 | 15 | 33 |
+| B — hard floor | 23.4 | 33 (25%) | 16 | 6 | 11 |
+| C — normative | 22.1 | 47 (35%) | 15 | 17 | **15** |
+
+B recovered 30 nodes from A and **C keeps 16 of those 30** — but the give-back is concentrated in the
+40–120-word band (6 → 17), which is exactly where the new exception is meant to fire. Above 120
+words, where "no second substantive element" is rarely a true excuse, C holds 15 against B's 11 and
+A's 33: **about 85% of the gain, kept where a short gist really is a miss.** A real partial retreat,
+mostly in the right place.
+
+**But C is worse than B on precisely the nodes the floor exists for**, and the lines say it better
+than the counts:
+
+- *A Multiway System Halts* (range 186 words): B *"…after 9 steps, **akin to a puzzle's halting
+  state**"* → C *"…a rare halting outcome."* The article's own sentence, dropped.
+- *Visually Obvious Correctness* (60 words): B *"…will always **correctly double their input**,
+  without needing further proof"* → C *"…that no bug can ever occur."* The claim itself, dropped.
+- *Human Imperfection and Hypocrisy* (193 words): 27 words → 17, losing Byron, Homer and Napoleon.
+
+**And Sol's fear about the hard floor did not materialise.** The padding signature he named —
+participle tails, *"showing that…"*, *"underscoring…"* — is 4% of C's depth-2 lines against 5% of B's
+and 3% of `toc/5`'s. The model does not pad. The nodes with nothing in their range stayed short in
+every draft: *"The lecture is titled Utility of Phrenology."*, seven words, over a three-word range.
+
+**The root moved the wrong way when the ceiling was loosened.** Ceiling 18 → mean 18.0, one of three
+over. Ceiling 20 → mean **22.0**, two of three over the new line and three of three over the old one.
+Raising the number bought no compliance: the model tracks it loosely and follows it *upward*,
+overshooting by about two either way. So the instruction has to say 18 for the output to land at 20,
+which is the number Sol wanted. n=3, so a signal to watch rather than a finding — but it is the only
+evidence there is, and it points one way.
+
+### Draft D, which is what is being landed
+
+Two changes, both out of the numbers above rather than anyone's taste:
+
+- **The root ceiling goes back to 18**, for the compliance reason. Sol's caution was about claim-ness
+  at 18, and he checked the 16–21-word roots himself and found them *"claims rather than labels"* —
+  a risk he could not see materialising, against a cost the measurement shows plainly.
+- **The licence to be short is tied to the range rather than to a judgment.** *"No second substantive
+  element"* asks the model to judge substance; *"where the range runs to a paragraph or more, 22-30
+  words is what it takes … shorter is right only where the range itself is slight: a title, a credit
+  line, a URL, a heading with nothing under it"* asks it to look. The guardrails and the deleted
+  escape hatch are unchanged.
+
+### The cushion, corrected: about fifteen tokens, not thirty and not three
+
+**Sol's arithmetic was right and his transfer was not, and the distinction matters enough to write
+down.** His ×1.186 is the *gist-only* growth ratio, applied to the whole node. A node also carries a
+title, a range, an id and often a `sourceHeading`, none of which grow — so the ratio that matches
+what the 145 figure measures is the **whole-node** one.
+
+| draft | worst whole-node ratio | → on the 145 scale | worst gist-only ratio | → on the 145 scale |
+|---|---|---|---|---|
+| A | ×1.110 | 161 | ×1.199 | 174 |
+| B | ×1.154 | 167 | ×1.280 | **186 — over 175** |
+| C | ×1.106 | **160** | ×1.193 | 173 |
+
+So `TOKENS_PER_NODE` = 175 stands, and **the plan's earlier "thirty-token cushion" should be read as
+about fifteen**. Both worsts are `fowler-phrenology`, the document whose stored gists were shortest;
+and the figure compounds two worst cases, since the worst-inflating document is not the worst-cost
+one.
+
+**The durable fix is to stop transferring ratios at all.** The reconstruction reads 90.8 for the
+corpus's worst tree where the documented figure is 145 — a 1.6× scale gap nobody has closed, and
+ratio transfer only holds if prose is the same *share* of cost on both scales, which it probably is
+not (a tokenizer charges more for `"spya-k3m9qt":{"range":[` than for prose). Take answer tokens ÷
+internal nodes off one real production hierarchy call once `toc/6` ships, the way Kuhn's 132 was got.
+
+### Draft D failed, both of its inferences were mine, and the real variable was neither
+
+D was worse than every other draft **and worse than having no depth-2 rule at all**:
+
+| draft | wording register | depth-2 mean | **under 22** | of which range &gt;120w | root mean (ceiling) |
+|---|---|---|---|---|---|
+| stored | — | 22.6 | 54 | 29 | 28.8 |
+| `toc/5` | no rule | 20.9 | 68 | 36 | 25.3 |
+| A | descriptive ceiling | 21.0 | 63 | 33 | 19.7 (18) |
+| **B** | **blunt imperative** | **23.4** | **33** | **11** | **18.0 (18)** |
+| C | softened norm | 22.1 | 47 | 15 | 22.0 (20) |
+| **D** | descriptive, range-tied | **20.2** | **76** | **38** | **22.3 (18)** |
+
+**Both changes I made after the last review were wrong, and each was an inference of mine rather than
+a measurement:**
+
+- **"The model overshoots the ceiling by about two, so say 18 to land at 20."** D says 18 and lands
+  at **22.3**, against B's 18.0 at the same ceiling. The ceiling is not what held B's roots down. The
+  only root difference between the two is that B said *"the one claim the piece makes"* and D said
+  *"the central claim or governing move"* — Sol's genre hedge, which measurably cost four words.
+- **"Tie the licence to the range rather than to a judgment, and the model will look rather than
+  judge."** It did keep C's restraint below 40 words, which was never the problem, and it lost
+  everything above 120.
+
+**And the variable is the register, not the content.** This is the finding of the whole exercise and
+it belongs to the measurement rather than to anybody's reasoning about prompts:
+
+> A and D are descriptive and land on the model's own default (`toc/5`, 20.9). C softens B and gives
+> back half. Only B's blunt imperative — *"AT LEAST 22 words … the floor is the half that will feel
+> wrong, so obey it … too SHORT, not admirably terse"* — moved it.
+
+So Sol's escape-hatch deletion and D's range-tied exception both look right *on the lines* and buy
+nothing on the numbers. They cost nothing either, which is why they stay.
+
+**Checked against the obvious confound**: D's worst document is `towards-a-theory-of-bugs`, which was
+a first draw with nothing re-bought, and both first-draw documents are well behind B. The ordering
+holds across all four documents.
+
+**And the cushion moves with the draft, so it has to be quoted with one.** Worst whole-node ratio:
+`toc/5` ×1.056 → 153; A ×1.110 → 161; **B ×1.154 → 167, a cushion of 8**; C ×1.106 → 160; D ×1.068 →
+155. D's cushion is generous because D writes less, which is not a reason to prefer it. **If B's
+register is what ships, the number to carry is 8, not 15 and not 30.**
+
+### Draft E — B's register, D's exception, Sol's guardrails, no hatch
+
+The criterion was declared before the run rather than argued after it, which is the lesson the
+calibration gate taught earlier in this same plan:
+
+> Land E if its under-22 count on ranges over 120 words is **≤ 15** *and* its root mean is **≤ 20**.
+> If it misses either, land **B minus the escape hatch** — measured wording with one sentence
+> deleted — and record E as a failed attempt.
+
+The root line restores B's *"THE ONE claim the piece makes"* with Sol's hedge folded in as a
+subordinate clause (*"or its one governing move if it makes no single claim"*) rather than replacing
+it, since that substitution is the only root difference between B and D and it cost four words.
+
+### The trailing comma is worse than the first report suggested
+
+Not occasional slippage — **the model's habit**. One captured answer carries **twenty** trailing
+commas, one on essentially every depth-2 node: `"gist": "…",}` where the omitted `question` would
+have followed. Any count above zero fails the whole parse, so the 5-in-20 broken-answer rate
+understates how close the clean answers are to breaking.
+
+`src/parse-json.ts` has no trailing-comma tolerance, and `src/hierarchy.ts`'s real structure call
+emits the same optional-`question` shape through the same parser. The repair is one line applied
+**only after a strict parse has already failed**, and logged when it fires. Its own piece of work,
+and the raw bytes are the evidence — promoted out of gitignored `output/` into
+`evals/results/summaries/`, since they are model-written JSON with no article prose in them.
+
+### Draft E cleared the criterion it was given before it ran — landed
+
+| | criterion | E |
+|---|---|---|
+| under 22 words on ranges over 120 words | ≤ 15 | **9** — better than B's 11 |
+| root mean | ≤ 20 | **19.7**, max 20, nothing over |
+
+Depth-2 mean **23.9** and **27 of 134** under the floor (20%), the best of the five drafts, against
+`toc/5`'s 68 and the stored trees' 54. The win is in all four documents, and E's strongest —
+`towards-a-theory-of-bugs`, 4 short against B's 9 — was a first draw, not a re-bought cell.
+
+**The three lines the whole argument turned on all got their ground back**, and the middle one is the
+clearest:
+
+- *Visually Obvious Correctness*: B *"…will always **correctly double their input**"* → C 16w and D
+  19w both dropped the claim → **E**: *"Some **doubling** cellular automata have visually simple
+  patterns that make it obvious they will **always work correctly**, with no possibility of bugs."*
+- *A Multiway System Halts*: the surprise structure is back at 26 words; B's puzzle analogy is not.
+- *Human Imperfection and Hypocrisy*: 24 words with its reason, grounded in the range — different
+  ground from B's Byron and Homer, not worse.
+
+Apparatus held everywhere: *License and attribution*, over a three-word range, is nine words. No
+padding in any draft, in any round.
+
+### What E costs, named rather than discovered later
+
+**The register that makes a floor stick pushes on the ceilings too — the last round's finding running
+the other way.**
+
+- **The depth-2 ceiling stops holding.** Six gists over 32 words, max 39, where B had none over 32.
+  The stored trees had nine, so at the top end this is back where it started. 4.5% of nodes, against
+  a 20% floor miss that went to 27 — a trade worth making, but a real one.
+- **Depth 1 is the weakest `toc/6` draft**: 8 of 31 over the ≤25 ceiling. Against the actual baseline
+  it is a wash — `toc/5` was 7 over with a mean of 22.1 and a max of 33, and E is 8 over with a mean
+  of **21.5** and a max of **32**. Better mean, better max, one more over the line. Six of the eight
+  are in one document, the same one as the depth-2 overshoot.
+- **The roots treat the ceiling as a target**: all three land at 19–20 against a ceiling of 18, none
+  under 18. Still claims — *"Phrenology offers practical, verifiable benefits across nearly every
+  domain of life, from health and parenting to law, business, and marriage"* — not labels.
+- **Cushion: 11 tokens.** Worst whole-node ratio ×1.129 → 164 against `TOKENS_PER_NODE` = 175. Mean
+  gist characters per node 166.4, the longest of any draft and above the stored trees' 162.9. **Carry
+  11**, and quote it with the draft it belongs to, because the number moved between 8 and 22 across
+  five drafts of the same change.
+
+**Neither side effect reopens the decision.** The criterion was declared before the run precisely so
+that a result which passes is not then re-argued against a standard invented afterwards — which is
+the mistake the calibration gate at the top of this plan exists to prevent, and which this plan has
+now had two chances to make.
+
+### Five drafts, and the lesson that outlived all of them
+
+> The **register** of an instruction moves the number; its content mostly does not.
+
+Descriptive wordings (A, D) land on the model's own default. A softened norm (C) gives back half. Only
+a blunt imperative (B, E) moves it — and it moves the ceilings as well as the floor, in both
+directions, which is the cost. Three separate pieces of reasoning about *content* — mine about the
+ceiling, mine and Sol's about substance-versus-range — were each measured and each turned out to buy
+nothing. They cost nothing either, so they stayed; but not one of them was the variable.
+
+$2.41 over five rounds, 20 live calls.

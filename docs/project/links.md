@@ -11,11 +11,14 @@ and, the same day, once the first version was on screen:
 > might think would be useful. Perhaps we could quickly run Mozilla Readability on it and show the
 > first paragraph and number of words with a loading spinner while that's happening?
 
-Most of that is now there. The one part that is not is the general case of *running Readability on
-the destination*, and the reason is a hard wall rather than a decision —
-[What a browser can and cannot reach](#what-a-browser-can-and-cannot-reach) below. Where the card
-does show a title, a first paragraph and a word count, it is because **Readability already ran** —
-at ingest, on our own server, over a page that is now on the shelf.
+**All of that is now there**, and the last part of it — *running Readability on the destination* in
+the general case — arrived on 2026-09-05, two days after this file was first written. It took a
+detour, and the detour is worth knowing rather than tidying away: it cannot be done from the reader's
+browser at all ([What a browser can and cannot reach](#what-a-browser-can-and-cannot-reach)), so it
+is our own server that fetches the page, once, and caches it for everybody
+([What our own server can reach](#what-our-own-server-can-reach)). Where the card shows a title, a
+first paragraph and a word count for a page *on the reader's shelf*, that is a different and older
+answer: Readability already ran, at ingest.
 
 The card is drawn by [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx), which is the *same*
 card the glossary term's hover uses — see [Two things over one phrase](#two-things-over-one-phrase),
@@ -336,15 +339,16 @@ Checked on 2026-08-27, with an `Origin:` header set to this app's own:
 A cross-origin `fetch` without that header is rejected before the response body is readable, and a
 `no-cors` request hands back an opaque response with nothing in it — no status, no headers, no text.
 There is no flag, no library and no amount of care that gets round it; it is the rule the header
-exists to state. The general case therefore needs **our own server**, which is the source below that
-is still unbuilt.
+exists to state. The general case therefore needs **our own server**, which is
+[the third source](#what-our-own-server-can-reach) and has existed since 2026-09-05.
 
 Three things fall out of that table that are worth keeping, and two of them are not about CORS:
 
 - **philpapers is not refusing our origin, it is refusing a robot.** The 403 carries
   `cf-mitigated: challenge` and comes back for any Origin and any user-agent, browser strings
-  included. So the corpus's commonest destination will fail the *server-side* version too, and
-  whoever builds that should find that out on day one rather than after the plumbing.
+  included. So the corpus's commonest destination will fail the *server-side* version too — which
+  was the prediction, and it was **confirmed from a server on 2026-09-05**, before the plumbing:
+  [What our own server can reach](#what-our-own-server-can-reach).
 - **Wikipedia's permissive CORS does not extend to its article pages** — only to the REST API paths.
   Worth stating because "just fetch the Wikipedia page and run Readability on it" is the obvious next
   idea, and it was checked and it does not work.
@@ -356,12 +360,18 @@ returns **null even on the call that succeeded**, because that header is not COR
 script cannot read it back. The browser used it and will not show it to you. Diagnose with `curl -I
 -H "Origin: …"` rather than from the page.
 
-## The two things somebody can tell us
+## The three things somebody can tell us
 
-[`link-facts.ts`](../../src/web/link-facts.ts) is the asynchronous half of the card. Two sources, and
-the section it adds appears *under* a card that was already complete — nothing above it waits,
-nothing moves, and a lookup that finds nothing leaves the free card exactly as it was. That is what
-lets these be allowed to be slow, and why the spinner is a line rather than a state.
+[`link-facts.ts`](../../src/web/link-facts.ts) is the asynchronous half of the card. Three sources
+since 2026-09-05, and the section each adds appears *under* a card that was already complete —
+nothing above it waits, nothing moves, and a lookup that finds nothing leaves the free card exactly
+as it was. That is what lets these be allowed to be slow, and why the spinner is a line rather than a
+state.
+
+**Only one of them is ever drawn**, and the order below is a ranking rather than a layout: the shelf
+beats Wikipedia beats the page's own metadata, because that is the order of how much we can say. The
+card declines to *ask* the further sources when a nearer one has already answered, and declines to
+*draw* them too — the shelf can land after the answer did.
 
 **An article already on this shelf.** Its title, its root gist and its length are already ours, so
 this is a lookup rather than a fetch — and it is the answer to *"run Readability and show the first
@@ -390,6 +400,13 @@ Deciding *whether* a URL names a Wikipedia article is reading an href, so it hap
 `link-preview.ts` and the fetching code is handed a title. A title containing a colon is refused,
 which is how `Special:`, `Talk:`, `File:` and `Category:` are excluded; the cost is the handful of
 real articles whose names contain one, and they lose the extra section and keep the ordinary card.
+
+**The page itself, fetched by our server.** The general case, and the only source that answers for an
+arbitrary destination — `GET /api/link-preview`, [`src/link-previews.ts`](../../src/link-previews.ts),
+built 2026-09-05. It gives the destination's own title, site name, description and opening paragraph,
+plus a word count. See [What our own server can reach](#what-our-own-server-can-reach) below for what
+it does and does not get, and [Fetched once, for everybody](#fetched-once-for-everybody) for the part
+that is a privacy decision rather than a caching one.
 
 ### What Wikipedia is told, and what it is not
 
@@ -532,14 +549,250 @@ which mounts the card for real and asserts the call count on `useJobs` rather th
 and [`tests/a-failed-shelf-read-is-not-an-empty-shelf.test.tsx`](../../tests/a-failed-shelf-read-is-not-an-empty-shelf.test.tsx),
 which is its own file because "the shelf read failed" is a module state a test file can reach once.
 
-## What is deliberately not built yet
+## What our own server can reach
 
-**Our own server fetching the page once, and caching it for everybody.** The general case, and the
-only one that needs real engineering. Note what it is *not*: a fetch per reader per hover. The first
-hover of a URL by anyone causes one fetch from our server's IP, and every hover after that — by that
-reader or any other — is a cache hit, so the destination never learns that a particular reader was
-reading a particular article at a particular time. It is also the only route to the thing Greg
-actually asked for in the general case, since the table above rules the client out.
+Built 2026-09-05, and it is the answer to the wall above: the general case needs our own server, and
+this is it. [`src/link-previews.ts`](../../src/link-previews.ts), behind
+`GET /api/link-preview?slug=&url=`.
+
+**Measured before it was built**, ten real destinations from this corpus through `fetchDocument`
+called exactly as `readWebPage` calls it. Three results, and the third was not predicted by anything:
+
+- **8 of 10 give something genuinely worth showing** — a real title plus a description or a first
+  paragraph. arXiv, plato.stanford, nature, anthropic, paulgraham, wikipedia, noema, gwern.
+- **philpapers fails, and so does science.org.** `FetchFailure { code: "forbidden", status: 403 }`,
+  confirmed by `curl` with the same user-agent to carry `server: cloudflare` and
+  **`cf-mitigated: challenge`**. This doc predicted it from the *client* side
+  ([What a browser can and cannot reach](#what-a-browser-can-and-cannot-reach)) and it is **now
+  confirmed from a server**: the corpus's commonest destination is behind a bot challenge, and no
+  amount of plumbing gets past it. That is a negative-cache row with a week's expiry, not a reason to
+  stop.
+- **`maxBytes` is all-or-nothing**, which contradicted the research doc and is corrected there.
+  `fetchDocument` throws `too-large` before returning anything, so a thrifty cap yields nothing at
+  all rather than a partial head. At 64KB only 2 of the 8 successes survive and at 256KB only 4. The
+  cap is **1MB**.
+
+Two things shape the extraction rather than the fetch, and both are counter-intuitive enough to be
+worth writing down:
+
+- **Three of the eight successes carry no `og:` tags at all** — plato.stanford, paulgraham, gwern —
+  so the `og:` → `twitter:` → `<title>` / `<meta name=description>` fallback chain is **load-bearing
+  rather than a nicety**. No metadata library: `open-graph-scraper`, `metascraper` and
+  `link-preview-js` all accept pre-fetched HTML, but their real value is a hardened fetch layer we
+  are deliberately bypassing, and the extraction itself is a `querySelector` chain. (`unfurl.js` is
+  archived; do not take it.) If the scope ever grows to JSON-LD and oEmbed, `open-graph-scraper` is
+  the one to reach for.
+- **Readability's "first paragraph" can be a byline artefact** — noema's comes back as the word
+  "Credits" — so it is sanity-checked before it goes on a card (`saneParagraph`: long enough, not a
+  label, contains a sentence) and the card falls back to `og:description` when it fails. A word count
+  under forty is dropped for the same reason: on a landing page it measures Readability rather than
+  the page.
+
+It reuses `fetchDocument` ([fetching.md](fetching.md)) the way `readWebPage` in
+[`src/chat-tools.ts`](../../src/chat-tools.ts) does, and it takes that call site's **complete**
+envelope: the URL-length and query-length refusals before anything is fetched, the scheme allowlist,
+the SSRF address guard re-checked at every redirect hop, the pinned agent, the byte cap, the deadline,
+one attempt, and a log line carrying `hostOf(url)` and never the URL. **Do not write new fetch-safety
+plumbing for this** — see [security.md](security.md).
+
+### Fetched once, for everybody
+
+Note what this is *not*: a fetch per reader per hover. The first hover of a URL by anyone causes one
+fetch from our server's IP, and every hover after that — by that reader or any other — is a cache
+hit, so **the destination never learns that a particular reader was reading a particular article at a
+particular time**. The sharing is the privacy feature, which is why `link_previews` is the first
+ownerless table in this schema; `src/db/schema.ts` § `linkPreviews` carries the argument it had to
+answer and the three things that close the parts of it that would not survive:
+
+- the route **never returns a cache timestamp**, because that would say whether and when some prior
+  reader caused a fetch;
+- ownerless rows have a **defined retention that actually runs**: thirty days past a row's own
+  expiry, and the deleting is done fifty rows at a time by the rare path that writes a new one
+  (`sweepABatch` in [`pg-link-previews.ts`](../../src/store/pg-link-previews.ts)). *A first version
+  left it to a manual script, and a review was right that a retention nobody runs is not a
+  retention: `expires_at` stops a row being served, it does not delete it.*
+  `npx tsx scripts/link-previews-sweep.ts` is still there for a bigger pass with a report;
+- **URLs that look like they carry a credential are refused**, not cached — an exact URL plus its
+  content in a shared table is the worst available home for a signed link. It is a **heuristic**,
+  said plainly: a name-based check over query parameters, plus `user:pass@`, applied to **every hop
+  of the redirect chain** rather than only to what the author published, because a harmless address
+  can redirect into a signed one. A capability in a path segment is not caught, and no list of names
+  can be complete.
+
+**And the route is article-scoped, which is the load-bearing part.** Being authenticated is not
+enough: any signed-in account could otherwise hand the endpoint any URL at all. So it verifies the
+caller owns the article *and* that the article's own extracted links really contain that URL, before
+it fetches or spends anything — `articleLinks` in [`chat-tools.md`](chat-tools.md), the same parse the
+chat tool uses, so there is no second idea of what counts as a link in this article. What is left is
+an **accepted limited disclosure**, recorded as accepted rather than argued away
+(the plan, § *Where the sharing stops*).
+
+**One part of it is sharper than ordinary cache latency and is worth naming**, because it is not the
+kind a timing argument covers: `pending` is a *word*, not a delay. It tells a caller who is eligible
+to ask — somebody who owns an article containing that URL — that a fill for that exact address is in
+flight right now, within a twenty-second lease. Two readers who both own pieces linking one paper can
+learn that the other is hovering it about now. That is accepted: the set of people who can hear it is
+the set who could already cause the fetch themselves, and the alternative — making them wait out
+somebody else's fetch with no way to tell it from a slow one — is a worse card for a privacy
+difference of one bit about somebody they cannot name. GPT Sol raised it, 2026-09-05.
+
+*Consequence, accepted for v1:* a hyperlink in a [chat answer](#the-links-chat-writes) is not in the
+article's extracted links, so it gets the free card only — a `refused`, which the client is careful
+not to remember under the address, since the same URL may be an ordinary prose link a moment later.
+
+Two more things worth knowing about it:
+
+- **Two simultaneous cold hovers do not both fetch** — a unique row prevents duplicate *storage*,
+  never duplicate *traffic*, so there is a claim with a lease: the winner fetches, everybody else is
+  told to wait and asks once more. **The promise stops there and it is worth stating exactly**, since
+  the first version of this line claimed more than the code delivers: a claimant that stalls past its
+  twenty-second lease still comes back and fetches, and nothing can reach into another process and
+  stop it. What *is* guaranteed is that **a loser can never destroy a winner** — a release only
+  removes the claim it holds a token for, and a write can never turn a live answer into a failure.
+  That is the only one of the three a reader would ever have seen.
+- **A per-reader limiter, keyed solely on the owner** — never on the article or the URL, which an
+  attacker varies freely — and cache hits bypass it entirely. 120 fills an hour at concurrency 4,
+  and **those numbers are guesses rather than measurements**, said out loud in
+  `PREVIEW_RATE_POLICY` so the next reader tunes them from telemetry.
+
+## And what it has to do with the piece in your hands
+
+Built 2026-09-05, stage 3 of
+[the plan](../plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md).
+[`src/link-summary.ts`](../../src/link-summary.ts), behind `GET /api/link-summary?slug=&url=`, which
+is a **stream**. It is the only thing on this card that we wrote rather than quoted, and the only one
+that costs money.
+
+Greg, 2026-09-05:
+
+> Perhaps run Mozilla Readability first before passing to GPT Luna, and ask for brief output (e.g.
+> just a paragraph or two) with low/medium reasoning, and perhaps also feed it (a summary of?) the
+> current article (indicating that this is what the reader is currently reading) with a slight
+> request for the summary to be relative to this one, with the user-profile-prompt + article-prompt
+> as background.
+
+**The framing is the whole feature and a generic gist is the failure.** Fable argued against a model
+call here at all, on [vision.md](vision.md)'s *augments rather than replaces*: once the page is
+fetched, its own opening paragraph is free, honest, and a door rather than a wall, where a gist lets
+a reader feel they have absorbed the link without following it. What answers that is not a better
+summary but a different question — *how does this stand to the paragraph you are standing in?* — which
+is not available anywhere else and points **back into the article**. The prompt says so in as many
+words: *if what you wrote would be just as true had you never been told which article it was hovered
+from, you have written the wrong thing.*
+
+So four things travel, and the last two are the ones that make it relative: the article's title, its
+one-sentence gist (the hierarchy root's), **the link's own anchor text**, and **the paragraph the
+author put it in**. Those two cost nothing — the blocks are already in memory for the membership
+check the route does anyway. The reader's profile rides along after the fence, as it does in explain.
+
+What it produced on the noema essay, 2026-09-05, verbatim and with no reader profile set:
+
+> An Encyclopaedia entry on Alfred North Whitehead, whose process-oriented philosophy and
+> intellectual biography are introduced in the opening. Seth invokes Whitehead's warning that a
+> metaphor must not be confused with the thing itself to challenge viewing the brain as merely a
+> Turing-style computational system; the destination identifies the philosopher behind that warning
+> but does not, in the provided opening, discuss the quotation or consciousness.
+
+The second sentence is the feature. The same link with a profile saying *"I am a software engineer
+with no philosophy background… I want plain language"* drops "process-oriented philosophy" and
+explains it instead — *"his view that reality consists of interconnected processes rather than
+separate things"* — which is also a different `profile_hash` and therefore a different cached row.
+
+**Measured, on `openai/gpt-5.6-luna`** — the first job ever put on the quick tier
+([`src/models.ts`](../../src/models.ts) § `TASK_TIER`):
+
+| | |
+|---|---|
+| cost per call | **$0.00015** — about a hundredth of a penny (2,008 prompt tokens, 87 completion, most of the prompt served from the upstream's automatic prefix cache) |
+| first visible token | 0.9–2.1s |
+| whole answer | 2.0–4.7s |
+| a cache hit | ~90ms, and no stream at all — one `ready` frame |
+| reasoning tokens | **0 reported**, at `effort: "low"`. `models.ts` warned of a documented 1,024-token floor billed against the completion budget; on Azure-served Luna nothing of the sort appeared in `completion_tokens_details`. The ceiling is sized for it anyway |
+
+Two things that are the same shape as the fetch half and one that is not:
+
+- **A different cache, with a different key.** `link_previews` is ownerless because what a page says
+  about itself is the same for everybody; `link_summaries` is keyed
+  `(owner, article, target, block)` because this is about *this reader reading this passage of this
+  piece* — the block is the fourth column since
+  [the mention the pointer is on](#the-mention-the-pointer-is-on-and-not-the-first-one).
+  The owner is **in the primary key** here where `glossary_lookups` keeps it beside one — an article has one owner today, so it is redundant,
+  and the day `articles` stops being one row per owner an article-keyed row would start serving one
+  reader's personalised summary to another.
+- **Four fingerprints are compared on every read**: the destination's text, the article context
+  above, the reader's profile, and the prompt version and model. `(owner, article, url)` alone never
+  changes when the article is re-extracted or the reader edits their box, and both are prompt inputs
+  — so the naive key is a summary that is stale for ever.
+- **The destination's prose is fenced as untrusted, and the fence cannot be closed from inside.**
+  Explicit markers, a system instruction saying the page is data rather than a request, a reminder
+  after the page as well as before it, **no tools of any kind** on the call — and every run of three
+  or more `=` in the page is rewritten, so a page carrying our own end-marker in its text cannot put
+  what follows outside the quotation.
+
+The limiter gains a second bucket, `link-summary-fill`: 30 fills per owner per hour, 100 per day,
+concurrency 2, and a **global daily fuse of 1,000** — Sol's numbers, explicitly guesses, and at the
+measured price the fuse is about fifteen pence a day. Cache hits bypass all of it.
+
+**It fires only where the fetch worked.** The summariser reads
+`link_previews.excerpt`, so a destination behind a bot challenge, a PDF, or a page whose text
+Readability could not reach gets the free card and nothing more.
+
+### The mention the pointer is on, and not the first one
+
+**A destination linked twice in one article used to be summarised against the first of the two**,
+and it was the sharpest thing wrong with this feature: the answer was about a real relationship in
+this piece, it was fluent, and it was about the wrong sentence, which is a worse failure than saying
+nothing. Not rare, either — the noema essay has two such pairs in sixty-two links. Found by GPT Sol,
+2026-09-05, P1-1; fixed the same day.
+
+The card now sends the **block the hovered anchor sits in** (`?block=`, read off the row the way
+every other feature here addresses text — [block-ids.md](block-ids.md)), `linkInArticle` resolves
+*that* sighting, and the block joins the summary's key so the two mentions are two rows rather than
+one they take turns overwriting.
+
+Five things about it are worth knowing before touching it:
+
+- **The data was already there.** `ArticleLink.blockIds` has been *every* block a link appears in
+  since 2026-08-27, in document order, because a GPT Sol review made exactly this point about the
+  chat tool: keeping only the first occurrence gives "a wrong answer wearing a block id"
+  ([chat-tools.md](chat-tools.md)). Nothing new is extracted; the fix is choosing.
+- **Two shapes, and handling one of them is the likely bug.** `articleLinks` dedupes on address
+  *plus text*, so two mentions under the **same** words are one row with two `blockIds` and two
+  mentions under **different** words are two separate rows. `tests/link-summary-occurrence.test.ts`
+  holds both, and the second is the one that stays green through the wrong fix.
+- **A block that does not check out is a refusal, not a fallback.** It has to be a block of this
+  article *and* one this link actually occurs in. A nominated block that quietly became the first
+  mention would let a caller have any paragraph of their own article summarised against any link in
+  it — the same request-shaped surface stage 2's P1-1 was about — and would look exactly like the
+  feature working. A caller that names *no* block still gets the first mention, which is what a
+  client from before this existed sends.
+- **The tab's own cache is keyed on the block too.** It sits in front of the server and never asks
+  twice, so leaving it keyed on `(slug, url)` would have kept the bug alive on the client after the
+  server was right.
+- **And where there is no block, the client does not ask at all.** A link in a chat answer, in the
+  sources under one, or in a figure's lightbox sits in no paragraph; the server's `"first"` fallback
+  would hand it a fluent paragraph about a passage the reader is nowhere near. The free card and the
+  fetched preview still land. The fallback stays on the server, where it is for a client from before
+  the parameter existed.
+
+### The two limitations that are left
+
+**An article already on your shelf gets no summary**, because no preview row is ever fetched for a
+page we already hold — and that is exactly the case where *how does it stand to this one* would be
+most interesting. Summarising from our own stored extraction is the repair.
+
+**Two links to one destination inside a single paragraph are still one question.** The block is the
+finest thing the card can name, so where an author writes the same address twice in one block under
+two different phrases, the second hover gets the first anchor's *words* — the paragraph is right and
+the label is not. The same goes for `…/x#one` and `…/x#two` in one block, which are one request
+target. Found by GPT Sol reviewing this fix, 2026-09-05, and **left**: telling two anchors in one
+block apart needs an anchor-level discriminator — an index the browser counts and the server's own
+parse has to agree with, block id by block id — which is a new contract to keep in step for a
+failure that is bounded (the right passage, the wrong phrase) and rarer than the one it would
+follow. Worth doing when something shows it happening, and cheap to add on top of `LinkOccurrence`,
+which is already the pair rather than the id.
+
+## What is deliberately not built yet
 
 Two smaller things left on the floor, both cheap, neither obviously worth it yet:
 
@@ -552,21 +805,11 @@ Two smaller things left on the floor, both cheap, neither obviously worth it yet
 **Ingest-time prefetch of every link was considered and rejected.** An article has dozens of external
 links and a reader hovers a handful; fetching them all at ingest multiplies job time for near-zero
 payoff, produces stale entries for links nobody visits, and stacks more per-link network calls onto a
-queue whose Vercel story is [already an open question](deployment.md). Once (3) exists with a
-URL-keyed cache, the "fetch once, serve everyone" benefit is already there — lazily instead of eagerly.
+queue whose Vercel story is [already an open question](deployment.md). The cache above delivers the
+"fetch once, serve everyone" benefit people reach for prefetch to get — lazily instead of eagerly.
 
-When (3) is built, it must reuse `fetchDocument` ([fetching.md](fetching.md)) the way `readWebPage`
-in [`src/chat-tools.ts`](../../src/chat-tools.ts) already does. That call site is the worked example:
-the scheme allowlist, the SSRF address guard, the redirect-hop cap with a per-hop re-check, the
-byte-counted size cap, and a log line carrying `hostOf(url)` and never the URL. **Do not write new
-fetch-safety plumbing for this** — see [security.md](security.md) for what it is guarding against.
-
-No metadata library is needed for the extraction when that day comes. `open-graph-scraper`,
-`metascraper` and `link-preview-js` are all alive and all accept pre-fetched HTML, but their real
-value is a hardened fetch layer we would be bypassing, and the extraction itself is a `querySelector`
-chain over `og:` / `twitter:` / `<title>` / `<meta name=description>` against the jsdom we already
-own. (`unfurl.js` is archived; do not take it.) If the scope ever grows to JSON-LD and oEmbed
-fallbacks, `open-graph-scraper` is the one to reach for.
+**Quotes pulled from the destination.** Greg asked for "summary and/or quotes"; the summary below is
+the "and/or" resolved, and pulled quotes can follow if it proves itself.
 
 ## What a card actually says
 
@@ -609,6 +852,53 @@ of the trail rule was wrong about philpapers and the unit test agreed with it: t
 written with an invented numeric id, so both were confidently wrong together. A fixture drawn from
 the data cannot do that.
 
+**The server half is tested at four seams**, and each of them was watched go red under a deliberate
+mutation rather than merely being green:
+
+- [`tests/link-preview-route.test.ts`](../../tests/link-preview-route.test.ts) — who may cause a
+  fetch and of what. `fetchDocument` is replaced so that *"nothing was fetched"* is a call count
+  rather than a hope, which is the only assertion that can tell a refusal from a fetch that then
+  answered `unavailable`. Deleting the membership check reddens two cases, deleting the credential
+  refusal one, and keying the cache on `urlKey` instead of `requestTarget` reddens three.
+- [`tests/link-preview-cache.test.ts`](../../tests/link-preview-cache.test.ts) — single-flight, the
+  lease, the alias hop, and how long each outcome stands. Making the claim stop refusing a second
+  caller reddens one case; taking the expiry out of the read reddens another.
+- [`tests/fetch-allowance.test.ts`](../../tests/fetch-allowance.test.ts) — the limiter, including the
+  case that would look like a working limiter and is not: `finish` frees the concurrency slot and the
+  fill goes on counting against the hour.
+- [`tests/link-preview-extract.test.ts`](../../tests/link-preview-extract.test.ts) — the pure half.
+  Every case is a real destination's shape, including noema's "Credits".
+
+**Stage 3 adds two more seams**, both watched red under mutation:
+
+- [`tests/link-summary-prompt.test.ts`](../../tests/link-summary-prompt.test.ts) — the prompt, which
+  *is* the feature, and every case is a property that fails silently. Dropping the passage from
+  `readerContext` reddens two cases (the relative half, and the staleness that depends on it);
+  removing the `===` rewrite reddens two more (a page cannot close its own fence). It also pins the
+  three things this job sends differently from every other chat caller here —
+  `max_completion_tokens` rather than the deprecated `max_tokens`, `reasoning: {effort: "low"}`, and
+  no tools at all — because OpenRouter drops a parameter a provider does not take *silently*, so the
+  only symptom of getting any of them wrong is a bill.
+- [`tests/link-summary-cache.test.ts`](../../tests/link-summary-cache.test.ts) — the four
+  fingerprints, the claim, the fencing token, and the row per mention. Making `matches` ignore the
+  profile hash reddens the profile case and nothing else; making it ignore the context hash reddens
+  the re-extraction case; making `claim` stop refusing a second caller reddens single-flight.
+  `tests/fetch-allowance.test.ts` gains the day and the fuse, and a sweep that keeps only the
+  shorter window reddens both.
+
+**Stage 4 adds two more**, both watched red under mutation:
+
+- [`tests/link-summary-occurrence.test.ts`](../../tests/link-summary-occurrence.test.ts) — *which*
+  mention, in both of the shapes `articleLinks` produces, plus the refusals. Letting
+  `linkInArticle` fall back to the first sighting instead of refusing reddens five cases; reading
+  the passage off `blockIds[0]` again reddens exactly one — the same-anchor-text case, which is why
+  a fixture carrying only the other shape would have proved nothing. Dropping the block from the
+  store's address reddens the two new cases in the cache suite.
+- [`tests/no-block-no-summary.test.tsx`](../../tests/no-block-no-summary.test.tsx) — the client
+  does not ask for a relative summary when the link is in no paragraph. The assertion is the
+  *request list*, because a card drawn without a summary and a card whose summary was never asked
+  for look identical; taking the early return out reddens it.
+
 The asynchronous half has tests only either side of the wire, and **the reason given here for that
 has now been wrong twice.** The first version said a test of the hook would be a test of a mock; a
 GPT Sol review pointed out that `useLinkFacts` is driven entirely by a prop and two deferred
@@ -642,6 +932,12 @@ It matters more there than here. Everything above this section is about an addre
 chose; a chat link is an address a *model* chose, after reading pages we do not control, with a label
 that is also the model's. `[the Anthropic paper](https://not-anthropic.example/)` is a plausible
 sentence with a hostile destination and the text gives nothing away.
+
+It also gets **less** than an article's own link does, and that is deliberate for now:
+`GET /api/link-preview` proves membership against the *article's* extracted links, and a chat link is
+in no article, so it gets the free card and no fetched preview
+([What our own server can reach](#what-our-own-server-can-reach)). Widening to chat links means
+proving membership against the thread instead.
 
 **The card is not enough on its own**, and saying so is the point rather than a caveat: it takes
 320ms of rest to open, a click does not wait for it, and on a touch screen a link navigates on the

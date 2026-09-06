@@ -89,6 +89,16 @@ export interface ArmSpec {
   variant?: string;
   /** Whether this arm sends the replacement GISTS block from `variants.md`. */
   newGists: boolean;
+  /**
+   * A **pinned shipped** GISTS block (`"toc/5"`, `"toc/6"`) instead of either of
+   * the above — `variants.md` § *The shipped GISTS block, …*.
+   *
+   * This exists because `incumbent` reads the *live* SYSTEM, so the moment a
+   * bump lands, `incumbent` **is** the new prompt and cannot be the before half
+   * of a before/after. Two pinned arms can be, and they stay pinned when
+   * `src/hierarchy.ts` moves again.
+   */
+  shippedGists?: string;
   questionRule: QuestionRule;
   /**
    * Everything about this arm's request that differs from production's, listed
@@ -104,6 +114,32 @@ const SHARED_DELTAS: readonly string[] = [
   "the tree is FIXED: the arm is not asked for structure, ranges, titles or sourceHeadings, only for a gist and (at depth <= MAX_QUESTION_DEPTH) a question per node",
   "the OUTPUT block is this eval's, not production's — a flat {nodeId: {gist, question}} map instead of a nested tree",
   "the STRUCTURE and TITLES blocks are replaced by a rendered outline of the fixed tree",
+];
+
+/**
+ * **The length-budget pair, and it asks a different question from the rest of
+ * this file.**
+ *
+ * Everything else here is choosing between Socratic *question* shapes.
+ * `gists-toc5` and `gists-toc6` ask one thing only: **did the `toc/6` per-depth
+ * length ceiling change the gists the model writes, and in the direction asked
+ * for?** Both carry production's QUESTIONS block unchanged, so the GISTS block
+ * is the single variable — the one genuinely isolated pair here, though both
+ * stay `bakeoff` because `SHARED_DELTAS` is still true of them.
+ *
+ * **Run them at `--depth 2`.** Depth 2 is where 852 of the 1,239 stored gists
+ * live and where the *"22-32 words, and use them"* half of the change has to
+ * show up; at the default depth 1 a run can only see the two ceilings.
+ *
+ * **`incumbent` is deliberately not the comparison.** It slices the *live*
+ * SYSTEM, so from the moment a bump lands it **is** the new prompt: byte for
+ * byte `gists-toc6`. Running it against `gists-toc6` buys a second sample of the
+ * after and no before at all. `tests/summaries-eval.test.ts` asserts that
+ * identity rather than leaving it to be discovered by a null result.
+ */
+const LENGTH_PAIR_DELTAS: readonly string[] = [
+  ...SHARED_DELTAS,
+  "GISTS: a PINNED copy of a shipped block from variants.md, not the live slice; QUESTIONS: production's, unchanged",
 ];
 
 export const ARMS: readonly ArmSpec[] = [
@@ -211,6 +247,25 @@ export const ARMS: readonly ArmSpec[] = [
       "questionFor: the trailing-hint rule from variants.md, which production does NOT have",
     ],
   },
+  {
+    name: "gists-toc5",
+    comparison: "bakeoff",
+    axis: "the GISTS block as it shipped BEFORE the toc/6 bump: one sentence, no ceiling anywhere",
+    newGists: false,
+    shippedGists: "toc/5",
+    questionRule: "production",
+    deltas: LENGTH_PAIR_DELTAS,
+  },
+  {
+    name: "gists-toc6",
+    comparison: "bakeoff",
+    isolatedAgainst: "gists-toc5",
+    axis: "the GISTS block as it ships today: root <=18 words, depth 1 <=25, deeper 22-32",
+    newGists: false,
+    shippedGists: "toc/6",
+    questionRule: "production",
+    deltas: LENGTH_PAIR_DELTAS,
+  },
 ];
 
 export function armByName(name: string): ArmSpec {
@@ -222,7 +277,18 @@ export function armByName(name: string): ArmSpec {
 /** The GISTS and QUESTIONS blocks this arm sends, resolved from the two sources. */
 export function promptBlocksFor(arm: ArmSpec): { gists: string; questions: string } {
   const file = readVariants();
-  const gists = arm.newGists ? file.gists : productionGists();
+  let gists: string;
+  if (arm.shippedGists !== undefined) {
+    const pinned = file.shippedGists.get(arm.shippedGists);
+    if (pinned === undefined) {
+      throw new Error(
+        `arm "${arm.name}" wants the shipped ${arm.shippedGists} GISTS block, which variants.md does not pin — it has ${[...file.shippedGists.keys()].join(", ") || "none"}`,
+      );
+    }
+    gists = pinned;
+  } else {
+    gists = arm.newGists ? file.gists : productionGists();
+  }
   if (arm.variant === undefined) return { gists, questions: productionQuestions() };
   const questions = file.questions.get(arm.variant);
   if (questions === undefined) {

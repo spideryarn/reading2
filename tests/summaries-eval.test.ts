@@ -59,6 +59,7 @@ import {
 import { readVariants } from "../evals/summaries/variants-file.js";
 import { exitCodeFor } from "../evals/dictation/coverage.js";
 import type { Cell } from "../evals/summaries/generate.js";
+import { systemFor } from "../evals/summaries/generate.js";
 import type { Tree } from "../src/types.js";
 
 const REPO = new URL("..", import.meta.url).pathname;
@@ -115,7 +116,19 @@ describe("the incumbent arm's rules are sliced out of the live SYSTEM", () => {
        without this eval being re-run, the control is no longer what the
        variants were measured against. */
     expect(productionQuestions()).toContain(THE_DIAGNOSED_SENTENCE);
-    expect(productionGists()).not.toContain("meta-narration");
+    /* **This used to assert production had NO meta-narration rule**, which was
+       the point of `gists-only`. `toc/6` (2026-09-06) put that rule into
+       production, so the assertion now runs the other way: the live block is
+       ahead of `variants.md`'s replacement, and `gists-only` is measuring a
+       block production has partly caught up with. Any result from `gists-only`
+       predating that bump is against a control that no longer exists.
+
+       Asserted on the sentence rather than on the label: production called it
+       "No empty meta-narration" and now calls it "No narration of document
+       order", and a test that tracked the heading would have gone red for a
+       rename while a test that tracks nothing would survive the rule's
+       deletion. This clause has outlived three drafts of the block. */
+    expect(productionGists()).toContain("do not narrate that it is claiming");
   });
 
   it("throws when a header moves, rather than slicing the wrong thing", () => {
@@ -214,12 +227,39 @@ describe("the arms", () => {
        so `isolated` must not appear anywhere. */
     for (const arm of ARMS) expect(["baseline", "noise-floor", "bakeoff"]).toContain(arm.comparison);
     expect(ARMS.filter((a) => a.comparison === "bakeoff").map((a) => a.name)).toEqual([
-      "gists-only", "v1", "v2", "v3", "v4",
+      "gists-only", "v1", "v2", "v3", "v4", "gists-toc5", "gists-toc6",
     ]);
+  });
+
+  /**
+   * **The pinned pair, and the identity that makes it necessary.**
+   *
+   * `incumbent` slices the live SYSTEM, so it is the *newest* shipped block
+   * whatever that is. The check that could have failed — and would have, had the
+   * block been retyped rather than copied — is the first one: the pinned `toc/6`
+   * text is character-for-character what production sends today. The second says
+   * out loud why the before half cannot be `incumbent`: its whole system prompt
+   * is byte-identical to `gists-toc6`'s, so a run of the two would measure the
+   * model's wobble and report it as the effect of the bump.
+   */
+  it("pins toc/6 to what production sends, and toc/5 to what it sent before", () => {
+    expect(promptBlocksFor(armByName("gists-toc6")).gists).toBe(productionGists());
+    expect(systemFor(armByName("incumbent"))).toBe(systemFor(armByName("gists-toc6")));
+    const five = promptBlocksFor(armByName("gists-toc5")).gists;
+    expect(five).not.toBe(productionGists());
+    /* The three sentences the bump added, absent from the before block. */
+    expect(five).not.toContain("LENGTH RUNS THE OPPOSITE WAY");
+    expect(five).not.toContain("No empty meta-narration");
+    expect(five).not.toContain("shorter, commoner word");
+    expect(five).toContain("Exactly ONE sentence");
+    /* The GISTS block is the only variable: questions are production's on both. */
+    expect(promptBlocksFor(armByName("gists-toc5")).questions).toBe(promptBlocksFor(armByName("gists-toc6")).questions);
+    expect(() => promptBlocksFor({ ...armByName("gists-toc6"), shippedGists: "toc/99" })).toThrow(/does not pin/);
   });
 
   it("points each arm at the one it differs from in a single block", () => {
     expect(armByName("gists-only").isolatedAgainst).toBe("incumbent");
+    expect(armByName("gists-toc6").isolatedAgainst).toBe("gists-toc5");
     expect(armByName("v1").isolatedAgainst).toBe("gists-only");
     for (const name of ["v2", "v3", "v4"]) expect(armByName(name).isolatedAgainst).toBe("v1");
     /* Every name it points at has to exist, or the report quotes a pair that

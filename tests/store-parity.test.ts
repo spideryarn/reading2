@@ -701,7 +701,7 @@ describe("the Postgres store, over the whole corpus", () => {
     expect(order).toEqual(["order-newest", "order-middle", "order-oldest"]);
   });
 
-  it("lists every article on disk, newest first by its own idea of when they arrived", async () => {
+  it("lists every article on disk on the right shelf, newest first by its own idea of when they arrived", async () => {
     /* **Not "the same order as the filesystem", which was never an invariant
        and this test used to demand.** The two stores computed `addedAt` from
        different clocks, so two articles fetched and extracted across each
@@ -711,8 +711,29 @@ describe("the Postgres store, over the whole corpus", () => {
        articles that are on disk, and it lists them newest first by whatever
        "newest" means to it — `coalesce(article_revisions.fetched_at,
        articles.created_at)`. A store sorting by the wrong column, which is what
-       the old assertion caught in August, still fails this on the first pair. */
+       the old assertion caught in August, still fails this on the first pair.
+
+       **"On disk" is not "on the active shelf", and losing the filesystem arm
+       lost that distinction.** Until 2026-09-05 this compared two *listings*,
+       and both ends excluded archived articles because `listArticles()` does.
+       Stage G (`86a4ef7c`) replaced the filesystem end with `slugs` — every
+       directory carrying blocks and a tree — which excludes nothing, so an
+       archived article became a slug the assertion demanded and the query is
+       right to withhold. It went red on the primary and nowhere else: the two
+       articles it named, `revistes-ub-30977` and `source-2`, were archived on
+       this box in August and their `shelf.json` still says so, while a
+       worktree starts without those gitignored directories and never asks.
+
+       So the partition is the assertion now, and it is the stronger one. Not
+       "exclude the archived two", which would pass just as well if Postgres
+       lost them altogether, but: every active slug is on the active shelf,
+       every archived slug is on the archived shelf, and neither list has
+       anything else in it. `seedShelfFromFiles` above wrote each article's
+       `archivedAt` from the same `shelf.json` this reads, `null` included, so
+       the two halves are compared against what this run actually seeded and
+       not against a previous one. */
     const fromPg = await pgArticleReader.listArticles();
+    const fromPgArchived = await pgArticleReader.listArticles({ archived: true });
     const onDisk = new Set(await completeArticles());
     /* Same exclusion, same reason, and the same positive assertion — see
        `expectPostgresRefusedTheLegacyArticle` and the note by `LEGACY_SLUG`. */
@@ -720,10 +741,21 @@ describe("the Postgres store, over the whole corpus", () => {
     const mine = (entries: LibraryEntry[]) =>
       entries.filter((e) => !e.fixture && onDisk.has(e.slug) && e.slug !== LEGACY_SLUG);
 
-    /* Every article this suite loaded is listed. Sorted by slug, because the
-       ORDER is the next assertion and comparing both at once reports either
-       failure as the other. */
-    expect(mine(fromPg).map((e) => e.slug).sort()).toEqual([...slugs].sort());
+    const active: string[] = [];
+    const archived: string[] = [];
+    for (const slug of slugs) {
+      const shelf = await readArticleJson<{ archivedAt?: string | null }>(slug, "shelf.json");
+      (shelf?.archivedAt ? archived : active).push(slug);
+    }
+
+    /* Every article this suite loaded is listed, on the shelf its own
+       `shelf.json` puts it on. Sorted by slug, because the ORDER is the last
+       assertion and comparing both at once reports either failure as the
+       other. */
+    expect(mine(fromPg).map((e) => e.slug).sort(), "the active shelf").toEqual([...active].sort());
+    expect(mine(fromPgArchived).map((e) => e.slug).sort(), "the archived shelf").toEqual(
+      [...archived].sort(),
+    );
 
     const dates = mine(fromPg).map((e) => e.addedAt);
     // `toEqual` rather than a loop of comparisons so the failure prints the

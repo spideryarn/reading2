@@ -316,6 +316,81 @@ export function stripFence(raw: string): string {
 }
 
 /**
+ * **Drop the commas JSON forbids and JavaScript would have allowed** — `,}` and
+ * `,]` — and say how many there were.
+ *
+ * ## Why this exists
+ *
+ * `src/hierarchy.ts` asks for a `question` field on the root and depth-1 nodes
+ * and for it to be **omitted** deeper. On a deep node the model writes the comma
+ * that would have preceded the field and then obeys the instruction, leaving
+ * `{"gist":"…",}`. Measured on 2026-09-06 while the `toc/6` gist rules were being
+ * evaluated: **five of twenty live answers**, and one captured answer carries
+ * **twenty** commas, one on essentially every deep node. Any count above zero
+ * fails the whole parse, so the broken-answer rate understates how close the
+ * clean ones are to breaking. Raw bytes in
+ * `evals/results/summaries/trailing-comma/`.
+ *
+ * ## Why a scanner and not a regular expression
+ *
+ * `text.replace(/,(\s*[}\]])/g, "$1")` is the obvious one-liner and it **edits
+ * article prose**. Every gist, quote and glossary definition in this app is the
+ * author's own words, and a sentence can end `…, }` inside a string value. So
+ * this tracks string and escape state exactly as {@link objectEnd} does — the
+ * same reason that function is a scanner, one level down.
+ *
+ * ## What it deliberately does not do
+ *
+ * It does not parse, does not judge, and is never reached on a document that
+ * already parses: {@link parseJsonAnswer} calls it only after a strict parse has
+ * thrown, and takes its output only if THAT parses. So a genuinely broken answer
+ * still throws, which is this module's whole disposition — a refusal costs the
+ * reader a Retry click, a wrong guess corrupts an artefact and says nothing.
+ *
+ * **Nothing records that it fired**, and that is a known cost rather than an
+ * oversight: this module has no logger on purpose (see the header — a bare
+ * `JSON.parse` here must not be able to write the model's answer into a line),
+ * and `parseJsonAnswer` returns the value alone. So a model that starts emitting
+ * these on every answer gets quietly accommodated instead of noticed. The place
+ * to count them, if that ever matters, is the caller that has a logger — which
+ * needs a signature change nobody needs yet.
+ */
+export function dropTrailingCommas(text: string): { text: string; removed: number } {
+  let out = "";
+  let removed = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      out += ch;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+      continue;
+    }
+    if (ch === ",") {
+      /* Look past whitespace only. Anything else — a value, a comment nobody
+         sends, the end of the input — and this is an ordinary separator. */
+      let j = i + 1;
+      while (j < text.length && /\s/.test(text[j]!)) j++;
+      const next = text[j];
+      if (next === "}" || next === "]") {
+        removed++;
+        continue; // the comma is dropped; the whitespace after it is kept
+      }
+    }
+    out += ch;
+  }
+  return { text: out, removed };
+}
+
+/**
  * Where the structure starting at index 0 of `text` closes — the index of its
  * own matching `}` or `]` — or -1 if `text` runs out before it does.
  *
@@ -497,7 +572,24 @@ export function parseJsonAnswer<T>(raw: string, source: string): T {
   const unambiguous = end !== -1 && text.indexOf("{", to + 1) === -1;
   if (unambiguous) {
     try {
-      return JSON.parse(text.slice(from, to + 1)) as T;
+      /* **The trailing-comma repair lives here and only here**, and where it
+         lives took a perturbation to settle. It was written twice — once over
+         the whole text before this hunt, once over the extracted span — and
+         with either one disabled every test still passed, because each was
+         quietly covering the other's absence. Two repairs, neither necessary,
+         and the suite could not tell.
+
+         This is the one that survives, on two grounds. It is strictly the
+         larger: a clean document is trivially its own extracted span, so
+         anything the earlier site mended this one mends, and it additionally
+         mends "a document, a comma, then a sign-off", which the earlier site
+         could not, because the prose defeated the whole-text parse. And the
+         earlier site quietly re-admitted ARRAY-ROOTED answers — `[{"a":1},]`
+         repaired and returned — which rule 3 above excludes on purpose.
+
+         Nothing is mended that would have parsed: `removed` is 0 on a clean
+         span and this is then the same call it always was. */
+      return JSON.parse(dropTrailingCommas(text.slice(from, to + 1)).text) as T;
     } catch {
       /* Discarded on purpose, and this is the one line in this function that
          has to stay that way: V8's message quotes the span, so letting it
