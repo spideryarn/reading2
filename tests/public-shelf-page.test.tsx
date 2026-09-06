@@ -75,10 +75,11 @@ import {
   PUBLIC_SHELF_HEADING,
   PUBLIC_SHELF_LEDE,
   PUBLIC_SHELF_RETRY,
+  PUBLIC_SHELF_PROVENANCE,
+  PUBLIC_SHELF_TAKEDOWN,
   PUBLIC_SHELF_TRUNCATED,
-  TAKEDOWN_LINK,
 } from "../src/messages.js";
-import { TAKEDOWN_HREF } from "../src/web/router.js";
+import { PUBLIC_SHARING_HREF } from "../src/web/router.js";
 
 /* React only treats `act()` as authoritative when this is set, and without it
    every render below logs "The current testing environment is not configured to
@@ -440,35 +441,62 @@ describe("what the page asks the server for", () => {
 });
 
 /**
- * **The way to complain about something on this page.**
+ * **Whose these articles are, and what to do if one is yours.**
  *
  * The shelf is where a stranger *finds* a republished article, so it is one of
- * the two places the takedown link has to be — the other being the article's own
- * details page (tests/public-metadata-artefacts.test.tsx). It is one quiet line
- * under the list rather than anything on a card: a card is an offer to read, and
- * a report link on every one of them would read as a warning about each article.
+ * the two places this has to be — the other being the article's own details page
+ * (tests/public-metadata-artefacts.test.tsx). It was one quiet line under the
+ * list until 2026-09-06, when Greg asked for it at the top, and it is now two
+ * sentences: three checkable facts, then the offer.
  *
- * Asserted as an `href` rather than as words, because the words will be
- * rewritten and the address is the thing that has to keep working —
- * tests/takedown-privacy-section.test.tsx is what checks there is a section at
- * the other end of it.
+ * **The ordering is the thing under test here**, not the words. The offer alone
+ * at the top of the page would read as a warning about every article beneath it
+ * — the objection that put it at the foot in the first place — so the facts have
+ * to come first, and `indexOf` is how that is asserted. Everything else is an
+ * `href`, because the words will be rewritten and the address is what has to
+ * keep working; docs/project/public-readable-sharing.md is the page at the end
+ * of it.
  */
 describe("if something on the shelf is yours", () => {
-  it("offers a way to ask for it to be taken down", async () => {
+  it("says what these articles are before it offers to take one down", async () => {
     const page = await show();
+    const text = page.textContent ?? "";
+    expect(text).toContain(PUBLIC_SHELF_PROVENANCE);
+    expect(text).toContain(PUBLIC_SHELF_TAKEDOWN);
+    /* The facts, then the offer — never the other way round. */
+    expect(text.indexOf(PUBLIC_SHELF_PROVENANCE)).toBeLessThan(
+      text.indexOf(PUBLIC_SHELF_TAKEDOWN),
+    );
     const hrefs = [...page.querySelectorAll("a")].map((a) => a.getAttribute("href"));
-    expect(hrefs).toContain(TAKEDOWN_HREF);
-    expect(page.textContent).toContain(TAKEDOWN_LINK);
+    expect(hrefs).toContain(PUBLIC_SHARING_HREF);
   });
 
   /**
-   * **And on an empty shelf too.** The link is about the page rather than about
+   * **Above the list, and it used to be below it.** Asserted against the
+   * heading rather than against a card, so an empty shelf exercises it too —
+   * `PUBLIC_SHELF_HEADING` is in the header on every arm.
+   */
+  it("puts it at the top of the page", async () => {
+    const page = await show();
+    const text = page.textContent ?? "";
+    expect(text.indexOf(PUBLIC_SHELF_HEADING)).toBeLessThan(
+      text.indexOf(PUBLIC_SHELF_PROVENANCE),
+    );
+    /* And it is not also at the foot. A page making the same offer at both ends
+       reads as anxious about it, and the duplicate is what a careless move
+       leaves behind. */
+    expect(text.split(PUBLIC_SHELF_TAKEDOWN)).toHaveLength(2);
+  });
+
+  /**
+   * **And on an empty shelf too.** The line is about the page rather than about
    * the list, and the empty state is the one arm where a "draw it under the
    * cards" implementation quietly loses it.
    */
   it("and says so even when there is nothing on the shelf", async () => {
     const page = await show(() => EMPTY);
+    expect(page.textContent).toContain(PUBLIC_SHELF_TAKEDOWN);
     const hrefs = [...page.querySelectorAll("a")].map((a) => a.getAttribute("href"));
-    expect(hrefs).toContain(TAKEDOWN_HREF);
+    expect(hrefs).toContain(PUBLIC_SHARING_HREF);
   });
 });

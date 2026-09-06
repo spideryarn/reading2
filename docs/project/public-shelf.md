@@ -74,13 +74,34 @@ distinction is worth writing down, and the listing's projection still names no c
 Greg, asked on 2026-09-04 whether a public article should show whose it is, said yes — the article
 page already did, through `PublicMeta.byline`, and this shelf did not.
 
-Under the list, outside all three state arms so an empty shelf and a failed read keep it, is one
-quiet line: **if something here is yours, ask us to take it down**. The shelf is where a stranger
-*finds* a republished article, so it is one of the two places that link has to be — the other is the
-visitor's own details page for one article. It is not on a card: a card is an offer to read, and a
-report link on every one of them would read as a warning about each article.
-[privacy.md § If something here is yours](privacy.md#if-something-here-is-yours) is the section it
-points at, and why it is a section rather than a route.
+Under the lede, since 2026-09-06, are two sentences: **whose these articles are, and what to do if
+one is yours**. They were one quiet line at the *foot* of the page until Greg asked for it at the
+top — and that move is why there are now two sentences rather than one.
+
+> we have this note: *"If something here is yours, ask us to take it down."* Let's move that to the
+> top.
+>
+> — Greg, 2026-09-06
+
+**The takedown offer on its own at the top would read as a warning about every article beneath it**,
+which is the exact objection that put it at the foot originally. So the facts come first — *written
+by somebody else, published somewhere else first, each links back to its original* — and the offer
+is the second sentence, a consequence of behaving openly rather than an apology. All three facts are
+checkable from the page itself within one click, which is what makes them work on both of the
+readers this line has: somebody browsing, and an author who arrived from a search.
+
+It is not on a card: a card is an offer to read, and a report link on every one of them would read
+as a warning about each article. And it is not drawn twice — the foot line is gone, because a page
+making the same offer at both ends reads as anxious about it.
+
+The link goes to [public-readable-sharing.md](public-readable-sharing.md)'s page, whose first
+paragraph is the offer and the address, and it carries a `ControlTip`
+([tooltips.md](tooltips.md)) whose unguessable half is the one thing a rights-holder is really
+asking: **none of these pages is in a search engine**. The visitor's own details page for one
+article keeps its link to
+[privacy.md § If something here is yours](privacy.md#if-something-here-is-yours) — that reader
+already has the piece in front of them and wants *that one* down, so the promise is the right
+destination and the fuller story is not.
 
 ## The address, and the three enforcers of it
 

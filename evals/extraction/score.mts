@@ -70,10 +70,13 @@ import {
 } from "./conformance-page.mjs";
 import { CORRUPTIONS, type Candidate } from "./corruptions.mjs";
 import { type ArmFinding, loadManifest, recordFindings } from "./manifest.mjs";
+import { SHAPE_PAGES, runShapeCorpus } from "./shapes.mjs";
 import {
   GATES,
   type MetricName,
   METRICS,
+  RUN_PLACEMENTS,
+  type RunPlacement,
   type Scorecard,
   bodyRunToRemove,
   detects,
@@ -274,6 +277,22 @@ async function main(): Promise<string[]> {
    * article is cannot say what an arm did to it.
    */
   const selfContradicting: string[] = [];
+  /**
+   * **Which branch of the order walk the SHIPPED extractions actually take.**
+   *
+   * Printed because the interesting number is the zero: the `ancestor`-cannot-
+   * supply branch fires zero times across all fifteen, so nothing here prices
+   * it and the shape corpus is the only thing that does. A branch the run
+   * reaches is a branch the run is evidence about; a branch it does not is one
+   * where a green card says nothing at all.
+   */
+  const shippedRuns: Record<RunPlacement, number> = {
+    owner: 0, subtreeEarlier: 0, subtreeOnly: 0, page: 0,
+    behind: 0, behindSubtree: 0, unplaceable: 0,
+  };
+  let shippedOwnerless = 0;
+  /** Which of them, so the number is a place to look rather than a total. */
+  const ownerlessBy: string[] = [];
 
   console.log(
     "fixture".padEnd(24) + "arm".padEnd(24) +
@@ -312,6 +331,11 @@ async function main(): Promise<string[]> {
         stampedHtml: c.stampedHtml, refused: c.refused, sourceHtml: prepared, manifest,
       });
     const base = cardOf(shipped, SHIPPED_ARM);
+    for (const k of RUN_PLACEMENTS) shippedRuns[k] += base.placements.runs[k];
+    shippedOwnerless += base.placements.ownerlessStamped;
+    if (base.placements.ownerlessStamped > 0) {
+      ownerlessBy.push(`${entry.name} ${base.placements.ownerlessStamped}`);
+    }
     const findings: Record<string, ArmFinding> = {};
     for (const t of forbiddenInsideRegion(prepared, manifest)) {
       selfContradicting.push(`${entry.name}: ${JSON.stringify(t.slice(0, 60))}`);
@@ -509,6 +533,46 @@ async function main(): Promise<string[]> {
     );
   }
 
+  /* -- the shape corpus, and the branches this run cannot reach ------------ */
+  const shapes = runShapeCorpus();
+  const shapeFailures = shapes.filter((v) => !v.ok);
+  const holes = shapes.filter((v) => v.case.hole);
+  console.log(
+    "\n=== THE SHAPE CORPUS, AND THE BRANCHES THE SHIPPED EXTRACTIONS CANNOT REACH ===\n" +
+      "Named source shapes and named candidate transformations, each pinning the gate verdicts\n" +
+      "AND the branch every node and run took — see evals/extraction/shapes.mts for the matrix.",
+  );
+  console.log(
+    `  ${shapes.length - shapeFailures.length}/${shapes.length} case(s) hold over ` +
+      `${SHAPE_PAGES.length} source shape(s); ${holes.length} pin a HOLE rather than a check: ` +
+      `${holes.map((v) => v.case.name).join(", ")}`,
+  );
+  for (const v of shapeFailures) {
+    console.log(`  ${v.case.name}: ${v.problems.join("; ")}`);
+  }
+  /**
+   * **The census is a claim about every fixture, so a scoped run may not make
+   * it.** `--fixture medium-about` accumulates one page's branches, and printing
+   * those under a sentence about the shipped extractions would be a number
+   * describing a set the run never looked at — the exact offence this file's
+   * `--fixture` validation exists to refuse, committed by the section added to
+   * report on it. GPT Sol's first finding, 2026-09-06.
+   *
+   * **The ownerless branch is not hypothetical on real pages**, and until it was
+   * counted it was believed to be. Those runs are placed anywhere on the page,
+   * so the order gate is checking their global order and nothing about which
+   * container they belong in — see `shapes.mts`
+   * § `borrowing-under-a-text-free-wrapper`.
+   */
+  const scope = only === null ? "Shipped extractions" : `\`${only}\` ALONE — not the corpus —`;
+  console.log(
+    `  ${scope} place their runs: ${RUN_PLACEMENTS.map((k) => `${k} ${shippedRuns[k]}`).join(", ")}.`,
+  );
+  console.log(
+    `  ${shippedOwnerless} run(s) placed page-wide under a stamp \`owners\` has no entry for` +
+      (ownerlessBy.length ? `: ${ownerlessBy.join(", ")}` : " — none"),
+  );
+
   console.log("\n=== THE REGION MEASURES THE SAME WAY TWICE ===");
   if (denominator.length === 0) {
     console.log(
@@ -530,6 +594,7 @@ async function main(): Promise<string[]> {
     );
   }
   flat.push(
+    ...shapeFailures.map((v) => `shape case failed — ${v.case.name}: ${v.problems.join("; ")}`),
     ...stale,
     ...selfContradicting.map((l) => `region credits forbidden text — ${l}`),
     ...denominator.map((l) => `the region measures two different ways — ${l}`),

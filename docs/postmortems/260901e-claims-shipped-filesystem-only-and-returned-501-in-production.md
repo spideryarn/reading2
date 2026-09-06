@@ -33,7 +33,7 @@ for a day.
 So the decision was defensible on the day. **The cause is that nothing made its consequence
 visible.** Specifically:
 
-1. **`SPIDERYARN_STORE` unset means `files`** ([`src/store/live.ts`](../../src/store/live.ts)), so
+1. **`SPIDERYARN_STORE` unset means `files`** (`src/store/live.ts` (deleted 2026-09-06)), so
    every test, every local run and every browser pass exercised the configuration that is not
    deployed.
 2. **No test asserts that a store has both implementations.** `notMigrated` is a deliberate, loud,

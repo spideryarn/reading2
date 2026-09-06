@@ -510,6 +510,11 @@ in this plan's scope unless the review says otherwise:
 Researched 2026-09-06, against the code rather than from memory. Read this before starting stage 2;
 several of these reverse an assumption the stages above were written on.
 
+**Merge `origin/dev` before you start, and again before each commit.** Greg, 2026-09-06: *"pull the
+latest changes to avoid a big merge conflict at the end"*. Stage 2 touches the step registry, the job
+layer and the publication path — all of them shared — so a week-old base is where the expensive
+conflict comes from. Fetch and merge; never rebase.
+
 ### The P0 is satisfied by omission, not by a guard
 
 **The discriminator is one ternary**, [`routes.ts`](../../src/routes.ts):7927 — `request.url === undefined`

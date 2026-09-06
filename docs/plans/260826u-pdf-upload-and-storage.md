@@ -226,7 +226,7 @@ no abort signal and no way to do its own ranged read; and `head` must distinguis
 **Storage returned 503**, which `src/store/artifacts-fs.ts`
 already does and is worth copying rather than reinventing. Blob selection should also **not** hang
 off `SPIDERYARN_STORE`, which selects article reads
-([`src/store/live.ts`](../../src/store/live.ts)) and is a different question.
+(`src/store/live.ts` (deleted 2026-09-06)) and is a different question.
 
 ### 3. Three endpoints
 

@@ -7,10 +7,16 @@
  * cannot read a custom property and `@custom-media` is not shipped anywhere. A
  * third copy of that sum lives in `scroll.ts` as a `matchMedia` string.
  *
- * **There was a fourth, `MODE_MIN + PROSE_MIN + SPINE_W - 1`, and it is gone
- * rather than checked** — the last describe in this file says why, and stands
- * where it was. A number the stylesheet cannot get right in both spine states
- * is not one to keep in step; it is one to stop writing down.
+ * **There was a fourth, the mode crossover, and it is gone rather than
+ * checked** — the last describe in this file says why, and stands where it was.
+ * A number the stylesheet cannot get right in both spine states is not one to
+ * keep in step; it is one to stop writing down.
+ *
+ * That paid on 2026-09-06, when the crossover moved from `MODE_MIN + PROSE_MIN
+ * + SPINE_W` (844) to `MODE_MIN + MODE_PROSE_FLOOR + SPINE_W` (700) so that a phone
+ * in landscape could have the band beside its article. One constant changed in
+ * layout.ts and nothing in the stylesheet had to move with it. Had the query
+ * still been there it would have been a fifth hand-copy to find.
  *
  * So there are five places one number lives, no tool checks any of them against
  * the others, and **the failure is silent in the direction that matters**. Move
@@ -50,7 +56,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { GIST_MIN, MODE_MIN, PROSE_MIN, SPINE_W, fitView } from "../src/web/layout.js";
+import { GIST_MIN, MODE_MIN, MODE_PROSE_FLOOR, PROSE_MIN, SPINE_W, fitView } from "../src/web/layout.js";
 
 const CSS_PATH = new URL("../src/web/styles.css", import.meta.url);
 const SCROLL_PATH = new URL("../src/web/scroll.ts", import.meta.url);
@@ -72,6 +78,13 @@ const cssCode = css.replace(/\/\*[\s\S]*?\*\//g, "");
 const CONSTANTS: Record<string, number> = {
   GIST_MIN,
   MODE_MIN,
+  /* Here so that a marker naming it evaluates rather than throwing "unknown
+     term" — not because one may. `MODE_PROSE_FLOOR` is the mode crossover's term,
+     and the mode crossover is the sum the stylesheet is not allowed to write
+     down at all (see below). If a marker ever does name it, the assertion three
+     describes down is what should fail, and it should fail on the sum rather
+     than on the parser. */
+  MODE_PROSE_FLOOR,
   PROSE_MIN,
   SPINE_W,
 };
@@ -184,12 +197,17 @@ describe("the derived breakpoints are the sums they say they are", () => {
        half a per-marker check cannot see.
 
        **The mode crossover is deliberately absent**, and asserting that is the
-       point of the equality rather than a side effect: `MODE_MIN + PROSE_MIN +
-       SPINE_W - 1` is not a width the stylesheet is allowed to know, because it
-       is only that number while the rail is on. Somebody re-deriving it here
-       fails this line and the agreement check below. */
+       point of the equality rather than a side effect: `MODE_MIN + MODE_PROSE_FLOOR
+       + SPINE_W - 1` is not a width the stylesheet is allowed to know, because
+       it is only that number while the rail is on. Somebody re-deriving it here
+       fails this line and the agreement check below.
+
+       Both the sum it must not be are checked — the live one and `PROSE_MIN`,
+       which was the live one until 2026-09-06 — because a stale hand-copy of
+       the *old* crossover is at least as likely as a fresh copy of the new. */
     const sums = new Set(markers().map((m) => evaluate(m.expr)));
     expect([...sums]).toEqual([GIST_MIN + PROSE_MIN + SPINE_W - 1]);
+    expect(sums.has(MODE_MIN + MODE_PROSE_FLOOR + SPINE_W - 1)).toBe(false);
     expect(sums.has(MODE_MIN + PROSE_MIN + SPINE_W - 1)).toBe(false);
   });
 });
@@ -234,9 +252,12 @@ describe("scroll.ts's SMALL_DEVICE is the same query as § a small device", () =
 /**
  * **The one query in this file that could not be right, and why it is gone.**
  *
- * `fitMode` compares `MODE_MIN + PROSE_MIN` against the window *minus the rail*,
- * so the width at which the band stops fitting beside the prose is 844 with the
- * rail on and 832 with `?spine=0`. A media query cannot see `?spine=0`, so the
+ * `fitMode` compares `MODE_MIN + MODE_PROSE_FLOOR` against the window *minus
+ * the rail*, so the width at which the band stops fitting beside the prose is
+ * **700 with the rail on and 688 with `?spine=0`** — and it was `PROSE_MIN`,
+ * 844 and 832, when the accident below happened. The numbers in the rest of
+ * this note are that era's, because it is a reproduction of a specific bug.
+ * A media query cannot see `?spine=0`, so the
  * `@media (max-width: 843px)` that used to widen the band disagreed with
  * `fitMode` across **832–843 with the rail off**: layout.ts handed the band
  * 288–299px and squeezed the table to make room, while the stylesheet widened
@@ -337,15 +358,34 @@ describe("the band covers the article on a fact, not on a width", () => {
     expect(app).toMatch(new RegExp(`fit\\.modeW === 0[^\\n]*\\n?[^\\n]*${COVERS_CLASS}`));
   });
 
-  it("agrees with fitMode across 800–880, rail on and rail off", () => {
-    /* 832 and 844 are the two crossovers; the band between them is where the
-       old query was wrong. Both spine states, because that is the whole bug. */
+  it("agrees with fitMode across 650–730, rail on and rail off", () => {
+    /* 688 and 700 are the two crossovers, and the twelve pixels between them —
+       the rail's width — are where a hand-copied query would be wrong in one
+       spine state and right in the other. Both spine states, because that is
+       the whole bug.
+
+       **This range was 800–880 until 2026-09-06 and had to move with the
+       crossover.** Left alone it would have gone on passing while asserting
+       nothing: at every width from 800 to 880 both spine states are now
+       side-by-side, so `js` is `false` throughout and a restored `@media`
+       query anywhere near the real crossover would sail through. GPT Sol
+       caught it reviewing the built code — a sweep pinned to the old constant
+       is exactly the check that cannot fail.
+
+       **Both halves of that were watched fail, 2026-09-06**, by injecting
+       `@media (max-width: 699px)` around `.reader.band-covers .mode-band` —
+       the exact mistake, since 699 is right with the rail on and wrong with it
+       off. At 650–730 this assertion goes red with *"at 688px with the rail
+       off: expected true to be false"*. At 800–880 it stays green and only the
+       sibling assertion above — the one that forbids a `max-width` gate at all
+       — notices. So the range is load-bearing, and that is also the answer to
+       "why two assertions": the cheaper one was carrying this alone. */
     const { gates } = coversRule();
     const gate = gates.find((g) => /^@media/.test(g) && /max-width/.test(g));
     const limit = gate ? Number(gate.match(/max-width:\s*(\d+)px/)![1]) : null;
 
     for (const spineOff of [false, true]) {
-      for (let w = 800; w <= 880; w++) {
+      for (let w = 650; w <= 730; w++) {
         const js = bandFit(w, spineOff).modeW === 0;
         // The stylesheet's own decision: a width while it is gated on one, and
         // otherwise the class, which is `js` by construction.

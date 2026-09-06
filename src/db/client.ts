@@ -33,40 +33,6 @@
  * in production.
  */
 
-/**
- * **The `SPIDERYARN_STORE` tombstone, imported for effect, and this is the
- * narrowest boundary it could sit at.**
- *
- * [`../store/live.ts`](../store/live.ts) refuses `files` — or a typo — at module
- * load, so it has to be *loaded*, and this file is the one thing everything that
- * reaches Postgres must cross: `getDb` is exported from here and nowhere else,
- * `new Pool` / `pg` / `drizzle-orm/node-postgres` appear in this file and no
- * other, and every module in `src/` that talks to the database imports `getDb`
- * from here.
- *
- * **It was in `src/store/index.ts` for about a day and that was not enough.**
- * That is the reader wiring hub — the obvious front door, and only one door:
- * `src/jobs.ts` binds `pgJobStore` without going near it (deliberately, to avoid
- * an import cycle), `src/upload-records.ts` and `src/store/ai-calls.ts` do the
- * same for their seams, and `scripts/stage.ts` and `evals/cost/run.ts` reach
- * Postgres through those instead. Measured 2026-09-05 with the flag set to
- * `files`: `store/index.js` refused, and `jobs.js`, `pg.js`, `db/client.js`,
- * `upload-records.js` and `ai-calls.js` all booted clean — as did
- * `evals/cost/run.ts --list`, which is a command that spends money.
- *
- * **The rule that generalises, and stage G needs it**: a side-effecting import
- * belongs at the narrowest boundary everything must cross, not at the most
- * obvious front door. A front door is whichever door you happened to walk
- * through. docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
- * § F.
- *
- * **First, above every other import**, so the refusal precedes anything that
- * might fail for a duller reason.
- * `tests/store-flag-refused-at-boot.test.ts` is what goes red if this line moves
- * — it imports each root in a child process and requires the child to die.
- */
-import "../store/live.js";
-
 import { basename } from "node:path";
 
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -76,6 +42,35 @@ import { loadEnvLocal } from "../env.js";
 import { log } from "../log.js";
 import * as schema from "./schema.js";
 import { isLocalDatabaseUrl, sslDecisionFor } from "./ssl.js";
+
+/**
+ * **`.env.local` is read here, at module scope, and this line is load-bearing
+ * for files that never call `getDb`.**
+ *
+ * It is not new behaviour. Until 2026-09-06 this file's first statement was
+ * `import "../store/live.js"` — the `SPIDERYARN_STORE` tombstone, imported for
+ * its refusal — and that module called `loadEnvLocal()` as it loaded. Stage I
+ * deleted the tombstone and took the load with it, which was a regression
+ * nothing in the suite could see: **GPT Sol reproduced it**, and so did a
+ * direct import with the Supabase credentials present in `.env.local` and
+ * absent from the environment —
+ * [`src/store/index.ts`](../store/index.ts) checks those credentials in its
+ * *module body*, so ESM evaluates it before any entry point's own
+ * `loadEnvLocal()` call can run. `scripts/live-spike.ts`, `evals/deepen/run.ts`
+ * and `evals/cost/interactions.ts` all import the store statically and load the
+ * file afterwards; all three died at boot.
+ *
+ * **Why here rather than in `src/store/index.ts`**, next to the check that
+ * needs it: this file is the narrowest boundary everything reaching Postgres
+ * must cross, and `src/jobs.ts`, `src/upload-records.ts` and
+ * `src/store/ai-calls.ts` all get there without going through the wiring hub.
+ * That is the same argument that put the tombstone's import here rather than at
+ * the front door, and it outlived the tombstone.
+ *
+ * Idempotent and cheap — `loadEnvLocal` returns at its own `readFileSync` when
+ * there is no file, which is every deployment.
+ */
+loadEnvLocal();
 
 /**
  * The whole schema is handed to Drizzle so that queries are typed by it — this

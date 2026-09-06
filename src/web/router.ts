@@ -220,6 +220,18 @@ export type Route =
    */
   | { kind: "features" }
   /**
+   * What happens when a reader makes an article public here, and what to do if
+   * the article is yours — `/features/public-readable-sharing`. See
+   * PublicReadableSharingPage.tsx and docs/project/public-readable-sharing.md.
+   *
+   * **The app's only nested address**, and the only one whose reader may have
+   * no interest in the product at all: a rights-holder who found their own
+   * writing on `/read/public`. Signed out for a stronger reason than `privacy`
+   * and `features` — that reader will never have an account, and a page they
+   * cannot open is a page that does not exist.
+   */
+  | { kind: "public-sharing" }
+  /**
    * What it costs — `/pricing`. See PricingPage.tsx and
    * docs/project/website-text.md. Signed out for the same reason as `privacy`
    * and `features`, and rather more so: a price you have to sign up to see is
@@ -237,6 +249,17 @@ export type Route =
    * and has a question about whether to.
    */
   | { kind: "contact" }
+  /**
+   * Every release since launch, newest first — `/changelog`. See
+   * ChangelogPage.tsx and docs/project/changelog.md.
+   *
+   * Signed out for the same reason as `privacy`, `features`, `pricing` and
+   * `contact`: it is a page somebody is *sent* — a reader is more likely to
+   * arrive from a link somebody shared than from browsing while signed in —
+   * and it is about the product rather than about their account, so there is
+   * nothing on it an account would change.
+   */
+  | { kind: "changelog" }
   /**
    * Where Google sends the reader back — `/auth/callback`. See AuthCallback.tsx.
    *
@@ -319,8 +342,10 @@ const ADMIN_ONLY: Record<Route["kind"], boolean> = {
   admin: true,
   privacy: false,
   features: false,
+  "public-sharing": false,
   pricing: false,
   contact: false,
+  changelog: false,
   callback: false,
   "not-found": false,
 };
@@ -419,20 +444,30 @@ export function parseRoute(pathname: string): Route {
   // Not under /read/, because it is not about an article. It is the one page in
   // the app with no data behind it at all.
   if (/^\/design\/?$/.test(pathname)) return { kind: "design" };
-  /* Above everything else, because the whole point of this address is that
-     nothing may reinterpret it. See the `callback` variant above. */
-  if (new RegExp(`^${CALLBACK_HREF}/?$`).test(pathname)) return { kind: "callback" };
-  if (new RegExp(`^${LOGIN_HREF}/?$`).test(pathname)) return { kind: "login" };
-  // Beside `design` and above `/read/` for the same reason: it is not about an
-  // article, so the article regex must never get a chance at it.
-  if (new RegExp(`^${PROFILE_HREF}/?$`).test(pathname)) return { kind: "profile" };
-  // Beside `design` and `profile`, and for the same reason. Above `/read/`
-  // because it is not about an article, and above the sign-in gate in App.tsx
-  // because it is not about being signed in either.
-  if (new RegExp(`^${PRIVACY_HREF}/?$`).test(pathname)) return { kind: "privacy" };
-  if (new RegExp(`^${FEATURES_HREF}/?$`).test(pathname)) return { kind: "features" };
-  if (new RegExp(`^${PRICING_HREF}/?$`).test(pathname)) return { kind: "pricing" };
-  if (new RegExp(`^${CONTACT_HREF}/?$`).test(pathname)) return { kind: "contact" };
+  /* **The addresses that are just themselves**, matched in order against one
+     table rather than as eight near-identical `if`s.
+
+     They were eight lines of `if (new RegExp(\`^${'${X}'}/?$\`)…) return { kind: … }`,
+     which is a shape that says nothing eight times. Adding
+     `/features/public-readable-sharing` as a ninth took `parseRoute` over
+     Biome's cognitive-complexity ceiling (26, max 25) — a file that had been
+     clean — and the honest fix is the one that removes branches rather than the
+     one that silences the rule.
+
+     **Order is still the whole contract**, and it is now the array's order:
+     `callback` first because nothing may reinterpret it, and
+     `public-readable-sharing` above `features` because the specific arm goes
+     above the general one. That ordering is a habit rather than a necessity —
+     every pattern here is anchored `/?$`, so `/features` cannot swallow its
+     child today — but it is the habit that keeps `/read/public` working above
+     `/read/:slug`, and this is the app's only nested pair.
+
+     `STATIC_ROUTES` is `readonly` and typed by its entries, so a kind that is
+     not a no-payload member of `Route` is a compile error rather than a route
+     that never matches. */
+  for (const [href, kind] of STATIC_ROUTES) {
+    if (new RegExp(`^${href}/?$`).test(pathname)) return { kind };
+  }
   /* Beside `design` and `profile`, and above `/read/` for the same reason: it
      is not about an article. The alternation is the validation — `/admin/foo`
      matches nothing here and falls through to `not-found`, which is what every
@@ -625,6 +660,22 @@ export const TAKEDOWN_HREF = `${PRIVACY_HREF}#${TAKEDOWN_SECTION_ID}`;
  */
 export const FEATURES_HREF = "/features";
 /**
+ * **What we do with an article somebody has made public** — the single place
+ * those claims are written, and the one address on this site aimed at somebody
+ * who did not choose to be here.
+ *
+ * Greg, 2026-09-06, picked this address over a top-level `/republishing`, which
+ * was argued for on the ground that `/features` sells the product and a
+ * rights-holder should not be told their article is a feature of it. His call,
+ * and the consequence is that the page has to read correctly to **two** people:
+ * an owner deciding whether to share, and an author who found their own writing
+ * on `/read/public`.
+ *
+ * Built from `FEATURES_HREF` rather than spelled out, so the pair cannot come
+ * apart if `/features` ever moves. docs/project/public-readable-sharing.md.
+ */
+export const PUBLIC_SHARING_HREF = `${FEATURES_HREF}/public-readable-sharing`;
+/**
  * The pricing page. Linked from the landing page's footer and from beside the
  * plans table there, which is the same three rows: `/pricing` exists so there is
  * an address to send somebody, not because the numbers live anywhere new.
@@ -640,6 +691,12 @@ export const PRICING_HREF = "/pricing";
  * first: the Feedback button is. ContactPage.tsx.
  */
 export const CONTACT_HREF = "/contact";
+/**
+ * Every release since launch — linked from the footer, where it is labelled
+ * "What's new" rather than "Changelog", the internal name for the process
+ * that writes it (docs/project/changelog.md).
+ */
+export const CHANGELOG_HREF = "/changelog";
 /**
  * The shelf of public articles.
  *
@@ -660,6 +717,54 @@ export const PUBLIC_LIBRARY_HREF = `/read/${PUBLIC_LIBRARY_SLUG}`;
  * into an article URL. lib/supabase.ts builds the absolute form from it.
  */
 export const CALLBACK_HREF = "/auth/callback";
+
+/**
+ * **A `Route` kind whose member carries nothing but the kind itself.**
+ *
+ * Computed rather than listed, and that is the point: `read` needs a slug,
+ * `admin` needs a page, `add` needs a URL, so none of them can be built from a
+ * bare `{ kind }` — and each is excluded here *because of its own shape*, not
+ * because somebody remembered to leave it out. Give `read` a default slug one
+ * day and it becomes eligible automatically; add a payload to `pricing` and the
+ * table below stops compiling. That is the difference between this and a
+ * hand-written union, which would go on compiling while meaning the wrong
+ * thing (AGENTS.md § Let the types catch it).
+ */
+type BareRouteKind = {
+  [K in Route["kind"]]: keyof Extract<Route, { kind: K }> extends "kind" ? K : never;
+}[Route["kind"]];
+
+/**
+ * **Every address that is exactly itself, in the order they are tried.**
+ *
+ * See the loop in `parseRoute` for why this is a table: the entries were eight
+ * identical `if`s, and the ninth took the function over the complexity ceiling.
+ *
+ * **Not sorted, and not to be sorted.** Order is the contract — see the loop.
+ */
+const STATIC_ROUTES: readonly (readonly [string, BareRouteKind])[] = [
+  /* Above everything else, because the whole point of this address is that
+     nothing may reinterpret it. See the `callback` variant above. */
+  [CALLBACK_HREF, "callback"],
+  [LOGIN_HREF, "login"],
+  // Beside `design` and above `/read/` for the same reason: it is not about an
+  // article, so the article regex must never get a chance at it.
+  [PROFILE_HREF, "profile"],
+  // Beside `design` and `profile`, and for the same reason. Above `/read/`
+  // because it is not about an article, and above the sign-in gate in App.tsx
+  // because it is not about being signed in either.
+  [PRIVACY_HREF, "privacy"],
+  // The specific arm above the general one — see the loop.
+  [PUBLIC_SHARING_HREF, "public-sharing"],
+  [FEATURES_HREF, "features"],
+  [PRICING_HREF, "pricing"],
+  [CONTACT_HREF, "contact"],
+  /* Landed as an `if` of its own the same day this table replaced the eight it
+     was written beside, so it joins here rather than there. Order is
+     indifferent to it: `/changelog` is top level and shares a prefix with
+     nothing. */
+  [CHANGELOG_HREF, "changelog"],
+] as const;
 
 /**
  * The canonical address for "add this URL": `/add/<the URL, percent-encoded>`.

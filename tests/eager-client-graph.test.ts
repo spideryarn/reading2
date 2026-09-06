@@ -436,6 +436,17 @@ const ROUTE_PRIVATE = [
  */
 const SHARED_WITH_READER = [
   "src/admin.ts",
+  /* Arrived 2026-09-06 by the second of the two zero-cost routes this list's
+     header predicts — a module already here gaining an import of its own, not
+     an admin file changing. `messages.ts` now imports `readableDay` from it, so
+     that the ingest refusal and the /profile page cannot name a reset date in
+     two different formats (docs/plans/260906h-improve-the-codebase-fourth-sweep.md
+     § T1.5). Costs the reader nothing: `BillingSection.tsx`, `PricingPage.tsx`
+     and `useBilling.ts` already import it, so it was in the reader's closure
+     before this edge existed — what is new is only that the admin closure
+     reaches it too. It is a leaf with no imports of its own, so nothing follows
+     it in. */
+  "src/billing-plan.ts",
   "src/block-policy.ts",
   "src/feedback-payload.ts",
   "src/html.ts",

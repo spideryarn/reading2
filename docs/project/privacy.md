@@ -186,6 +186,15 @@ that changes an article's visibility without a person deciding. The mechanism fo
 down is the owner's own sharing switch; an administrator's override of it is a much larger decision
 than this section, and [admin.md](admin.md) is where it would have to be argued.
 
+**This section keeps the promise; it no longer carries the argument.** Since 2026-09-06 the reasons a
+rights-holder might be reassured — what actually goes out, that the original stays linked from the
+top of our copy, that none of it is in a search engine, what the model wrote and what the author did
+— live on `/features/public-readable-sharing`
+([public-readable-sharing.md](public-readable-sharing.md)), which is also where the two claims that
+turned out to be false are recorded. The split is worth stating because it is the reason neither
+page restates the other: **this section is what we will do when you ask; that page is what we do with
+an article in the meantime.**
+
 **The anchor is a mechanism, not markup.** `navigate` scrolls to the top on every navigation and a
 client-rendered page has nothing under the fragment for a browser to find on a cold load, so
 `PrivacyPage` scrolls its own section into view. The id and the address are one constant —

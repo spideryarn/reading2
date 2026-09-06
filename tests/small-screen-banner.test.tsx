@@ -119,20 +119,30 @@ describe("what it draws", () => {
   it("says all of it on a phone in portrait", () => {
     mount(true);
     const said = words();
-    // The four clauses Greg asked for, checked separately so that losing one is
-    // one failure rather than a diff of the whole paragraph.
+    // The clauses Greg asked for, checked separately so that losing one is one
+    // failure rather than a diff of the whole paragraph.
     expect(said).toContain("designed for a larger screen");
     expect(said).toContain("not both");
     expect(said).toContain("Plain");
-    expect(said).toContain("work in progress");
-    expect(said).toContain("Landscape gives you a bit more room");
+    expect(said).toContain("Landscape may have room for both");
+    /* **"Showing both is work in progress" went on 2026-09-06**, and this
+       asserts its absence rather than merely stopping asking for it. It was
+       true while the crossover was 844 and false the moment it became 700: a
+       phone in portrait — which is the machine this branch describes — is one
+       rotation away from the band sitting beside the article. A sentence that
+       under-promises reads as harmless and is the hardest kind to notice has
+       gone stale, so the check is the negative one. */
+    expect(said).not.toContain("work in progress");
   });
 
-  it("drops the landscape clause when the phone is already sideways", () => {
+  it("swaps the landscape clause for a floor when the phone is already sideways", () => {
+    // 667 × 375 is an iPhone SE sideways, which is genuinely under the floor:
+    // there is no rotation left to suggest, so the sentence says why instead.
     viewport(667, 375);
     mount(true);
     expect(words()).toContain("designed for a larger screen");
     expect(words()).not.toContain("Landscape");
+    expect(words()).toContain("needs more width");
   });
 
   it("draws nothing when the band has room beside the prose", () => {
