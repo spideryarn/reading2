@@ -1,8 +1,8 @@
 # Back to where you jumped from
 
-Status as of 2026-09-06: **Stages A, B, B2 and the docs are built**; Stage C is not — evidence:
-`src/web/ReturnChip.tsx` and `src/web/comment-jump.ts` exist, and nothing draws a mark in the spine
-for a jump origin.
+Status as of 2026-09-06: **every stage and the docs are built** — evidence:
+`src/web/ReturnChip.tsx` and `src/web/comment-jump.ts` exist, and `Spine.tsx` draws a `.spine-from`
+mark for a jump origin. Stage C has not been through a cross-family review.
 **Four cross-family reviews, four refusals** — [round 1](260906g-plan-review-sol.md) and
 [round 2](260906g-plan-review2-sol.md) on the plan, [round 3](260906g-stage-a-review-sol.md) on
 Stage A's code and [round 4](260906g-stage-b-review-sol.md) on Stage B's. What each changed is in
@@ -520,12 +520,49 @@ no `jumpTo` in scope, so no edit *inside* it can reintroduce F9. What no type ca
 `App.tsx` calling `jumpToComment` from an arrow closure instead, and the test suite pins the module
 rather than the wiring. The comment at the call sites says so; a reviewer is the check.
 
-### Stage C — one tick in the spine
+### Stage C — one tick in the spine — **built, 2026-09-06**
 
-- [ ] A single faint mark at the origin block, drawn only while the chip is up, and none at all for a `{ kind: "top" }` origin (F8), through the rail's
+- [x] A single faint mark at the origin block, drawn only while the chip is up, and none at all for a `{ kind: "top" }` origin (F8), through the rail's
       existing mark machinery ([`spine-marks.ts`](../../src/web/spine-marks.ts)).
-- [ ] It must not take a search lane or move the search marks sideways.
-- [ ] Test the arithmetic, not the pixels — that is what `spine-marks.ts` is a separate module for.
+- [x] It must not take a search lane or move the search marks sideways.
+- [x] Test the arithmetic, not the pixels — that is what `spine-marks.ts` is a separate module for.
+      `tests/spine-marks.test.ts` § `jumpOriginMark` is the five-case arithmetic;
+      `tests/spine-jump-origin.test.ts` is the ten things about the mark that are not arithmetic
+      and are all invisible — the gate, the lane, and the paint order.
+- [x] Three mutations of the finished code at the end of the stage, each caught: dropping the `top`
+      case (three red), keeping a mark whose row the page no longer has (two), and rendering the
+      mark after the search marks instead of before them (one).
+
+#### What was built, and the three things the code says that the plan could not
+
+`jumpOriginMark` in [`spine-marks.ts`](../../src/web/spine-marks.ts), a `.spine-from` element in
+[`Spine.tsx`](../../src/web/Spine.tsx), and one rule in `styles.css`. **No edit to `App.tsx` at
+all**, which is the first of the three.
+
+**The rail subscribes to the stamp itself.** `matches` is a prop because it is derived from search
+state that lives in `App`; the jump origin is not, so `Spine` calls `useJumpOrigin` exactly as
+`ReturnChip` does. That makes the mark and the chip **one fact with two views** rather than two
+things kept in step — the × strips the stamp and both go, with neither knowing the other exists —
+and it keeps `App` out of a re-render it has no use for. It does *not* put the rail back on the
+scroll path, which is the thing that component is careful about: `jumpOriginSnapshot` caches the
+object it returns, so the scroll spy's `?at=` replace fires the store's listener about once a second
+and changes nothing.
+
+**The mark needed `.spine-here`'s clamp, and for a sharper reason than the ring did.** The 3px floor
+grows the box downward from `top`, so a mark placed in the last rows of the article grows out of
+`.spine { overflow: hidden }` and disappears — and a jump made from the end of a long piece is
+exactly the one whose reader is furthest from home. Same `--from-top` custom property, same
+`min()` in the stylesheet, same reason it cannot be a `calc()` written inline (jsdom's CSSOM mangles
+it into a string every assertion would agree with). **`.spine-match` still has this bug**: 3px floor,
+no clamp, so a search hit in the article's final block is clipped away. Not touched here — it is the
+search feature's, and fixing it inside this stage would have meant editing the one thing Stage C was
+told not to disturb.
+
+**"Takes no lane" is a shape, not a discipline.** The origin is not a `SpineMark`: that type carries
+a `lane` and an `rgb`, and lanes are *packed* by `laneOrder`, so anything holding one has to be given
+a track out of the same 10px gutter and every search shifts sideways to make room. Returning
+`{ top, height }` from a different function into a different element makes that impossible rather
+than merely avoided, and the test pins the search mark's whole inline style across a jump.
 
 ### Docs
 

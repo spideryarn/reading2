@@ -2033,6 +2033,41 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
   opacity: 0.8;
 }
 
+/* **Where the reader jumped from**, drawn only while the chip offering the way
+   back is up — ReturnChip.tsx is the same fact in words, and Spine.tsx has why
+   it is one mark rather than the fading trail that was asked for.
+
+   Three deliberate differences from everything else on the rail, because a mark
+   nobody can tell from a hairline is a mark that says nothing:
+
+   - **Full width**, where the L2 tick and the *you are here* fill both start at
+     `left: 2px`. It is not part of the article's structure; it is a place the
+     reader stood.
+   - **Neutral.** `--depth-1` means *which part, which section* and the brand
+     orange means *where you are looking*; this is neither, and a third meaning
+     borrowing either colour would be read as one of them.
+   - **Never in the right-hand gutter.** It is its own element rather than a
+     lane, so a search cannot be pushed sideways by it — Spine.tsx says why that
+     is structural rather than a matter of these numbers.
+
+   The floor is the same admission the hit (4px), the search mark (3px) and the
+   viewport band (2px) all make: one row of a long article rounds to nothing.
+   And the floor needs the clamp above it, for the reason `.spine-here` does —
+   `min-height` grows the box downward from `top`, so a jump made from the last
+   rows grows out of `.spine { overflow: hidden }` and the mark vanishes for
+   exactly the reader furthest from home. `--from-top` is set inline; Spine.tsx
+   says why it is a custom property rather than a `calc()` there. */
+.spine-from {
+  position: absolute;
+  top: min(var(--from-top), 100% - 3px);
+  left: 0;
+  right: 0;
+  min-height: 3px;
+  pointer-events: none;
+  background: var(--ink-faint);
+  opacity: 0.55;
+}
+
 /* Invisible hit targets, one per L2, over the top of everything. A 1px tick is
    not something anyone can click, and landing on the L2 is more precise than
    landing on the part that contains it. */
