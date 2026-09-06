@@ -849,7 +849,35 @@ table.zoom {
    § the header over the article's column — 40 lines that moved `Text verbatim`
    onto the prose's left edge, added 2026-09-04 and inert the moment the word
    stopped being drawn. */
-thead th {
+/* **Scoped to the zoom table, and the spelling is load-bearing twice over.**
+
+   Both of these were bare element selectors until 2026-09-06 — `thead th` and
+   `td` — so they reached EVERY table in the app. On the shelf that put the
+   header cells 44px down the page, overlapping the first article's title by
+   their whole height (measured: th at 495.3–527.8, first row at 484.3–536.8),
+   and drew a vertical column grid `lib/DataTable.tsx` never asked for. It had
+   been worked around three times and fixed none: `.design-table td` writes
+   `border-right: 0` with a comment naming this rule, and `.prose th, .prose td`
+   restate `border` in full for the same reason.
+   docs/plans/260906g-the-shelf-table-is-ugly-because-the-reading-view-s-css-leaks-into-it.md.
+
+   **Direct children, not descendants.** `table.zoom td` would not have fixed
+   it: an article's own <table> renders inside `td.text`, which is inside
+   `table.zoom`, so a descendant selector goes on reaching every `.prose` cell
+   exactly as the bare one did.
+
+   **`:where()`, so the specificity does not move.** The obvious
+   `table.zoom > thead > tr > th` is (0,1,4) and would beat `thead th.pin-left`
+   (0,1,2) below — the base `z-index: 25` overriding the pinned header's 35, and
+   the base `border-right` overriding `td.pin-right`'s `none`. That breaks the
+   pinned end columns in the one view these rules exist for. `:where()`
+   contributes zero, so these stay (0,0,2) and (0,0,1) — exactly what the bare
+   selectors were. GPT Sol, 2026-09-06.
+
+   Safe against the markup: TableView.tsx always sets `className="zoom …"`, and
+   the <thead>, <tr> and <tbody> are written explicitly rather than left to the
+   parser. */
+:where(table.zoom > thead) > tr > th {
   position: sticky;
   top: var(--bar-bottom);
   z-index: 25;
@@ -858,7 +886,7 @@ thead th {
   overflow: hidden;
 }
 
-td {
+:where(table.zoom > tbody > tr) > td {
   vertical-align: top;
   border-bottom: 1px solid var(--rule);
   border-right: 1px solid var(--rule-strong);
@@ -1706,6 +1734,13 @@ td.text.kind-callout .prose::before {
   border-collapse: collapse;
   font-size: 0.9em;
 }
+/* **`border` in full, and it used to be defensive.** The bare `td` rule gave
+   every cell in the app a right border in --rule-strong, so naming only the
+   sides this wanted would have let the zoom table's column grid through into an
+   article's own table. That rule is scoped since 2026-09-06 (§ the head with no
+   row), so the shorthand is now just a shorthand — kept because a full border
+   is what an article's table wants anyway, not because anything is being
+   fought off. */
 .prose th, .prose td {
   padding: 0.3em 0.7em;
   border: 1px solid var(--rule);
@@ -4211,14 +4246,12 @@ td.text.has-hit[data-hues="8"] {
 }
 
 .design-table { border-collapse: collapse; width: 100%; }
-/* `border-right: 0` is not redundant. The bare `td` rule far above gives EVERY
-   cell in the app a right border in --rule-strong, for the zoom table's column
-   grid; it reaches here, and reaches into an article's own <table> inside
-   .prose as well (which is why .prose th/td restate `border` in full rather
-   than only the parts they want). */
+/* This carried `border-right: 0` until 2026-09-06, with a comment explaining
+   that the bare `td` rule far above gave EVERY cell in the app a right border.
+   That rule is scoped to the zoom table now (§ the head with no row), so there
+   is nothing left to undo and the declaration has gone. */
 .design-table td {
   padding: 0.55rem 0.9rem 0.55rem 0;
-  border-right: 0;
   border-bottom: 1px solid var(--rule);
   vertical-align: middle;
 }
@@ -12847,8 +12880,13 @@ td.text.kind-heading .blk-gutter[data-open] {
   }
   /* Each consumer animates its own ordinary property. `top` is animatable on a
      sticky or fixed element, and there are only ever four of these on screen at
-     once, so the layout cost of the 180ms is not worth avoiding. */
-  thead th,
+     once, so the layout cost of the 180ms is not worth avoiding.
+
+     Scoped like the rule that makes these sticky in the first place (§ the head
+     with no row) — bare, this handed the shelf's and an article's own header
+     cells a `transition: top` written for chrome that slides under a bar they
+     do not have. */
+  :where(table.zoom > thead) > tr > th,
   td.gist .sticky,
   .spine,
   .mode-band,
@@ -13143,7 +13181,9 @@ td.text.kind-heading .blk-gutter[data-open] {
   .controls,
   .dock,
   .install-hint,
-  thead th,
+  /* Scoped for the reason § the head with no row gives — this is the reduced-motion
+     half of the transition it turns off, so the two selectors have to match. */
+  :where(table.zoom > thead) > tr > th,
   td.gist .sticky,
   .spine,
   .mode-band {

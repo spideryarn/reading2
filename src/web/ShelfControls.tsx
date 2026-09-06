@@ -27,9 +27,11 @@
  * visibility ever arrive — see docs/project/library.md § Sorting the shelf.
  */
 import { EyeOff, Rows3, Table as TableIcon } from "lucide-react";
+import { RadioGroup } from "radix-ui";
 import type { Table } from "@tanstack/react-table";
 import type { LibraryEntry } from "../types.js";
 import { chipClass, SortChips } from "./lib/DataTable.js";
+import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
 export type ShelfView = "cards" | "table";
 export type ShelfFilter = "all" | "unread";
@@ -75,42 +77,7 @@ export function ShelfControls({
           Unread
         </Chip>
 
-        {/* **28px, the same as a chip**, and the arithmetic is the whole reason
-            this reads as one row rather than three. The box is `h-7` and its
-            children `size-6`: 24 + 2×1px padding + 2×1px border = 28. Before
-            2026-08-27 it was `p-1.5` icons in an unmeasured box and came out
-            **33px inside a 38.6px fieldset**, standing a head above the pills
-            beside it — and each button carried the UA's `2px outset white`
-            border on top of that, because a hand-rolled `<button>` had no
-            preflight to flatten it (tailwind.css § the bit of preflight we
-            need). Two bright boxes where there should have been one quiet one.
-
-            `rounded-sm` inside `rounded-md` is not a guess either: an inner
-            radius should be the outer one minus the padding between them, and
-            here that is 8 − 2 = 6px, which is what `radius-sm` resolves to. */}
-        <fieldset className="tw:m-0 tw:flex tw:h-7 tw:items-center tw:gap-0.5 tw:rounded-md tw:border tw:border-border tw:p-px">
-          <legend className="tw:sr-only">How the shelf is shown</legend>
-          {/* `onView` only fires on a change. These are the one control here
-              whose buttons can be pressed while already on — a sort chip
-              reverses and the Unread chip toggles, so both always do something
-              — and `view` is a `push` parameter, so clicking Cards while in
-              Cards would put an identical entry on the history stack and cost
-              the reader an extra press of Back. */}
-          <ViewButton
-            pressed={view === "cards"}
-            label="Cards — with the one-sentence blurb"
-            onClick={() => view !== "cards" && onView("cards")}
-          >
-            <Rows3 size={14} />
-          </ViewButton>
-          <ViewButton
-            pressed={view === "table"}
-            label="Table — every column at once, no blurb"
-            onClick={() => view !== "table" && onView("table")}
-          >
-            <TableIcon size={14} />
-          </ViewButton>
-        </fieldset>
+        <ViewSwitch view={view} onView={onView} />
       </div>
     </div>
   );
@@ -146,31 +113,137 @@ function Chip({
   );
 }
 
-function ViewButton({
-  pressed,
-  label,
-  onClick,
-  children,
-}: {
-  pressed: boolean;
-  label: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+/**
+ * **Cards or table: one of two, so it is a radio group.**
+ *
+ * It was two `aria-pressed` buttons in a `<fieldset>` until 2026-09-06, and that
+ * is the wrong pattern by the APG's own definitions. A toggle button models an
+ * *independent* binary control ("is bold on") and cannot express that exactly
+ * one of these is always chosen; the radio pattern is "a set of checkable
+ * buttons where no more than one can be checked at a time", and it explicitly
+ * endorses styling them to look like toggle buttons, which is what this is.
+ *
+ * **Tabs is the other wrong answer**, and the more tempting one. The APG defines
+ * tabs as switching between *layered sections of content*. These two switch the
+ * *painting of one list* — same rows, same order, same sort state, which is the
+ * distinction this file's header comment has always drawn. Nothing is being
+ * shown or hidden, so there is no tabpanel for a tab to control.
+ *
+ * **Radix's `RadioGroup`, not its `ToggleGroup`.** `ToggleGroup type="single"`
+ * gives radiogroup roles too and was the first suggestion, but a toggle group
+ * can be deselected to an empty value, and "no view at all" is not a state this
+ * page has. `RadioGroup` models the invariant exactly and brings the roving
+ * tabindex, the arrow keys that move selection as well as focus, Home/End,
+ * wrapping and RTL — all of which a hand-rolled version has to get right, and
+ * the plan for this change badly underestimated. GPT Sol, 2026-09-06.
+ *
+ * **`onValueChange` only fires on a change**, which preserves the property the
+ * old handlers spelled out by hand: `view` is a `push` parameter, so re-selecting
+ * the current view would put an identical entry on the history stack and cost
+ * the reader an extra press of Back.
+ */
+function ViewSwitch({ view, onView }: { view: ShelfView; onView: (v: ShelfView) => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={pressed}
-      aria-label={label}
-      title={label}
-      className={`tw:inline-flex tw:size-6 tw:items-center tw:justify-center tw:rounded-sm tw:transition-colors ${
-        pressed
-          ? "tw:bg-highlight/15 tw:text-highlight"
-          : "tw:bg-transparent tw:text-muted-foreground tw:hover:bg-highlight/10 tw:hover:text-foreground"
-      }`}
-    >
-      {children}
-    </button>
+    /* **32px, not 28.** The old box was `h-7` around `size-6` children — 28px,
+       matched to a chip by arithmetic this comment used to carry. That was
+       *smaller than any shadcn default* (`sm` is `h-8`) and below Material's
+       40dp segmented-button spec, which is most of why Greg could not find it.
+       The chips beside it are still `h-7`; a control that is doing something
+       different is allowed to be the taller thing in the row, and at 32 against
+       28 it reads as deliberate rather than as a mismatch.
+
+       `rounded-sm` inside `rounded-md` is still not a guess: an inner radius is
+       the outer one minus the padding between them, 8 − 2 = 6px, which is what
+       `radius-sm` resolves to. */
+    <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
+      <RadioGroup.Root
+        value={view}
+        onValueChange={(v) => onView(v as ShelfView)}
+        /* Horizontal, so ← and → drive it rather than ↑ and ↓ — the arrows that
+           match the way the two sit on screen. */
+        orientation="horizontal"
+        aria-label="How the shelf is shown"
+        className="tw:flex tw:h-8 tw:items-center tw:gap-0.5 tw:rounded-md tw:border tw:border-border tw:p-px"
+      >
+        <ViewOption value="cards" tip={VIEW_TIPS.cards} current={view}>
+          <Rows3 size={14} />
+        </ViewOption>
+        <ViewOption value="table" tip={VIEW_TIPS.table} current={view}>
+          <TableIcon size={14} />
+        </ViewOption>
+      </RadioGroup.Root>
+    </TooltipGroup>
   );
 }
+
+/**
+ * One segment.
+ *
+ * **The label is drawn beside the icon above `sm` and hidden below it.** Two
+ * well-known glyphs are enough on their own for a two-option switcher — Linear
+ * ships exactly this, icon-only — but there is room on this row at any ordinary
+ * window width, and a word is free discoverability for the reader who has never
+ * pressed it. The `sr-only` span is what keeps the accessible name intact when
+ * the visible word goes away, so the control is named identically either way.
+ */
+function ViewOption({
+  value,
+  tip,
+  current,
+  children,
+}: {
+  value: ShelfView;
+  tip: { head: string; what: string; how: string };
+  current: ShelfView;
+  children: React.ReactNode;
+}) {
+  const selected = current === value;
+  return (
+    <Tooltip content={<ControlTip {...tip} />} placement="bottom">
+      <RadioGroup.Item
+        value={value}
+        className={`tw:inline-flex tw:h-7 tw:items-center tw:gap-1.5 tw:rounded-sm tw:px-2 tw:text-xs tw:transition-colors ${
+          selected
+            ? "tw:bg-highlight/15 tw:text-highlight"
+            : "tw:bg-transparent tw:text-muted-foreground tw:hover:bg-highlight/10 tw:hover:text-foreground"
+        }`}
+      >
+        {children}
+        {/* **One span, not two.** The first version drew the word twice — once
+            `hidden sm:inline` and once `sm:hidden sr-only` — which is correct in
+            both directions and needs a reader to hold two media queries in their
+            head to see that it is. `sr-only` clips rather than hiding, so the
+            word is in the accessible name at every width and merely *visible*
+            from `sm` up. */}
+        <span className="tw:sr-only tw:sm:not-sr-only">{tip.head}</span>
+      </RadioGroup.Item>
+    </Tooltip>
+  );
+}
+
+/**
+ * **What each view is, then what it costs you** — the shape every other card in
+ * this app uses (Tooltip.tsx § `ControlTip`).
+ *
+ * A native `title` was what these carried until 2026-09-06, and Greg asked for
+ * "a rich tooltip" by name. He was right to: a `title` waits about a second,
+ * cannot be styled, truncates at the OS's idea of a line, and **does not exist
+ * at all on a touch device** — which for a sentence whose whole job is to say
+ * what a control means is close to not being there.
+ *
+ * The second paragraph is the one a reader could not have worked out by pressing
+ * the button, which is the rule for this card: not "it shows a table", but what
+ * that costs and what it does not promise.
+ */
+const VIEW_TIPS = {
+  cards: {
+    head: "Cards",
+    what: "One card per article, with the blurb — the tree root's own sentence about the whole piece.",
+    how: "The blurb is what makes a card a decision aid rather than a row: you are choosing what to read, and it says what the piece is about before you open it. Costs vertical space, so fewer articles fit on a screen.",
+  },
+  table: {
+    head: "Table",
+    what: "One row per article, with every column at once: when it was added, when you last opened it, how many times, how many comments, how long it is.",
+    how: "No blurb — this is the view for comparing and finding rather than for choosing. Both views share one sort, so switching keeps your place in the order.",
+  },
+} as const;
