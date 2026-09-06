@@ -1,8 +1,15 @@
 # The spine highlights the section, not just the part
 
-**Status as of 2026-09-06: reviewed, not built.** Fable reviewed the product shape and GPT Sol the
-technical one ([review](260906g-spine-concentric-depth-highlight-review-sol.md)); this doc has been
-revised against both. Nothing in `src/` has changed.
+**Status as of 2026-09-06: built, reviewed twice, verified in a browser, and on `dev`** as
+`ec1a7721`. Fable reviewed the product shape and GPT Sol the technical one, at the plan stage
+([review](260906g-spine-concentric-depth-highlight-review-sol.md)) and again against the code
+([code review](260906g-spine-concentric-depth-highlight-code-review-sol.md)); this doc is revised
+against all three, and every finding is either fixed or recorded below as a decision.
+
+**One thing found on the way is not fixed and is not this ticket's**: the last ~0.65 viewport-heights
+of every article can never reach the reading line, so the rail — and `aria-current` with it — has
+never been able to say *you are here* about the end of a piece. It predates the ring and wants its
+own ticket. See **What the browser pass found**.
 
 ## The problem
 
