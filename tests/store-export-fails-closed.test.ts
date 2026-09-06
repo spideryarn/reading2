@@ -41,7 +41,8 @@
  * script. Every name this test depends on is set explicitly, in both
  * directions, and `""` is how "absent" is spelled — `configured()` and the
  * `?.trim()` checks read it as absent, and unlike `delete` it survives
- * `.env.local`. tests/store-selection.test.ts's cousin problem.
+ * `.env.local`. The same problem the deleted `tests/store-selection.test.ts`
+ * had about the store flag, which is why `src/env.ts` keeps that snapshot.
  *
  * No database is needed and none is reached: all three refusals fire before the
  * first query.

@@ -23,10 +23,10 @@
  * `uploadGrants()` returning `null` is therefore a real answer: *this
  * installation cannot take uploads*. The route says so in a sentence.
  *
- * ## Why selection does not read `SPIDERYARN_STORE`
+ * ## Why selection never read `SPIDERYARN_STORE`
  *
- * That variable chooses where **articles** are read from (src/store/live.ts),
- * which is a different question with a different answer. Blobs follow the
+ * That variable chose where **articles** were read from until 2026-09-05, a
+ * different question with a different answer. Blobs follow the
  * credentials: if this process has a Supabase service key, the bytes go to
  * Supabase, because that is the only place a browser can put them. Otherwise
  * they go under `data/_blobs/`, which is enough for tests and for a laptop with

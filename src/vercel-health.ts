@@ -15,9 +15,14 @@
  * Everything it checks fails **quietly**, and none of it is visible from the
  * reading view:
  *
- * 1. **Which store is serving reads.** `SPIDERYARN_STORE` unset — or misspelt —
- *    means `files`, and on Vercel `files` means an empty shelf: a 200 with
- *    nothing in it, identical to a working site with no articles yet.
+ * 1. **Whether the store is answering, and with anything in it.** This point
+ *    used to be about *which* store: `SPIDERYARN_STORE` unset — or misspelt —
+ *    meant the filesystem one, and on Vercel that meant an empty shelf, a 200
+ *    with nothing in it, indistinguishable from a working site with no articles
+ *    yet. There has been one store since 2026-09-05 and no variable to misspell
+ *    since 2026-09-06, so what is left is the second half of that failure: an
+ *    empty shelf still looks exactly like a healthy new deployment, and
+ *    `cachedStoreCheck` below is what warns about it.
  * 2. **Whether TLS verifies the server.** `sslDecisionFor` degrades to
  *    `encrypted-unverified` when the CA certificate is not found. The
  *    connection still works and is still encrypted; it just stops checking who
@@ -337,70 +342,6 @@ const EXPECTED: readonly Expected[] = [
      cannot use, one line above the key that really does matter. Whether the
      tiers are configured is a database question now, not an environment one. */
 ];
-
-/**
- * **Variables that should no longer be set, and what to do about each.**
- *
- * The mirror image of `EXPECTED` above, and it needed to be its own list rather
- * than a flag on that one: `Expected` says *"absence may be a problem"*, and
- * every field on it is a statement about absence. This says *"presence is the
- * problem"*, which no combination of `breaks`, `with` and `where` can express.
- *
- * ## Why this exists at all, which is the useful part
- *
- * `SPIDERYARN_STORE` is a **tombstone** ([`src/store/live.ts`](store/live.ts)):
- * it decides nothing, and it is kept only because Vercel's Preview and
- * Production environments still carry it and removing it needs a Vercel
- * credential nobody but Greg has. Stage I of
- * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
- * deletes the tombstone — **and is gated on that removal having happened**.
- *
- * Until now nothing watched for it. The plan said *"once Greg has removed the
- * variable"* and the only instrument was somebody remembering to run
- * `vercel env ls production`, which is how a one-line chore becomes a stage that
- * waits for ever. This turns it into something that says so on every deploy.
- *
- * ## Reported, never warned about, and the difference matters
- *
- * These go in their own `retired` field and **not** in `warnings`. A leftover
- * variable that decides nothing is not a broken deployment, and pushing it into
- * `warnings` would 503 this endpoint and fail `npm run deploy` over a no-op —
- * a gate whose red is not a fault is a gate people learn to force past.
- *
- * **Absent is silent**: the field is omitted entirely rather than reported
- * empty, the same rule `schema` and `migrations` follow below, so this cannot
- * become a false alarm the day the variable goes. That is also what makes its
- * disappearance the signal: no `retired` field, nothing left to retire.
- *
- * ## A record keyed by the name, so the guard can see it
- *
- * tests/one-store-only.test.ts asserts that `SPIDERYARN_STORE` is read in one
- * place, and it reads source with regexes — one of which is a bare
- * `SPIDERYARN_STORE:` or `=`. Writing this as `{ SPIDERYARN_STORE: "…" }` puts
- * the name in a shape that guard **does** match, so this file is reported and
- * then exempted by name with a reason, instead of passing silently because
- * `name: "SPIDERYARN_STORE"` happens to fall through every pattern.
- *
- * That is deliberate. A second reader of a flag that is supposed to have one
- * reader has to be a decision somebody made and wrote down, not a gap in a
- * regex; and the guard cannot be widened to catch the quoted form without also
- * catching the flag's name inside English sentences, which are not reads.
- */
-const RETIRED: Readonly<Record<string, string>> = {
-  SPIDERYARN_STORE:
-    "it chose between the filesystem store and Postgres until 2026-09-05 and there is one store now. " +
-    "Remove it from Preview and Production (`vercel env rm SPIDERYARN_STORE production`), which is what " +
-    "unblocks stage I of docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md " +
-    "— the commit that deletes the tombstone in src/store/live.ts. Harmless until then: `postgres` and " +
-    "unset both pass, and `files` throws at boot.",
-};
-
-/** Every retired variable this environment still carries. Empty is the goal. */
-function retiredStillSet(): { name: string; why: string }[] {
-  return Object.entries(RETIRED)
-    .filter(([name]) => value(name) !== null)
-    .map(([name, why]) => ({ name, why }));
-}
 
 /**
  * Which variables are set, and a warning for each one that is needed and is not.
@@ -998,10 +939,6 @@ export async function health(req: IncomingMessage, res: ServerResponse): Promise
    */
   const migrations = await migrationReport(warnings);
 
-  /* Read before the verdict and reported beside it, never folded into it: a
-     variable that decides nothing must not make a healthy deployment 503. */
-  const retired = retiredStillSet();
-
   const failed = "error" in store || "error" in ssl || (schema !== undefined && "error" in schema);
   const ok = !failed && warnings.length === 0;
 
@@ -1033,11 +970,6 @@ export async function health(req: IncomingMessage, res: ServerResponse): Promise
            credential to tell whether this deployment's code and its schema are
            in step. docs/plans/260902a-remote-box-runs-production-migrations-without-a-human-in-the-loop.md */
         ...(migrations === undefined ? {} : { migrations }),
-        /* **Absent when there is nothing to retire**, which is the whole design:
-           the field's disappearance is the signal that stage I can start, and an
-           empty array reported for ever would be a nag nobody could ever
-           satisfy. Deliberately not in `warnings` — see `RETIRED`. */
-        ...(retired.length === 0 ? {} : { retired }),
         ssl,
         env,
       },

@@ -158,9 +158,12 @@ interface Input {
    * Whether paragraph rows are permissible at all.
    *
    * False on a window narrow enough that the band covers the prose rather than
-   * sitting beside it (below `MODE_MIN + PROSE_MIN` in layout.ts, which is iPad
-   * portrait). The navLabel fallback above is only defensible while the prose
-   * is visible, so rung 5 is not merely unhelpful there — it is the
+   * sitting beside it — below `MODE_MIN + MODE_PROSE_FLOOR` in layout.ts, which
+   * is 700px since 2026-09-06 and was 844 before it. That move took the iPad in
+   * portrait and the modern phone in landscape out of this branch and into the
+   * side-by-side one; what is left under it is a phone in portrait and a small
+   * phone sideways. The navLabel fallback above is only defensible while the
+   * prose is visible, so rung 5 is not merely unhelpful there — it is the
    * substitution principle 1 forbids.
    */
   allowParagraphs: boolean;

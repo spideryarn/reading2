@@ -127,7 +127,7 @@ reaches nothing either. That is a second, quieter bug with the same cause.
 
 ### (b) Which commit and which mode
 
-**Files mode** — `SPIDERYARN_STORE` unset, which [`src/store/live.ts`](../../src/store/live.ts)
+**Files mode** — `SPIDERYARN_STORE` unset, which `src/store/live.ts` (deleted 2026-09-06)
 resolves to `"files"`. Still the default; still what every laptop and this box run.
 
 The claim arrived with `c109658` (2026-08-27, *"Take the queue out of one process's memory, and put a
@@ -318,7 +318,7 @@ and answered.
   - **A soft default, not a hard set** — `${SPIDERYARN_STORE:-postgres}`, so a value that is
     already set survives. A hard set would silently discard the value somebody typed, which is the
     exact failure class this repo keeps writing postmortems about, and
-    [`src/store/live.ts`](../../src/store/live.ts) already refuses to guess a misspelling for the
+    `src/store/live.ts` already refuses to guess a misspelling for the
     same reason.
 
     **But the escape hatch is `.env.local`, not the command line**, and that is worth stating

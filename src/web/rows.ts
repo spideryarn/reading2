@@ -38,6 +38,42 @@
  * `tr[data-block]` unscoped, matching what the loop matched: scoping it to
  * `tbody` here would silently drop a row the old code would have found.
  */
+/**
+ * The same lookup for **one** block, and the only spelling of the selector.
+ *
+ * `querySelector` rather than the map above, because for a single id the map
+ * builds an entry for every row in the table to answer a question about one —
+ * and `querySelector` may stop at its first match. (Only *may*: nothing in the
+ * DOM spec promises an index, and an earlier draft of this sentence claimed one.
+ * The honest statement is that it need not scan the whole table, where the map
+ * must.) The two agree by the argument in § *The one way this could differ from
+ * the loop, and does not*: ids are unique, and where they were not, both take
+ * the first match in document order.
+ *
+ * They can differ outside the id contract, which is worth naming because that
+ * contract is exactly the sort of thing a caller stops honouring quietly:
+ * `CSS.escape` rewrites a value like U+0000 while the map compares the raw
+ * `dataset.block`, so a malformed id could match here and not there. Block ids
+ * are minted by us and match `spya-[a-z0-9]+` (docs/project/block-ids.md), so
+ * this is a statement about the boundary rather than a live case.
+ *
+ * It exists so that `tr[data-block="${CSS.escape(id)}"]` is written once.
+ * `src/web/scroll.ts`'s header says it is the one place a block is resolved for
+ * scrolling, and it contained two hand-rolled copies of this expression while
+ * saying so; two more elsewhere were absorbed into `rowsForBlockIds` on
+ * 2026-09-05 and the remaining pair was recorded, unfixed, by two consecutive
+ * codebase sweeps. `CSS.escape` is the part that must not be forgotten by a
+ * fifth copy — a block id is minted by us and is safe today
+ * (docs/project/block-ids.md), which is exactly the reasoning that makes an
+ * unescaped copy survive review.
+ *
+ * Not a fifth caller: `internal-links.ts` runs the same selector against an
+ * arbitrary `doc`, not the live page, so it is a different question.
+ */
+export function blockRow(blockId: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`tr[data-block="${CSS.escape(blockId)}"]`);
+}
+
 export function rowsForBlockIds(blockIds: readonly string[]): (HTMLElement | null)[] {
   const byId = new Map<string, HTMLElement>();
   for (const el of document.querySelectorAll<HTMLElement>("tr[data-block]")) {

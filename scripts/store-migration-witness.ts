@@ -197,11 +197,26 @@ const POSITIVE_CONTROLS: readonly Control[] = [
  * that never wrote a line proves the run broke, not that the file is clean, and
  * conflating those two is the failure this witness exists to avoid.
  *
- * `store-selection` is the sharpest of them: its subject is the store flag, so
- * an instrument that hooked on import rather than on call would light it up.
+ * **`store-selection` was the first of them until 2026-09-06, and the reason it
+ * was chosen died before it did.** Its sharpness was that its subject was the
+ * store flag, so an instrument that hooked on *import* rather than on *call*
+ * would light it up — which was a real claim while `src/store/live.ts` was
+ * condemned, and stopped being one when `INSTRUMENTED` shrank to
+ * `copy-artefacts` alone. Stage I then deleted the file itself.
+ *
+ * **Replaced rather than dropped**, because the count is load-bearing: three
+ * negatives would still print three `ok` lines, and this list's whole job is to
+ * prove the instrument reports on files that touch nothing. Its successor is
+ * `tests/one-store-only.test.ts`, which now owns the claim that nothing reads
+ * the flag — and is a cleaner negative than its predecessor ever was, since it
+ * imports nothing from `src/` at all and reads the tree as text.
+ *
+ * A control file that leaves the tree is caught loudly by the `existsSync`
+ * check in the self-check below rather than silently mis-measured — verified
+ * 2026-09-06, when stage I deleted this entry's predecessor.
  */
 const NEGATIVE_CONTROLS = [
-  "tests/store-selection.test.ts",
+  "tests/one-store-only.test.ts",
   "tests/corpus-materialise.test.ts",
   "tests/chat-web-links-prompt.test.ts",
   "tests/note-arrival.test.ts",

@@ -186,10 +186,15 @@ const TREE = {
   },
 };
 
+/* `navLabelStatus` is required on both types and neither fixture set it — this
+   file and the field arrived on `dev` from two different branches on 2026-09-06,
+   so each was right about its own half and the pair did not typecheck. `"ready"`
+   because the tree here is fully built: nothing in this file is about labels. */
 const OWNED: Article = {
   blocks: BLOCKS,
   tree: TREE,
   assets: undefined,
+  navLabelStatus: "ready",
   meta: { slug: SLUG, title: "A piece", byline: "Somebody" },
 };
 
@@ -198,6 +203,7 @@ const SHARED: PublicArticle = {
   blocks: BLOCKS,
   tree: TREE,
   assets: undefined,
+  navLabelStatus: "ready",
   comments: [],
   searches: [],
 };

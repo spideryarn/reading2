@@ -44,7 +44,7 @@ import { ArrowLeft } from "lucide-react";
 import { TAKEDOWN_HEADING } from "../messages.js";
 import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
-import { TAKEDOWN_SECTION_ID } from "./router.js";
+import { PUBLIC_SHARING_HREF, TAKEDOWN_SECTION_ID } from "./router.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 
@@ -603,6 +603,28 @@ export function PrivacyPage() {
           keep anything else in their library — and it does nothing about wherever else the piece
           may have been copied to. If you want the copy erased as well, say so and we will do that
           too.
+        </p>
+        {/* **The signpost out, and it points the way it does on purpose.**
+            Everything above is a promise about what we will do when somebody
+            asks; the reasons they might be less unhappy in the first place —
+            what actually goes out, the link back to their page, the fact that
+            none of this is in a search engine — are on
+            `/features/public-readable-sharing`, and neither page restates the
+            other. docs/project/public-readable-sharing.md § the split.
+
+            **Last in the section, not first.** Somebody who read this far came
+            for the mailbox and now has it; a link offered above the address
+            would be a page between them and the thing they came for. */}
+        <p>
+          If you want the fuller picture first —{" "}
+          <Link
+            href={PUBLIC_SHARING_HREF}
+            className="tw:text-highlight tw:no-underline tw:hover:underline"
+          >
+            what we do with an article somebody has made public
+          </Link>{" "}
+          sets out what goes out, what stays linked to the original, and why none of these pages is
+          in a search engine.
         </p>
       </Section>
 

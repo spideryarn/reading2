@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { availableParallelism, homedir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { InlineConfig } from "vitest/node";
 import { defaultExclude, defineConfig } from "vitest/config";
@@ -72,6 +75,103 @@ if (PRIVATE.length < 50 || SHARED.length < 3) {
 }
 
 /**
+ * **How many files run at once: half the machine, not all of it.**
+ *
+ * Vitest's default is `availableParallelism() - 1`, decided by each run in
+ * ignorance of every other. That is right for a machine running one suite and
+ * wrong for both of ours, where a dozen worktrees each have an agent that runs
+ * `npm test` when it suits them. What it costs when they collide, and what a
+ * cap costs when they don't, are measured in
+ * docs/plans/260906h-cap-vitest-workers-so-one-box-can-hold-ten-suites.md.
+ *
+ * Three layers, narrowest first — one run, one machine, everywhere:
+ *
+ *     VITEST_MAX_WORKERS                        "this run is alone, go faster"
+ *     ~/.config/spideryarn/vitest-max-workers   "this machine is crowded"
+ *     half the cores, and at least 2
+ *
+ * The middle one is a **file** rather than an environment variable because the
+ * variable does not arrive: measured on the box, nothing in the `env` block of
+ * `~/.claude/settings.json` reaches a Claude Bash tool call, not even the
+ * `CLAUDE_CODE_SCROLL_SPEED` that has been in it since the box was built. A
+ * file has no propagation to be wrong about. `infra/hetzner/provision.sh`
+ * writes 3 into it; a laptop has none and takes the half.
+ *
+ * **Why the override is read here and then deleted.** Vitest reads
+ * `VITEST_MAX_WORKERS` itself, in `resolveConfig`, **after** the line that
+ * turns `fileParallelism: false` into `maxWorkers: 1`, and for every project —
+ * so leaving it set lets a knob for *using less of the machine* quietly
+ * de-serialise the private-postgres lane below, which is serial because its
+ * files share a database and a job-queue singleton. That trades a slow suite
+ * for a lying one, and it had already been typed in good faith
+ * (260906f ran `VITEST_MAX_WORKERS=4 npm run check`). Deleting it is the only
+ * lever a config file has, since everything vitest does with it happens later.
+ * `tests/vitest-worker-caps.test.ts` pins vitest's behaviour as well as ours,
+ * so a release that fixes the ordering upstream turns red here rather than
+ * leaving a defence nobody dares delete.
+ */
+export const MACHINE_WORKERS_FILE = join(homedir(), ".config", "spideryarn", "vitest-max-workers");
+
+/** Both layers say a worker count the same way, so they are read the same way. */
+function parseWorkerCount(raw: string, source: string): number | undefined {
+  if (raw.trim() === "") return undefined;
+  const workers = Number(raw.trim());
+  if (!Number.isInteger(workers) || workers < 1) {
+    throw new Error(
+      `${source} must be a whole number of workers, 1 or more; got ${JSON.stringify(raw)}. ` +
+        "Remove it to take half of this machine's cores.",
+    );
+  }
+  return workers;
+}
+
+/**
+ * Exported for `tests/vitest-worker-caps.test.ts`, which has to be able to ask
+ * what this machine would do *without* the file this machine happens to have —
+ * otherwise the test for the default answer is red on the box and green on the
+ * laptop, which is worse than having no test.
+ */
+export function resolveParallelWorkers(machineFile = MACHINE_WORKERS_FILE): number {
+  /* **Consumed once, and not remembered.** Vite evaluates this file again on a
+     watch restart, by which time the variable is gone, so `npm run test:watch`
+     started with an override falls back to the machine's number after the first
+     restart. That is a real wart and it was fixed once, by keeping the value on
+     `globalThis` — but a config file cannot tell a restart from a second vitest
+     in the same process, so the remembered value then leaked into instances
+     that never asked for it (both measured by GPT Sol, 2026-09-06). Both
+     mistakes are worth the same: a run that is faster or slower than asked.
+     Neither can reach the serial lane, which names its own `maxWorkers: 1`. So
+     the simpler wrong thing wins over the more complicated wrong thing, and
+     `tests/vitest-worker-caps.test.ts` pins the absence of the leak. */
+  const fromEnv = process.env.VITEST_MAX_WORKERS;
+  delete process.env.VITEST_MAX_WORKERS;
+  const chosen = fromEnv === undefined ? undefined : parseWorkerCount(fromEnv, "VITEST_MAX_WORKERS");
+  if (chosen !== undefined) return chosen;
+
+  /* **Only "there is no such file" is silent**, because that is the normal
+     case: a laptop has nothing to say. A file that exists and cannot be read —
+     wrong permissions, a directory where the file should be, a failing disk —
+     is a machine that *did* mean to set a policy and whose policy is not being
+     applied, and swallowing that would hand the box back a cap of 8 with
+     nothing anywhere to say why. GPT Sol, 2026-09-06. */
+  let fromFile: string | undefined;
+  try {
+    fromFile = readFileSync(machineFile, "utf8");
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw new Error(`${machineFile} exists but could not be read; fix it or remove it.`, { cause });
+    }
+    fromFile = undefined;
+  }
+  const machine = fromFile === undefined ? undefined : parseWorkerCount(fromFile, machineFile);
+  if (machine !== undefined) return machine;
+
+  return Math.max(2, Math.floor(availableParallelism() / 2));
+}
+
+const PARALLEL_WORKERS = resolveParallelWorkers();
+
+/**
  * What every project shares. Split out so the three differ **only** in the ways
  * they are supposed to: which files, which setup, and whether they are
  * serialised.
@@ -139,6 +239,16 @@ const NO_PROVIDER_CALLS = "./tests/setup/no-provider-calls.ts";
 export default defineConfig({
   resolve: { alias: ALIAS },
   test: {
+    /* **At the root, not on each project**, and that is not a tidiness
+       preference. Vitest prefers a *project's* `maxWorkers` over the global one,
+       so a cap written into the shared block below would silently beat an
+       explicit `vitest --maxWorkers=8` on the command line — the ordinary
+       escape hatch, quietly doing nothing. From here the two parallel lanes
+       fall back to this value and a CLI flag still wins. GPT Sol, 2026-09-06.
+
+       The private lane names its own `maxWorkers: 1` and so is unaffected by
+       either, which is the point of it. */
+    maxWorkers: PARALLEL_WORKERS,
     projects: [
       {
         resolve: { alias: ALIAS },
@@ -177,7 +287,12 @@ export default defineConfig({
 
              `fileParallelism: false` is what serialises the files; `maxWorkers`
              follows it rather than leading, because vitest overrides the latter
-             from the former and stating both is how a reader learns that. */
+             from the former and stating both is how a reader learns that. It
+             also overrides COMMON's cap, which this lane must not take.
+
+             **Neither line survives `VITEST_MAX_WORKERS` in the environment**,
+             which is why resolveParallelWorkers() above removes it before
+             vitest can read it. */
           fileParallelism: false,
           maxWorkers: 1,
         },

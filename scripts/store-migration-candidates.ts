@@ -11,19 +11,23 @@
  * The path is the point. "162 files reach `fs.ts`" is true and useless; a path
  * that reads `tests/x.test.ts → src/routes.ts → src/store/index.ts → src/store/fs.ts`
  * says *this test imports the app*, and a one-hop path says *this test's subject
- * is the adapter*. So each test is bucketed by **why** it reaches. The deciding
- * cut is the graph with every **flag-reading module** removed — a module that
- * imports `src/store/live.ts` is doing store *selection*, and that reach dies
- * with the flag; a reach that survives the cut is a real dependency:
+ * is the adapter*. So each test is bucketed by **why** it reaches:
  *
  *   - `subject`              the test imports a condemned module itself.
- *   - `fixture`              it survives the cut through a `tests/helpers/…`
- *                            module — the test's own fixture machinery.
- *   - `app-survives-flag`    it survives the cut through `src/…` only.
- *   - `flag-selection-only`  every path runs through a flag reader; incidental,
- *                            and it disappears at the hinge.
+ *   - `fixture`              it reaches through a `tests/helpers/…` module —
+ *                            the test's own fixture machinery.
+ *   - `app-survives-flag`    it reaches through `src/…` only.
  *   - `type-only`            reachable only across erased `import type` edges,
  *                            so nothing executes. Listed, never counted as a reach.
+ *
+ * **There was a fifth bucket until 2026-09-06.** The deciding cut used to be the
+ * graph with every module importing `src/store/live.ts` removed, because such a
+ * module was doing store *selection* and that reach died with the flag;
+ * `flag-selection-only` was what fell out of the cut. The flag went in stage I of
+ * the plan above, so no module reads it, the cut removes nothing, and every
+ * bucket boundary lands exactly where it landed with the cut in place. The
+ * dimension went rather than staying as a field reporting zero for ever about a
+ * file that is no longer on disk.
  *
  * `src/store/index.ts` alone is **not** the wiring hub — that hypothesis was
  * tested against this data and fails. Only 23 of 192 reaching tests go
@@ -65,10 +69,6 @@ const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TARGETS = [
   "src/store/copy-artefacts.ts",
 ];
-
-/** Reported apart: the leaf everything reads the flag through, so lumping it in
- *  with the adapters would drown the signal. */
-const FLAG_LEAF = "src/store/live.ts";
 
 /** Removing this node is how "incidental app wiring" is told from "this test
  *  wants the adapter" — it is the module that wires up every store. */
@@ -250,17 +250,10 @@ if (dynamicEdges < 100) {
 const testFiles = allFiles.filter((f) => /^tests\/.*\.test\.tsx?$/.test(f));
 const targets = new Set(TARGETS.filter((t) => existsSync(join(REPO, t))));
 const missingTargets = TARGETS.filter((t) => !targets.has(t));
-const leaf = new Set([FLAG_LEAF]);
 const none: ReadonlySet<string> = new Set();
 const hub: ReadonlySet<string> = new Set([WIRING_HUB]);
 
-/** A module that imports `src/store/live.ts` reads the flag, so the condemned
- *  import it makes is store *selection* — the thing this migration deletes. */
-const flagReaders = new Set(
-  allFiles.filter((f) => (graph.get(f) ?? []).some((e) => e.to === FLAG_LEAF)),
-);
-
-const BUCKETS = ["subject", "fixture", "app-survives-flag", "flag-selection-only", "type-only"] as const;
+const BUCKETS = ["subject", "fixture", "app-survives-flag", "type-only"] as const;
 type Bucket = (typeof BUCKETS)[number];
 
 type Report = {
@@ -268,20 +261,14 @@ type Report = {
   bucket: Bucket;
   /** Shortest path to each target, and the module that pulls it in. */
   paths: Record<string, { path: string[]; puller: string }>;
-  /** Shortest path with every flag-reading module cut out of the graph. A
-   *  target still reachable here is reached for a reason that outlives the
-   *  flag; a target that disappears was pure store selection. */
-  pathsWithoutFlagReaders: Record<string, string[]>;
   /** Shortest path with `src/store/index.ts` alone cut, so the
    *  "everything reaches it through the wiring hub" claim stays checkable. */
   pathsWithoutWiringHub: Record<string, string[]>;
-  livePath: string[] | null;
 };
 
 const reports: Report[] = [];
 for (const file of testFiles) {
   const hits = shortestPaths(file, graph, targets, none, false);
-  const live = shortestPaths(file, graph, leaf, none, false).get(FLAG_LEAF) ?? null;
   if (hits.size === 0) {
     const typeOnly = shortestPaths(file, graph, targets, none, true);
     if (typeOnly.size === 0) continue;
@@ -289,28 +276,21 @@ for (const file of testFiles) {
       file,
       bucket: "type-only",
       paths: Object.fromEntries([...typeOnly].map(([t, p]) => [t, { path: p, puller: p[p.length - 2] as string }])),
-      pathsWithoutFlagReaders: {},
       pathsWithoutWiringHub: {},
-      livePath: live,
     });
     continue;
   }
-  const unflagged = shortestPaths(file, graph, targets, flagReaders, false);
   const bucket: Bucket =
     [...hits.values()].some((p) => p.length === 2)
       ? "subject"
-      : unflagged.size === 0
-        ? "flag-selection-only"
-        : [...unflagged.values()].some((p) => p.slice(1, -1).some((n) => n.startsWith("tests/")))
-          ? "fixture"
-          : "app-survives-flag";
+      : [...hits.values()].some((p) => p.slice(1, -1).some((n) => n.startsWith("tests/")))
+        ? "fixture"
+        : "app-survives-flag";
   reports.push({
     file,
     bucket,
     paths: Object.fromEntries([...hits].map(([t, p]) => [t, { path: p, puller: p[p.length - 2] as string }])),
-    pathsWithoutFlagReaders: Object.fromEntries(unflagged),
     pathsWithoutWiringHub: Object.fromEntries(shortestPaths(file, graph, targets, hub, false)),
-    livePath: live,
   });
 }
 
@@ -341,15 +321,12 @@ const payload = {
   method: "transitive import-graph walk (static + dynamic import(), @/ alias, .js→.ts specifiers)",
   targets: [...targets],
   missingTargets,
-  flagLeaf: FLAG_LEAF,
   wiringHub: WIRING_HUB,
-  flagReaders: [...flagReaders].sort(),
   counts: {
     filesParsed: allFiles.length,
     testFiles: testFiles.length,
     reaching: reaching.length,
     ...Object.fromEntries(BUCKETS.map((b) => [b, bucketOf(b).length])),
-    reachingFlagLeaf: reports.filter((r) => r.livePath !== null).length,
     onlyViaWiringHub: onlyViaWiringHub.length,
     unresolvedSpecifiers: unresolved.length,
     unfollowableDynamicImports: unfollowable.length,
@@ -371,8 +348,7 @@ if (missingTargets.length > 0) console.log(`WARNING target(s) not on disk: ${mis
 console.log("\ntest files reaching a condemned filesystem module:");
 for (const b of BUCKETS) console.log(`  ${b.padEnd(20)} ${String(bucketOf(b).length).padStart(4)}`);
 console.log(`  ${"total (executable)".padEnd(20)} ${String(reaching.length).padStart(4)} of ${testFiles.length}`);
-console.log(`\ntest files reaching ${FLAG_LEAF}: ${payload.counts.reachingFlagLeaf}`);
-console.log(`reaching ONLY through ${WIRING_HUB}: ${onlyViaWiringHub.length}`);
+console.log(`\nreaching ONLY through ${WIRING_HUB}: ${onlyViaWiringHub.length}`);
 console.log("\nper target (executable / type-only):");
 for (const [t, n] of Object.entries(perTarget)) console.log(`  ${String(n.value).padStart(4)} / ${n.typeOnly}  ${t}`);
 console.log("\nwho pulls the target in (shortest paths, all tests):");
