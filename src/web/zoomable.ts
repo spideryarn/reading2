@@ -37,6 +37,8 @@
  *    is ours by construction, which is what lets the click handler trust it.
  */
 
+import { costOn, leafClock, noteCost } from "./annotation-cost.js";
+
 /** The wrapper the button is positioned against. */
 export const ZOOM_WRAP_CLASS = "zoomable";
 
@@ -165,6 +167,25 @@ function outermost(el: Element, host: Element): Element {
  * only shows up on a long article.
  */
 export function addZoomHandles(html: string): string {
+  /* The stopwatch wraps the worker rather than sitting in front of each
+     `return`, so a `return` added later cannot escape it — src/web/annotation-cost.ts
+     § the header. Off by default; nothing here runs for an ordinary reader, and
+     `leafClock()` reads no clock in the mode the decision is made in — this is
+     the call `proseHtml` makes once per block, and the one whose timing
+     overhead would otherwise land inside `proseHtml`'s own interval.
+
+     The `mightHaveFigure` fast path is counted as a call, because "one regex
+     per block over 2,046 blocks" is a real cost and this instrument exists to
+     see it, not to be flattered by it. */
+  const counting = costOn();
+  const t0 = leafClock();
+  const out = zoomHandles(html);
+  if (counting) noteCost("addZoomHandles", t0);
+  return out;
+}
+
+/** `addZoomHandles` without the stopwatch — the whole of the real work. */
+function zoomHandles(html: string): string {
   if (!mightHaveFigure(html)) return html;
 
   const host = document.createElement("div");

@@ -30,13 +30,13 @@ import { functionalUpdate } from "@tanstack/react-table";
 import { throttle, useQueryState } from "nuqs";
 
 import type { AdminUser } from "../admin.js";
-import { ADMIN_CHIP_ORDER, ADMIN_DEFAULT_BY, adminColumns } from "./admin-columns.js";
+import { ADMIN_CHIP_ORDER, adminColumns } from "./admin-columns.js";
 import { buildCommit, buildTime, shortCommit } from "./build-stamp.js";
 import { DataTable, naturalDirections, SortChips, useSortedTable } from "./lib/DataTable.js";
 import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { adminByParam, sortDirParam } from "./params.js";
+import { ADMIN_DEFAULT_BY, adminByParam, sortDirParam } from "./params.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import {
   ADMIN_FEEDBACK_HREF,

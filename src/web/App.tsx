@@ -25,7 +25,7 @@ import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { isAdmin } from "../admin.js";
-import { AdminFeedbackPage, AdminHome, AdminUsersPage } from "./AdminPage.js";
+import { LazyPage } from "./LazyPage.js";
 import { LandingPage } from "./LandingPage.js";
 import { NotFoundPage } from "./NotFoundPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
@@ -37,7 +37,6 @@ import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
 import { useExperimental } from "./useExperimental.js";
-import { DesignPage } from "./DesignPage.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
 import {
@@ -292,6 +291,23 @@ const OWNER_HAS_EVERYTHING: PublicArtefacts = {
   sketch: true,
 };
 
+/**
+ * **The two routes whose code is not in the reader's initial download.**
+ * `LazyPage.tsx`
+ * has the reasoning; these are the four loaders it takes.
+ *
+ * Named-export adapters rather than `lazy(() => import("./AdminPage.js"))`,
+ * because `React.lazy` reads `module.default` and neither page has one — the
+ * bare form would send every visit to the failure surface. And **module
+ * scope**, because a loader's identity is a `useMemo` dependency: an inline
+ * arrow would build a new lazy type, and start a new fetch, on every render.
+ */
+const loadAdminHome = () => import("./AdminPage.js").then((m) => ({ default: m.AdminHome }));
+const loadAdminUsers = () => import("./AdminPage.js").then((m) => ({ default: m.AdminUsersPage }));
+const loadAdminFeedback = () =>
+  import("./AdminPage.js").then((m) => ({ default: m.AdminFeedbackPage }));
+const loadDesign = () => import("./DesignPage.js").then((m) => ({ default: m.DesignPage }));
+
 
 
 /**
@@ -489,18 +505,21 @@ function SignedIn({
      proof — it moved onto the `/admin` index on 2026-09-05 and stayed open to
      everybody, because the `if` was in the `admin` arm.
 
-     **Nothing is hidden by it.** These components are in the bundle every
-     signed-in reader downloads, and the SPA rewrite answers 200 at these
-     addresses whoever asks; `/design` reads no data at all, so there is nothing
-     behind it to refuse either. The only refusal that counts is the server's on
+     **Nothing is hidden by it.** These components are absent from the initial
+     reader download since 2026-09-05 (LazyPage.tsx), but their chunks are
+     public assets served to anyone who requests them, and the SPA rewrite
+     answers 200 at these addresses whoever asks; `/design` reads no data at
+     all, so there is nothing behind it to refuse either. **An unloaded chunk is
+     not a boundary**: the only refusal that counts is the server's on
      `/api/admin/`, which would turn down a hand-written `fetch` from any of
      these pages just the same. src/admin.ts § the two halves.
 
      **The shelf, and deliberately not the 404 page** that arrived on 2026-09-03
      for every address nobody minted (NotFoundPage.tsx). Same reason
      docs/project/admin.md gives for the server answering 403 rather than 404:
-     these pages exist, visibly, in everybody's bundle, so pretending the address
-     means nothing buys nothing and costs a true sentence.
+     these pages exist, visibly, and their code is there for anybody who asks,
+     so pretending the address means nothing buys nothing and costs a true
+     sentence.
 
      `key` for the same reason the shelf below carries one — this is the same
      component, reached a different way. */
@@ -543,7 +562,7 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        <DesignPage />
+        <LazyPage load={loadDesign} routeKey="design" />
       </>
     );
   // Signed in, the policy gets the corner logo like every other standalone
@@ -630,11 +649,11 @@ function SignedIn({
       <>
         <HomeLogo />
         {route.page === "users" ? (
-          <AdminUsersPage />
+          <LazyPage load={loadAdminUsers} routeKey="admin:users" />
         ) : route.page === "feedback" ? (
-          <AdminFeedbackPage />
+          <LazyPage load={loadAdminFeedback} routeKey="admin:feedback" />
         ) : (
-          <AdminHome />
+          <LazyPage load={loadAdminHome} routeKey="admin:home" />
         )}
       </>
     );
@@ -3230,6 +3249,12 @@ function Reader({
           be there in every mode too. */}
       <ProseHoverCard
         entries={terms}
+        /* Which article this is, and it is the *permission* for the third
+           lookup rather than part of its question: `GET /api/link-preview`
+           refuses to fetch a URL until it has proved this reader owns this
+           article and that this article really points at that URL.
+           ProseHoverCard.tsx § slug, src/link-previews.ts. */
+        slug={slug}
         sourceUrl={article.meta.url ?? null}
         /* A visitor's card describes a link and asks nobody about it. The
            lookups behind this are `GET /api/library`, which is authenticated,

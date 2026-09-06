@@ -9,6 +9,13 @@ one sentence, written into `converse.ts` at 00:27 on 2026-08-26, corrected in pl
 found, and copied verbatim — comment included — into six more files over six days. Three of the six
 findings against quiz mode were that sentence.
 
+**Done, 2026-09-04.** All seven production callers and the eval go through
+[`classifyEnd`](../../src/ai-call.ts); no local re-implementation of the stream-end judgement
+survives anywhere. `grep -rn openRouterStream --include=*.ts` over the tree that day found eight call
+sites and no ninth. The contract now lives in
+[ai-gateway.md § How a stream ends](../project/ai-gateway.md#stream-end), which is where a reader
+should be sent rather than at any one caller.
+
 ## What is actually duplicated
 
 A survey of every caller, 2026-09-01. **Seven in production**, not the five the postmortem counted:
@@ -202,6 +209,290 @@ four requests per turn and a `length` on round 2 currently vanishes. `referee-mi
 `referee-claims-run` and `referee-criteria-run` are somebody else's open work this week; all three
 are byte-identical to what `search.ts` had, so each is a mechanical commit once the file is free.
 
+### Stage D — the three referee callers ✅
+
+All three are byte-identical to what `search.ts` had before Stage C, so this is the mechanical
+commit the Stage C note promised: same three post-loop guards, same broken conjunction, same
+`stopped` flag set in two places.
+
+- [x] `referee-mirror.ts`, `referee-claims-run.ts`, `referee-criteria-run.ts` each lose their local
+      `finishReason`, their in-loop scrape, their `stopped` flag and the three guards, and gain one
+      `switch (classifyEnd(end, …).kind)` with a `never` default.
+- [x] **The same deliberate behaviour change Stage C made in `explain` and `search`, for the same
+      reason:** `finish_reason: "error"` throws `providerFailedMidAnswer()`. All three already throw
+      exactly that for the same event arriving as `chunk.error` **data**; the field form reached the
+      old conjunction, where a non-null reason could only make it *less* likely to fire, so a
+      provider that said it had errored had its half-answer handed to `parseHits` and reported as a
+      finished run if it happened to parse. **The red-first test is one per file**: a complete,
+      parseable payload, `[DONE]`, and `finish_reason: "error"` — green today, and green is the bug.
+- [x] `truncated` and `filtered` stay with the strict parse, exactly as in `search`: the payload is
+      one JSON object, so a reply cut off anywhere fails `parseHits` and the referee is told about
+      the answer rather than about the stream, and a `length` that lands *after* the object closed
+      is a legitimately short result. `unknown-finish-reason` is accepted on quiz's deny-list
+      reasoning. Pinned with a test in each file, so the next reader finds a decision and not an
+      omission.
+- [x] The clean reader-abort log line moves out of the `catch` and into `case "abandoned"`, as in
+      `explain` and `search` — one event, one path, one sentence.
+- [x] **`evals/referee-claims.ts` has no copy to remove**, and the review is right that changing it
+      is an addition rather than an unforking. It is done anyway, because it is six lines and the
+      hole is the exact class this plan exists for: `ablated()` deliberately has no clocks and no
+      invariants, so an arm whose answer was truncated and still parsed moves the numbers the eval
+      exists to produce, silently, and looks like a model that found fewer claims. It gains a
+      `classifyEnd` that throws on anything but a clean end — its "deadline" is the
+      `AbortSignal.timeout` it already passes, there is no reader and no stall clock —
+      **and a `chunk.error` throw inside the loop**, which is the review's third finding and the
+      reason the classifier alone would not have established the invariant: an in-band error frame
+      is data, never reaches `StreamEnd`, and every production caller throws on it in the loop.
+
+**What landed, 2026-09-04.** All three, and the eval. **The red-first evidence is the part worth
+keeping**: in every one of the three the pre-fix failure was `expect(sawDone).toBe(false)` →
+`received true` — a complete payload plus `finish_reason: "error"` plus `[DONE]` produced a
+*successful result*. That is the bug, reproduced three times, and it is why "no existing assertion
+changed" was never going to find it: no assertion was pointed at it.
+
+Two things worth recording:
+
+- **Mirror had no home for these tests**, so it has one now:
+  `tests/referee-mirror-stream-end.test.ts`. None of the four candidates fitted —
+  `referee-mirror.test.ts` opens with *"Nothing here calls a model"*, `referee-mirror-route.test.ts`
+  stubs `fetch` to **throw** because its point is that some runs never reach the model,
+  `referee-mirror-stream.test.tsx` is the React hook, and `overflow-message-reaches-its-caller.ts`
+  exists for one property compared across four callers. Mirror is the only one of the four JSON
+  callers with no run-file of its own.
+- **`wants-tools` is not quite dead in `referee-criteria-run.ts`**, and its comment says so rather
+  than repeating the other two. A `literature` criterion *does* send a tool, but
+  `openrouter:web_search` is run server-side by the gateway, so there is nothing for this process to
+  call and the finished text arrives on the same stream. Still a `break`; the union needed no change.
+
+*Abandonable as:* six callers on the shared truth, one on its own. Which is where Stage C left us,
+minus three.
+
+### Stage E — `converse`, and the fold it needs ✅
+
+The one caller whose migration is not mechanical, for the reason the top of this plan gives: it makes
+**up to four requests per turn** and resets `end` at the top of each, so `classifyEnd` is called
+**once per round** and the turn's verdict is a fold over the rounds' verdicts.
+
+- [x] The three post-loop guards inside the round loop — the signal-only reader test, the clocks, and
+      the broken conjunction — become one `classifyEnd` per round and one `switch`. Precedence is
+      unchanged in fact as well as in intent: `readerAborted` already returns false the moment either
+      clock has fired, so converse's reader-then-clocks order and the classifier's clocks-then-reader
+      order agree on every input.
+- [x] `stopped` loses **three** of its five assignments — the one in the `catch` and the signal-only
+      test after the loop become one reading of the round's outcome (`abandoned`), and the
+      turn-scope `let` stays because every guard after it steps aside when it is true. **The two
+      inside the tool batch stay, and that is a correction from the review**: a reader can stop
+      *after* a round has already classified as `wants-tools`, while its tools are running, and no
+      verdict computed before the batch can know that. `tests/converse-stop.test.ts` pins it. The
+      classifier answers "how did this stream end", and a reader who leaves between streams is not
+      an answer to that question.
+- [x] **`truncated` gains a second disjunct rather than becoming a plain sticky fold**, and the
+      difference is the review's second finding. Today it is `finishReason === "length"` where
+      `finishReason` is whatever the *final* round reported, and the plan named the hole at the top:
+      a model cut off mid-tool-call reports `length`, has its partial calls reassembled — `wanted`
+      needs only an id and a name, and `parseToolArgs` turns truncated arguments into `{}` rather
+      than failing — goes round again, and the next round overwrites the reason. So the answer the
+      reader was shown stopped mid-sentence and the flag says it did not.
+
+      An unguarded "any round that ended `length`" over-fires, though, and the panel's sentence is
+      a **failure** with a retry offered — *"This answer ran out of room and stopped mid-sentence"*
+      (`src/web/ChatPanel.tsx`, `src/types.ts` § `truncated`). A round that wrote **no prose** and
+      was cut off inside its tool arguments left nothing mid-sentence in the stored answer. So the
+      addition is guarded on the round having written prose:
+
+      > `truncated = !stopped && text.trim() !== "" && (the last round ended "truncated" || some
+      > round ended "truncated" having written prose)`
+
+      The first disjunct is today's reading, unchanged, so the change is **strictly additive** — it
+      can turn a `false` into a `true` and never the other way. `!stopped` stays in front of both,
+      because a reader's stop must not also be reported as our failure.
+      **Red-first test**: a two-round turn whose first round writes prose, asks for a tool and ends
+      `length`, and whose second ends cleanly, reports `truncated: false` today.
+- [x] **`finish_reason: "error"` throws `providerFailedMidAnswer()`**, as in the four callers before
+      it and for the same reason — converse already throws exactly that for the same event arriving
+      as `chunk.error` data. Nothing is lost: `src/routes.ts` stores whatever text arrived and marks
+      the row `error`, so the reader sees the half-answer *and* is told it is not one.
+      **Red-first test**: a complete answer, `[DONE]`, `finish_reason: "error"` — a clean `done`
+      today.
+- [x] What is **not** changed, and each pinned: a reader's stop is still a `done` with `stopped:
+      true` and never a throw (`tests/converse-stop.test.ts` is the whole file about that);
+      `filtered` is still stored as an ordinary answer, because a `ConverseEvent` has nowhere to say
+      otherwise and that is a product decision about what a reader is shown;
+      `wants-tools` keeps its existing meaning, including the `TOOL_CALL_LOST` guard, which is now
+      `outcome.kind === "wants-tools"` rather than a string comparison.
+
+**What landed, 2026-09-04.** Both red-first tests were watched red on `tests/converse-stream-end.test.ts`
+— a new file, because `converse-stop.test.ts` is about the stop button and should stay about it.
+The provider-error one failed on `expect(failure).toContain("[ai-interrupted]")` with `failure` still
+`null`, converse having yielded a clean `done`; the fold one on
+`expect(last.truncated).toBe(true)` → `received false`. **The control was then mutation-tested**:
+dropping the `roundText.trim() !== ""` guard turns it red, so it really is holding the fix back from
+over-reaching rather than passing by luck.
+
+One thing not in the plan and worth recording: **`TOOL_CALL_LOST` lost its `!stopped`**, because an
+interrupted round classifies as `abandoned` rather than `wants-tools`, so the guard steps aside for
+exactly the reason it always did with the union saying so instead of a flag.
+`tests/converse-stop.test.ts` § *"does not call a stop a garbled tool call"* pins it.
+
+**Two things converse needs that `StreamOutcome` deliberately does not carry**, and both are the
+caller's rather than gaps in the union: a reader who leaves **between** streams, while the tool batch
+is running — no per-stream verdict computed before the batch can know that; and whether a truncated
+round had written prose, which needs `roundText` and is what keeps `truncated` from apologising for
+an answer that is whole.
+
+*Abandonable as:* the whole migration, done.
+
+### Stage F — the docs, and the pointer that still named the wrong file ✅
+
+- [x] `docs/project/ai-gateway.md` gains the shared contract: `classifyEnd`, what it reports, what it
+      refuses to decide, and the table of who does what with `length`. That doc owns the gateway, and
+      this is a fact about the gateway.
+- [x] `docs/project/comments.md` around line 443 currently tells a reader that "the check is in
+      `explainStream`" and quotes the broken sentence as the thing to follow. It becomes a one-line
+      citation of `ai-gateway.md`. **The `#streaming` and `#stall-clock` anchors stay**, because
+      other docs link to them.
+- [x] This plan updated with what actually landed.
+
+**The inventory is closed.** `grep -rn openRouterStream --include=*.ts` over the whole tree,
+2026-09-04, finds **eight** call sites and no ninth: the seven production callers this plan is about
+and `evals/referee-claims.ts`. `src/transcribe.ts` checks `finish_reason: "length"` and is not one —
+it goes through `openRouterJson` and has no stream to end. The Messages wire
+(`src/messages-stream.ts`) has no copy of this judgement either: the SDK hands it a whole `message`,
+so there is no terminator to be missing.
+
+### Stage G — the class Stage E's bug belongs to, made unwriteable ✅
+
+Not in the original plan. Stage E fixed `truncated`; writing the postmortem for it —
+[260905i-the-round-variable-read-as-the-turns-answer.md](../postmortems/260905i-the-round-variable-read-as-the-turns-answer.md)
+— found that it was **the third time the same mistake had been made in this one file**, and the
+first two were each fixed in place without anybody naming the shape.
+
+The shape: **a variable the round loop rebuilds every iteration, read after the loop as though it
+summarised the loop.** `usage` (`2e5d6d69`, a three-round turn billed as a third of its real cost),
+`finishReason` for the failure log (`f1a7d7e6`), and `finishReason` again for `truncated`
+(`31830f73`). It is hard to see because **the wrong reading is correct whenever the turn has one
+round**, which is most turns and all the old tests.
+
+`engineering-manager.md` says the prevention a postmortem recommends becomes a stage in the same
+run, so it did. Its first recommendation, the easy high-value one:
+
+- [x] `roundLog`'s element becomes a named `RoundRecord` type with `ended` — the round's
+      `StreamOutcome["kind"]`, set beside the `switch` — and `prose` beside `chars`, because
+      "wrote something" and "wrote more than whitespace" are different questions and `truncated`
+      turns on the second.
+- [x] **Every turn-level fact is now computed from `roundLog` and nothing else.** The two
+      turn-scoped `let`s Stage E introduced are gone; `truncated` is
+      `lastRound?.ended === "truncated" || roundLog.some(r => r.ended === "truncated" && r.prose)`,
+      and `finishReason` is `roundLog.at(-1)?.finishReason` rather than a leftover read of `end`.
+      Identical in behaviour — the two mutations from Stage E were re-run against the new form and
+      both still turn their test red — and the difference is that "read the last round and call it
+      the turn" is now something you have to write out and can see yourself writing.
+- [x] A comment at the boundary saying so, because the next person to add a turn-level field is the
+      person this is for.
+
+*Abandonable as:* the same behaviour with the mistake harder to make. **Recommendations 2 and 3 of
+that postmortem are not done**: 2 is satisfied for this field (the multi-round helper
+`roundsOf(...bodies)` now exists in `tests/converse-stream-end.test.ts`, which was the missing
+piece), and **3 — extracting `runOneRound()` so a round's facts and a turn's facts are different
+types — is a real refactor of a 900-line generator and is deliberately left**, with the argument for
+it written down in the postmortem rather than lost.
+
+### Stage H — the round-two review, and the two P1s it found in the shared classifier ✅
+
+[260901g-stages-def-code-review-sol.md](260901g-stages-def-code-review-sol.md) — GPT Sol on the
+**built code**, which is the review that finds what a plan review cannot. It **refused**, on two
+established P1s, and it had run harnesses rather than reasoned: *"F5 and F6 are established P1s with
+end-to-end reproductions."* Both were reproduced independently here before anything was changed.
+
+- [x] **F5 (P1, accepted, fixed).** `classifyEnd` asked the signals before `end.terminated`, so a
+      deadline that fired in the gap between `[DONE]` arriving and the loop noticing it classified a
+      **complete answer** as `timed-out` and threw it away — *"The AI service did not finish
+      within…"* over the top of words the reader had already watched appear.
+
+      `terminated` is set **only** when `data: [DONE]` literally arrives
+      ([`src/openrouter-stream.ts`](../../src/openrouter-stream.ts)), so it is not something the
+      provider *said*; it is proof the complete SSE response was received, and nothing later
+      unreceives it. The three signal checks are now gated on `!end.terminated`. It does not weaken
+      the mid-stream cases those checks exist for: a clock that fires while the stream is running
+      ends it *without* `[DONE]`.
+
+      **Not this change's bug — it predates the classifier**, because every caller's old sequence
+      also threw on `deadline.aborted` regardless of the terminator. Fixed here because this plan
+      owns `classifyEnd`, and one fix covers all seven callers.
+
+      Reproduced without Sol's timing harness, deterministically: the whole reply — prose, finish
+      reason and `[DONE]` — arrives as **one enqueued chunk**, so `sseChunks` takes it in a single
+      read and is suspended mid-line-buffer with the terminator received and not yet seen. The test
+      is the consumer, so sleeping between events resumes it only once the deadline has certainly
+      fired. `tests/converse-stream-end.test.ts` § *"a terminator that had already arrived when our
+      own clock fired"*, plus three cases in `tests/openrouter-stream.test.ts`.
+
+      **And one existing test asserted the opposite.** *"blames our deadline before anything the
+      provider said"* supplied `terminated: true`, which is the fixture that made it wrong — Sol's
+      words: *"A terminator is not merely something the provider said; it proves the complete SSE
+      response arrived."* Its fixture is now `terminated: false`, which is what it always meant.
+
+- [x] **F7 (P2, accepted, fixed).** `openRouterStream`'s reset cleared `finishReason` and `answered`
+      and **not `terminated`**, under a comment promising that a reused `end` "cannot carry a stale
+      verdict into a new stream". Nothing reuses one today; the defect is that the comment is the
+      thing the next caller will read. Worse after F5, because a stale `terminated: true` now
+      suppresses the clock checks too. Red-first in `tests/ai-call.test.ts`.
+
+- [x] **F6 (P1, accepted in substance; the fix is split, and half of it is Greg's).** Sol's
+      reproduction: round one writes *"I'll check that.\n\n"* — a complete sentence — emits a usable
+      tool call and ends `length`; round two answers cleanly. Stage E's fold reports
+      `truncated: true`, and the panel says *"This answer ran out of room and stopped mid-sentence"*.
+      Neither sentence is incomplete.
+
+      **The flag is right and the sentence overclaims.** A step *was* cut off and content *was*
+      lost, which is what the reader needs to know; whether the stored text ends mid-sentence is not
+      observable from `finish_reason`, and Sol says so plainly: *"The available wire signals cannot
+      reliably determine grammatical or semantic incompleteness."* So the fold stays — reverting it
+      would restore a silent success, which is the failure this whole plan exists to stop, and the
+      false positive costs a reader an unnecessary retry where the false negative costs them a
+      truncated answer with no warning at all.
+
+      `src/types.ts` § `truncated` now states the observable fact, close to Sol's wording: *"At least
+      one provider round hit its output limit after writing prose"*, with a note that the panel's own
+      sentence still overclaims. **The panel's copy is not changed**: this job is server-side only by
+      its brief and must not touch `src/web/`, and what a reader is shown is a product decision that
+      is Greg's. Written down where the field is defined rather than left for somebody to rediscover.
+
+**The narrowly scoped check of those fixes** —
+[260901g-stage-h-narrow-check-sol.md](260901g-stage-h-narrow-check-sol.md), which
+`engineering-manager.md` requires because the fix for an established P1 is by definition not in the
+round it was found in. It passed the three things that mattered and found one more:
+
+- **F5's fix verified, including the part I could not.** *"`terminated = true` has one production
+  writer, the literal `[DONE]` branch… Production constructors use `false`; no production caller
+  aliases or reuses the object. Gating the signals is correct."* And on the three callers this job
+  does not own: *"the changed precedence accepts only an already-complete stream"*.
+- **Stage G verified behaviour-neutral**, which was its whole claim: *"no disagreeing completed-turn
+  input found"*, with the `noteRound`-then-`classifyEnd` ordering checked explicitly.
+- [x] **F8 (P2, new, established, fixed).** The reset sat **after** the response had been validated,
+      so a reused `end` was still stale for an attempt that aborted, was refused, or came back with
+      no body — the caller would then classify a call that never reached a byte using the previous
+      stream's terminator. The three assignments now run **before `send`**, which is what an
+      out-parameter meaning "how did *this attempt* end" requires: cleared when the attempt starts,
+      not when it starts going well. Red-first, and the mutation that moves it back turns the new
+      test red.
+
+**F6 is the one thing left open, and it is deliberately not mine.** Sol's verdict was REFUSE on it a
+second time, and on the disposition rather than the reasoning: *"The server-only boundary is
+defensible as ownership, but it does not resolve F6. Put the copy change to the product owner."*
+Which is exactly what this is. The panel says *"This answer ran out of room and stopped
+mid-sentence"* where the server now only claims the answer *may* be incomplete, and Sol's suggested
+replacement is:
+
+> A model step hit its output limit after writing part of this answer. The answer may be incomplete;
+> try again.
+
+It is one string in `src/web/ChatPanel.tsx`, this job's brief forbids touching `src/web/`, and what a
+reader is shown is Greg's call. **Not overruled — handed over.**
+
+*Abandonable as:* the migration, plus a shared-classifier bug that was there before it and is now
+fixed for all seven callers, plus one sentence of reader-facing copy waiting on Greg.
+
 ## What this is not
 
 **Not** the transport half of `§ 3.4` — key, endpoint, headers, clocks and accumulation stay where
@@ -220,6 +511,26 @@ twice; the classifier is what stops there being an eighth.
 
 ## The reviews
 
+- The **narrowly scoped check of the F5/F6/F7 fixes and of Stage G**, neither of which was in the
+  round-two snapshot: [260901g-stage-h-narrow-check-sol.md](260901g-stage-h-narrow-check-sol.md),
+  prompt at [260901g-stage-h-narrow-check-prompt.md](260901g-stage-h-narrow-check-prompt.md). Found
+  F8, and refused a second time on F6 — on the disposition rather than the reasoning, which is what
+  puts that one in front of Greg rather than in a plan.
+- Stages D–G, **on the built code**:
+  [260901g-stages-def-code-review-sol.md](260901g-stages-def-code-review-sol.md) — refused, on two
+  established P1s it had reproduced by running harnesses rather than by reading. Both were real, one
+  of them (F5) a bug older than this migration living in the shared classifier. The prompt is
+  [260901g-stages-def-code-review-prompt.md](260901g-stages-def-code-review-prompt.md) and the
+  evidence handed to it is
+  [260901g-stages-def-test-evidence.md](260901g-stages-def-test-evidence.md). This is the round that
+  earned its keep: the plan review a week earlier could not have found F5, because F5 is not in the
+  plan.
+- Stages D, E and F, **on the plan**:
+  [260901g-stages-def-review-sol.md](260901g-stages-def-review-sol.md) — reviewed
+  the plan **before it was built**, and three of its four findings changed the design: `stopped`
+  cannot be derived from the round's outcome alone, the `truncated` fold over-fired as first
+  written, and an in-band `chunk.error` never reaches `StreamEnd`, so the classifier alone would not
+  have given the eval the invariant it was promised.
 - Stage A and B: [260901g-…-review-sol.md](260901g-one-stream-end-classification-review-sol.md)
   — reviewed the plan, and its one correction (`unknown-finish-reason`, rather than folding an
   unrecognised reason into `finished`) is the member of the union that matters.

@@ -63,9 +63,12 @@ import type {
   ChatStore,
   CommentStore,
   FeedbackStore,
+  FetchAllowanceStore,
   GlossaryLookupStore,
   GlossaryStore,
   LibrarySearch,
+  LinkPreviewStore,
+  LinkSummaryStore,
   ReaderStore,
   RealtimeSessionStore,
   RefereeClaimsStore,
@@ -83,6 +86,9 @@ import { pgChatStore } from "./pg-chat.js";
 import { pgCommentStore } from "./pg-comments.js";
 import { pgFeedbackStore } from "./pg-feedback.js";
 import { pgGlossaryStore } from "./pg-glossary.js";
+import { pgLinkPreviewStore } from "./pg-link-previews.js";
+import { pgLinkSummaryStore } from "./pg-link-summaries.js";
+import { pgFetchAllowanceStore } from "./pg-rate-limit.js";
 import { pgGlossaryLookupStore } from "./pg-lookups.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
@@ -446,6 +452,43 @@ export const visibilityStore: VisibilityStore = guarded("visibility", pgVisibili
  * now, so there is nothing to decline.
  */
 export const feedbackStore: FeedbackStore = guarded("feedback", pgFeedbackStore);
+
+/* -------------------------------------------------------- link previews -- */
+
+/**
+ * **What the page on the other end of a hyperlink says about itself.**
+ *
+ * The one seam here whose rows have **no owner** — see src/db/schema.ts §
+ * `linkPreviews` for why that is the privacy feature rather than a lapse, and
+ * what three things had to be true before it could be. Guarded like the rest:
+ * `guardDbStore` matters as much here as anywhere, because a failed Drizzle
+ * query puts every bound parameter into `Error.message` and the bound parameter
+ * here is a URL somebody hovered.
+ */
+export const linkPreviewStore: LinkPreviewStore = guarded("link-previews", pgLinkPreviewStore);
+
+/**
+ * **How that page stands to the piece the reader is holding** — the Luna
+ * summary, cached per reader, per article, per address.
+ *
+ * The owned half of the same card, and the counterpart to the ownerless seam
+ * above: one holds what a page says about itself and is the same for everybody,
+ * this one is written from a reader's own profile and is shared with nobody.
+ * src/db/schema.ts § `linkSummaries` for why the two are separate tables.
+ */
+export const linkSummaryStore: LinkSummaryStore = guarded("link-summaries", pgLinkSummaryStore);
+
+/**
+ * **How many outbound fetches one reader's pointer may cause.**
+ *
+ * Owner-scoped where the table above is ownerless, and the two must never be
+ * joined: one knows what was fetched and nothing about who asked, the other
+ * knows who asked and nothing about what. src/store/pg-rate-limit.ts.
+ */
+export const fetchAllowanceStore: FetchAllowanceStore = guarded(
+  "fetch-allowance",
+  pgFetchAllowanceStore,
+);
 
 /* -------------------------------------------------------- the AI ledger -- */
 

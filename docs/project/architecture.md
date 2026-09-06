@@ -122,8 +122,8 @@ artefacts on disk, not by reaching into another stage's code.
 | 5c | the thread — the article as numbered posts ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)). **Not run by a plain add**: in `STEP_ORDER`, out of `DEFAULT_INGEST_STEPS` | **tweet thread** ([`src/tweets.ts`](../../src/tweets.ts)) | `tweets.json` |
 | 5d | the glossary — the terms this piece uses, defined from it ([glossary.md](glossary.md)). **Not run by a plain add**, same as 5c | **glossary** ([`src/glossary.ts`](../../src/glossary.ts)) | `glossary.json` |
 | 5f | the **ideas** — the propositions the piece needs you to hold, the ones it assumes and the ones it adds ([ideas.md](ideas.md)). **Not run by a plain add**, same as 5c–5d. The first stage whose freshness covers the *tree* as well as the blocks, and the first that lets the model name block ids — so every one it names is checked against `blocks.json` | **ideas** ([`src/ideas.ts`](../../src/ideas.ts)) | `ideas.json` |
-| 6 | server + client — see [granularity-zoom.md § The tabular view](granularity-zoom.md#the-tabular-view). **Sanitises again at ingress** ([security.md](security.md#sanitised-twice-on-purpose)) — stage 3 used jsdom's parser, this one uses the browser's | **granularity zoom** | `src/api.ts`, `src/routes.ts`, `src/web/` |
-| 6b | ingest queue — runs stages 1–5b on demand ([ingest-queue.md](ingest-queue.md)) | **granularity zoom** | `data/_jobs/`, `src/jobs.ts`, `src/pipeline.ts` |
+| 6 | server + client — see [granularity-zoom.md § The tabular view](granularity-zoom.md#the-tabular-view). **Sanitises again at ingress** ([security.md](security.md#sanitised-twice-on-purpose)) — stage 3 used jsdom's parser, this one uses the browser's | **granularity zoom** | `src/routes.ts`, `src/store/pg.ts`, `src/web/` |
+| 6b | ingest queue — runs stages 1–5b on demand ([ingest-queue.md](ingest-queue.md)) | **granularity zoom** | the `jobs` table, `src/jobs.ts`, `src/pipeline.ts` |
 | 7 | reading assistant: comments — see [comments.md](comments.md) | **granularity zoom** | `comments.json`, `src/explain.ts` |
 
 Stage 3 was previously unassigned. Greg settled it on 2026-08-24: it belongs with the hierarchy,
@@ -152,17 +152,16 @@ foreign keys rather than good intentions, and a nullable timestamp wherever a bo
 away when it happened. [export.md](export.md) is the way data leaves: the zip a reader downloads for
 one article, and the `db:export` rollback it shares its queries with.
 
-**Moved, as of 2026-09-01.** Every store — reader and pipeline alike — is Postgres under
-Postgres, which since 2026-09-05 is the only store there is: a pipeline job commits each step's
-product into a draft revision and publishes it in one transaction with the job's own finish, rather
-than writing the filesystem layout below. Under the `files` default — a laptop with the flag unset —
-the same stages write that layout, unchanged, until stage 4 deletes it.
+**Moved, as of 2026-09-01, and since 2026-09-05 the only store there is.** A pipeline job commits
+each step's product into a draft revision and publishes it in one transaction with the job's own
+finish, rather than writing the filesystem layout below. `SPIDERYARN_STORE=files` throws
+([`src/store/live.ts`](../../src/store/live.ts)) rather than falling back to it.
 [database.md](database.md) has the mechanism;
 [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3 is the
 write-up, and [260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md) the
 reasoning.
 
-The layout the pipeline writes, one directory per article:
+The layout the pipeline used to write, one directory per article, until 2026-09-05:
 
 ```
   data/_jobs/       ingest job records, one file per job (ingest-queue.md)
@@ -255,16 +254,17 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 - One process, one command: `npm run dev`. The API is currently mounted as **Vite dev middleware**
   ([`vite.config.ts`](../../vite.config.ts)) rather than as a separate server, so there is nothing to
   run in a second terminal while the ideas are still moving. The reads live in
-  `src/api.ts` as a plain transport-free `loadArticle(slug)` — that is the seam a
+  `src/store/pg.ts`, bound to `loadArticle(slug)` in `src/store/index.ts` — that is the seam a
   standalone Node server wraps when one is needed, so choosing Express or Hono stays a deferred
   decision rather than a revisited one.
-- `loadArticle` looks in `data/<slug>/`, and in [`example/`](../../example/README.md) — the
-  hand-authored placeholder — **only for the slug `example`**. Real pipeline output under
-  `data/example/` still supersedes the fixture with no code change. It used to fall back to the
-  fixture for *every* slug, which meant an article with no tree yet, or no article at all, was
-  answered with the fixture's prose under the reader's own address; the reasoning for taking that
-  away is on `candidateDirs` in `src/api.ts`, and the security half of it is in
-  [security.md § Why it survived being looked at](security.md#why-it-survived-being-looked-at).
+- Until 2026-09-05, `loadArticle` fell back to [`example/`](../../example/README.md) — the
+  hand-authored placeholder — for the slug `example` only, so a fresh clone had something to open
+  before the pipeline had ever run; it used to fall back for *every* slug, which meant an article
+  with no tree yet, or no article at all, was answered with the fixture's prose under the reader's
+  own address, and the security half of narrowing that is in
+  [security.md § Why it survived being looked at](security.md#why-it-survived-being-looked-at). That
+  fallback went with `src/api.ts`, the filesystem reader it lived in; the fixture itself survives,
+  seeded into Postgres like any other article ([example/README.md § Replacing it](../../example/README.md#replacing-it)).
 - API is thin: `GET /api/article/<slug>` returns `meta + blocks + tree`. The client has everything
   it needs for every zoom level in one payload; zooming must never hit the network. `GET /api/library`
   returns one small record per article for the homepage — [library.md](library.md). The comment
@@ -272,9 +272,9 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   ([ingest-queue.md](ingest-queue.md)) are the rest. All of them live in
   [`src/routes.ts`](../../src/routes.ts), which is the connect-shaped wrapper a standalone server
   would mount unchanged.
-- **`src/api.ts` is the seam a database goes behind.** It is the only file that knows articles are
-  directories; everything above it sees `Article` and `LibraryEntry`, both shaped as rows rather than
-  as files. See [library.md § When this becomes Postgres](library.md#when-this-becomes-postgres).
+- **`src/store/pg.ts`, reached through `src/store/index.ts`, is the seam the database lives behind.**
+  It is the only place that knows articles are Postgres rows; everything above it sees `Article` and
+  `LibraryEntry`. See [library.md § When this becomes Postgres](library.md#when-this-becomes-postgres).
 - React client. The reading view is described in
   [granularity-zoom.md § Interaction](granularity-zoom.md#interaction) — note especially that scroll
   position is a **block id**, never a pixel offset. Brand and reading tokens come from

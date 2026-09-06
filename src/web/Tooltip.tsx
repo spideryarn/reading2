@@ -297,6 +297,7 @@ export function ControlTip({
   what,
   drawn,
   how,
+  tap,
 }: {
   head: string;
   state?: string | undefined;
@@ -311,6 +312,23 @@ export function ControlTip({
    */
   drawn?: string | undefined;
   how: string;
+  /**
+   * **"Tap again to do it"**, and only ever that shape.
+   *
+   * A card opened by a *finger* is the one case where the reader has pressed
+   * the control and it has not done anything — reveal, then commit
+   * (docs/project/touch.md). Nothing else on the card says so, and a control
+   * that appears to have been pressed and ignored reads as broken.
+   *
+   * The caller decides when to pass it, and both halves of that decision are
+   * the spine's, made for the same reasons (Spine.tsx § `showTapHint`): only
+   * when a finger opened the card — saying "tap again" to somebody holding a
+   * mouse is noise — and only where a second tap would actually do something.
+   *
+   * Last in the card, because it is the only line that is about the *gesture*
+   * rather than the control.
+   */
+  tap?: string | undefined;
 }) {
   return (
     <>
@@ -319,6 +337,7 @@ export function ControlTip({
       <p>{what}</p>
       {drawn && <p className="tip-soon-drawn">{drawn}</p>}
       <p className="tip-soon-how">{how}</p>
+      {tap && <p className="tip-soon-tap">{tap}</p>}
     </>
   );
 }

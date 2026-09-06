@@ -32,7 +32,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import {
@@ -115,6 +115,54 @@ const TREE: Tree = {
         },
       ]),
     ),
+  },
+} as Tree;
+
+/**
+ * The one shape `c8e2cc7e` made illegal: `n1` covers the whole of `n0`'s range
+ * and has children of its own, so one rung finer restates the same blocks.
+ * Everything else about it is well-formed, so `checkTree` reports exactly one
+ * problem and a refusal cannot be about something else.
+ */
+const RESTATED_RUNG: Tree = {
+  version: "toc/1",
+  generator: "fixture",
+  slug: SLUG,
+  rootId: "n0",
+  nodes: {
+    n0: {
+      id: "n0", depth: 0, parent: null, children: ["n1"],
+      range: [BLOCKS[0]!.id, BLOCKS[1]!.id],
+      title: "A fixture article",
+      gist: "A fixture built by tests/store-publish-guards.test.ts and nothing else.",
+    },
+    n1: {
+      id: "n1", depth: 1, parent: "n0", children: ["n2", "n3"],
+      range: [BLOCKS[0]!.id, BLOCKS[1]!.id],
+      title: "The rung that says it again",
+      gist: "The same two paragraphs as its parent, one rung finer and no finer.",
+    },
+    n2: {
+      id: "n2", depth: 2, parent: "n1", children: [],
+      range: [BLOCKS[0]!.id, BLOCKS[0]!.id],
+      title: "A paragraph",
+      navLabel: "One paragraph of a fixture article that exists only for this test",
+    },
+    n3: {
+      id: "n3", depth: 2, parent: "n1", children: [],
+      range: [BLOCKS[1]!.id, BLOCKS[1]!.id],
+      title: "A paragraph",
+      navLabel: "One paragraph of a fixture article that exists only for this test",
+    },
+  },
+} as Tree;
+
+/** The same defect under a different title, so it is not the same JSON. */
+const RESTATED_RUNG_MOVED: Tree = {
+  ...RESTATED_RUNG,
+  nodes: {
+    ...RESTATED_RUNG.nodes,
+    n1: { ...RESTATED_RUNG.nodes.n1!, title: "The rung that says it again, differently" },
   },
 } as Tree;
 
@@ -233,5 +281,121 @@ describe("the publication guard", () => {
     const published = await publishRevision({ slug: SLUG, revisionId });
     expect(published.revisionId).toBe(revisionId);
     expect(published.scalars.blockCount).toBe(BLOCKS.length);
+  });
+  /* -------------------------------------------------------------------------
+     A tree that was legal when it was published, and is not now.
+
+     This is the shape that took `nagel-bat` off the air on 2026-09-05, and it
+     is not hypothetical: `c8e2cc7e` added the "no rung may restate its parent"
+     rule to `checkTree` that morning, deployed it, and every article whose
+     ALREADY-PUBLISHED tree had that shape stopped being able to publish
+     anything at all — glossary, quotes, debate, any mode — because
+     `beginDraftIn` copies the base tree forward verbatim and
+     `reasonsNotToPublish` runs the whole of `checkTree` on it again.
+
+     Four refusals in thirteen minutes on one article, each after its paid model
+     call had already completed, each reported to the reader as "trying again is
+     worth a go". Which was false: the failure is deterministic and permanent.
+
+     `UPDATE`ing the published tree is exactly what the invariant change did —
+     it made a stored tree illegal without anything writing to it. There is no
+     other way to get one: the guard refuses to publish it in the first place.
+     ------------------------------------------------------------------------- */
+
+  /** The published tree, poisoned in place; returns the good one to put back. */
+  async function poisonThePublishedTree(): Promise<() => Promise<void>> {
+    const db = getDb();
+    const [article] = await db
+      .select({ id: articles.id, current: articles.currentRevisionId })
+      .from(articles)
+      .where(eq(articles.slug, SLUG));
+    const current = article?.current;
+    if (!current) throw new Error("no published revision to poison — beforeAll did not run");
+    await db.update(articleRevisions).set({ tree: RESTATED_RUNG }).where(eq(articleRevisions.id, current));
+    return async () => {
+      await getDb().update(articleRevisions).set({ tree: TREE }).where(eq(articleRevisions.id, current));
+    };
+  }
+
+  /**
+   * **The red one.** Watched failing before the fix existed, with the sentence
+   * production produced verbatim:
+   *
+   * > `PublishRefused: Refusing to publish "test-publish-guards": n0 → n1: covers
+   * > its parent's whole range, so one rung finer restates the same blocks…`
+   *
+   * There is no `.set({ tree })` here, and that is the whole point: this draft
+   * did not touch the tree. It is what a glossary step's draft looks like.
+   */
+  it("publishes a draft carrying a bad tree it did not change", async () => {
+    const putBack = await poisonThePublishedTree();
+    try {
+      const { revisionId } = await beginRevision({ slug: SLUG });
+
+      const published = await publishRevision({ slug: SLUG, revisionId });
+      expect(published.revisionId).toBe(revisionId);
+    } finally {
+      await putBack();
+    }
+  });
+
+  /**
+   * **The laundering path GPT Sol found before it shipped.**
+   *
+   * `checkTree` is a function of the *pair* `(blocks, tree)`, so an exemption
+   * that compared only the tree would let a draft change its blocks — causing a
+   * fresh tree problem — and be waved through because the tree JSON matched.
+   * `hashBlocks` would not catch it either: it fingerprints `id`, `text`, `role`
+   * and `treatment`, and `checkTree` reads `kind`.
+   *
+   * This asserts the mechanism rather than one synthesised failure: change a
+   * block and the exemption must not apply, so the carried tree's problem is
+   * reported exactly as it was before the fix.
+   *
+   * Watched red by comparing only the tree — which is what the first draft of
+   * the fix did.
+   */
+  it("withholds the exemption from a draft that changed its blocks", async () => {
+    const putBack = await poisonThePublishedTree();
+    try {
+      const { revisionId } = await beginRevision({ slug: SLUG });
+      /* One column, on one block, that `hashBlocks` does not fingerprint. The
+         tree is untouched and still equal to the base's. */
+      await getDb()
+        .update(revisionBlocks)
+        .set({ kind: "heading" })
+        .where(
+          and(eq(revisionBlocks.revisionId, revisionId), eq(revisionBlocks.blockId, BLOCKS[0]!.id)),
+        );
+
+      const refusal = await publishRevision({ slug: SLUG, revisionId }).catch((err) => err);
+      expect(refusal).toBeInstanceOf(PublishRefused);
+      expect((refusal as PublishRefused).message).toContain("covers its parent's whole range");
+    } finally {
+      await putBack();
+    }
+  });
+
+  /* The other half, and the reason the exemption is narrow: a publication that
+     ALTERS the tree is judged on the tree it is proposing, however bad the one
+     it inherited was. Without this, the fix above would be a way to launder a
+     broken tree into an article by starting from a broken one. */
+  it("still refuses a bad tree that this draft actually changed", async () => {
+    const putBack = await poisonThePublishedTree();
+    try {
+      const { revisionId } = await beginRevision({ slug: SLUG });
+      /* Same defect, different tree: one extra leaf under the restated rung, so
+         it cannot be mistaken for the carried-forward one. */
+      await getDb()
+        .update(articleRevisions)
+        .set({ tree: RESTATED_RUNG_MOVED })
+        .where(eq(articleRevisions.id, revisionId));
+
+      const refusal = await publishRevision({ slug: SLUG, revisionId }).catch((err) => err);
+      expect(refusal).toBeInstanceOf(PublishRefused);
+      expect((refusal as PublishRefused).message).toContain("covers its parent's whole range");
+    } finally {
+      await putBack();
+    }
   });
 });

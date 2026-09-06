@@ -419,30 +419,6 @@ const ESCAPE = /%([0-9A-Fa-f]{2})/g;
 /** RFC 3986's unreserved set — the only characters whose encoding means nothing. */
 const UNRESERVED = /[A-Za-z0-9\-._~]/;
 
-/**
- * Would fetching these two ask a server for the same thing?
- *
- * **Three callers, all asking the same question about the article's own
- * address**, and it is worth listing them because the shared implementation is
- * the point:
- *
- * - `articleLinks` (src/chat-tools.ts) — a self-link written the long way round,
- *   `href="https://this.article/#section"`, is still a self-link;
- * - `read_web_page` (src/chat-tools.ts) — refusing to go and fetch the article
- *   the model is already holding;
- * - `admissible` (src/debate.ts) — a citation whose target is `meta.url` is the
- *   article presented as a response to *itself*, and such a row passes every
- *   other defence that mode has: real URL, real quote from that URL, real claim
- *   quote. Stage 0 saw the article come back among its own annotations.
- *
- * **Not `urlKey`** in any of the three, for the reason `requestTarget` gives:
- * the shelf's sameness folds `http` into `https` and `www.` into the bare host,
- * which is generous in the wrong direction here.
- */
-export function sameTarget(a: string, b: string): boolean {
-  const one = requestTarget(a);
-  return one !== null && one === requestTarget(b);
-}
 
 /**
  * One parenthesised group in a URL, itself allowed to hold one nested pair.
@@ -620,5 +596,131 @@ export function withoutWebLinks(text: string): string {
     out = out.slice(0, link.index) + " ".repeat(link.end - link.index) + out.slice(link.end);
   }
   return out;
+}
+
+/* ------------------------------------------------- what a GET asks for --- */
+
+
+/**
+ * **Would fetching these two ask a server for the same thing?**
+ *
+ * `requestTarget` equality, and nothing more. It was a *generous* comparison for
+ * one day — 2026-09-05 — on the argument that its caller is `read_web_page`
+ * refusing to re-fetch the article the reader already has open, and that
+ * over-matching there costs only a fetch nobody needed.
+ *
+ * **That argument was wrong and the test that killed it is in
+ * tests/chat-tools.test.ts.** `…/a%2Fb` and `…/a/b` are different request
+ * targets — one asks for a single segment whose name contains a slash — so
+ * folding them is this tool telling the model a page is already open when it is
+ * a *different page*, and the cost is not a wasted fetch but a page the model
+ * needed and did not get. `requestTarget` already folds the escapes that really
+ * are one spelling of one character (RFC 3986's unreserved set), which is the
+ * whole of what the generous version was reaching for.
+ *
+ * Kept as a named function rather than inlined: the name is what the two call
+ * sites are asking, and `requestTarget(a) === requestTarget(b)` at each of them
+ * would be two places to get the null case wrong.
+ */
+export function sameTarget(a: string, b: string): boolean {
+  const one = requestTarget(a);
+  return one !== null && one === requestTarget(b);
+}
+
+/**
+ * The query-parameter names that make a URL look like a key rather than an
+ * address — see `carriesCredential`.
+ *
+ * Compared with punctuation and case stripped, so `X-Amz-Signature`,
+ * `access_token` and `apiKey` all land on one entry.
+ */
+const CREDENTIAL_PARAMS = new Set([
+  "token",
+  "tokenhash",
+  "accesstoken",
+  "idtoken",
+  "refreshtoken",
+  "auth",
+  "authkey",
+  "authorization",
+  "apikey",
+  "key",
+  "resourcekey",
+  "rlkey",
+  "secret",
+  "clientsecret",
+  "password",
+  "passwd",
+  "passcode",
+  "pwd",
+  "pin",
+  "otp",
+  "signature",
+  "sig",
+  "hmac",
+  "jwt",
+  "session",
+  "sessionid",
+  "sid",
+  "ticket",
+  "code",
+  "invite",
+  "share",
+  "sharekey",
+  "xamzsignature",
+  "xamzcredential",
+  "xamzsecuritytoken",
+  "xgoogsignature",
+  "xgoogcredential",
+]);
+
+/**
+ * **Does this URL look like it carries something that works like a key?**
+ *
+ * A signed S3 link, an unsubscribe token, a password-reset address, a session id
+ * in a query string. `link_previews` (src/db/schema.ts) is the first ownerless
+ * table in this schema — a row in it outlives the article that introduced it and
+ * answers to any reader who hovers the same address — so *the exact URL plus
+ * what came back from it* is the worst available place to put a credential. Such
+ * URLs are refused rather than cached. GPT Sol, 2026-09-05, finding P1-7.
+ *
+ * ## It is a heuristic and it cannot be complete, and that has to be said
+ *
+ * The first version of this comment claimed the guarantee outright —
+ * *"credential-bearing URLs are refused"* — and a review was right that a
+ * name-based denylist cannot support that sentence: a capability can live in a
+ * path segment, or under a parameter name nobody has thought of. What this
+ * *does* give is the common shapes, refused before the row is written, plus one
+ * thing that matters more than the list: **the caller checks every URL in the
+ * redirect chain**, not only the one the author published, because a harmless
+ * published address can redirect into a signed one. GPT Sol, P1-3.
+ *
+ * Two rules, and both are deliberately over-eager. The cost of a false positive
+ * is a card that stays exactly as it was, which is what the reader already sees
+ * for any destination we cannot reach; the cost of a false negative is a secret
+ * written into a shared table.
+ *
+ * 1. `user:pass@host` — `hasCredentials` above, which the chat renderer already
+ *    uses for the same reason.
+ * 2. A query parameter whose **name** is in `CREDENTIAL_PARAMS`. Names rather
+ *    than value shapes, because a token is only a string and any entropy test
+ *    would refuse ordinary article slugs. `code`, `key` and `share` are on the
+ *    list knowing they have innocent uses: the cost of refusing one of those is
+ *    a card that says a little less.
+ */
+export function carriesCredential(url: string): boolean {
+  if (hasCredentials(url)) return true;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    // Unparseable is somebody else's refusal to report; it is certainly not
+    // something to write into a shared table.
+    return true;
+  }
+  for (const name of parsed.searchParams.keys()) {
+    if (CREDENTIAL_PARAMS.has(name.toLowerCase().replace(/[^a-z0-9]/g, ""))) return true;
+  }
+  return false;
 }
 

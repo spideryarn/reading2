@@ -76,7 +76,11 @@ const LINK: LinkPreview = {
 let seen: { loading: boolean; shelfKnown: boolean; library: unknown } | null = null;
 
 function Probe() {
-  const facts = useLinkFacts(LINK, "https://noema.example/the-piece");
+  const facts = /* No slug: this suite is about the shelf read, and a slug would set the
+     third lookup off at our own server as well. `null` is the honest value for
+     a probe that is not standing in an article — and so is the block after it,
+     for the same reason. */
+  useLinkFacts(LINK, "https://noema.example/the-piece", null, null);
   seen = { loading: facts.loading, shelfKnown: facts.shelfKnown, library: facts.library };
   return null;
 }

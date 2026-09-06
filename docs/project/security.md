@@ -765,8 +765,9 @@ does not get compared against the code unless somebody thinks to.
 under the answer ([`ChatPanel.tsx`](../../src/web/ChatPanel.tsx)). Allowlisted by `isWebUrl` in
 [`src/urls.ts`](../../src/urls.ts), and allowlisted **twice**: once in `collectCitations` in
 [`src/openrouter-stream.ts`](../../src/openrouter-stream.ts) before the URL is stored, and again in
-the panel before it is rendered. The repetition is deliberate — `chat.json` is a file on disk that
-predates the check and can be hand-edited, and the render is the boundary that actually matters.
+the panel before it is rendered. The repetition is deliberate — stored chat state (`chat.json` on
+disk until 2026-09-05, a `chat` row now) can predate the check or be edited directly, and the render
+is the boundary that actually matters.
 
 **The first of those two was itself two, until 2026-08-28.** Chat and explanations each read the
 model's `annotations` with their own byte-identical copy of the rule, so a fix to the check would

@@ -1131,12 +1131,55 @@ const MIN_STRENGTH = 0.35;
  * thread `?refscale=` through look exactly like passing `rg` deliberately, and
  * the whole point of one scale for the whole mode is that the two ramps put red
  * at opposite ends of the truth.
+ *
+ * **The pressed result is applied on top of a cached, `openKey`-free set of
+ * marks** — see `unpressed` below, which is where that matters and why.
  */
 export function hitMarks(
   found: Found[],
   openKey: string | null,
   scale: DivergingScale,
 ): Map<BlockId, Mark[]> {
+  const base = baseMarks(found, scale);
+  /* A copy of the map, so the per-block arrays below can differ from the cached
+     ones without the cache ever seeing it. */
+  const byBlock = new Map(base);
+  if (openKey === null) return byBlock;
+  for (const [blockId, marks] of base) {
+    if (!marks.some((m) => m.id === openKey)) continue;
+    byBlock.set(
+      blockId,
+      marks.map((m) => (m.id === openKey ? { ...m, open: true } : m)),
+    );
+  }
+  return byBlock;
+}
+
+/**
+ * The same marks **before anybody pressed one of them**, cached on the result
+ * array's identity — the same key, and the same argument for it, as `pages`
+ * above: nothing on the client mutates a `Found[]` in place (`orderFound` and
+ * `keepAbove` both copy), so a surviving identity guarantees the results behind
+ * it survived too.
+ *
+ * **Why the pressed key is applied on top rather than folded in.** `hitMarks`
+ * used to bake `open` into every mark it built, so pressing one result in the
+ * panel handed `TableView` a fresh array for *every* block with a hit in it —
+ * and `proseHtml` decides a block can reuse its html by comparing those arrays
+ * by identity, so the press re-annotated the whole article to move one ring.
+ * This is the split `openTerm` has had from `termMarksByBlock` since
+ * 2026-08-26; `TermSelection.open` in annotate.ts gives the argument, and
+ * docs/plans/260905i-… § Stage 2 has the measurement.
+ *
+ * The arrays handed back are **shared, and must not be mutated** — as `page`'s
+ * are. Every caller either reads them or spreads them into a new array.
+ */
+const unpressed = new WeakMap<Found[], Map<DivergingScale, Map<BlockId, Mark[]>>>();
+
+function baseMarks(found: Found[], scale: DivergingScale): Map<BlockId, Mark[]> {
+  const byScale = unpressed.get(found) ?? new Map<DivergingScale, Map<BlockId, Mark[]>>();
+  const had = byScale.get(scale);
+  if (had) return had;
   const byBlock = new Map<BlockId, Mark[]>();
   for (const f of found) {
     if (f.end <= f.start) continue;
@@ -1159,10 +1202,11 @@ export function hitMarks(
         f.confidence === null
           ? 1
           : MIN_STRENGTH + (1 - MIN_STRENGTH) * (Math.min(100, Math.max(0, f.confidence)) / 100),
-      ...(f.key === openKey ? { open: true } : {}),
     });
     byBlock.set(f.blockId, list);
   }
+  byScale.set(scale, byBlock);
+  unpressed.set(found, byScale);
   return byBlock;
 }
 

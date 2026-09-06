@@ -175,7 +175,12 @@ export interface UploadLogEntry {
  * deliberately — a free-text source is a free-text field.
  */
 export type ClientErrorSource =
-  /** `AppBoundary.componentDidCatch` — React tore a subtree down. */
+  /**
+   * A React error boundary's `componentDidCatch` — a subtree was torn down.
+   * There are two: [`AppBoundary.tsx`](AppBoundary.tsx) and the one inside
+   * [`LazyPage.tsx`](LazyPage.tsx) that catches a route chunk failing to
+   * arrive. Which of them is a Sentry tag, not a variant here.
+   */
   | "boundary"
   /** `Tweets.tsx`, which catches its own failure and so reaches neither of the others. */
   | "tweets"

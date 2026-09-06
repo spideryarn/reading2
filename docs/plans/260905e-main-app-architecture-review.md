@@ -494,6 +494,14 @@ local classification in `referee-claims-run.ts`, `referee-criteria-run.ts`, `ref
 new stream. Classify each provider round and fold all rounds of a conversation; the last round's
 finish reason must not erase an earlier truncation. Preserve feature-specific stop/persist policy.
 
+**Done, 2026-09-05.** All four migrated, in
+[260901g](260901g-one-stream-end-classification-shared-by-five-callers.md) § Stages D, E and F.
+Both requirements above are met and tested: `converse` classifies once per round and folds, so a
+`length` on round two no longer vanishes when round three ends cleanly; every caller kept its own
+stop/persist policy, each now a written `case` with a comment rather than an absence. The one
+behaviour change is that `finish_reason: "error"` throws in all four, as it already did for the same
+event arriving as `chunk.error` data.
+
 ### A10. Organise styles and extension checks around ownership
 
 **Proved shared stylesheet and edit surface; maintainability judgement.** The semantic CSS model
@@ -618,15 +626,15 @@ both would apply to any future schema change here.
 
 ### Stage: Cut secondary-route startup cost
 
-- [ ] Record an emitted import graph and a production network trace for signed-out landing,
+- [x] Record an emitted import graph and a production network trace for signed-out landing,
   signed-in shelf, Plain reader and direct Admin/Design routes. Use the same source/config/device.
-- [ ] Lazy-load Admin and Design with local loading/error handling. If a shared import retains the
+- [x] Lazy-load Admin and Design with local loading/error handling. If a shared import retains the
   heavy graph, move only that shared constant/type to a small existing home and verify again.
-- [ ] Keep reader/shelf/mode code eager in this tranche. Test in-tab offline navigation and first
+- [x] Keep reader/shelf/mode code eager in this tranche. Test in-tab offline navigation and first
   cached-mode activation before accepting a bundle reduction.
-- [ ] Test a failed chunk load with a usable escape; session engines survive pending/rejected
+- [x] Test a failed chunk load with a usable escape; session engines survive pending/rejected
   imports, and loading a module emits zero generation requests.
-- [ ] Record before/after initial requested JS and time-to-readable-prose, not just the largest
+- [x] Record before/after initial requested JS and time-to-readable-prose, not just the largest
   emitted chunk. Update [performance](../project/performance.md). Stop if no meaningful gain.
 
 ### Stage: Make the common mode surface fit and behave consistently

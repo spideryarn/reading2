@@ -274,6 +274,23 @@ caller is checked and not just the pipeline. It lived in the session until 2026-
 base publishes only over an article serving nothing, which is fail-closed for a draft minted before
 the column existed.
 
+**And a publication is judged on the input it changes, not the input it carries forward.** The same
+copy is why: `beginDraftIn` hands every draft the published blocks and tree, so a glossary or quotes
+or debate step arrives at the gate holding artefacts it never looked at. `checkTree`'s problems
+against an *unchanged* pair are pre-existing — they are in front of readers either way — so they are
+carried out on `PublishRevisionResult.carriedTreeProblems` and logged after the commit rather than
+refusing. Anything that alters either half is judged in full, and everything else the gate checks —
+no blocks, no tree, the `hierarchy` run's status, its `input_hash` — stays unconditional. The
+comparison is one boolean computed in the database over both halves, because `checkTree` validates
+the pair and a tree-only test would let a changed block launder a fresh problem through.
+
+Added 2026-09-05, after a rule tightened that morning retroactively invalidated stored trees and took
+roughly one article in twenty off the air entirely — at a paid model call per attempt, with the
+reader told to try again:
+[260905f](../postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md).
+The lesson worth carrying: **tightening an invariant over durable stored data is a migration** —
+sweep the rows in the same commit, or say in the commit why not.
+
 **A writable disk is still what the `files` store *is*** — that host question is unchanged — but it
 is no longer a waypoint Postgres writes pass through, because `ArtifactStore.write()` has one caller
 and every step reaches it. Since 2026-08-29 a step returns a *product* —
