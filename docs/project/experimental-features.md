@@ -8,8 +8,8 @@ One setting, off by default, with **two controls**: a checkbox on
 > (which is what we want for most users). When on, it includes extra features that might be still
 > under development or not ready for production.
 
-**Four modes and four Diagram pictures are behind it** —
-[What is behind it today](#what-is-behind-it-today) names them. Features go behind it one at a time, each with a reason: the switch and the decision
+**Some reading modes and four Diagram pictures are behind it** —
+[What is behind it today](#what-is-behind-it-today) is the list, and this doc is its one home. Features go behind it one at a time, each with a reason: the switch and the decision
 about which features are unfinished are two separate arguments, and taking them together means
 neither gets made properly.
 
@@ -41,8 +41,8 @@ the same code saying it: [`experimental-visibility.ts`](../../src/web/experiment
 one rule with two callers, `visibleModes` in [`Dock.tsx`](../../src/web/Dock.tsx) and `visibleKinds`
 in [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx). The switch is about clutter, not enforcement — an old bookmark keeps
 working, and a shared URL shows two people **the same band**, whatever their switches say. Their
-*bars* differ, which is the whole point: ten buttons for one and fourteen for the other, and one
-Diagram chip against five. A gate
+*bars* differ, which is the whole point: the default bar for one and every mode for the other, and
+one Diagram chip against five. A gate
 that redirected or 404'd would turn a preference into a broken link.
 
 **Hiding never deletes.** Turning the switch off must not remove an artefact, a note or a
@@ -160,12 +160,18 @@ is a column rather than something in the browser's `localStorage`.
 
 ## What is behind it today
 
-**Four of the fourteen modes**, and **four of Diagram's five pictures**. Greg picked the first four
-on 2026-09-03
+**The modes in the table below**, and **four of Diagram's five pictures**. Greg picked the first
+four on 2026-09-03
 ([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)), Debate joined
-them on 2026-09-05, and **Quotes came out on 2026-09-06**; each row is a required
+them on 2026-09-05, and Quotes came out on 2026-09-06; each row is a required
 `experimental: boolean` in `MODES_UI` ([`Dock.tsx`](../../src/web/Dock.tsx)), so mode fifteen cannot
 be added without somebody deciding which side of the line it is on.
+
+**The table is the list, and nothing counts the modes.** Both halves used to be restated — a count
+in five source comments and two other docs, and the complement written out by name — so promoting
+one mode meant editing arithmetic in eight places, one of which had already drifted wrong and gone
+on passing ([new-mode.md § Moving a mode in or out](new-mode.md#moving-a-mode-in-or-out-of-the-switch)).
+Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src/modes.ts)).
 
 | Mode | Why it is behind the switch |
 |---|---|
@@ -174,11 +180,11 @@ be added without somebody deciding which side of the line it is on.
 | [Remember](remember-mode.md) | The name suggests saved notes and spaced repetition, neither of which exists; the quiz half is newer still. |
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
 
-**The ten that stay visible**: Plain, Hierarchy, Outline, Summary, Glossary, Ideas, Quotes, Search,
-Chat, Diagram. Hierarchy and Outline are stand-ins for the merged **Structure** mode
-([260903b](../plans/260903b-one-structure-mode-hierarchy-and-outline-merged.md)); when that lands it
-takes one default-visible slot and those two go, making it nine of thirteen. **Do not write
-nine/thirteen anywhere before then.**
+**Everything else is what everybody sees**, a signed-out visitor included. Hierarchy and Outline
+are both stand-ins for the merged **Structure** mode
+([260903b](../plans/260903b-one-structure-mode-hierarchy-and-outline-merged.md)); when that lands
+those two become one, and because nothing here or in the tests counts them, that merge needs no
+number changed anywhere.
 
 **Quotes left the table on 2026-09-06.** Greg:
 
