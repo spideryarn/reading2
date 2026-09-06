@@ -374,19 +374,25 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      job resumes from its artefacts, the same reason `jb-gone` is. See
      `STEP_STOPPED`. */
   "jb-stopped": "retry",
-  /* **The seven steps that know why they stopped**, and six of them are
-     `blocked` — see § the steps that know why they stopped below for what that
-     narrows and why. They are `jb-` rather than `ai-` because none of them is a
-     model call: four are a document that is not there, is not what it claims, or
-     has no words in it, and three are a Sketch that has to be drawn before the
-     painting can be.
+  /* **The steps that know why they stopped** — seven when this note was
+     written, eight since the capability floor joined them on 2026-09-06, and
+     all but one `blocked`: see § the steps that know why they stopped below for
+     what that narrows and why. They are `jb-` rather than `ai-` because none of
+     them is a model call: five are a document that is not there, is not what it
+     claims, or has too few words in it to build from, and three are a Sketch
+     that has to be drawn before the painting can be.
 
-     `jb-source-damaged` is the one `bug` of the seven: a stored object that does
-     not hash to its own name is an invariant of ours that broke, and it is the
-     only one of the seven the reader has no move against. */
+     `jb-source-damaged` is the one `bug` of them: a stored object that does not
+     hash to its own name is an invariant of ours that broke, and it is the only
+     one the reader has no move against. */
   "jb-source-gone": "blocked",
   "jb-source-damaged": "bug",
   "jb-no-article": "blocked",
+  /* The capability floor, 2026-09-06: Readability handed back a parse it had
+     itself concluded had failed, and stage 2 used to publish it. Its own code
+     rather than `jb-no-article`'s because a code names a branch — there the
+     library found nothing at all, here it found too little. */
+  "jb-too-little-text": "blocked",
   "jb-no-text": "blocked",
   "jb-no-sketch": "blocked",
   "jb-sketch-stale": "blocked",
@@ -1010,6 +1016,52 @@ export const PAGE_HAS_NO_ARTICLE: ReaderFacingFailure = {
     "would be handed the same page again, so it is the address it came from that needs looking " +
     "at. [jb-no-article]",
 };
+
+/**
+ * **The page came back, and there was not enough of it to read** — the
+ * capability floor's sentence, and the count is in it deliberately.
+ *
+ * A factory rather than a constant for that one reason: *"there was no article"*
+ * is a verdict the reader can only take on trust, where *"185 characters"* is a
+ * fact they can check against the page they were looking at. It is also the
+ * fastest way for somebody reporting this to say which page they meant.
+ *
+ * **It says "usually", and it never says this is an error page.** The rule that
+ * produced it does not know that: it reads no markup and makes no claim about
+ * what the page *is* — only that there is too little text here to build
+ * anything from, which is equally true of a genuinely tiny real page
+ * (src/extract.ts § `capabilityFloor`). So the causes are named as the usual
+ * ones and the short-honest-page case is named beside them, because a reader
+ * whose genuinely 300-character page was refused must not be told they were shown a wall.
+ *
+ * **Its own code rather than `jb-no-article`'s**, on the rule the two failures
+ * either side of it already follow: a code names a branch, and a reader quoting
+ * four characters should land whoever is helping on the right one. The move is
+ * the same for all three; the finding is not.
+ *
+ * The floor is Readability's own constant, not ours —
+ * docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md § C1a.
+ */
+export function pageHadTooLittleText(chars: number): ReaderFacingFailure {
+  return {
+    kind: "blocked",
+    /* **The threshold is not in the sentence, only the count.** The reader has
+       no use for our number and cannot act on it — and `tests/messages.test.ts`
+       reads any bare 400-599 in a sentence as a leaked HTTP status, which 500
+       is. The count is the fact about *their* page; the threshold is ours. */
+    message:
+      /* **"could be read as article text", not "of text"**, which the reader
+         would hear as the whole page. It is the count of what the extractor got
+         out of it: Medium's 404 shell has 249 characters visible and this
+         reports 185, and a sentence that conflated the two would send somebody
+         to count words on a page. GPT Sol, 2026-09-06. */
+      `There was not enough on the page that was fetched to build an article from — only ${chars} ` +
+      "characters of it could be read as article text. That is usually a login wall, an error " +
+      "page, or a page whose words only appear once its own scripts have run, though a genuinely " +
+      "very short page ends the same way — and this step would be handed the same page again, so " +
+      "it is the address it came from that needs looking at. [jb-too-little-text]",
+  };
+}
 
 export const ARTICLE_HAD_NO_TEXT: ReaderFacingFailure = {
   kind: "blocked",

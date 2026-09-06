@@ -77,6 +77,7 @@ import {
   SHIPPED_ARM,
   armNamed,
   preparedSourceHtml,
+  withoutTheCapabilityFloor,
 } from "../evals/extraction/arms.mjs";
 import { SCORABLE_FIXTURES } from "../evals/extraction/corpus.mjs";
 /**
@@ -1918,7 +1919,18 @@ describe("the degenerate arms — each has to lose, and the test names where", (
        * not a test.
        */
       const { raw, url, manifest, prepared } = fixtureBytes("pmc-article");
-      const dropped = armNamed("drop-every-short-block").run(raw, url, { manifest, url });
+      /* **The floor is held open for this one call, and only this one.** Stage
+         2 refuses `pmc-article` since 2026-09-06 — 130 characters, below
+         Readability's own threshold (src/extract.ts § `capabilityFloor`) — so
+         the shipped candidate is empty and the arm has nothing to flatten. That
+         is right for the corpus and wrong for this oracle, which asks what the
+         SCORER can see rather than what we publish, and would otherwise become
+         an assertion about the empty string with nothing to say so.
+         `withoutTheCapabilityFloor` (evals/extraction/arms.mts) has no other
+         caller. */
+      const dropped = withoutTheCapabilityFloor(() =>
+        armNamed("drop-every-short-block").run(raw, url, { manifest, url }),
+      );
       expect(
         dropped.html.includes("if you are not automatically redirected"),
         "the arm no longer makes the flattening this test is about",
