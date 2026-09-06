@@ -11,6 +11,7 @@
  * Everything addresses the block by its stable id — never by offset or selector
  * path. See docs/project/block-ids.md.
  */
+import { blockRow } from "./rows.js";
 import { safeAreaInsets } from "./safe-area.js";
 
 /**
@@ -526,9 +527,7 @@ export function scrollToTop() {
 }
 
 export function scrollToBlock(id: string, behavior: ScrollBehavior = "smooth") {
-  const row = document.querySelector<HTMLElement>(
-    `tr[data-block="${CSS.escape(id)}"]`,
-  );
+  const row = blockRow(id);
   if (!row) return;
   // Explicit and clamped rather than scrollIntoView(): we want the row's own
   // top edge, offset to clear the bars, and no surprise when the row sits
@@ -665,7 +664,7 @@ export function arrivalTarget(
  * window rather than a constant, so it scales with the viewport.
  */
 export function isBlockOnScreen(id: string): boolean {
-  const row = document.querySelector<HTMLElement>(`tr[data-block="${CSS.escape(id)}"]`);
+  const row = blockRow(id);
   if (!row) return false;
   const { top, bottom } = row.getBoundingClientRect();
   const margin = window.innerHeight * 0.1;

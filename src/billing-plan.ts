@@ -718,7 +718,31 @@ export function noHigherPlan(tierName: string | null): string {
 export function readableDate(iso: string): string | null {
   const at = Date.parse(iso);
   if (!Number.isFinite(at)) return null;
-  return new Date(at).toLocaleDateString("en-GB", {
+  return readableDay(new Date(at));
+}
+
+/**
+ * The same day, for a caller that already holds a `Date`.
+ *
+ * **This is the format itself, and it is deliberately the only copy of it.** The
+ * sentence above — *"the same rule and the same format `ingestQuotaReached`
+ * uses, so the page and the refusal name the same day"* — was, until 2026-09-06,
+ * the entire mechanism keeping that true: `ingestQuotaReached` in
+ * src/messages.ts had its own `toLocaleDateString("en-GB", …)` with the same
+ * four options written out again, and each was tested separately against a
+ * hardcoded string, so neither test could ever have noticed the other changing.
+ * A reader refused an ingest and then opening /profile would have been shown two
+ * spellings of one date. Two sweeps recorded the pair before it was closed —
+ * docs/plans/260906h-improve-the-codebase-fourth-sweep.md § T1.5.
+ *
+ * `Date` rather than an ISO string because that is what the quota carries, and
+ * routing it through `readableDate` would mean `toISOString()` on a value that
+ * might not be a valid date — which throws, where the old inline call merely
+ * printed `Invalid Date`. Trading a wrong word for an exception is not a fix, so
+ * the two entry points differ in what they accept and agree on everything else.
+ */
+export function readableDay(at: Date): string {
+  return at.toLocaleDateString("en-GB", {
     day: "numeric",
     month: "long",
     year: "numeric",

@@ -177,7 +177,7 @@ describe("the pages that mount it", () => {
       .sort(),
   );
 
-  it("is exactly the eight pages that have a bottom, once each", () => {
+  it("is exactly the nine pages that have a bottom, once each", () => {
     expect(Object.fromEntries(mounts)).toEqual({
       /* `/contact`, since 2026-09-05 — docs/plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md. */
       "ContactPage.tsx": 1,
@@ -190,6 +190,14 @@ describe("the pages that mount it", () => {
       "PricingPage.tsx": 1,
       "PrivacyPage.tsx": 1,
       "ProfilePage.tsx": 1,
+      /* `/features/public-readable-sharing`, since 2026-09-06. It is under
+         `/features`, so it wears that family's `variant="marketing"` row — but
+         it takes no *link* in the row, and that asymmetry is deliberate:
+         `FooterPage` does not have a `public-sharing` member, so nothing drops
+         and no page links here. It is reached from the shelf, from `/privacy`
+         and from an article's details page, which is where the reader it is for
+         will be. docs/project/public-readable-sharing.md. */
+      "PublicReadableSharingPage.tsx": 1,
       "SignInPage.tsx": 1,
     });
   });
