@@ -2890,9 +2890,10 @@ function Reader({
       /* `band-covers` is the same idea and exists for a sharper reason: it is
          the *stylesheet's* only way to know that the mode band has no room
          beside the prose and is lying over it instead. That crossover is
-         `MODE_MIN + PROSE_MIN` against the window **minus the rail**, so it
+         `MODE_MIN + MODE_PROSE_FLOOR` against the window **minus the rail**, so it
          moves with `?spine=0` — and a media query cannot see a query
-         parameter. It was one for six days (`@media (max-width: 843px)`), and
+         parameter. (It was `MODE_MIN + PROSE_MIN` until 2026-09-06, which is
+         the pair the widths below are in.) It was one for six days (`@media (max-width: 843px)`), and
          from 832 to 843 with the rail off the two disagreed: layout.ts
          squeezed the table to make room for a band the stylesheet had already
          thrown over the article.
@@ -3470,9 +3471,11 @@ function Reader({
           arcByRow={arcCells}
           focusRow={outlineLive.focusRow}
           /* `modeW` is 0 exactly when the band covers the prose instead of
-             sitting beside it (layout.ts), which is iPad portrait. That is the
-             condition paragraph rows are not permissible under, so it is read
-             from the layout rather than from a width guessed here. */
+             sitting beside it (layout.ts) — a phone, since 2026-09-06; it was
+             iPad portrait and below until the crossover fell to 700. That is
+             the condition paragraph rows are not permissible under, and reading
+             it from the layout rather than from a width guessed here is why
+             that move cost this line nothing but its example. */
           proseBeside={fit.modeW > 0}
           /* **Rung 5 is the same layer the `Paragraphs` column draws**, so it
              makes the same decision. Withheld rather than announced: nobody

@@ -234,12 +234,48 @@ describe("fitView in a mode — the band replaces the columns", () => {
     expect(f.overflowing).toBe(false);
   });
 
-  it("shrinks to MODE_MIN, and that is the last width where both fit", () => {
+  it("shrinks to MODE_MIN, and that is the last width the prose keeps 544 at", () => {
     // 844 - 12 spine = 832 available, which is exactly MODE_MIN + PROSE_MIN.
     const f = band(844);
     expect(f.modeW).toBe(MODE_MIN);
     expect(f.widths).toEqual([544]);
     expect(f.overflowing).toBe(false);
+  });
+
+  /**
+   * **Between MODE_MIN bottoming out and the band giving up, the prose is what
+   * moves.** This region did not exist before 2026-09-06: 832 of available was
+   * both the width the band stopped shrinking at *and* the width it stopped
+   * fitting at, so the two events were the same event. Splitting `MODE_PROSE_FLOOR`
+   * off `PROSE_MIN` (layout.ts) put 144px between them, and that gap is the
+   * whole of what a phone in landscape gained — Greg asked for Outline + Text
+   * side by side on one, and no iPhone ever reached 844.
+   *
+   * The band holds at MODE_MIN throughout, which is the file's own rule read
+   * one notch further down: the prose is what yields once the band has nothing
+   * left to give, and it yields to a floor rather than to nothing.
+   */
+  it("holds the band at MODE_MIN and lets the prose take the rest, 700 to 844", () => {
+    // A phone sideways, near enough: ≈734 is a modern iPhone's landscape width
+    // once `useWindowWidth` has taken the notch out of it.
+    const phone = band(734);
+    expect(phone.modeW).toBe(MODE_MIN);
+    expect(phone.widths).toEqual([434]); // 734 − 12 rail − 288 band
+    expect(phone.overflowing).toBe(false);
+    expect(phone.minWidth).toBe(734); // fills the window exactly, no scroll
+
+    // An iPad in portrait, which used to be a covered article and is now a split.
+    const ipad = band(834);
+    expect(ipad.modeW).toBe(MODE_MIN);
+    expect(ipad.widths).toEqual([534]);
+
+    // The whole region fills its window exactly and never overflows.
+    for (let w = 700; w <= 844; w++) {
+      const f = band(w);
+      expect(f.modeW, `band at ${w}`).toBe(MODE_MIN);
+      expect(f.modeW + f.tableW, `sum at ${w}`).toBe(w - 12);
+      expect(f.overflowing, `overflow at ${w}`).toBe(false);
+    }
   });
 
   /**
@@ -259,11 +295,14 @@ describe("fitView in a mode — the band replaces the columns", () => {
    * none. layout.ts § fitMode, and styles.css § a narrow window.
    */
   it("gives the band the whole screen once the two no longer fit", () => {
-    const f = band(843);
+    // 699 − 12 of rail = 687, one under `MODE_MIN + MODE_PROSE_FLOOR`. It was 843
+    // until 2026-09-06, when the prose got a floor distinct from the width it
+    // is defended at and the crossover fell from 844 to 700.
+    const f = band(699);
     expect(f.modeW).toBe(0);
-    expect(f.widths).toEqual([831]); // the prose, still there, still full width
+    expect(f.widths).toEqual([687]); // the prose, still there, still full width
     expect(f.overflowing).toBe(false);
-    expect(f.minWidth).toBe(843); // never wider than the window
+    expect(f.minWidth).toBe(699); // never wider than the window
   });
 
   /**
@@ -278,24 +317,38 @@ describe("fitView in a mode — the band replaces the columns", () => {
    * mode was a correctly-positioned element nought pixels wide. Nothing threw.
    *
    * **The literal went on 2026-09-03**, because it could not be right in both
-   * spine states: the crossover is the window *minus the rail*, so it is 844
-   * with the rail on and 832 with `?spine=0`, and a media query cannot see a
+   * spine states: the crossover is the window *minus the rail*, so it is 700
+   * with the rail on and 688 with `?spine=0`, and a media query cannot see a
    * query parameter. `App.tsx` writes `band-covers` from `fit.modeW === 0` and
    * the stylesheet keys off that instead — so the assertion below is now the
    * *whole* statement of the crossover rather than one of a pair, and moving it
    * moves the page. `tests/spine-width.test.ts` is what stops the query coming
    * back.
+   *
+   * **And it did move, on 2026-09-06** — 844/843 to 700/699 — which is the
+   * proof the 2026-09-03 change was worth making: one constant in layout.ts
+   * changed, and not one line of CSS or one media query had to be found and
+   * changed with it.
    */
-  it("hands over to the stylesheet at exactly 844/843", () => {
-    expect(band(844).modeW).toBe(MODE_MIN); // still a band beside the prose
-    expect(band(843).modeW).toBe(0); // the stylesheet takes it from here
+  it("hands over to the stylesheet at exactly 700/699", () => {
+    expect(band(700).modeW).toBe(MODE_MIN); // still a band beside the prose
+    expect(band(699).modeW).toBe(0); // the stylesheet takes it from here
   });
 
-  it("never asks a phone for more width than it has", () => {
-    for (const w of [320, 390, 480, 600, 732, 843]) {
+  /**
+   * **A sweep rather than a handful, since 2026-09-06.** It was six named
+   * widths, every one of them on the covering side of the old crossover — so it
+   * proved the invariant for the branch that returns `avail` verbatim and never
+   * once for the branch that does arithmetic. The new region between 700 and
+   * 844 is exactly where a `MODE_PROSE_FLOOR` that bound one pixel too late would
+   * make the two halves sum to more than the window, and the old list could not
+   * have seen it.
+   */
+  it("never asks a screen for more width than it has, at any width", () => {
+    for (let w = 320; w <= 1600; w++) {
       const f = band(w);
-      expect(f.minWidth).toBe(w);
-      expect(f.overflowing).toBe(false);
+      expect(f.minWidth, `minWidth at ${w}`).toBe(w);
+      expect(f.overflowing, `overflowing at ${w}`).toBe(false);
     }
   });
 
