@@ -520,7 +520,10 @@ synchronous recovery **in the same JavaScript task**, so a browser click cannot 
 ## Stage 2 — the Dock's real focus contract, reproduced
 
 Playwright against system Chrome on the box, 2026-09-06, signed-out visitor on
-`/read/cargocult-spya-rz663q`. Screenshot `.playwright-mcp/a6d-drawer-open.png` (gitignored).
+`/read/cargocult-spya-rz663q`. A screenshot was taken and is **not** kept: it went to a gitignored
+path in a worktree that has since been removed, and it showed a dimmed drawer, which is the one part
+of this nobody doubted. The table below is the record — every row of it is a value read out of the
+live page, and `tests/the-dock-drawer-is-not-a-modal.test.tsx` is what holds the conclusions now.
 
 | Question | What the browser did |
 |---|---|
