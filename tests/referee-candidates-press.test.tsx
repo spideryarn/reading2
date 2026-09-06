@@ -2,21 +2,33 @@
 /**
  * **Candidates does not spend money on being looked at.**
  *
- * The four sub-mode chips are a radiogroup, and a first-time referee reads a
- * radiogroup by pressing along it. Three of the four are inert to that;
- * Candidates was not. It fired a model call from a `useEffect` the moment the
- * sub-mode first mounted — a paid run over the paper, **and** web searches whose
- * terms are drawn from an unpublished manuscript and go to a search engine.
- * That last part is why this is more than a cost bug: the search engine is a
- * *different third party at a different time* from the model provider the
- * band's confidentiality notice is about, and that notice is in the past tense,
- * so it cannot be covering something that has not happened yet.
+ * *Looked at*, not *asked for*, and since 2026-09-06 those are different things
+ * — so read the next two paragraphs together.
+ *
+ * Candidates fired a model call from a `useEffect` the moment the sub-mode first
+ * **mounted**: a paid run over the paper, **and** web searches whose terms are
+ * drawn from an unpublished manuscript and go to a search engine. That last part
+ * is why it was more than a cost bug — the search engine is a *different third
+ * party at a different time* from the model provider the band's confidentiality
+ * notice is about, and that notice is in the past tense, so it cannot be
+ * covering something that has not happened yet.
+ *
+ * **A mount is still not an ask, and that is what every test here holds.** What
+ * changed on 2026-09-06 is that the *chip press* which opens the sub-mode counts
+ * as one, through the activation token
+ * ([260906b](../docs/plans/260906b-opening-a-mode-starts-it-generating.md)) — so
+ * the four chips are no longer "three inert and one not": Claims and Candidates
+ * both run what they open, and Criteria and Mirror arm nothing. Nothing in this
+ * file arms a token, so every mount below is the bare mount, which is exactly
+ * the case that must stay free. Which gesture *mints* a token is
+ * [`tests/pressing-a-chip-arms-it.test.tsx`](./pressing-a-chip-arms-it.test.tsx).
  *
  * ## The mutation each test catches
  *
  *  - **"nothing is asked until the button is pressed"** — put the `useEffect`
- *    back, or call `startBrief` from anywhere but the button, and the POST
- *    appears in the first assertion. Nothing else in the suite would notice:
+ *    back, or call `startBrief` from a mount rather than from a press or a
+ *    consumed activation, and the POST appears in the first assertion. Nothing
+ *    else in the suite would notice:
  *    tests/referee-candidates-panel.test.tsx hands the panel a finished thread,
  *    which is the state *after* the press.
  *  - **"the press is what asks"** — a button wired to nothing, or one that only
@@ -158,7 +170,11 @@ function startButton(): HTMLElement | null {
 }
 
 describe("opening the Candidates sub-mode", () => {
-  it("asks nothing until the button is pressed", async () => {
+  it("asks nothing when it is merely mounted, with nothing pressed", async () => {
+    /* No activation token is armed anywhere in this file, so this is a bare
+       mount: a pasted `?referee=candidates`, a Back step, a re-render. The
+       automatic run reads the same `status === "none"` the old `useEffect` did
+       and must still spend nothing, because nobody asked. */
     mount();
     await flush();
     expect(

@@ -6985,6 +6985,16 @@ td.text.note-open {
 /* The disclosure line is for a different reader — somebody whose agreement
    permits this — so it is separated rather than run on. */
 .ref-notice .ref-notice-also { margin-top: 0.45rem; color: var(--ink-faint); }
+/* **Outside the collapse**, so it is on screen whether the notice is open or
+   shut — it is the one sentence here in the future tense, about something the
+   next chip press would cause rather than something already done. Not
+   `--ink-faint` like the line above it: that one is a footnote for a reader who
+   has decided the notice does not apply to them, and this one is a warning
+   nobody has read yet. src/messages.ts § `REFEREE_CANDIDATES_REACHES_SEARCH`. */
+.ref-notice .ref-notice-ahead { margin-top: 0.45rem; margin-bottom: 0; }
+/* Only when the notice is open: the paragraphs now sit *under* the ahead line
+   (App.tsx says why), so the gap belongs between them rather than above it. */
+.ref-notice-toggle[aria-expanded="true"] ~ .ref-notice-ahead { margin-bottom: 0.45rem; }
 
 /* **The source scan.** src/web/SourceScanNotice.tsx, and it sits between the
    confidentiality notice and the sub-mode chips because it belongs to the mode

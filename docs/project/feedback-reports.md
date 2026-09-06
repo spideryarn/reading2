@@ -67,10 +67,15 @@ It is [engineering-manager.md](../reusable/engineering-manager.md), with the rep
 
 1. **Read the queue, in full, before starting anything.** Two reports that turn out to be one bug
    become one agent's brief; the rest are independent and the fan-out below assumes it.
+   Then **read [`docs/user-feedback/`](../user-feedback/) — the file names alone are usually
+   enough** — because that directory is the record of what has already been done, and a new report
+   is often the same subject as a finished one, or asks for the thing that was deliberately
+   declined. Read the note before re-deriving its answer.
 2. **One `gjd-remote` session per report**, not a background subagent — so that each report is a
    real Claude session on the box, which Greg can open a tab on with `gjd-remote resume-all` or
    steer through Claude Code remote control while it runs
-   ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)):
+   ([gjd-remote.md](../reusable/gjd-remote.md) is the CLI,
+   [hetzner-remote-server-box.md](hetzner-remote-server-box.md) the machine):
 
    ```
    gjd-remote new-claude --no-attach -p - <<'EOF'
@@ -87,6 +92,17 @@ It is [engineering-manager.md](../reusable/engineering-manager.md), with the rep
    (`EnterWorktree`, then `npm run worktree:setup` — [worktrees.md](worktrees.md)), with its own
    subagents beneath it. **Three at a time at most**: they share one local Supabase, one dev server
    and one box, and past three the tests start going red for reasons that are nobody's bug.
+
+   **Launch the later waves in the same breath, with `--wait`.** `new-claude --wait 5h --no-attach`
+   creates the session now and starts Claude when the wait is over, so the whole queue goes out in
+   one pass and the loop does not have to be alive in five hours to start wave two. Space the waves
+   by roughly how long a report takes, and **use them to keep two agents off the same ground**: two
+   reports about the same mode, the same prompt or the same file belong in different waves, not in
+   the same three.
+
+   **Each session does its own bookkeeping** — its own note in `docs/user-feedback/` and its own
+   Sentry status write, per § Three ways a report ends. Nothing does it for them afterwards, and a
+   report whose agent forgot comes back in the next queue.
 
    **The loop can run this from the box itself** — it has a keypair that reaches only itself and an
    `/etc/gjd-remote-host` that tells the tool so, and the sessions it starts are the same tmux

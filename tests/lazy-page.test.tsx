@@ -30,7 +30,13 @@ vi.mock("../src/web/monitoring.js", () => ({
   captureClientFailure,
   initClientMonitoring: () => {},
 }));
-vi.mock("../src/web/log-buffer.js", () => ({ recordLog }));
+/* Only the door is stubbed. `nameOfThrown` is the real one, because it is what
+   decides the `name` the assertions below read — a stub of it would be a second
+   implementation of the thing under test. src/web/log-buffer.ts § nameOfThrown. */
+vi.mock("../src/web/log-buffer.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/web/log-buffer.js")>()),
+  recordLog,
+}));
 
 import type { PageLoader } from "../src/web/LazyPage.js";
 

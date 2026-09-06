@@ -595,3 +595,22 @@ fresh inaccuracy — after F9's trace-diff narrowing and F21's "no logger". Ever
 plausible reading rather than from running the thing, and every one was caught by a reviewer who
 simply ran it. The lesson has earned its place in this doc: **when you replace a false sentence about
 the code, run the command first, and paste what it actually printed.**
+
+## Afterwards: F10 got a postmortem, and a third instance turned up
+
+[260906c-the-safe-helper-was-private-so-three-boundaries-wrote-the-unsafe-spelling.md](../postmortems/260906c-the-safe-helper-was-private-so-three-boundaries-wrote-the-unsafe-spelling.md).
+
+Writing it up found that the fix everyone kept hand-rolling **already existed**: `nameOfThrown` in
+[`log-buffer.ts`](../../src/web/log-buffer.ts), module-private, with a docstring naming this exact
+hazard, in the very file all three boundaries import `recordLog` from. It was written ten hours after
+the defect was introduced, for a different call site, and never reached back to the first one.
+
+It also found a **live third instance** — `ChunkBoundary` in `LazyPage.tsx`, written the same day by
+the lazy-route job, by following `AppBoundary`'s conventions and inheriting its defect along with its
+virtues.
+
+So the two hand-rolled guards this plan added are gone, `nameOfThrown` is exported and is now the one
+way a boundary turns a caught value into a log name, and
+`tests/no-boundary-reads-the-caught-value.test.ts` is what stops the fourth boundary repeating it.
+`tests/every-boundary-contains-a-throw-that-is-not-an-error.test.tsx` (renamed from the root-only
+version) covers all three with a `throw null`.
