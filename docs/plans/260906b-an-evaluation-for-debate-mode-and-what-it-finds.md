@@ -801,12 +801,14 @@ that is article text. So:
 - **What actually fixes the decoy is the floor plus the default threshold.** All six reported rows
   have zero coverage — none of them quotes the 2023 article — so all six are `named`-only, and § "The
   bar" hides `named`-only rows by default. That is Stage P3's job, not the ceiling's.
-- **A sharper per-row guard exists and is deliberately not built.** A mirror has no words of its own,
-  so a row citing one must have a `sourceQuote` that is article text; testing that is nearly free.
-  Measured: it would refuse **none** of the ten rows we have. Building a second guard with no
-  demonstrated positive case is the machinery *"simplest version first"* refuses — recorded here so
-  the next reader knows it was considered, and it is what to reach for if a mirror ever does surface
-  as a row.
+- **A sharper per-row guard exists and is deliberately not built** — *built after all, 2026-09-06,
+  and as a **precondition** rather than a second guard; see the round-3 ledger below.* A mirror has
+  no words of its own, so a row citing one must have a `sourceQuote` that is article text; testing
+  that is nearly free. Measured: it would refuse **none** of the ten rows we have. Building a second
+  guard with no demonstrated positive case is the machinery *"simplest version first"* refuses —
+  recorded here so the next reader knows it was considered, and it is what to reach for if a mirror
+  ever does surface as a row. **What changed:** Sol reproduced a *false positive* on the drop, which
+  is a demonstrated case for the conjunction and a different argument from the one weighed here.
 
 **Threshold 50%**, sitting in an empty band: every copy measured is ≥ 65%, every genuine reply ≤ 17.3%.
 The ceiling requires **at least 5 extract windows** before it may fire, because a 250-character extract
@@ -952,3 +954,44 @@ Discovery closes here, per [engineering-manager.md](../reusable/engineering-mana
 | F55 | the mark could still make abstention look like improvement | **accepted.** Printed beside the full contingency table; never orders, colours or selects |
 | F56 | "winning prompt" had no declared selection rule | **accepted.** Recorded before generation: `targeted` lands only if it passes every gate and `incumbent` fails one |
 | F57 | the candidate had already landed | **accepted.** `43e9fc41` from base `538e5191`, inspected through merge `bafebbc3` |
+
+## Review ledger — GPT Sol, round 3, on Stage P's code, 2026-09-06
+
+[The review](260906b-stage-p-code-review-sol.md), over `35db7d53`, `f344a207` and `04f7b367`. Three
+findings, all three reproduced red first on the production path from Sol's own inputs, all three
+accepted.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F1 | **P0** — the article's own H1 is in `blockText`, so a title of ≥ 8 words and ≥ 40 characters is a quotation window: a page repeating the title earned `quoted` and cleared the default bar | **accepted.** Quotation evidence is over **prose**: `GroupInput.blockText` now carries `{ text, kind }` and `articleShingles` takes no window from a heading. Headings stay in `blocks`, which is the copy test's side. A page repeating a heading is `named`, which already covered it |
+| F2 | **P0** — `isCopy` judges the *search extract*, so a fisking (long blockquote, short rebuttal) was dropped and the reader told the page was a copy — 22 windows, density 0.50, and the sentence is false | **accepted.** The drop now needs **two** signals: `isCopy(overlap)` **and** the row's own verified `sourceQuote` being article text (`isArticleText`). A mirror has no words of its own; a fisking's are its own. Strictly narrows the drop, so no row can be lost that was kept before |
+| F3 | **P1** — `linked` was derived from the model-chosen witness while quotation matching saw the whole extract, so a page whose extract carried the URL was recorded `named` and hidden by the default bar | **accepted.** The directness check stays on the witness — F24's fix, load-bearing — and the `linked` signal comes from the extract, via a shared `linkTo`. The tooltip now lists what is there |
+
+[The second review](260906b-stage-p-fix-review-sol.md) was **the same review again on the fix**, and it found four more — three of them in the fix itself,
+all four reproduced red first and accepted:
+
+| ID | Finding | Disposition |
+|---|---|---|
+| P0 | the first draft's `?? naming.url` fallback **fabricated a link**: the witness is an arbitrary slice, so an address ending it parses as this article there and as a longer `…-2026` successor in the whole extract — the row was shown at `linked` with a tooltip claiming a link the page does not have | **accepted.** No fallback. When neither the extract's link nor the title survives, the row is `directnessUnverified` — which is also what keeps `identifies` non-empty, honestly rather than by invention |
+| P0 | a **mirror survived** when its `sourceQuote` crossed a paragraph break: the extract of a copy is the article's blocks with the breaks between them, the spaced matcher reads across one, and `isArticleText` asked per block said false | **accepted.** `isArticleText` asks the joined article. Density stays per block for the opposite reason — a join there would invent windows and inflate the ratio. Across a break the words are still the article's, so joining refuses *more* copies and no more replies |
+| P1 | keeping headings on the **density** side contradicted taking them off the quotation side: a title long enough for five windows made a title-only extract read as 100% article words and the row was dropped as `sourceIsCopy` — a second false sentence about the page the first fix had just been taught to let through | **accepted.** Headings leave `blocks` too. **One rule, both sides:** a heading is naming evidence and never text evidence |
+| P2 | the tooltip still did not list every signal found — `named` was read off the model-chosen witness while `linked` had moved to the extract | **accepted.** `named` is read off the extract too, showing the extract's own occurrence of the title. It is the weakest arm, so it can never move a level or what the bar shows |
+
+**The corpus did not move — measured again after both rounds.** Layer 1 replay over the three
+journals, before and after: `writes` keeps hamtyped at `quoted`, Cargo Cult keeps nothing, the
+constitution keeps Lawfare at `named`. Identical loss reasons, identical levels, no `sourceIsCopy` on
+either side, and no row gained a `linked` signal — **so the default bar shows exactly what the Stage
+P3 table says it shows.**
+
+**What is left, and it is a deliberate trade.** `sourceQuote` is not a fully independent copy signal:
+a mirror whose model-chosen `sourceQuote` is the archive's own chrome — *"archived 12 Oct 2024 ·
+original · webpage capture"* — is not article text, so the conjunction keeps it. That is the price of
+not telling a reader a fisking is a copy, and it is the right way round while the ceiling's positive
+case is still unmeasured (no mirror has ever been *reported as a row*). Recorded here rather than
+patched, because a third mechanism with no observed case is what *"simplest version first"* refuses.
+
+**Mutations, all caught.** Round one: headings shingled again → 3 tests; the row-level evidence
+dropped from the copy refusal → 1; `isArticleText` never firing → 5, including the two mirror tests
+that are its positive control; the link read from the witness again → 1. Round two: the directness
+refusal disabled → 1; `named` read off the witness again → 1; the join broken → 2; headings back in
+`blocks` → 2.
