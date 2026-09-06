@@ -1,6 +1,6 @@
 # Share measured geometry — after profiling the scroll and layout reads
 
-Status: **Stage 1 done — the verdict is optimise.** Stage 2 and 3 to come.
+Status: **Stages 1 and 2 built; the Stage 1 review sent it back.** Sol's round-2 verdict is *request changes, Stage 3 authorisation refused* — five P1s, one of them a behaviour change in the probe itself. Findings F10–F17, their dispositions and their order are in § "Review ledger — round 2" at the foot of this document. **Stage 3 is blocked** on F10's counterfactual, and every number in § "Stage 1 result" is **provisional** until F11 and F13 are fixed and the three sessions re-run.
 Source baseline `cc749e0f1061583f1a8877dc3db5b6c1b2c162e3` (branch `worktree-a8-shared-geometry`).
 
 This is item **A8** of
@@ -522,7 +522,17 @@ performance.md, and the job is done. That is a legitimate finish and not a failu
 beside them, the commands are recorded so they can be re-taken, and the decision rule has been applied
 in writing.
 
-### Stage 1 result, 2026-09-06 — **optimise**, on clause 1, on both heavy shapes, in every session
+### Stage 1 result, 2026-09-06 — **eligible for optimisation**, on clause 1, on both heavy shapes, in every session
+
+> **Provisional, and the verdict word has changed.** Sol's round-2 review (F10–F13) found that the
+> p50/p95 quoted below are percentiles over *repetition means*, not over frames; that the pinned
+> distance was enforced to 80% rather than exactly; that statistics were published on fewer than the
+> five warmed repetitions the rule requires; and that F10's ownership counterfactual — which this plan
+> made the gate on Stage 3 — was never run. Sol's own provisional re-derivation from the raw vectors
+> still puts both heavy articles over clause 1, so the **direction** below survives; the **numbers**
+> do not, and neither does the claim that the cost is the reads rather than a flush. Read everything
+> in this section as pending the re-run. § "Review ledger — round 2" has the corrections and their
+> order.
 
 Production build, `vite preview` on port 5310, Playwright against system Chrome on the Hetzner box.
 Three sessions per configuration, `--repeats 6 --warmup 1`, pinned scroll of 30 × 100px = 3,000px at a
@@ -582,7 +592,7 @@ flush that `spineApply`'s and `contextPanelPlace`'s writes made necessary, and s
 not remove that. What it should remove is the *second* consumer's 37,290 clean reads. The A/B in
 Stage 4 is the counterfactual F1 requires, and it is what decides whether this was real.
 
-#### `contextPanelPlace` is bigger than the pilot, and F8 is now established
+#### `contextPanelPlace` is bigger than the pilot — but F8 is **not** established (Sol F10)
 
 | gesture, `m1-kuhn` | calls | inclusive ms | per-call p95/max |
 |---|---:|---:|---|
@@ -590,10 +600,17 @@ Stage 4 is the counterfactual F1 requires, and it is what decides whether this w
 | scroll from the top | 16 | 308.8 | 63.6 / 108.7 ms |
 | granularity column toggle | 3 | 130.5 | 173.4 / 173.4 ms |
 
-F8 asked that the read/write interleave be established rather than asserted. **It is now**, and it is
-the single most expensive geometry site in the reading view — 743 ms in one gesture, more than double
-both pilot buckets combined, from **32 calls doing 272 reads**. The cost per read is four orders of
-magnitude worse than the pilot's, which is the signature of a flush per call rather than per frame.
+F8 asked that the read/write interleave be established rather than asserted. An earlier draft of this
+section claimed it now was. **It is not**, and Sol's F10 is right that it cannot be: what is measured
+here is *time*, and time does not attribute a flush to the write that caused it — which is precisely
+F1, the finding this whole instrument was reshaped around, reappearing in the conclusion I drew from
+its output. Only the counterfactual or a real trace can establish F8, and neither has been run.
+
+What **is** established: `contextPanelPlace` is the single most expensive geometry site in the reading
+view — 743 ms in one gesture, more than double both pilot buckets combined, from **32 calls doing 272
+reads**. Its cost per read is roughly 600× the pilot's (F17: an earlier draft said "four orders of
+magnitude", which was wrong arithmetic as well as an overclaim). That ratio is *consistent with* a
+flush per call. It is not evidence of one.
 
 **Per F4 this cannot authorise the A8 pilot and does not change its verdict.** It is recorded here as a
 separately scoped follow-up with its numbers attached, so the next person does not have to rediscover
@@ -740,3 +757,61 @@ declared sufficient once it was known. The observer has a maintenance cost and i
 
 **Otherwise revert the pilot**, and say so here. Extending beyond the two consumers needs a separately
 measured verdict and is not authorised by this one.
+
+## Review ledger — round 2, Stage 1 code and result
+
+[The review](260906d-stage1-review-sol.md), from the prompt at
+[260906d-stage1-review-prompt.md](260906d-stage1-review-prompt.md), run against `5fdf1065..914f59c4`.
+
+**Verdict: request changes, and Stage 3 authorisation refused.** Sol's summary of why is worth
+quoting rather than paraphrasing: *"The raw data probably supports 'optimise,' but the instrument has
+not yet earned that verdict under the precommitted rules."* That is the right distinction. The
+direction of the answer survives — Sol's own provisional re-derivation still puts both heavy articles
+over clause 1 — but four of the five P1s say the published numbers were computed a different way from
+the way the plan promised, and the fifth says the probe changed the page.
+
+All eight findings are **accepted**. One (F16) is accepted in part and settled below.
+
+| ID | Severity | Finding | Disposition |
+|----|----------|---------|-------------|
+| F10 | P1 established | The counterfactual gate this plan set for itself was never run. The harness only calls `Performance.getMetrics`; it never starts a trace, and `LayoutCount` 56 against 46 attempted writes cannot attribute ownership. So neither "the cost is the reads" nor "F8 is now established" follows | **Accepted.** Stage 3 is unauthorised until the perf-only A/B counterfactual runs. `contextPanelPlace` goes back to **candidate**, and § "F8 is now established" is wrong as written |
+| F11 | P1 established | `pilotMsPerSamplingFrame` is a *mean* — total ms over max calls — and the report then takes p50/p95 across five such repetition means and labels them per scroll frame. That is not the distribution F6 asked for, and it flattens exactly the sparse tail F6 existed to preserve | **Accepted.** Tag each parent sample with its rAF frame, sum the two non-overlapping sites within a frame, take percentiles over *that* vector, and re-run. Every published p50/p95 is provisional until then |
+| F12 | P1 established | The population gate refuses only zero blocks, zero nodes, a missing instrument or mode `off`. An article whose section tree failed to render still records `readingPosition` calls, and no pathname or article identity is asserted, so a redirect to a different valid article passes | **Accepted.** Assert final pathname and article identity, expose an independent resolved-section count, and assert each fixed workload's expected section range, depth and gist-column presence before timing. Sol checked these particular logs and their fingerprints are right, so the runs are not retrospectively void — the gate is |
+| F13 | P1 established | `scrollVerdict` accepts 80% of the requested distance, so the "pinned workload" F6 required is not pinned; and `report` publishes on one warmed sample where the rule says five. Warmed 2,900px and 2,976px repetitions are in the logs | **Accepted.** Tolerance tightens to rounding, publication refuses below five warmed valid repetitions, and the affected sessions re-run. Sol notes this leaves four valid repetitions in some runs and three in `evaldeepen` session 2 middle |
+| F14 | P1 established | **The instrument changes behaviour.** In `scroll.ts § apply`, `parentGeometryClock()` consumes a `performance.now()` immediately before the existing `performance.now() < quietUntil` test, so with counting on the second read can land the other side of the boundary. Sol reproduced it: `quietUntil` 250, clocks 249 then 251, bar hidden with counting on and quiet with it off — and that flips whether a layout-affecting write happens | **Accepted.** Read the clock once and use the one value for both the quiet-window decision and the timer start. This is a bug I shipped and it gets a postmortem: the class is *a probe that participates in the thing it measures*, and it is the one failure Stage 1 was explicitly not allowed to have |
+| F15 | P2 established | The suite is mutation-blind at the site that authorises the work. Sol ran it: mutating covered `measureRow` fails as it should, but changing `readingPosition`'s read count to `1`, and separately moving its timer start next to `noteGeometry`, both leave all 12 tests green | **Accepted.** This confirms my own suspicion 2 and makes it worse than I wrote it: the gap is not merely uncovered, it is uncovered precisely where the number came from. Extract `readingPosition`'s measurement body behind a driveable seam and assert emitted reads and timer placement against spied accessors |
+| F16 | P2 reasoned | "Optimise" does not justify doing A8 *next*: clause 2 genuinely fails, the pilot is 2–6% of ~13.9s of main-thread work, and `contextPanelPlace` is larger | **Accepted in part; settled below** |
+| F17 | P3 established | "Four orders of magnitude" is arithmetically wrong: 743/272 against 339/74,430 is ~600×, or 2.8 orders | **Accepted.** Say ~600×, and stop using the ratio as evidence of reflow ownership at all — per F10 it is not evidence of that |
+
+Sol also **confirms** three things it went looking to break and did not: all ten read constants are
+correct, including `ContextPanel`'s 9/8 branches and the exclusive zero at `diagramReaderRow`; there
+is no parent/leaf double-counting; and clause 3 does fire on the mode switch — though at a median of
+about 27.1ms, where the write-up quoted the p95. Fix that citation too.
+
+### F16, settled
+
+Sol is right about the fact and I am overruling the recommendation, because it asks this job to
+become a different job.
+
+The fact stands and is already in this plan: clause 2 does not fire, the pilot is a small fraction of
+wall time, and `contextPanelPlace` is bigger. What F16 proposes — investigate `ContextPanel` first,
+then re-run A8 — is the reverse of F4, which was accepted specifically so that an unrelated bucket
+could not decide this pilot's fate. F4 stops `contextPanelPlace` **authorising** A8; it equally stops
+it **vetoing** A8. A8 is the assigned stage and its own two buckets convict on their own numbers.
+
+What does change: the verdict word. It is **"eligible for optimisation"**, not "optimise", until F10's
+counterfactual runs. And `contextPanelPlace` is recorded here, again and more loudly, as a separately
+scoped follow-up that is plausibly worth more than everything else in this plan.
+
+### What this costs, in order
+
+1. **F14 first**, because it is a live behaviour change in committed code, and a postmortem with it.
+2. **F11 + F13 + F12**, the harness corrections, then **re-run the three sessions**. Until that lands
+   every number in § "Stage 1 result" is provisional and is marked so.
+3. **F10's counterfactual**, which is the gate on Stage 3 and cannot be skipped by doing Stage 3 and
+   calling Stage 4's A/B the discharge — that is the ordering error F10 names.
+4. **F15's seam**, which Stage 3 wants anyway.
+5. F17 and the clause-3 citation, prose.
+
+Stage 2 is unaffected: it is two hoists inside one function body each, it was authorised by clause 1,
+and clause 1 survives Sol's own re-derivation.
