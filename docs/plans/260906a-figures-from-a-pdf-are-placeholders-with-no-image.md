@@ -86,7 +86,7 @@ subsample; `colours` is distinct RGB, capped at 4096.
 | `evals/pdf/titles/frontiers-wrapped-title` | 3 | **0** | — |
 | `evals/pdf/titles/kuhn-landscape-of-consciousness` | 3 | 3 | 2 pictures + one 119×119, 58-colour logo at 0.0165 |
 | `evals/pdf/harder` (ball lightning) | 14 | 5 | 4 figures, 2067px wide, one per figure page — plus a 200×70 journal masthead on p1 |
-| `evals/pdf/much-harder` (Wellcome scan) | 17 | 17 | **one full-page scan image per page**, every one 661×1024 at deflBpp ≈ 2.0 |
+| `evals/pdf/much-harder` (Wellcome scan) | 17 | 17 | **one full-page scan image per page** on pp. 2–17, 633–661 × 1024 at deflBpp ≈ 2.0 — *plus* a 500×164 logo on p1, which is not a scanned page at all |
 
 Four things fall out of that table, and three of them are traps:
 
@@ -105,6 +105,23 @@ Four things fall out of that table, and three of them are traps:
    model called a `figure` is ever looked at. The ball-lightning masthead is on p1 and Kuhn's logo
    on p1, and page 1 gets `publisher`/`cover` records, not `figure` ones. Every logo in this corpus
    is excluded by the gate rather than by a threshold.
+
+**Point 3 was overstated, and stage B's tests are what found it.** "One full-page image per page,
+all 17" reads that row of the table as if every page were alike. The probe's own output — printed in
+this session and then summarised carelessly into the sentence above — says page 1 is a **500×164**
+logo and pages 2 and 17 are 649×1024 and 633×1024, not 661. Wellcome's generated rights page is not
+a scan: it carries **95 words**, nearly five times `SCAN_WORDS_PER_PAGE`, which is the very fact
+`Pass0.isScan`'s comment already records and which this plan repeated without applying.
+
+So the honest claim is **the per-page scan rule excludes sixteen of seventeen pages**, not
+seventeen. The seventeenth is refused a page later, by the figure-record gate, because a rights page
+gets `cover`/`publisher` records and never a `figure` one.
+
+Which leaves a real choice, and the reason for taking it is worth more than the choice:
+a document-level `isScan` would make the number seventeen and the sentence tidy. **It is not
+built.** It costs a full text walk of every page to compute, and it would refuse a genuine figure on
+the one typeset page of an otherwise-scanned document — a worse failure than the tidy sentence is
+worth. The per-page rule stands, and the number is sixteen.
 
 Note also that **order varies**: on p11 of the Analog PDF the real image is painted first and the
 blank second; on p16 it is the other way round. Anything that assumes "the picture, then the
