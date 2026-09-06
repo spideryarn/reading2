@@ -51,6 +51,40 @@ code* names. **A rights-holder cannot check any of it and is relying on us to ha
 it invites *"so are you?"* and it is the sentence somebody would quote back. The facts and the offer
 say it instead.
 
+### And then the first draft got eight more things wrong
+
+The table above is what checking the *brief* caught. A cross-family review of the built page
+(GPT Sol, 2026-09-06) found eight further overclaims in prose that had already been written
+carefully, which is the fact worth carrying forward rather than the individual corrections: **on this
+page, "I checked the claims" is not the same as "the claims are right", and neither is one pass.**
+
+The worst of them is worth naming because of its shape. The page said a sharer's *"notes, their
+comments and their conversations stay private to them"*. The truth is the near-opposite —
+`SHARED_LINK_CARRIES` says marks, notes and searches travel with the link and only conversations do
+not, and [`src/store/public-reader.ts`](../../src/store/public-reader.ts) really does select and
+serialise them. **A page whose entire purpose is to be trusted told an author that publicly visible
+material was private.** It was written from what felt right about "a reader's own side" rather than
+from the constant that already owned the fact, which is the failure mode to watch for here: this
+page restates things other files know, and every restatement is a chance to restate them wrongly.
+
+The other seven, in one line each, because each is now pinned by a test:
+
+- **Web images are stored**, just not served — the page had claimed we do not copy them at all.
+- **The source link and the canonical share one condition** (`safePublicCanonical` refuses a query
+  string), and the draft hedged the canonical while stating the source link unconditionally.
+- **`scripts/deploy.ts` checks `robots.txt` and nothing else** — it never invokes the shell checker
+  that verifies the `X-Robots-Tag` header, so the page could not credit it with that.
+- **The allowance discount is conditional**, and the free allowance is *lifetime*, not monthly. The
+  unconditional version repeats a mistake `UNSHARING_COSTS_ALLOWANCE` already had corrected on
+  2026-09-05, when it turned out to be false for two real owners.
+- **Extraction is a heuristic**, so "the site around them is not reproduced" was too categorical.
+- **A PDF's text is reconstructed**, so "the paragraph you actually wrote" was unsafe for PDFs.
+- **The byline sits under the title**, not above everything.
+
+Sol also asked for two disclosures that were simply missing: the **private source snapshot** we keep
+so a page can be re-extracted, and that some reading aids **may have been shaped by the sharer's
+reader profile**, though the profile is never published. Both are on the page now.
+
 ## The three awkward facts, named on purpose
 
 > But don't let's make too big a deal of this. Let's wait and see if this upsets anyone.
@@ -90,10 +124,19 @@ they will never press.
 
 ## The claims that can go stale silently, and the test that holds them
 
-Four sentences on the page describe things that live outside it and could change without anybody
+Nine sentences on the page describe things that live outside it and could change without anybody
 touching the prose: the `Disallow: /` in [`public/robots.txt`](../../public/robots.txt), the
-`X-Robots-Tag` header in `vercel.json`, the `<link rel="canonical">` in `page-head.ts`, and the
-no-training wording that has to keep matching `/privacy`. **A claim about a header is exactly the
+`X-Robots-Tag` header in `vercel.json`, the `<link rel="canonical">` in `page-head.ts`, the
+no-training wording that has to keep matching `/privacy`, and the five the review added — what a
+shared link carries, what `rehost.ts` serves, the query-string condition, what `deploy.ts` verifies,
+and the allowance qualifier.
+
+**The image sentence is the one that will go stale first, and it will do it on a known day.**
+[`src/web/rehost.ts`](../../src/web/rehost.ts) describes a later stage that turns on serving our
+stored copies of a web article's images — one addition to that file. The page currently says *we do
+not serve those copies*, and on the day that stage lands the sentence is false with nothing else
+noticing. The test asserts against `rehost.ts`'s own "this walks only the second" comment, so it
+goes red on that day and names this page. **A claim about a header is exactly the
 kind that stays on a page for a year after the header goes** —
 [silent-success.md](../reusable/silent-success.md) — so the test reads the page as text and fails
 when one of the four stops being true, the way `tests/privacy-page.test.ts` pins model names.

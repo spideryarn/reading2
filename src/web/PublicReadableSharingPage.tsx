@@ -165,27 +165,72 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
             , so somebody who was never sent the link can find it.
           </p>
           <p>
-            What we keep is the prose, the headings and the figures. The site around them is not
-            reproduced — not your navigation, not your design, not anything you sell. The pictures
-            in a web article are still loaded from your own servers rather than copied onto ours;
-            figures we pulled out of a PDF are the exception, and those we store.
+            We run a web page through Mozilla Readability to pull out the article itself and discard
+            the navigation, the advertising, the sidebars and the styling around it. That extraction
+            is a heuristic rather than a rule, so a stray piece of page furniture does sometimes come
+            with it.
+          </p>
+          {/* **This paragraph said the opposite until 2026-09-06, and it was
+              the worst sentence on the page**: *"their notes, their comments and
+              their conversations stay private to them"*. `SHARED_LINK_CARRIES`
+              says the truth — marks, notes and searches travel with the link,
+              and only conversations do not — and the public reader really does
+              select and serialise them (src/store/public-reader.ts §
+              `PUBLIC_COMMENTS_WHERE`). GPT Sol, 2026-09-06, finding 1.
+
+              **A page whose whole purpose is to be trusted told an author that
+              publicly visible material was private.** Worth leaving the
+              correction visible: the failure was writing the sentence from what
+              felt right about a "reader's own side" rather than from the
+              constant that already said it. */}
+          <p>
+            What travels with a shared link, besides the text, is the sharer's own side of it: their
+            highlights and notes, the model's answers to the questions they asked of a passage, and
+            the meaning-searches they saved. Their back-and-forth conversations with the model are
+            not part of it. Some of the reading aids — a glossary, the ideas pulled out of a piece —
+            may also have been shaped by the sharer's profile, though the profile itself is never
+            published.
           </p>
           <p>
-            What never goes out is the reader's own side of it: their notes, their comments and
-            their conversations with the article stay private to them.
+            On pictures we are in an in-between state and it is worth saying which. In the reading
+            view a web article's images are still loaded from your servers rather than ours. We do
+            keep our own copies of them, and today we do not serve those copies; figures recovered
+            from a PDF are both stored and served by us. We also keep a private snapshot of the page
+            or PDF we fetched, so that we can extract it again — that snapshot is not part of the
+            public copy.
           </p>
         </Section>
 
         <Section title="Your name and your address stay on it">
+          {/* **The qualification is not pedantry, it is most of the sentence.**
+              `publicSourceUrl` goes through `safePublicCanonical` (src/urls.ts),
+              which refuses a URL with a query string, with credentials, on a
+              private-looking host, or over 2048 characters — and when it
+              refuses, a visitor gets *no* origin line and an unlinked title,
+              rather than a wrong one. So an unconditional promise here is false
+              for exactly the sites that use `?id=` article addresses. GPT Sol,
+              2026-09-06, finding 3 — and note the first draft had already
+              hedged the canonical claim below and not this one, which is the
+              same fact hedged in one place and asserted in another. */}
           <p>
-            The title at the top of our copy is itself a link to your page. Directly beneath it we
-            print where it came from — your site's address, host and path — as a second, visible
+            Where the address we recorded is one we can safely republish — in particular, one
+            without a query string — the title at the top of our copy is itself a link to your page,
+            and directly beneath it we print where it came from, host and path, as a second visible
             link. Both open your page in a new tab, and somebody reading without an account sees
-            exactly what a signed-in reader sees.
+            those links too. Where the address is one we will not republish, we show no source line
+            at all rather than a guess at one.
           </p>
+          {/* **"first in the line of facts under the title", not "above
+              everything else"**, which is what this said until it was checked
+              against Masthead.tsx: the byline leads the facts line, and the
+              facts line sits below the title. A small overclaim, and exactly the
+              kind this page cannot afford — the reader it is written to cannot
+              check it, so the only thing keeping it honest is somebody having
+              looked. */}
           <p>
-            Where the article carries an author's name we show that too, above everything else on
-            the card and on the page. We do not put our name on your writing.
+            Where the article carries an author's name we show that too — on its card in the list,
+            and in the line of facts under the title on the page. We do not present Spideryarn as
+            the author of anything you wrote.
           </p>
         </Section>
 
@@ -196,9 +241,9 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
             every page carries the matching{" "}
             <code className="tw:text-foreground">&lt;meta name="robots"&gt;</code>, and our{" "}
             <code className="tw:text-foreground">robots.txt</code> disallows crawling of the whole
-            site. We publish no sitemap. Our deploy script checks the first and the last of those on
-            the live site every time we ship, and refuses to finish if either has stopped being
-            true.
+            site. We publish no sitemap. After every deploy our script re-checks the live{" "}
+            <code className="tw:text-foreground">robots.txt</code> — that it is still a real plain-text
+            file and still carries a disallow rule — and reports the deploy as failed if it is not.
           </p>
           <p>
             There is one narrow hole and it is worth naming: Facebook's and Twitter's link-preview
@@ -208,11 +253,11 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
             noindex header.
           </p>
           <p>
-            Where we recorded the address the article came from, the page also carries a{" "}
+            Where that address is one we can safely republish, the page also carries a{" "}
             <code className="tw:text-foreground">&lt;link rel="canonical"&gt;</code> pointing at
             yours, so any machine that does read our copy is told yours is the authoritative one.
             That is belt-and-braces rather than the main protection: nothing is indexing us to begin
-            with.
+            with, and it is left out on the same addresses that get no source line above.
           </p>
         </Section>
 
@@ -244,15 +289,20 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
           </p>
           <p>
             Today nothing printed beside them says so, which we think is a gap and intend to close.
-            What we never do is quietly rewrite your prose: at the finest level of zoom the reader
-            is always looking at the paragraph you actually wrote.
+            What we never do is substitute a summary for the writing: at the finest level of zoom
+            the reader is looking at the extracted passage itself, never a model's version of it.
+            One honest caveat — the text of a <em>PDF</em> is reconstructed rather than simply read
+            out, so for those the passage is our best recovery of the page rather than a byte-exact
+            copy.
           </p>
         </Section>
 
         <Section title="Money, and what we get out of this">
           <p>
-            Readers pay us for the tool. Somebody reading a public article pays nothing, sees no
-            advertising, and is not tracked across the web. We do not sell anybody's text, and
+            Readers pay us for the tool. Somebody reading a public article pays nothing and sees no
+            advertising, and we run no behavioural analytics on them — the only thing that reports
+            back from the page is a scrubbed error reporter, with session replay and tracing
+            deliberately switched off. We do not sell anybody's text, and
             nobody trains a model on it — though, as our{" "}
             <Link href={PRIVACY_HREF} className="tw:text-highlight tw:no-underline tw:hover:underline">
               privacy policy
@@ -264,8 +314,10 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
           <p>
             Two things you would otherwise have to find out for yourself. Public articles are where
             we draw the examples shown on our home and features pages, so a shared piece may appear
-            there as a link. And making an article public halves what it counts against a reader's
-            monthly allowance, so there is a small incentive in the direction of sharing.
+            there as a link. And where an article counts against a reader's allowance at all, making
+            it public halves that charge — so there is a small incentive in the direction of
+            sharing. Not every article counts: older ones added before we charged for anything do
+            not, and the free allowance is a lifetime one rather than a monthly one.
           </p>
         </Section>
 
