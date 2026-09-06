@@ -39,6 +39,7 @@
     "eval:summaries": "tsx evals/summaries/run.ts",
     "eval:cost": "tsx evals/cost/run.ts",
     "eval:deepen": "tsx evals/deepen/run.ts",
+    "eval:debate": "tsx evals/debate/run.ts",
     "eval:cost:interactions": "tsx evals/cost/interactions.ts",
     "typecheck": "tsx scripts/typecheck.ts",
     "db:generate": "tsx scripts/db-generate.ts",

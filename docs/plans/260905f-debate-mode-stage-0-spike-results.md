@@ -212,6 +212,18 @@ highest-value deferred item rather than a nicety.**
 Group one is *not* impossible: the second article produced **1 direct row**. So the rule admits real
 reception; the extract is what usually stops it.
 
+> **Correction, 2026-09-06 — "fifty years of citation" was the wrong yardstick.** Hand-verified web
+> research for [260906b](260906b-an-evaluation-for-debate-mode-and-what-it-finds.md)'s corpus found
+> that the web around *Cargo Cult Science* is saturated with pages that **quote and admire** it, and
+> that genuine argument *with* it is rare and mostly academic. **Volume of citation is not volume of
+> response**, so an empty group one here is a good deal more defensible than the sentence above
+> makes it sound, and the piece is a **precision** test rather than a recall one.
+>
+> The measurement is unaffected: `unverifiedSource` and not `directnessUnverified` is still what
+> emptied the group, and the extract is still the binding constraint. What changes is where the
+> *recall* question should be asked — of Carr's *Is Google Making Us Stupid?*, which does have a
+> stable ecosystem of named argumentative replies, and where an empty group one would be damning.
+
 ### 4. `valence` is systematically measuring the wrong thing — the one user-visible bug
 
 Three of the seven Feynman rows point valence at the **source's own subject** rather than at the row's
