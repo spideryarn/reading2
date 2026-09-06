@@ -356,13 +356,20 @@ export function adminColumns(now: number): SortableColumn<AdminUser>[] {
         return (
           /* **The marker goes under the address rather than beside it**, which
              looks like the lesser arrangement and is the only one that works.
-             This is the fluid column (`w-full max-w-0` in lib/DataTable.tsx),
-             so on a narrow screen the table scrolls and this column collapses
-             to almost nothing — and a pill that will not shrink, on the same
-             line, then takes all of it: measured at 390px on 2026-09-03, the
-             administrator's own address was the one address on the page that
-             could not be read at all. Below, the worst it can do is make the
-             column as wide as the word. */
+             This is the fluid column (`FLUID_CELL` in lib/DataTable.tsx), and a
+             pill that will not shrink, on the same line, takes as much of it as
+             it likes: measured at 390px on 2026-09-03, the administrator's own
+             address was the one address on the page that could not be read at
+             all. Below, the worst it can do is make the column as wide as the
+             word.
+
+             **It no longer collapses to almost nothing**, which is what this
+             comment used to say and what made the collision so bad. Since
+             2026-09-06 the fluid column carries a `min-w-56` floor, so a narrow
+             window scrolls the table rather than crushing this column — the
+             shelf's fix, inherited here because both tables come through the
+             same component (260906g). The arrangement below is still right; the
+             reason it was urgent is half gone. */
           <div className="tw:min-w-0">
             <div className="tw:truncate tw:text-foreground" title={row.original.email}>
               {row.original.email}

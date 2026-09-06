@@ -29,7 +29,6 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { CONTACT_EMAIL } from "../src/site-text.js";
 import { SiteFooter } from "../src/web/SiteFooter.js";
 
 /* React only treats `act()` as authoritative when this is set, and without it
@@ -83,41 +82,37 @@ const FEATURES = "Features → /features";
 const PRICING = "Pricing → /pricing";
 const PRIVACY = "Privacy → /privacy";
 const CONTACT = "Contact → /contact";
-const MAIL = `${CONTACT_EMAIL} → mailto:${CONTACT_EMAIL}`;
 
 describe("the site footer", () => {
   it("carries the whole row on a page that is not one of its own", () => {
     // The control: if this ever stops holding, every "is missing" assertion
     // below would pass over a footer that rendered nothing at all.
-    expect(footerAt("/profile")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CONTACT, MAIL]);
+    expect(footerAt("/profile")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CONTACT]);
   });
 
   it("drops Home on the shelf, which is also the landing page", () => {
-    expect(footerAt("/")).toEqual([FEATURES, PRICING, PRIVACY, CONTACT, MAIL]);
+    expect(footerAt("/")).toEqual([FEATURES, PRICING, PRIVACY, CONTACT]);
   });
 
   it("drops Features on the features page", () => {
-    expect(footerAt("/features")).toEqual([HOME, PRICING, PRIVACY, CONTACT, MAIL]);
+    expect(footerAt("/features")).toEqual([HOME, PRICING, PRIVACY, CONTACT]);
   });
 
   it("drops Privacy on the privacy page", () => {
-    expect(footerAt("/privacy")).toEqual([HOME, FEATURES, PRICING, CONTACT, MAIL]);
+    expect(footerAt("/privacy")).toEqual([HOME, FEATURES, PRICING, CONTACT]);
   });
 
-  it("drops Contact on the contact page, and keeps the address there", () => {
-    /* The one page where the two halves of this row say nearly the same thing,
-       and they still behave differently: the link drops itself, the `mailto:`
-       does not. That is the decision in SiteFooter.tsx § `LINKS`, and this is
-       what would go red if somebody later folded the address into the link. */
-    expect(footerAt("/contact")).toEqual([HOME, FEATURES, PRICING, PRIVACY, MAIL]);
+  it("drops Contact on the contact page", () => {
+    expect(footerAt("/contact")).toEqual([HOME, FEATURES, PRICING, PRIVACY]);
   });
 
-  it("keeps the contact address on every one of them", () => {
-    // Said separately from the four above because it is a different rule with a
-    // different reason: the address is the only thing in the row that is not a
-    // page, and the only thing a reader who is stuck can actually use.
+  it("carries no email address anywhere in the row", () => {
+    /* It carried `hello@spideryarn.com` beside the Contact link for a day, and
+       Greg, 2026-09-06: *"Remove the hello@spideryarn.com from the footer —
+       just keep the Contact page, which already points to that."* Every entry
+       in this row is now a page, which is what SiteFooter.tsx § `LINKS` says. */
     for (const at of ["/", "/features", "/pricing", "/privacy", "/contact", "/profile"]) {
-      expect(footerAt(at)).toContain(MAIL);
+      for (const link of footerAt(at)) expect(link).not.toContain("mailto:");
     }
   });
 
@@ -134,7 +129,7 @@ describe("the site footer", () => {
    * ways, which is precisely the distinction `here` was added to make.
    */
   it("believes the page over the address when the caller says which it is", () => {
-    expect(footerAt("/profile", "library")).toEqual([FEATURES, PRICING, PRIVACY, CONTACT, MAIL]);
+    expect(footerAt("/profile", "library")).toEqual([FEATURES, PRICING, PRIVACY, CONTACT]);
   });
 
   it("takes a sentence of its own above the links", () => {

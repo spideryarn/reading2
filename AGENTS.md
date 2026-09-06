@@ -320,6 +320,10 @@ nothing else has a copy of.
   is that. And no subagent is read-only by construction — an `Explore` lacks `Edit` and `Write` but
   keeps an unrestricted `Bash`, so "don't edit" is a brief you write, not a boundary you get
   ([engineering-manager.md § Delegate](docs/reusable/engineering-manager.md#delegate)).
+- **From outside a Claude session** — a script, a cron job, a Codex-primary run, the box — dispatch
+  Claude with [`scripts/run-claude.ts`](scripts/run-claude.ts) rather than `claude -p`:
+  [claude-cli-as-subagent.md](docs/reusable/claude-cli-as-subagent.md). Inside a session, an
+  ordinary subagent is cheaper and better, because it inherits the harness.
 - **When you rename anything, hunt down everything that names it.** A rename is never one edit. Send
   a cheap subagent to sweep the whole repo — code, docs, plans, tests, fixtures, scripts,
   `package.json` — and grep for fragments as well as the whole name, since a `camelCase` rename and

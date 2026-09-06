@@ -75,6 +75,7 @@ function article(visibility: Visibility | undefined): Article {
       },
     ],
     assets: undefined,
+    navLabelStatus: "ready",
     tree: {
       version: "t",
       generator: "t",

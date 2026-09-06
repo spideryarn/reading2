@@ -615,6 +615,7 @@ is read by nothing.
 | `NODE_OPTIONS=--experimental-require-module` | see [require(ESM)](#the-runtime-has-requireesm-turned-off). **Set on Production and, since 2026-08-27, Preview.** It was Production-only until then (measured 2026-08-26), which meant a preview deployment used to check anything failed for a reason unrelated to whatever you were checking |
 | `NODEJS_HELPERS=0` | see [the request body](#the-request-body) |
 | `OPENROUTER_API_KEY` | **every paid call in the app**, since 2026-08-27 — the pipeline as well as explain, chat, search, PDF reading and embeddings. Without it nothing can be ingested at all. [ai-gateway.md](ai-gateway.md) |
+| `OPENAI_API_KEY` | **set on Production, 2026-09-06** — live conversation mode and nothing else, and it is [the one declared exception](ai-gateway.md) to everything going through OpenRouter, on a **separate bill**. [`src/live.ts`](../../src/live.ts) is the only file that reads it; absent means live conversation refuses with `[live-not-set-up]` and the rest of the app is unaffected. Stored as a Vercel **Secret**, so `vercel env pull` writes `[SENSITIVE]` rather than the value. Production only — a preview has no database anyway. [live-conversation.md](live-conversation.md) |
 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | the gate verifies tokens with these. `SUPABASE_ANON_KEY` is the legacy fallback and is what is set today |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | **set on Production, 2026-08-27 — and they are read at BUILD time**, which is the part to remember. Vite compiles them into the bundle, so setting them after a deploy changes nothing until the next build. Missing means [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) throws at module load and the site is a **blank page** — which is what `www.spideryarn.com` was for a few hours that day. **Set on Preview too, 2026-08-27** — until then a preview was a blank page for this reason and no other, which looks identical to a build that never ran. Note that Preview builds predating that setting keep the missing values baked in; only a new build picks them up. The values came from `.env.prod`, where the publishable key lives under the legacy name `SUPABASE_ANON_KEY` and its value is an `sb_publishable_…`. [auth.md](auth.md), [260826ae-auth-ui-and-production.md § The release fence](../plans/260826ae-auth-ui-and-production.md#the-release-fence) |
 | `STRIPE_SECRET_KEY` | **set on Production, 2026-09-03** — the `sk_live_…` for `acct_1UBW3NLv4piDbwcb`, and it must be the **live** key here and nowhere else. A production deployment on `sk_test_…` takes test cards, writes `active` subscription rows and grants real quota, while every "is it set" check stays green; [`src/billing/stripe.ts`](../../src/billing/stripe.ts) refuses to construct a client in that state and `/api/health` warns. Absent is fine and means everybody is on the free tier. [billing.md](billing.md) |
@@ -1157,6 +1158,10 @@ Vercel.
 
 ## See also
 
+- [260906a-deployment-and-infrastructure.html](../tutorials/260906a-deployment-and-infrastructure.html)
+  — the tutorial version of this page, for somebody who has not opened the code: the four machines,
+  `npm run deploy` step by step, and the failures below retold as one pattern rather than five
+  incidents. Open it in a browser; this page is authoritative wherever they disagree
 - [260825d-deploy-and-repo-move.md](../plans/260825d-deploy-and-repo-move.md) — the plan, the
   domain move, and the beta gate
 - [database.md](database.md) — the roles, the three hosts, and the enforced SSL

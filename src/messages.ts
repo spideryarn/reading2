@@ -25,6 +25,7 @@
  *    brackets and last, so it is skippable by a reader who does not want it and
  *    quotable by one reporting a problem.
  */
+import { readableDay } from "./billing-plan.js";
 import type { Mode } from "./modes.js";
 import type { DateRejection, EmbeddingReason, StepName } from "./types.js";
 import { MAX_PAGES, MAX_UPLOAD_BYTES } from "./uploads.js";
@@ -299,6 +300,39 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-filtered": "blocked",
   "ai-no-room": "blocked",
   "ai-empty": "retry",
+  /* **Raised outside this file**, by `CLAIMS_UNUSABLE` (src/referee-claims-run.ts)
+     and `ANSWER_UNUSABLE` (src/referee-criteria-run.ts): the model answered and
+     none of what came back could be found in the paper. `retry` because both
+     sentences end "asking again usually works", which is true — it is a fact
+     about that answer, never about the paper.
+
+     Both sites had asked in prose since 2026-09-02 to be registered here, and
+     `referee-criteria-run.ts` said exactly why it would not happen: *"Skipping
+     the second has no symptom here — `kindOfMessage` returns null,
+     `worthRetrying` says yes, and Retry is the right answer anyway."* It was
+     right, and being right by a default's coincidence is not the same as being
+     declared. tests/every-ai-code-is-registered.test.ts is what now says so.
+
+     **Registering a code is not only bookkeeping**, which GPT Sol pointed out
+     and this entry is the first case of: `authored()` in src/monitoring-scrub.ts
+     is `kindOfMessage(message) !== null`, so a message ending in a registered
+     code has its **full text forwarded to Sentry** instead of being withheld.
+     That is correct for these two — both are fixed literals with nothing
+     interpolated into them, which is exactly what that allowlist is for. But
+     note what it means for the next sentence given this code: it must stay free
+     of article prose and of anything a reader typed (docs/project/logging.md).
+     `monitoring-scrub.ts`'s own reasoning says the vocabulary is closed because
+     "tests/messages.test.ts round-trips every sentence in that file", and these
+     two sentences are not in this file — which is the sharpest argument for
+     moving them here, still open, and belonging to docs/project/copy.md's own
+     batch rather than to this line.
+
+     **Two different sentences share this one code**, which the "one distinct
+     sentence, one code" rule says they must not — see
+     docs/plans/260906h-improve-the-codebase-fourth-sweep.md § T2.8. Recorded
+     rather than fixed here: unifying them or splitting the code changes what a
+     reader is shown, which is copy.md's call and not a sweep's. */
+  "ai-unusable": "retry",
   /* Not a model call, and not the reader's fault either. `retry` on purpose:
      an interrupted job resumes from its artefacts rather than starting again,
      so another go is both allowed and cheap. See `INTERRUPTED`. */
@@ -4161,15 +4195,14 @@ export function ingestQuotaReached(quota: {
     };
   }
 
-  /* Day, month and year, in the reader's words rather than an ISO stamp. `UTC`
-     so the sentence does not change depending on where the server is standing —
-     the boundary itself is Stripe's, and it is not to the hour anyway. */
-  const when = quota.resetAt.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+  /* Day, month and year, in the reader's words rather than an ISO stamp, and
+     `UTC` so the sentence does not change depending on where the server is
+     standing — the boundary itself is Stripe's, and it is not to the hour
+     anyway. All of which is now said once, in `readableDay`: this used to spell
+     the same four options out again, and the only thing keeping the refusal and
+     the /profile page naming one day was a sentence in billing-plan.ts saying
+     they must. */
+  const when = readableDay(quota.resetAt);
   return {
     kind: "blocked",
     message:

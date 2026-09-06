@@ -327,12 +327,14 @@ const ARTICLE: PublicArticle = {
   comments: [],
   searches: [],
   assets: undefined,
+  navLabelStatus: "ready",
 };
 
 const OWNED: Article = {
   blocks: BLOCKS,
   tree: TREE,
   assets: undefined,
+  navLabelStatus: "ready",
   meta: { slug: SLUG, title: "A piece, as its owner renamed it", url: "https://example.com/a" },
 };
 

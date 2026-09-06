@@ -159,9 +159,12 @@ per-stage pipeline commands, which model does which job, and what each secret is
 — explains the whole system to somebody who knows the product and has never opened the code: how an
 article is fetched, cut into blocks and retold at several lengths, why every paragraph gets a
 permanent id so your notes survive a re-import, and why the pipeline builds a new revision beside the
-live one rather than editing in place. Open it in a browser. Two more go a level deeper:
-[import-pipeline-and-database.html](docs/tutorials/import-pipeline-and-database.html) and
-[revisions-and-the-schema.html](docs/tutorials/revisions-and-the-schema.html).
+live one rather than editing in place. Open it in a browser. Three more go a level deeper:
+[import-pipeline-and-database.html](docs/tutorials/import-pipeline-and-database.html),
+[revisions-and-the-schema.html](docs/tutorials/revisions-and-the-schema.html), and
+[260906a-deployment-and-infrastructure.html](docs/tutorials/260906a-deployment-and-infrastructure.html)
+— *Shipping Spideryarn* — which follows one commit all the way to the live site and is the place to
+start if you want to know what it takes to run this thing.
 
 For engineers, [architecture.md](docs/project/architecture.md) is the reference, and
 [block-ids.md](docs/project/block-ids.md) is the one contract everything else depends on — read it

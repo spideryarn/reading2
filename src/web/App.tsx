@@ -135,6 +135,7 @@ import {
   columnHint,
   columnLabel,
 } from "./tree.js";
+import { paragraphLabelNotice, paragraphLabelsReady, paragraphPill } from "./nav-labels.js";
 import {
   atParam,
   colsParam,
@@ -2868,6 +2869,16 @@ function Reader({
   /** Whether the paragraph-level nav labels are riding beside the prose. */
   const leafOn = showText && fit.columns.includes(geometry.leafDepth);
 
+  /**
+   * What stands where the `Paragraphs` pill would be when there is nothing for
+   * it to open, or `null` in the ordinary case — nav-labels.ts owns the rule.
+   *
+   * Read once here and used twice: the bar below, and `OutlinePanel`, whose
+   * rung 5 draws the same labels and must make the same decision. `TableView`
+   * asks for itself, off the same `article`.
+   */
+  const paragraphNotice = paragraphLabelNotice(article.navLabelStatus);
+
   /** The gist columns actually on screen — the leaf column isn't one of them. */
   const shownGists = useMemo(
     () => fit.columns.filter((d) => d !== geometry.leafDepth),
@@ -3036,17 +3047,43 @@ function Reader({
             ))}
             {/* The paragraph outline, beside the prose rather than instead of
                 it. Only offered in reading mode: in outline mode this column is
-                the view, and turning it off would leave nothing. */}
-            {showText && (
-              <Toggle
-                className={PILL}
-                pressed={leafOn}
-                onPressedChange={() => toggle(geometry.leafDepth)}
-                title={columnHint(geometry.leafDepth, geometry.leafDepth)}
-              >
-                {columnLabel(geometry.leafDepth, geometry.leafDepth)}
-              </Toggle>
-            )}
+                the view, and turning it off would leave nothing.
+
+                **And only while there are labels to draw.** Where there are
+                not, the control is replaced by the sentence saying why rather
+                than disabled with the sentence in its tooltip — a touch reader
+                cannot open a tooltip, which is the argument that took the pills
+                from `L3` to `Paragraphs` in the first place (tree.ts §
+                `columnLabel`). A pill that opened a column of blank cells is
+                the failure nav-labels.ts exists to prevent; a pill that opened
+                a column of one repeated notice would be worse still.
+
+                **`|| leafOn` is the door back out, and it is not a hedge.**
+                `toggle` is the only caller of `setCols` in this file, so
+                replacing the control replaces the only way to *close* the
+                column as well as the only way to open it. The leaf depth can
+                already be on without this pill — `?cols=` naming it, shared or
+                bookmarked — and such a reader was left with a wide column of
+                one repeated sentence and nothing to shut it with: for ever, if
+                the status is `failed`. So the notice stands in for the pill
+                only while the column is shut, which is the case it was written
+                for; once the column is open the pill comes back, because the
+                column itself is already carrying the sentence
+                (TableView § `withheldLeafCell`) and what the reader needs from
+                the bar is the way out. GPT Sol's F2 on stage 1, 2026-09-06. */}
+            {showText &&
+              (paragraphPill(article.navLabelStatus, leafOn) === "toggle" ? (
+                <Toggle
+                  className={PILL}
+                  pressed={leafOn}
+                  onPressedChange={() => toggle(geometry.leafDepth)}
+                  title={columnHint(geometry.leafDepth, geometry.leafDepth)}
+                >
+                  {columnLabel(geometry.leafDepth, geometry.leafDepth)}
+                </Toggle>
+              ) : (
+                <span className="pill-note">{paragraphNotice}</span>
+              ))}
           </>
         )}
         {/* Failures of the comment transport belong here rather than in the
@@ -3456,6 +3493,16 @@ function Reader({
              condition paragraph rows are not permissible under, so it is read
              from the layout rather than from a width guessed here. */
           proseBeside={fit.modeW > 0}
+          /* **Rung 5 is the same layer the `Paragraphs` column draws**, so it
+             makes the same decision. Withheld rather than announced: nobody
+             asked for rung 5 — the panel climbs the ladder as far as the band
+             has room — so a sentence in place of it would be an answer to a
+             question the reader never put. The rungs below still draw, which is
+             what "withhold the layer" means here.
+             Sent as a boolean rather than the status, because that is exactly
+             what this panel needs and `allowParagraphs` beside it is already
+             one. src/web/nav-labels.ts. */
+          paragraphLabels={paragraphLabelsReady(article.navLabelStatus)}
           onJump={jumpTo}
         />
       )}

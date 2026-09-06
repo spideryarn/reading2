@@ -15,6 +15,13 @@ diagram actually looked at in a browser rather than trusted from the markup.
   in and becoming blocks.
 - [revisions-and-the-schema.html](../tutorials/revisions-and-the-schema.html) — how re-extraction
   keeps everything that was anchored to the old text.
+- [260906a-deployment-and-infrastructure.html](../tutorials/260906a-deployment-and-infrastructure.html)
+  — a commit becoming `www.spideryarn.com`: the four machines, the seven steps of `npm run deploy`,
+  what a serverless host takes away, and the failures that reported success.
+- [260906b-beads-issue-tracker-for-coding-agents.html](../tutorials/260906b-beads-issue-tracker-for-coding-agents.html)
+  — the odd one out: it explains **somebody else's tool**, not ours. `beads` gives coding agents a
+  dependency graph instead of a markdown plan, and its one real query is "what can start now". Read
+  it for the idea, and for the section on what an 80/20 version of it would be — we do not use it.
 
 ## Naming
 
