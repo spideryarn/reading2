@@ -76,6 +76,7 @@ import { CommentDialog } from "./CommentDialog.js";
 import { Masthead } from "./Masthead.js";
 import { useSlow } from "./useSlow.js";
 import { Dock } from "./Dock.js";
+import { ReturnChip } from "./ReturnChip.js";
 import { ChatPanel } from "./ChatPanel.js";
 import { useLiveConversation } from "./live/useLiveConversation.js";
 import {
@@ -199,7 +200,7 @@ import {
   offerableGists,
   proseVisible,
 } from "./layout.js";
-import { navPlan, useArrowNav } from "./keynav.js";
+import { beginJump, navPlan, useArrowNav } from "./keynav.js";
 import { useLastView } from "./last-view.js";
 import { useSwipeNav } from "./swipe.js";
 import { useComments } from "./useComments.js";
@@ -1704,21 +1705,50 @@ function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: str
   // `throttle(0)`, not `undefined`: nuqs resolves this option with `??`, so an
   // explicit undefined here falls straight through to atParam's
   // `debounce(POSITION_SETTLE_MS)` and cancels nothing. throttle(0) aborts the
-  // pending debounce and writes the URL on the spot. Caught by
-  // exactOptionalPropertyTypes — see docs/project/typechecking.md.
+  // pending debounce. Caught by exactOptionalPropertyTypes — see
+  // docs/project/typechecking.md.
+  //
+  // It does **not** write the URL on the spot, which this comment used to claim.
+  // nuqs's queue resets `timeMs` to its own default (50ms outside Safari) and
+  // `push` only ever raises it, so `throttle(0)` cannot lower the floor: the
+  // write lands within ~50ms, on a later task. Nothing here minds — the scroll
+  // starts immediately and the chip is drawn from the entry, not from the
+  // address — but a test that waited one tick for it was a coin toss until
+  // tests/jump-history.test.ts § settled said so.
+  //
+  // **The push also has to say where the reader was**, so that a chip can offer
+  // them the way back on a device with no Back button. That is `beginJump`
+  // (keynav.ts, beside the measurement it uses; the stamp itself is
+  // jump-history.ts): it measures the origin (never `?at=`, which is stale by
+  // design in three separate ways), arms it, makes this one push, and scrolls.
+  // The predecessor's `?at=` is rewritten by `watchHistoryWrites`, which is the
+  // thing nuqs's flush eventually calls; a second `setAt` here would be
+  // overwritten by this one inside nuqs's queue and would silently do nothing.
+  //
+  // `synced` is set **only when the jump happened** and only after the fact,
+  // which is safe because nuqs defers the push to a later task: React cannot
+  // have re-rendered with the new `at` before this line runs. A refused jump
+  // must leave it alone, or the restore effect would stop recognising the
+  // position the reader is actually standing at.
   const jumpTo = useCallback(
     (blockId: BlockId) => {
-      synced.current = blockId;
-      void setAt(blockId, { history: "push", limitUrlUpdates: throttle(0) });
-      scrollToBlock(blockId);
+      const moved = beginJump(blocks, blockId, (id) => {
+        void setAt(id, { history: "push", limitUrlUpdates: throttle(0) });
+      });
+      if (moved) synced.current = blockId;
     },
-    [setAt],
+    [blocks, setAt],
   );
 
   // `at` goes out as well as `jumpTo` because it is half of the answer to
   // "where should this link land" — the other half being `?note=`, which the
   // caller has and this hook does not. See arrivalTarget in scroll.ts.
-  return { at, jumpTo };
+  //
+  // `rowOf` goes out because `ReturnChip` asks the same question of it that the
+  // spy does — which section is this block in — and a second `new Map` over
+  // every block in the article, kept in step by nothing, is two indexes that
+  // can disagree.
+  return { at, jumpTo, rowOf };
 }
 
 /**
@@ -2032,7 +2062,7 @@ function Reader({
   // sideways: the rail's width is taken out of the prose column's, so hiding it
   // rewraps every paragraph in the article and every row changes height.
   const layoutKey = `${fit.columns.join(",")}|${proseOn}|${windowWidth}|${fit.modeW}|${fit.spine}`;
-  const { at, jumpTo } = useReadingPosition(sections, article.blocks, layoutKey);
+  const { at, jumpTo, rowOf } = useReadingPosition(sections, article.blocks, layoutKey);
 
   /**
    * **Tell the Feedback dialog where the reader is.** feedback-context.ts.
@@ -3724,6 +3754,13 @@ function Reader({
           onOpenKey={setOpenRefereeKey}
         />
       )}
+
+      {/* **The way back from a jump**, drawn only on an entry a jump stamped —
+          ReturnChip.tsx, which owns that rule and the words. It takes the
+          sections this component already built rather than resolving the
+          origin block itself: the label is a section title, and there must be
+          one answer to "which section is this block in" on the page. */}
+      <ReturnChip sections={sections} rowOf={rowOf} />
 
       {/* Last in the DOM as well as topmost in z-index: the bar and its drawer
           are drawn over everything, and matching source order to paint order is
