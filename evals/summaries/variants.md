@@ -290,21 +290,31 @@ line and obvious the moment it becomes the only one.
 ## The shipped GISTS block, toc/6
 
 **Copied out of `src/hierarchy.ts` § SYSTEM, verbatim** — the block `toc/6` gave a per-depth length
-rule (root at most 18 words, depth 1 at most 25, deeper at least 22 and at most 32), plus the
-no-meta-narration rule and *"where a shorter, commoner word loses nothing, use it"*.
+rule (root at most 20 words, depth 1 at most 25, deeper normally 22-30 on a substantive node), plus
+the no-narration rule and *"where a shorter, commoner word loses nothing, use it"*.
 
 It is copied rather than sliced live because the arm that carries it has to stay put while
 `src/hierarchy.ts` moves on; `tests/summaries-eval.test.ts` asserts the copy is
 character-for-character what production sends today, so a drift is a red test rather than a
 measurement of something we do not ship.
 
-**Revised once, on 2026-09-06, and the two revisions are different measurements.** The first draft
-gave depth 2 as *"22-32 words, and use them"* — a range that the model could satisfy from below, and
-did: measured over four documents at `--depth 2`, depth-2 length was **unmoved** against `toc/5`
-(mean 20.9 → 21.0 words), with 63 of 134 gists still under 22. A ceiling the model can satisfy by
-writing less is not a floor. The block below states the floor **as a floor**, and gives the reason a
-fine gist is allowed to be longer. Any depth-2 number from before that revision is a measurement of
-the earlier wording.
+**Three drafts on 2026-09-06, and a depth-2 number belongs to exactly one of them.** Each was
+measured at `--depth 2` over four documents; the count of depth-2 gists under 22 words, out of 134,
+is the line that separates them.
+
+| draft | depth-2 wording | mean words | under 22 |
+|---|---|---|---|
+| A | *"22-32 words, and use them"* | 21.0 | 63 |
+| B | *"AT LEAST 22 words … too SHORT, not admirably terse"* | 23.4 | 33 |
+| C — below | *"normally use 22-30 … a shorter gist is right when the range holds no second substantive element"* | see the run | see the run |
+
+A is the reason B exists: a range the model can satisfy from below is a ceiling, not a floor, and
+depth 2 did not move at all against `toc/5` (20.9 → 21.0). B is the reason C exists: its floor was
+absolute, and it carried the sentence *"if 22 words cannot be filled honestly, the section was too
+slight to be its own node"* — which, in **production**, is said to a model that is choosing the
+boundaries in the same breath, so it licences merging a real section to satisfy a prose constraint.
+**This eval fixes the tree and therefore cannot see that**, which is why the finding came from GPT
+Sol rather than from a number here. C states the floor as a norm with a named exception instead.
 
 ```
 GISTS (internal nodes)
@@ -312,22 +322,23 @@ GISTS (internal nodes)
 - Exactly ONE sentence. This is what the reader sees at the zoom level above.
 - It must be a CLAIM or a MOVE, not a topic label.
 - Write a parent's gist from its children, not from the raw text.
-- LENGTH RUNS THE OPPOSITE WAY TO WHAT YOU WOULD EXPECT. The coarser the node,
-  the SHORTER its gist. Budgets, and they are ceilings rather than targets:
-    - the root: AT MOST 18 words. It is the shelf blurb — the one claim the
-      piece makes, shorter than any chapter's gist.
-    - depth 1: AT MOST 25 words.
-    - deeper than that: AT LEAST 22 words, and at most 32. The floor is the
-      half that will feel wrong, so obey it: down here a one-clause gist is too
-      SHORT, not admirably terse. A reader at this zoom is reading your sentence
-      INSTEAD of the paragraphs it covers, so give them the claim AND the ground
-      it stands on. If 22 words cannot be filled honestly, the section was too
-      slight to be its own node.
-  A root that runs "X stems from A and B, so we should C while reaffirming D" is
-  four gists wearing one full stop. Pick the claim they add up to and stop there.
-- No empty meta-narration: never "the essay opens by", "the essay closes by
-  urging", "this section explores", "the author then turns to", "then", "next",
-  "goes on to". Say what the section CLAIMS; do not narrate that it is claiming.
+- LENGTH IS SET BY WHERE THE LINE IS READ, and it runs SHORTER as the node gets
+  coarser:
+    - the root: AT MOST 20 words. It is the shelf card and the coarsest zoom —
+      the central claim or governing move, shorter than any chapter's gist. A
+      root that runs "X stems from A and B, so we should C while reaffirming D"
+      is four gists wearing one full stop; pick the claim they add up to and
+      stop there.
+    - depth 1: AT MOST 25 words. Chapter-level orientation.
+    - deeper than that: this line SUBSTITUTES for the prose it covers, so on a
+      substantive node normally use 22-30 words — the main claim or move, plus
+      its essential reason, contrast, consequence or example. A shorter gist is
+      right when the range holds no second substantive element. Never pad, never
+      invent support, and never change a boundary to reach a word count.
+- No narration of document order: not "the essay opens by", "the essay closes by
+  urging", "this section explores", "the author then turns to", "goes on to".
+  Say what the section CLAIMS; do not narrate that it is claiming. Ordinary
+  "then" and "next" inside a claim are fine — "if X, then Y" may BE the claim.
 - Keep the article's own words for the things it names — those are the reader's
   handholds — and ordinary words for everything else. Where a shorter, commoner
   word loses nothing, use it. A gist is read at a glance and has to land first

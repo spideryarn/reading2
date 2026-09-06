@@ -121,8 +121,14 @@ describe("the incumbent arm's rules are sliced out of the live SYSTEM", () => {
        production, so the assertion now runs the other way: the live block is
        ahead of `variants.md`'s replacement, and `gists-only` is measuring a
        block production has partly caught up with. Any result from `gists-only`
-       predating that bump is against a control that no longer exists. */
-    expect(productionGists()).toContain("meta-narration");
+       predating that bump is against a control that no longer exists.
+
+       Asserted on the sentence rather than on the label: production called it
+       "No empty meta-narration" and now calls it "No narration of document
+       order", and a test that tracked the heading would have gone red for a
+       rename while a test that tracks nothing would survive the rule's
+       deletion. This clause has outlived three drafts of the block. */
+    expect(productionGists()).toContain("do not narrate that it is claiming");
   });
 
   it("throws when a header moves, rather than slicing the wrong thing", () => {
