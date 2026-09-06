@@ -290,31 +290,46 @@ line and obvious the moment it becomes the only one.
 ## The shipped GISTS block, toc/6
 
 **Copied out of `src/hierarchy.ts` § SYSTEM, verbatim** — the block `toc/6` gave a per-depth length
-rule (root at most 20 words, depth 1 at most 25, deeper normally 22-30 on a substantive node), plus
-the no-narration rule and *"where a shorter, commoner word loses nothing, use it"*.
+rule (root at most 18 words, depth 1 at most 25, deeper 22-30 wherever the range runs to a paragraph
+or more), plus the no-narration rule and *"where a shorter, commoner word loses nothing, use it"*.
 
 It is copied rather than sliced live because the arm that carries it has to stay put while
 `src/hierarchy.ts` moves on; `tests/summaries-eval.test.ts` asserts the copy is
 character-for-character what production sends today, so a drift is a red test rather than a
 measurement of something we do not ship.
 
-**Three drafts on 2026-09-06, and a depth-2 number belongs to exactly one of them.** Each was
-measured at `--depth 2` over four documents; the count of depth-2 gists under 22 words, out of 134,
-is the line that separates them.
+### Four drafts in one day, and a depth-2 number belongs to exactly one of them
 
-| draft | depth-2 wording | mean words | under 22 |
-|---|---|---|---|
-| A | *"22-32 words, and use them"* | 21.0 | 63 |
-| B | *"AT LEAST 22 words … too SHORT, not admirably terse"* | 23.4 | 33 |
-| C — below | *"normally use 22-30 … a shorter gist is right when the range holds no second substantive element"* | see the run | see the run |
+Each was measured at `--depth 2` over the same four documents — 134 depth-2 nodes, 31 at depth 1,
+3 roots. The count under 22 words is the line that separates them, **split by how many words of prose
+the node's range actually covers**, because that split is what makes the count readable: under 40
+words there is nothing in the range but a title, a URL or a credit line, and over 120 a short gist is
+a miss rather than a judgement.
 
-A is the reason B exists: a range the model can satisfy from below is a ceiling, not a floor, and
-depth 2 did not move at all against `toc/5` (20.9 → 21.0). B is the reason C exists: its floor was
-absolute, and it carried the sentence *"if 22 words cannot be filled honestly, the section was too
-slight to be its own node"* — which, in **production**, is said to a model that is choosing the
-boundaries in the same breath, so it licences merging a real section to satisfy a prose constraint.
-**This eval fixes the tree and therefore cannot see that**, which is why the finding came from GPT
-Sol rather than from a number here. C states the floor as a norm with a named exception instead.
+| draft | depth-2 wording | mean | under 22 | <40w | 40-120w | >120w | root mean (ceiling) |
+|---|---|---|---|---|---|---|---|
+| `toc/5` | *(no rule at all)* | 20.9 | 68 | 16 | 16 | 36 | 25.3 |
+| A | *"22-32 words, and use them"* | 21.0 | 63 | 15 | 15 | 33 | 19.7 (18) |
+| B | *"AT LEAST 22 words … too SHORT, not admirably terse"* | 23.4 | 33 | 16 | 6 | 11 | 18.0 (18) |
+| C | *"normally 22-30 … shorter where no second substantive element"* | 22.1 | 47 | 15 | 17 | 15 | 22.0 (20) |
+| D — below | *"22-30 where the range runs to a paragraph or more … shorter only where the range itself is slight"* | see the run | | | | | (18) |
+
+**A is why B exists.** A range the model can satisfy from below is a ceiling, not a floor: depth 2
+did not move at all against `toc/5` (20.9 → 21.0).
+
+**B is why C exists**, and the reason came from GPT Sol rather than from any number here. B carried
+*"if 22 words cannot be filled honestly, the section was too slight to be its own node"* — which, in
+**production**, is said to a model that is choosing the boundaries in the same breath, so it licences
+merging a real section to satisfy a prose constraint. **This eval fixes the tree and therefore cannot
+see that.**
+
+**C is why D exists**, and that reason is in the table. C gave back half of B's recovered nodes, but
+almost all of the give-back sat in the 40-120-word band (6 → 17) rather than above 120 (11 → 15) — so
+*"no second substantive element"*, which asks the model to judge substance, was being used as a
+general licence. D ties the exception to the range instead: a title, a credit line, a URL. And C's
+root moved with its ceiling and then past it — ceiling 18 gave a mean of 18.0, ceiling 20 gave 22.0,
+with 2 of 3 over the new line where 1 of 3 was over the old one. The model tracks the number loosely
+and overshoots it upward, so the ceiling is back at 18.
 
 ```
 GISTS (internal nodes)
@@ -324,16 +339,17 @@ GISTS (internal nodes)
 - Write a parent's gist from its children, not from the raw text.
 - LENGTH IS SET BY WHERE THE LINE IS READ, and it runs SHORTER as the node gets
   coarser:
-    - the root: AT MOST 20 words. It is the shelf card and the coarsest zoom —
+    - the root: AT MOST 18 words. It is the shelf card and the coarsest zoom —
       the central claim or governing move, shorter than any chapter's gist. A
       root that runs "X stems from A and B, so we should C while reaffirming D"
       is four gists wearing one full stop; pick the claim they add up to and
       stop there.
     - depth 1: AT MOST 25 words. Chapter-level orientation.
-    - deeper than that: this line SUBSTITUTES for the prose it covers, so on a
-      substantive node normally use 22-30 words — the main claim or move, plus
-      its essential reason, contrast, consequence or example. A shorter gist is
-      right when the range holds no second substantive element. Never pad, never
+    - deeper than that: this line SUBSTITUTES for the prose it covers, so where
+      the range runs to a paragraph or more, 22-30 words is what it takes — the
+      main claim or move, plus its essential reason, contrast, consequence or
+      example. Shorter is right only where the range itself is slight: a title,
+      a credit line, a URL, a heading with nothing under it. Never pad, never
       invent support, and never change a boundary to reach a word count.
 - No narration of document order: not "the essay opens by", "the essay closes by
   urging", "this section explores", "the author then turns to", "goes on to".
