@@ -64,6 +64,7 @@ import type {
   BlockKind,
   GlossaryKind,
   Idea,
+  NavLabelStatus,
   Quote,
   QuoteDrops,
   SearchHit,
@@ -221,6 +222,25 @@ export interface PublicArticle extends PublicArtefactSet {
    * article that quietly goes on hot-linking.
    */
   assets: Assets | undefined;
+  /**
+   * **Where the paragraph nav labels are** — the same `NavLabelStatus` the
+   * owner gets, and the same argument `assets` above makes for being a required
+   * key rather than an optional one: the reading view takes an `Article`, a
+   * public payload reaches it by being structurally one, and `Article` requires
+   * it.
+   *
+   * It crosses for the reason `Tree.provisional` crosses. Both say *this part
+   * of the structure has not arrived*, and a client that cannot tell that from
+   * *this article has no paragraph labels* draws a run of blank cells and
+   * reports our own unfinished work as the shape of somebody's article.
+   *
+   * **The enum, and nothing else.** `failed` never brings a reason with it —
+   * a provider's error body is the one place an upstream can echo the article
+   * back at us (docs/project/copy.md § rule 4), and a visitor could act on it
+   * even less than the owner can. Three words about our pipeline's state is the
+   * whole of it, and none of them is about a person.
+   */
+  navLabelStatus: NavLabelStatus;
 }
 
 /**
