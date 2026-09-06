@@ -186,6 +186,7 @@ describe("referee mode's sub-modes", () => {
     act(() => {
       root.render(
         createElement(RefereeViews, {
+          slug: "a-piece",
           view: selected,
           onView: (next: RefereeView) => changes.push(next),
         }),
