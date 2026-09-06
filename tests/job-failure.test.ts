@@ -44,9 +44,9 @@
  *
  * **Blind to.** Where an artefact physically lives; and the *blob* half of the
  * two source-document cases is still a real store, deliberately — `fsBlobs` is
- * selected by credentials rather than by `SPIDERYARN_STORE` and is outside this
- * migration, and a genuine object is what makes "longer than its manifest
- * claims" a real condition rather than a stub's opinion.
+ * selected by credentials and is outside this migration, and a genuine object
+ * is what makes "longer than its manifest claims" a real condition rather than
+ * a stub's opinion.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -402,9 +402,9 @@ describe("the failures a retry cannot change", () => {
     const store = memoryArtefacts();
     const page = new TextEncoder().encode("<html><body><p>real bytes, wrongly described</p></body></html>");
     /* **The blob store here is the real one and stays real.** `fsBlobs` is
-       selected by credentials rather than by `SPIDERYARN_STORE` and is out of
-       this migration's scope; what the case needs is a genuine object whose
-       length disagrees with the manifest beside it. */
+       selected by credentials and is out of this migration's scope; what the
+       case needs is a genuine object whose length disagrees with the manifest
+       beside it. */
     const put = await storeRawSource(page, "html");
     store.plant("a-slug", "fetch", "raw", {
       kind: "html",

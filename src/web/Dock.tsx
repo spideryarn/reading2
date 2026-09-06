@@ -255,7 +255,7 @@ interface Props {
    * They differ for the committed fixture, whose meta.json names the full
    * article it is an excerpt of — so building a link out of the meta slug would
    * send you to a different article, and one that exists, so nothing would look
-   * broken. See src/api.ts § FIXTURE_SLUG.
+   * broken.
    */
   slug: string;
   /** Which of the article's pages this bar is sitting on. */

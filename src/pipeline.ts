@@ -829,7 +829,7 @@ function canonicalBlock(block: Block): string {
  * blocks artefact beside them: 7 ms for the smallest, 469 ms at 669 blocks, and
  * **934 ms for the 676 KB `consciousness`**, which is the worst case in the
  * corpus. It runs once per `stepIsDone` for this one step: once per job that
- * contains `blocks`, and once per metadata-page load (src/api.ts). Accepted as
+ * contains `blocks`, and once per metadata-page load (src/store/pg.ts). Accepted as
  * temporary, against the persisted binding above.
  *
  * It is **not** short-circuited on the filesystem, where the two reads return
@@ -961,7 +961,7 @@ async function blocksMatchTheirHtml(ctx: StepContext, store: ArtifactReads): Pro
  * answer about the filesystem — the silent-success shape this seam exists to
  * remove, sitting inside the seam. There is no correct value to fall back to,
  * so there is no fallback: src/jobs.ts passes the pipeline's store, and
- * src/api.ts passes its own because the metadata page falls back to the
+ * src/api.ts passed its own because the metadata page fell back to the
  * `example/` fixture.
  */
 export async function stepIsDone(

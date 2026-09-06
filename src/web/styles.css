@@ -288,6 +288,27 @@
    * has to move with it.
    */
   --hint-h: 0px;
+
+  /**
+   * **How much room the way-back chip takes at the bottom left**, and 0 when
+   * there is no chip — `--hint-h`'s arrangement, for the same reason: only the
+   * thing that is drawn knows whether it is drawn, and only a variable can tell
+   * the rest of the furniture.
+   *
+   * It exists so the offline strip can stand above the chip rather than over
+   * it. **Room, not height**, and the difference cost a browser check: the
+   * chip's own `bottom` stands it 0.75rem off the edge below, so a strip given
+   * only the chip's 2.5rem still clipped the top 7px of the button — measured
+   * at both 390px and 1280px, since it is arithmetic rather than a wrapping
+   * artefact. Counting the gap here rather than in the strip's rule keeps the
+   * no-chip case exactly as it was.
+   *
+   * The number is a constant because the chip is deliberately one truncating
+   * line — 2rem of button, `.install-hint-close`'s floor, plus its own padding
+   * and border — so unlike the strip it cannot grow when the window narrows.
+   * Set beside the chip's own rule, below.
+   */
+  --return-chip-h: 0px;
 }
 
 * { box-sizing: border-box; }
@@ -3666,7 +3687,15 @@ td.text.has-hit[data-hues="8"] {
   position: fixed;
   left: var(--safe-left);
   right: var(--safe-right);
-  bottom: calc(var(--dock-space) + var(--hint-h));
+  /* **`--return-chip-h` too**, because the two share this slot and the strip is
+     the one that can be told where to stand. The chip sat 0.75rem above the
+     same edge at z-index 46 and the strip covers it from 97, so at 390px —
+     where the offline sentence wraps to two lines — the way back was under it
+     and unreachable, while internal jumps and Back go on working offline. The
+     chip is a fixed single line, which is what makes *its* height a constant
+     and the strip's not: it truncates rather than wraps. GPT Sol F21,
+     2026-09-06. */
+  bottom: calc(var(--dock-space) + var(--hint-h) + var(--return-chip-h));
   /* Above the bar (96), its drawer (95) and the drawer's dim (92). A lost
      connection outranks everything the bar offers, because none of it is going
      to work — and the dim exists to say "deal with this first", which is a
@@ -3722,6 +3751,98 @@ td.text.has-hit[data-hues="8"] {
   cursor: pointer;
 }
 .install-hint-close:hover { color: var(--highlight); border-color: var(--highlight); }
+
+/* -------------------------------------------------------- the return chip --
+   "↩ back to <section>", above the bar, after a jump — ReturnChip.tsx, which
+   carries the words and the rule for when it is there at all.
+
+   **Bottom left, and the mirror of `.cmt-dialog`** (§ above), which is the
+   closest thing to it: a small fixed panel pinned above the bar, clear of the
+   hint band, that must not be under the dock or in the home-indicator strip.
+   The left, because the right is where the comment and chat dialogs open and a
+   chip that could be covered by one is a chip the reader cannot press.
+
+   **It clears the rail rather than starting at a flat gutter.** The plan said
+   `left: 1.25rem`, which is 20px and does clear the 12px spine — but only while
+   `--mode-w` is 0. Open chat on a wide window and the band takes real width
+   from that edge, and a chip written in a bare gutter would sit inside it. This
+   is the same expression `.reader`'s padding, `.masthead`, `.controls` and
+   `td.pin-left` all use for "after the furniture on the left", plus a gutter,
+   and it comes to the same 20px in the mode where the plan measured it. */
+/* 2.5rem of chip — 2rem of button, plus 0.15rem of padding and a 1px border
+   either side, measured at 38.78px rather than guessed — and then the 0.75rem
+   it stands off the edge below, because what the strip above needs is the room
+   the chip occupies rather than its height. `:root:has()`, the install hint's
+   arrangement, so that the strip can read it. Pinned by the browser check at
+   390px and 1280px: the two rectangles must not intersect. */
+:root:has(.return-chip) { --return-chip-h: 3.25rem; }
+
+.return-chip {
+  position: fixed;
+  left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left) + 0.5rem);
+  /* `--dock-space` rather than `--dock-bottom`, so it stays put while the bar
+     slides away — the install hint's reason, and it applies more here: this is
+     a target the reader is aiming at, and a target that moves while they reach
+     for it is worse than one a little further from the edge. */
+  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem);
+  /* Under the drawer (95), its dim (92) and the dock (96); above the mode band
+     (44) and the spine (45). `.install-hint`'s number and its reason — chrome
+     about the reading session rather than part of the article, which a modal
+     drawer must cover like everything else. */
+  z-index: 46;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  max-width: min(20rem, calc(100vw - 6rem));
+  padding: 0.15rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  /* The same lift `.cmt-dialog` has: it floats over prose, and a flat panel on
+     a dark ground reads as a hole in the article rather than as something in
+     front of it. */
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.return-chip-go {
+  /* One line, and the title is 2–6 words by construction — but the window can
+     be 390px wide, so it truncates rather than wrapping the chip into a block
+     of text sitting over the prose. */
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* 2rem, `.install-hint-close`'s floor and its reason: this is chrome about
+     getting somewhere, not one of the bar's own controls, and at 44px it would
+     read as an equal of them. */
+  min-height: 2rem;
+  padding: 0 0.5rem;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+.return-chip-go:hover { color: var(--ink); }
+
+.return-chip-close {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.return-chip-close:hover { color: var(--highlight); border-color: var(--highlight); }
 
 /* ------------------------------------------------- the small-screen hint --
    One banner, once, at the top of the reading view on a narrow touch screen —
@@ -14586,47 +14707,87 @@ td.text.kind-heading .blk-gutter[data-open] {
    two disclaimers beside it give up. */
 .dbt-searched { color: var(--ink-soft); font-weight: 600; }
 
-/* The two groups. A heavier rule between them than between two rows, because
-   "pages about this piece" and "pages about what it claims" are two different
-   questions rather than two parts of one list — the same call § timeline mode
-   makes between what happened and what is merely expected. */
-.dbt-group { margin: 0; padding: 0.5rem 0 0; }
-.dbt-group + .dbt-group {
-  margin-top: 0.7rem;
-  border-top: 1px solid var(--rule-strong);
-}
-.dbt-group > h3 {
-  /* Sticky, so *which of the two searches am I reading* survives scrolling —
-     docs/reusable/css-sticky-containing-block.md for the case where this
-     silently does nothing. */
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-  margin: 0;
-  padding: 0.35rem 0 0.2rem;
-  background: var(--panel);
+/* **There are no group headings, and that is the design** (DebatePanel.tsx §
+   One list). Two searches run, but which of them a row came from is our
+   epistemics rather than the reader's question, and drawn as two headed
+   sections it produced two headings, two blurbs, an empty-state paragraph and
+   two foot lines stacked over zero rows. `.dbt-mark` below is what replaced
+   them: the label moved onto the row, where it can say something per row that a
+   heading could only say per section. */
+
+/* **The lead sentence is drawn like an answer, not like a gap.** Finding no
+   page that responds to a piece is this mode's commonest correct output, so it
+   gets the ordinary quiet ink and ordinary padding — dimming it further, or
+   setting it in italics as an aside, would teach the reader that the honest
+   answer is a failure. */
+.dbt-empty { padding: 0.4rem 0 0.7rem; font-size: 0.86rem; line-height: 1.45; }
+
+/* **The row's own label**, carrying what the two headings used to. It is a
+   chip rather than a line of text so it reads as a property of the row at a
+   glance, and it sits between the host and the title because it answers *why
+   is this here*, which a reader asks before they read a title.
+
+   **The three identification levels are drawn identically**, and that is a
+   decision this file must not quietly undo. They are ordered — a link is
+   stronger than a title — but colouring them along that order would be a scale,
+   and a scale over one fact is precisely the composite this mode refused
+   (docs/project/quotes.md). The order is in the threshold, where the reader
+   sets it; on the row it is a name.
+
+   The claim chip is the one that differs, because it is a different *kind* of
+   thing rather than a weaker one: dotted where the others are solid, the same
+   distinction `.dbt-claim` draws against `.dbt-quote` two rules down. */
+.dbt-mark-line { margin: 0.3rem 0 0; }
+.dbt-mark {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.08rem 0.4rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: none;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.77rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.dbt-group > h3 > .gloss-count { margin-left: auto; letter-spacing: 0; }
-.dbt-blurb {
-  margin: 0.15rem 0 0.4rem;
+/* A button, because it opens a card — and it does nothing on press, which is
+   what `help` says. Same affordance as the ⓘ at the end of the row above it. */
+button.dbt-mark { cursor: help; }
+button.dbt-mark:hover { color: var(--ink); border-color: var(--ink-faint); }
+button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.dbt-mark-claim {
+  border-style: dotted;
+  border-color: var(--rule);
   color: var(--ink-faint);
-  font-size: 0.79rem;
-  line-height: 1.35;
 }
-/* **The empty sentence is drawn like an answer, not like a gap.** Group one
-   being empty is this mode's commonest correct output, so it gets the ordinary
-   quiet ink and ordinary padding — dimming it further, or setting it in italics
-   as an aside, would teach the reader that the honest answer is a failure. */
-.dbt-empty { padding: 0.2rem 0 0.6rem; font-size: 0.86rem; line-height: 1.45; }
+
+/* The card behind the chip: every signal found, one to a line. Narrow like the
+   ⓘ card next door, and for the same reason — the band it hangs off is 288px at
+   its narrowest (`MODE_MIN` in layout.ts). */
+.tooltip.dbt-mark-card { max-width: 21rem; }
+.dbt-mark-card-head {
+  display: block;
+  margin: 0 0 0.35rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.dbt-mark-card-list {
+  margin: 0;
+  padding: 0 0 0 1rem;
+  color: var(--ink);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.dbt-mark-card-list li + li { margin-top: 0.3rem; }
+/* A URL in a signal is the evidence itself, so it wraps rather than truncating:
+   half an address is not one. */
+.dbt-mark-card-list li { overflow-wrap: anywhere; }
 
 .dbt-list { margin: 0; padding: 0; list-style: none; }
 .dbt-item { padding: 0.55rem 0; border-top: 1px solid var(--rule); }
@@ -14803,10 +14964,12 @@ td.text.kind-heading .blk-gutter[data-open] {
   line-height: 1.4;
 }
 
-/* The two foot lines under each group — what the model offered against what
-   survived, and what the search returned against what got into the answer.
-   Modelled on `.quotes-discarded`, and quiet for the same reason: this is
-   provenance, not an error. */
+/* The foot lines under the one list — what each search offered against what
+   survived, and what each returned against what got into the answer. Up to four
+   sentences, because the two searches keep their own numbers (DebatePanel.tsx §
+   `footLines` has the reason they cannot be summed). Modelled on
+   `.quotes-discarded`, and quiet for the same reason: this is provenance, not an
+   error. */
 .dbt-foot {
   margin: 0.5rem 0 0;
   padding: 0.4rem 0 0;

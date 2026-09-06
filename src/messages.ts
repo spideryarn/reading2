@@ -3807,18 +3807,35 @@ export const TIMELINE_THIN =
    below is about *this search*, and the grammar is what carries that.
    docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § 2.  */
 
+/* **These are lead sentences now, not the contents of a headed section.** Until
+   2026-09-06 the panel drew two headed groups, so each of these sat under a
+   heading that said which of the two searches it was about, and none of them had
+   to name its own search. The heading is gone — one list, each row
+   self-labelling — so **every sentence here has to say which search it is
+   about in its own words**, and that is why the two "unverified" forms were
+   rewritten rather than moved.
+   docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md § 1. */
+
 /**
- * **The search came back with no pages to look at.** Group one.
+ * **No page came back that responds to this piece.** The first of the two forms
+ * the lead sentence takes.
  *
  * `returnedSources === 0`: the pass ran, it reported a positive search count —
  * zero would have failed the whole step — and not one admissible page came back
  * with it.
+ *
+ * **It says *by name*, and that is the whole of the claim.** What a direct row
+ * has to prove is that the page identifies *this* article — its address, its
+ * words, or its title. A page that argues against the piece without ever having
+ * heard of it is not missing from this answer; it is in the rest of the list,
+ * which is what `DEBATE_CLAIMS_FOLLOW` goes on to say.
  */
-export const DEBATE_RESPONSES_NONE = "This search did not find any responses to this piece.";
+export const DEBATE_RESPONSES_NONE = "No page the search found responds to this piece by name.";
 
 /**
- * **The search came back with pages, and not one of them could be checked.**
- * Group one, and a different fact from the sentence above.
+ * **Pages came back, and not one of them could be checked.** The second form,
+ * and a different fact from the sentence above — which is why this one carries
+ * the count and that one cannot.
  *
  * Every quotation is located in the *extract the search engine returned*, which
  * ran 236–4,945 characters in the Stage 0 measurements, of pages that may run to
@@ -3826,18 +3843,44 @@ export const DEBATE_RESPONSES_NONE = "This search did not find any responses to 
  * slice loses its row (Sol's F18). That is the right direction to fail in — we
  * lose a true row rather than admit an unchecked one — and it is emphatically
  * not the same news as *nothing came back*.
+ *
+ * The number is `returnedSources`: **pages the search returned**, not rows the
+ * model reported and not rows we refused. A reader told *"4 pages"* can weigh
+ * how thin the answer is; told nothing, they cannot tell this sentence from the
+ * one above it.
  */
-export const DEBATE_RESPONSES_UNVERIFIED =
-  "The search returned possible responses, but the excerpts provided were not enough to verify " +
-  "them.";
+export function debateResponsesUnverified(pages: number): string {
+  return (
+    `The search found ${pages} ${pages === 1 ? "page" : "pages"} that might respond to this ` +
+    `piece, but ${pages === 1 ? "it could not be checked" : "none could be checked"} against ` +
+    "the words it returned."
+  );
+}
 
-/** The same pair for group two, whose search asks about the claims rather than the piece. */
+/** The same pair for the other search, which asks about the claims rather than the piece. */
 export const DEBATE_CLAIMS_NONE =
   "This search did not find anyone writing about what this piece claims.";
 
-/** …and the same distinction, which is why these are four strings and not two. */
-export const DEBATE_CLAIMS_UNVERIFIED =
-  "The search returned possible sources, but the excerpts provided were not enough to verify them.";
+/** …and the same distinction, which is why these are four sentences and not two. */
+export function debateClaimsUnverified(pages: number): string {
+  return (
+    `The search found ${pages} ${pages === 1 ? "page" : "pages"} that might answer what this ` +
+    `piece claims, but ${pages === 1 ? "it could not be checked" : "none could be checked"} ` +
+    "against the words it returned."
+  );
+}
+
+/**
+ * **What the reader is looking at instead.**
+ *
+ * Appended to whichever of the two sentences above fired for the *direct*
+ * search, and only when there are claim rows below it to be looking at. Without
+ * it the lead is a dead end — *no page responds to this piece* over a list of
+ * rows, with nothing saying what the rows are. With it, the empty answer reads
+ * as a finding and a hand-off rather than as a broken panel, which is what Greg
+ * asked for.
+ */
+export const DEBATE_CLAIMS_FOLLOW = "What follows takes up what it argues.";
 
 /**
  * **The order means nothing, said out loud.**

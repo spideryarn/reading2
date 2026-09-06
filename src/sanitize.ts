@@ -141,7 +141,7 @@ export function sanitizeHtml(html: string): string {
  * filesystem is read-only in production (docs/project/deployment.md) — and a
  * read path that repairs files is a surprise nobody wants during an incident.
  * `stale` is returned rather than logged here so the caller says it, following
- * the rule `readJson` in src/api.ts already writes down: a helper that logs is
+ * the rule `readJson` in src/api.ts wrote down: a helper that logs is
  * convenient until it is called in a loop, and the loop is always somewhere else.
  *
  * It also does not touch `text`. That is never rendered as markup — it goes to
@@ -151,9 +151,9 @@ export function sanitizeHtml(html: string): string {
  *
  * ## Blocks and a stamp, not a file
  *
- * The two arguments are deliberate. **There are two stores**, and the fix that
+ * The two arguments are deliberate. **There were two stores**, and the fix that
  * only guards one of them is the shape this whole area keeps failing in: the
- * filesystem reader is `loadArticle` in src/api.ts, and the Postgres reader is
+ * filesystem reader was `loadArticle` in src/api.ts, and the Postgres reader is
  * `loadArticle` → `blocksFor` in src/store/pg.ts, where the blocks are rows and
  * the stamp is a column rather than a key in a JSON object. A parameter shaped
  * like `blocks.json` would fit one caller and have to be faked by the other.

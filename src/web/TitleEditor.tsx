@@ -48,7 +48,7 @@ export function TitleEditor({
    *
    * `undefined` means *we do not know*, which is the honest answer in the
    * reading view: the masthead has the article payload and no shelf entry, and
-   * a payload deliberately does not carry the superseded title (src/api.ts §
+   * a payload deliberately does not carry the superseded title (src/library-scalars.ts §
    * `titleFor`). The hint below then says the thing that is true either way
    * rather than naming a title that might be the reader's own.
    */
@@ -153,7 +153,7 @@ export interface ArticleRename {
  * `null` clears the override, and what the reader should then see is whatever
  * the extractor last found — a string this page does not have. So `onRenamed`
  * is called with `entry.title`, which is the store's answer to "what is this
- * article called now" (src/api.ts § `titleFor`). Echoing the typed value would
+ * article called now" (src/library-scalars.ts § `titleFor`). Echoing the typed value would
  * be right for a rename and blank for a clear.
  *
  * **A failed write leaves the heading alone and says so.** No optimistic

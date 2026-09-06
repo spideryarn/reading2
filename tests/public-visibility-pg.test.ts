@@ -58,11 +58,9 @@ import type { Glossary, Ideas, TweetThread } from "../src/types.js";
 
 loadEnvLocal();
 
-/**
- * **Postgres, and set before `src/routes.ts` is ever imported.** `STORE` is read
- * once at module load in src/store/live.ts, which is why every import of the
- * route layer in this file is dynamic and everything else is not.
- */
+/* Every import of the route layer here is dynamic. That was because `STORE`
+   was read once at module load in src/store/live.ts, which went on 2026-09-06
+   with the store flag. */
 
 const SLUG = "test-public-visibility";
 const ARTICLE_ID = "00000000-0000-4000-8000-0000000000ea";
@@ -533,10 +531,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        computing it a second way would be pinning its own arithmetic.
 
        **Imported dynamically**, for the reason this file's header gives about
-       the route layer: `STORE` is read once at module load, and a static import
-       of `store/pg.js` at the top of this file reaches it before
-       `process.env.SPIDERYARN_STORE` is set two lines down — which turns every
-       request in the suite into a 501. Found by doing it. */
+       the route layer. */
     const { sourceHashFor } = await import("../src/store/pg.js");
     const fingerprint = await sourceHashFor(ARTICLE_ID);
     await db.insert(searchRuns).values([

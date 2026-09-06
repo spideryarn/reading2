@@ -2,20 +2,25 @@
  * Which ledger is live — the one place that decides, and a **leaf**.
  *
  * Its own file rather than a line in [index.ts](index.ts), for the reason
- * [live.ts](live.ts) gives about itself: `index.ts` imports [fs.ts](fs.ts),
- * which imports `src/chat.ts` and `src/searches.ts`, so anything the *pipeline*
- * needs cannot come from there without closing an import cycle — and
+ * `src/store/live.ts` gave about itself before it went on 2026-09-06:
+ * `index.ts` imported `fs.ts` (deleted 2026-09-05), which imported
+ * `src/chat.ts` and `src/searches.ts`, so anything the *pipeline* needed
+ * could not come from there without closing an import cycle — and
  * `src/jobs.ts` needs this, because a pipeline step is where most of the money
  * goes. `npm run cycles` is a gate rather than advice, so that would be a red
  * build.
+ *
+ * **Nothing forces that any more**, measured 2026-09-06 rather than assumed:
+ * `index.ts` does not reach `src/jobs.ts` at all now, over 132 modules, because
+ * the chain ran through `fs.ts`. It stays a leaf because moving it back would
+ * be churn, not because it must.
  *
  * `index.ts` re-exports it, so a route does not have to know it moved house.
  *
  * **Not a fallback, and no longer a choice.** `costStore` is `pgCostStore`
  * unconditionally: there is no flag, no branch, and **no `selected()`** — the
- * hinge of 2026-09-05 took the last of them out, and
- * [ai-calls-fs.ts](ai-calls-fs.ts) now has no importer outside its own tests
- * and is deleted by stage G of
+ * hinge of 2026-09-05 took the last of them out, and `ai-calls-fs.ts` had no
+ * importer outside its own tests and went in stage G of
  * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
  *
  * ⟨Until 2026-09-05 this paragraph said there was a filesystem adapter "given
@@ -35,7 +40,7 @@ import { guardDbStore } from "./db-errors.js";
 /**
  * Guarded on the Postgres side only, like `guarded()` in `index.ts` and for the
  * same reason: a failed Drizzle query puts every bound parameter into
- * `Error.message`, and the filesystem one binds nothing.
+ * `Error.message`.
  *
  * Deliberately **not** named `pgSomething`: tests/store-guarded.test.ts greps
  * every statement that consults `STORE` for an identifier of that shape and
@@ -45,7 +50,7 @@ import { guardDbStore } from "./db-errors.js";
 const guardedLedger: CostStore = guardDbStore("ai-calls", pgCostStore);
 
 /**
- * **Which adapter answers this call** — the store flag, and nothing else.
+ * **Which adapter answers this call** — there is only one, and no flag.
  *
  * ## There was a third case here for three days, and this is why
  *
@@ -79,18 +84,10 @@ const guardedLedger: CostStore = guardDbStore("ai-calls", pgCostStore);
  * mattered: with the redirect in place **no route suite in the tree had ever put
  * a row through the Postgres adapter**, which is the only one that deploys.
  *
- * So this function is the flag again, and
+ * So the redirect went, and
  * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
  * § C is where it was argued. tests/cost-store-under-test.test.ts is what says
  * the rows land in the private database and not in the developer's own.
- *
- * **Asked per call, not once at module load, and that is still the trap.** The
- * comment on `ledger()` in ai-calls-fs.ts records what happened the first time:
- * ESM hoists static imports, so a module-level constant here would be decided
- * before any test body ran, and a suite that sets `SPIDERYARN_STORE` in its own
- * `beforeAll` would already have been given the other adapter — writing
- * somewhere it did not intend while looking exactly like a suite that had been
- * configured.
  */
 export const costStore: CostStore = guardedLedger;
 

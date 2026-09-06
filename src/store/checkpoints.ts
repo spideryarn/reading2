@@ -444,8 +444,8 @@ export function checkpointCutoff(days: number, now: Date = new Date()): Date {
  * from `src/labels.ts` — so a selector here, importing the Postgres adapter,
  * would close `checkpoints → checkpoints-pg → db/schema → labels → checkpoints`.
  * `npm run cycles` is a gate rather than advice, so that is a red build. It is
- * the same reason [ai-calls.ts](ai-calls.ts) and [live.ts](live.ts) are their
- * own files.
+ * the same reason [ai-calls.ts](ai-calls.ts) is its own file (so was
+ * `live.ts`, until it went on 2026-09-06).
  *
  * So the constructor is exported from its own module and the caller imports it:
  * `scripts/checkpoints-sweep.ts` does it for the sweep, and D2's coordinator
@@ -466,10 +466,10 @@ export function checkpointCutoff(days: number, now: Date = new Date()): Date {
  * article row to key on.
  *
  * There are two, and neither is production. `fsStoreSession`
- * ([session.ts](session.ts)) runs against `data/<slug>/` on a laptop with
- * `SPIDERYARN_STORE` unset, where there is no `articles` row and therefore no
- * `articleId` — the one thing this store must be keyed on. And
- * `npm run eval:pdf-read` is in the same position for the same reason.
+ * ([session.ts](session.ts)) ran against `data/<slug>/`, where there is no
+ * `articles` row and therefore no `articleId` — the one thing this store must
+ * be keyed on. And `npm run eval:pdf-read` is in the same position for the
+ * same reason.
  *
  * **It used to be three command lines and is now one.** `npm run hierarchy` and
  * `npm run blocks` go through the queue since 2026-09-05 (`scripts/stage.ts`),
