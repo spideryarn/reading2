@@ -20,8 +20,19 @@
 import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 
-import { collectPdfFigures, MAX_FIGURE_BYTES, MAX_FIGURES } from "../src/collect-pdf-figures.js";
-import { sniffImage } from "../src/assets.js";
+import {
+  collectPdfFigures,
+  MAX_ARTICLE_FIGURE_BYTES,
+  MAX_FIGURE_BYTES,
+  MAX_FIGURES,
+} from "../src/collect-pdf-figures.js";
+import { sniffImage, type Assets } from "../src/assets.js";
+import type { Block } from "../src/types.js";
+import { MAX_FIGURE_EDGE } from "../src/pdf-figures.js";
+import { RawDocumentUnavailable } from "../src/fetch.js";
+import { recoverPdfFigures, STEPS } from "../src/pipeline.js";
+import { memoryArtefacts } from "./helpers/memory-artefacts.js";
+import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import type { BlobHead, PutResult, RawSourceStore } from "../src/store/blobs.js";
 
 const HARDER = "evals/pdf/harder/source.pdf";
@@ -77,24 +88,31 @@ describe("a real paper with four figures and a masthead", () => {
     const entry = run.entries[0]!;
     expect(entry.status).toBe("stored");
     if (entry.status !== "stored") return;
-    /* 2067 x 1741, the largest raster in the corpus — pinned in
-       tests/pdf-figure-read.test.ts against the same fixture, so a disagreement
-       between the two files is a disagreement about the same document. */
-    expect([entry.width, entry.height]).toEqual([2067, 1741]);
+    /* 2067 × 1741 is the raster pdf.js decodes — pinned in
+       tests/pdf-figure-read.test.ts against the same fixture, so a
+       disagreement between the two files is a disagreement about the same
+       document. What lands in the manifest is what a reader is *served*, and
+       that is the halved copy: `downscaleRaster` takes an exact factor of two
+       to bring 2067 inside `MAX_FIGURE_EDGE`. */
+    expect([entry.width, entry.height]).toEqual([1034, 871]);
     expect(entry.ext).toBe("png");
     expect(entry.contentType).toBe("image/png");
     expect(entry.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(run.stored).toBe(1);
-    /* **The measurement that changed the cap, pinned so it cannot quietly stop
-       being true.** The plan proposed 4 MiB on the strength of a 756 KB largest
-       figure — which is the *Analog Cognition* document's number, not the
-       corpus's. This one is photographic RGB and encodes to about 9.4 MB, so a
-       4 MiB cap would refuse a real figure in the repo's own fixtures. A range
-       rather than an exact byte count: what is load-bearing is that it is over
-       4 MiB, not what zlib settled on today. src/collect-pdf-figures.ts §
-       `MAX_FIGURE_BYTES`; GPT Sol, SP-3. */
-    expect(entry.bytes).toBeGreaterThan(4 * 1024 * 1024);
-    expect(entry.bytes).toBeLessThan(16 * 1024 * 1024);
+    /* **The measurement the downscale exists for, pinned so it cannot quietly
+       stop being true.** This figure is photographic RGB and encoded to
+       9,355,050 bytes at full resolution — the number that forced the byte cap
+       up to 16 MiB and left a reader fetching 9 MB for one picture. Halved, it
+       is 2,349,789 bytes (run 2026-09-06 against this fixture).
+
+       A range rather than the exact count, because what is load-bearing is
+       that it is *well under* the 4 MiB the plan originally proposed, not what
+       zlib settled on today. The lower bound is there so that a downscale
+       which quietly stopped producing a picture — an all-zero raster deflates
+       to almost nothing — is a red test rather than a small number that looks
+       like a win. src/pdf-figures.ts § `MAX_FIGURE_EDGE`. */
+    expect(entry.bytes).toBeGreaterThan(1024 * 1024);
+    expect(entry.bytes).toBeLessThan(3 * 1024 * 1024);
   }, 60_000);
 
   it("puts real PNG bytes in the bucket, under a name that is their own hash", async () => {
@@ -164,8 +182,14 @@ describe("every marker gets an entry, whatever went wrong", () => {
   it("records one per marker when the document will not open at all", async () => {
     /* A PDF that cannot be reopened is a fault about the document rather than
        about any figure, and it must not take the step down: the article's web
-       images are the other half of it. `out-of-time` because nothing is known
-       about any of these figures — not `no-raster`, which would claim we looked. */
+       images are the other half of it.
+
+       **`unreadable-pdf`, and it was `out-of-time` until 2026-09-06.** The bytes
+       reached us and were verified against the hash the manifest names; saying
+       the clock beat us erases exactly what that verification established, and
+       sends whoever reads the manifest looking for a slow pipeline instead of a
+       broken document. GPT Sol, C-4. Not `no-raster` either, which would claim
+       we looked inside. */
     const markers = [marker(1), marker(2), marker(3)];
     const run = await collectPdfFigures({
       markers,
@@ -174,13 +198,17 @@ describe("every marker gets an entry, whatever went wrong", () => {
     });
     expect(run.entries).toHaveLength(markers.length);
     expect(run.entries.map((e) => e.ref)).toEqual(markers.map((m) => m.ref));
-    expect(run.entries.every((e) => e.status === "failed" && e.reason === "out-of-time")).toBe(true);
+    expect(run.entries.every((e) => e.status === "failed" && e.reason === "unreadable-pdf")).toBe(
+      true,
+    );
   }, 60_000);
 
   it("records the markers past the runaway guard rather than dropping them", async () => {
     /* "No entry" has to go on meaning "this step never looked at it" for every
        marker the article has — the same choice `MAX_IMAGES` overflow makes in
-       src/collect-assets.ts. */
+       src/collect-assets.ts, and now with the same word for it: `budget` is
+       *this document is enormous*, which has a different fix from *the pipeline
+       is running slow today*. GPT Sol, C-4. */
     const markers = Array.from({ length: 5 }, (_, i) => marker(i + 1));
     const run = await collectPdfFigures({
       markers,
@@ -190,6 +218,9 @@ describe("every marker gets an entry, whatever went wrong", () => {
     });
     expect(run.entries).toHaveLength(5);
     expect(run.entries.map((e) => e.ref).sort()).toEqual(markers.map((m) => m.ref).sort());
+    expect(run.entries.slice(2).every((e) => e.status === "failed" && e.reason === "budget")).toBe(
+      true,
+    );
     expect(MAX_FIGURES).toBeGreaterThan(5);
   }, 60_000);
 
@@ -221,11 +252,14 @@ describe("every marker gets an entry, whatever went wrong", () => {
       expect.objectContaining({ status: "failed", reason: "too-many-pixels" }),
     ]);
     expect(run.stored).toBe(0);
-    /* And the shipping cap is not the 4 MiB the plan proposed — see the
-       measurement pinned in the first test in this file. Asserted rather than
-       described so that lowering it back to 4 MiB is a red test rather than a
-       corpus figure that quietly stops being recovered. */
-    expect(MAX_FIGURE_BYTES).toBeGreaterThan(4 * 1024 * 1024);
+    /* And the shipping cap is a backstop rather than the control: the largest
+       PNG this module can now produce is a 1600 × 1600 RGBA raster, whose
+       filter-0 scanlines are 10,241,600 bytes before deflate — which cannot
+       expand them by more than a fraction of a percent. Asserted rather than
+       described so that lowering the cap under that ceiling, and reinstating
+       the silent refusal a 4 MiB cap caused once already, is a red test.
+       src/collect-pdf-figures.ts § `MAX_FIGURE_BYTES`. */
+    expect(MAX_FIGURE_BYTES).toBeGreaterThan(MAX_FIGURE_EDGE * (1 + MAX_FIGURE_EDGE * 4));
   }, 60_000);
 
   it("records every marker when the step is aborted, and stores nothing after", async () => {
@@ -242,4 +276,203 @@ describe("every marker gets an entry, whatever went wrong", () => {
     expect(run.stored).toBe(0);
     expect(run.entries.every((e) => e.status === "failed")).toBe(true);
   }, 60_000);
+});
+
+/* ------------------------------------------------------------------ *
+ * The wall clock
+ * ------------------------------------------------------------------ */
+
+describe("the step's own deadline", () => {
+  /**
+   * **The test the two abort tests above could not be.**
+   *
+   * One of them starts already aborted and the other rejects immediately, so
+   * both stayed green while a hang in the bucket meant `collectPdfFigures` never
+   * returned at all — no entries finalised, no manifest written, and the whole
+   * *every marker gets an entry* invariant failing by never finishing. Aborting
+   * the job changed nothing, because neither `encodeFigurePng` nor
+   * `storeRawSource` takes a signal. GPT Sol, C-1.
+   *
+   * So the fixture is the one that would have caught it: a bucket that accepts
+   * the call and never answers. The fix is the shape src/collect-assets.ts
+   * already uses — race the whole run against the clock, then write an entry for
+   * every marker the race left behind — because racing is the only thing that
+   * bounds a step whose storage layer takes no signal.
+   */
+  it("hands back a complete manifest when the bucket never answers", async () => {
+    const blobs = fakeBlobs();
+    blobs.putIfAbsent = () => new Promise<PutResult>(() => {});
+    const markers = [marker(3), marker(6)];
+    const run = await collectPdfFigures({
+      markers,
+      pdf: await bytes(HARDER),
+      blobs,
+      budgetMs: 4_000,
+    });
+    expect(run.entries).toHaveLength(markers.length);
+    expect(run.entries.map((e) => e.ref)).toEqual(markers.map((m) => m.ref));
+    expect(run.entries.every((e) => e.status === "failed" && e.reason === "out-of-time")).toBe(true);
+    expect(run.stored).toBe(0);
+  }, 30_000);
+
+  it("stores nothing once its clock has run out", async () => {
+    /* The other half of C-1: an abort during the encode could still store that
+       figure afterwards, because nothing between the deflate and the `put`
+       looked at the signal. A `budgetMs` of one millisecond fires before the
+       document is even open, and the bucket has to be empty a second later —
+       *after* whatever was in flight has had time to finish and try. */
+    const blobs = fakeBlobs();
+    const run = await collectPdfFigures({
+      markers: [marker(3)],
+      pdf: await bytes(HARDER),
+      blobs,
+      budgetMs: 1,
+    });
+    expect(run.entries).toHaveLength(1);
+    expect(run.stored).toBe(0);
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    expect(blobs.objects.size).toBe(0);
+  }, 30_000);
+});
+
+/* ------------------------------------------------------------------ *
+ * What the whole article may cost
+ * ------------------------------------------------------------------ */
+
+describe("the article's shared byte budget", () => {
+  it("is small enough to make the runaway guard mean something", () => {
+    /* **The arithmetic that made this necessary**: the marker count is capped
+       and the per-figure size is capped, and multiplying the two gave one
+       document leave to store 100 × 12 MiB. A cap on each part is not a cap on
+       the whole. GPT Sol, C-3. */
+    expect(MAX_ARTICLE_FIGURE_BYTES).toBeLessThan(MAX_FIGURES * MAX_FIGURE_BYTES);
+  });
+
+  it("records the figures it has no room left for, rather than dropping them", async () => {
+    /* Measured rather than guessed, in two passes over the same fixture: the
+       first learns what page 3 costs, the second gives the article exactly that
+       and no more. So the first figure is stored and fills the budget, and the
+       second is recorded `budget` — *this article is enormous*, which is a
+       different fact with a different fix from `out-of-time`. */
+    const generous = await collectPdfFigures({
+      markers: [marker(3)],
+      pdf: await bytes(HARDER),
+      blobs: fakeBlobs(),
+    });
+    const first = generous.entries[0]!;
+    expect(first.status).toBe("stored");
+    if (first.status !== "stored") return;
+
+    const blobs = fakeBlobs();
+    const run = await collectPdfFigures({
+      markers: [marker(3), marker(6)],
+      pdf: await bytes(HARDER),
+      blobs,
+      maxArticleBytes: first.bytes,
+    });
+    expect(run.entries).toHaveLength(2);
+    expect(run.entries[0]!.status).toBe("stored");
+    expect(run.entries[1]).toMatchObject({ status: "failed", reason: "budget" });
+    expect(run.stored).toBe(1);
+    expect(blobs.objects.size).toBe(1);
+  }, 60_000);
+});
+
+/* ------------------------------------------------------------------ *
+ * The pipeline's half — finding the document to look in
+ * ------------------------------------------------------------------ */
+
+/** A block carrying one figure marker, as `renderHtml` writes one. */
+function figureBlock(ref: string): Block {
+  return {
+    id: `spya-b${ref.slice(-4)}`,
+    tag: "figure",
+    kind: "text",
+    text: "Fig 1",
+    words: 1,
+    html: `<figure data-spya-pdf-figure="${ref}"><figcaption>Fig 1</figcaption></figure>`,
+    gistable: true,
+  };
+}
+
+const CTX = {
+  slug: "a",
+  report: () => {},
+  signal: new AbortController().signal,
+  cacheArticle: false,
+};
+
+describe("recoverPdfFigures", () => {
+  const blocks = [figureBlock(marker(3).ref), figureBlock(marker(6).ref)];
+
+  /**
+   * **The markers are discovered before the source is**, and the order is the
+   * whole finding.
+   *
+   * `recoverPdfFigures` returned on `manifest?.kind !== "pdf"` *before* it had
+   * looked for a marker, so an inconsistent revision — valid markers, a raw
+   * manifest that is missing or says HTML — produced no `pdfFigures` at all.
+   * That is indistinguishable from *there was nothing here to look at*, which is
+   * the one distinction this whole feature's manifest exists to keep. GPT Sol,
+   * C-2.
+   */
+  it("records every marker when there is no raw manifest at all", async () => {
+    const store = memoryArtefacts();
+    const run = await recoverPdfFigures(CTX, store, blocks);
+    expect(run?.entries).toHaveLength(2);
+    expect(run?.entries.every((e) => e.status === "failed" && e.reason === "no-source")).toBe(true);
+  });
+
+  it("records every marker when the article did not come from a PDF", async () => {
+    const store = memoryArtefacts();
+    store.plant("a", "fetch", "raw", { file: "raw.html", kind: "html" });
+    const run = await recoverPdfFigures(CTX, store, blocks);
+    expect(run?.entries).toHaveLength(2);
+    expect(run?.entries.every((e) => e.status === "failed" && e.reason === "no-source")).toBe(true);
+  });
+
+  it("still costs nothing on an article that has no markers", async () => {
+    /* `undefined`, not an empty run: *there was nothing here to look at* has to
+       stay distinguishable from *we looked and could not*. src/assets.ts. */
+    const store = memoryArtefacts();
+    expect(await recoverPdfFigures(CTX, store, [])).toBeUndefined();
+  });
+
+  /**
+   * **A missing object and a bucket that is down need different people**, which
+   * is the distinction `AssetFailure` already keeps between `storage` and
+   * `network` and the one this catch erased: every `readRawBytes` failure was
+   * recorded `out-of-time`, with nothing logged. GPT Sol, C-4.
+   */
+  it("tells a document that is not there from a bucket that will not answer", async () => {
+    const store = memoryArtefacts();
+    store.plant("a", "fetch", "raw", { file: "raw.pdf", kind: "pdf", storedSha256: "f".repeat(64) });
+
+    const gone = await recoverPdfFigures(CTX, store, blocks, {
+      readBytes: () => {
+        throw new RawDocumentUnavailable("missing", "the object is not there");
+      },
+    });
+    expect(gone?.entries.every((e) => e.status === "failed" && e.reason === "no-source")).toBe(true);
+
+    const down = await recoverPdfFigures(CTX, store, blocks, {
+      readBytes: () => {
+        throw new Error("Storage get failed (503): upstream connect error");
+      },
+    });
+    expect(down?.entries.every((e) => e.status === "failed" && e.reason === "storage")).toBe(true);
+  });
+
+  it("puts the failed figures on the manifest the step writes", async () => {
+    /* End to end through the step, because the two halves are spread onto one
+       `Assets` and a run that recorded everything correctly and handed it to
+       nobody would look exactly like this feature working. */
+    const store = memoryArtefacts();
+    store.plant("a", "hierarchy", "blocks", { blocks });
+    const out = await STEPS.assets.run(CTX, store, nullCheckpointStore());
+    const assets = out.parts?.assets as Assets;
+    expect(assets.entries).toEqual([]);
+    expect(assets.pdfFigures).toHaveLength(2);
+    expect(assets.pdfFigures?.every((e) => e.status === "failed")).toBe(true);
+  });
 });

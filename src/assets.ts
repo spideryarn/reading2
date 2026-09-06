@@ -146,13 +146,19 @@ export interface Assets {
   fetchedAt: string;
   entries: AssetEntry[];
   /**
-   * The figures a PDF came with — **absent unless this article came from one
-   * and its blocks carry at least one marker.**
+   * The figures a PDF came with — **absent unless the blocks carry at least one
+   * marker.**
    *
    * Absent is the third state here exactly as it is for `entries` above: an
    * article ingested before this existed, an article that is not a PDF, and a
    * PDF whose transcription found no figures all look alike to a reader of this
-   * field, and all three mean *there is nothing to draw*. What must never
+   * field, and all three mean *there is nothing to draw*.
+   *
+   * **The marker is what decides, not the manifest.** A revision with markers
+   * and no PDF behind them gets a list of `no-source` failures rather than an
+   * absent field, because *we looked and there was no document* is a fact and
+   * an absent field would report it as *nothing was ever here*. GPT Sol, C-2;
+   * src/pipeline.ts § `recoverPdfFigures`. What must never
    * happen is a marker that is present in the blocks and missing from this
    * list: every one gets an entry, stored or failed, and
    * `pairPageFigures` (src/pdf-figures.ts) asserts that on the way through.
@@ -164,9 +170,18 @@ export interface Assets {
 /**
  * Why a figure marker ended up with no picture.
  *
- * The first five are `PdfFigureFailure` in src/pdf-figures.ts, which decides
- * them on bytes; the last three are this step's, and cannot be decided there
- * because that module never encodes, stores or watches a clock.
+ * The first seven are `PdfFigureFailure` in src/pdf-figures.ts, which decides
+ * them on bytes; the last six are this step's, and cannot be decided there
+ * because that module never encodes, stores, reads a bucket or watches a clock.
+ *
+ * **The six are six because folding them together loses the fix.** Until
+ * 2026-09-06 four of them were spelled `out-of-time` — a missing object, a
+ * hash-corrupt object, a PDF that would not open and a runaway guard all
+ * reported as *the clock beat us* — so the one thing a reader of the manifest
+ * wants (is this us, the bucket, the document, or this article's own size?)
+ * was the one thing it did not say. That is the distinction `AssetFailure`
+ * already keeps between `storage` and `network`, and it keeps it *because the
+ * two need different people*. GPT Sol, C-4.
  * `pdfFigureFailure` in src/collect-pdf-figures.ts maps one union onto the
  * other with no default arm, so a new reason over there is a typecheck failure
  * here rather than a figure filed under whatever the fallback happened to be —
@@ -189,9 +204,52 @@ export type PdfFigureFailure =
   | "byte-count-mismatch"
   /** The raster was fine and turning it into a PNG was not. */
   | "encode-failed"
-  /** The PNG was made and the bucket would not take it. `AssetFailure.storage`. */
+  /**
+   * **A bucket operation failed** — putting the PNG in, or getting the PDF back
+   * out. `AssetFailure.storage`, and the same reason for being its own word: a
+   * `CorruptObject` at a canonical name or a Storage outage needs a human with
+   * the service key, and filing that under anything else files it under *try
+   * again later*. src/collect-assets.ts.
+   */
   | "storage"
-  /** The step's wall clock ran out. Nothing is known about this figure at all. */
+  /**
+   * **The PDF this article was made from is not there to look in.** Its
+   * stage-1 manifest is missing or does not say it was a PDF at all, or the
+   * object it names is gone, or what is at that name does not hash to it
+   * (`RawDocumentUnavailable`, src/fetch.ts).
+   *
+   * Separate from `storage` because the fix is different and so is the person:
+   * this one is re-fetch the article — or clear the object by hand — where
+   * `storage` is fix the bucket. Separate from `out-of-time` because nobody's
+   * clock ran out; the document really is not there, and a re-run will say the
+   * same thing.
+   */
+  | "no-source"
+  /**
+   * **The bytes were read and verified and pdf.js would not open them.** A fact
+   * about the document, and it is the reason a whole paper's figures share when
+   * one bad document must not fail the step.
+   *
+   * Was folded into `out-of-time` until 2026-09-06, which erased what the hash
+   * verification had just established — the bytes are exactly the ones the
+   * manifest promises, so *we looked* is true and *we ran out of time* is not.
+   * GPT Sol, C-4.
+   */
+  | "unreadable-pdf"
+  /**
+   * **The article's own cap, not this figure's.** More markers than the runaway
+   * guard admits, or the article's shared byte budget was spent before this
+   * figure's turn. `AssetFailure.budget` is the same word for the same fact, and
+   * it is separate from `out-of-time` for the same reason: *this document is
+   * enormous* and *the pipeline is running slow today* have two different fixes.
+   * src/collect-pdf-figures.ts § `MAX_FIGURES`, § `MAX_ARTICLE_FIGURE_BYTES`.
+   */
+  | "budget"
+  /**
+   * **The step's wall clock ran out, or the caller cancelled it.** Nothing is
+   * known about this figure at all — not that the document is bad, not that the
+   * bucket is down. `PDF_FIGURES_BUDGET_MS`, src/collect-pdf-figures.ts.
+   */
   | "out-of-time";
 
 /**
@@ -370,13 +428,23 @@ export function pdfFigureMarkerValue(input: {
  * `null` is *not one of ours*, which is what a forged attribute on a web
  * article looks like, and what a value truncated by some future editor looks
  * like too. Both mean the same thing to every caller: there is no figure here.
+ *
+ * **The two numbers are bounded to six digits, and that is the safe-integer
+ * check.** `[1-9][0-9]*` accepted a page of arbitrary length, and `Number` of a
+ * 400-digit decimal is `Infinity`, which `JSON.stringify` writes as `null` — so
+ * a forged attribute could put a `page: null` into a manifest typed `number`
+ * and out through the public DTO. Verified by GPT Sol, C-5. Six digits caps
+ * both at 999,999, which is beyond any document that exists and *provably*
+ * inside `Number.MAX_SAFE_INTEGER` — a bound in the grammar rather than a
+ * second test after it, so there is one place the shape is decided.
  */
-const MARKER = /^([a-z][a-z0-9]*-[0-9a-f]{32})\.([1-9][0-9]*)\.([1-9][0-9]*)$/;
+const MARKER = /^([a-z][a-z0-9]*-[0-9a-f]{32})\.([1-9][0-9]{0,5})\.([1-9][0-9]{0,5})$/;
 
 export function parsePdfFigureMarker(value: string): PdfFigureMarker | null {
-  const match = MARKER.exec(value.trim());
+  const trimmed = value.trim();
+  const match = MARKER.exec(trimmed);
   if (!match) return null;
-  return { ref: value.trim(), page: Number(match[2]), ordinal: Number(match[3]) };
+  return { ref: trimmed, page: Number(match[2]), ordinal: Number(match[3]) };
 }
 
 /**
@@ -388,24 +456,39 @@ export function parsePdfFigureMarker(value: string): PdfFigureMarker | null {
  * happens exactly once, here.
  *
  * **`ref` is the whole attribute value**, so a marker is one string to look up
- * and not three fields to keep in step. Deduped because two `<figure>`s
- * carrying one ref would be a bug in the renderer, and `pairPageFigures`
- * (src/pdf-figures.ts) throws on it rather than attaching one picture to two
- * captions; dropping the repeat here means the throw is reached only by a real
- * collision and not by a block counted twice.
+ * and not three fields to keep in step.
+ *
+ * ## A repeated ref refuses *both*, and it used to silently keep the first
+ *
+ * Two `<figure>`s carrying one ref is a bug in the renderer, and the manifest
+ * cannot describe it honestly: it is keyed by ref, so one entry is all there
+ * is. Keeping the first occurrence meant both elements looked that one entry up
+ * and **the same picture appeared under two different captions** — a fabricated
+ * claim about the paper, with the app's authority behind it, and invisible to
+ * the reader. That is precisely what `pairPageFigures` (src/pdf-figures.ts)
+ * refuses `ambiguous` for one page at a time, and the silent dedupe here meant
+ * production could never reach its duplicate-ref assertion at all. GPT Sol,
+ * C-5.
+ *
+ * So a ref seen more than once yields **no** marker, and both `<figure>`s stay
+ * caption-only — the same trade Fable's call made and for the same reason: a
+ * missing figure is visible, a wrong one is not. It is not recorded as a
+ * failure either, because a marker that was never returned was never promised
+ * to anybody; the invariant every later stage carries is that every marker
+ * *this walk hands back* gets an entry.
  */
 export function pdfFigureMarkersIn(root: ParsedRoot): PdfFigureMarker[] {
-  const found: PdfFigureMarker[] = [];
-  const seen = new Set<string>();
+  const parsed: PdfFigureMarker[] = [];
+  const times = new Map<string, number>();
   for (const element of root.querySelectorAll(PDF_FIGURE_SELECTOR)) {
     const raw = element.getAttribute(RESERVED_ATTRS.pdfFigure);
     if (raw === null) continue;
     const marker = parsePdfFigureMarker(raw);
-    if (!marker || seen.has(marker.ref)) continue;
-    seen.add(marker.ref);
-    found.push(marker);
+    if (!marker) continue;
+    parsed.push(marker);
+    times.set(marker.ref, (times.get(marker.ref) ?? 0) + 1);
   }
-  return found;
+  return parsed.filter((marker) => times.get(marker.ref) === 1);
 }
 
 /* ------------------------------------------------------------------ *

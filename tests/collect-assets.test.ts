@@ -1351,6 +1351,27 @@ describe("assetsInputHash", () => {
     expect(assetsInputHash(after)).not.toBe(assetsInputHash(before));
   });
 
+  it("notices a different PDF behind the same number of figures", () => {
+    /**
+     * **The case the test above cannot make**, and the reason it is worth its
+     * own: that one goes from *no markers* to *one marker*, so replacing every
+     * parsed ref with a single constant token would still change the hash and
+     * still pass. This one holds the count fixed and changes only the ref —
+     * which is exactly what re-ingesting a *different* PDF does, because a ref
+     * folds in the raw document's sha256 (src/pdf-figures.ts § `pdfFigureRef`).
+     *
+     * If this were not true, a revision whose PDF had been replaced would carry
+     * the old document's figures forward and report itself current: the reader
+     * would be shown pictures out of a paper that is no longer the one they are
+     * reading. GPT Sol, C-6.
+     */
+    const before = [figure(3)];
+    const after = [block(`<figure data-spya-pdf-figure="pdffig1-${"f".repeat(32)}.3.1"><figcaption>Fig 3</figcaption></figure>`)];
+    after[0]!.id = before[0]!.id;
+    expect(pdfFigureMarkersIn(after)).toHaveLength(pdfFigureMarkersIn(before).length);
+    expect(assetsInputHash(after)).not.toBe(assetsInputHash(before));
+  });
+
   it("notices an image URL changing", () => {
     expect(assetsInputHash([img("https://cdn.test/a.png")])).not.toBe(
       assetsInputHash([img("https://cdn.test/b.png")]),
@@ -1400,6 +1421,18 @@ describe("pdfFigureMarkersIn over blocks", () => {
     expect(pdfFigureMarkersIn([block("<p>Just words.</p>"), img("https://cdn.test/a.png")])).toEqual(
       [],
     );
+  });
+
+  it("refuses a ref that two blocks carry, and keeps the rest", () => {
+    /* **The cross-block case is the one that can actually happen**, because the
+       reading view rehosts one block at a time (src/web/rehost.ts): a ref in two
+       blocks would put the same picture under two different captions, which is a
+       fabricated claim about the paper the reader cannot detect. Dropping the
+       repeat and keeping the first — what this did until 2026-09-06 — also meant
+       `pairPageFigures`'s duplicate-ref assertion could never be reached from
+       production. GPT Sol, C-5. */
+    const blocks = [figure(3), block("<p>prose</p>"), figure(3), figure(7)];
+    expect(pdfFigureMarkersIn(blocks).map((m) => m.page)).toEqual([7]);
   });
 
   it("still sees a marker an upper-case serialiser wrote", () => {

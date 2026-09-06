@@ -322,24 +322,31 @@ export function imageUrlsIn(blocks: readonly Block[]): string[] {
  * *this* revision's PDF: they cannot not, because a ref folds in the raw PDF's
  * sha256, so a marker minted against a different document is a lookup that
  * misses rather than a mismatch anybody has to detect.
+ *
+ * **A ref repeated across two blocks refuses both**, which is the rule
+ * `pdfFigureMarkersInRoot` states at length for two `<figure>`s inside one — and
+ * the cross-block case is the one that can actually happen, because the reading
+ * view rehosts a block at a time and would put the same picture under both
+ * captions. Counting first and filtering after is what makes the two agree; the
+ * `seen`-and-skip this replaced kept the first and dropped the rest, which is
+ * the shape that hid it. GPT Sol, C-5.
  */
 export function pdfFigureMarkersIn(blocks: readonly Block[]): PdfFigureMarker[] {
   const { JSDOM } = jsdom();
   const dom = new JSDOM("<!doctype html><template></template>");
   const template = dom.window.document.querySelector("template");
   if (!template) return [];
-  const found: PdfFigureMarker[] = [];
-  const seen = new Set<string>();
+  const parsed: PdfFigureMarker[] = [];
+  const times = new Map<string, number>();
   for (const block of blocks) {
     if (!block.html || !MARKER_IN_HTML.test(block.html)) continue;
     template.innerHTML = block.html;
     for (const marker of pdfFigureMarkersInRoot(template.content)) {
-      if (seen.has(marker.ref)) continue;
-      seen.add(marker.ref);
-      found.push(marker);
+      parsed.push(marker);
+      times.set(marker.ref, (times.get(marker.ref) ?? 0) + 1);
     }
   }
-  return found;
+  return parsed.filter((marker) => times.get(marker.ref) === 1);
 }
 
 /**

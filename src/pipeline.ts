@@ -35,11 +35,12 @@ import {
   runBlocks,
   splitIntoBlocks,
 } from "./blocks.js";
-import type { Assets, PdfFigureEntry } from "./assets.js";
+import type { Assets, PdfFigureEntry, PdfFigureFailure } from "./assets.js";
 import {
   ASSETS_VERSION,
   assetsInputHash,
   collectAssets,
+  describeStorageFailure,
   pdfFigureMarkersIn,
 } from "./collect-assets.js";
 import { collectPdfFigures, type PdfFiguresRun } from "./collect-pdf-figures.js";
@@ -1560,19 +1561,26 @@ function refuseToIllustrate(reason: IllustrateRefusal): never {
  * **The PDF half of the `assets` step** — or `undefined`, which means this
  * article never had a PDF to look in.
  *
- * Three cheap refusals before a byte of the document is read, in this order
- * because each is cheaper than the next: an article whose stage-1 manifest says
- * it was not a PDF, a PDF whose blocks carry no figure marker, and only then
- * the object itself. Three of the seven eval PDFs contain no raster image
- * anywhere and every web article contains no PDF, so the ordinary case has to
- * cost nothing — and the cheapest way to make that true is to never reach
- * `getDocument`.
+ * **The markers are looked for first, and that order is the whole of one bug.**
+ * This asked `manifest?.kind !== "pdf"` and returned *before* it had discovered
+ * a marker, so an inconsistent revision — valid markers in the blocks, a raw
+ * manifest that is missing or says HTML — produced no `pdfFigures` at all,
+ * which is indistinguishable from *there was nothing here to look at*. That is
+ * the one distinction this manifest exists to keep. GPT Sol, C-2.
+ *
+ * It costs nothing to reorder, which is why there was no trade to make: the
+ * walk is a regex over each block's html before any parse
+ * (src/collect-assets.ts § `MARKER_IN_HTML`), and `assetsInputHash` runs it on
+ * every article in the same step anyway. What the ordinary case still never
+ * reaches is `getDocument` — three of the seven eval PDFs contain no raster
+ * image anywhere and every web article contains no PDF at all.
  *
  * **`undefined` is not an empty run**, and the difference reaches the reader:
  * an absent `pdfFigures` means *there was nothing here to look at*, and a
  * present one with failed entries means *we looked and could not*. Collapsing
  * them is how a feature that has not shipped yet gets reported as one that
- * failed. src/assets.ts § `Assets`.
+ * failed. src/assets.ts § `Assets`. So `undefined` is now reached by exactly one
+ * road — no markers — and every other road records what it found.
  *
  * **The bytes come through `readRawBytes`**, which is what stage 2 already uses
  * and which verifies the object against the hash the manifest names — so this
@@ -1580,33 +1588,33 @@ function refuseToIllustrate(reason: IllustrateRefusal): never {
  * ref folds in. A raw document that has gone missing is recorded against the
  * figures and does not fail the step, because the article's web images are the
  * other half of it and are unaffected.
+ *
+ * @param deps the reader, injected. The default is the real `readRawBytes`; a
+ *   test replaces it to reach the two arms below, which otherwise need a
+ *   Storage outage and a corrupt canonical object to reproduce. Exported with
+ *   this function for tests/collect-pdf-figures.test.ts.
  */
-async function recoverPdfFigures(
+export async function recoverPdfFigures(
   ctx: StepContext,
   store: ArtifactReads,
   blocks: Block[],
+  deps: { readBytes?: typeof readRawBytes } = {},
 ): Promise<PdfFiguresRun | undefined> {
-  const manifest = await store.read(ctx.slug, "fetch", "raw");
-  if (manifest?.kind !== "pdf") return undefined;
   const markers = pdfFigureMarkersIn(blocks);
   if (markers.length === 0) return undefined;
 
-  let pdf: Uint8Array;
-  try {
-    pdf = await readRawBytes(manifest, { slug: ctx.slug });
-  } catch {
-    /* The bytes are not where the manifest says, or are not the ones it
-       promises. That is a fact about the document rather than about any figure,
-       so every marker gets the reason that means *nothing is known about this
-       at all* — and the step carries on and stores the web images, of which a
-       PDF has none, so the manifest is empty either way and the article is
-       still readable. */
+  /**
+   * Every marker, with one reason. The step carries on and stores the web
+   * images, of which a PDF has none — so the manifest is empty either way and
+   * the article is still readable.
+   */
+  const allFailed = (reason: PdfFigureFailure): PdfFiguresRun => {
     const at = new Date().toISOString();
     const entries: PdfFigureEntry[] = markers.map((marker) => ({
       ref: marker.ref,
       page: marker.page,
       status: "failed",
-      reason: "out-of-time",
+      reason,
       at,
     }));
     return {
@@ -1618,6 +1626,59 @@ async function recoverPdfFigures(
       storageErrors: [],
       elapsedMs: 0,
     };
+  };
+
+  const manifest = await store.read(ctx.slug, "fetch", "raw");
+  if (manifest?.kind !== "pdf") {
+    /* Markers minted against a PDF, and a stage-1 manifest that has no PDF in
+       it. Nothing here is retryable and nothing is a fault of ours; the article
+       has to be re-fetched. */
+    plog.warn(
+      { slug: ctx.slug, step: "assets", figures: markers.length, kind: manifest?.kind ?? null },
+      `assets ${ctx.slug}: ${markers.length} PDF figure markers and no PDF to look in`,
+    );
+    return allFailed("no-source");
+  }
+
+  let pdf: Uint8Array;
+  try {
+    pdf = await (deps.readBytes ?? readRawBytes)(manifest, { slug: ctx.slug });
+  } catch (err) {
+    /**
+     * **Two failures, two reasons, and one of them was erasing the other.**
+     *
+     * Every throw here was recorded `out-of-time` with nothing logged, so a
+     * missing object, an object that does not hash to its own name and a
+     * Storage outage all reported that our clock had run out — which is the one
+     * thing that had not happened, since `readRawBytes` verifies the bytes
+     * against the hash and that verification establishes something real. GPT
+     * Sol, C-4.
+     *
+     * `RawDocumentUnavailable` is the discriminator and it is asked by type
+     * rather than by message, the rule src/fetch.ts § `overlongObject` already
+     * states: its three reasons (`no-object`, `missing`, `corrupt`) all mean the
+     * document has to be re-fetched or cleared by hand, and anything else means
+     * the bucket is unwell, which is `AssetFailure`'s own reason for keeping
+     * `storage` apart from everything transient — the two need different people.
+     *
+     * **Logged here rather than handed back**, which is the opposite of what
+     * src/collect-assets.ts does and for its stated reason: that module is not
+     * in src/log.ts's component list, and this one is the caller that owns a
+     * `pipeline` logger. Redacted through `describeStorageFailure` all the same,
+     * because a message is somebody else's and may hold a URL or a grant.
+     */
+    const ours = err instanceof RawDocumentUnavailable;
+    plog.warn(
+      {
+        slug: ctx.slug,
+        step: "assets",
+        figures: markers.length,
+        reason: ours ? err.reason : "storage",
+        why: describeStorageFailure(err),
+      },
+      `assets ${ctx.slug}: the PDF behind ${markers.length} figure markers could not be read`,
+    );
+    return allFailed(ours ? "no-source" : "storage");
   }
   return collectPdfFigures({ markers, pdf, signal: ctx.signal });
 }
