@@ -80,13 +80,20 @@ Five product calls, all Greg's, 2026-09-06.
    `raw_sources` § *No lifecycle, on purpose* records Greg choosing in 2026-08-27. Overruled by Greg
    on 2026-09-06: "permanently delete" over a PDF still sitting in our bucket is a claim the privacy
    page cannot make honestly.
+   **Reopened 2026-09-06 after Sol's review.** Reference counting as described is unsafe — counting
+   and then removing is a race a second owner can lose — and doing it safely means a blob catalogue
+   with locking and a durable cleanup queue, which is plausibly larger than the rest of this feature.
+   Greg is choosing again with the cost visible. See Stage E.
 5. **Deleting must not change what the reader owes.** `ingest_events.article_id` is `on delete set
    null` and quota is recomputed live from `coalesce(a.visibility,'private') = 'public'`, so today a
    delete would silently re-price a public article's ledger rows from half a unit to a full one and
    push the owner's usage *up*. Stage B stamps the price at charge time so it cannot move.
    *Simpler option passed over:* `schema.ts`'s own instruction — compute the delta and say what it
    will cost, as unsharing does. Rejected because a sentence explaining that deleting will use up
-   more of your quota cannot be made to sound like anything but a bug.
+   more of your quota cannot be made to sound like anything but a bug. **The mechanism changed after
+   Sol's F2** — stamping at *charge* time is the thing `billing.md` explicitly rejects, because it
+   misprices every article shared or unshared later. The price is stamped at *delete* time instead,
+   which touches nothing while the article is alive. The decision itself stands.
 
 Two things that are **not** decisions, because the code already made them:
 
@@ -210,18 +217,60 @@ slug's non-terminal jobs rather than relying on the refusal to mean there are no
 `uploads` and `feedback` rows also survive with a stale `slug`, but neither has a unique index on it,
 so they dangle harmlessly.
 
+#### What Sol's plan review found, 2026-09-06
+
+The full answer is
+[260906h-delete-an-article-permanently-review-sol.md](260906h-delete-an-article-permanently-review-sol.md);
+the prompt it answered is beside it. **Sol refused the plan** on three P0s. I checked every load-bearing
+citation myself and all six findings stand — the first draft would have shipped incorrect charging,
+a permanently leaked quota slot, and an article that could come back from the dead.
+
+| ID | Finding | Severity | Disposition |
+|----|---------|----------|-------------|
+| F1 | Stage E's count-then-remove can delete a blob another owner committed a reference to in between | P0 | **Open — Greg's call.** See Stage E |
+| F2 | Stage B stamped the price at *charge* time, which `billing.md` explicitly rejects; share-later and unshare-later would both misprice | P0 | **Fixed** — stamp at *delete* time instead, Stage B rewritten |
+| F3 | Stage C deleted active jobs, leaking their reservation for ever — reservations deliberately never expire | P0 | **Fixed** — refuse on a broad predicate, never delete an active job. Stage C 4–5 rewritten |
+| F4 | Enqueue can race the delete and `lockOrCreateArticle` resurrects the article | P1 | **Fixed** — enqueue must lock the article row; barrier test. New Stage C item |
+| F5 | Storage cleanup misses illustrated plates and upload staging keys, and a crash mid-loop is unknowable | P1 | **Open with F1** — same decision |
+| F6 | Cache invalidation far too narrow, and the failure re-read can be answered from the offline copy and lie | P1 | **Fixed** — `forgetUser`, and a network-authoritative re-read. Stage D rewritten |
+
+Two of Sol's open decisions are now settled and no longer open questions:
+
+- **A public link to a deleted article returns 404, not 410.** A tombstone would break the
+  deliberate indistinguishability of *absent* and *private* (`src/store/public-slug.ts:28`). Test the
+  public page, the public API and public image URLs after a delete.
+- **A private article's deletion needs no audit row.** A never-public article was never served to a
+  stranger, so there is no takedown obligation to answer; an article that *was* public keeps its
+  `article_visibility_changes` rows, which is exactly the evidence a late complaint needs
+  (`schema.ts:316`).
+
+Sol also confirmed that decision 3 — not gating delete on archive — creates no integrity hazard.
+Archive was a speed bump, not a boundary.
+
 ### Stage B — deleting must not change the bill
 
-Independent of everything else and useful on its own.
+Independent of everything else and useful on its own. **Rewritten after Sol's F2** — the first draft
+stamped the price at charge time, which is the design
+[`billing.md`](../project/billing.md#L617) explicitly rejects: *"charging half at add time misses the
+article you decide to share three weeks later, which is most of them."* Usage must stay live while
+the article exists, and freeze only when it stops existing.
 
-- [ ] Failing test first: charge an `ingest_event` for a public article, delete the article row,
-      assert the owner's usage is unchanged. Watch it go red.
-- [ ] Migration: stamp the price onto `ingest_events` at charge time — a column recording whether the
-      article was public when the unit was charged — so `usageSql`
-      ([`src/store/pg-billing.ts:396`](../../src/store/pg-billing.ts)) stops depending on a row that
-      can vanish. Backfill from the live join so existing rows keep their current price.
-- [ ] Update `usageSql` and the admin public/private split
-      ([`src/store/pg-admin.ts:533`](../../src/store/pg-admin.ts)), which has the same dependency.
+- [ ] Failing tests first, all three, watched red:
+      - charge an `ingest_event` for a public article, delete the article, assert usage unchanged;
+      - charge it private, then **share** it — usage must still fall;
+      - charge it public, then **unshare** it — usage must still rise.
+      The last two are the regression Stage B could so easily introduce.
+- [ ] Migration: add nullable `ingest_events.article_visibility_at_delete`. It is null for every
+      existing row and for every live article, so it is not a second source of truth — it is only
+      ever read once the article it described is gone.
+- [ ] Stamp it in a `BEFORE DELETE` trigger on `articles` rather than in the application, so it holds
+      for every deletion path including a future admin one or a hand-run statement.
+- [ ] `usageSql` ([`src/store/pg-billing.ts:396`](../../src/store/pg-billing.ts)) and the admin
+      public/private split ([`src/store/pg-admin.ts:533`](../../src/store/pg-admin.ts)) both become:
+
+      coalesce(a.visibility, e.article_visibility_at_delete, 'private') = 'public'
+
+      The live column still wins wherever there is one.
 - [ ] Update [`docs/project/billing.md`](../project/billing.md) and the note at `schema.ts:4272`,
       which currently says no delete path exists.
 - [ ] `npm test`, `npm run typecheck`, `npm run check`. Mutate the new column's read and check the
@@ -241,6 +290,9 @@ No UI. The whole of the destruction, reachable only by an API call.
       - An HTTP-level case with the `reader()` harness at `tests/owner-isolation.test.ts:1378`,
         proving the gate is what fills the owner box.
       - A live-job refusal test: a queued job holding a draft ⇒ 409, nothing deleted.
+      - **And the one that broke the first draft (Sol F3): a `queued` job with `draft_revision_id`
+        still null, charged.** Assert 409, and assert the article, the job, the reservation and the
+        computed usage are every one of them unchanged.
 - [ ] `ShelfStore.destroy(slug)` in [`src/store/contracts.ts`](../../src/store/contracts.ts),
       implemented in [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) beside `patch`, following
       `pgGlossaryStore.deleteGlossary` exactly:
@@ -249,18 +301,30 @@ No UI. The whole of the destruction, reachable only by an API call.
          `pg-billing.ts:70` is `billing_accounts` before `articles`, everywhere, and violating it is
          the documented deadlock cycle.
       3. `select … .where(ownedSlug(slug)).for("update")`; `if (!row) throw notFound(slug)`.
-      4. Refuse while a job is live — reuse the shape of `liveJobHoldingADraftQuery`
-         (`pg-glossary.ts:164`) and `refuseIfAJobIsInside` (`tests/helpers/forget-revisions.ts:42`);
-         409 with a sentence, not a code.
-      5. Delete the slug's **non-terminal** `jobs` rows — `queued` and `running`. Measured in Stage
-         A: leaving one behind returns `23505 … "jobs_reserved_slug"` when the reader tries to
-         re-add the same URL, and orphans a job the queue will still pick up. Terminal rows
-         (`done`/`error`) are inert and stay, so the history survives. **Do not lean on step 4 to
-         mean there are none** — the glossary query it copies deliberately misses a claimed job that
-         has not opened its draft yet. Clear `queue_state.running_job_id` if it names one. Delete the
-         `uploads` row — but **not** its staging object, per `pg-uploads.ts:221`.
+      4. **Refuse while any job is live, on the broad predicate.** Select and lock every job for
+         this owner and slug whose status is `queued` or `running` — regardless of draft pointer or
+         lease age. If any exists, 409 with a sentence, and delete nothing.
+      5. **Never delete an active job** (Sol F3). The first draft did, to clear the
+         `jobs_reserved_slug` collision Stage A measured; that would have leaked the job's quota slot
+         for ever, because deleting a job deliberately does not touch its reservation
+         (`schema.ts:1976`) and an unsettled reservation deliberately never expires
+         (`schema.ts:4253`, itself Sol's call on 2026-09-02). Refusing at step 4 solves the
+         collision too, since the reader stops the import and then deletes. Terminal rows
+         (`done`/`error`) are inert — Stage A measured that — and stay as history; the cascade nulls
+         their `article_id`. `queue_state.running_job_id` needs no clearing: its FK is already
+         `on delete set null` (`schema.ts:2223`). Delete the `uploads` row — but see Stage E, which
+         now owns its staging object rather than abandoning it.
       6. `delete(articles).where(ownedSlug(slug))` — **one statement**, children left to the cascade.
       7. Return something the client can act on; never the deleted entry as though it still existed.
+- [ ] **Close the enqueue race (Sol F4).** Today the bare-slug ownership check happens before the
+      job is built (`src/jobs.ts:2965`, `:3066`) and `enqueueOrGet` never locks the article
+      (`src/store/pg-jobs.ts:704`). So: enqueue checks the article exists, delete commits, enqueue
+      inserts, and the worker calls `lockOrCreateArticle` — which is documented to *create the row
+      if it is missing* (`src/store/pg-revisions.ts:482`). The article comes back after a successful
+      delete. Fix: every enqueue targeting an existing article must lock the owner-scoped article row
+      and insert the job in one transaction, re-reading absence after the lock and returning 404
+      rather than inserting. A barrier test must allow both legal orders and forbid
+      "delete succeeded **and** the article later exists".
 - [ ] `DELETE /api/library/:slug` in `serveAuthenticatedApi`, reusing the existing `shelfEntry`
       pattern beside the PATCH at [`src/routes.ts:7106`](../../src/routes.ts). `slugPart`, no body,
       no ownership check in the route. Update the route index comment at the top of the file.
@@ -299,10 +363,24 @@ No UI. The whole of the destruction, reachable only by an API call.
       destructive tint anywhere here.
 - [ ] Afterwards: navigate to the library. And per the lesson in `ArchiveArticle`'s catch block — a
       lost response is not proof nothing happened — on failure re-read `/api/metadata/:slug`; a 404
-      means it went, so navigate anyway.
-- [ ] Cache: invalidate `/api/article/<slug>` **and** `/api/library` via
-      [`src/web/lib/offline-store.ts:712`](../../src/web/lib/offline-store.ts), and fix the
-      now-false claim in [`src/web/lib/cached-shelf.ts:34`](../../src/web/lib/cached-shelf.ts).
+      means it went, so navigate anyway. **But the re-read must be network-authoritative (Sol F6).**
+      `apiFetch` answers a failed GET from the offline copy with a real `Response`, status 200 and
+      `x-spideryarn-offline: copy` (`src/web/lib/api.ts:664`) — so the naive re-read would cheerfully
+      report *"still here, untouched"* about an article that is gone. Only a fresh server 404 proves
+      deletion and only a fresh server 200 proves survival; a transport failure or an offline copy
+      proves neither and must fall through to **Couldn't tell whether that worked. Reload the page.**
+- [ ] Cache: invalidating `/api/article/<slug>` and `/api/library` is not enough (Sol F6) — metadata,
+      comments, chat, search, glossary and illustrated are all cacheable too
+      (`src/web/lib/api.ts:834`), and `offline-store.ts:697` says stale data after a delete looks
+      exactly like a delete that failed. Call `forgetUser(ownerId)`
+      ([`offline-store.ts:718`](../../src/web/lib/offline-store.ts)) on confirmed deletion and retire
+      the reader's whole cached set; per-article invalidation can replace it later. Fix the now-false
+      claim in [`src/web/lib/cached-shelf.ts:34`](../../src/web/lib/cached-shelf.ts).
+- [ ] Authenticated plates and assets are served `immutable` for a year (`src/routes.ts:605`, `:691`).
+      Make those revalidate authorisation, and say plainly in the copy and in `privacy.md` that a
+      copy already downloaded to a reader's own device cannot be recalled.
+- [ ] The confirm button must never be auto-focused and must not inherit the trigger's keyboard
+      activation, and must not be reachable from metadata we only have an offline copy of (Sol).
 - [ ] Component tests. Then drive a real browser in a Sonnet subagent — tests going green is not
       evidence a reader can see it.
 - [ ] Docs: [`library.md`](../project/library.md) (a section for delete beside Archive, and the
@@ -311,34 +389,42 @@ No UI. The whole of the destruction, reachable only by an API call.
       recommendation was overruled.
 - [ ] Sol review. Commit.
 
-### Stage E — the bytes
+### Stage E — the bytes — **blocked on a product decision**
 
 Last, and separately reviewed, because this is the only stage that can damage another reader's
-library.
+library. **Sol's F1 and F5 say the design in the first draft is unsafe and the safe version is
+large**, so this stage is not startable until Greg picks a route. Stages B, C and D do not depend on
+the answer; only Stage D's copy does, and only in one sentence.
 
-- [ ] Establish the reference counts, and write the test that proves the counting is real: two
-      articles — **two different owners** — sharing one `sha256`; delete one; assert the object
-      survives and the other article still opens. Then delete the second and assert the object goes.
-- [ ] Raw sources: count remaining `article_revisions.raw_source_sha256` references before calling
-      `RawSourceStore.remove` ([`src/store/blobs.ts:86`](../../src/store/blobs.ts) — never called
-      today). Decide whether the `raw_sources` catalogue row goes with the object or stays as the
-      audit of what was there; the table's header says rows are never deleted, so changing that is a
-      decision to record, not a detail.
-- [ ] Article images and PDF figures: **there is no catalogue row per image** — the only references
-      are the `assets` manifests inside `article_revisions`. Work out with Sol whether to add a
-      catalogue, scan the manifests, or leave images as orphans in v1 and say so. This is the open
-      technical question of the stage and it is deliberately not pre-answered here.
-- [ ] Deletion of objects happens **after** the transaction commits, never inside it — a rolled-back
-      transaction that has already removed bytes is unrecoverable. A failed object delete is a
-      logged orphan, not a failed request.
-- [ ] Docs: [`privacy.md`](../project/privacy.md) — this is the stage that makes "permanently
-      delete" a true claim about bytes rather than about rows — plus the `raw_sources` header, which
-      currently says nothing ever deletes one.
-- [ ] Sol review. Commit, push, and check the worktree is safe to remove.
+The problem, in one paragraph. Blobs are content-addressed and deduplicated **across owners**, and
+bytes are written before and outside the transaction that records the reference
+(`src/store/artifacts-pg.ts:1015`). So counting references and then removing the object is a race
+Alice can lose to Bob: Alice counts zero, Bob ingests identical bytes and commits a reference, Alice
+removes the object, Bob's article now points at nothing. `src/store/blobs.ts:375` already documents
+this exact class and says the seam has no serialisation to fix it with. Article images, PDF figures
+and illustrated plates make it worse: they have **no catalogue row at all**, only `assets` manifests
+inside `article_revisions`, so there is nothing to count and nothing to lock.
+
+The two routes:
+
+- **Safe and small — leave the bytes, and say so.** Delete every row; leave the objects as orphans.
+  This is what the archive post-mortem originally recommended: *"orphans are the safe failure;
+  cross-owner deletion is the unsafe one."* Cost: near zero. Price: decision 4 is withdrawn and the
+  copy must not claim the bytes are gone, only the article and everything the reader did with it.
+- **Safe and large — build the catalogue.** One catalogue/ref table covering every canonical blob
+  class (raw sources, assets, PDF figures, illustrated plates). Writers and deleters lock the same
+  catalogue row; the deleting transaction marks the last-reference object `pending_delete` and
+  commits a durable cleanup task; a writer may never commit a reference to an object marked
+  `pending_delete`. A barrier test races a second owner's write against the delete. This also
+  answers F5 — upload staging keys and illustrated plates get cleanup tasks instead of being
+  abandoned, and a failed removal is pending work rather than a discarded log line.
+
+Whichever way it goes: [`privacy.md`](../project/privacy.md) has to say what is true, and the
+`raw_sources` header currently says nothing ever deletes one.
 
 ## Open questions
 
-- **What should a public link to a deleted article do?** Left open by the archive note. `publicSlug`
-  will simply 404, which is probably right and needs confirming rather than designing.
-- Whether a private article's deletion needs its own audit row. `article_visibility_changes` only
-  has rows if the article was ever shared, so today a private delete leaves no trace at all.
+- **Stage E: orphans or a catalogue?** The one live decision. See Stage E.
+
+Settled since the first draft: the public link 404s, and a private delete needs no audit row — both
+recorded under *What Sol's plan review found* above.
