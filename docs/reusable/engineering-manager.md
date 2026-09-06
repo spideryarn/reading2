@@ -147,7 +147,9 @@ the machinery is still open now.
 ## Along the way
 
 - **Docs.** Update them in the same stage as the change, and write a doc where one is missing.
-- **Tests.** Write the failing test before the fix; a test that was never red proves nothing.
+- **Tests.** Write the failing test before the fix; a test that was never red proves nothing. Then
+  mutate the finished code at the end of the stage and check the suite notices — red-first only tests
+  the diff ([silent-success.md](silent-success.md)).
 - **Spikes.** When the answer isn't clear, spend a subagent on a throwaway experiment and find out,
   rather than arguing it out in prose.
 - **Static analysis, typecheck, lint** — as well as the suite. Run the gate the project actually
