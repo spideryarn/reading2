@@ -245,6 +245,12 @@ const READS = [
      returned citation is compared against to keep the article out of its own
      debate. src/debate.ts § `inputFingerprint`. */
   "debate",
+  /* Added 2026-09-06 with `pgArticleReader.loadAssets`, for the route that
+     serves one asset's bytes (src/routes.ts § `sendArticleAsset`). The
+     narrowest projection in the map — one `jsonb` column and the id, and no
+     fingerprint at all, because a manifest has no staleness a reader could act
+     on. src/store/pg.ts § `REVISION_PROJECTIONS.assets`. */
+  "assets",
   /* Added 2026-08-31 with `pgArticleReader.loadSource`. The only read that
      takes bytes, which is why it is a projection of its own rather than columns
      bolted onto `article` — src/store/pg.ts § `rawSource`. */

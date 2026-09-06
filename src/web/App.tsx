@@ -62,6 +62,7 @@ import { QuizPanel, RememberSubModeToggle } from "./QuizPanel.js";
 import { useQuiz } from "./useQuiz.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
+import { rehostImages } from "./rehost.js";
 import { TableView } from "./TableView.js";
 import type { SelectionAnchor } from "./selection.js";
 import type { TermSelection } from "./annotate.js";
@@ -900,7 +901,25 @@ function useArticleAccess(slug: string, readerId: string | null): ArticleAccess 
 async function resolveAccess(slug: string, signedIn: boolean): Promise<ArticleAccess> {
   const found = await findArticle(slug, signedIn);
   if (found.kind === "not-shared" || found.kind === "reauth-required") return found;
-  const article = sanitizeArticle(found.article);
+  /* **`rehostImages` runs AFTER `sanitizeArticle`, and the order is the whole
+     of why it is here at all.** `stripOwnApiUrls` (src/sanitize-policy.ts)
+     removes any `src` resolving to our own API, deliberately — an article may
+     not point a reader's browser at our endpoints — so a URL of ours written
+     before this line would be deleted by the line itself. rehost.ts § Why it
+     cannot be done in the pipeline has the rest, including the tempting way
+     round it and why not to take it.
+
+     **On both branches**, for `sanitizeArticle`'s own reason: a shared article
+     is the same extracted HTML through a different projection, and a visitor
+     looking at eight blank figures is the reported bug with the audience we
+     invited. What differs is only how the bytes are reached — a token and a
+     `blob:` for an owner, `/api/public/asset/…` for a visitor — which is the
+     `footing` argument and nothing else. */
+  const article = await rehostImages(
+    sanitizeArticle(found.article),
+    slug,
+    found.kind === "owned" ? "owned" : "public",
+  );
   return found.kind === "owned"
     ? { kind: "owned", article }
     : {
@@ -2986,6 +3005,10 @@ function Reader({
       </div>
       <TableView
         article={article}
+        /* The route's slug, not `article.meta.slug` — TableView.tsx § `slug`
+           has the reason, and it is the same one `Origin` gives in
+           Metadata.tsx. */
+        slug={slug}
         sections={sections}
         layoutKey={layoutKey}
         /* The permalink base — this page's whole address, including every

@@ -417,6 +417,17 @@ type RevisionReader =
   | "debate"
   | "arc"
   /**
+   * **The image manifest on its own**, for the route that serves one asset's
+   * bytes — src/routes.ts § `sendArticleAsset`.
+   *
+   * Its own projection rather than reusing `article`, and the reason is the
+   * same one `rawSource` gives below: this read runs once per *picture*, so a
+   * PDF with eight figures runs it eight times on one page load, and the
+   * `article` projection carries the whole tree — 37 KB on one article — plus
+   * every metadata column, to answer a question that needs one `jsonb`.
+   */
+  | "assets"
+  /**
    * **The raw document, and it is the only read that goes looking for it.**
    *
    * Its own projection rather than columns added to `article`, which every page
@@ -449,7 +460,7 @@ const REVISION_READ_POLICY: Record<
     article: "value", library: "value", metadata: "value", publish: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
-    illustrated: "value", debate: "value",
+    illustrated: "value", debate: "value", assets: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -638,8 +649,13 @@ const REVISION_READ_POLICY: Record<
      says the opposite about the same article.
 
      Not on the library: a card says nothing about images, and a presence flag
-     nobody draws is a column in a query for no reason. */
-  assets: { article: "value", metadata: "value" },
+     nobody draws is a column in a query for no reason.
+
+     **And on `assets`, which is the read that exists for exactly this column**
+     — `sendArticleAsset` (src/routes.ts) looks a hash up in this manifest and
+     rebuilds the storage key from what it finds, so the manifest *is* the
+     authorisation for handing over the bytes. GPT Sol, I-5. */
+  assets: { article: "value", metadata: "value", assets: "value" },
 
   /* Each artefact goes to the one read that returns it, and to the metadata
      page, which asks of every artefact "would we write this again today".
@@ -1013,6 +1029,21 @@ export const REVISION_PROJECTIONS = {
     ...CITED_FINGERPRINT_COLUMNS,
   },
   arc: { id: articleRevisions.id, arc: articleRevisions.arc, ...FINGERPRINT_COLUMNS },
+  /**
+   * **One column, and no fingerprint** — the narrowest read in this map.
+   *
+   * `loadAssets` answers *does this article hold an object under this hash*,
+   * which is a question about the manifest and about nothing else. There is no
+   * staleness to report: a manifest that is out of date still describes objects
+   * that really are in the bucket, and refusing to serve a picture because the
+   * paragraph beside it has been re-extracted would take a figure off the page
+   * for a reason the reader cannot act on.
+   *
+   * A projection of its own rather than `article`, for `rawSource`'s reason
+   * one entry down: the route that uses it runs once per picture — eight times
+   * on the PDF this was built for — and `article` carries the whole tree.
+   */
+  assets: { id: articleRevisions.id, assets: articleRevisions.assets },
   /**
    * **The reference `readRawDocument` follows, and `rawFilename` for the name to
    * download it under.** src/store/raw-document.ts owns what those columns mean;
@@ -3144,6 +3175,23 @@ const rawPgArticleReader: ArticleReader = {
       stale: !tree || arcIsStale(arc, blocks, tree, metaFingerprintOf(found.revision)),
       outdated: arc.version !== ARC_PROMPT_VERSION,
     };
+  },
+
+  /**
+   * The image manifest of this reader's own article — see the contract.
+   *
+   * **A missing article throws `notFound`; a missing manifest is `undefined`.**
+   * The two are different answers and the caller has to be able to tell them
+   * apart: *not yours, or not there* is a 404 about the article, and *the
+   * assets step has never run here* is a 404 about one picture. Collapsing them
+   * would tell an owner their article does not exist because a step they have
+   * not run yet has not run yet.
+   */
+  async loadAssets(slug: string): Promise<Assets | undefined> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "assets");
+    if (!found) throw notFound(slug);
+    return (found.revision.assets as Assets | null) ?? undefined;
   },
 };
 

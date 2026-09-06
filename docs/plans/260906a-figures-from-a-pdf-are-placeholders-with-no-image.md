@@ -367,6 +367,28 @@ that changed the design are folded in above; the rest, held as build constraints
   A cap is still worth having, on the honest grounds — what the reader has to download — rather
   than on a platform limit that is not there. The largest figure measured anywhere in the corpus is
   756 KB.
+
+  **That 756 KB was the *Analog Cognition* document's number, and the corpus is worse.** Stage C
+  measured the ball-lightning paper's page-3 figure at 2067 × 1741 of photographic RGB encoding to
+  **9,355,050 bytes**, so a 4 MiB cap refused a real fixture — silently — and the cap went up to
+  16 MiB to let it through, leaving a reader fetching 9 MB for one picture.
+
+  **A cap was the wrong instrument, and Greg's call on 2026-09-06 was to fix the pixels instead:**
+
+  > downscale instead
+
+  A figure renders at roughly 700 px of CSS width in the reading view, so ~1600 px on the longest
+  side is already generous for a 2× display. `downscaleRaster` in
+  [`src/pdf-figures.ts`](../../src/pdf-figures.ts) box-filters everything above `MAX_FIGURE_EDGE`
+  down to it — alpha-weighted, because averaging colour across pixels of differing alpha puts a dark
+  fringe round every transparent edge — and it runs immediately before `encodeFigurePng`. Re-measured
+  over the corpus the same day: 9,355,050 → **2,349,789** at 1034 × 871, 2,917,234 → 985,154,
+  3,432,261 → 822,724, and every figure already inside the bound returned untouched.
+
+  `MAX_FIGURE_BYTES` becomes a backstop rather than the control, at **12 MiB** — above the
+  10,241,600 raw bytes a 1600 × 1600 RGBA raster could ever deflate from, so it cannot refuse a
+  figure the downscale allowed. The next real reduction is a lossy encoder, and that is still
+  blocked on `@napi-rs/canvas` being 34 MB of Vercel bundle.
 - **Drop the second blankness clause.** "Every pixel within tolerance of one colour" buys nothing
   the corpus needs and introduces the one false negative that matters — a near-white diagram or a
   faint grid deleted silently. Only exact transparency, only for `RGBA_32BPP`. Keeping a flat
@@ -426,10 +448,10 @@ the original**.
 
 | | Stage | Lands | State |
 |---|---|---|---|
-| A | **The pure module** | `src/pdf-figures.ts` — the transparency rule, the validator, the PNG writer, the pairing gate, the ref. No pdf.js, no store. | |
-| B | **The extraction** | real XObjects out of a real PDF through `loadPdfjs`, `maxImageSize` on the document, pinned against the eight known-real and eight known-blank keys. | |
-| C | **The marker, the manifest and the step** | `data-spya-pdf-figure` in `renderHtml` and `src/reserved.ts`; `pdfFigures` on `Assets`; the assets step extended; **the freshness stamp fixed and `ASSETS_VERSION` bumped**. Nothing served yet. | |
-| D | **Delivery and the prose** | the generic asset route after `sendPlate`; `rehostImages` after `sanitizeArticle`; the muted line and its link. PDF figures only. **The first stage a reader can see.** | |
+| A | **The pure module** | `src/pdf-figures.ts` — the transparency rule, the validator, the PNG writer, the pairing gate, the ref. No pdf.js, no store. | done `0297784f`, reviewed `93d565b4` |
+| B | **The extraction** | real XObjects out of a real PDF through `loadPdfjs`, `maxImageSize` on the document, pinned against the eight known-real and eight known-blank keys. | done `06ed314b`, reviewed `a6b1ce49` (one P0) |
+| C | **The marker, the manifest and the step** | `data-spya-pdf-figure` in `renderHtml` and `src/reserved.ts`; `pdfFigures` on `Assets`; the assets step extended; **the freshness stamp fixed in both its homes and `ASSETS_VERSION` bumped**. Nothing served yet. | done `87359bca` |
+| D | **Delivery and the prose** | the generic asset route after `sendPlate`; `rehostImages` after `sanitizeArticle`; the muted line and its link; the open-the-original icon. PDF figures only. **The first stage a reader can see.** | in progress |
 | E | **Web images through the same door** | the article's own images switched on — 260829b's stages C and D finished, and readers stop announcing themselves to publishers' CDNs. | |
 | F | **Proof and docs** | the browser pass on a real ingest, `article-images.md`, `content-extraction.md`, `export.md`, this file. | |
 
