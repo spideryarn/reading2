@@ -110,8 +110,8 @@ export interface Exchange {
   passages: ExchangePassage[];
   tools: ExchangeTool[];
   /**
-   * The reader talked over this answer, so the text above may contain words
-   * they never heard.
+   * The spoken answer ended early (interruption, hangup or provider failure),
+   * so the text above may be incomplete or include words the reader never heard.
    *
    * OpenAI truncates the unplayed audio and does **not** hand back a corrected
    * transcript, so this cannot be fixed here — only declared. What must never
@@ -345,7 +345,11 @@ export class ExchangeLedger {
         if (id) this.calls.set(id, turn);
       }
       const wantsMore = calls.length > 0;
-      if (!wantsMore) turn.answerSettled = true;
+      const endedEarly = response.status === "failed" || response.status === "cancelled" || response.status === "incomplete";
+      // A terminal provider failure settles the exchange, but its partial words
+      // must not become a complete answer when the reader reopens the thread.
+      if (endedEarly) turn.interrupted = true;
+      if (!wantsMore || endedEarly) turn.answerSettled = true;
       return this.harvest();
     }
 

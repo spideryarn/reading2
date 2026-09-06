@@ -174,19 +174,37 @@
    * for why it could not have it).
    */
   --bar-hide: 0px;
-  /* The wordmark fixed in the top-left corner — HomeLogo.tsx. A token because
-     three rules need the same number: the logo's own width, and the left
-     padding the masthead and the controls bar reserve so that a narrow window
-     (where the spine has been shrunk or dropped by layout.ts) does not paint
-     the article's title underneath it. Change it here or the other two go
-     silently wrong. */
+  /* The wordmark fixed in the top-left corner — HomeLogo.tsx.
+
+     **It sizes one control and reserves nothing, since 2026-09-06.** It used to
+     be read by three rules — the logo's own width, and the left padding the
+     masthead and the controls bar held so a narrow window could not paint the
+     article's title underneath the wordmark — and the comment here warned that
+     changing it without the other two was how a control ended up on top of the
+     one thing the page is for. Both bars are on the reading view, the reading
+     view draws `.dock-home` in the bottom bar instead (Dock.tsx), and there is
+     nothing left in that corner to hold the title clear of. What is left is
+     `.logo-home`'s own `width`, on the pages that still draw it, and the
+     narrower value § a narrow window gives it when the word goes.
+     docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md
+     § Stage 2.
+
+     **Kept rather than inlined, and the alternative is real**: `width: 8.5rem`
+     on `.logo-home` and `width: 2.6rem` in the query would be two declarations
+     where this is three, with no indirection at all. It loses because the
+     shrink is *one* decision about *two* controls — the wordmark and the
+     Feedback button give up their words in the same breath, for the same reason
+     — and this is the one place that is said, in one `:root` block under one
+     comment. Inlined, its two halves would sit in two different blocks of the
+     same media query nearly three thousand lines apart, each beside the
+     `display: none` it follows from, with nothing left saying they are the same
+     decision. */
   --logo-w: 8.5rem;
-  /* Its mirror image in the other corner — FeedbackButton.tsx. A token for the
-     same reason and with the same trap: the button's own width, and the right
-     padding the masthead and the controls bar reserve so that a long article
-     title does not run underneath it. Change it here or the other two go
-     silently wrong, and the way they go wrong is a control sitting on top of
-     the one thing the page is for. */
+  /* Its mirror image in the other corner — FeedbackButton.tsx, and the same
+     story: the button's own width and nothing else, now that neither bar
+     reserves a right-hand gutter for a trigger that is in the Dock. See the
+     note above, which carries the whole of it including why both stayed
+     tokens. */
   --feedback-w: 7.5rem;
   /* **The table head's height, and it is zero on purpose since 2026-09-05.**
      Greg: *"I'm even wondering if we can get rid of the row of

@@ -94,14 +94,23 @@
   // rather than as dependencies. Both are genuinely expected to be on PATH:
   // `supabase` is the CLI from docs/project/supabase-local.md, and `openssl` is
   // used by tests/db-tls.test.ts to inspect the remote's certificate.
-  "ignoreBinaries": ["supabase", "openssl"],
+  "ignoreBinaries": ["supabase", "openssl"]
 
-  // playwright-core is loaded by scripts/remote-smoke-browser.mjs through
-  // createRequire() against a path computed at runtime, because that script
-  // runs on the remote box and has to find whichever copy is there. Knip
-  // resolves static imports, so it cannot see that and reports the dependency
-  // as unused. It is not: dropping it puts the box back on borrowing a
-  // playwright-core from the npx cache at whatever version the MCPs bundled.
-  // See docs/project/browser-control.md.
-  "ignoreDependencies": ["playwright-core"]
+  // There is deliberately no `ignoreDependencies` here any more.
+  //
+  // It used to hold playwright-core, on the good grounds that the only thing
+  // reaching for it was scripts/remote-smoke-browser.mjs through a runtime
+  // createRequire() against a path computed on the box — which knip, resolving
+  // static imports, cannot see. That stopped being true: scripts/
+  // measure-annotation.ts now has a plain `import { chromium } from
+  // "playwright-core"`, so knip resolves the dependency without help and the
+  // entry suppressed nothing. Knip said so itself, in its own output —
+  // "playwright-core  knip.jsonc  Remove from ignoreDependencies" — for however
+  // long it took somebody to read the last three lines of a report.
+  //
+  // A dead ignore is worse than no ignore: it is what hides the *next*
+  // genuinely unused dependency. Removed 2026-09-06,
+  // docs/plans/260906h-improve-the-codebase-fourth-sweep.md § T1.3. The
+  // dependency itself is still needed and still used — see
+  // docs/project/browser-control.md — this is only about knip's view of it.
 }

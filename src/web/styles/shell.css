@@ -204,37 +204,42 @@ body {
      than to a `top`, so the title still scrolls away completely — a masthead
      that stopped `--safe-top` short of the edge would leave a band of page
      colour behind it that nothing ever covers. */
-  padding: calc(1.25rem + var(--safe-top)) 1.5rem 0.9rem;
-  /* Room for the corner wordmark, but only when there is not already room.
-     This bar starts at `left: --spine-w + --mode-w`, so the logo reaches
-     `--logo-w` minus that offset into it; once a mode band is open the term is
-     negative and the ordinary 1.5rem wins. That is the whole mechanism — see
-     HomeLogo.tsx for why the corner is otherwise free.
+  /* **The ordinary gutter on both sides, and that is new on 2026-09-06.** This
+     bar used to hold its left open for the corner wordmark
+     (`max(1.5rem, calc(--logo-w + 1.5rem - --spine-w - --mode-w))`) and its
+     right for the Feedback button (`--feedback-w + 1.5rem`), because both were
+     `position: fixed` over it and an unreserved corner puts a control on top of
+     the article's own title. Both are in the Dock now, this bar is drawn only
+     on the reading view, and the reading view has no corner controls left — so
+     what the two terms reserved was 148px on the left and 144px on the right of
+     empty page, against an ordinary gutter of 24px. Measured before it came
+     out, and the number that shows is the 800px window: the title started at
+     x=160 with its own prose at x=54, because that is the width below which the
+     centred-column rules have no margin left to give the reservation back.
+     docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md
+     § Stage 2.
 
-     The `+ 1.5rem` is not slack. Without it the title starts at exactly the
-     wordmark's right edge, which does not overlap and still reads as broken:
-     it is the ordinary gutter this bar has everywhere else, kept rather than
-     eaten. */
-  /* **Named, because the title has to be placed against them.** This bar is
-     asymmetric — the wordmark reserves the left, the Feedback button the right
-     — and § the title over the column has to undo that asymmetry to land the
-     title on the prose's own left edge. Two declarations reading one number
-     each, rather than the arithmetic being written out twice.
-     `.controls` below still carries the same two expressions of its own: it
-     needs the same numbers here and *different* ones on a phone (§ a narrow
-     window gives it a 0.75rem right gutter and this bar 1rem), so one shared
-     pair would be a claim that is false at the width it matters most. */
-  --masthead-pad-l: max(1.5rem, calc(var(--logo-w) + 1.5rem - var(--spine-w) - var(--mode-w)));
-  padding-left: var(--masthead-pad-l);
-  /* And the same again on the other side, for the Feedback button. Simpler
-     than its mirror, deliberately: both bars are *positioned* at
-     `left: --spine-w + --mode-w`, so the wordmark only reaches into them by
-     what is left after that — while nothing insets them from the right but
-     `--safe-right`, which the button sits inside too. So the button reaches
-     exactly `--feedback-w` in, and there is nothing to subtract.
-     FeedbackButton.tsx § The bars have to reserve the space. */
-  --masthead-pad-r: calc(var(--feedback-w) + 1.5rem);
-  padding-right: var(--masthead-pad-r);
+     **Still two names, and the two may differ.** § the title over the column
+     places the title against this bar's gutter and carries both terms
+     explicitly, so it is correct for any pair — and it needs to be, because
+     § a narrow window makes them unequal: a phone's left gutter is the prose's
+     own inset while its right is an ordinary one.
+
+     They were briefly equal, and the expression below was briefly simplified to
+     assume it. That was correct arithmetic and the wrong move, and it is worth
+     one sentence so nobody does it again: **simplifying an expression by
+     assuming a fact declared somewhere else turns an identity into a
+     precondition nobody knows the rule has.** The pair is still written
+     together, in one shorthand, at both widths (§ a narrow window redefines the
+     pair rather than overriding the padding, which is what used to leave these
+     two describing a desktop the bar was not drawing).
+
+     Four-value shorthand — top, right, bottom, left — so there is one padding
+     declaration on this bar rather than a shorthand and two rules undoing part
+     of it. */
+  --masthead-pad-l: 1.5rem;
+  --masthead-pad-r: 1.5rem;
+  padding: calc(1.25rem + var(--safe-top)) var(--masthead-pad-r) 0.9rem var(--masthead-pad-l);
 }
 
 .masthead-inner { max-width: 62rem; }
@@ -447,19 +452,21 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  /* **One gutter, both sides, since 2026-09-06.** This bar carried its own
+     copies of the masthead's two reservations — `--logo-w` on the left,
+     `--feedback-w` on the right — and they went with the masthead's, for the
+     reason § shell gives above: neither corner has a control in it on the one
+     page this bar is drawn on.
+
+     The copies were copies rather than a shared pair on purpose, and that
+     reasoning goes with them rather than being kept for a term that no longer
+     exists: the two bars needed the same numbers here and different ones on a
+     phone, so a shared pair would have been a claim that was false at the width
+     it mattered most. What survives of it is the invariant it protected —
+     **whatever gutter this bar has, the masthead has**, or the granularity
+     pills stop lining up with the title above them. 1.5rem here and 1.5rem
+     there; § a narrow window moves both to 1rem. */
   padding: 0 1.5rem;
-  /* Same expression as .masthead above, and for the same reason. Both bars are
-     inset by the spine, so both need it, and it has to be the same number in
-     both or the title and the granularity pills stop lining up. */
-  padding-left: max(1.5rem, calc(var(--logo-w) + 1.5rem - var(--spine-w) - var(--mode-w)));
-  /* And the same again on the other side, for the Feedback button. Simpler
-     than its mirror, deliberately: both bars are *positioned* at
-     `left: --spine-w + --mode-w`, so the wordmark only reaches into them by
-     what is left after that — while nothing insets them from the right but
-     `--safe-right`, which the button sits inside too. So the button reaches
-     exactly `--feedback-w` in, and there is nothing to subtract.
-     FeedbackButton.tsx § The bars have to reserve the space. */
-  padding-right: calc(var(--feedback-w) + 1.5rem);
   background: var(--page);
   border-bottom: 1px solid var(--rule-strong);
   font-family: var(--font-ui);
@@ -492,6 +499,27 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   text-transform: uppercase;
   color: var(--ink-faint);
   margin-left: 0.5rem;
+}
+
+/* **A sentence standing where a pill would be**, when the control has nothing
+   to open — today that is the `Paragraphs` pill while the labels are still
+   arriving or a run failed to produce them (src/web/nav-labels.ts).
+
+   Not a disabled `Toggle`: a disabled control still reads as a control, and its
+   explanation would have to live in a tooltip that a touch reader cannot open —
+   which is the argument that named these pills `Paragraphs` rather than `L3` in
+   the first place (src/web/tree.ts § `columnLabel`). So the control is replaced
+   by the reason, in the bar's own voice: italic and faint, like `.mode` beside
+   it, and no border, because a bordered thing in this row is something you can
+   press. It wraps to the pills' own metrics rather than growing the bar. */
+.pill-note {
+  font-size: 0.72rem;
+  line-height: 1.55;
+  font-style: italic;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* `.provenance` was here — the dashed monospace chip in the controls holding the

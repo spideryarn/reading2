@@ -585,6 +585,13 @@ td.text.kind-callout .prose::before {
   border-collapse: collapse;
   font-size: 0.9em;
 }
+/* **`border` in full, and it used to be defensive.** The bare `td` rule gave
+   every cell in the app a right border in --rule-strong, so naming only the
+   sides this wanted would have let the zoom table's column grid through into an
+   article's own table. That rule is scoped since 2026-09-06 (§ the head with no
+   row), so the shorthand is now just a shorthand — kept because a full border
+   is what an article's table wants anyway, not because anything is being
+   fought off. */
 .prose th, .prose td {
   padding: 0.3em 0.7em;
   border: 1px solid var(--rule);
@@ -649,6 +656,25 @@ td.text.kind-caption .prose {
   font-size: 0.78rem;
   line-height: 1.45;
   color: var(--ink-soft);
+}
+
+/* **The sentence the leaf column shows instead of drawing itself**, while the
+   paragraph labels are still arriving or after a run failed to produce them —
+   src/web/nav-labels.ts, and TableView § the withheld column.
+
+   One cell spanning the whole table, so it reads as a note about the column
+   rather than as a row about a paragraph: italic and faint, which is the one
+   pair of signals in this stylesheet that already says "this is us talking,
+   not the article". The cell keeps `td.gist.leaf`'s background so the column
+   is still visibly a column; it deliberately loses the pointer, because there
+   is nothing to jump to. */
+td.gist.leaf.labels-withheld { cursor: default; }
+td.gist.leaf.labels-withheld:hover { background: var(--page); }
+.reading td.gist.leaf.labels-withheld:hover { background: var(--panel); }
+.nav-label-absent {
+  font-style: italic;
+  color: var(--ink-faint);
+  text-wrap: balance;
 }
 
 td.gist.leaf { cursor: pointer; background: var(--page); }

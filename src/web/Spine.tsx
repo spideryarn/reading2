@@ -591,6 +591,59 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
    */
   const hereHitId = hereHit && hereHit.metrics === metrics ? hereHit.id : null;
 
+  /**
+   * **The band to fill as *you are here* — the current section, when there is
+   * one worth drawing.**
+   *
+   * Greg, 2026-09-06, on an article whose single part holds 95% of the rows:
+   *
+   * > The Spine only really highlights in orange the current top-level section,
+   * > so basically the Spine is almost completely orange when I'm reading the
+   * > main section.
+   *
+   * `.spine-part.active` is not wrong on that shape, it is uninformative — it
+   * says *you are in the 95% of the article that is the article*. Three of the
+   * thirteen trees in `data/` have a part over half the document, so this is a
+   * shape rather than a pathology. The answer is to draw the level below, which
+   * this component has computed since 2026-08-28 and until now showed only to a
+   * screen reader. docs/plans/260906g-spine-concentric-depth-highlight.md.
+   *
+   * **It costs no extra render**, which is what makes it a `find` here rather
+   * than a project: `hereHit` is already state and already transitions on
+   * exactly these boundaries, so this runs inside renders that were happening
+   * anyway. Not a `useMemo` — memoising would only skip an `O(hits)` scan of a
+   * few dozen entries during a render that has already been paid for.
+   *
+   * **`parent` is the test, and it is the one that cannot drift.** A band gets
+   * a `parent` from `childBands` and none from the L1 fallback `measure` uses
+   * for a childless part, so the field already *is* "am I a real section". The
+   * plan originally proposed asking whether the id also appears in `metrics.l1`;
+   * that works, but it is a second scan inferring what `measure` already
+   * recorded. GPT Sol, 2026-09-06.
+   *
+   * **`total > 1`, and that is not defensive.** Children partition their
+   * parent, so a part with exactly one child is covered by it exactly —
+   * permitted by `tree-invariants.ts` for a leaf ("no child may cover its
+   * parent's whole range — unless it is a leaf") and already present in
+   * `tests/spine-card.test.tsx`'s fixture. Ringing it would paint a second fill
+   * at the part's own geometry, which nobody would report as a bug: it just
+   * looks like a slightly darker band.
+   *
+   * A **supplement** falls out of the same test rather than needing its own.
+   * `buildOutline` gives one `children: []` unconditionally, so `measure`
+   * always makes it an L1 fallback, so it has no `parent` and gets no ring. The
+   * first draft of the plan specified a dimmed supplement ring; it could never
+   * have rendered.
+   *
+   * Null outside the article, because `hereHitId` is — the scroll effect gives
+   * it no fallback to the first or last band on purpose.
+   */
+  const hereBand =
+    metrics && hereHitId !== null
+      ? metrics.hits.find((b) => b.entry.node.id === hereHitId)
+      : undefined;
+  const hereRing = hereBand?.parent && hereBand.parent.total > 1 ? hereBand : null;
+
   const docHeight = metrics?.docHeight ?? 1;
   const pct = useCallback(
     (v: number) => `${(v / docHeight) * 100}%`,
@@ -655,10 +708,21 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
       className="spine"
       aria-label="Article outline"
       /* The whole rail is one keyboard-navigation zone, meaning L1: it draws
-         parts as bands and marks the current one, so ↑ / ↓ over it step part by
-         part. Its click targets are L2 — finer than its
-         bands, because a 1px tick is unhittable — but that is a pointing
-         concession, not what the rail is *about*. See keynav.ts. */
+         parts as bands, so ↑ / ↓ over it step part by part. See keynav.ts.
+
+         **This is now a decision rather than the obvious reading, and it was
+         re-taken on 2026-09-06.** It used to say the L2 click targets were "a
+         pointing concession, not what the rail is *about*", on the grounds
+         that a 1px tick is unhittable. That argument is spent: since the rail
+         started filling the current section (`hereRing` below), L2 is not just
+         where a click lands, it is the strongest fill on the rail.
+
+         It stays L1 anyway. The rail still *shows* the whole part structure and
+         a reader stepping through it is navigating the article's parts; making
+         ↑ / ↓ step section by section would turn a seven-press traverse into a
+         fifty-press one, which is the opposite of what a bird's-eye rail is
+         for. Revisit it as its own change if anybody asks for it — do not
+         change it as a side-effect of a visual one. GPT Sol, 2026-09-06. */
       data-nav-depth={1}
     >
       <div className="spine-track">
@@ -681,6 +745,66 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
             />
           );
         })}
+
+        {/* **The section you are in**, filled — see `hereRing` above for why
+            the part alone was not enough and when this is deliberately absent.
+
+            **Its position in this list is the whole of its correctness**, and
+            nothing about getting it wrong looks wrong. The rail is one stacking
+            context of absolutely-positioned siblings with no `z-index` between
+            them, so tree order is paint order, and this element has to sit:
+
+            - *after* the parts, or the band it marks paints over it;
+            - *before* the L2 ticks, or it hides the hairline that marks its own
+              top edge — and the hairlines are what make it read as *one of
+              these sections* rather than as a brighter smear;
+            - *before* the search marks, which is the one that would have cost
+              somebody an afternoon. The tempting version of this feature is
+              `.spine-hit[aria-current="location"] { background: … }` — the
+              geometry and the state are both already there and it needs no new
+              element. It is wrong: the hit targets render below, *over* the
+              marks, so a fill on one would hide the search hits inside the
+              section the reader is actually reading. The 14% hover wash gets
+              away with it by being faint and momentary; a permanent fill would
+              not. `tests/spine-here.test.ts` asserts this order, because jsdom
+              cannot see paint and a screenshot only shows it during a search.
+
+            `aria-hidden`, and deliberately: the button underneath already
+            carries `aria-current="location"`, which is the standard way to say
+            *this one, of these, is where you are*. This element is the same
+            fact made visible, and saying it twice is worse than saying it
+            once. Nothing here should announce on a section crossing — that
+            fires throughout an ordinary scroll. */}
+        {hereRing && (
+          <div
+            className="spine-here"
+            aria-hidden="true"
+            /* **`--here-top` rather than `top`.** The 2px floor in the
+               stylesheet grows the box *downward* from a fixed `top`, and the
+               final L2 of an article starts at very nearly 100% — so the floor
+               grows straight out of `.spine { overflow: hidden }` and is
+               clipped away, dropping the *you are here* exactly at the end of
+               the piece. Not hypothetical: two of the thirteen trees in
+               `data/` (`scaling-hypothesis`, `fowler-phrenology`) end in a
+               section worth 0.12% of the article, against the ~0.22% that two
+               pixels of a rail cost. GPT Sol found it, 2026-09-06.
+
+               So the top is clamped inward, and the clamp has to live in CSS:
+               written here as `calc(min(<top>, 100% - 2px))` it would be
+               parsed by jsdom's CSSOM into `calc(min(3000% * , - 2px))`, and
+               every assertion in `tests/spine-here.test.ts` would read that
+               mangled string and agree with itself while the browser did
+               something else. A custom property is stored verbatim, so the
+               number stays checkable in jsdom and the clamp sits in the
+               stylesheet beside the floor it corrects. */
+            style={
+              {
+                "--here-top": pct(hereRing.top),
+                height: pct(hereRing.height),
+              } as CSSProperties
+            }
+          />
+        )}
 
         {/* Subdivision is always drawn, so the shape of the article is visible
             even where there is no room for a word of it. */}

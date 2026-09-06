@@ -76,7 +76,12 @@
   right: 0;
   overflow: hidden;
   border-top: 1px solid var(--rule);
-  transition: background 0.15s;
+  /* No `transition: background` here any more. It animated the
+     `--highlight-wash` that `.active` used to set, and that background went on
+     2026-09-06 — leaving a transition on a property nothing changes, which
+     reads like an intended animation and is dead. The tint that *does* change
+     lives on `::before`'s opacity; if the band should ever fade rather than
+     cut, animate that instead. GPT Sol, 2026-09-06. */
 }
 
 /* The part's tint bar, the full width and height of its band — the rail reads
@@ -90,10 +95,26 @@
   opacity: 0.3;
 }
 
-.spine-part.active {
-  background: var(--highlight-wash);
-}
-.spine-part.active::before { opacity: 0.75; }
+/* **Quieter than it was, and that is the fix rather than a side-effect of it.**
+   This was `background: var(--highlight-wash)` behind a 0.75 tint, and on an
+   article whose one part holds 95% of the rows that made the whole rail orange
+   while saying nothing — Greg, 2026-09-06. Three of the thirteen trees in
+   `data/` have a part over half the document, so it is a shape, not a Nagel
+   quirk.
+
+   The wash is gone and the tint drops to 0.45, so that `.spine-here` below can
+   be the brightest *fill* on the rail and the part reads as the field it sits
+   in. Turning it down uniformly rather than suppressing it above some size: a
+   threshold would give the rail two behaviours a reader has to learn — *why is
+   the part not lit on this article?* — and a number to argue about, where this
+   degrades smoothly and still reads on a nine-part piece.
+
+   What the brand orange bought here it now buys nowhere on the rail except
+   hover and focus: `--highlight` means *where you are looking*, which is the
+   viewport band's edges. The **nested fills** mean *which part* and *which
+   section within it* — two strengths of one tint, which is why neither of them
+   is the brand colour any more. */
+.spine-part.active::before { opacity: 0.45; }
 
 /* The apparatus: **dimmed, at its true proportional height.** The band is the
    same size it would be as a part — the rail must not lie about pixels — and
@@ -103,6 +124,43 @@
    docs/plans/260828o-footnotes.md § What the reader sees. */
 .spine-part.supplement::before { opacity: 0.1; }
 .spine-part.supplement.active::before { opacity: 0.4; }
+
+/* **The section you are in.** The concentric inner ring: the part is a quiet
+   field, this is the bright fill inside it, and the viewport band's edges are
+   the exact pixels. Three layers, three channels, none mistakable for another.
+
+   **Opacity of one token rather than a step down the `--depth-N` ladder**,
+   which would have been the obvious move and is a trap on this page: that ramp
+   runs `oklch(0.82 …)` to `oklch(0.44 …)`, so it gets *darker* with depth, and
+   a "deeper" ring painted from it would recede into a near-black page instead
+   of advancing out of it. Same class of mistake as colour-scales.md § *The page
+   is near-black, so every published scale is upside down*.
+
+   `left: 2px` is the L2 tick's own inset, so the ring reads as nested inside
+   the part rather than as a second band stacked on it.
+
+   The `min-height` is the same admission the hit (4px), the mark (3px) and the
+   viewport band (2px) all make: everything in this track is a percentage of the
+   document's height, and a short section in a long article rounds to nothing.
+   Two pixels of lie about geometry, against a *you are here* that disappears
+   exactly when the reader most needs it.
+
+   **The floor needs the clamp above it to be worth anything at the end.** It
+   grows the box downward from `top`, and the article's last section starts at
+   nearly 100%, so without `min()` those two pixels grow out of the rail's
+   `overflow: hidden` and the ring vanishes on exactly the articles that have a
+   one-line colophon or acknowledgement to end on. `--here-top` is set inline;
+   Spine.tsx says why it is a custom property rather than a `calc()` there. */
+.spine-here {
+  position: absolute;
+  top: min(var(--here-top), 100% - 2px);
+  left: 2px;
+  right: 0;
+  min-height: 2px;
+  pointer-events: none;
+  background: var(--depth-1);
+  opacity: 0.8;
+}
 
 /* L2 as hairlines: the subdivision of the article stays visible even where
    there is no room for a word of it. */

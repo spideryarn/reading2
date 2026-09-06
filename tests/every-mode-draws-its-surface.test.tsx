@@ -45,9 +45,14 @@
  * A `{ where: string | null; says: string | null }` permits exactly the omission
  * this file exists to catch: `{ where: ".mode-band.research", says: null }`
  * passes over an empty band shell, and `{ where: null, says: null }` passes over
- * a controller nobody wrote. So both fields are required and non-empty, and the
- * two modes that genuinely draw no band are named in `NO_BAND_MODES` — a list
- * somebody has to edit on purpose, rather than a row they can leave out.
+ * a controller nobody wrote. So both fields are required and non-empty.
+ *
+ * A mode that genuinely draws no band says so in the same table, as a
+ * `kind: "none"` row that must carry **the control**: what is on screen
+ * instead. There was a `NO_BAND_MODES` list here until GPT Sol's F21, and it
+ * excused a mode from the table and skipped it at run time from one reading —
+ * so a mode added to it was checked by nothing. `DRAWS` is total over `Mode`
+ * now, and there is no way to be absent from it.
  *
  * And `says` is a **body literal unique to this file's fixture** — a term
  * invented here, a sentence written here — never a heading, a status line, a
@@ -73,6 +78,8 @@ import type {
   Article,
   ChatThread,
   Debate,
+  DebateCounts,
+  DebateLosses,
   Glossary,
   Ideas,
   Quotes,
@@ -217,6 +224,11 @@ const OWNED: Article = {
   blocks: BLOCKS,
   tree: TREE,
   assets: undefined,
+  /* Stage 5's labels are done, so the tree renders with its headings rather
+     than the run of blank leaf cells a `pending` article would draw. Nothing
+     here asserts on it; it is `ready` so that no mode's surface is missing for
+     a reason this file is not about. */
+  navLabelStatus: "ready",
   meta: { slug: SLUG, title: "A piece", url: "https://example.com/a" },
 };
 
@@ -331,16 +343,17 @@ const TIMELINE: Timeline = {
   elapsedMs: 1,
 };
 
-const NO_LOSSES = {
+const NO_LOSSES: DebateLosses = {
   uncited: 0,
   selfSource: 0,
   unverifiedSource: 0,
   directnessUnverified: 0,
+  sourceIsCopy: 0,
   claimNotInBlock: 0,
   unknownBlockId: 0,
   malformed: 0,
 };
-const COUNTS = {
+const COUNTS: DebateCounts = {
   returnedSources: 1,
   reportedRows: 1,
   keptRows: 1,
@@ -366,6 +379,10 @@ const DEBATE: Debate = {
         valence: "negative",
         applies: DEBATE_APPLIES,
         articleReferenceQuote: "The instrument was built",
+        /* The witness is the same string as `articleReferenceQuote` — that is
+           how src/debate.ts builds a `named` signal, and a fixture that split
+           them would describe a row the pipeline cannot produce. */
+        identifies: [{ kind: "named", by: "title", witness: "The instrument was built" }],
       },
     ],
     counts: COUNTS,
@@ -531,15 +548,18 @@ const FREE_MUTATIONS: readonly { what: RegExp; why: string }[] = [
 ];
 
 /**
- * **What this scenario bought outside the job queue**, sorted and deduplicated.
+ * **What this scenario bought outside the job queue**, sorted and **counted**.
  *
- * A set rather than a list, because `<StrictMode>` invokes every effect twice
- * and the question here is *which* endpoints a press reached, not how many
- * times a double-invoked effect asked for the same one. `POST /api/jobs` is
- * left out because it is asserted in full, with its steps, through `posts`.
+ * A list rather than a set. It was a set until GPT Sol's F22, on the grounds
+ * that `<StrictMode>` invokes every effect twice — but that erased the
+ * difference between a press that buys one request and a press that buys the
+ * same one twice, and the second is money a reader really pays. The harness
+ * artefact is dealt with where it is caused, in `open()`'s `strict` flag;
+ * see its note for the measurement. `POST /api/jobs` is left out because it is
+ * asserted in full, with its steps, through `posts`.
  */
 function paidPosts(): string[] {
-  return [...new Set(mutations)]
+  return [...mutations]
     .filter((m) => m !== "POST /api/jobs")
     .filter((m) => !FREE_MUTATIONS.some((free) => free.what.test(m)))
     .sort();
@@ -686,16 +706,32 @@ async function settle(turns = 6): Promise<void> {
 }
 
 /** The whole app at the owner's article, exactly as `main.tsx` mounts it. */
-async function open(search = ""): Promise<void> {
+/**
+ * **`strict` is off for phase A, and that is a measurement decision.**
+ *
+ * `<StrictMode>` invokes every effect twice, so an effect-driven request
+ * appears twice in `mutations` however many times the app really made it. The
+ * money contract cannot count under that, and the first version of this file
+ * answered by deduplicating — which made a mode that genuinely posted twice
+ * indistinguishable from one that posted once (GPT Sol, F22). Discarding
+ * cardinality to survive a harness artefact is the wrong trade: an accidental
+ * duplicate inside one effect is money a reader actually pays.
+ *
+ * So the artefact is removed instead of its symptom. **Measured rather than
+ * assumed**: with cardinality kept and StrictMode on, exactly one endpoint
+ * doubled (`POST /api/similar/:slug`, Force's, from a mount effect); with
+ * StrictMode off, all 28 tests pass with exact counts. That is the replay and
+ * not a real double-spend — so there is no money bug here, and phase A can now
+ * see one if it appears.
+ *
+ * Phase B keeps StrictMode, because it asserts what was *drawn* rather than
+ * what was spent, and the double invocation is worth having there.
+ */
+async function open(search = "", { strict = true }: { strict?: boolean } = {}): Promise<void> {
   history.replaceState(null, "", `/read/${SLUG}${search}`);
+  const tree = createElement(NuqsAdapter, null, createElement(App, null));
   await act(async () => {
-    root.render(
-      createElement(
-        StrictMode,
-        null,
-        createElement(NuqsAdapter, null, createElement(App, null)),
-      ),
-    );
+    root.render(strict ? createElement(StrictMode, null, tree) : tree);
   });
   await act(async () => {
     for (const fn of [...authListeners]) fn("SIGNED_IN", { user: OWNER });
@@ -913,7 +949,7 @@ describe("phase A — what a press on each mode's real bar button spends", () =>
              anything on an article that has one. See `sketchDrawn`. */
           sketchDrawn = want.steps.includes("illustrated");
 
-          await open(want.search);
+          await open(want.search, { strict: false });
           /* The positive control: the page is a working reader before the
              press, so "no POST" below is a settled page rather than an empty
              one. */
@@ -953,71 +989,132 @@ describe("phase A — what a press on each mode's real bar button spends", () =>
    Artefacts populated. What each mode's controller actually drew. */
 
 /**
- * **The two modes that draw no band**, and they are a list somebody edits on
- * purpose rather than a row anybody can omit. A fifteenth bandless mode has to
- * be added here deliberately.
- */
-const NO_BAND_MODES = ["plain", "hierarchy"] as const;
-
-/**
  * **What the owner's own controller must have on screen**, on this file's
- * populated fixture.
+ * populated fixture — one row for **every** mode, with no exclusions.
  *
- * Neither field may be null or empty:
+ * This was keyed `Exclude<Mode, (typeof NO_BAND_MODES)[number]>` off a
+ * `NO_BAND_MODES` list until GPT Sol's F21, and that was the very mistake this
+ * file exists to prevent, committed one level up. The list was read twice: once
+ * to *excuse* a mode from having a row here, and once to *skip* it at run time.
+ * So a fifteenth mode added to it needed no expectation, was skipped by phase
+ * B, and — because the two absence tests were hand-written separately — got no
+ * absence test either. A mode could be added, wired up wrongly, and pass
+ * everything. Deriving the requirement and the skip from one list is exactly a
+ * test that agrees with an omission.
  *
- *  - `where` — the band, as a selector. A nullable one would let a mode that
- *    draws no band at all pass by saying so.
+ * The union has no such door. Every mode is named, and **"draws no band" is a
+ * decision written down with its own positive control** rather than an absence:
+ *
+ *  - `where` — the band, as a selector. Never nullable, or a mode that drew
+ *    nothing could pass by saying so.
  *  - `says` — one string that must be readable **inside that band**, and it is
  *    a body literal invented in this file: not a heading, not a status line, not
  *    a button label, and never a sentence the empty state could draw.
+ *  - `control` — for a bandless mode, what must be on screen *instead*. Not
+ *    optional, because "no band" is also what a page that failed to load draws.
  */
-const DRAWS: Record<
-  Exclude<Mode, (typeof NO_BAND_MODES)[number]>,
-  { where: string; says: string }
-> = {
+type Draws =
+  | { kind: "band"; where: string; says: string }
+  | {
+      kind: "none";
+      why: string;
+      /* Spelled out rather than built from the mode, because Hierarchy needs
+         `&cols=1` — see its note below. */
+      query: string;
+      control: { where: string; says: string };
+    };
+
+const DRAWS: Record<Mode, Draws> = {
+  /**
+   * **Scoped to the gist cells themselves**, and that scope is the whole of the
+   * positive control. Read from the page as a whole, the root's own gist is in
+   * the masthead in *every* mode — so a page-wide assertion would be satisfied
+   * by a Hierarchy that drew no columns at all. `COLUMN_GIST` is the child
+   * node's, which only a rendered column can be showing.
+   *
+   * **`?cols=1` is spelled out**, and it is not a cheat: an absent `cols` means
+   * *whatever fits* (App.tsx), and nothing fits in jsdom, where every element
+   * measures zero. So a link that names the column is the only way to reach the
+   * surface a reader with a window gets by default.
+   */
+  hierarchy: {
+    kind: "none",
+    why: "it draws the gist columns beside the prose, not a band",
+    query: "?mode=hierarchy&cols=1",
+    control: { where: ".gist-text", says: COLUMN_GIST },
+  },
+  /* The article, and nothing over it. */
+  plain: {
+    kind: "none",
+    why: "it leaves the article alone",
+    query: "?mode=plain",
+    control: { where: ".prose", says: PARAGRAPH },
+  },
   /* The child node's title, from the tree in the payload — the one row this
      fixture's structure can produce. Deliberately **not** a gist: gists are in
      the columns beside the prose as well, so a gist would pass over an empty
      band the moment the columns happened to be open. */
-  outline: { where: ".mode-band.outln", says: OUTLINE_ROW },
+  outline: { kind: "band", where: ".mode-band.outln", says: OUTLINE_ROW },
   /* The root's own gist, drawn as the band rather than as a column. */
-  summary: { where: ".mode-band.summ", says: ROOT_GIST },
+  summary: { kind: "band", where: ".mode-band.summ", says: ROOT_GIST },
   /* An entry's name, which is what a closed row shows — a canary the panel
      cannot draw without having drawn the list. */
-  glossary: { where: ".mode-band.gloss", says: GLOSSARY_TERM },
+  glossary: { kind: "band", where: ".mode-band.gloss", says: GLOSSARY_TERM },
   /* The idea's **name** rather than its statement, for the same reason. */
-  ideas: { where: ".mode-band.ideas", says: IDEA_NAME },
+  ideas: { kind: "band", where: ".mode-band.ideas", says: IDEA_NAME },
   /* **The line itself, and it had to be**: the panel draws the quoted words and
      not the model's reason for choosing them. See `QUOTE_LINE`. */
-  quotes: { where: ".mode-band.quotes", says: QUOTE_LINE },
+  quotes: { kind: "band", where: ".mode-band.quotes", says: QUOTE_LINE },
   /* The event's label. The dating phrase beside it is drawn too, but a label is
      the row's own content where a phrase could come from a formatter. */
-  timeline: { where: ".mode-band.timeline", says: TIMELINE_LABEL },
+  timeline: { kind: "band", where: ".mode-band.timeline", says: TIMELINE_LABEL },
   /* What the found page is said to bear on — a row's body, not the group
      heading above it, which is a constant sentence. */
-  debate: { where: ".mode-band.dbt", says: DEBATE_APPLIES },
+  debate: { kind: "band", where: ".mode-band.dbt", says: DEBATE_APPLIES },
   /* A node **inside** the drawing, not the drawing's title: a title is drawn
      from the artefact's header and survives a scene that painted nothing. */
-  diagram: { where: ".mode-band.diag", says: SKETCH_NODE },
+  diagram: { kind: "band", where: ".mode-band.diag", says: SKETCH_NODE },
   /* The owner's own saved question. Asserting the band's *"Search"* heading
      would pass over an empty `<aside>`. */
-  search: { where: ".mode-band.srch", says: SEARCH_CRITERION },
+  search: { kind: "band", where: ".mode-band.srch", says: SEARCH_CRITERION },
   /* The referee's own criterion, off the saved list — and the band opens on
      Criteria, so this is the sub-mode a press actually lands on. */
-  referee: { where: ".mode-band.referee", says: CRITERION_TEXT },
+  referee: { kind: "band", where: ".mode-band.referee", says: CRITERION_TEXT },
   /* **The two conversation bands share a component and a class**, so the
      negation is what keeps these two rows apart: Remember's band carries
      `remember` as well as `chat`, and without `:not()` a Remember panel drawn
      in Chat's place would satisfy this row. */
-  chat: { where: ".mode-band.chat:not(.remember)", says: CHAT_TITLE },
+  chat: { kind: "band", where: ".mode-band.chat:not(.remember)", says: CHAT_TITLE },
   /* Recall, which is the half Remember opens on. */
-  remember: { where: ".mode-band.remember", says: REMEMBER_TITLE },
+  remember: { kind: "band", where: ".mode-band.remember", says: REMEMBER_TITLE },
 };
 
 describe("phase B — what each mode's real controller drew", () => {
   for (const mode of MODES) {
-    if ((NO_BAND_MODES as readonly string[]).includes(mode)) continue;
-    const row = DRAWS[mode as Exclude<Mode, (typeof NO_BAND_MODES)[number]>];
+    const row = DRAWS[mode];
+
+    if (row.kind === "none") {
+      it(
+        `${mode}: draws no band, because ${row.why}`,
+        async () => {
+          fixtures = "populated";
+          await open(row.query);
+
+          /* The control first, and it is the whole of the test. "No band" is
+             also what a page that failed to load draws, so the absence below
+             means nothing until something only this mode puts on screen has
+             been found. */
+          expect(row.control.says.trim(), `${mode}: the row named no control`).not.toBe("");
+          const shown = [...host.querySelectorAll(row.control.where)].map(readable).join("\n");
+          expect(shown, `${mode}: ${row.control.where} drew nothing`).toContain(row.control.says);
+
+          expect(host.querySelector(".mode-band"), `${mode} opened a band`).toBeNull();
+        },
+        PHASE_MS,
+      );
+      continue;
+    }
+
     it(
       `${mode}: draws its own body in ${row.where}`,
       async () => {
@@ -1039,38 +1136,8 @@ describe("phase B — what each mode's real controller drew", () => {
 
 });
 
-/* ============================================ the two that draw no band ====
-
-   Checked for their *deliberate absence*, and each with a positive control
-   beside it — otherwise "no band" is satisfied by a page that failed to load. */
-
-describe("the modes that deliberately draw no band", () => {
-  it("plain leaves the article readable and opens nothing", async () => {
-    fixtures = "populated";
-    await open("?mode=plain");
-
-    expect(readable(host), "the prose").toContain(PARAGRAPH);
-    expect(host.querySelector(".mode-band"), "plain opened a band").toBeNull();
-  });
-
-  /**
-   * **Scoped to the gist cells themselves**, and that scope is the whole of the
-   * positive control. Read from the page as a whole, the root's own gist is in
-   * the masthead in *every* mode — so a page-wide assertion would be satisfied
-   * by a Hierarchy that drew no columns at all. `COLUMN_GIST` is the child
-   * node's, which only a rendered column can be showing.
-   *
-   * **`?cols=1` is spelled out**, and it is not a cheat: an absent `cols` means
-   * *whatever fits* (App.tsx), and nothing fits in jsdom, where every element
-   * measures zero. So a link that names the column is the only way to reach the
-   * surface a reader with a window gets by default.
-   */
-  it("hierarchy draws the gist columns and opens nothing", async () => {
-    fixtures = "populated";
-    await open("?mode=hierarchy&cols=1");
-
-    const gists = [...host.querySelectorAll(".gist-text")].map(readable).join("\n");
-    expect(gists, "the gist columns").toContain(COLUMN_GIST);
-    expect(host.querySelector(".mode-band"), "hierarchy opened a band").toBeNull();
-  });
-});
+/* The two modes that draw no band used to be checked here, in tests written by
+   hand beside the table rather than generated from it. They are rows in `DRAWS`
+   now — GPT Sol's F21. Two hand-written tests cover the two modes somebody
+   thought of; a `kind: "none"` row is *required of every mode that claims to
+   draw nothing*, and carries the positive control with it. */

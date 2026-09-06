@@ -6,11 +6,28 @@ filesystem store are gone.** What is left is two stages, and neither is ordinary
 - **H is optional and currently declined** — tightening contracts the filesystem store had been
   weakening. It is the only stage of the nine with no failure behind it; every other one had a bug,
   an outage or a flag that lied. Greg has said he was "not sure about H and I".
-- **I is blocked on Greg, and on nobody else** — it cannot start until `SPIDERYARN_STORE` is removed
-  from Vercel Preview and Production, because deleting the tombstone while a deployment still asks
-  for `files` would silently ignore what the operator asked. **The signal is an absence**: while the
-  variable is set, `npm run deploy` prints a *"still to remove"* line; when it stops appearing, the
-  gate is open. Nobody has to remember, and no agent on this box needs a Vercel credential.
+- **I is unblocked as of 2026-09-06 16:35.** Greg ran `vercel env rm SPIDERYARN_STORE production`
+  and `… preview`; both returned *Removed Environment Variable*. It had been blocked on that and on
+  nothing else, because deleting the tombstone while a deployment still asks for `files` would
+  silently ignore what the operator asked.
+
+  **The sensor kept firing after the removal, and that was not a fault.** A deployment's
+  environment is baked at build time, so `/api/health` on the deployment built at 09:49 that day
+  still reported `retired: [SPIDERYARN_STORE]` — accurately, about what *it* was built with.
+
+  **This header said, for about an hour, that the confirmation stage I needed was "the first
+  production deploy after the removal coming back with no `retired` field". That was circular and
+  is struck out.** GPT Sol's review of stage I found it (F2): the next production deploy contains
+  stage I, which deletes the field unconditionally, so its absence would have proved nothing
+  whatever about the deployed environment — a check that reports success no matter what the world
+  is doing, which is [silent-success.md](../reusable/silent-success.md) wearing this plan's own
+  colours. It is worth keeping the mistake visible, because it was made *by* the person who had
+  just finished writing the sensor and understood exactly how it worked.
+
+  **The evidence is the removal itself**: `vercel env rm SPIDERYARN_STORE production` and
+  `… preview`, both returning *Removed Environment Variable*, quoted by Greg into the session at
+  16:35 on 2026-09-06. The sensor's job was to say *when to look*, and it did that. It was never
+  able to confirm its own retirement, and nothing that deletes itself in the same commit can.
 
 **Do not re-derive a stage count from this file.** An earlier version of this header said "seven of
 thirteen stages are done, and stage B is started" and was two days and five stages out of date —
@@ -30,7 +47,7 @@ three later stages consume it**:
 A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
   → T-D (activation) ✅ → T-E (pollution) ✅
   → B ✅ → B2 ✅ → B3 ✅ → C ✅ → D ✅ → D′ ✅ → E ✅ → F ✅ (hinge) → G ✅
-  → H (optional, declined) → I (blocked on Greg's Vercel change)
+  → H (optional, declined) → I ✅ (2026-09-06) — the plan is finished
 ```
 
 **`C → B` became `B → C` on 2026-09-04**, and this line is the only place the order lives, so
@@ -190,7 +207,7 @@ the earlier pass missed by scoping the grep to `src/`:
 
 **It is the single biggest source of silent success in this repo**, which is this codebase's chronic
 failure class ([silent-success.md](../reusable/silent-success.md)). `SPIDERYARN_STORE` unset means
-`files` ([`src/store/live.ts`](../../src/store/live.ts)), so every test, every fixture and every
+`files` (`src/store/live.ts`), so every test, every fixture and every
 ungated route suite exercises **the configuration that is not deployed**. Not hypothetical:
 
 - **Claims shipped filesystem-only and answered 501 in production for four hours**, having passed
@@ -4541,7 +4558,7 @@ is 28, of which one is a line of prose). The plan's estimate was 19; it counted 
 counts the same thing, so the estimate was simply low. `STORE` and `StoreName` are gone with them, and
 so is `storeFromEnv`.
 
-**The tombstone is `refuseTheStoreFlag` in [`src/store/live.ts`](../../src/store/live.ts)**, called
+**The tombstone is `refuseTheStoreFlag` in `src/store/live.ts`**, called
 once at module load, returning `void`: unset, `""` and `postgres` pass in silence; `files` and every
 other value throw *"the filesystem store was removed on 2026-09-05; there is one store; unset this"*.
 `tests/store-selection.test.ts` asserts the **date** rather than the wording, because the date is the
@@ -4594,7 +4611,7 @@ imported it for its *value*. Stage G should ask, of every module it stops refere
 module did anything at load time.
 
 **The regression matters more than the fix.**
-[`tests/store-flag-refused-at-boot.test.ts`](../../tests/store-flag-refused-at-boot.test.ts) imports
+`tests/store-flag-refused-at-boot.test.ts` (deleted by stage I, 2026-09-06) imports
 **the module a server imports, in a child process, and requires the child to die**, with the sentence
 and the date in its output and *without* the "serving article reads" line — because printing that
 means the refusal came too late to be one. It was **watched red before the fix**, and it carries a
@@ -5296,7 +5313,7 @@ simply keeping the old one alive with exceptions. Every entry in `SEAM_ASYMMETRI
 missing *files* side, so nothing that passed before fails now; and the door the map left open —
 declaring away a missing **Postgres** side, the direction its own type called *"a production outage
 with a date on it"* — is shut. `SEAM_ASYMMETRIES` and its type are deleted from
-[`src/store/live.ts`](../../src/store/live.ts), with a note in their place saying why they are not
+`src/store/live.ts`, with a note in their place saying why they are not
 coming back. The `notMigrated` check survives untouched: a `pgFooStore` whose every method refuses
 is the same 501 by a longer route.
 
@@ -5719,15 +5736,157 @@ identifier is gone; those cannot both be true in one stage.
 **What tells us I can start is the sensor stage F added, not a calendar.** While the variable is
 still set on a deployment, `/api/health` carries a `retired` field naming it and `npm run deploy`
 prints a *"still to remove"* line on the machine that holds the Vercel credential (§ *The sensor that
-retires the tombstone*). **When that line stops appearing, the gate is open** — the field is omitted
-rather than emptied precisely so its absence is the answer, and no agent on this box needs a Vercel
-credential to read it. Stage I then deletes `RETIRED` and `retiredNotes` along with the tombstone,
+retires the tombstone*). That line is what tells somebody **to go and look**, and no agent on this
+box needs a Vercel credential to read it.
+
+**It is not what confirms the removal, and this section said it was.** The field's disappearance
+cannot be the gate: it is baked at build time, so it can only go quiet after a redeploy, and that
+redeploy carries stage I, which deletes the field. The gate is the `vercel env rm` results
+themselves — see the header, and F2 of the round-one review. Stage I then deletes `RETIRED` and `retiredNotes` along with the tombstone,
 and the guard's exemption for `src/vercel-health.ts` with them; the staleness case in
 `one-store-only.test.ts` reddens if an exemption is left behind, so that cleanup cannot be forgotten
 quietly.
 
 Final grep must cover `src/`, `tests/`, `scripts/`, **`evals/`, `vite.config.ts`, `package.json`,
 `.env.example` and `AGENTS.md`** — not only the source paths.
+
+#### I landed — 2026-09-06
+
+Commit `219c4bc1`. 44 files, 1297 insertions, 1274 deletions; three files deleted
+(`src/store/live.ts`, `tests/store-selection.test.ts`, `tests/store-flag-refused-at-boot.test.ts`).
+
+**What went.** The tombstone validator and its two suites; the sensor stage F added — `RETIRED`,
+`retiredStillSet()` and the `retired` field in `src/vercel-health.ts`, `retiredNotes()` in
+`scripts/deploy-checks.ts`, and the *"still to remove"* line in `scripts/deploy.ts`; the
+`src/vercel-health.ts` exemption in the guard's allowlist, which is now empty; the exported
+`inheritedEnv()` in `src/env.ts`, whose only caller was the tombstone; and a whole reporting
+dimension in `scripts/store-migration-candidates.ts` — `FLAG_LEAF`, `flagReaders`, the
+`flag-selection-only` bucket, `livePath`, `reachingFlagLeaf` — which the deleted file left
+permanently zero while still naming it.
+
+**`src/store/live.ts` went too, which the first draft of the stage did not plan.** It was to survive
+holding `notMigratedError` / `notMigrated`, the 501 for a write with no Postgres implementation. GPT
+Sol's answer to the question was to delete it: both exports had zero callers, every refusal it stood
+behind now has a Postgres implementation, and an orphan whose header calls itself *"the one way to
+refuse"* misleads more than an absence does. Verified by grep before deleting — every remaining
+mention of the name in the tree is prose.
+
+##### The one real regression, and it was invisible to the whole suite
+
+**Deleting the tombstone deleted an import-time `.env.local` load that nothing had noticed was
+load-bearing.** `src/db/client.ts` opened with `import "../store/live.js"`, and that module called
+`loadEnvLocal()` as it evaluated. `src/store/index.ts` checks Supabase credentials in its **module
+body**, and ESM evaluates every static import before the importing module's own statements — so an
+entry point that imports the store statically and calls `loadEnvLocal()` afterwards is calling it
+too late. `scripts/live-spike.ts`, `evals/deepen/run.ts` and `evals/cost/interactions.ts` all died
+at boot with *"the store is Postgres, but there is no Supabase Storage configured"*.
+
+GPT Sol found it and reproduced it; it was then reproduced here independently before anything was
+touched. **The fix is one statement at module scope in `src/db/client.ts`** — `loadEnvLocal();` —
+and the reasoning for putting it there rather than beside the check that needs it is the same
+reasoning that put the tombstone's import there during stage F: `src/jobs.ts`,
+`src/upload-records.ts` and `src/store/ai-calls.ts` all reach Postgres without crossing the wiring
+hub, so the hub is one door of several and `src/db/client.ts` is the boundary all of them cross.
+**The rule outlived the thing it was invented for**: a side-effecting import belongs at the narrowest
+boundary everything must cross, not at the most obvious front door — a front door is whichever door
+you happened to walk through.
+
+**Why no test saw it.** The unit lane sets `VITEST`, and `VITEST` is exactly what makes
+`src/store/index.ts` skip the credential check. The lane that would run the guard is the lane that
+cannot execute the failure. So the guard added in `tests/one-store-only.test.ts` is a **source-shape
+assertion**: `src/db/client.ts` must contain `loadEnvLocal();` at column zero — anchored there
+deliberately, because the lazy call inside `databaseUrl()` is indented and runs far too late to
+help. Both new assertions were mutation-tested: removing the module-scope call turned the guard red
+*and* reproduced the real boot failure, and planting a bogus allowlist entry turned the emptiness
+assertion red.
+
+##### The confirmation criterion this document had was circular
+
+**This is worth recording as a mistake rather than a correction.** The header said for about an hour
+that what would confirm the removal was *"the first production deploy after the removal coming back
+with no `retired` field"*. The next production deploy contains stage I, which deletes the field
+unconditionally — so its absence would have proved nothing whatever about the deployed environment.
+A check that reports success no matter what the world is doing is
+[silent-success.md](../reusable/silent-success.md) wearing this plan's own colours, and it was
+written by the person who had just finished building the sensor and understood exactly how it
+worked. GPT Sol caught it (F2). The evidence is the two `vercel env rm` results themselves. **The
+sensor's job was to say when to look, and it did that; nothing that deletes itself in the same
+commit can confirm its own retirement.**
+
+##### `appears` was the wrong word, and the criterion now says `read`
+
+The stage's own completion test said the identifier *appears* nowhere in the searched paths. It
+appears in perhaps seventy comments that correctly explain, in the past tense, what it used to
+decide, and deleting those would be rewriting history to satisfy a grep. **What must not exist is an
+executable read**, and `tests/one-store-only.test.ts` is what asserts it, over four reader shapes
+with an allowlist that is now empty. Sol's F3 is what forced the distinction.
+
+##### Stage I's review — two rounds, both refused, five findings
+
+Prompts and verdicts:
+[round one](260903f-stage-i-review-prompt.md) / [its answer](260903f-stage-i-review-sol.md),
+[round two](260903f-stage-i-round-two-review-prompt.md) /
+[its answer](260903f-stage-i-round-two-review-sol.md).
+
+| | | grade | outcome |
+|---|---|---|---|
+| F1 | tombstone deletion removed import-time `.env.local` loading | P1 | fixed, guarded twice, mutation-tested |
+| F2 | the plan's confirmation criterion was circular | P2 | struck out in three places — the header, § I, and `deployment.md` |
+| F3 | present-tense claims about the tombstone are now false | P3 | swept, ~14 sites |
+| F4 | deleting `src/store/live.ts` broke ten documentation links and reddened `npm test` | P1 | unlinked; `doc-links` back to 14/14 |
+| F5 | the guard does not scan `.env.example` or `AGENTS.md`, which the plan claims it does | P2 | both added to the collector |
+
+**Both rounds refused, and the second refusal is the one worth keeping.** Round one found the
+regression; round two found that the change fixing it had reddened `npm test` in a way neither the
+author nor the implementer had run. F4 was not subtle — a whole test failing outright — and it was
+still missed, because the work had been checked by running the tests that were *about* it. **The
+gate is the suite, not the suite's relevant-looking subset.**
+
+**Sol's two answers to the questions put to it**, both taken:
+
+- *Keep the narrow `notMigrated` tripwire; do not generalise it.* An "every method only throws" AST
+  rule would be brittle while implying broader semantic coverage than it can deliver.
+- *A child-process outcome test is possible and preferable* to the source-shape assertion guarding
+  F1, and **column zero does not prove module scope**. Both were built.
+
+##### What now guards F1, and the thing that was measured rather than assumed
+
+Two checks, and neither replaces the other. `tests/one-store-only.test.ts` parses
+`src/db/client.ts` and asserts `loadEnvLocal()` is a statement of `Program.body` — a claim about the
+source, which fails fast and names the line. It carries its own discriminator control: there is a
+*second* `loadEnvLocal()` inside `databaseUrl()`, so a predicate that could not tell scope apart
+would count two and pass with the module-scope line deleted.
+
+[`tests/store-boots-without-inherited-credentials.test.ts`](../../tests/store-boots-without-inherited-credentials.test.ts)
+is the outcome: a `tsx` child with `NODE_ENV=production`, no `VITEST`, and the Supabase credentials
+deleted from its environment, which must import the store and print a marker. **With a negative
+control that must die** — otherwise a boot check quietly switched off looks exactly like a working
+fix, which is this stage's own subject arriving a second time.
+
+**And then a control on that control, because the obvious way to withhold a credential does not
+work.** The first attempt set the three names to `""`, and the child booted anyway.
+`applyEnvFile` skips a name only when its current value differs from the snapshot `INHERITED` took
+at its own module load — and a child's snapshot is taken *after* it inherits, so an empty string it
+was born with reads as *"the shell said so"* and `.env.local` wins. The negative control uses
+`SPIDERYARN_ENV_PINNED` instead, which is a string in the environment rather than a comparison
+against a snapshot and therefore survives `spawn`. The empty-string run is kept as a fourth case,
+so that if the precedence rule ever changes it is *that* which goes red, rather than the negative
+control silently starting to pass for the wrong reason.
+
+**One cost, recorded because it is a change to the landing contract**: this is the only test in the
+repo that requires `.env.local` to exist on disk, and it fails loudly rather than skipping when it
+does not. That is deliberate — a skip here is a green tick over the thing the test exists to prove —
+but it means `npm test` now needs the file on any box, not just a database.
+
+##### One check in the tree is now a tripwire rather than a guard
+
+`callsNotMigrated` in `tests/store-seams-have-two-implementations.test.ts` matches a call to an
+identifier literally spelled `notMigrated` inside a `pg*Store` initializer. Nothing defines that name
+any more, so it cannot fire on today's source; it can only fire if somebody revives the helper *and*
+keeps the spelling. It is kept, because that is a real if narrow scenario and the file's own header
+points at git history for the shape — but the file now says so in as many words, so it is never
+again read as evidence that no seam refuses. **The load-bearing case is its neighbour**,
+`"has a Postgres implementation for every seam"`, which is structural rather than name-based.
 
 ## Making the database required, without the cure being the disease
 
@@ -5816,7 +5975,20 @@ outstanding here in error.
 
 ## What "done" looks like
 
-`SPIDERYARN_STORE` appears nowhere in `src/`, `tests/`, `scripts/`, `evals/`, `vite.config.ts`,
-`package.json`, `.env.example` or `AGENTS.md`; `grep -rn 'STORE ===' src/ vite.config.ts` is empty;
+`SPIDERYARN_STORE` is **read** nowhere in `src/`, `tests/`, `scripts/`, `evals/`,
+`vite.config.ts`, `package.json`, `.env.example` or `AGENTS.md` — `tests/one-store-only.test.ts`
+is what asserts it, over four reader shapes with an empty allowlist. **Read, not *appears***, and
+that was sharpened on 2026-09-06 after Sol's F3 pointed out the two are not the same claim: the
+name still appears in perhaps seventy comments that correctly explain, in the past tense, what it
+used to decide. Deleting those would be rewriting history to satisfy a grep, which is the opposite
+of what they are for. What must not exist is an executable read.
+
+**`.env.example` and `AGENTS.md` were in that list before the test read either of them**, from
+stage F until 2026-09-06 — a criterion naming files no check opened, which is the same sentence
+promising more than its code can fail on that this stage kept tripping over. Sol'"'"'s F5 found it and
+both were added to the collector, read raw rather than comment-stripped. The sentence above is now
+true rather than aspirational.
+
+Also: `grep -rn 'STORE ===' src/ vite.config.ts` is empty;
 there is one `ArtifactStore` implementation; the stage CLIs still run standalone, against Postgres;
 and **`npm test` fails loudly on a machine with no database, with somebody having watched it do so**.

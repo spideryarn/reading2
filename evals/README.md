@@ -848,6 +848,130 @@ are checked against the queue's own rule before anything is enqueued, the summar
 was nothing here*, and a run that died says so at the top rather than in its last line.
 [260905b](../docs/postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md).
 
+## `debate/` — does the mode's reading of a page hold up, and what did the run actually buy?
+
+```
+npm run eval:debate -- check                   # free: every seam, no model, no network, no database
+npm run eval:debate -- plan --slug <slug>      # free: what a run would buy, and from where
+npm run eval:debate -- run --slug <slug>       # one live run, journalled. ~$0.15
+npm run eval:debate -- replay --run <dir>      # Layer 1, free, over a journal on disk
+npm run eval:debate -- verify --dry-run        # free: the full-page fallback, over a synthetic web
+npm run eval:debate -- verify --run <dir>      # would the FULL PAGE have held the quotations the extract lost?
+```
+
+Stage A of
+[260906b](../docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md), and so far it
+is **capture rather than scoring** — the loss-reason tables, the corpus manifest, the arms and the
+judge are Stages B onward.
+
+It exists because two live debate runs cost $0.6252 and **bought no replayable evidence**. Only
+*kept* rows reach `debate.json`, so every refused row, every raw annotation and every page extract
+the model was reading was gone the moment the step ended — and the thing worth diagnosing was
+precisely the rows that did not survive.
+
+**The runner calls `generateDebate` directly and never through the queue**, so no reader's artefact
+is clobbered and no product spend row is written against a purchase nobody made. A run lands under
+`output/debate-runs/`, which is **gitignored**, for the reason `summaries/` gives about its own:
+a journal carries whole page extracts and, through the answer text, sentences of the article.
+
+### Two events per attempted pass, never one record afterwards
+
+`attempt-started` before dispatch; `provider-response` at the gateway boundary, **before the
+`finish_reason` allowlist, the search count or `collectSearchEvidence`**; a terminal outcome in the
+`finally`. GPT Sol refused the single-record design twice (F40, F52): `runPass` throws before
+returning on an unreadable answer, a bad finish reason or a zero search count, so a record written
+after the answer would have captured the paid failure as nothing — and one immutable record cannot
+represent an abort before any answer, cannot survive process death, and cannot carry a
+classification decided later.
+
+Two rules are the point of the whole thing, and both are tested:
+
+- **An abort with no response gets metadata and an abort outcome and no invented response fields.**
+  There is no "empty response" arm to fill in.
+- **An unmatched `attempt-started` means the process died, or the outcome is unknown**, and nothing
+  may report it as captured. On 2026-09-05 an OOM kill between the two passes billed pass A and
+  wrote nothing at all.
+
+Two things it deliberately cannot capture, both `src/ai-call.ts`'s design rather than a gap here: a
+2xx body that will not parse arrives as `json: null` with the bytes gone, and a non-2xx arrives as a
+status with the body gone. The gateway keeps one key, one `Meter` and one `finally` and hands no
+caller a hook, and provider bytes on this wire are a stranger's page and the reader's article.
+Both are written up in `src/debate-journal.ts`'s header.
+
+### The cost of a run is not a number anything hands you
+
+GPT Sol's F43. `generateDebate` returns searches and elapsed time, not money; `withLedger` prints an
+aggregate it does not return; and token `Usage` prices nothing here, because a web search is billed
+**per search** and is invisible to token arithmetic. So the figure comes from the collector's own
+`SpendRecord`s through `totalSpend`, with the contributing generation ids and the ledger run id
+recorded beside it — and a **completed run must hold exactly its two search calls**. Any unpriced
+call makes the whole figure `not measured`; nothing prints `$0.0000` about money it could not
+measure.
+
+### `check` runs first, and it is free
+
+`summaries` has `--stub` and `deepen` has `--dry-run` because **a paid run that quietly measured
+nothing is this repo's commonest expensive bug**. `check` exercises journal writing, reconciliation
+(including an OOM-shaped journal that must come back *not complete*), the cost path answering
+`not measured` three different ways, and Layer 1 replay over a synthetic journal with a kept row, a
+row lost to `directnessUnverified` and an attempt whose bytes are gone. Seventeen assertions, no
+model, no network, no database, and it exits non-zero when any of them fails.
+
+The one seam it cannot cover is `generateDebate` writing the journal at all, which needs something
+at the other end of `openRouterJson`.
+[`tests/debate-journal.test.ts`](../tests/debate-journal.test.ts) covers that with the gateway
+stubbed — including that `attempt-started` really goes down *before* dispatch, which is F40 in one
+assertion.
+
+### `verify` — would the full page have rescued the rows the extract lost?
+
+The plan's two-curl experiment, and the thing that decides whether Stage F gets built:
+[`verify-fallback.ts`](debate/verify-fallback.ts). Production checks a row's quotation against the
+**search engine's page extract** — 236–4,945 characters on the one live run we have — and on that run
+it emptied group one. If the quotations are in the full page the extract is the constraint and a
+fallback fixes it; if they are not, the model paraphrased and the repair is in the prompt. **Opposite
+builds**, so the tool is written to be wrong in the cheap direction rather than the expensive one.
+
+Every quotation the **direct** pass reported — the rows production kept *and* the rows it dropped —
+is resolved against three haystacks with `findQuote(…, "spaced")`, the same matcher and mode
+production uses, so the comparison is about the haystack and nothing else:
+
+1. the **provider extract**, rebuilt from the journalled raw annotations by `admissibleSources`;
+2. **Readability's text**, the `fetchDocument` → JSDOM → Readability path `read_web_page` uses;
+3. the **whole document's visible text**, `script`/`style`/`noscript` removed.
+
+**Both 2 and 3.** Readability extracts *the article* and can discard the section a quotation lives in
+— a comment thread, an editor's note; whole-body text catches those and drags in navigation. Which
+one Stage F should use is a real design choice, and this is what decides it.
+
+The headline is **`recovered X of Y observed failures`**, and both readings of it are printed rather
+than left in a comment: *one recovery establishes that the fallback can fix the observed class; zero
+recoveries defers Stage F and does not establish that full-page fetching can never help.*
+
+Four rules keep it honest, and each is a test:
+
+- **A URL that could not be fetched is `not attempted`, in its own column** — never "not recovered".
+  Every outcome is named (`ok`, `unsupported`, `blocked`, `timed-out`, `too-big`, `not-found`,
+  `failed`, `budget-exhausted`), so a network problem cannot read as evidence about the model.
+- **A PDF is `unsupported`, never an empty page.** `FetchedDocument.text` is `null` for one, and
+  reading that as `""` would answer *"the quotation is not there"* about a document nothing opened.
+- **Fetching goes through `fetchDocument` and never a bare `fetch`** (F44), keeping HTTP(S)-only,
+  the private-address and DNS-pinning checks on every redirect, the redirect cap, byte cap, type
+  sniff and deadline — plus a whole-run concurrency, fetch, byte and elapsed budget. Fetched text is
+  a haystack and enters no prompt.
+- **A quotation is looked for only where production would look.** The extract first; only a miss
+  invokes a fetch (F53), which is Stage F's own ordering and keeps the fetch count proportionate to
+  the failures. A quotation under `isSubstantiveQuote`'s floor is counted `belowFloor` and kept out
+  of the denominator, because production drops it whatever a page says.
+
+`verify --dry-run` runs all of that over a synthetic journal and a seven-page synthetic web
+([`verify-fixture.ts`](debate/verify-fixture.ts)) with **no network at all** — the fixture is handed
+to `fetchDocument` as its own `fetchImpl` seam, so every guard still runs. Twenty-five assertions,
+including the negative ones: a page whose quotation the extract already had must **not** be fetched,
+and neither the PDF nor the 404 may appear in the *not recovered* column. The output names hosts and
+never a URL, and carries no quotation, extract or line of anybody's prose — two of the assertions
+check exactly that.
+
 ## `embedding-retrieval.ts` — which embedding model finds the right passage in *our* articles?
 
 ```

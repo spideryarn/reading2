@@ -424,7 +424,13 @@
 
 /* The way home, fixed in the very top-left of the window — HomeLogo.tsx.
    Height matches `--bar-h` so it sits on the same line as the reading view's
-   controls bar rather than floating above it. */
+   controls bar rather than floating above it.
+
+   **Not on the pages that mount a `Dock` since 2026-09-06** — the article, its
+   metadata and tweets pages, and the three visitor stand-ins draw `.dock-home`
+   in the bottom bar instead (Dock.tsx § the way home is back). This rule is for
+   everywhere else: the shelf-adjacent pages, `/privacy`, the article's loading
+   and error screens, and the two refusal pages. */
 .logo-home {
   position: fixed;
   /* Fixed in the corner the phone rounds off, so both insets apply. `--safe-top`
@@ -436,7 +442,18 @@
   padding: 0 0.7rem;
   /* Above the spine (45) and the controls bar (40), and below the drawer's dim
      (92). The drawer is modal — while it is open, leaving the page is not one
-     of the things you are being offered, and Escape or the dim closes it. */
+     of the things you are being offered, and Escape or the dim closes it.
+
+     **That rule is now local to this corner, and it was reversed for the copy
+     in the bar.** `.dock` is z-index 96, deliberately above the dim, so
+     `.dock-home` *stays* operable while the drawer is open — leaving the page
+     is one of the things being offered there. The flip was accepted rather than
+     overlooked (GPT Sol's G-note, Fable's item 4): the bar is already how you
+     shut the drawer and already carries Metadata, which is itself a link off
+     this page. Nothing about this rule changed; what changed is that it no
+     longer describes every copy of the wordmark, so this paragraph exists to
+     stop the next reader finding two files asserting opposite things.
+     § the bar's fit ladder and .dock above. */
   z-index: 60;
   text-decoration: none;
   /* Opacity rather than a second colour: the wordmark is already `--highlight`

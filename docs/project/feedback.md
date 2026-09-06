@@ -1,8 +1,16 @@
 # Feedback
 
-The **Feedback** button in the top-right corner, the dialog behind it, and the two places a bug
-report ends up. Part of
+The **Feedback** button, the dialog behind it, and the two places a bug report ends up. Part of
 [dev-and-deployment-overview.md](dev-and-deployment-overview.md).
+
+**One dialog, two buttons, since 2026-09-06.** The dialog is mounted once, at the signed-in `App`
+level, and hands `open()` down through a context — otherwise a bar that unmounts takes a half-written
+report with it. The button is in the window's top-right corner on most pages and at the right-hand
+end of the bottom bar on the three that mount a `Dock` — the article, its metadata page and its
+tweets page, each in an owner's and a visitor's shape
+([260905g](../plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md)). On a phone that
+costs it being always-visible: the bar's row already scrolls, and this button is at the end you have
+to drag to. Taken deliberately — if reports from phones fall off, that is the first place to look.
 
 ## One box, since 2026-09-02
 
@@ -245,7 +253,7 @@ which *is* the verified account id.
 
 | what | file |
 |---|---|
-| the corner button, its hover card, and who sees it | [`src/web/FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) |
+| the dialog's host, the two triggers, their hover card, and who sees them | [`src/web/FeedbackButton.tsx`](../../src/web/FeedbackButton.tsx) |
 | the dialog | [`src/web/FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) |
 | the microphone on its box | [dictation.md](dictation.md), and two guards this dialog needs that the others do not — see its header |
 | the diagnostics allowlist, shared by both halves | [`src/feedback-payload.ts`](../../src/feedback-payload.ts) |

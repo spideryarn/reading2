@@ -146,6 +146,7 @@ import {
    turns into a 409. Nothing here touches a file, so nothing here has to know
    which store is live. Every write goes through `chatStore` above. */
 import { ChatConflict, withEdit, withRetry } from "./chat.js";
+import { shortenedSpokenLabel } from "./spoken-label.js";
 import { CommentIdTaken, NotAnExplanation, type AnswerPatch, type MarkPatch } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
 /* Referee mode's Criteria sub-mode — the model call, and the rules a request
@@ -689,8 +690,10 @@ async function sendPlate(
  *
  * **Immutable, and it can be**: the URL contains the hash of its own contents.
  * `private` because the article is one reader's — a shared cache must not hold
- * it. The public twin deliberately answers `no-store` instead, and
- * `servePublicAsset` in src/public/routes.ts says why.
+ * it. The public twin deliberately answers `no-store` instead: `sendBytes`
+ * (src/public/routes.ts) sets no `Cache-Control` at all, because `serveApi` has
+ * already set `no-store` across the whole public namespace before dispatch, and
+ * that function's header says why the two answers must differ.
  */
 async function sendArticleAsset(
   res: ServerResponse,
@@ -3246,25 +3249,6 @@ const MAX_SPOKEN_CHARS = 20_000;
 const MAX_SPOKEN_ITEMS = 32;
 
 /**
- * The longest a label on a pointer or a tool run may be.
- *
- * These are short by construction — `show_passage` asks for "a few words naming
- * what is in the passage", and a tool's label is `searched your library for
- * "predictive processing"`. The cap is not a product rule, it is a bound on
- * what a browser can put in a column: everything on this route is a claim by
- * the browser, and the two fields with no natural length were the two with no
- * limit. Trimmed rather than refused, because a long label is a cosmetic
- * problem and throwing the whole exchange away over one would lose the reader's
- * words for it.
- */
-const MAX_SPOKEN_LABEL = 400;
-
-/** Trim rather than refuse. See `MAX_SPOKEN_LABEL`. */
-function shortened(text: string): string {
-  return text.length > MAX_SPOKEN_LABEL ? text.slice(0, MAX_SPOKEN_LABEL) : text;
-}
-
-/**
  * The passages a spoken answer pointed at, checked.
  *
  * Returns the field or **nothing**, so the caller spreads it: the two stores
@@ -3305,7 +3289,7 @@ function parseSpokenPassages(
     }
     return {
       blockIds: blockIds as string[],
-      why: typeof why === "string" ? shortened(why) : "",
+      why: typeof why === "string" ? shortenedSpokenLabel(why) : "",
     };
   });
   return passages.length > 0 ? { passages } : undefined;
@@ -3341,9 +3325,9 @@ function parseSpokenTools(x: unknown): { tools: ToolRun[] } | undefined {
     }
     return {
       name,
-      label: shortened(label),
+      label: shortenedSpokenLabel(label),
       status: "done" as const,
-      ...(typeof detail === "string" && detail !== "" ? { detail: shortened(detail) } : {}),
+      ...(typeof detail === "string" && detail !== "" ? { detail: shortenedSpokenLabel(detail) } : {}),
     };
   });
   return tools.length > 0 ? { tools } : undefined;

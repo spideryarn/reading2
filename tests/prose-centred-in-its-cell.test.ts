@@ -15,7 +15,10 @@
  *      margin beside paragraphs they are no longer next to (§ the gutter)
  *   3. the masthead lands on the prose's left edge in a mode too, so a centred
  *      column is not sitting under a left-aligned title
- *      (§ the title over the column)
+ *      (§ the title over the column) — and where nothing is centring anything,
+ *      the bar's own left gutter *is* the prose's inset, so the title starts
+ *      there too. The bar's two gutters are deliberately allowed to differ and
+ *      the expression carries both.
  *
  * **There was a fourth, and it went on 2026-09-05.** `th.text .th-measure` put
  * the `Text verbatim` heading on the prose's left edge by the same arithmetic.
@@ -93,7 +96,13 @@ describe("the reading column is centred in its cell", () => {
    * open, because a table cell treats `height` as a *minimum*.
    */
   it("the column-header row has no height left to align anything in", () => {
-    const head = rule("thead th");
+    /* The selector was bare `thead th` until 2026-09-06, when it was scoped to
+       the zoom table because it had been reaching every table in the app
+       (docs/postmortems/260906g-an-unscoped-element-selector-in-styles-css-reached-every-table-in-the-app.md).
+       This assertion is about the geometry, not the spelling, but `rule()`
+       matches a selector literally — so a later rescoping breaks this test
+       again, and the fix is to respell it here, never to relax the rule. */
+    const head = rule(":where(table.zoom > thead) > tr > th");
     expect(head).toContain("height: var(--head-h)");
     expect(head).toContain("padding: 0");
     expect(head).not.toContain("border-bottom");
@@ -123,23 +132,86 @@ describe("the reading column is centred in its cell", () => {
   it("the masthead follows the prose wherever the two share a box", () => {
     const r = rule(".reader:has(table.only-prose):not(.text-alone) .masthead-inner");
     expect(r).toContain("max-width: var(--reading-measure)");
-    // Stated rather than `auto`: this bar's own padding is asymmetric, so auto
-    // margins would centre the title 60px left of the column.
+    /* Stated rather than `auto`, and it still has to be: auto margins would
+       centre this box in the bar, while the prose is half the reading cell's
+       padding asymmetry right of centre in *its* box. */
     expect(r).toContain("margin-left: max(");
     expect(r).toContain("margin-right: auto");
+    expect(r).toContain("var(--text-pad-l)");
+    expect(r).toContain("var(--text-pad-r)");
+    expect(r).toContain("font-size: var(--reading-size)");
+    /* **And the bar's own padding is one of the terms, after a day in which it
+       was not.** It rebuilds the bar's full width from the content box
+       (`+ --masthead-pad-l + --masthead-pad-r`) and then subtracts
+       `--masthead-pad-l` to get back into it, because the prose divides the
+       whole reading cell while a margin starts at the bar's content edge.
+
+       When the two reservations came out with the corner controls the two sides
+       became equal, the term cancelled, and it was dropped. That was correct
+       arithmetic and the wrong move: it turned an identity into a precondition,
+       and the very next fix needed the two sides *unequal* — a phone's title
+       wants the left gutter its prose has (styles.css § a narrow window). The
+       long form is true for any pair, so nothing two hundred lines away has to
+       stay in step with it.
+       docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md
+       § Stage 2. */
     expect(r).toContain("var(--masthead-pad-l)");
     expect(r).toContain("var(--masthead-pad-r)");
-    expect(r).toContain("font-size: var(--reading-size)");
   });
 
-  it("and the bar names the padding the title has to undo", () => {
-    /* Asserted as declarations rather than through `rule()`, because `.masthead`
-       is a long rule and what matters is that the two custom properties are the
-       ones the padding is actually set from — a var declared and then not used
-       is a number that can drift out of step in silence. */
-    expect(css).toContain("padding-left: var(--masthead-pad-l)");
-    expect(css).toContain("padding-right: var(--masthead-pad-r)");
-    expect(css).toMatch(/--masthead-pad-l:\s*max\(1\.5rem,/);
-    expect(css).toMatch(/--masthead-pad-r:\s*calc\(var\(--feedback-w\) \+ 1\.5rem\)/);
+  it("and the title still starts where the prose does when nothing is centring it", () => {
+    /* **The floor of that `max` is the prose's own inset, not zero.**
+
+       Below the width at which the centring term survives — a phone, or a band
+       mode on a laptop — the term goes negative and the floor is what places the
+       title. Zero puts it at the bar's content edge while the prose stays inset
+       by `--text-pad-l`, and the two left edges are a step apart: measured at
+       1024 in a band mode on 2026-09-06, title at 436 against a first line of
+       prose at 447.
+
+       Nobody had seen it because the *reservation* was paying for it by
+       accident — the masthead's left padding was derived from `--logo-w` and
+       landed within about two pixels of the prose's inset — so taking the
+       reservation away is what exposed it. GPT Sol, T1. */
+    const r = rule(".reader:has(table.only-prose):not(.text-alone) .masthead-inner");
+    expect(r).toContain("max(0px, calc(var(--text-pad-l) - var(--masthead-pad-l)))");
+  });
+
+  it("and a phone's title starts at the prose's own gutter", () => {
+    /* The other half of the same fix, and it is a padding rather than a margin
+       because on a phone this bar is `.text-alone`: the rule above never runs,
+       nothing is centring anything, and the title simply starts at the bar's
+       content edge. So that edge is the prose's inset.
+
+       Asserted as the declaration rather than as a computed number, for the
+       reason this file gives elsewhere: `--text-pad-l` is `--blk-slot` plus its
+       padding and has moved twice this month, and a test that copied its value
+       would be a second place to change. */
+    expect(css).toMatch(/--masthead-pad-l:\s*var\(--text-pad-l\)/);
+    // And the padding really is set from the pair, or they are two numbers
+    // nothing reads.
+    expect(css).toMatch(/padding:[^;]*var\(--masthead-pad-r\)[^;]*var\(--masthead-pad-l\)/);
+  });
+
+  it("and the granularity pills follow the title rather than the gutter", () => {
+    /* **The step this fix could have moved rather than removed.** `.controls`
+       sits directly under the masthead and holds the granularity pills, and the
+       shell's invariant is that the two bars share a gutter or the pills stop
+       lining up with the title above them. Giving the phone's masthead the
+       prose's inset while leaving this bar at a flat `1rem` would have put the
+       pills 19.2px left of the title — the same step, one line lower down the
+       screen. GPT Sol, U1.
+
+       Written out in both rules rather than shared through a custom property:
+       `--masthead-pad-*` are declared *on* `.masthead` and do not reach this
+       bar, and lifting them to `:root` would make two bars with genuinely
+       different vertical padding look like one thing. So the invariant is two
+       numbers that have to agree, which is exactly the kind of thing that wants
+       a test rather than a comment. */
+    const narrow = css.slice(css.indexOf("@media (max-width: 731px)"));
+    const controls = narrow.slice(narrow.indexOf(".controls {"));
+    expect(controls.slice(0, controls.indexOf("}"))).toContain(
+      "padding: 0 1rem 0 var(--text-pad-l)",
+    );
   });
 });

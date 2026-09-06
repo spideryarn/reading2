@@ -534,6 +534,28 @@ The inverse case is a warning rather than an error: a **gistable** leaf with no 
 flagged as "unreachable in the ToC". That is the escape hatch for a genuinely trivial transition,
 and it is deliberately noisy — skipping prose should be a decision someone made, not a default.
 
+### Absence on a node is *deliberately unlabelled*; "not written yet" is a column
+
+Everything above is about the first kind of absence, and every consumer reads it that way. The
+second kind arrives with
+[260906a](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md), which takes the label pass
+out of the blocking `hierarchy` step — so for a minute or two after an ingest an article has a real
+tree and no labels at all, and a missing field would have meant both things at once.
+[`hierarchy.ts`](../../src/hierarchy.ts) had already named the problem: deferring the labels *"needs
+a state that says 'still arriving' rather than an absence that says nothing."*
+
+So it is a **revision-scoped column** — `article_revisions.nav_label_status`, `NavLabelStatus` in
+[`src/types.ts`](../../src/types.ts), one of `pending` / `ready` / `failed`. Not a field on the tree:
+a labels run that fails has to mark the revision **the reader is looking at**, and its own candidate
+tree is thrown away. Written beside the artefact by `writeArtefacts`, so it cannot disagree with the
+labels it is about; `carry` in `REVISION_CARRY_POLICY`, so it travels with `tree` and `labels`.
+
+While it is not `ready` the client withholds the **whole** paragraph-label layer rather than drawing
+what happens to exist — [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) is the one rule, and it
+says why: a column of blank cells reports our unfinished work as the article's own shape, and a
+partly-drawn outline rung is worse. Stage 1 writes `ready` everywhere, so nothing visible has changed
+yet.
+
 ## Headings: verbatim unless genuinely uninformative
 
 Greg's call: use the author's heading text, rewriting only when it tells the reader nothing. A row

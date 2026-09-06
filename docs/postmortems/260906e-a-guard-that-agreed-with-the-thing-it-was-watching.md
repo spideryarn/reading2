@@ -7,13 +7,26 @@ nine because the fix for each is different and the *class* is identical.
 
 ## The class
 
-**A check whose expectation is downstream of the thing it checks.**
+**An uncalibrated verifier — a check that cannot distinguish the healthy state from the broken one,
+anywhere along its length.**
 
-Not "an untested code path" — every one of these had a test, and the test passed, and a person had
-read it. The failure is that the assertion could not distinguish the healthy state from the broken
-one, because something it depended on came from the same place as the answer.
+Not "an untested code path": every one of these had a test, the test passed, and a person had read
+it. And not, as this document said in its first draft, "a check whose expectation is downstream of
+the thing it checks" — GPT Sol's F27 pointed out that this names one *subtype* and presents it as
+the whole class. Two of the flavours below involve no derived expectation at all, and two findings
+from the review of this very document (F22 and F25) are of exactly those kinds.
 
-Four flavours, in rising order of how hard they are to see:
+A verifier has four stages, and **the failing state can be erased at any of them**:
+
+| | Stage | How it erases the failure |
+|---|---|---|
+| **acquisition** | what it looks at | The corpus is not the one the property lives in. |
+| **normalisation** | what it does to it first | A transform throws away the dimension that carried the fault. |
+| **predicate** | what it asks | The question is weaker than the property. |
+| **expectation** | what it compares against | The answer came from the same place as the thing being checked. |
+
+Four flavours, in rising order of how hard they are to see — the first two are expectation faults,
+the third acquisition, the fourth predicate:
 
 1. **The expectation is derived from the implementation.** Read the value out of the table you are
    checking, and the check is `x === x`.
@@ -24,6 +37,19 @@ Four flavours, in rising order of how hard they are to see:
 4. **The predicate is weaker than the property.** `toContain(".crit-how")` for "the rule
    `.crit-how` exists"; `Math.max(...) === 8` for "rules 1 through 8 exist"; sorted comparison for
    "in this order".
+
+And a fifth, which the four missed and the review supplied:
+
+5. **The normalisation discards the dimension the fault lives in.** A money contract that
+   deduplicated its request log to survive `<StrictMode>`'s effect replay, and so could not tell one
+   paid call from two. The expectation was independent, the corpus was right, the predicate was
+   exact — and a double charge was still invisible, because the reading passed through a `Set` on
+   its way to the assertion. **Dealing with a harness artefact by removing information is how this
+   one arrives**, and the fix is always to remove the artefact instead.
+
+The practical value of the wider frame is that it says where to look. Calibration is not one
+question but four: *did I look at the right thing, did I keep what mattered, did I ask a strong
+enough question, and did my answer come from somewhere else?*
 
 ## The nine
 
@@ -38,6 +64,33 @@ Four flavours, in rising order of how hard they are to see:
 | 7 | The same test's node check | `startsWith("@import")` accepted `@important;`, an external URL, and `@import "./styles/table.css" print;`, which makes every table rule print-only. **Flavour 4** |
 | 8 | `aimed-column`'s vacuity guard | Allowed arbitrary selector suffixes, so `.never` on all eight `[data-aim]` selectors passed. **Flavour 4** |
 | 9 | `annotate`'s hue guard | Asserted `Math.max(...) === BAR_HUES`; rules 1–7 could be deleted. **Flavour 4** |
+
+## The tenth, found afterwards — and the first found by somebody else's test
+
+Later the same day, merging 78 commits of `origin/dev` into the split turned up a tenth, and it is
+the most instructive of them because its twin survived.
+
+Two of `origin/dev`'s own tests read `src/web/styles.css` from disk. After the split that path holds
+65 lines of `@import` and no rules at all.
+
+| | The guard | What happened |
+|---|---|---|
+| 10 | `tests/table-selectors-are-scoped.test.ts` | Asserts an **empty** list of offending selectors. With no selectors to scan the list is empty, so it passed while checking nothing — and it is the guard for the very deletions being merged: `origin/dev` was scoping the bare `td {` and `thead th {` that reached the shelf. **Flavour 4** |
+| — | `tests/dock-corner-controls.test.tsx` | Same cause, same day, **failed loudly** — because its author asserted the masthead's `--safe-top` padding is found *before* asserting the absences. |
+
+The two differ in one line. That is the whole argument of this document, arriving as evidence
+rather than as reasoning: the guard with a positive control announced the breakage, and the guard
+without one absorbed it silently. Neither author did anything else differently.
+
+The repair was calibrated without mutating anything, because the merge supplied both states: the
+pre-merge body holds **2** bare selectors and the post-merge body holds **0**, so the repaired
+guard separates them, while the version reading `styles.css` reports green for both.
+
+**And note who found it.** Nine instances came from review — mine, or GPT Sol's. This one came from
+a stranger's test breaking under a change neither of us was thinking about. A split large enough to
+be worth doing is large enough to walk through other people's assumptions, and there is no review
+that reliably catches that; merging often enough that each collision is small is the thing that
+does.
 
 Plus two near-misses of the same shape, caught before they landed: a `toContain(".crit-how")` guard
 satisfied by `.crit-how-x`, the exact rename it existed to catch; and `git diff --stat -- src/web/styles/`

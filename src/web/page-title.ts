@@ -175,10 +175,17 @@ export type TitleSpec =
   | { kind: "privacy" }
   /** What the thing does, with pictures — FeaturesPage.tsx. */
   | { kind: "features" }
+  /**
+   * What we do with an article somebody has made public —
+   * PublicReadableSharingPage.tsx.
+   */
+  | { kind: "public-sharing" }
   /** What it costs — PricingPage.tsx. */
   | { kind: "pricing" }
   /** How to reach us — ContactPage.tsx. */
   | { kind: "contact" }
+  /** Every release since launch, newest first — ChangelogPage.tsx. */
+  | { kind: "changelog" }
   /**
    * **The shelf of shared articles** — `/read/public`, PublicLibraryPage.tsx.
    *
@@ -278,11 +285,25 @@ function segments(spec: TitleSpec): string[] {
     case "features":
       return ["Features", APP_NAME];
 
+    /* **Not the page's own heading**, which is the rule the four cases around
+       this one follow, and the exception is worth a line. The heading is
+       "Public-readable sharing"; a tab reading that tells somebody scanning
+       twenty tabs nothing they could not have guessed from the site name. The
+       reader this page most needs to reach came looking for what we did with
+       their article, so the tab answers that. */
+    case "public-sharing":
+      return ["Sharing an article publicly", APP_NAME];
+
     case "pricing":
       return ["Pricing", APP_NAME];
 
     case "contact":
       return ["Contact", APP_NAME];
+
+    /* Matches the footer's own label for the same address, so a reader who
+       followed "What's new" down there sees the same words in the tab. */
+    case "changelog":
+      return ["What’s new", APP_NAME];
 
     /* The page's own heading, unshortened — it is already two words, which is
        the length the two cases above had to cut down to. It says *Shared* and

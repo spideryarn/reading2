@@ -34,7 +34,10 @@ import { resetMicrophoneLock } from "../src/web/mic-lock.js";
 import { useLiveConversation, type LiveOptions } from "../src/web/live/useLiveConversation.js";
 import type { LiveUsageReport } from "../src/web/live/meter.js";
 import type { LiveTicket, LiveWiring } from "../src/web/live/wiring.js";
-import type { SpokenLanded } from "../src/web/chat/controller.js";
+import { ChatController, type ChatEffects, type SpokenLanded } from "../src/web/chat/controller.js";
+import { asOpId, type ThreadsOutcome } from "../src/web/chat/model.js";
+import type { SpokenOutcome } from "../src/web/chat/effects.js";
+import type { ChatMessage, ChatThread } from "../src/types.js";
 import type { SpokenExchange } from "../src/web/useChat.js";
 
 /* ---------- the fake wire ---------- */
@@ -47,6 +50,8 @@ let channel: FakeChannel | null = null;
 let mic: { enabled: boolean; stopped: boolean } | null = null;
 /** Every peer connection the hook built, so a test can break the last one. */
 let pcs: unknown[] = [];
+let players: { play: ReturnType<typeof vi.fn>; srcObject: unknown }[] = [];
+let playbackRefused = false;
 /**
  * Everything the hook told our own server about what the session cost.
  *
@@ -69,6 +74,10 @@ class FakeChannel {
   close() {
     this.readyState = "closed";
   }
+  /** The browser may dispatch the close event after close() has returned. */
+  notifyClosed() {
+    for (const fn of this.#listeners.get("close") ?? []) fn({});
+  }
   /** The channel opening, which is what starts the seeding. */
   open() {
     this.readyState = "open";
@@ -85,6 +94,9 @@ function fakeMic() {
   const held = mic;
   return {
     kind: "audio",
+    label: "Built-in Microphone",
+    muted: false,
+    get readyState() { return held.stopped ? "ended" : "live"; },
     get enabled() {
       return held.enabled;
     },
@@ -102,6 +114,8 @@ beforeEach(() => {
   channel = null;
   mic = null;
   pcs = [];
+  players = [];
+  playbackRefused = false;
   metered = [];
   resetMicrophoneLock();
 
@@ -139,6 +153,10 @@ beforeEach(() => {
         this.connectionState = "failed";
         for (const fn of this.#on.get("connectionstatechange") ?? []) fn({});
       }
+      disconnect() {
+        this.connectionState = "disconnected";
+        for (const fn of this.#on.get("connectionstatechange") ?? []) fn({});
+      }
       addTrack() {}
       getSenders() {
         return [];
@@ -156,6 +174,13 @@ beforeEach(() => {
     class {
       autoplay = false;
       srcObject: unknown = null;
+      play = vi.fn(async () => {
+        if (playbackRefused) throw new DOMException("Playback blocked", "NotAllowedError");
+      });
+      pause() {}
+      constructor() {
+        players.push(this);
+      }
     },
   );
   /* The SDP exchange with OpenAI, which is the only `fetch` left in the hook —
@@ -190,17 +215,20 @@ function ticketWith(over: Partial<LiveTicket> = {}): LiveTicket {
 
 /** The three accounting posts, recorded rather than made. */
 function meterCalls(): Pick<LiveWiring, "liveConnected" | "liveUsage" | "liveClose"> {
+  // A deferred teardown belongs to the test/session that created its wire.
+  // Do not let it append into a later test's replacement observation array.
+  const reports = metered;
   return {
     liveConnected: async (sessionId) => {
-      metered.push({ kind: "connected", sessionId });
+      reports.push({ kind: "connected", sessionId });
       return "accepted";
     },
     liveUsage: async (sessionId, report) => {
-      metered.push({ kind: "usage", sessionId, report });
+      reports.push({ kind: "usage", sessionId, report });
       return "accepted";
     },
     liveClose: async (sessionId, reason) => {
-      metered.push({ kind: "close", sessionId, reason });
+      reports.push({ kind: "close", sessionId, reason });
       return "accepted";
     },
   };
@@ -338,6 +366,102 @@ async function speakTurn(u: string, r: string, q: string, a: string) {
 }
 
 describe("the seeding barrier", () => {
+  it.each(["unmount", "pagehide"])("releases startup audio and its deadline on %s while the ticket is pending", async (exit) => {
+    vi.useFakeTimers();
+    const close = vi.fn(async () => {});
+    let ticketSignal: AbortSignal | undefined;
+    vi.stubGlobal("AudioContext", class { state = "running"; close = close; });
+    const h = mount({ wiring: { ...wiringFor(ticketWith()), ticket: (_slug, _thread, _placement, signal) => {
+      ticketSignal = signal;
+      return new Promise(() => {});
+    } } });
+    try {
+      act(() => h.get().start({ threadId: THREAD }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(pcs).toHaveLength(0);
+      if (exit === "unmount") h.unmount();
+      else act(() => window.dispatchEvent(new Event("pagehide")));
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(ticketSignal?.aborted).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      if (exit !== "unmount") h.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("times out a ticket request that never settles, before opening any device", async () => {
+    vi.useFakeTimers();
+    const h = mount({ wiring: { ...wiringFor(ticketWith()), ticket: () => new Promise(() => {}) } });
+    try {
+      act(() => h.get().start({ threadId: THREAD }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+      expect(h.get().phase).toBe("failed");
+      expect(mic).toBeNull();
+    } finally {
+      h.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("times out an unanswered microphone permission and stops a track arriving afterwards", async () => {
+    vi.useFakeTimers();
+    let grant!: () => void;
+    vi.spyOn(navigator.mediaDevices, "getUserMedia").mockImplementation(() => new Promise((resolve) => {
+      grant = () => resolve({ getAudioTracks: () => [fakeMic()] } as unknown as MediaStream);
+    }));
+    const h = mount({ wiring: wiringFor(ticketWith()) });
+    try {
+      act(() => h.get().start({ threadId: THREAD }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+      expect(h.get().phase).toBe("failed");
+      await act(async () => { grant(); });
+      expect(mic?.stopped).toBe(true);
+      expect(h.get().phase).toBe("failed");
+    } finally {
+      h.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("fails and releases capture when the data channel never opens", async () => {
+    vi.useFakeTimers();
+    const h = mount({ wiring: wiringFor(ticketWith()) });
+    try {
+      act(() => h.get().start({ threadId: THREAD }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(mic?.stopped).toBe(false);
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+      expect(h.get().phase).toBe("failed");
+      expect(h.get().error).toMatch(/starting|connect/i);
+      expect(mic?.stopped).toBe(true);
+    } finally {
+      h.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not let a cancelled session's seed deadline close a later session", async () => {
+    vi.useFakeTimers();
+    const h = mount({ wiring: wiringFor(ticketWith({ seed: [{ role: "user", text: "history" }] })) });
+    try {
+      act(() => h.get().start({ threadId: THREAD }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); channel?.open(); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+      await act(async () => { await h.get().stop(); });
+      act(() => h.get().start({ threadId: THREAD }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); channel?.open(); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
+      expect(h.get().phase, "an old timer cancelled the new connection").toBe("connecting");
+      await act(async () => { channel?.deliver(seedAck("s2", "user")); });
+      expect(h.get().phase).toBe("live");
+    } finally {
+      h.unmount();
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps the microphone OFF until every seed item has come back", async () => {
     /* The failure this prevents is silent and total: the reader starts talking
        the instant the connection is up, VAD opens a turn, and the model answers
@@ -446,6 +570,7 @@ describe("the seeding barrier", () => {
       });
       expect(h.get().error).toMatch(/did not finish starting/);
       expect(mic?.enabled, "it started listening against an unseeded session").toBe(false);
+      expect(h.get().phase, "the retry button would stay disabled in closing").toBe("failed");
     } finally {
       vi.useRealTimers();
     }
@@ -960,7 +1085,8 @@ describe("hanging up", () => {
       (pcs.at(-1) as { fail(): void } | undefined)?.fail();
     });
     await settle();
-    expect(h.get().phase).toBe("idle");
+    expect(h.get().phase).toBe("failed");
+    expect(h.get().error).toMatch(/connection.*lost/i);
     expect(mic?.stopped).toBe(true);
   });
 
@@ -1003,7 +1129,322 @@ describe("hanging up", () => {
   });
 });
 
+describe("live audio and tool recovery", () => {
+  it("retains unsaved words and their warning when retrying the same conversation", async () => {
+    const h = await connected({ wiring: wiringFor(ticketWith()), speak: async () => ({
+      ok: false, conflict: false, error: "The spoken exchange could not be saved.",
+    }) });
+    await speakTurn("unsaved-u", "unsaved-r", "Keep my question", "Keep the answer");
+    await settle();
+    act(() => h.get().start({ threadId: THREAD }));
+    await settle();
+    await act(async () => { channel?.open(); });
+    expect(h.get().phase).toBe("live");
+    expect(h.get().lines.map((line) => line.text)).toEqual(expect.arrayContaining(["Keep my question", "Keep the answer"]));
+    expect(h.get().hasUnsavedLines).toBe(true);
+    expect(h.get().error).toBeNull();
+    h.unmount();
+  });
+
+  it("ignores a duplicate start while an existing session still owns the device", async () => {
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    const before = pcs.length;
+    act(() => h.get().start({ threadId: THREAD }));
+    await settle();
+    expect(pcs).toHaveLength(before);
+    expect(h.get().phase).toBe("live");
+    expect(mic?.stopped).toBe(false);
+    h.unmount();
+  });
+
+  it("meters and settles a failed response before exposing the failure", async () => {
+    const written: SpokenExchange[] = [];
+    const h = await connected({ wiring: wiringFor(ticketWith()), speak: async (exchange) => {
+      written.push(exchange);
+      return { ok: true, threadId: THREAD, tailId: "spya-faila1" };
+    } });
+    const events = turn("failed-u", "failed-r", "A question", "The partial answer");
+    const completed = events.find((event) => event.type === "response.done")!;
+    await act(async () => {
+      for (const event of events.filter((event) => event.type !== "response.done")) channel?.deliver(event);
+      channel?.deliver({ ...completed, response: { ...completed.response,
+        status: "failed", status_details: { error: { message: "Voice service temporarily unavailable" } },
+      } });
+    });
+    await settle();
+    expect(metered.filter((event) => event.report?.kind === "response").map((event) => event.report)).toMatchObject([
+      { providerEventId: "failed-r", status: "failed", inputTokens: 132, outputTokens: 121 },
+    ]);
+    expect(written).toMatchObject([{ question: "A question", answer: "The partial answer", interrupted: true }]);
+    expect(h.get().phase).toBe("failed");
+    expect(sent.filter((event) => event.type === "response.create")).toEqual([]);
+    h.unmount();
+  });
+
+  it("uses the injected text item's provider id for its one visible reader line", async () => {
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    act(() => h.get().say("A typed probe"));
+    const item = sent.find((event) => event.type === "conversation.item.create")?.item as Record<string, unknown>;
+    expect(item.id).toBe(h.get().lines[0]?.id);
+    await act(async () => { channel?.deliver({ type: "conversation.item.added", item: { ...item, id: item.id ?? "provider-invented-id" } }); });
+    expect(h.get().lines).toHaveLength(1);
+    h.unmount();
+  });
+
+  it("meters the captured track without opening another microphone and closes its audio context", async () => {
+    const actualTrack = fakeMic();
+    const capture = vi.spyOn(navigator.mediaDevices, "getUserMedia").mockResolvedValue({ getAudioTracks: () => [actualTrack] } as unknown as MediaStream);
+    const measured: MediaStreamTrack[] = [];
+    const close = vi.fn(async () => {});
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { frames.push(callback); return frames.length; });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    vi.stubGlobal("MediaStream", class {
+      constructor(private readonly tracks: MediaStreamTrack[]) {}
+      getAudioTracks() { return this.tracks; }
+    });
+    vi.stubGlobal("AudioContext", class {
+      state = "running";
+      close = close;
+      createMediaStreamSource(stream: MediaStream) {
+        measured.push(stream.getAudioTracks()[0]!);
+        return { connect() {}, disconnect() {} };
+      }
+      createAnalyser() {
+        return { fftSize: 2048, getFloatTimeDomainData(buffer: Float32Array) { buffer.fill(0.1); }, disconnect() {} };
+      }
+    });
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    await act(async () => { frames.shift()?.(performance.now() + 16); });
+    expect(measured).toEqual([actualTrack]);
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(h.get().measuringInput).toBe(true);
+    expect(h.get().inputLevel.current).toBeGreaterThan(0);
+    h.unmount();
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(mic?.stopped).toBe(true);
+  });
+
+  it("releases a connection that stays disconnected instead of reporting live forever", async () => {
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        (pcs.at(-1) as { disconnect(): void }).disconnect();
+        await vi.advanceTimersByTimeAsync(12_000);
+      });
+      expect(h.get().phase).toBe("failed");
+      expect(h.get().error).toMatch(/connection/i);
+      expect(mic?.stopped).toBe(true);
+    } finally {
+      h.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("hands live lines to provisional chat rows during a deferred append and restores failed words", async () => {
+    let finishAppend!: (result: SpokenLanded) => void;
+    let provisional: SpokenExchange | null = null;
+    const h = await connected({ wiring: wiringFor(ticketWith()), speak: (exchange) => {
+      provisional = exchange;
+      return new Promise((resolve) => { finishAppend = resolve; });
+    } });
+    await speakTurn("handoff-u", "handoff-r", "Question survives", "Answer survives");
+    expect(provisional).toMatchObject({ question: "Question survives", answer: "Answer survives" });
+    expect(h.get().lines, "the completed exchange appeared beside its provisional chat rows").toEqual([]);
+    await act(async () => { finishAppend({ ok: false, conflict: false, error: "The spoken exchange could not be saved." }); });
+    expect(h.get().lines.map((line) => line.text)).toEqual(expect.arrayContaining(["Question survives", "Answer survives"]));
+    h.unmount();
+  });
+
+  it("surfaces a failed provider response and releases the microphone for typing or dictation", async () => {
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    await act(async () => {
+      channel?.deliver({ type: "response.done", response: {
+        id: "failed-response", status: "failed", output: [],
+        status_details: { error: { message: "Voice service temporarily unavailable" } },
+      } });
+    });
+    await settle();
+    expect(h.get().error).toMatch(/temporarily unavailable/);
+    expect(h.get().phase).toBe("failed");
+    expect(mic?.stopped).toBe(true);
+    h.unmount();
+  });
+
+  it("shows provisional input transcription and replaces it with the final wording", async () => {
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    await act(async () => {
+      channel?.deliver({ type: "conversation.item.added", item: { id: "heard-1", type: "message", role: "user" } });
+      channel?.deliver({ type: "conversation.item.input_audio_transcription.delta", item_id: "heard-1", delta: "The draft" });
+    });
+    expect(h.get().lines.find((line) => line.id === "heard-1")).toMatchObject({ text: "The draft", done: false });
+    await act(async () => {
+      channel?.deliver({ type: "conversation.item.input_audio_transcription.completed", item_id: "heard-1", transcript: "The corrected wording." });
+    });
+    expect(h.get().lines.find((line) => line.id === "heard-1")).toMatchObject({ text: "The corrected wording.", done: true });
+    h.unmount();
+  });
+
+  it("opens the same remembered microphone as dictation and names the acquired device", async () => {
+    vi.spyOn(window.localStorage, "getItem").mockImplementation((key) =>
+      key === "spya.dictation.deviceId" ? "physical-mic" : null,
+    );
+    const capture = vi.spyOn(navigator.mediaDevices, "getUserMedia");
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    expect(capture).toHaveBeenCalledWith({ audio: { deviceId: { exact: "physical-mic" } } });
+    expect(h.get().deviceLabel).toBe("Built-in Microphone");
+    h.unmount();
+  });
+
+  it("falls back visibly when the remembered microphone was unplugged", async () => {
+    vi.spyOn(window.localStorage, "getItem").mockImplementation((key) =>
+      key === "spya.dictation.deviceId" ? "unplugged" : null,
+    );
+    const capture = vi.spyOn(navigator.mediaDevices, "getUserMedia")
+      .mockRejectedValueOnce(new DOMException("Device absent", "OverconstrainedError"));
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    expect(capture).toHaveBeenCalledTimes(2);
+    expect(h.get().phase).toBe("live");
+    expect(h.get().notice).toMatch(/microphone|device/i);
+    h.unmount();
+  });
+
+  it("shows blocked playback and retries it from an explicit enable-audio action", async () => {
+    playbackRefused = true;
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    await act(async () => {
+      (pcs.at(-1) as { ontrack: (e: unknown) => void }).ontrack({ streams: [{}] });
+    });
+    expect(h.get().playbackBlocked).toBe(true);
+    expect(h.get().phase).toBe("live");
+    playbackRefused = false;
+    await act(async () => { await h.get().enableAudio(); });
+    expect(h.get().playbackBlocked).toBe(false);
+    expect(players.at(-1)?.play).toHaveBeenCalledTimes(2);
+    h.unmount();
+  });
+
+  it("returns every tool output once and continues only after the response and all tools finish", async () => {
+    let finishSearch!: () => void;
+    const runTool = vi.fn(() => new Promise<{ content: string; label: string; detail: string }>((resolve) => {
+      finishSearch = () => resolve({ content: "found", label: "searched", detail: "one match" });
+    }));
+    const h = await connected({ wiring: { ...wiringFor(ticketWith()), runTool } });
+    const calls = [
+      { type: "function_call", call_id: "c1", name: "show_passage", arguments: '{"blockIds":[]}' },
+      { type: "function_call", call_id: "c2", name: "search_library", arguments: '{}' },
+    ];
+    await act(async () => {
+      channel?.deliver({ type: "response.created", response: { id: "r-tools" } });
+      for (const call of calls) channel?.deliver({ ...call, type: "response.function_call_arguments.done", response_id: "r-tools" });
+    });
+    expect(sent.filter((e) => e.type === "response.create"), "continued while the original response was still running").toHaveLength(0);
+    expect(h.get().thinking).toBe(true);
+    expect(h.get().pendingTools.map((t) => t.callId)).toEqual(["c2"]);
+    await act(async () => {
+      channel?.deliver({ type: "response.done", response: { id: "r-tools", status: "completed", output: calls } });
+    });
+    expect(sent.filter((e) => e.type === "response.create"), "continued before the slow tool returned").toHaveLength(0);
+    await act(async () => { finishSearch(); });
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+    expect(sent.filter((e) => (e.item as { type?: string } | undefined)?.type === "function_call_output")).toHaveLength(2);
+    expect(runTool).toHaveBeenCalledTimes(1);
+    h.unmount();
+  });
+
+  it("returns a failure output when a remote tool never finishes", async () => {
+    vi.useFakeTimers();
+    const h = mount({ wiring: { ...wiringFor(ticketWith()), runTool: () => new Promise(() => {}) } });
+    try {
+      act(() => h.get().start({ threadId: THREAD }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); channel?.open(); });
+      const call = { type: "function_call", call_id: "slow-call", name: "search_library", arguments: "{}" };
+      await act(async () => {
+        channel?.deliver({ type: "response.created", response: { id: "slow-response" } });
+        channel?.deliver({ type: "response.done", response: { id: "slow-response", status: "completed", output: [call] } });
+        await vi.advanceTimersByTimeAsync(65_000);
+      });
+      const output = sent.find((e) => (e.item as { type?: string } | undefined)?.type === "function_call_output");
+      expect((output?.item as { output?: string } | undefined)?.output).toMatch(/failed|too long|timed out/i);
+      expect(sent.filter((e) => e.type === "response.create")).toHaveLength(1);
+      expect(h.get().pendingTools).toEqual([]);
+    } finally {
+      h.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not start an old tool continuation after the reader interrupts with another turn", async () => {
+    let finishSearch!: () => void;
+    const h = await connected({ wiring: { ...wiringFor(ticketWith()), runTool: () => new Promise((resolve) => {
+      finishSearch = () => resolve({ content: "old search", label: "searched", detail: "" });
+    }) } });
+    const call = { type: "function_call", call_id: "interrupted-call", name: "search_library", arguments: "{}" };
+    await act(async () => {
+      channel?.deliver({ type: "response.created", response: { id: "old-r" } });
+      // VAD can arrive before the tool arguments have finished streaming.
+      channel?.deliver({ type: "input_audio_buffer.speech_started" });
+      channel?.deliver({ ...call, type: "response.function_call_arguments.done", response_id: "old-r" });
+      channel?.deliver({ type: "response.done", response: { id: "old-r", status: "completed", output: [call] } });
+      channel?.deliver({ type: "input_audio_buffer.speech_stopped" });
+      channel?.deliver({ type: "input_audio_buffer.committed" });
+      channel?.deliver({ type: "response.created", response: { id: "new-r" } });
+      finishSearch();
+    });
+    expect(sent.filter((e) => e.type === "response.create")).toHaveLength(0);
+    await act(async () => {
+      channel?.deliver({ type: "response.done", response: { id: "new-r", status: "completed", output: [] } });
+    });
+    expect(sent.filter((e) => e.type === "response.create"), "replied again using the old tool after answering the new question").toHaveLength(0);
+    h.unmount();
+  });
+
+  it("ignores late tool completions and playback failures belonging to a stopped session", async () => {
+    let finishSearch!: () => void;
+    let rejectPlayback!: (error: Error) => void;
+    const h = await connected({ wiring: {
+      ...wiringFor(ticketWith()),
+      runTool: () => new Promise((resolve) => {
+        finishSearch = () => resolve({ content: "old result", label: "searched", detail: "" });
+      }),
+    } });
+    players.at(-1)?.play.mockImplementation(() => new Promise<void>((_, reject) => { rejectPlayback = reject; }));
+    await act(async () => {
+      (pcs.at(-1) as { ontrack: (e: unknown) => void }).ontrack({ streams: [{}] });
+      channel?.deliver({ type: "response.function_call_arguments.done", call_id: "old-call", name: "search_library", arguments: "{}", response_id: "old-response" });
+    });
+    await act(async () => { await h.get().stop(); });
+    act(() => h.get().start({ threadId: THREAD }));
+    await settle();
+    await act(async () => { channel?.open(); });
+    const before = sent.length;
+    await act(async () => {
+      finishSearch();
+      rejectPlayback?.(new DOMException("Old player blocked", "NotAllowedError"));
+    });
+    expect(h.get().phase).toBe("live");
+    expect(h.get().playbackBlocked).toBe(false);
+    expect(h.get().pendingTools).toEqual([]);
+    expect(sent).toHaveLength(before);
+    h.unmount();
+  });
+});
+
 describe("the meter, which is the only place a live conversation's cost exists", () => {
+  it("ignores an old channel's delayed close when accounting for the resumed session", async () => {
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    const oldChannel = channel as FakeChannel | null;
+    await act(async () => { await h.get().stop(); });
+    act(() => h.get().start({ threadId: THREAD }));
+    await settle();
+    await act(async () => { channel?.open(); oldChannel?.notifyClosed(); });
+    expect(h.get().phase).toBe("live");
+    await act(async () => { await h.get().stop(); });
+    expect(metered.filter((report) => report.kind === "close").map((report) => report.reason)).toEqual(["reader", "reader"]);
+    h.unmount();
+  });
+
   /**
    * The audio is a WebRTC connection from this tab straight to OpenAI, so the
    * `usage` object attached to every turn is delivered to client JavaScript and
@@ -1152,5 +1593,154 @@ describe("the meter, which is the only place a live conversation's cost exists",
     } finally {
       said.mockRestore();
     }
+  });
+});
+
+
+describe("spoken repair through the actual chat controller", () => {
+  const at = "2026-09-06T12:00:00.000Z";
+  const row = (id: string, role: ChatMessage["role"], text: string): ChatMessage => ({
+    id, role, text, status: "done", createdAt: at,
+  });
+
+  function seam() {
+    let resolveWrite!: (outcome: SpokenOutcome) => void;
+    let resolveRepair!: (outcome: ThreadsOutcome) => void;
+    let repairSignal: AbortSignal | undefined;
+    const bodies: Record<string, unknown>[] = [];
+    const thread: ChatThread = {
+      id: THREAD, kind: "chat", title: "New chat", createdAt: at, updatedAt: at, messages: [],
+    };
+    const saved: ChatThread = { ...thread, messages: [
+      row("spya-srvq01", "user", "What happened?"),
+      row("spya-srva01", "assistant", "The response was lost."),
+    ] };
+    const effects: ChatEffects = {
+      loadThreads: (_slug, signal) => { repairSignal = signal; return new Promise((resolve) => { resolveRepair = resolve; }); },
+      appendSpoken: (_slug, _thread, body) => {
+        bodies.push(body);
+        return new Promise((resolve) => { resolveWrite = resolve; });
+      },
+      renameThread: async () => ({ ok: true }),
+      deleteThread: async () => ({ ok: true }),
+      runTurn: async () => {},
+      settledAnswer: async () => null,
+      stopAnswer: async () => ({ ok: true }),
+      cancelThread: async () => ({ ok: true }),
+    };
+    const controller = new ChatController("a-slug", effects);
+    controller.dispatch({ type: "thread.begun", thread });
+    let seq = 0;
+    const speak = (exchange: SpokenExchange) => controller.appendSpoken({
+      id: asOpId(`spya-spok0${++seq}`), kind: "spoken", threadId: THREAD,
+      question: row(`spya-locq0${seq}`, "user", exchange.question),
+      reply: { ...row(`spya-loca0${seq}`, "assistant", exchange.answer),
+        ...(exchange.interrupted ? { interrupted: true } : {}),
+        ...(exchange.passages ? { passages: exchange.passages } : {}),
+        ...(exchange.tools ? { tools: exchange.tools } : {}),
+      },
+      expectedTailId: exchange.expectedTailId, at,
+    });
+    return { controller, saved, bodies, speak, signal: () => repairSignal,
+      fail: (outcome: SpokenOutcome) => resolveWrite(outcome),
+      refuse: () => resolveWrite({ ok: false, conflict: true, error: "Conversation moved on." }),
+      repair: (outcome: ThreadsOutcome) => resolveRepair(outcome),
+    };
+  }
+
+  it("keeps exactly one provisional copy through a deferred 409 repair, then uses the recovered server tail", async () => {
+    const s = seam();
+    const h = await connected({ wiring: wiringFor(ticketWith()), speak: s.speak });
+    try {
+      await speakTurn("u-repair", "r-repair", "What happened?", "The response was lost.");
+      const visible = () => [...s.controller.threads.flatMap((t) => t.messages.map((m) => m.text)), ...h.get().lines.map((l) => l.text)];
+      expect(visible()).toEqual(["What happened?", "The response was lost."]);
+      await act(async () => { s.refuse(); });
+      expect(h.get().lines).toEqual([]);
+      expect(h.get().hasUnsavedLines).toBe(false);
+      expect(visible()).toEqual(["What happened?", "The response was lost."]);
+      await act(async () => { s.repair({ ok: true, threads: [s.saved] }); });
+      expect(visible()).toEqual(["What happened?", "The response was lost."]);
+      expect(h.get().hasUnsavedLines).toBe(false);
+      expect(s.controller.state.error).toBeNull();
+      expect(s.controller.threads[0]?.messages.at(-1)?.id).toBe("spya-srva01");
+      await speakTurn("u-next", "r-next", "And now?", "It continues.");
+      expect(s.bodies[1]?.expectedTailId).toBe("spya-srva01");
+      // Settle the second request so teardown has no outstanding writer.
+      s.refuse();
+      await act(async () => {});
+      s.repair({ ok: false, error: "Offline now." });
+      await act(async () => {});
+    } finally { h.unmount(); }
+  });
+
+  it("checks exhausted ambiguous writes before restoring a live copy", async () => {
+    const s = seam();
+    const h = await connected({ wiring: wiringFor(ticketWith()), speak: s.speak });
+    try {
+      await speakTurn("u-uncertain", "r-uncertain", "What happened?", "The response was lost.");
+      await act(async () => { s.fail({ ok: false, conflict: false, uncertain: true, error: "Every response was lost." }); });
+      expect(h.get().hasUnsavedLines).toBe(false);
+      expect(h.get().lines).toEqual([]);
+      expect(s.controller.threads[0]?.messages).toHaveLength(2);
+      await act(async () => { s.repair({ ok: true, threads: [s.saved] }); });
+      expect(h.get().hasUnsavedLines).toBe(false);
+      expect(s.controller.threads[0]?.messages.map((m) => m.id)).toEqual(["spya-srvq01", "spya-srva01"]);
+    } finally { h.unmount(); }
+  });
+
+  it("recovers the paired answer tail without claiming later turns the live model has not heard", async () => {
+    const s = seam();
+    const h = await connected({ wiring: wiringFor(ticketWith()), speak: s.speak });
+    try {
+      await speakTurn("u-moved", "r-moved", "What happened?", "The response was lost.");
+      await act(async () => { s.refuse(); });
+      const later = { ...s.saved, messages: [...s.saved.messages,
+        row("spya-otherq", "user", "An unrelated question"), row("spya-othera", "assistant", "An unrelated answer"),
+      ] };
+      await act(async () => { s.repair({ ok: true, threads: [later] }); });
+      expect(h.get().hasUnsavedLines).toBe(false);
+      expect(s.controller.threads[0]?.messages).toHaveLength(4);
+      await speakTurn("u-after", "r-after", "Continue?", "Only with the history I know.");
+      expect(s.bodies[1]?.expectedTailId).toBe("spya-srva01");
+      // The next write still conflicts against the unrelated later rows.
+      await act(async () => { s.refuse(); });
+      await act(async () => { s.repair({ ok: true, threads: [later] }); });
+      expect(h.get().hasUnsavedLines).toBe(true);
+    } finally { h.unmount(); }
+  });
+
+  it("restores genuinely missing words only after repair finishes", async () => {
+    const s = seam();
+    const h = await connected({ wiring: wiringFor(ticketWith()), speak: s.speak });
+    try {
+      await speakTurn("u-missing", "r-missing", "What happened?", "The response was lost.");
+      await act(async () => { s.refuse(); });
+      expect(h.get().hasUnsavedLines).toBe(false);
+      await act(async () => { s.repair({ ok: true, threads: [{ ...s.saved, messages: [] }] }); });
+      expect(h.get().hasUnsavedLines).toBe(true);
+      expect(h.get().lines.map((l) => l.text)).toEqual(["What happened?", "The response was lost."]);
+      expect(s.controller.threads[0]?.messages).toEqual([]);
+    } finally { h.unmount(); }
+  });
+
+  it("bounds a hung repair while finishing and ignores its late saved response", async () => {
+    const s = seam();
+    const h = await connected({ wiring: wiringFor(ticketWith()), speak: s.speak });
+    try {
+      await speakTurn("u-timeout", "r-timeout", "What happened?", "The response was lost.");
+      vi.useFakeTimers();
+      await act(async () => { s.refuse(); });
+      expect(h.get().hasUnsavedLines).toBe(false);
+      let finished = false;
+      act(() => { void h.get().stop().then(() => { finished = true; }); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+      expect(finished).toBe(true);
+      expect(s.signal()?.aborted).toBe(true);
+      expect(h.get().hasUnsavedLines).toBe(true);
+      expect(h.get().error).toMatch(/confirm|time/i);
+      await act(async () => { s.repair({ ok: true, threads: [s.saved] }); });
+      expect(s.controller.threads[0]?.messages).toEqual([]);
+    } finally { h.unmount(); vi.useRealTimers(); }
   });
 });

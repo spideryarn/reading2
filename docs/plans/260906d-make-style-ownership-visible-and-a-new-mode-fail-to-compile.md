@@ -465,6 +465,62 @@ the right length, and still passes every test. So: concatenating the 37 sheets i
 the headers stripped reproduces `origin/dev`'s `styles.css` from line 29 on — all **15,629 lines**,
 exactly.
 
+### The second merge, 2026-09-06 — and the oracle that had to be replaced
+
+78 commits of `origin/dev`, and **37 hunks, 622 insertions and 220 deletions**. Unlike the first
+merge this one is not additive: `origin/dev` scopes the bare `td {` and `thead th {` that were
+reaching the shelf (`601a550a`), and retires the dock-fit rules the new bar replaces.
+
+**The first merge's check could no longer be used, and this is the more interesting half.** "The
+sheets reconstruct `origin/dev`'s `styles.css` exactly" stopped being true the moment this branch
+added CSS of its own — the `/design` bands of Stage 5. Kept as it was, it would have been a guard
+that can never go green, which is the same failure as one that can never go red: either way it has
+stopped distinguishing anything. It was replaced by a three-way merge of the three *concatenated
+bodies*, computed with `git merge-file`, and the sheets must concatenate to that byte for byte.
+`git merge-file` is not the code path that edits the sheets (`git apply`, hunk by hunk), so the two
+can disagree.
+
+The arithmetic is the reason to believe it, and it was checked before the merge was applied:
+
+| | lines | |
+|---|---|---|
+| base | 15,601 | |
+| ours | 15,666 | base **+65** — this branch's `/design` bands |
+| theirs | 16,003 | base **+402** — exactly 622 − 220 |
+| expected | 16,068 | base **+65 + 402** |
+
+The three-way merge was clean, 0 conflicts. **One hunk was accepted by two sheets**: it changes a
+button's width to a gap-and-padding, and `.prof-mic` in `profile.css` has a byte-identical
+declaration block. Placed in `mode-band.css` by mapping the hunk's base line number to the region
+that owns it — base line 4934 is inside `.chat-live-btn`, and `profile.css` contains no
+`.chat-live*` rule at all. The oracle then went green, which is independent confirmation: the wrong
+choice would have moved those three lines in the concatenation.
+
+#### Two of origin/dev's own guards had been broken by the split, and only one of them said so
+
+This is the class in [the postmortem](../postmortems/260906e-a-guard-that-agreed-with-the-thing-it-was-watching.md),
+found for the tenth time — and the first found by somebody else's test rather than by review.
+
+- **`tests/table-selectors-are-scoped.test.ts` read `src/web/styles.css` directly and asserted an
+  *empty* list of offending selectors.** After the split that path holds no selectors at all, so the
+  guard passed while checking nothing — and it is the guard for the very deletions in this merge.
+  Repaired to read the sheet set, and to assert it found **more than 500** selector branches before
+  asserting the absence. Calibrated without mutating anything: the pre-merge body has **2** bare
+  selectors and the post-merge body has **0**, so the repaired guard separates the two states, while
+  the version reading `styles.css` reports green for both.
+- **`tests/dock-corner-controls.test.tsx` had the same cause and failed loudly**, because its author
+  had written a positive control — the masthead's `--safe-top` padding has to be found before the
+  absences are asserted. Same split, same day, opposite outcome, decided entirely by whether a
+  positive control was written. That is the postmortem's recommendation observed working in the
+  wild rather than argued for.
+
+Three types tightened under the new mode test while it was not looking, which is the contract doing
+its job in the direction it was built for: `Article` gained a required `navLabelStatus`,
+`DirectDebateRow` a required `identifies`, and `DebateLosses` a `sourceIsCopy`. All four errors
+landed at `npm run typecheck` rather than at runtime. `NO_LOSSES` and `COUNTS` are now annotated
+`DebateLosses` and `DebateCounts` rather than inferred, so the next added field is one error at the
+declaration instead of one at every use.
+
 ### Stage 5 — the docs, 2026-09-06
 
 83 references to `styles.css` found across `docs/`; **53 repointed** at the sheet that now owns the
@@ -595,6 +651,29 @@ to check each finding yourself:
 F18's fix also needed `aimed-column.test.ts` moved to the jsdom environment, which broke its
 `new URL(…, import.meta.url)` reads — jsdom hands back an `http` `import.meta.url` — so those
 became cwd-relative, matching the sibling style tests.
+
+### Round 2, on the code — [260906d-code-review-round2-sol.md](260906d-code-review-round2-sol.md)
+
+The fixes from round one, which no reviewer had seen, plus the second `origin/dev` merge. Eight
+findings, **all eight accepted**; six fixed, one recorded, one a correction to the postmortem.
+
+Sol reconstructed the base, ours and theirs bodies himself and re-ran the three-way merge before
+judging it, and got matching SHA-256 hashes. A review that checks the evidence rather than the
+prose about it is the one worth paying for.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F20 | `DiagramPanel.tsx` still said Force is the default picture and that opening bare `?mode=diagram` posts to `/api/similar`. The default has been Sketch since `params.ts` § `DEFAULT_DIAGRAM` | **Fixed.** Flavour 2 again, in the same file that caused F11 — false prose waiting for a test to be written from it |
+| F21 | `DRAWS` was keyed `Exclude<Mode, (typeof NO_BAND_MODES)[number]>`, so one list both *excused* a mode from having a row and *skipped* it at run time. A fifteenth mode added to it was checked by nothing at all | **Fixed**, and this was the serious one — the mistake the file exists to prevent, committed one level up. `DRAWS` is now total over `Mode` with a `band` / `none` union, and a `none` row must carry its own positive control. Calibrated: deleting the `plain` row is now `TS2741` |
+| F22 | `paidPosts()` deduplicated through a `Set`, so a press that bought the same request twice was indistinguishable from one that bought it once | **Fixed**, and it needed an experiment rather than an edit. Measured: with cardinality kept, exactly one endpoint doubled (Force's `/api/similar`, from a mount effect); with `<StrictMode>` off, all 28 pass with exact counts. So it was the replay and **not** a real double-spend. Phase A now opens non-strict and counts; phase B keeps StrictMode, which is where it earns its place |
+| F23 | The import walker recognised `@import "…"` but not `@import url("…")`, so a sheet could import another sheet and both the leaf ban and the duplicate-visit check would miss it | **Fixed.** Calibrated with Sol's own mutation |
+| F24 | Nothing stopped a component doing `import "./styles/table.css"`. `client-imports.test.ts` allows any specifier resolving inside `src/web`, and every CSS-side rule only walks `@import` edges — so the *other way in* was unguarded, and a sheet arriving that way is **unlayered**, which beats every layered rule regardless of specificity | **Fixed** with a new guard: the only stylesheet a TypeScript file may import is `src/web/tailwind.css` (twelve files do; no other spelling is legal). Calibrated — and `client-imports.test.ts` stayed green throughout the mutation, exactly as Sol said |
+| F25 | The `> 500` positive control proves bulk, not that the sheet under test entered the scan | **Fixed** with a named witness from `table.css`. **And the calibration found a hole in the fix**: my first witness, the scoped `thead` selector, is repeated in `narrow-window.css`, so it survived `table.css` being dropped from the manifest entirely. A unique selector replaced it. The count still reported 1,974 branches while the sheet was absent — Sol's point exactly |
+| F26 | The merge oracle proves global byte order, not ownership: moving a rule across an adjacent sheet boundary preserves the concatenation | **Recorded, not fixed.** Correctly identified as a limitation rather than circularity, and it is the right limitation to accept: the oracle exists to prove *the cascade did not move*, which it does exactly. Ownership is what the sheet headers and the nine misfiled sections are for, and neither is a thing a byte comparison can check |
+| F27 | The postmortem's class — "a check whose expectation is downstream of the thing it checks" — names one subtype as the whole. Flavours 3 and 4 involve no derived expectation | **Accepted and rewritten.** The class is now an **uncalibrated verifier**, with four stages at which the failing state can be erased: acquisition, normalisation, predicate, expectation. F22 and F25 from this very round are normalisation and acquisition faults, which the old frame could not name — and normalisation joins as a fifth flavour, since a harness artefact answered by discarding information is how it arrives |
+
+Nothing overruled. Sol's judgement that the split's size was "an amplifier, not the root cause" is
+accepted too, and it is the argument for merging often rather than for splitting less.
 
 ## What actually happened
 

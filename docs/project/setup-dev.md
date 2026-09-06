@@ -4,6 +4,11 @@
 into. Everything after it is depth: what each secret is for, which model does
 which job, how to run one pipeline stage on its own. You do not need any of that to start.
 
+For the *why* behind any of it — what the Docker stack is standing in for, what shipping looks like,
+and what the production host takes away that your laptop gives you for free — read
+[260906a-deployment-and-infrastructure.html](../tutorials/260906a-deployment-and-infrastructure.html)
+in a browser. It is written for somebody who has never opened the code.
+
 ## Quickstart
 
 ### What you need first
@@ -113,9 +118,12 @@ That is deliberate — [architecture.md § Server and client](architecture.md#se
 the filesystem store and the `SPIDERYARN_STORE` flag went
 ([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F). The
 dev server, the CLI stages, seeding, the evals and the test suite all read one store, and nothing has
-to be told which. **Do not set `SPIDERYARN_STORE`**: what is left of it is a tombstone that throws on
-any value but `postgres` ([`src/store/live.ts`](../../src/store/live.ts)), because silently ignoring
-somebody who asked for the store that is gone is the failure this whole migration was leaving behind.
+to be told which. **Do not set `SPIDERYARN_STORE`**: it decides nothing and is read by nothing. A
+tombstone in `src/store/live.ts` threw on any value but `postgres` while
+Vercel still carried the variable — silently ignoring somebody who asked for the store that is gone
+is the failure this whole migration was leaving behind — and stage I deleted it on 2026-09-06 once
+Greg had taken the variable out of Preview and Production.
+[`tests/one-store-only.test.ts`](../../tests/one-store-only.test.ts) is what keeps the name unread.
 
 `npm run dev` had defaulted the flag to `postgres` since 2026-09-02, and the reason it did is the
 reason the store move happened at all: the filesystem adapter cannot fence two servers over one

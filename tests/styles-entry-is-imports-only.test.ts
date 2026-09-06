@@ -31,6 +31,7 @@
  * having on its own. Changing bundlers is a separate import-prelude review.
  */
 
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
@@ -250,5 +251,67 @@ describe("the stylesheet entry point is an import manifest", () => {
       "every .css under src/web/styles/ must be named by MANIFEST exactly once — an " +
         "unimported sheet is dead, and an import with no file behind it fails the build",
     ).toEqual(present);
+  });
+});
+
+/**
+ * **The other way in, which the CSS-side rules could never see.**
+ *
+ * Everything above walks `@import` edges, so it reasons only about sheets that
+ * `styles.css` already reaches. A component can load a sheet without going
+ * through any of it — `import "./styles/table.css";` in a `.tsx` — and GPT
+ * Sol's F24 is that nothing stopped it: `tests/client-imports.test.ts` allows
+ * any specifier that resolves inside `src/web`, which that one does.
+ *
+ * What it costs is not a duplicate but a **layer**. `tailwind.css` names the
+ * cascade layers in order and pulls the reading view in as
+ * `@import "./styles.css" layer(app)`; a sheet imported straight from a
+ * component arrives **unlayered**, and unlayered rules beat every layered one
+ * whatever their specificity. So Table's rules would quietly start winning
+ * against things written to override them, and nothing would look wrong until
+ * a page did.
+ *
+ * The rule is therefore flat, and the tree already obeys it: **the only
+ * stylesheet a TypeScript file may import is `src/web/tailwind.css`**, the one
+ * entry point that establishes the layers. Twelve files do (`main.tsx` and the
+ * eleven preview entries); no other spelling is legal.
+ */
+describe("no component loads a stylesheet behind the entry point's back", () => {
+  const ALLOWED = "./tailwind.css";
+
+  it("imports no CSS from TypeScript except the layered entry point", () => {
+    const files = execFileSync(
+      "git",
+      ["ls-files", "src", "--", "*.ts", "*.tsx"],
+      { encoding: "utf8" },
+    )
+      .split("\n")
+      .filter(Boolean);
+
+    const offenders: string[] = [];
+    let seen = 0;
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      for (const m of text.matchAll(/(?:^|\n)\s*import\s*["']([^"']+\.css)["']/g)) {
+        const spec = m[1];
+        if (spec === undefined) continue;
+        seen++;
+        if (spec !== ALLOWED) offenders.push(`${file} → ${spec}`);
+      }
+    }
+
+    /* The scanner first. If the import spelling ever changes, this finds
+       nothing and the assertion below passes over a tree full of offenders —
+       the shape this whole file exists to refuse. */
+    expect(seen, "no CSS imports found at all, so the scan is not working").toBeGreaterThan(5);
+
+    expect(
+      offenders,
+      `only ${ALLOWED} may be imported from TypeScript. It is the file that declares the ` +
+        "cascade layers and pulls the reading view in as layer(app); a sheet imported " +
+        "straight from a component arrives UNLAYERED, and unlayered rules beat every " +
+        "layered one whatever their specificity. Add the sheet to src/web/styles.css at " +
+        "the position it belongs in the cascade instead.",
+    ).toEqual([]);
   });
 });

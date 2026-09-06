@@ -60,10 +60,23 @@ export interface Sheet {
  * `tests/styles-entry-is-imports-only.test.ts` is what refuses it, in the only
  * file that could grow one.
  */
+/**
+ * **Both spellings, because CSS has two and the ban is only worth what it
+ * cannot be spelled around.**
+ *
+ * This matched `@import "…"` alone until GPT Sol's F23. `@import url("./x.css")`
+ * is the same import to every real processor, and it was invisible here — so a
+ * sheet could import another sheet, and both the leaf prohibition below and the
+ * duplicate-visit check would pass while the cascade quietly gained a second
+ * copy. A guard that only sees the spelling nobody was going to use anyway is
+ * not a guard. The unquoted `url(./x.css)` is legal too, so it is here as well.
+ */
 function relativeImportsOf(css: string): string[] {
   const found: string[] = [];
-  for (const m of css.matchAll(/^\s*@import\s+["']([^"']+)["']/gm)) {
-    const id = m[1];
+  const IMPORT =
+    /^\s*@import\s+(?:url\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"\s]+))\s*\)|"([^"]*)"|'([^']*)')/gm;
+  for (const m of css.matchAll(IMPORT)) {
+    const id = m[1] ?? m[2] ?? m[3] ?? m[4] ?? m[5];
     if (id?.startsWith(".")) found.push(id);
   }
   return found;

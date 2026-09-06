@@ -232,14 +232,12 @@
 }
 
 .design-table { border-collapse: collapse; width: 100%; }
-/* `border-right: 0` is not redundant. The bare `td` rule far above gives EVERY
-   cell in the app a right border in --rule-strong, for the zoom table's column
-   grid; it reaches here, and reaches into an article's own <table> inside
-   .prose as well (which is why .prose th/td restate `border` in full rather
-   than only the parts they want). */
+/* This carried `border-right: 0` until 2026-09-06, with a comment explaining
+   that the bare `td` rule far above gave EVERY cell in the app a right border.
+   That rule is scoped to the zoom table now (§ the head with no row), so there
+   is nothing left to undo and the declaration has gone. */
 .design-table td {
   padding: 0.55rem 0.9rem 0.55rem 0;
-  border-right: 0;
   border-bottom: 1px solid var(--rule);
   vertical-align: middle;
 }

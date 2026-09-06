@@ -264,9 +264,20 @@ falls through to the title, and *"Claude's Constitution"* is 21 characters again
 `MIN_TITLE_EVIDENCE_CHARS = 20`. So a 2026 commentary is kept as a response to a document it has never
 discussed, with every counter clean.
 
+**Measured 2026-09-06, and it is not a hypothesis any more.** All **six** direct rows the model
+reported answer the 2026 document. Two are established from their own quoted words — Zvi's names
+*"the official version of what we previously were calling its 'soul document'"*, and Matt Glassman's
+says *"It's completely different in approach to the previous Claude constitution."* **A row that
+explicitly distinguishes the two documents was reported as a response to the older one.** The rules
+cut six to one, so one false positive reached the kept set — and it survived by the accident of where
+a search engine cut its extract, not because any rule noticed.
+
 Whether that is *fixable* is a real question — an article and its successor sharing a title is
-genuinely ambiguous, and demanding a URL match would empty group one much further. It is not this
-plan's job to answer it. It is this plan's job to stop it being **unknown**.
+genuinely ambiguous, and demanding a URL match would empty group one much further. This plan's job
+was to stop it being unknown, and that is done. **What has changed is its priority**: it now gates
+Stage F, because fetching the full page would take this article's group one from one wrong row to
+six. Raising recall on a rule whose precision is broken makes the product worse, and the two findings
+have to be answered together.
 
 **Pinned by production's own fingerprint** (F41): each entry pins
 `inputFingerprint(blocks, tree, meta)` — blocks, tree and the cited head — because pass A searches for
@@ -320,26 +331,61 @@ is training on the test set.
   judge exists to find). The report prints the anchor confusion matrix, not a fraction. It is a
   sanity gate and not evidence about the judge's population error.
 
-## The write failure, folded in here rather than left open
+## The write failure — settled, 2026-09-06, and it was neither of my guesses
 
 Job `spya-ttcxz7` generated `1 about this piece, 5 about what it claims` and errored on the write,
-losing $0.1948. **The "another worktree claimed it" story is probably wrong:** the step's `detail`
-string exists only in this branch's `src/pipeline.ts`, so the claiming process had recent code; the
-step finished the same second as its last `ai_calls` row, so both passes completed; and the first
-attempt was an OOM-killed process, which does not unwind — so the requeue came from a **lapsed
-lease**, not from `pauseForDeadline`, whose docblock is the one promising *"the job goes back to
-queued on its own row with its draft intact"*.
+losing $0.1948. I guessed twice and was wrong twice, so both are recorded.
 
-**Refined hypothesis: a lease-lapse requeue can leave a job unable to write its artefact.** If true
-that costs a reader a whole purchase, it is not debate-specific, and it gets a postmortem. Repro:
-enqueue, kill the driver mid-step, let the lease lapse, watch the second attempt.
+**Guess one, at the debrief: another worktree's dev server claimed it.** Wrong — the step's `detail`
+string exists only in this branch's `src/pipeline.ts`, so the claiming process had recent code.
+
+**Guess two, in round one of this plan: a lease-lapse requeue leaves a job unable to write.** Also
+wrong, and refuted rather than merely doubted. `settleExpired` in
+[`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts) deliberately omits `draft_revision_id` from its
+requeue `UPDATE`, so the lapse keeps the draft, exactly as `pauseForDeadline` does — true since
+2026-09-04, before the incident. A reproduction that assembled the exact state an OOM kill leaves —
+claim, open draft, `beginStep`, stop, `settleExpired`, then a genuine second `advanceJob` — came back
+with an identical draft revision id and a step that ran, published and finished `done`.
+
+**What actually happened.** The job's row carries the *generic* fallback message (`[jb-step-again]`,
+empty `failure_kind`), which is the signature of an unclassified exception from `runStep`'s catch-all
+— not `StaleAttemptError` (which answers `busy` and writes no `job.error`) and not `DraftGoneError`
+(which has its own sentence). `debate` was the job's only step, so finishing it publishes inside
+`commit`, and that is where `PublishRefused` throws with an undeclared `FailureKind` and lands in the
+same fallback. It is the bug already written up in
+[260905f](../postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md),
+whose query independently names **this job's own slug** as one of two local articles with the tree
+shape the tightened rule refuses. Verified: the fix commits `724a27c6` and `6e9b9f3e` landed at
+22:41 and 22:48 UTC on 2026-09-05 — **about fifty minutes after this job failed at 21:52:59 UTC**.
+
+So two unrelated things happened that evening: an OOM kill cost one paid attempt, and the requeue
+machinery then worked correctly; and the successful second attempt was refused at publish by a rule
+that had landed hours earlier and been broken for hours more. **No new postmortem — this corroborates
+that one.** Nothing here is specific to `debate`, to the lease, or to the draft.
+
+**Worth carrying out of it:** an artefact-producing step whose publish is refused loses the whole
+purchase and reports a sentence that says nothing about why. That is a general property of the queue
+and not this plan's to fix, but it is the reason a $0.19 loss took three guesses to explain, and the
+capture journal above is what would have made it one.
 
 ## Stages
 
 Each ends with the suite green and the tree safe to commit. **Nothing lands in production before
 Stage E.**
 
-### Stage A — the journal, the runner, and the two-curl verdict
+### Stage A — the journal, the runner, and the two-curl verdict — **done, 2026-09-06**
+
+Landed as `0963f85d`. Three articles journalled for **$0.6384** over six calls, all
+`scope_kind: 'eval'`; the verdict is `recovered 6 of 6` and is written up in
+[the spike results](260905f-debate-mode-stage-0-spike-results.md) §§ 6–7. Both instruments were
+watched failing under a deliberate mutation before their green was believed — the free seam check
+(17 assertions) and the verification probe's dry run (25).
+
+**One gap found in the doing, not yet closed:** an eval run's `ai_calls` rows carry an empty
+`article_slug`, because the runner calls `generateDebate` outside a job and nothing attaches the
+article. The run's own `run.json` records the generation ids, so nothing is unattributable — but the
+ledger alone cannot say which article an eval call was for, and a later cost report over
+`scope_kind: 'eval'` would need the run directories beside it.
 
 - The two-event capture journal above.
 - `evals/debate/` with a runner calling `generateDebate` directly — **never the queue**, so no
@@ -350,10 +396,21 @@ Stage E.**
   figure `not measured`.
 - One fresh pass A on Cargo Cult with the journal on, then the fetch → extract → `findQuote` path
   over each reported URL.
-- The write-failure repro.
+- ~~The write-failure repro.~~ **Done, 2026-09-06** — see § above. Refuted and explained without
+  spending anything, on a free step.
 
-**Done:** *"recovered X of Y"*, written into the spike-results doc, and one journal on disk Layer 1
-can replay. ~$0.15.
+**How many observed failures before the verdict counts — declared before spending.** The experiment
+answers *"recovered X of Y"*, and a Y of one or two is not a verdict about anything. **The floor is
+four observed failures**: quotations the model reported that miss in the provider extract. Cargo
+Cult's earlier run produced exactly two, so if one fresh run does not reach four, the answer is to
+run another corpus article rather than to call it on what came back. Those journals are wanted for
+Stage C regardless, so the extra runs are brought forward rather than added.
+
+Declared here rather than settled afterwards, for the reason the summaries eval gives about
+`MAX_ANCHOR_INVERSIONS`: a threshold argued after the numbers arrive is not a threshold.
+
+**Done:** *"recovered X of Y"* over Y ≥ 4, written into the spike-results doc, and journals on disk
+Layer 1 can replay. ~$0.15 per article.
 
 ### Stage B — the free instrument, and one shipped bug
 
@@ -361,7 +418,13 @@ can replay. ~$0.15.
   kept-per-returned, gold-URL hits. No IO, **unit-tested in `tests/debate-eval-score.test.ts`**.
 - Layer 1 replay from raw annotations.
 - Layer 0's six packets as tests, each watched red first.
-- **The `namesArticle` typography fix**, red test first.
+- ~~**The `namesArticle` typography fix**, red test first.~~ **Done, 2026-09-06**, brought forward
+  into Stage A's commit because it is a shipped bug and the file was already open. Both branches now
+  ask `findQuote(..., "spaced")` through one `appearsIn` helper. Watched red on the real failure
+  first. One thing checked rather than assumed while writing it, and the comment says so: this is a
+  strictly **wider** match than the `includes` it replaced and nothing narrows — a short title still
+  matches inside a longer word in both modes, which is why `MIN_TITLE_EVIDENCE_CHARS` and the byline
+  branch exist and why neither moved.
 - The corpus manifest, pinned by `inputFingerprint`.
 
 **Done:** free repeatable numbers over Stage A's journal, and one real bug closed. No money.
@@ -407,7 +470,73 @@ sweep that does no judging cannot produce.
   `evals/results/debate/` and the section in `evals/README.md`; update the parent plan and the spike
   results. ~$2.
 
-### Stage F — full-page verification fallback, **only if Stage A recovered something**
+### Stage P — the identification level, the one list, and the bar — **gates Stage F**
+
+The product work Greg commissioned, § "The two product questions" below. It is not an eval stage and
+it is not optional scaffolding for one: **Stage F may not land before it**, because fetching raises
+recall on a rule whose precision is broken, and the level plus its default threshold is what contains
+the precision it costs.
+
+Three parts, in this order, each a commit.
+
+**P1 — the field and the matcher.** `identifies` on `DirectDebateRow`, a non-empty array of
+`IdentificationSignal`, plus `identificationLevel(row)` returning the strongest — a lookup over a
+fixed order, never a sum. The shingle matcher is model-free and lives in its own module beside
+`src/quote-match.ts`: article windows of 8 words and ≥ 40 characters, `findQuote(…, "spaced")` as the
+one matcher, **coverage as the floor and density as the ceiling** at the numbers measured above.
+Refusing a copy is a new drop reason, `sourceIsCopy`, counted and shown — never a silent filter
+([silent-success.md](../reusable/silent-success.md)). Artefacts written before the field read as
+`named` with the existing `articleReferenceQuote` as witness, so nothing needs re-running and no
+migration is required.
+
+**Done:** unit tests over fixed strings for the matcher, including a red-first test for each of the
+two mirrors at their measured densities and for `hamtyped` at 16.4% staying `quoted`; the level
+derivation exhaustive over the union with a `never` check; `npm test` and `npm run typecheck` green;
+the Layer 1 replay reproduces today's journals with the field populated and no model call.
+
+**P2 — one list.** The panel loses its two headings, two blurbs and two foot lines. Direct rows
+first, then claim rows, search order within each — `DEBATE_NO_RANKING` stands and the list is **not**
+sorted by level. Each row self-labels: direct rows carry the identification chip with the tooltip
+listing every signal found, claim rows keep `On what it claims` and their *Answering "…"* line. The
+empty first section becomes the one sentence, in its three forms, from § 1.
+
+**Done:** the panel renders all three empty forms and a populated list, seen in a real browser by a
+Sonnet subagent, not inferred from tests.
+
+**P3 — the bar.** `src/web/threshold.ts` unchanged and reused, on the one fact, over direct rows only;
+claim rows carry no level and never sit under it. Three stops labelled with the words. New `?name` in
+the URL state. **Default hides `named`-only rows**, and the default is re-measured on the corpus: if
+`writes` or Carr loses a verified reply at it, the default moves and that is a product fact worth
+recording here.
+
+**Done:** `?name` round-trips, `hiddenNote` says what is held back, the decoy's six rows are hidden by
+default and reachable by dragging, and the re-measurement is written into this doc whichever way it
+comes out.
+
+**Then the obligatory Sol review**, on all three commits together.
+
+### Stage F — full-page verification fallback — **Stage A said yes, and it must not land alone**
+
+**Answered 2026-09-06: `recovered 6 of 6`.** Every quotation the model reported that was missing from
+the provider extract, and whose page could be fetched, was found in the full page. The model was not
+paraphrasing; the slice was too small. Numbers and the three ways a naïve instrument would have got
+this wrong are in
+[the spike results](260905f-debate-mode-stage-0-spike-results.md) § 6.
+
+Two things that came with the verdict and change the stage:
+
+- **The haystack is decided: whole-body visible text, not Readability.** 6 of 6 against 2 of 6, with
+  four found in whole-body text *only* because Readability discards the sections they live in. The
+  precision risk that buys — a quotation matching a *"you may also like"* blurb — is to be
+  **measured**, since nothing so far exercised it.
+- **PDFs are a recurring case for group one, not an edge one.** On an academic subject the genuine
+  responses are papers, and one of Cargo Cult's two lost rows is Gelman's. `text: null` means Stage F
+  as specified still loses it. `src/pdf-read.ts` exists; wiring it in is a real question.
+
+**And the constraint that outranks the stage.** § "The decoy" below: on the constitution article
+full-page fetching would take group one from **one** false positive to **six**, because it raises
+recall on a rule whose precision is already broken there. **Stage F does not land before the decoy is
+measured and answered** — a fallback that finds more of the wrong thing is worse than no fallback.
 
 **Verification order matters**: the provider extract first, and only a quotation that misses there
 invokes the fallback. **A fetch or extraction failure never removes a row already verified from the
@@ -438,19 +567,212 @@ network-free.
 
 *Good enough to ship as experimental* is 1, 2 and 5.
 
-## The one product question, held for Greg
+## The two product questions — answered by Greg, decided 2026-09-06
 
-> the reliable product is *what the web says about what this piece claims*, and direct responses are
-> a bonus that fires on famous pieces. But the bonus is not optional, because a reader trying the
-> mode for the first time will try it on something famous, and an empty "About this piece" on *Cargo
-> Cult Science* — a piece with a Wikipedia article named after it — reads as broken, not honest. So:
+Greg, after seeing the decoy measurement:
+
+> 1 Maybe there's a way to clarify the phrasing to be clearer what it does and why it didn't find
+> any? Or combine them somehow? Not sure. Maybe there's a better approach.
+>
+> 2 I think it's important that the commentary be about the article being read here. However, it's
+> not always obvious whether different urls are hosting the exact same version as possible. So
+> perhaps report some kind of score for "how sure we are that this is about this particular exact
+> version", with a tooltip for each showing the reasons for the score? And then the user can
+> threshold by that in the "Prioritised" sub-mode?
+>
+> — Greg, 2026-09-06
+
+### 2 — a level that *is* one of the facts, not a score over them
+
+**My reading was half wrong and Fable caught the wrong half.** I argued Greg's score escapes both of
+this plan's refusals because its inputs are facts we computed rather than model opinions. It escapes
+§ 3 — a fact about our own evidence is not a verdict handed to a reader mid-read. It does **not**
+escape [quotes.md](../project/quotes.md), and re-reading the sentence I had cited shows why:
+
+> Both raw numbers are on a prioritised row and the composite never is — that is our arithmetic
+> dressed as the model's judgment.
+
+The raw scores there are on screen and checkable too. **What was refused is the combination**, because
+the weights are ours and a `0.7` means nothing a reader can verify. `link = 0.5, byline = 0.2,
+quote = 0.3` fails that identically. *"Every input is checkable"* saves the inputs; it does not save
+the arithmetic.
+
+So what survives is narrower and better: **the level is the name of the strongest evidence found.** No
+weights, no sum — a lookup, not arithmetic.
+
+```ts
+identifies:
+  | { kind: "linked"; url: string }
+  | { kind: "quoted"; quote: string; blockId: BlockId }
+  | { kind: "named"; by: "title" | "title-and-byline"; witness: string }
+```
+
+A row may have several; the level is the best, and **the tooltip lists every one found** — which is
+the tooltip Greg asked for, and it is the evidence rather than a gloss on it. Artefacts written before
+the field read as `named` with the existing `articleReferenceQuote` as witness, so nobody pays for a
+re-run.
+
+**And it is not called confidence.** The signals establish *how a page identifies this piece*, not
+*which version its author read*; calling it confidence invites the percentage we just refused.
+
+#### The quoting signal, measured before it was chosen
+
+The one signal that separates the decoy per row: **does the page quote words that are actually in this
+article?** We hold the article; the extract is in the journal; `findQuote` already exists. No model
+judgment — we *find* the span, and the span goes in the tooltip.
+
+Fable's caveat was that 2026 phrases might turn up in the 2023 text, which would make the signal
+weaker than hoped. **Checked, at its proposed floor of 8-word windows over 40 characters:**
+
+| corpus | windows | result |
+|---|---|---|
+| Claude's Constitution (the decoy) | 2,308 | **0 hits on all eight third-party commentaries.** The only hit is anthropic.com's own other page |
+| `writes` (Paul Graham) | 349 | **5 of 7 sources quote it** — 1.4%, 2.6%, 4.9%, 22.3%, and two at 100% |
+
+So it does not leak, and it has real positive power on ordinary replies out of extracts as short as
+765 characters.
+
+**The two at 100% are the finding that was not in anybody's design.** `archive.ph` and
+`www.paulgraham.com` matched *every window* — they are copies of the essay, not responses to it. Raw
+hit count would rank a mirror above every genuine reply: maximal identification, minimal reason to
+show it. It is `selfSource` wearing a new hat, and `sameTarget` does not catch it because a `www.`
+host and an archive are different addresses.
+
+**So the measure carries a ceiling as well as a floor.** What the ceiling *counts* changed once it was
+measured on more than one article — see below, because the first answer was wrong.
+
+##### The ceiling counts density, not coverage — corrected 2026-09-06, after measuring
+
+The paragraph above chose the obvious ceiling: **coverage**, the share of the article's windows found
+in the extract, refusing a page at ~100%. That is the number `writes` produced, and it is an artefact
+of `writes` being short. The essay is 3,146 characters, so a copy of it *fits inside one extract* and
+scores 100%. **On a long article a mirror is truncated like everything else**, its coverage collapses,
+and the ceiling never fires.
+
+The alternative asks the question the other way round. **Density** is the share of the *extract's own*
+windows that are found in the article: a copy is almost entirely article words however little of it we
+were handed, a commentary is mostly its own words. Both computed over the same sources:
+
+| source | article | extract | coverage | **density** |
+|---|---|---|---|---|
+| `archive.ph` | `writes` (349 windows) | 3,209 | 100.0% | **95.3%** |
+| `www.paulgraham.com` | `writes` | 3,136 | 100.0% | **79.5%** |
+| `www.hamtyped.com` (real reply) | `writes` | 3,760 | 22.3% | **16.4%** |
+| `robinsonraju.blog` (real reply) | `writes` | 765 | 4.9% | **17.3%** |
+| **`www.anthropic.com`** | constitution (2,308) | 253 | **1.3%** | **100.0%** |
+| **`calteches.library.caltech.edu`** | Cargo Cult (2,455) | 252 | **0.5%** | **65.0%** |
+| `sites.stat.columbia.edu` (real reply) | Cargo Cult | 5,287 | 4.0% | **13.9%** |
+
+**The last three rows are the whole finding.** Caltech's library hosts the original text of Cargo Cult
+Science and `www.anthropic.com` was serving a slice of the constitution — both copies, both invisible
+to a coverage ceiling at 0.5% and 1.3%, both obvious to density at 65% and 100%. Under the coverage
+rule a row citing either is kept and shown as a page that quotes the piece, which is the failure the
+ceiling exists to prevent, and only the density form of it fires.
+
+**What the ceiling does not do — corrected before it was built.** I first wrote here that the
+`anthropic.com` copy was *the one decoy row that reached the kept set*, which conflated two different
+things: it was an admissible **source**, and the kept row was a different page. Running production's
+own `parsePass` over the three journals says so plainly — of the ten rows the model reported across
+`writes`, Cargo Cult and the constitution, **not one cites a mirror**, and not one has a `sourceQuote`
+that is article text. So:
+
+- **The ceiling's positive case is unmeasured.** No mirror has yet been *reported as a row*;
+  `sourceIsCopy` will read `0` on today's whole corpus. It is a precaution, not a fix, and it is worth
+  building because a mirror row would carry the strongest chip on the panel — a copy of the article
+  presented as the best-identified response to it — but the plan should not claim it repairs anything
+  observed. **A counter that has only ever read zero is indistinguishable from a broken one**, so the
+  ceiling's proof is the unit tests at the measured densities, not the corpus.
+- **What actually fixes the decoy is the floor plus the default threshold.** All six reported rows
+  have zero coverage — none of them quotes the 2023 article — so all six are `named`-only, and § "The
+  bar" hides `named`-only rows by default. That is Stage P3's job, not the ceiling's.
+- **A sharper per-row guard exists and is deliberately not built.** A mirror has no words of its own,
+  so a row citing one must have a `sourceQuote` that is article text; testing that is nearly free.
+  Measured: it would refuse **none** of the ten rows we have. Building a second guard with no
+  demonstrated positive case is the machinery *"simplest version first"* refuses — recorded here so
+  the next reader knows it was considered, and it is what to reach for if a mirror ever does surface
+  as a row.
+
+**Threshold 50%**, sitting in an empty band: every copy measured is ≥ 65%, every genuine reply ≤ 17.3%.
+The ceiling requires **at least 5 extract windows** before it may fire, because a 250-character extract
+carries only a couple of dozen and a ratio over three of them is noise.
+
+**Coverage is still computed and still shown** — it is the floor (any hit at all makes the row
+`quoted`) and it is a number for the tooltip. What it is not is the copy test.
+
+#### What is built, and what is cut
+
+| signal | decision |
+|---|---|
+| links the exact URL (`sameTarget`) | **keep, free** — already computed inside `namesArticle`; surface which branch fired |
+| quotes text that is in this article | **build** — shingles, model-free, floor 8 words / 40 chars, **density ceiling for mirrors** at 50% over ≥ 5 extract windows |
+| title + byline vs title alone | **tooltip detail, not a level** — free, but Anthropic is the byline of both versions, so it does not discriminate here |
+| source date vs article date | **cut.** `SearchEvidence` carries no date; it would need Stage F plus meta parsing, and the decoy's commentary is *later* than both documents, so it never fires |
+| the article announcing a successor | **cut as a detector** — no reliable structure, and a heuristic banner is the shape [silent-success](../reusable/silent-success.md) warns about. Six rows all at the bottom level *is* the tell |
+| same host, different path | **cut** — anthropic.com hosts both versions; zero information |
+
+#### The bar, and what "Prioritised" turns out to mean
+
+One checkable fact is not a composite, so the `prioritised` refusal does not apply — **but this is not
+Prioritised either.** It is the same threshold bar Glossary, Quotes and Search already share
+([`src/web/threshold.ts`](../../src/web/threshold.ts)), on one fact, filtering direct rows only; claim
+rows carry no level and are never under it. Three stops labelled with the words rather than digits,
+per Quotes' *"the stops are the data, not a grid"*. New `?name` in the URL state.
+
+**Default: hide `named`-only rows.** Greg's own reason — *"important that the commentary be about the
+article being read here"* — and on the decoy the alternative is six wrong rows with a small chip on
+each, which a first-time reader takes for reception. Hidden rows say so through the existing
+`hiddenNote`, unchanged. **The default is re-measured on the corpus**: if `writes` or Carr lose a
+verified reply at it, the default moves, and that is a product fact worth knowing.
+
+### 1 — combine them, because the empty section was the symptom
+
+**Fable's answer, adopted:** the two-group split exists because two metered passes are what let us say
+*"no reply found"* truthfully. That is **our epistemics, not the reader's question**, and on Cargo
+Cult it currently produces two headings, two blurbs, an empty-state paragraph and two foot lines
+stacked over zero rows, followed by the three rows that are the actual product.
+
+**One list.** Direct rows first, then claim rows, search order within each — `DEBATE_NO_RANKING`
+stands, and it is **not** sorted by level, because the chip already says it. Each row self-labels:
+direct rows carry the identification chip, claim rows carry `On what it claims` and their existing
+*Answering "…"* line. Not grouped by `relation`, either: a section heading is a claim we stand behind,
+and relation is fenced as the model's reading. **Structure by what we can verify; keep the model's
+readings inside rows.**
+
+The empty first section becomes one sentence at the top:
+
+- nothing returned: *"No page the search found responds to this piece by name. What follows takes up
+  what it argues."*
+- returned but all lost: *"The search found 4 pages that might respond to this piece, but none could
+  be checked against the words it returned. What follows takes up what it argues."*
+- all hidden by the bar: nothing extra — `hiddenNote` already says it.
+
+On a famous article that reads as a finding rather than a broken panel, which is the honest empty
+state Greg asked for said in the reader's terms instead of ours.
+
+### Where this sits in the order of work
+
+It is **not** an eval stage, and it now gates one. Sequence: the `identifies` field and the shingle
+matcher, then the panel's one list, then the bar, and **only then Stage F** — fetching widens the
+haystack for `linked` and `quoted` as much as for recall, and the default threshold is what contains
+the precision it costs.
+
+**The simpler option passed over**, recorded because it is the obvious one: tighten `namesArticle` to
+require link-or-quote and drop title-only rows into `directnessUnverified`. Same default screen,
+fewer parts — and worse, because the rows become an invisible counter and Greg asked to *see* them
+with their reasons. The level plus a default threshold is that gate with a slider on it.
+
+## ~~The one product question, held for Greg~~ — asked and answered above
+
+Fable's original framing, kept because the decision above went further than it:
+
 > lead the panel with group two, show group one as a short line above it.
 >
 > — Fable, 2026-09-06
 
-Held, and brought back **with the live sweep's numbers under it**. The corpus research has already
-softened one half of its premise: Cargo Cult has famous *citations* rather than famous *replies*, so
-an empty group one there is more defensible than it looked.
+Greg's answer was *"combine them somehow… maybe there's a better approach"*, and the better approach
+is § 1 above: **one list**, with the two-pass distinction on each row and in a single sentence rather
+than in two sections of chrome. Reordering the sections would have kept the structure that was the
+problem.
 
 ## Deliberately not in this job
 

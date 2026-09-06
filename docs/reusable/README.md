@@ -28,8 +28,10 @@ inventing a process.
 | [debrief-progress.md](debrief-progress.md) | reporting where a piece of work stands: what's done, what's left, whether it's still worth it |
 | [improve-the-codebase.md](improve-the-codebase.md) | the periodic sweep — find the rework worth doing across the whole tree, cluster and prioritise it, and land the clusters that fit |
 | [write-tutorial.md](write-tutorial.md) | explaining how something works to somebody who has never read the code — mental models first, spiral passes, diagrams you actually look at |
+| [write-postmortem.md](write-postmortem.md) | a bug whose cause was more interesting than the line that broke — name the class, say why nothing went red, and rank what would have caught it |
 | [edit-important-docs.md](edit-important-docs.md) | changing a doc whose wording is a rule — one small set of changes at a time, before/after, approval before each |
 | [codex-cli-as-subagent.md](codex-cli-as-subagent.md) | a GPT/Codex subagent for cross-family review or delegated work, via [`scripts/run-codex.ts`](../../scripts/run-codex.ts) |
+| [claude-cli-as-subagent.md](claude-cli-as-subagent.md) | the mirror image — reaching Opus from something that is *not* a Claude session (a Codex run, a script, the box), via [`scripts/run-claude.ts`](../../scripts/run-claude.ts) |
 | [review-prompt-template.md](review-prompt-template.md) | writing the prompt for that review — name the candidate durably, suspicions last, a severity scale, an ID on every finding |
 | [claude-in-chrome.md](claude-in-chrome.md) | driving a browser through the Chrome extension, and it will not connect — `list_connected_browsers` returning `[]` is almost always the wrong Chrome profile |
 | [playwright-browser-control.md](playwright-browser-control.md) | driving a browser from a script, with no eyes — on the remote box, where the Chrome extension cannot follow ([browser-control.md](../project/browser-control.md) is which mechanism goes where) |

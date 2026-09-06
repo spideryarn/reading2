@@ -110,6 +110,11 @@ const SHARED = new Set([
      after somebody has talked for two minutes.
      See src/dictation-limits.ts. */
   "dictation-limits.js",
+  // The server caps spoken passage/tool labels before saving them. Live's
+  // lost-response repair compares those saved fields with the same cap, so it
+  // must share the rule. Extracted from routes.ts into this import-free leaf;
+  // the purity check below keeps server dependencies out of the client.
+  "spoken-label.js",
   /* What a bug report may carry — the diagnostics blob's shape and the two
      image formats a pasted screenshot may be. On the list for the same reason
      `monitoring-scrub.js` is, and it is the same argument one seam over: the
@@ -399,7 +404,34 @@ const SHARED = new Set([
      file names the prefix) and
      docs/plans/260831af-carrying-markup-facts-past-readability.md. */
   "reserved.js",
+  /* The changelog file's schema and its parser. The writer
+     (`scripts/changelog/changelog.ts`) and the reader
+     (`src/web/ChangelogPage.tsx`) are the two callers, and a format defined
+     twice drifts — here it would drift into a blank page rather than an error,
+     since the page is deliberately tolerant of a line it cannot read.
+
+     **One flat file rather than a `src/changelog/` pair**, which is what it was
+     for an hour on 2026-09-06. This list holds names resolved directly under
+     `src/`, so a nested module cannot be shared through it and would need a
+     second mechanism beside this one — `asset-delivery.ts` made the same call
+     for the same reason. It imports nothing, so the purity check below has
+     nothing to find.
+     See src/changelog.ts and docs/project/changelog.md. */
+  "changelog.js",
 ]);
+
+/**
+ * **The one file the client reaches for entirely outside `src/`.**
+ *
+ * `docs/changelog/versions.ndjson` is committed data, not code: nothing to
+ * bundle, only a string Vite inlines through `?raw`, and there is no `src/`
+ * leaf to move a copy into — the file *is* the changelog process's own
+ * append-only output (docs/project/changelog.md), and ChangelogPage.tsx is
+ * its one reader. The exact specifier, not a directory, because a second file
+ * reached this way is a decision of its own rather than something this line
+ * should wave through.
+ */
+const OUTSIDE_SRC_ALLOWED = new Set(["../../docs/changelog/versions.ndjson?raw"]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */
 function sourcesUnder(dir: string): string[] {
@@ -520,6 +552,10 @@ describe("the client's imports", () => {
       for (const spec of importsOf(file)) {
         // Only relative imports can escape; a bare specifier is a package.
         if (!spec.startsWith("../")) continue;
+
+        // `docs/changelog/versions.ndjson?raw` — the one exact specifier
+        // allowed entirely outside `src/`. See `OUTSIDE_SRC_ALLOWED`.
+        if (OUTSIDE_SRC_ALLOWED.has(spec)) continue;
 
         /* **Resolved against the importing file, not counted as `../`s.** The
            check used to read one leading `../` as "this leaves src/web", which

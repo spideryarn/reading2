@@ -291,6 +291,7 @@ const ARTICLE: PublicArticle = {
      reader hot-links exactly as it always did. The third state, and it is
      what the publisher-host assertions below are measured against. */
   assets: undefined,
+  navLabelStatus: "ready",
   blocks: [
     {
       id: "spya-aaaaaa",
@@ -433,6 +434,7 @@ const OWNED: Article = {
   blocks: ARTICLE.blocks,
   tree: ARTICLE.tree,
   assets: undefined,
+  navLabelStatus: "ready",
   meta: {
     ...ARTICLE.meta,
     ...PDF_META,
@@ -2524,7 +2526,11 @@ describe("the same address, as the owner", () => {
 
     /* An empty composer, on this paragraph — the panel's other shape. */
     expect(host.querySelector("textarea.chat-input")).not.toBeNull();
-    expect(new URLSearchParams(location.search).get("thread")).toBeNull();
+    // The draft renders immediately; nuqs throttles its separate history write.
+    // Six zero-time turns can finish before the URL queue is allowed to flush.
+    await act(async () => {
+      await vi.waitFor(() => expect(new URLSearchParams(location.search).get("thread")).toBeNull());
+    });
     /* And the transcript is gone, which is what says the button forced a draft
        rather than reopening what it was already showing. */
     expect(host.textContent).not.toContain(SEEDED_ANSWER);

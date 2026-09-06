@@ -12,13 +12,25 @@
    docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.
 
    `fb-*` classes rather than Tailwind: the house convention for dialogs, and
-   this one is a form with a dozen elements whose spacing has to agree. */
+   this one is a form with a dozen elements whose spacing has to agree.
+
+   **`.fb-button` is one of two shapes the trigger wears since 2026-09-06.** The
+   other is `.dock-feedback`, a button in the bottom bar, which needs no rule of
+   its own: it is a `.dock-btn` and § the bar's fit ladder owns its word. This
+   corner is what every page *without* a `Dock` still draws. */
 
 /* The mirror of `.logo-home` in the other corner, and the same three numbers:
    `--safe-*` insets, `--bar-h` so it sits on the controls bar's line rather
    than floating above it, and a z-index above the spine (45) and the bars (40)
    but below the drawer's dim (92) — while the drawer is open, filing a report
-   is not one of the things being offered. */
+   is not one of the things being offered.
+
+   **And that last clause is now true of this corner only.** The bar's copy sits
+   at `.dock`'s z-index 96, above the dim and operable by design, so moving the
+   trigger into the bar reverses the decision this line records. Accepted, with
+   the same reasoning `.logo-home` carries: the bar is how the drawer is shut,
+   and it already holds a link off the page. Said in both places so the next
+   reader does not find one file contradicting the other. */
 .fb-button {
   position: fixed;
   top: var(--safe-top);
@@ -431,8 +443,10 @@
 
 @media (max-width: 731px) {
   /* The word goes and the icon stays — § tokens shrinks `--feedback-w` to match,
-     and the two have to move together or the bars reserve room for a label that
-     is not being drawn. */
+     and the two still have to move together, though what goes wrong if they do
+     not is smaller than it was: until 2026-09-06 the bars reserved room for a
+     label nobody was drawing, and now it is only this button's own hit area
+     that is three times the glyph in it. */
   .fb-button-text { display: none; }
   .fb-button { justify-content: center; padding: 0; }
 }
