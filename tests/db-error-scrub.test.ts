@@ -353,7 +353,7 @@ describe("the guard, without a database", () => {
   });
 
   it("lets a tagged failure through with its own words", async () => {
-    /* `notMigrated`'s 501 and the reader's 404 both say something true and
+    /* An unmigrated seam's 501 and the reader's 404 both say something true and
        chosen. Translating them would replace a useful sentence with a generic
        one and lose the status with it. */
     const tagged = Object.assign(new Error("Looking a term up has no Postgres implementation yet."), {

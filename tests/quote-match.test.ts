@@ -15,7 +15,7 @@
  * arithmetic in it.
  */
 import { describe, expect, it } from "vitest";
-import { findQuote, quoteAppears, snippet } from "../src/quote-match.js";
+import { findQuote, quoteAppears, quoteFinder, snippet } from "../src/quote-match.js";
 
 describe("findQuote", () => {
   it("finds an exact quote and reports its real offsets", () => {
@@ -180,6 +180,50 @@ describe("findQuote", () => {
     const text = "alpha beta   gamma";
     const span = findQuote(text, "beta   ");
     expect(text.slice(span!.start, span!.end)).toBe("beta");
+  });
+});
+
+/**
+ * **One haystack, many needles** — the same search with the expensive half done
+ * once.
+ *
+ * `findQuote` reduces the whole text on every call, which is right for one
+ * question and quadratic for a caller asking thousands. src/shingles.ts asks
+ * 2,455 of them of one page's extract, and that cost 8 seconds a row before
+ * this existed.
+ *
+ * **The only thing worth testing is that it is the same function**, because a
+ * faster matcher that answers differently is the exact shape of failure
+ * docs/reusable/silent-success.md is about — the rows would still appear, with
+ * quieter evidence on them.
+ */
+describe("quoteFinder", () => {
+  const cases: [string, string][] = [
+    ["He rejects the idea that mind is software.", "mind is software"],
+    ["The Hard Problem is not the easy one.", "hard problem"],
+    ["a line\nbroken   oddly across   several spaces", "line broken oddly"],
+    ["it will fall apart in the end", "fall a part"],
+    ["Alpha beta gamma", "gamma"],
+    ["Alpha beta", "delta"],
+    ["", "anything"],
+    ["Alpha beta", ""],
+    ["\u201cQuoted\u201d and em\u2014dashed", '"Quoted" and em-dashed'],
+  ];
+
+  it("answers exactly as findQuote does, in both modes", () => {
+    for (const [text, quote] of cases) {
+      for (const passes of ["forgiving", "spaced"] as const) {
+        expect(quoteFinder(text, passes)(quote)).toEqual(findQuote(text, quote, undefined, passes));
+      }
+    }
+  });
+
+  it("takes the same hint, and takes it per question", () => {
+    const text = "the same words, and later the same words again";
+    const finder = quoteFinder(text);
+    expect(finder("the same words", 30)).toEqual(findQuote(text, "the same words", 30));
+    /* The haystack is prepared once; the hint is not part of it. */
+    expect(finder("the same words")).toEqual(findQuote(text, "the same words"));
   });
 });
 

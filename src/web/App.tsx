@@ -33,6 +33,7 @@ import { ContactPage } from "./ContactPage.js";
 import { FeaturesPage } from "./FeaturesPage.js";
 import { PublicLibraryPage } from "./PublicLibraryPage.js";
 import { PricingPage } from "./PricingPage.js";
+import { PublicReadableSharingPage } from "./PublicReadableSharingPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
@@ -296,9 +297,9 @@ const OWNER_HAS_EVERYTHING: PublicArtefacts = {
 };
 
 /**
- * **The two routes whose code is not in the reader's initial download.**
+ * **The three routes whose code is not in the reader's initial download.**
  * `LazyPage.tsx`
- * has the reasoning; these are the four loaders it takes.
+ * has the reasoning; these are the five loaders it takes.
  *
  * Named-export adapters rather than `lazy(() => import("./AdminPage.js"))`,
  * because `React.lazy` reads `module.default` and neither page has one — the
@@ -311,6 +312,11 @@ const loadAdminUsers = () => import("./AdminPage.js").then((m) => ({ default: m.
 const loadAdminFeedback = () =>
   import("./AdminPage.js").then((m) => ({ default: m.AdminFeedbackPage }));
 const loadDesign = () => import("./DesignPage.js").then((m) => ({ default: m.DesignPage }));
+/* `/changelog`'s own reason, beside `/design`'s: the parsed NDJSON file is
+   210 KB and would otherwise land in every reader's first download for a page
+   almost nobody opens — docs/project/changelog.md § The page. */
+const loadChangelog = () =>
+  import("./ChangelogPage.js").then((m) => ({ default: m.ChangelogPage }));
 
 
 
@@ -418,6 +424,13 @@ export function App() {
        landing page's "everything it does" link has to land somewhere a
        stranger can read. */
     if (route.kind === "features") return <FeaturesPage signedIn={false} />;
+    /* **The one page here whose reader may want nothing from us at all** — an
+       author who found their own writing on `/read/public`. Every other page in
+       this branch is reachable signed out because a stranger is deciding
+       whether to sign up; this one is reachable signed out because that reader
+       will never sign up, and a page they cannot open is a page that does not
+       exist. router.ts § `public-sharing`. */
+    if (route.kind === "public-sharing") return <PublicReadableSharingPage signedIn={false} />;
     /* The fifth, and the least arguable of them: a price somebody has to sign
        up to read is the thing people complain about, and this is the page one
        person sends another. */
@@ -435,6 +448,14 @@ export function App() {
        than their order in this list. Renumbering them for an insertion would
        make three comments say something none of them was claiming. */
     if (route.kind === "contact") return <ContactPage />;
+    /* Since 2026-09-06, and closer to `contact` than to any of the pages
+       above it: a changelog is a page somebody is *sent*, not one they browse
+       to, and it is about the product rather than about their account, so
+       there is nothing behind it an account would change. Bare, like every
+       other page in this branch — no shelf to send a stranger back to.
+       Lazy for the reason `design` is below: the parsed file is 210 KB.
+       LazyPage.tsx. */
+    if (route.kind === "changelog") return <LazyPage load={loadChangelog} routeKey="changelog" />;
     /* **The sixth, since 2026-09-03, and the only one that is not a page
        somebody was sent.** A stranger at an address nobody minted is exactly
        the reader this gate's default fails: the pitch at `/asdf` is a plausible
@@ -607,11 +628,32 @@ function SignedIn({
         <FeaturesPage signedIn />
       </>
     );
+  /* Mounted signed in as well, for the owner half of its two readers: somebody
+     weighing up the sharing switch is by definition signed in, and reaches this
+     from `/privacy` or from the shelf. `signedIn` for the reason the line above
+     it carries. */
+  if (route.kind === "public-sharing")
+    return (
+      <>
+        <HomeLogo />
+        <PublicReadableSharingPage signedIn />
+      </>
+    );
   if (route.kind === "contact")
     return (
       <>
         <HomeLogo />
         <ContactPage />
+      </>
+    );
+  // Signed in, the corner logo like every other standalone page — there is a
+  // shelf here for it to link at. See the signed-out branch above for why
+  // `/changelog` is on this list at all.
+  if (route.kind === "changelog")
+    return (
+      <>
+        <HomeLogo />
+        <LazyPage load={loadChangelog} routeKey="changelog" />
       </>
     );
   if (route.kind === "pricing")
@@ -2890,9 +2932,10 @@ function Reader({
       /* `band-covers` is the same idea and exists for a sharper reason: it is
          the *stylesheet's* only way to know that the mode band has no room
          beside the prose and is lying over it instead. That crossover is
-         `MODE_MIN + PROSE_MIN` against the window **minus the rail**, so it
+         `MODE_MIN + MODE_PROSE_FLOOR` against the window **minus the rail**, so it
          moves with `?spine=0` — and a media query cannot see a query
-         parameter. It was one for six days (`@media (max-width: 843px)`), and
+         parameter. (It was `MODE_MIN + PROSE_MIN` until 2026-09-06, which is
+         the pair the widths below are in.) It was one for six days (`@media (max-width: 843px)`), and
          from 832 to 843 with the rail off the two disagreed: layout.ts
          squeezed the table to make room for a band the stylesheet had already
          thrown over the article.
@@ -3470,9 +3513,11 @@ function Reader({
           arcByRow={arcCells}
           focusRow={outlineLive.focusRow}
           /* `modeW` is 0 exactly when the band covers the prose instead of
-             sitting beside it (layout.ts), which is iPad portrait. That is the
-             condition paragraph rows are not permissible under, so it is read
-             from the layout rather than from a width guessed here. */
+             sitting beside it (layout.ts) — a phone, since 2026-09-06; it was
+             iPad portrait and below until the crossover fell to 700. That is
+             the condition paragraph rows are not permissible under, and reading
+             it from the layout rather than from a width guessed here is why
+             that move cost this line nothing but its example. */
           proseBeside={fit.modeW > 0}
           /* **Rung 5 is the same layer the `Paragraphs` column draws**, so it
              makes the same decision. Withheld rather than announced: nobody

@@ -7,6 +7,8 @@
  * connects the two — see "the sentence must agree with the kind" below, which
  * is the test that would have caught the bug this file was written after.
  */
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import * as messages from "../src/messages.js";
 import { OWNED_ARTEFACT, sharingPersonalisedList } from "../src/messages.js";
@@ -221,7 +223,39 @@ describe("the code table and the messages are one fact, not two", () => {
         // heuristic in `kindOfMessage`, not to the table.
         .filter((c) => !/^ai-\d{3}$/.test(c)),
     );
-    expect([...fromMessages].sort()).toEqual(Object.keys(CODE_KINDS).sort());
+    const missing = [...fromMessages].filter((c) => !(c in CODE_KINDS)).sort();
+    expect(missing, "a message in this file carries a code the table does not have").toEqual([]);
+  });
+
+  /**
+   * **This used to be one `toEqual`, and the equality was hiding an assumption.**
+   *
+   * Asserting `codes(EVERY) === keys(CODE_KINDS)` checked both directions at
+   * once, which is why it was written that way — but the reverse direction
+   * silently required that **every registered code's sentence lives in this
+   * file**. That is not true and was never quite true: `ai-unusable` is raised
+   * by `CLAIMS_UNUSABLE` (src/referee-claims-run.ts) and `ANSWER_UNUSABLE`
+   * (src/referee-criteria-run.ts), both of which ask in their own comments to be
+   * registered here.
+   *
+   * The cost of the assumption was four days of not registering it. Adding the
+   * table entry alone turned this test red, and the only way to satisfy the
+   * equality was to move two exported constants and every site that throws them
+   * — so the "two mechanical steps" those comments describe were never two
+   * independent steps, and the cheap half could not land on its own. That is why
+   * three written reminders produced nothing.
+   *
+   * So the reverse direction moved to tests/every-ai-code-is-registered.test.ts,
+   * which derives its universe from `git ls-files src` instead of from this
+   * module's exports, and therefore checks it for the whole tree rather than for
+   * this file. Nothing is unchecked that was checked before; the orphan
+   * assertion simply got wider. docs/plans/260906h-improve-the-codebase-fourth-sweep.md § T1.2.
+   */
+  it("leaves the no-orphan direction to the tree-wide guard", () => {
+    /* A signpost with an assertion under it, so it cannot rot into a comment
+       about a file that stopped existing. */
+    const guard = "every-ai-code-is-registered.test.ts";
+    expect(existsSync(path.join(import.meta.dirname, guard)), `${guard} is gone`).toBe(true);
   });
 });
 

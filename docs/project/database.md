@@ -21,17 +21,17 @@ manual; that one is the taste.
 **This file opened by saying "there is no database" until 2026-08-28**, which was true when it was
 written as a stub for [auth.md](auth.md) to point at and had not been true for some time.
 
-## There is one store, and a tombstone where the flag was
+## There is one store, and nothing left of the flag
 
 **`SPIDERYARN_STORE` chose between a directory under `data/` and Postgres until 2026-09-05.** It
 chooses nothing now: [`src/store/index.ts`](../../src/store/index.ts) wires Postgres and only
-Postgres, and what is left of the variable in
-[`src/store/live.ts`](../../src/store/live.ts) is a **validator** — unset and `postgres` pass in
-silence, `files` or anything else throws a sentence with the date in it. It is there because Vercel's
-Preview and Production environments still carry the variable and only Greg can take it out; silently
-ignoring somebody who asked for the store that is gone would be the failure this whole migration was
-leaving behind. It goes when the variable does
+Postgres. A validator in `src/store/live.ts` outlived the choice by a day, because Vercel's Preview
+and Production environments still carried the variable and silently ignoring somebody who asked for
+the store that is gone would be the failure this whole migration was leaving behind. Greg removed it
+from both on 2026-09-06 and that file went with it
 ([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § I).
+**Nothing reads the name now**, and
+[`tests/one-store-only.test.ts`](../../tests/one-store-only.test.ts) says so with an empty allowlist.
 
 Everything below about *why* the filesystem store could not be the live one is kept, because it is
 the argument that got us here rather than a description of a switch. The sharpest form: the
@@ -60,7 +60,8 @@ that works — which is how Claims shipped filesystem-only and answered 501 in p
 hours with every test green
 ([260901e](../postmortems/260901e-claims-shipped-filesystem-only-and-returned-501-in-production.md)).
 A `pgFooStore` whose every method calls `notMigrated` is the same 501 by a longer route, so the same
-test flags it.
+test flags it — though that helper was deleted on 2026-09-06 once every seam had a real adapter, so
+that case is now a tripwire on a revival rather than a check on today's source.
 
 That guard asked for *two* implementations, and carried a `SEAM_ASYMMETRIES` map for the seams that
 deliberately had one, until 2026-09-05. Two was never the point: it was asking for a Postgres side
@@ -1374,8 +1375,10 @@ adapter uses `getDb()` and takes no `tx`.
   you. Measure the upload before blaming the database.
 - **Vercel does not have these values yet** — `DATABASE_URL`, `SPIDERYARN_OWNER_ID`,
   `PGSSLROOTCERT`. See [deployment.md](deployment.md#environment-variables). (`SPIDERYARN_STORE` was
-  on this list and is now the opposite: it is set there and wants **taking off** — stage I of
-  [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md).)
+  on this list, then became its opposite — set there and wanting taking off. Greg removed it from
+  Preview and Production on 2026-09-06 and stage I of
+  [260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) deleted
+  the last code that named it.)
 - **`on delete restrict` is inherited, not chosen.** All seven `owner_id` foreign keys use it, which
   means deleting the user from the Auth admin API or the dashboard will fail with `23503` while any
   row is owned. Supabase's own guidance is `cascade` or `set null`; keeping `restrict` is defensible

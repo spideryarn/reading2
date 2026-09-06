@@ -96,7 +96,13 @@ describe("the reading column is centred in its cell", () => {
    * open, because a table cell treats `height` as a *minimum*.
    */
   it("the column-header row has no height left to align anything in", () => {
-    const head = rule("thead th");
+    /* The selector was bare `thead th` until 2026-09-06, when it was scoped to
+       the zoom table because it had been reaching every table in the app
+       (docs/postmortems/260906g-an-unscoped-element-selector-in-styles-css-reached-every-table-in-the-app.md).
+       This assertion is about the geometry, not the spelling, but `rule()`
+       matches a selector literally — so a later rescoping breaks this test
+       again, and the fix is to respell it here, never to relax the rule. */
+    const head = rule(":where(table.zoom > thead) > tr > th");
     expect(head).toContain("height: var(--head-h)");
     expect(head).toContain("padding: 0");
     expect(head).not.toContain("border-bottom");
