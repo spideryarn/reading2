@@ -441,3 +441,112 @@ in this plan's scope unless the review says otherwise:
 - **Leave it and raise the deadline.** Rejected: `DEFAULT_JOB_CONCURRENCY = 3` means a step that is
   marginal alone is not marginal under load, and the lease exists to stop a wedged job holding a
   claim for ever.
+
+## Groundwork for stage 2, established before any code <a id="stage2-groundwork"></a>
+
+Researched 2026-09-06, against the code rather than from memory. Read this before starting stage 2;
+several of these reverse an assumption the stages above were written on.
+
+### The P0 is satisfied by omission, not by a guard
+
+**The discriminator is one ternary**, [`routes.ts`](../../src/routes.ts):7927 — `request.url === undefined`
+takes the free arm (`queue({})`), anything else goes through `withIngestSlot`. Nothing downstream
+re-derives it; the only durable fact is `jobs.ingest_event_id`, and for a slug-scoped rerun it is
+null because `EnqueueRequest.ingestEventId` is simply absent. `settleReservation`'s first line is
+`if (!ingestEventId) return;`, so a free job settles nothing on every ending.
+
+So **you have to work to charge**, and there are exactly two ways to do it by accident: route the
+successor through a body carrying a `url`, or copy the parent's `ingestEventId` onto it. The second
+is refused by `jobs_ingest_event_unique` — but it surfaces as *"Too many articles already called X"*
+after twenty allocation passes, which is safe and completely unintelligible. **Write the test that
+names it.**
+
+Note `Job.url` cannot be asked the billing question: `enqueue` fills it from `urlForSlug(slug)`
+([`jobs.ts`](../../src/jobs.ts):3043), so a free rerun's row carries a URL too. That normalisation is
+why the wall lives in the route rather than in `enqueue`
+([`admission.ts`](../../src/billing/admission.ts):8).
+
+### Enqueueing inside the publication transaction does not exist yet
+
+`tryEnqueue` ([`pg-jobs.ts`](../../src/store/pg-jobs.ts):219) opens `const db = getDb()` and inserts on
+the **pool**. It is the only thing in the codebase that inserts a `jobs` row, and the file's
+`type Executor = Db | Tx` doctrine (:97) is drawn deliberately around *transitions* — `settleIn` can
+pass its transaction to `finishIn` and `releaseStepIn`, and `enqueueOrGet` is pointedly not on that
+list. The recorded reason is that `enqueueOrGet` takes a **second pooled connection** and
+`DATABASE_POOL_MAX` is 5 — an argument against calling it while holding the billing lock, **not**
+against inserting on an executor you already hold.
+
+**There is no precedent for a job spawning a job.** Two production callers of `enqueue` (the routes
+and `retryJob`), no post-publication hook of any kind. Stage 2 invents this pattern, so there is no
+existing test and no written failure mode to copy.
+
+What it needs is a narrow `enqueueSuccessorIn(tx, …)` of roughly thirty lines rather than threading
+`tx` through `enqueue`'s 320. The successor's shape is the simplest one `enqueue` supports:
+`reservesName: false`, `urlKey` null, no `ingestEventId`, no `retryOf`. `drive()`/`pump` stays
+**outside** the transaction and is a no-op on Vercel anyway. Lock order is already article-then-job
+and this adds none.
+
+### "One job per slug" is gone, and the successor is never refused
+
+The index that would have blocked this was **deleted on 2026-09-02** and split three ways
+([`schema.ts`](../../src/db/schema.ts):2085), precisely so a second request for one article queues
+rather than 409s. The successor is inserted `queued`, so it collides with none of the four surviving
+indexes; the only conflict it can hit is `jobs_active_work`, which resolves to `sameWork` — the
+dedupe we want. And because the parent's `finishIn` runs in the same transaction as the insert, a
+claimant arriving after commit sees no predecessor.
+
+**One thing in our favour that the stages above did not know:** `STEP_BUDGET_MS` is consulted only
+for the *next* step after one has finished ([`jobs.ts`](../../src/jobs.ts):2411). The first runnable
+step of any claim runs ungated, so a one-step `labels` job **always gets the full 740 s deadline**
+whatever number goes in the table. The measured worst case is 682 s. It fits — only just, and only
+because it starts its own claim.
+
+### The hand-kept registrations, which are where this will drift
+
+Compiler-enforced and therefore safe: `StepName`, `STEP_ORDER`, `STEPS`, `STEP_BUDGET_MS`,
+`STORAGE`, `STEP_STORAGE`, `STAMP_SOURCE`, `STAGE_ICONS`. `labels` is **already** an `ArtifactKind`
+and already a `Task`, so no `SHAPE` row, no DTO change, no export line.
+
+The ones nothing checks:
+
+- **The `revision_step_runs_step` CHECK** — a migration plus a hand-copied literal at
+  [`schema.ts`](../../src/db/schema.ts):2294. **It has drifted three times.** Its comment currently
+  says *"`labels` is deliberately NOT here"*; that sentence becomes false and must be replaced.
+- **`FORCE_ONLY_WHEN_NAMED`** ([`pipeline.ts`](../../src/pipeline.ts):366) — a bare `ReadonlySet`.
+  Omitting `labels` leaves it in the positional cascade, so forcing `hierarchy` sweeps it in. Decide
+  it, with a comment, either way.
+- **`DEFAULT_INGEST_STEPS`** — `labels` must not be added, and nothing checks that.
+- **`isCurrent`'s switch** ([`pg.ts`](../../src/store/pg.ts):2488) — falling through to `default: true`
+  makes the step report itself current for ever, on the one page whose job is to say otherwise. It
+  has already happened to `ideas` and to `sketch`.
+- **`STEP_TIMING`** ([`job-state.ts`](../../src/job-state.ts):417) — falls back to 180 s, so a 680 s
+  labels run raises a false alarm every time.
+
+### What `arc` actually cost, since it is the rehearsal
+
+From [260829f](260829f-defer-arc-and-rename-hierarchy.md). Two lessons, and the second is the one
+that bites us:
+
+1. **The freshness check came first, while the step was still in the defaults**, and the removal from
+   `DEFAULT_INGEST_STEPS` happened only afterwards, in one commit with `FORCE_ONLY_WHEN_NAMED`. The
+   order was forced by review. *"Its position **is** the signal, and this change removes its
+   position."*
+2. **Every existing artefact went stale the day it shipped** — *"the visitor problem arriving for the
+   whole existing library at once."* That is F4/F5 in this plan, and `arc` walked straight into it.
+
+Also: **a test's name was the old specification.** `tests/jobs.test.ts` § *"keeps `arc` in the
+cascade, because it cannot check itself"* had to be rewritten, and four other assertions in the same
+file silently expected the positional sweep. Grep `tests/jobs.test.ts` for `labels` before starting.
+
+### The open question that must be settled before any code <a id="two-steps-one-stamp"></a>
+
+**Two steps would read their stamp off the same artefact.** This plan keeps
+`STAMP_SOURCE.hierarchy = "labels"` ([§ the stamp route](#stamp-route)) *and* adds a `labels` step
+that also writes the `labels` column. Nobody has thought that through against `assertStampAgrees`,
+`recordStamp` and `stampForStep`'s `StampDisagrees` throw — which is the very mechanism this plan
+measured producing 409s on 14 live articles. **It deserves its own pass, first.** If it does not
+hold, the stamp route has to be reopened rather than patched.
+
+Two smaller undecideds: whether the successor should carry a `profile` (the route resolves it from
+the reader today, and a server-enqueued job has no route), and whether `enqueueSuccessorIn` belongs
+in `pg-jobs.ts` or as a bespoke insert in `pg-session.ts`.
