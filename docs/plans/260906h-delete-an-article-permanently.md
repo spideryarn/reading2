@@ -110,11 +110,9 @@ otherwise read the gaps as bugs.
 
 ## Risks, surfaced early
 
-- **`articles_current_revision_fk` is `NO ACTION` and not deferrable**
-  ([`drizzle/0001_auth_fks_and_guards.sql:33`](../../drizzle/0001_auth_fks_and_guards.sql)). A
-  single-statement `DELETE FROM articles` survives it only because `NO ACTION` is checked at end of
-  statement. Deleting children by hand first, or splitting into two statements, breaks it. **Stage A
-  proves this against a fully-populated article rather than trusting the reasoning.**
+- ~~**`articles_current_revision_fk` is `NO ACTION` and not deferrable**~~ — **settled by the Stage A
+  spike, 2026-09-06.** The single statement works; hand-deleting children first fails, and a
+  transaction does not rescue it. See *What the spike found* below, which is now the authority.
 - **Three tables are keyed by `slug` with no foreign key** and are invisible to the cascade:
   `jobs.slug` ([`schema.ts:1752`](../../src/db/schema.ts)), `uploads.slug` (`:1700`), `feedback.slug`
   (`:3531`). `jobs` also carries the `jobs_one_running_per_slug` and `jobs_reserved_slug` partial
@@ -137,19 +135,80 @@ settle it and record any overrule here.
 
 ### Stage A — prove the delete is possible, and get this plan reviewed
 
-- [ ] Spike, in a scratch script against local Postgres: build a **fully populated** article — a
+- [x] Spike, in a scratch script against local Postgres: build a **fully populated** article — a
       published revision, blocks, block identities, comments, a chat thread with messages, a search
       run, criteria, claims, checkpoints, glossary lookups, link summaries, an `ai_calls` row, an
       `ingest_events` row, a visibility change, a `jobs` row — then run the one statement
       `delete from spideryarn.articles where id = $1` and report what happens.
       Reuse `tests/helpers/scratch-article.ts`; do not invent a second seeder.
-- [ ] Record which tables emptied, which kept a row with a null pointer, and — the point of the
+- [x] Record which tables emptied, which kept a row with a null pointer, and — the point of the
       spike — whether `articles_current_revision_fk` complained.
 - [ ] Send this plan to GPT Sol before any production code is written.
 - [ ] Fold the verdict back into this doc.
 
 Done looks like: a transcript showing the delete succeeding (or failing, which would reshape Stage
 C), and Sol's review answered.
+
+#### What the spike found, 2026-09-06
+
+Seeded through `scratchArticleInPg` — the real load path, so a genuinely **published** revision and
+a non-null `current_revision_id`, which is the whole risk — plus raw inserts for the leaf tables:
+19 blocks, 19 identities, 9 step runs, and a row in every reader-state table.
+
+**`delete from spideryarn.articles where id = $1` succeeded, `rowCount = 1`.**
+`articles_current_revision_fk` did not complain. Everything with a cascading FK emptied. The four
+`on delete set null` tables — `ai_calls`, `ingest_events`, `article_visibility_changes`,
+`realtime_sessions` — each kept its row with `article_id` now null, individually confirmed.
+
+**The positive control was observed red**, which is the half that makes the above worth believing.
+Deleting children by hand first fails, and **a transaction does not rescue it** — these constraints
+are `NOT DEFERRABLE`, so the check lands at end of *statement*, not end of transaction:
+
+```
+delete from spideryarn.article_revisions where article_id = $1
+→ 23503 update or delete on table "article_revisions" violates foreign key constraint
+  "articles_current_revision_fk" on table "articles"
+
+begin;
+  delete from spideryarn.block_identities where article_id = $1;   -- throws here
+  delete from spideryarn.articles where id = $1;
+→ 23503 … violates foreign key constraint "comments_identity_fk" on table "comments"
+```
+
+The same article then deleted cleanly with the single statement. **So Stage C must delete the
+`articles` row in one statement and let the cascade run — tidying up children first is the thing
+that breaks, and wrapping it in a transaction hides nothing and helps nothing.**
+
+Four more `NO ACTION` composite FKs *between* cascade-children survive the single statement silently,
+and are named here because they are the same class of trap for anyone who later tries to be tidy:
+`comments_identity_fk`, `revision_blocks → block_identities`, `chat_threads → block_identities`,
+`comments(article_id, criterion_id) → referee_criteria`.
+
+**The one real gap the cascade leaves is an active job**, and it is sharper than the plan assumed.
+Both slug indexes are partial:
+
+```
+jobs_reserved_slug        unique (slug) where status in ('queued','running') and reserves_name
+jobs_one_running_per_slug unique (slug) where status = 'running'
+```
+
+Measured, by deleting the article and then re-adding the same slug:
+
+| leftover job status | re-insert article | new job |
+|---|---|---|
+| `done` / `error` | ok | ok |
+| `queued` / `running` | ok | **`23505 duplicate key value violates unique constraint "jobs_reserved_slug"`** |
+
+So a terminal job is inert and can be left alone; a `queued` or `running` one left behind **blocks
+the reader from ever re-adding that URL**, and is also an orphan the queue will still try to run.
+`jobs_active_work` and `jobs_active_source` are partial on the same statuses and behave the same way.
+
+This is not fully covered by the live-job refusal in Stage C step 4: the glossary query it copies
+deliberately misses *a claimed job that has not opened its draft yet*. So step 5 must delete the
+slug's non-terminal jobs rather than relying on the refusal to mean there are none.
+
+`uploads` and `feedback` rows also survive with a stale `slug`, but neither has a unique index on it,
+so they dangle harmlessly.
 
 ### Stage B — deleting must not change the bill
 
@@ -193,10 +252,13 @@ No UI. The whole of the destruction, reachable only by an API call.
       4. Refuse while a job is live — reuse the shape of `liveJobHoldingADraftQuery`
          (`pg-glossary.ts:164`) and `refuseIfAJobIsInside` (`tests/helpers/forget-revisions.ts:42`);
          409 with a sentence, not a code.
-      5. Delete the `jobs` rows for the slug (frees `jobs_one_running_per_slug` /
-         `jobs_reserved_slug` so the URL can be re-added) and clear `queue_state.running_job_id` if
-         it names one. Delete the `uploads` row — but **not** its staging object, per
-         `pg-uploads.ts:221`.
+      5. Delete the slug's **non-terminal** `jobs` rows — `queued` and `running`. Measured in Stage
+         A: leaving one behind returns `23505 … "jobs_reserved_slug"` when the reader tries to
+         re-add the same URL, and orphans a job the queue will still pick up. Terminal rows
+         (`done`/`error`) are inert and stay, so the history survives. **Do not lean on step 4 to
+         mean there are none** — the glossary query it copies deliberately misses a claimed job that
+         has not opened its draft yet. Clear `queue_state.running_job_id` if it names one. Delete the
+         `uploads` row — but **not** its staging object, per `pg-uploads.ts:221`.
       6. `delete(articles).where(ownedSlug(slug))` — **one statement**, children left to the cascade.
       7. Return something the client can act on; never the deleted entry as though it still existed.
 - [ ] `DELETE /api/library/:slug` in `serveAuthenticatedApi`, reusing the existing `shelfEntry`
