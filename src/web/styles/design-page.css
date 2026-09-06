@@ -105,6 +105,71 @@
   gap: 0.6rem;
   margin-bottom: 0.7rem;
 }
+/* A note that shares a row with the control it is about, rather than sitting
+   under it as a paragraph. Only the margin changes; the type and the colour
+   stay `.design-note`'s. */
+.design-note-inline { margin: 0; flex: 1 1 22rem; }
+
+/* ---- the shared mode surfaces ----
+   The states of `.mode-band` and the `.gloss-*` bodies inside it. Nothing here
+   describes the band: these five rules are the shelf it is stood on.
+
+   THE ONE THING TO UNDERSTAND: `.mode-band` is `position: fixed`, and on this
+   page it stays that way. Overriding it to `static` — which
+   preview-chat-markdown.tsx does, reasonably, being a throwaway that checks one
+   scroller — would take the band's height with it, and with the height go
+   `min-height: 0` and the `flex: 1` on its scroller. The page would then be
+   showing a shape the app never draws, which is the exact failure this whole
+   file's header warns about.
+
+   So the cell becomes a **containing block for fixed descendants** instead.
+   `contain: layout` does that by definition (CSS Containment § layout
+   containment); `paint` is here because the band is deliberately allowed to
+   overflow in one of the cases below and the clip has to be this box rather
+   than the page.
+
+   The seven custom properties are the band's ENVIRONMENT, not its style. In
+   the app they come off `.reader` (`--spine-w`, `--mode-w`) and `:root` (the
+   bars, the notch) and describe the rail, the two moving bars and the safe
+   areas — none of which exists here. Zeroing them is what makes the band fill
+   this cell; nothing about how the band draws is restated.
+
+   `--mode-w: 288px` MIRRORS `MODE_MIN` in layout.ts — the narrow end of what
+   the layout will ever give the band, and so the width every state below has to
+   survive. Mirrored rather than imported, the same way `--spine-w: 12px`
+   mirrors `SPINE_W` in shell.css, and for a duller reason: DesignPage is a lazy
+   route, and importing layout.ts would put it in the graph test's shared-with-
+   every-reader list (tests/eager-client-graph.test.ts). Px and not `rem`,
+   because px is the unit the band's width is arithmetic in — and because the
+   root-font control on that page would otherwise widen the band while the
+   layout's own number stayed put, which is the mismatch the control exists to
+   show rather than to commit. */
+.design-bands {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1.6rem 1.4rem;
+}
+.design-band-case { --mode-w: 288px; margin: 0; width: var(--mode-w); }
+.design-band-case figcaption { margin-bottom: 0.35rem; font-size: 0.8rem; color: var(--ink-soft); }
+.design-band-case .design-note { margin: 0.45rem 0 0; }
+.design-band {
+  --spine-w: 0px;
+  --safe-left: 0px;
+  --safe-bottom: 0px;
+  --bar-bottom: 0px;
+  --dock-bottom: 0px;
+  --hint-h: 0px;
+  position: relative;
+  contain: layout paint;
+  width: var(--mode-w);
+  /* Tall enough that every state below draws in full — the tallest, *missing*,
+     is about 225px at a 16px root. The band in the app runs from the controls
+     bar to the dock, which is most of the window, so a cell short enough to
+     clip one of these would be reporting a fault only this page has. `rem`
+     rather than px so it keeps its headroom under the root-font control. */
+  height: 18rem;
+}
 
 .design-swatches {
   display: grid;
