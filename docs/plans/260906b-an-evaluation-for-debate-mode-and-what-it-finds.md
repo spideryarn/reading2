@@ -264,9 +264,20 @@ falls through to the title, and *"Claude's Constitution"* is 21 characters again
 `MIN_TITLE_EVIDENCE_CHARS = 20`. So a 2026 commentary is kept as a response to a document it has never
 discussed, with every counter clean.
 
+**Measured 2026-09-06, and it is not a hypothesis any more.** All **six** direct rows the model
+reported answer the 2026 document. Two are established from their own quoted words — Zvi's names
+*"the official version of what we previously were calling its 'soul document'"*, and Matt Glassman's
+says *"It's completely different in approach to the previous Claude constitution."* **A row that
+explicitly distinguishes the two documents was reported as a response to the older one.** The rules
+cut six to one, so one false positive reached the kept set — and it survived by the accident of where
+a search engine cut its extract, not because any rule noticed.
+
 Whether that is *fixable* is a real question — an article and its successor sharing a title is
-genuinely ambiguous, and demanding a URL match would empty group one much further. It is not this
-plan's job to answer it. It is this plan's job to stop it being **unknown**.
+genuinely ambiguous, and demanding a URL match would empty group one much further. This plan's job
+was to stop it being unknown, and that is done. **What has changed is its priority**: it now gates
+Stage F, because fetching the full page would take this article's group one from one wrong row to
+six. Raising recall on a rule whose precision is broken makes the product worse, and the two findings
+have to be answered together.
 
 **Pinned by production's own fingerprint** (F41): each entry pins
 `inputFingerprint(blocks, tree, meta)` — blocks, tree and the cited head — because pass A searches for
@@ -362,7 +373,19 @@ capture journal above is what would have made it one.
 Each ends with the suite green and the tree safe to commit. **Nothing lands in production before
 Stage E.**
 
-### Stage A — the journal, the runner, and the two-curl verdict
+### Stage A — the journal, the runner, and the two-curl verdict — **done, 2026-09-06**
+
+Landed as `0963f85d`. Three articles journalled for **$0.6384** over six calls, all
+`scope_kind: 'eval'`; the verdict is `recovered 6 of 6` and is written up in
+[the spike results](260905f-debate-mode-stage-0-spike-results.md) §§ 6–7. Both instruments were
+watched failing under a deliberate mutation before their green was believed — the free seam check
+(17 assertions) and the verification probe's dry run (25).
+
+**One gap found in the doing, not yet closed:** an eval run's `ai_calls` rows carry an empty
+`article_slug`, because the runner calls `generateDebate` outside a job and nothing attaches the
+article. The run's own `run.json` records the generation ids, so nothing is unattributable — but the
+ledger alone cannot say which article an eval call was for, and a later cost report over
+`scope_kind: 'eval'` would need the run directories beside it.
 
 - The two-event capture journal above.
 - `evals/debate/` with a runner calling `generateDebate` directly — **never the queue**, so no
@@ -447,7 +470,28 @@ sweep that does no judging cannot produce.
   `evals/results/debate/` and the section in `evals/README.md`; update the parent plan and the spike
   results. ~$2.
 
-### Stage F — full-page verification fallback, **only if Stage A recovered something**
+### Stage F — full-page verification fallback — **Stage A said yes, and it must not land alone**
+
+**Answered 2026-09-06: `recovered 6 of 6`.** Every quotation the model reported that was missing from
+the provider extract, and whose page could be fetched, was found in the full page. The model was not
+paraphrasing; the slice was too small. Numbers and the three ways a naïve instrument would have got
+this wrong are in
+[the spike results](260905f-debate-mode-stage-0-spike-results.md) § 6.
+
+Two things that came with the verdict and change the stage:
+
+- **The haystack is decided: whole-body visible text, not Readability.** 6 of 6 against 2 of 6, with
+  four found in whole-body text *only* because Readability discards the sections they live in. The
+  precision risk that buys — a quotation matching a *"you may also like"* blurb — is to be
+  **measured**, since nothing so far exercised it.
+- **PDFs are a recurring case for group one, not an edge one.** On an academic subject the genuine
+  responses are papers, and one of Cargo Cult's two lost rows is Gelman's. `text: null` means Stage F
+  as specified still loses it. `src/pdf-read.ts` exists; wiring it in is a real question.
+
+**And the constraint that outranks the stage.** § "The decoy" below: on the constitution article
+full-page fetching would take group one from **one** false positive to **six**, because it raises
+recall on a rule whose precision is already broken there. **Stage F does not land before the decoy is
+measured and answered** — a fallback that finds more of the wrong thing is worse than no fallback.
 
 **Verification order matters**: the provider extract first, and only a quotation that misses there
 invokes the fallback. **A fetch or extraction failure never removes a row already verified from the
