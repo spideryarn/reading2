@@ -56,11 +56,12 @@ of compression, down the page for position and across for detail. Read that firs
 
 ### The modes in the band
 
-**Five of the fourteen are behind the experimental-features switch** and are drawn only for a reader
-who asked for them — Quotes, Timeline, Referee, Remember and Debate. The other nine (Plain, Hierarchy,
-Outline, Summary, Glossary, Ideas, Search, Chat, Diagram) are what everybody sees, a signed-out
-visitor included. Diagram was the fifth until 2026-09-04, when the gate moved a level down: the mode
-is in everybody's bar and four of its five pictures are behind the switch instead
+**Four of the fourteen are behind the experimental-features switch** and are drawn only for a reader
+who asked for them — Timeline, Referee, Remember and Debate. The other ten (Plain, Hierarchy,
+Outline, Summary, Glossary, Ideas, Quotes, Search, Chat, Diagram) are what everybody sees, a
+signed-out visitor included. Quotes came out on 2026-09-06, valuable enough to show everybody, and
+Diagram on 2026-09-04, when the gate moved a level down instead: the mode is in everybody's bar and
+four of its five pictures are behind the switch
 ([diagram.md](diagram.md), [experimental-features.md](experimental-features.md)).
 
 Hidden means hidden from the bar, not unreachable: `?mode=timeline` still works, and the bar retains

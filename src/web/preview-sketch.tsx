@@ -11,7 +11,7 @@
  * is whether it survives a narrow band: 288px is `MODE_MIN`, and 400px is
  * `MODE_IDEAL`, which is what a laptop actually gives it.
  *
- * Delete this file, preview-sketch.html and preview-sketch-fixture.json when
+ * Delete this file, preview/preview-sketch.html and preview-sketch-fixture.json when
  * the check is done; nothing links to any of them.
  */
 import { createRoot } from "react-dom/client";

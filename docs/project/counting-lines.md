@@ -68,7 +68,7 @@ encodes two judgements:
   JSON and hand-written write-ups of what that JSON meant, side by side. A rule that claimed the
   whole directory would file six essays as generated output.
 - `fixtures`, `generated` and `assets` come next, above `tests`. Otherwise
-  `test/fixtures/structures.blocks.json` — pipeline output, committed so a test has something to run
+  `tests/fixtures/structures.blocks.json` — pipeline output, committed so a test has something to run
   against — counts as a test somebody sat down and wrote.
 
 Those three are listed but kept out of the headline, under `— nobody wrote`. A total that includes

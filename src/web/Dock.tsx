@@ -91,11 +91,17 @@
  * ## And a second rule, which is *whether* a button is drawn at all
  *
  * Since 2026-09-03 the order is not the only question a `MODES_UI` row answers.
- * Five of the fourteen — Quotes, Timeline, Referee, Remember and Debate — are
+ * Four of the fourteen — Timeline, Referee, Remember and Debate — are
  * behind the experimental-features switch, so the bar draws the rows that are
  * not experimental **plus whichever mode the reader is in**. Every row carries
  * a required `experimental: boolean`, so mode fifteen cannot be added without
  * somebody deciding which side of that line it is on.
+ *
+ * **Quotes came out on 2026-09-06** — Greg's call, that it is valuable enough
+ * to put in front of every reader — leaving four. The limit its row in
+ * docs/project/experimental-features.md was written about is still real (the
+ * check proves the words are in the piece, not who said them); it is now
+ * something a reader meets rather than a reason to hide the mode.
  *
  * **Diagram came back out on 2026-09-04**, and the gate went one level down
  * rather than away: the mode is in the default bar, and four of its five
@@ -153,7 +159,11 @@ import {
    record. See `ModeUi` below. */
 import { MODE_LABEL } from "../title-text.js";
 import type { Comment } from "../types.js";
-import { armActivationForMode } from "./activation.js";
+import {
+  armActivationForDiagram,
+  armActivationForMode,
+  armActivationForTweets,
+} from "./activation.js";
 import { useDockFit } from "./dock-fit.js";
 /* Type only: the bar is *handed* the switch, it does not subscribe to the store
    — see the `experimental` prop. A type import cannot become a subscription. */
@@ -171,7 +181,8 @@ import {
 /* The one rule both this bar and Diagram's picture chips draw by — see
    `visibleModes` below. experimental-visibility.ts. */
 import { shownBehindTheSwitch } from "./experimental-visibility.js";
-import { DEFAULT_MODE, type Mode, type Panel } from "./params.js";
+import type { DiagramKind } from "./diagram.js";
+import { DEFAULT_MODE, diagramInSearch, type Mode, type Panel } from "./params.js";
 import { Link } from "./Link.js";
 import { type ArticleView, carriedSearch, readHref } from "./router.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -559,10 +570,15 @@ const MODES_UI = [
      the mode that is *closest* to them — every row is a sentence out of the
      piece rather than something a model wrote about it. Greg set this order by
      hand, so a new mode goes where it belongs in his reasoning rather than on
-     the end. docs/project/quotes.md. */
+     the end. docs/project/quotes.md.
+
+     **Not experimental since 2026-09-06**, on Greg's call that the mode is
+     valuable enough to show everybody. Like Glossary and Ideas, pressing it
+     starts a paid run (activation.ts § MODE_TARGET), which is what the other
+     two default-visible extraction modes already do. */
   {
     mode: "quotes",
-    experimental: true,
+    experimental: false,
     icon: Quote,
     blurb: "The lines worth keeping — the piece's own sentences, chosen and checked against it",
   },
@@ -626,9 +642,15 @@ const MODES_UI = [
      **Not experimental since 2026-09-04**, and the flag moved rather than
      went: one of its five pictures is good enough for everybody and four are
      not, so the switch now hides the four (`KIND_UI` in DiagramPanel.tsx).
-     Opening the mode still buys nothing — the picture it lands on is a Sketch
-     nobody has drawn, which is an invitation with the price on it, and only a
-     press on that button spends anything (activation.ts § MODE_TARGET).
+
+     **Pressing this button draws the Sketch, since 2026-09-06.** It used to buy
+     nothing — the mode landed on an invitation with the price on it and waited
+     for a second press — and Greg asked for the second press to go
+     (docs/plans/260906b-opening-a-mode-starts-it-generating.md). So this is now
+     the most expensive button in the bar that is in front of *every* reader:
+     ~$0.20 and about two minutes. Only the Sketch; Illustrated is still its own
+     chip inside the mode. activation.ts § MODE_TARGET has the reasoning, and the
+     empty state still says the price for anyone who arrives without pressing.
 
      The blurb names the picture a default reader will actually meet. It used to
      list the three geometries, which are now the hidden ones. */
@@ -878,9 +900,10 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
  * for as long as the marker was up. GPT Sol, reviewing stage 2.
  *
  * **The modes go in by name, not by count.** It was `MODES_UI.length` until
- * 2026-09-03, when five modes went behind the experimental switch (four since
- * 2026-09-04, Diagram having come back out): the bar
- * retains whichever experimental mode the reader is in, so `?mode=quotes`
+ * 2026-09-03, when five modes went behind the experimental switch (four today —
+ * Diagram came back out on 2026-09-04, Debate went in on 2026-09-05 and Quotes
+ * came out on 2026-09-06): the bar
+ * retains whichever experimental mode the reader is in, so `?mode=timeline`
  * becoming `?mode=remember` leaves the count unmoved and changes the row's
  * width, because those two words are not the same width. A signature that
  * counted would not re-run the fit, leaving the bar overflowing after a move to
@@ -1150,7 +1173,20 @@ export function Dock({
             See DockModes below. Off the reading view there is no band to switch,
             so the same five degrade to links back to it. */}
         {mode !== undefined && onMode ? (
-          <DockModes slug={slug} modes={visible} mode={mode} onMode={onMode} marked={marked} />
+          <DockModes
+            slug={slug}
+            /* **`diagramInSearch`, not the raw parameter.** A link from August
+               saying `?diagram=tree` names a picture that was cut, and
+               `diagramParam` opens the Sketch for it — so arming the raw word
+               would arm nothing and the press would do nothing, which is the
+               behaviour this change exists to remove. params.ts owns the
+               degrade rule and both readers take it from there. */
+            diagram={diagramInSearch(search)}
+            modes={visible}
+            mode={mode}
+            onMode={onMode}
+            marked={marked}
+          />
         ) : (
           visible.map((m) => (
             <DockLink
@@ -1229,15 +1265,37 @@ export function Dock({
 
         {/* Labelled `Thread` until 2026-08-26, and `Tweets` now — after its own
             page and its own route, which is the same rule that renamed `About`
-            to `Metadata`. The thread is written on demand and costs a model
-            call, but that is a button on the page rather than a reason to hide
-            the page. */}
+            to `Metadata`.
+
+            **Pressing this writes the thread, since 2026-09-06** — one model
+            call over the whole article, tens of seconds — where before it took
+            you to a page with a button on it. Greg's rule about opening a mode
+            (activation.ts), applied to the one surface in this bar that is not
+            a mode.
+
+            `onNavigate` rather than `onClick`, and that distinction is the
+            whole of the care here: a ⌘-click opens the thread in a *new* tab
+            and leaves this one where it is, so an `onClick` would mint a token
+            in a tab that is not going to the thread. Link.tsx § `onNavigate`.
+
+            The page keeps its button. It is what a reader presses after a
+            failure, and after this session has spent its one automatic try. */}
         <DockLink
           href={readHref(slug, search, "tweets")}
           current={view === "tweets"}
           icon={ListOrdered}
           label="Tweets"
           title="The article as a numbered thread of short posts"
+          /* **Only for the owner, and only from the reading view's own bar.**
+             `isVisitor` is the same capability seam every band uses: a visitor
+             cannot write anything, so arming would mint a token nothing can
+             ever spend. And `current` keeps a press on the page you are already
+             on from arming a second time — that navigation does not happen. */
+          onNavigate={
+            isVisitor || view === "tweets"
+              ? undefined
+              : () => armActivationForTweets(slug)
+          }
         />
 
         {/* A link, not a drawer trigger — the details are a page now. Last in
@@ -1430,6 +1488,7 @@ const MARKED = "tw:opacity-55";
 
 function DockModes({
   slug,
+  diagram,
   modes,
   mode,
   onMode,
@@ -1437,6 +1496,21 @@ function DockModes({
 }: {
   /** The article a press is about, for the activation token. */
   slug: string;
+  /**
+   * **Which picture a press on Diagram would land on** — `?diagram=`, or
+   * `sketch` where the address bar is silent, which is `diagramParam`'s default.
+   *
+   * Read here rather than a `MODE_TARGET` row because the answer is not fixed,
+   * and arming a fixed one leaves a token that a later Back step can spend:
+   * activation.ts § `armActivationForDiagram` has the sequence.
+   *
+   * **Already degraded** — `diagramInSearch` in params.ts, which applies the
+   * same rule `diagramParam` does, so an unrecognised `?diagram=` arrives here
+   * as `sketch` rather than as itself. Reading the raw parameter instead made a
+   * press on an old `?diagram=tree` link arm nothing while the mode opened the
+   * Sketch, which is precisely the extra button-click this change removes.
+   */
+  diagram: DiagramKind;
   /**
    * The rows to draw, already filtered — `visibleModes` above, which is where
    * the two rules live. Handed in rather than read from `MODES_UI` here so that
@@ -1535,7 +1609,13 @@ function DockModes({
                    nobody has paid for yet, and this is what tells that panel
                    the difference between a press and a pasted link.
                    src/web/activation.ts. */
-                armActivationForMode(slug, m.mode);
+                /* **The picture, not the mode**, for Diagram — see `diagram`
+                   on the props above, which is where the reasoning is. */
+                if (m.mode === "diagram") {
+                  armActivationForDiagram(slug, diagram);
+                } else {
+                  armActivationForMode(slug, m.mode);
+                }
                 onMode(m.mode);
                 // A real click leaves the keyboard to the article; Enter and
                 // Space (detail 0) leave focus where the reader put it. See the
@@ -1574,6 +1654,7 @@ function DockLink({
   title,
   className = "",
   keepLabel,
+  onNavigate,
 }: {
   href: string;
   current: boolean;
@@ -1594,10 +1675,17 @@ function DockLink({
    * be looking for the way back from.
    */
   keepLabel?: true | undefined;
+  /**
+   * **This link is about to replace the page, in this tab.** A pass-through to
+   * `Link.onNavigate`, which is where the whole note about why it is not
+   * `onClick` lives; one caller, the Tweets link below.
+   */
+  onNavigate?: (() => void) | undefined;
 }) {
   return (
     <Link
       href={href}
+      onNavigate={onNavigate}
       className={`dock-btn${current ? " on" : ""}${className ? ` ${className}` : ""}`}
       aria-current={current ? "page" : undefined}
       title={title}

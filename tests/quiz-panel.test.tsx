@@ -136,6 +136,7 @@ function owner(over: Partial<UseQuiz> = {}): UseQuiz {
     stalled: false,
     attempt: null,
     answered: new Set<string>(),
+    ensure: async () => {},
     write: async () => {},
     cancel: () => {},
     mark: async (id: string, answer: string) => {

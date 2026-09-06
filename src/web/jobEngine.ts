@@ -60,6 +60,7 @@
  * Recurring polls also stop dead while the tab is hidden — see `schedule`.
  */
 import type { Job, StepName } from "../types.js";
+import type { AutoRunTarget } from "./auto-run-targets.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
 
 /** While something is running. Fast enough to feel live, slow enough to be free. */
@@ -269,7 +270,7 @@ export interface JobEngine {
    *
    * docs/plans/260902e-a-per-article-job-queue-that-appends-and-modes-that-start-themselves.md § 2a.
    */
-  beginAutoAttempt(slug: string, step: StepName): boolean;
+  beginAutoAttempt(slug: string, target: AutoRunTarget): boolean;
   /**
    * Apply a job list as though a poll had returned it, **without touching the
    * timer**.
@@ -339,7 +340,7 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
   let completions: { seq: number; job: Job }[] = [];
 
   /**
-   * `(slug, step)` pairs this session has already tried automatically.
+   * `(slug, target)` pairs this session has already tried automatically.
    *
    * Session-owned rather than mount-owned, which is the point: it survives a
    * panel unmounting, a mode toggled off and on, and a re-render, so none of

@@ -200,6 +200,8 @@ export function ClaimsBand({
   /** `Reader` owns the prose — see the seam described on `found` in App.tsx. */
   onFound(next: Found[]): void;
 }) {
+  /* The press that starts a run with nothing there is inside the hook, beside
+     the read it is answered against — useClaims.ts § the automatic run. */
   const api = useClaims(slug);
   /** Which claims are painting the prose. Empty is the default — marks are off. */
   const [showing, setShowing] = useState<string[]>([]);

@@ -202,6 +202,22 @@ export interface ChatApi {
    */
   loadFailed: boolean;
   /**
+   * **Ask for the thread list again.**
+   *
+   * One caller: Candidates' automatic run, for the one case a press cannot be
+   * answered from what is on screen — a first read that *failed* is not an
+   * answer to *is there a thread yet*, so it is answered by reading again rather
+   * than by starting a paid turn. useAutoRun.ts § A failed read is not an
+   * answer.
+   *
+   * **Safe by construction rather than by a guard here.** It dispatches a second
+   * `load.started`, and registering a second load drops the first from the map
+   * in reduce.ts — so the first load's success *and* its failure are refused by
+   * the same rule, which is exactly the arrangement the effect below relies on
+   * for `StrictMode`'s two loads. Nothing needs to be cancelled.
+   */
+  reload(): void;
+  /**
    * Answers whose stream this client has lost, and is now asking the server
    * about. The row is still `pending`, but nothing is arriving and the panel
    * should say so rather than go on claiming to be thinking.
@@ -385,8 +401,15 @@ export function useChat(slug: string): ChatApi {
    * Two loads of one article is not a contrivance: `StrictMode` starts exactly
    * that.
    */
-  useEffect(() => {
+  /* One sentence, two callers: the opening read below and `reload` on the
+     interface. Written out rather than inlined twice so the two cannot come to
+     disagree about what a load is. */
+  const startLoad = useCallback(() => {
     controller.dispatch({ type: "load.started", op: { id: asOpId(mintId()), kind: "load" } });
+  }, [controller]);
+
+  useEffect(() => {
+    startLoad();
     /* **And when this hook goes, the callbacks go with it.** The controller
        outlives it on purpose — the stream still holds it, so a cancel waiting
        for the `begin` frame is still sent after the panel closed — but
@@ -397,7 +420,7 @@ export function useChat(slug: string): ChatApi {
     return () => {
       controller.detach();
     };
-  }, [controller]);
+  }, [controller, startLoad]);
 
   /**
    * Hand one finished spoken exchange to the controller.
@@ -885,6 +908,7 @@ export function useChat(slug: string): ChatApi {
        can come back with, and only `loading` is neither. */
     loaded: state.loadPhase !== "loading",
     loadFailed: state.loadPhase === "failed",
+    reload: startLoad,
     recovering,
     send,
     speak,

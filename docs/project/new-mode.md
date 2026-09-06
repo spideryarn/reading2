@@ -49,6 +49,14 @@ Then the residue, which is why this page exists:
 - **A read hook** shaped like [`useIdeas.ts`](../../src/web/useIdeas.ts) — ordering from
   [`useOrderedRead.ts`](../../src/web/useOrderedRead.ts), the job from
   [`useStepJob.ts`](../../src/web/useStepJob.ts), rather than a ninth copy of either. *Nothing.*
+- **Opening it for the first time starts it.** A mode the reader opens with nothing in it generates
+  it, rather than offering a button and waiting — so a new artefact-backed mode wants a name in
+  [`auto-run-targets.ts`](../../src/web/auto-run-targets.ts), a row in `MODE_TARGET`
+  ([`activation.ts`](../../src/web/activation.ts)), and `useAutoRun` in its hook, called with the
+  **unforced** verb. The traps, and the one mode deliberately left out, are
+  [260906b](../plans/260906b-opening-a-mode-starts-it-generating.md).
+  *[`tests/modes-that-start-themselves.test.tsx`](../../tests/modes-that-start-themselves.test.tsx)
+  for the modes already in it; nothing for a new one.*
 - **The band's chrome**: the scroller is documented in
   [`styles.css`](../../src/web/styles.css) § mode band. A `.band-head` title row is **optional, and
   the default is not to have one** — since 2026-09-05 it must not carry the mode's own name, because
@@ -123,7 +131,8 @@ Then the residue nothing refuses at compile time:
       article in the fixture a query filtering on nothing returns the same rows as one filtering
       correctly, so the predicate is untestable —
       *[`tests/public-visibility-pg.test.ts`](../../tests/public-visibility-pg.test.ts)*.
-- **Pressing the mode's button with nothing in it runs the job**; arriving does not —
+- **Pressing the control that opens it — a mode button, a sub-mode chip, the Tweets link — runs the
+  job when there is nothing there**; arriving does not —
   [`useAutoRun.ts`](../../src/web/useAutoRun.ts) is the whole rule, and
   [reading-view-overview.md § True across the whole view](reading-view-overview.md#true-across-the-whole-view)
   is why. *Nothing.*
