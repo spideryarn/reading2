@@ -201,13 +201,21 @@ A separate read-only pass over `node_modules/nuqs` and the client, before the re
 Each ends green and committable. Value is front-loaded: Stages A + B alone solve the reported
 problem.
 
-### Stage A — the jump transaction
+### Stage A — the jump transaction — **built, 2026-09-06**
 
 The predecessor entry must name where the reader actually was, and the stamp must agree with it.
 
-- [ ] New `src/web/jump-history.ts`: pure functions over an opaque history-state object — read our
-      stamp, write it, strip it while preserving foreign state. No React, no DOM.
-- [ ] **The origin is measured, not read**, and it is **not always a block**:
+- [x] New [`src/web/jump-history.ts`](../../src/web/jump-history.ts): the stamp and the arm, pure
+      functions over an opaque history-state object — read ours, write it, strip it while preserving
+      every foreign key, leaving `null` rather than `{}` when nothing is left. **Pure for a hard
+      reason, not a tidy one.** The first cut also had `measureOrigin` and `beginJump` here, which
+      gave it an import of keynav.ts — and router.ts imports this file. router.ts is on
+      `SHARED_WITH_READER`, so that one edge dragged keynav, scroll, position, tree, safe-area and
+      supplement into the lazily-loaded /admin and /design bundles, for a chip nobody on those pages
+      can see. `tests/eager-client-graph.test.ts` caught it and named all six. The two DOM functions
+      now live in [`keynav.ts`](../../src/web/keynav.ts) beside `measureRow`, which is the
+      measurement they use; `jump-history.ts` is the one line added to `SHARED_WITH_READER`.
+- [x] **The origin is measured, not read**, and it is **not always a block**:
 
       ```ts
       type JumpOrigin = { kind: "top" } | { kind: "block"; blockId: BlockId };
@@ -221,7 +229,7 @@ The predecessor entry must name where the reader actually was, and the stamp mus
       article whether or not any row has reached the line, and a `scrollToBlock` on the first block
       lands under the sticky chrome rather than at the top.
 
-- [ ] **One transaction, owned by the wrapper** (F11). `jumpTo` arms `{ pathname, origin, target }`
+- [x] **One transaction, owned by the wrapper** (F11). `jumpTo` arms `{ pathname, origin, target }`
       and makes **exactly one** nuqs call — the destination push. When `watchHistoryWrites`
       intercepts the matching armed push it synchronously calls its **captured inner**
       `replaceState` to rewrite the current entry to the origin, then its **captured inner**
@@ -238,30 +246,67 @@ The predecessor entry must name where the reader actually was, and the stamp mus
       "Captured inner", because calling `history.replaceState` here would recurse through our own
       wrapper. And this is *synchronous and wrapper-owned* rather than atomic: the History API
       offers no rollback if the second native call throws.
-- [ ] **Every same-path push strips the inherited stamp** and adds one only when a jump has just
+- [x] **Every same-path push strips the inherited stamp** and adds one only when a jump has just
       armed an origin (F3). An unarmed push clears rather than inherits.
-- [ ] `replaceState` preserves the current entry's stamp — free, via nuqs, but pinned by a test so
+- [x] `replaceState` preserves the current entry's stamp — free, via nuqs, but pinned by a test so
       it stays free.
-- [ ] A pathname change clears: an excursion belongs to one article.
-- [ ] **When the measured origin is the target block, abort the whole jump** — before `synced`,
+- [x] A pathname change clears: an excursion belongs to one article.
+- [x] **When the measured origin is the target block, abort the whole jump** — before `synced`,
       before the setter, before `scrollToBlock` (F6b, sharpened by F10). Suppressing only the
       history write would still move the reader, because those are independent statements today and
       a tall paragraph can cross the reading line with its top well above the viewport. The visible
       consequence is that clicking a search result for the paragraph you are already reading does
       nothing; that is deliberate and wants a comment at the abort saying so, or somebody will
       "fix" it.
-- [ ] The wrapper is `watchHistoryWrites` ([`router.ts`](../../src/web/router.ts)), which is the
-      single choke point for both nuqs's writes and `navigate`'s. `navigate` currently hardcodes
-      `null` state; it stops doing that.
-- [ ] Tests, red first — `tests/jump-history.test.ts`: strip-and-preserve, the arm-and-consume
+- [x] The wrapper is `watchHistoryWrites` ([`router.ts`](../../src/web/router.ts)), which is the
+      single choke point for both nuqs's writes and `navigate`'s. `navigate` goes on passing `null`
+      state and no longer needs to know anything: the wrapper substitutes, which is one fewer caller
+      that can get the rule wrong.
+- [x] Tests, red first — `tests/jump-history.test.ts`: strip-and-preserve, the arm-and-consume
       handshake, a `cols`/`mode`/`sort` push after a jump carrying **no** stamp, a replace after a
       jump carrying **one**, jumping within a section after manual scrolling, jumping while the
       300ms position replace is pending, and both variants of `JumpOrigin` round-tripping through
       the stamp. Two of them assert more than a stamp's existence:
       - **from the top**: the predecessor URL has **no** `?at=`, and the final `scrollY` is `0`
       - **the F10 abort**: `scrollToBlock` was **not called**, not merely that no entry appeared
-- [ ] Mutate the finished code at the end of the stage and check the suite notices — red-first only
+- [x] Mutate the finished code at the end of the stage and check the suite notices — red-first only
       tests the diff ([silent-success.md](../reusable/silent-success.md)).
+
+#### What was built, and the two things the code says that the plan could not
+
+Everything above, in [`jump-history.ts`](../../src/web/jump-history.ts) (the stamp, the handshake),
+[`keynav.ts`](../../src/web/keynav.ts) (`measureOrigin`, `beginJump`) and
+[`router.ts`](../../src/web/router.ts) (the wrapper, `addressAt`).
+`beginJump` makes the one nuqs call that was already there — `setAt(target, { history: "push",
+limitUrlUpdates: throttle(0) })` — so App.tsx's `jumpTo` is four lines and owns no address logic.
+`blockHref` (BlockRef.tsx) now delegates to `addressAt` rather than building the string itself,
+because the address written into the predecessor entry and a permalink to that block must be the
+same string or Back and the link go to different places.
+
+**The evidence for the atomic shape, since F11 named it but could not test it.** `tests/jump-history.test.ts`
+§ never renders the intermediate origin mounts nuqs and React and records every `?at=` React is
+rendered with; the destination is the only one that ever appears. Both of the wrapper's writes carry
+nuqs's own `"__nuqs__"` marker, so nuqs's history patch skips its `sync()` on both and the single
+update the hooks receive is the one nuqs emits for the destination — the atomicity is *by
+construction* rather than by React's batching. Under the rejected two-setter shape the origin would
+be rendered first and `useReadingPosition`'s restore effect would drag the reader back to where they
+came from and then forward again. § discards a position write pins the other half: a scroll write
+still inside its 300ms debounce is aborted by the jump's own `throttle(0)`, so it cannot land on the
+entry the jump just pushed.
+
+**One nuqs fact this stage had to learn the hard way, and it is now written into App.tsx too.**
+`throttle(0)` does not write the URL on the spot. The queue resets its `timeMs` to nuqs's own
+default — 50ms outside Safari — and `push` only ever *raises* it, so a `throttle(0)` cannot lower
+the floor: the write lands within ~50ms, on a later task. Nothing in the app minds, but a test that
+waited one tick for it passed or failed depending on how slow the previous test had been, which is a
+coin toss wearing a green tick. `tests/jump-history.test.ts` § settled waits past the whole window
+and says why.
+
+**`scrollY` is not observable in jsdom**, which has no layout and whose `window.scrollTo` is a
+no-op. The top-of-the-article test therefore asserts the thing that *produces* `scrollY === 0` — the
+predecessor entry carries **no** `?at=` at all, which is the branch `useReadingPosition`'s restore
+effect takes to `scrollToTop()`. The stamp round-trips as `{ kind: "top" }` beside it. Said plainly
+here because a test that claims more than it checks is the failure mode this stage kept hitting.
 
 ### Stage B — the chip
 

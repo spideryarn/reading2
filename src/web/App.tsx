@@ -198,7 +198,7 @@ import {
   offerableGists,
   proseVisible,
 } from "./layout.js";
-import { navPlan, useArrowNav } from "./keynav.js";
+import { beginJump, navPlan, useArrowNav } from "./keynav.js";
 import { useLastView } from "./last-view.js";
 import { useSwipeNav } from "./swipe.js";
 import { useComments } from "./useComments.js";
@@ -1662,15 +1662,39 @@ function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: str
   // `throttle(0)`, not `undefined`: nuqs resolves this option with `??`, so an
   // explicit undefined here falls straight through to atParam's
   // `debounce(POSITION_SETTLE_MS)` and cancels nothing. throttle(0) aborts the
-  // pending debounce and writes the URL on the spot. Caught by
-  // exactOptionalPropertyTypes — see docs/project/typechecking.md.
+  // pending debounce. Caught by exactOptionalPropertyTypes — see
+  // docs/project/typechecking.md.
+  //
+  // It does **not** write the URL on the spot, which this comment used to claim.
+  // nuqs's queue resets `timeMs` to its own default (50ms outside Safari) and
+  // `push` only ever raises it, so `throttle(0)` cannot lower the floor: the
+  // write lands within ~50ms, on a later task. Nothing here minds — the scroll
+  // starts immediately and the chip is drawn from the entry, not from the
+  // address — but a test that waited one tick for it was a coin toss until
+  // tests/jump-history.test.ts § settled said so.
+  //
+  // **The push also has to say where the reader was**, so that a chip can offer
+  // them the way back on a device with no Back button. That is `beginJump`
+  // (keynav.ts, beside the measurement it uses; the stamp itself is
+  // jump-history.ts): it measures the origin (never `?at=`, which is stale by
+  // design in three separate ways), arms it, makes this one push, and scrolls.
+  // The predecessor's `?at=` is rewritten by `watchHistoryWrites`, which is the
+  // thing nuqs's flush eventually calls; a second `setAt` here would be
+  // overwritten by this one inside nuqs's queue and would silently do nothing.
+  //
+  // `synced` is set **only when the jump happened** and only after the fact,
+  // which is safe because nuqs defers the push to a later task: React cannot
+  // have re-rendered with the new `at` before this line runs. A refused jump
+  // must leave it alone, or the restore effect would stop recognising the
+  // position the reader is actually standing at.
   const jumpTo = useCallback(
     (blockId: BlockId) => {
-      synced.current = blockId;
-      void setAt(blockId, { history: "push", limitUrlUpdates: throttle(0) });
-      scrollToBlock(blockId);
+      const moved = beginJump(blocks, blockId, (id) => {
+        void setAt(id, { history: "push", limitUrlUpdates: throttle(0) });
+      });
+      if (moved) synced.current = blockId;
     },
-    [setAt],
+    [blocks, setAt],
   );
 
   // `at` goes out as well as `jumpTo` because it is half of the answer to

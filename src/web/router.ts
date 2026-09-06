@@ -78,6 +78,8 @@ import {
   type ArticleView,
 } from "../read-address.js";
 import { isSpideryarnId } from "../ids.js";
+import type { BlockId } from "../types.js";
+import { consumeArmedJump, type JumpOrigin, readStamp, withStamp } from "./jump-history.js";
 export type { ArticleView };
 
 /** Which admin page. `home` is `/admin` itself — the index of the others. */
@@ -1169,17 +1171,118 @@ export function onAddressChange(listener: () => void): () => void {
  * which module was reached first.
  *
  * Idempotent, because a second patch would double every event.
+ *
+ * ## It also decides which entries remember a jump
+ *
+ * Since 2026-09-06 this is not only a listener. Every entry may carry a stamp
+ * saying where the reader jumped from (jump-history.ts), and this is the one
+ * place that can put it there or take it away, because it is the one place both
+ * kinds of write pass through. Three rules, each from a review finding:
+ *
+ *  - **A push strips whatever stamp the caller handed over**, and adds one only
+ *    when it is the push a jump armed. nuqs passes the **current** entry's state
+ *    into `pushState` verbatim (nuqs/dist/adapters/react.js), so without the
+ *    strip a `cols`, `mode` or `sort` toggle after a jump would *inherit* that
+ *    jump's origin, and the chip would sit on an entry whose Back merely undoes
+ *    the toggle. GPT Sol F3.
+ *  - **A replace preserves the stamp of the entry it is rewriting**, taken from
+ *    `history.state` rather than from the caller — `navigate({replace:true})`
+ *    passes `null`, and the scroll spy rewrites `?at=` about once a second, so
+ *    trusting the argument would erase the chip the moment the reader moved.
+ *  - **A change of pathname clears it.** An excursion belongs to one article.
+ *
+ * ## The jump transaction happens here, not at the call site
+ *
+ * A jump has to write two entries: the one being left gains a `?at=` naming
+ * where the reader actually was, and the new one carries the destination and
+ * the stamp. **Those cannot be two nuqs setters.** nuqs keeps pending updates
+ * in a `Map` keyed by parameter name, so a second `setAt` in the same tick
+ * overwrites the first — one destination push would land and the predecessor
+ * rewrite would silently never happen — and even `throttle(0)` defers the flush
+ * to a later task (nuqs/dist/debounce-*.js). GPT Sol F11, 2026-09-06.
+ *
+ * So `beginJump` arms the origin and makes **one** ordinary nuqs push, and this
+ * wrapper — which is what nuqs's flush eventually calls — performs the pair
+ * against the functions it captured when it patched. Calling
+ * `history.replaceState` here instead would recurse straight back through this
+ * wrapper. The two calls are back to back with nothing between them and one
+ * `NAVIGATED` after, so nothing observes the half-done state; strictly it is
+ * *one wrapper-owned operation performed synchronously* rather than a
+ * transaction, because the History API cannot roll the first call back if the
+ * second throws.
  */
 let historyWatched = false;
 export function watchHistoryWrites(): void {
   if (historyWatched) return;
   historyWatched = true;
-  for (const name of ["pushState", "replaceState"] as const) {
-    const real = history[name].bind(history);
-    history[name] = (...args: Parameters<History["pushState"]>) => {
-      real(...args);
-      window.dispatchEvent(new Event(NAVIGATED));
-    };
+  /* The functions as they were when we patched — nuqs's own wrappers, since
+     main.tsx installs `enableHistorySync()` first and ours is the outer of the
+     two. Everything below calls these, never `history.pushState`. */
+  const innerPush = history.pushState.bind(history);
+  const innerReplace = history.replaceState.bind(history);
+
+  history.pushState = (state: unknown, marker: string, url?: string | URL | null) => {
+    /* Consumed up front rather than in a `finally`: taking it before either
+       native call means a throw from one of them cannot leave the arm behind to
+       be claimed by whatever the app does next. A push that is not this jump's
+       leaves it armed — see jump-history.ts § the handshake. */
+    const origin = consumeArmedJump(pathnameOfWrite(url), atOfWrite(url));
+    if (origin !== null) innerReplace(history.state, marker, originHref(origin));
+    innerPush(withStamp(state, origin), marker, url ?? null);
+    window.dispatchEvent(new Event(NAVIGATED));
+  };
+
+  history.replaceState = (state: unknown, marker: string, url?: string | URL | null) => {
+    const kept = pathnameOfWrite(url) === location.pathname ? readStamp(history.state) : null;
+    innerReplace(withStamp(state, kept), marker, url ?? null);
+    window.dispatchEvent(new Event(NAVIGATED));
+  };
+}
+
+/**
+ * The address the reader is leaving, with `?at=` pointed at where they actually
+ * were — or with it **removed**, which is how the top of the article is said.
+ *
+ * Removed rather than set to the first block: `useReadingPosition`'s restore
+ * effect branches on exactly this, `scrollToTop()` for no `?at=` and
+ * `scrollToBlock()` otherwise, so a value here would land the reader with the
+ * first paragraph under the sticky chrome and the masthead gone. Same rule
+ * `positionToWrite` uses for the same question. GPT Sol F8, 2026-09-06.
+ */
+function originHref(origin: JumpOrigin): string {
+  const base = addressWithout(location.pathname + location.search, "at");
+  return origin.kind === "top" ? base : addressAt(base, origin.blockId);
+}
+
+/** Where a history write is aimed. No URL at all means "this page". */
+function pathnameOfWrite(url: string | URL | null | undefined): string {
+  if (url === null || url === undefined) return location.pathname;
+  try {
+    return new URL(url, location.href).pathname;
+  } catch {
+    return location.pathname;
+  }
+}
+
+/**
+ * The `?at=` a history write is carrying, which is how an armed jump recognises
+ * its own push. Parsed rather than pattern-matched, because the value is one
+ * this app minted and the question is only "which block".
+ */
+function atOfWrite(url: string | URL | null | undefined): BlockId | null {
+  const search =
+    url === null || url === undefined
+      ? location.search
+      : safeUrl(url)?.search ?? location.search;
+  const at = new URLSearchParams(search).get("at");
+  return at !== null && isSpideryarnId(at) ? (at as BlockId) : null;
+}
+
+function safeUrl(url: string | URL): URL | null {
+  try {
+    return new URL(url, location.href);
+  } catch {
+    return null;
   }
 }
 
@@ -1222,6 +1325,27 @@ export function addressWithout(address: string, name: string): string {
   if (q === -1) return address;
   const kept = searchWithout(address.slice(q), name);
   return kept ? `${address.slice(0, q)}?${kept}` : address.slice(0, q);
+}
+
+/**
+ * That address with an `?at=` written on the end — an address the reader could
+ * be *at*, whether it goes in a link or straight into the history entry they
+ * are leaving.
+ *
+ * `blockHref` (BlockRef.tsx) is the link-shaped caller and delegates here, so
+ * the two cannot drift: `originHref` above writes the same thing into the
+ * predecessor entry that a permalink to that block would say, which is what
+ * makes "press Back" and "open the link" the same journey.
+ *
+ * `base` must already have had `at` dropped — `addressWithout` above — and is
+ * edited as **text**, never round-tripped through `URLSearchParams`, which
+ * would re-encode `?cols=0,1` into `?cols=0%2C1`: still correct, still parses,
+ * and no longer readable by the person you send it to. The id is encoded even
+ * though every id this repo mints is already URL-safe, because `BlockId` is a
+ * string alias rather than a checked type.
+ */
+export function addressAt(base: string, id: BlockId): string {
+  return `${base}${base.includes("?") ? "&" : "?"}at=${encodeURIComponent(id)}`;
 }
 
 /**
