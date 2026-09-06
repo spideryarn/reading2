@@ -489,10 +489,31 @@ Refusing a copy is a new drop reason, `sourceIsCopy`, counted and shown — neve
 `named` with the existing `articleReferenceQuote` as witness, so nothing needs re-running and no
 migration is required.
 
-**Done:** unit tests over fixed strings for the matcher, including a red-first test for each of the
-two mirrors at their measured densities and for `hamtyped` at 16.4% staying `quoted`; the level
-derivation exhaustive over the union with a `never` check; `npm test` and `npm run typecheck` green;
-the Layer 1 replay reproduces today's journals with the field populated and no model call.
+**Done — landed 2026-09-06, `35db7d53`.** `src/shingles.ts`, `IdentificationSignal` /
+`identifiesOf` / `identificationLevel` in `src/types.ts`, the wiring and `sourceIsCopy` in
+`src/debate.ts`, and `blockText` moved up to `GroupInput` (`ClaimGroupInput`, left with nothing in it,
+was collapsed). The measured table above is reproduced exactly on the real journals. Seven mutations
+were applied and all seven were caught.
+
+**Three things the stage turned up, none of them in the brief:**
+
+- **`anyLost` claimed an exhaustiveness it did not have.** Its docblock said a new `DebateLosses`
+  field would be a compile error at its hand-written sum. It was not — `sourceIsCopy` compiled clean,
+  and the new counter would have vanished from the reader's foot line in silence. That is F24's shape
+  exactly, a docblock stating a rule with no code under it, in the same file. A `...rest` destructure
+  assigned to `Record<string, never>` now makes the claim true, checked by adding an unlisted field
+  and watching it fail at that line.
+- **The matcher was quadratic for this caller.** `findQuote` reduces its haystack per call: 8.6
+  seconds a row on Cargo Cult, on a step a reader waits for. `quoteFinder` (src/quote-match.ts)
+  prepares it once and lazily, and `findQuote` is now that function asked one question, so there is
+  still one definition. **1.76s for twelve rows.** Verified against the pre-refactor implementation
+  over **5,548 comparisons** — three articles, both passes, two `near` values, needles damaged with
+  double spaces, curly quotes, em-dashes, uppercasing and stripped whitespace — **zero
+  disagreements**, and the differential was itself mutated to prove it can fail.
+- **The Layer 1 replay guard was in the wrong place.** A *direct* replay without blocks would have
+  come back **clean** — no `quoted` signal, no copy refused — which is a fact about the replay
+  reported as a fact about the run, and the quieter of its two failure modes. The guard moved above
+  the branch.
 
 **P2 — one list.** The panel loses its two headings, two blurbs and two foot lines. Direct rows
 first, then claim rows, search order within each — `DEBATE_NO_RANKING` stands and the list is **not**
