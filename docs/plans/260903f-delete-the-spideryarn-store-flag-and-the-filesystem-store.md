@@ -5752,7 +5752,7 @@ Final grep must cover `src/`, `tests/`, `scripts/`, **`evals/`, `vite.config.ts`
 
 #### I landed — 2026-09-06
 
-Commit `SHA_PLACEHOLDER`. 35 files, 390 insertions, 1254 deletions; three files deleted
+Commit `219c4bc1`. 44 files, 1297 insertions, 1274 deletions; three files deleted
 (`src/store/live.ts`, `tests/store-selection.test.ts`, `tests/store-flag-refused-at-boot.test.ts`).
 
 **What went.** The tombstone validator and its two suites; the sensor stage F added — `RETIRED`,

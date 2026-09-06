@@ -9,9 +9,16 @@ exactly what they meant then. Anything new starts at **`F4`** and numbers upward
 
 ## The candidate
 
-**Live pre-commit**, still. Base SHA `870bcb832a2e451e4fd2ca48f380aa9796c53439` on branch
-`worktree-delete-store-flag`, in the worktree
-`/home/greg/code/spideryarn2/.claude/worktrees/delete-store-flag`.
+**Landed as `219c4bc1`** (2026-09-06). It was a live pre-commit candidate when this was written, on
+base SHA `870bcb832a2e451e4fd2ca48f380aa9796c53439`, branch `worktree-delete-store-flag`, in the
+worktree `/home/greg/code/spideryarn2/.claude/worktrees/delete-store-flag`.
+
+**Four things in that commit post-date this prompt**, all of them answers to the verdict it drew:
+F4's ten unlinked documentation references; F2's two surviving passages, in the plan's own § I and in
+`docs/project/deployment.md`; F5's `.env.example` and `AGENTS.md` added to the guard's collector; and
+the two checks this review recommended in place of the source-shape assertion — an AST assertion that
+`loadEnvLocal()` is a statement of `Program.body`, and
+`tests/store-boots-without-inherited-credentials.test.ts`.
 
 ```
 git diff 870bcb832a2e451e4fd2ca48f380aa9796c53439 -- <paths below>
@@ -42,9 +49,6 @@ four, all in `docs/plans/`, and all four will be committed:
 260903f-stage-i-round-two-review-prompt.md   (this file)
 260903f-stage-i-round-two-review-sol.md      (where your answer will be written)
 ```
-
-**The commit SHA will be written into this file once the change is committed**, so that what you
-reviewed stays identifiable after the working tree moves on.
 
 **Start** with `src/db/client.ts` and `tests/one-store-only.test.ts` — that is where F1's fix and
 its guard live. That is a starting point and **not** a limit on scope.

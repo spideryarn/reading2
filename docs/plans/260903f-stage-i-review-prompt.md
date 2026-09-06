@@ -6,9 +6,14 @@ Deletes a validated no-op and the sensor that was watching for its unblocking.
 
 ## The candidate
 
-**Live pre-commit.** Base SHA `870bcb832a2e451e4fd2ca48f380aa9796c53439` on branch
+**Landed as `219c4bc1`** (2026-09-06), which is where to read what this reviewed. It was a live
+pre-commit candidate at the time, on base SHA `870bcb832a2e451e4fd2ca48f380aa9796c53439`, branch
 `worktree-delete-store-flag`, in the worktree
 `/home/greg/code/spideryarn2/.claude/worktrees/delete-store-flag`.
+
+**The commit is not what this round saw.** Its verdict was *refuse as-is*, and the F1 fix, the two
+deletions it asked for (Q1, Q2) and everything round two then found all post-date it —
+[round two](260903f-stage-i-round-two-review-prompt.md) is the review of the commit as it landed.
 
 ```
 git diff 870bcb832a2e451e4fd2ca48f380aa9796c53439 -- <paths below>
