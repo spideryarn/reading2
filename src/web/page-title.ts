@@ -179,6 +179,8 @@ export type TitleSpec =
   | { kind: "pricing" }
   /** How to reach us — ContactPage.tsx. */
   | { kind: "contact" }
+  /** Every release since launch, newest first — ChangelogPage.tsx. */
+  | { kind: "changelog" }
   /**
    * **The shelf of shared articles** — `/read/public`, PublicLibraryPage.tsx.
    *
@@ -283,6 +285,11 @@ function segments(spec: TitleSpec): string[] {
 
     case "contact":
       return ["Contact", APP_NAME];
+
+    /* Matches the footer's own label for the same address, so a reader who
+       followed "What's new" down there sees the same words in the tab. */
+    case "changelog":
+      return ["What’s new", APP_NAME];
 
     /* The page's own heading, unshortened — it is already two words, which is
        the length the two cases above had to cut down to. It says *Shared* and

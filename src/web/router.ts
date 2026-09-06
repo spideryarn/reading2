@@ -229,6 +229,17 @@ export type Route =
    */
   | { kind: "contact" }
   /**
+   * Every release since launch, newest first — `/changelog`. See
+   * ChangelogPage.tsx and docs/project/changelog.md.
+   *
+   * Signed out for the same reason as `privacy`, `features`, `pricing` and
+   * `contact`: it is a page somebody is *sent* — a reader is more likely to
+   * arrive from a link somebody shared than from browsing while signed in —
+   * and it is about the product rather than about their account, so there is
+   * nothing on it an account would change.
+   */
+  | { kind: "changelog" }
+  /**
    * Where Google sends the reader back — `/auth/callback`. See AuthCallback.tsx.
    *
    * **The one route that must be exempt from every rewrite in main.tsx**, and
@@ -312,6 +323,7 @@ const ADMIN_ONLY: Record<Route["kind"], boolean> = {
   features: false,
   pricing: false,
   contact: false,
+  changelog: false,
   callback: false,
   "not-found": false,
 };
@@ -424,6 +436,7 @@ export function parseRoute(pathname: string): Route {
   if (new RegExp(`^${FEATURES_HREF}/?$`).test(pathname)) return { kind: "features" };
   if (new RegExp(`^${PRICING_HREF}/?$`).test(pathname)) return { kind: "pricing" };
   if (new RegExp(`^${CONTACT_HREF}/?$`).test(pathname)) return { kind: "contact" };
+  if (new RegExp(`^${CHANGELOG_HREF}/?$`).test(pathname)) return { kind: "changelog" };
   /* Beside `design` and `profile`, and above `/read/` for the same reason: it
      is not about an article. The alternation is the validation — `/admin/foo`
      matches nothing here and falls through to `not-found`, which is what every
@@ -631,6 +644,12 @@ export const PRICING_HREF = "/pricing";
  * first: the Feedback button is. ContactPage.tsx.
  */
 export const CONTACT_HREF = "/contact";
+/**
+ * Every release since launch — linked from the footer, where it is labelled
+ * "What's new" rather than "Changelog", the internal name for the process
+ * that writes it (docs/project/changelog.md).
+ */
+export const CHANGELOG_HREF = "/changelog";
 /**
  * The shelf of public articles.
  *

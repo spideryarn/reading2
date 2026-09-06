@@ -295,9 +295,9 @@ const OWNER_HAS_EVERYTHING: PublicArtefacts = {
 };
 
 /**
- * **The two routes whose code is not in the reader's initial download.**
+ * **The three routes whose code is not in the reader's initial download.**
  * `LazyPage.tsx`
- * has the reasoning; these are the four loaders it takes.
+ * has the reasoning; these are the five loaders it takes.
  *
  * Named-export adapters rather than `lazy(() => import("./AdminPage.js"))`,
  * because `React.lazy` reads `module.default` and neither page has one — the
@@ -310,6 +310,11 @@ const loadAdminUsers = () => import("./AdminPage.js").then((m) => ({ default: m.
 const loadAdminFeedback = () =>
   import("./AdminPage.js").then((m) => ({ default: m.AdminFeedbackPage }));
 const loadDesign = () => import("./DesignPage.js").then((m) => ({ default: m.DesignPage }));
+/* `/changelog`'s own reason, beside `/design`'s: the parsed NDJSON file is
+   210 KB and would otherwise land in every reader's first download for a page
+   almost nobody opens — docs/project/changelog.md § The page. */
+const loadChangelog = () =>
+  import("./ChangelogPage.js").then((m) => ({ default: m.ChangelogPage }));
 
 
 
@@ -434,6 +439,14 @@ export function App() {
        than their order in this list. Renumbering them for an insertion would
        make three comments say something none of them was claiming. */
     if (route.kind === "contact") return <ContactPage />;
+    /* Since 2026-09-06, and closer to `contact` than to any of the pages
+       above it: a changelog is a page somebody is *sent*, not one they browse
+       to, and it is about the product rather than about their account, so
+       there is nothing behind it an account would change. Bare, like every
+       other page in this branch — no shelf to send a stranger back to.
+       Lazy for the reason `design` is below: the parsed file is 210 KB.
+       LazyPage.tsx. */
+    if (route.kind === "changelog") return <LazyPage load={loadChangelog} routeKey="changelog" />;
     /* **The sixth, since 2026-09-03, and the only one that is not a page
        somebody was sent.** A stranger at an address nobody minted is exactly
        the reader this gate's default fails: the pitch at `/asdf` is a plausible
@@ -611,6 +624,16 @@ function SignedIn({
       <>
         <HomeLogo />
         <ContactPage />
+      </>
+    );
+  // Signed in, the corner logo like every other standalone page — there is a
+  // shelf here for it to link at. See the signed-out branch above for why
+  // `/changelog` is on this list at all.
+  if (route.kind === "changelog")
+    return (
+      <>
+        <HomeLogo />
+        <LazyPage load={loadChangelog} routeKey="changelog" />
       </>
     );
   if (route.kind === "pricing")

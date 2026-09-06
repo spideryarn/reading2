@@ -1163,6 +1163,10 @@ Vercel.
   incidents. Open it in a browser; this page is authoritative wherever they disagree
 - [260825d-deploy-and-repo-move.md](../plans/260825d-deploy-and-repo-move.md) — the plan, the
   domain move, and the beta gate
+- [changelog.md](changelog.md) — a deploy is a version, and a successful one is the moment its
+  write-up becomes possible. Deliberately **not** a step in `npm run deploy`: a changelog failure
+  cannot undo a deploy that already succeeded, and it should not muddy the verdict on one.
+  [§ Running it](changelog.md#running-it) is what to do afterwards, when somebody asks
 - [database.md](database.md) — the roles, the three hosts, and the enforced SSL
 - [architecture.md](architecture.md) — the single-process assumption this runs into
 - [debugging.md](debugging.md) — start here when something is broken: which of the
