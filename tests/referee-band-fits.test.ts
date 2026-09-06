@@ -36,10 +36,16 @@
  * - markup that actually puts the notice and the scan inside a `.ref-brief`,
  *   and leaves the chips and the panel outside it.
  *
- * Delete the wrapper from App.tsx and the CSS matches nothing; every other test
+ * Delete the wrapper from the band and the CSS matches nothing; every other test
  * still passes and the mode is unusable again. So this file pins the pairing,
  * which is the part that rots, and says nothing about pixels, which is the part
  * it cannot see.
+ *
+ * The markup half moved out of `App.tsx` into
+ * src/web/modes/referee/RefereeMode.tsx on 2026-09-06. `BAND_FILE` names it in
+ * every guard below, so a subject that moves again fails loudly rather than
+ * slicing an empty string out of the wrong file —
+ * docs/reusable/silent-success.md.
  */
 import { readFileSync } from "node:fs";
 
@@ -51,7 +57,8 @@ import {
 } from "../src/messages.js";
 
 const CSS = readFileSync("src/web/styles.css", "utf8");
-const APP = readFileSync("src/web/App.tsx", "utf8");
+const BAND_FILE = "src/web/modes/referee/RefereeMode.tsx";
+const BAND_SOURCE = readFileSync(BAND_FILE, "utf8");
 
 /** The declarations inside `selector { … }`, or null if there is no such rule. */
 function bodyOf(selector: string): string | null {
@@ -92,7 +99,7 @@ describe("the markup the rules above are aimed at", () => {
    * rather than a vacuous pass, which is the trap a regex test falls into when
    * it stops matching anything.
    */
-  const band = APP.match(/className="mode-band gloss referee"[\s\S]*?<\/aside>/)?.[0];
+  const band = BAND_SOURCE.match(/className="mode-band gloss referee"[\s\S]*?<\/aside>/)?.[0];
 
   /* The five **tags**, not the five words. `.ref-panel` is named in the prose of
      the comment above the scan ("outside `.ref-panel`"), so an `indexOf` on the
@@ -108,8 +115,8 @@ describe("the markup the rules above are aimed at", () => {
     panel: 'className="ref-panel"',
   } as const;
 
-  it("the Referee band is still in App.tsx and still has all five parts", () => {
-    expect(band, "no `mode-band gloss referee` aside in App.tsx").toBeDefined();
+  it(`the Referee band is still in ${BAND_FILE} and still has all five parts`, () => {
+    expect(band, `no \`mode-band gloss referee\` aside in ${BAND_FILE}`).toBeDefined();
     for (const [name, tag] of Object.entries(TAGS)) {
       expect(band, `the ${name} (\`${tag}\`) is not in the band`).toContain(tag);
     }
@@ -153,7 +160,7 @@ describe("the preamble is shut until a referee asks for it", () => {
   /* The same slice as the describe above takes, and taken again rather than
      shared: a `band` that stopped matching would then fail in one place instead
      of quietly emptying two. */
-  const band = APP.match(/className="mode-band gloss referee"[\s\S]*?<\/aside>/)?.[0];
+  const band = BAND_SOURCE.match(/className="mode-band gloss referee"[\s\S]*?<\/aside>/)?.[0];
 
   it("the notice's label is the long sentence's own opening clause", () => {
     /* Values, not source text: two strings that drift apart are the failure —
@@ -178,9 +185,9 @@ describe("the preamble is shut until a referee asks for it", () => {
   });
 
   it("starts shut on every visit, and remembers nothing between them", () => {
-    /* A collapse is only allowed here because it is not a dismissal — App.tsx
-       § RefereeBand. `useState(false)` is that, in one line: no storage, no
-       column, and the same first screen every time. */
-    expect(APP).toContain("const [noticeOpen, setNoticeOpen] = useState(false);");
+    /* A collapse is only allowed here because it is not a dismissal —
+       RefereeMode.tsx § RefereeBand. `useState(false)` is that, in one line: no
+       storage, no column, and the same first screen every time. */
+    expect(BAND_SOURCE).toContain("const [noticeOpen, setNoticeOpen] = useState(false);");
   });
 });

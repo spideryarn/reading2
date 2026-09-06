@@ -28,7 +28,7 @@
  * Deterministic, no network, no model call, like everything under tests/.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -73,14 +73,26 @@ const WEB = join(ROOT, "src", "web");
  * closes:
  *
  * - **What the referee band renders.** `RefereeBand` and `RefereeSubMode` in
- *   src/web/App.tsx are the only places a referee sub-mode reaches the screen,
- *   and the `never` in that switch means a fifth `RefereeView` cannot exist
- *   without a panel named there. This catches a panel that imports nothing with
- *   "referee" in the name.
- * - **What imports the referee domain.** Any `.tsx` under src/web that imports
- *   a `src/referee-*` or `src/injection-scan*` module. This catches a surface
- *   that is not a sub-mode panel at all — a dialog that grows a referee section,
- *   say — which the first rule cannot see.
+ *   src/web/modes/referee/RefereeMode.tsx are the only places a referee sub-mode
+ *   reaches the screen, and the `never` in that switch means a fifth
+ *   `RefereeView` cannot exist without a panel named there. This catches a panel
+ *   that imports nothing with "referee" in the name. **The controller itself
+ *   seeds the set**, because it holds the band's own copy and satisfies neither
+ *   rule: it is not rendered by itself, and nothing it imports is named
+ *   `referee-*`.
+ * - **What imports the referee domain.** Any `.tsx` **anywhere** under src/web
+ *   that imports a `src/referee-*` or `src/injection-scan*` module. This catches
+ *   a surface that is not a sub-mode panel at all — a dialog that grows a referee
+ *   section, say — which the first rule cannot see.
+ *
+ * **Both rules walk the tree rather than one directory, and both resolve a
+ * specifier from the file that wrote it.** A non-recursive `readdirSync(WEB)`
+ * and a `basename`-and-look-in-`src/web` resolver were both correct until
+ * 2026-09-06, when the controller moved down two directories; either one alone
+ * would have let `RefereeMode.tsx` leave the scanned set in silence while every
+ * floor below stayed green, because the panels it renders still satisfy rule one
+ * and the root-level referee files still satisfy rule two.
+ * docs/reusable/silent-success.md, and GPT Sol's fourth finding on the plan.
  *
  * A parser rather than a regular expression, for the reason
  * tests/helpers/ts-ast.ts gives: both of this repo's earlier source scans were
@@ -108,14 +120,33 @@ const WEB = join(ROOT, "src", "web");
  * stylesheet fetched, no script run and a PDF not opened at all.
  */
 
-/** Which `src/web` file an import specifier points at, if it is one of ours. */
-function localTarget(specifier: string): string | null {
-  if (!specifier.startsWith("./")) return null;
-  const stem = basename(specifier).replace(/\.js$/, "");
+/**
+ * Which repo file an import specifier points at, if it is one of ours.
+ *
+ * **Resolved against the importing file's own directory**, not against
+ * `src/web`: a controller under `src/web/modes/referee/` reaches its panels as
+ * `../../ClaimsPanel.js`, and a resolver that took the basename and looked in
+ * `src/web` would agree for the wrong reason today and be wrong outright the
+ * first time two directories hold the same file name.
+ */
+function localTarget(fromFile: string, specifier: string): string | null {
+  if (!specifier.startsWith(".")) return null;
+  const stem = resolve(dirname(fromFile), specifier.replace(/\.js$/, ""));
   for (const ext of [".tsx", ".ts"]) {
-    if (existsSync(join(WEB, stem + ext))) return `src/web/${stem}${ext}`;
+    if (existsSync(stem + ext)) return relative(ROOT, stem + ext);
   }
   return null;
+}
+
+/** Every `.tsx` under `src/web`, at any depth — the mode controllers included. */
+function clientComponents(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...clientComponents(full));
+    else if (entry.name.endsWith(".tsx")) out.push(full);
+  }
+  return out;
 }
 
 /** `localName` → specifier, for every `import` in one module. */
@@ -153,40 +184,47 @@ function componentsRenderedBy(ast: AstNode, fnName: string): string[] | null {
   return [...names];
 }
 
-const APP = parseSource(readFileSync(join(WEB, "App.tsx"), "utf8")) as unknown as AstNode;
-const APP_IMPORTS = importedNames(APP);
+/** The mode controller: the band, the chips, and the switch over the sub-modes. */
+const CONTROLLER = join(WEB, "modes", "referee", "RefereeMode.tsx");
+const BAND = parseSource(readFileSync(CONTROLLER, "utf8")) as unknown as AstNode;
+const BAND_IMPORTS = importedNames(BAND);
 
-/** Rule one: the panels the referee band actually puts on screen. */
+/** Rule one: the controller itself, and the panels the referee band puts on screen. */
 const RENDERED_BY_THE_BAND: string[] = (() => {
-  const out = new Set<string>();
+  /* **Seeded with the controller**, which neither rule would otherwise reach:
+     it is not rendered by itself, and nothing it imports is named `referee-*`.
+     It carries the band's own copy — the confidentiality notice's wiring and
+     `REFEREE_VIEW_TIP`, four sentences a referee reads on hover — so a scan
+     that skipped it would be checking the panels and not the band. */
+  const out = new Set<string>([relative(ROOT, CONTROLLER)]);
   for (const fn of ["RefereeBand", "RefereeSubMode"]) {
-    const names = componentsRenderedBy(APP, fn);
+    const names = componentsRenderedBy(BAND, fn);
     if (names === null) {
       throw new Error(
-        `src/web/App.tsx has no function called ${fn}. This derivation is anchored ` +
-          `on it, and a rename that went unnoticed here would silently stop scanning ` +
-          `every referee panel — so it is an error rather than an empty list.`,
+        `src/web/modes/referee/RefereeMode.tsx has no function called ${fn}. This ` +
+          `derivation is anchored on it, and a rename or a move that went unnoticed ` +
+          `here would silently stop scanning every referee panel — so it is an error ` +
+          `rather than an empty list.`,
       );
     }
     for (const name of names) {
-      const target = localTarget(APP_IMPORTS.get(name) ?? "");
+      const target = localTarget(CONTROLLER, BAND_IMPORTS.get(name) ?? "");
       if (target?.endsWith(".tsx")) out.add(target);
     }
   }
   return [...out];
 })();
 
-/** Rule two: anything under src/web that speaks the referee domain. */
-const IMPORTS_THE_DOMAIN: string[] = readdirSync(WEB)
-  .filter((f) => f.endsWith(".tsx"))
-  .filter((f) => {
-    const ast = parseSource(readFileSync(join(WEB, f), "utf8")) as unknown as AstNode;
+/** Rule two: anything under src/web, at any depth, that speaks the referee domain. */
+const IMPORTS_THE_DOMAIN: string[] = clientComponents(WEB)
+  .filter((full) => {
+    const ast = parseSource(readFileSync(full, "utf8")) as unknown as AstNode;
     for (const specifier of importedNames(ast).values()) {
       if (/^(referee-|injection-scan)/.test(basename(specifier))) return true;
     }
     return false;
   })
-  .map((f) => `src/web/${f}`);
+  .map((full) => relative(ROOT, full));
 
 const REFEREE_SURFACES = [...new Set([...RENDERED_BY_THE_BAND, ...IMPORTS_THE_DOMAIN])].sort();
 
@@ -202,6 +240,23 @@ describe("the list of surfaces is derived, and the derivation found something", 
     );
     expect(IMPORTS_THE_DOMAIN.length, "nothing imports the referee domain").toBeGreaterThan(2);
     expect(REFEREE_SURFACES.length).toBeGreaterThan(4);
+  });
+
+  it("scans the controller itself, which neither rule reaches on its own", () => {
+    /* The seed, asserted rather than assumed. `RefereeMode.tsx` renders the
+       panels; nothing renders it, and none of its imports is named `referee-*`,
+       so both rules pass it by. It holds the band's own copy, and a scan that
+       covered every panel and not the band would be green and blind — the
+       failure docs/reusable/silent-success.md is about. */
+    expect(REFEREE_SURFACES).toContain("src/web/modes/referee/RefereeMode.tsx");
+  });
+
+  it("walks below src/web, so a controller in a subdirectory is still a file it can see", () => {
+    /* Rule two used to be a flat `readdirSync`. The assertion is about the
+       walker rather than about this one file: at least one scanned surface is
+       nested, so a walk that stopped at the top level goes red here instead of
+       going quiet. */
+    expect(REFEREE_SURFACES.filter((p) => p.split("/").length > 3).length).toBeGreaterThan(0);
   });
 
   it("finds files that exist and have something in them after the comments come off", () => {
@@ -222,8 +277,8 @@ describe("the list of surfaces is derived, and the derivation found something", 
     expect(
       RENDERED_BY_THE_BAND.length,
       `${REFEREE_VIEWS.length} referee sub-modes exist and only ` +
-        `${RENDERED_BY_THE_BAND.length} panels could be resolved from App.tsx — one of ` +
-        `them is being scanned by nothing.`,
+        `${RENDERED_BY_THE_BAND.length} panels could be resolved from RefereeMode.tsx — ` +
+        `one of them is being scanned by nothing.`,
     ).toBeGreaterThanOrEqual(REFEREE_VIEWS.length);
   });
 });

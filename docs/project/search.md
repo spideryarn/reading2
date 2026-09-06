@@ -782,7 +782,8 @@ is a reading of it rather than the only one — GPT's review, which agreed with 
 that the first draft of this paragraph overstated that.
 
 **And hiding buys something a list cannot show.** The dropped results lose their marks in the prose
-too, because [`App.tsx`](../../src/web/App.tsx) computes one array and hands it to both the panel and
+too, because [`SearchMode.tsx`](../../src/web/modes/search/SearchMode.tsx) computes one array and
+hands it to both the panel and
 the article — the same single-source rule the `hitMarks` prop in
 [`TableView.tsx`](../../src/web/TableView.tsx) already existed for. So the bar declutters the page,
 not just the list. Grouping would have left every weak wash exactly where it was. That is the
@@ -917,7 +918,8 @@ visible — and one exported function decides:
 ```
 
 `resolveMatcher` in [`params.ts`](../../src/web/params.ts), used in one place
-([`App.tsx`](../../src/web/App.tsx) § SearchBand), tested against the URL shape rather than against
+([`SearchMode.tsx`](../../src/web/modes/search/SearchMode.tsx) § SearchBand), tested against the URL
+shape rather than against
 the constant. It is safe in the other direction because **`?find=` is cleared on the way into meaning
 mode** (below): a live meaning search never has one set, so "has `find`" cannot mean anything else.
 The library's link now also says `match=words` out loud, which is the canonical spelling rather than
@@ -988,7 +990,7 @@ list, an unknown `order` is document order. Same rule as everything else in
 ## How the pieces fit
 
 ```
-  SearchPanel.tsx ─── App.tsx § SearchBand ─── useSearch.ts ──POST /api/search/<slug>──┐
+  SearchPanel.tsx ─── SearchMode.tsx ───────── useSearch.ts ──POST /api/search/<slug>──┐
    the box, the         the four ?params,       the client half,                       │
    toggle, the list      and the ONE place       one POST one answer                   ▼
         │                the two matchers                                        routes.ts § search
@@ -1035,7 +1037,8 @@ cannot:
   carries **none of the four verbs**. There is no `onDelete` to call, rather than a disabled button.
   The three fetch flags — `loaded`, `loadFailed`, `error` — are on the owner's arm too, because they
   are facts about a request a visitor never makes.
-- `?match=` is **pinned** to `meaning` in `useSearchMode` ([`App.tsx`](../../src/web/App.tsx)),
+- `?match=` is **pinned** to `meaning` in `useSearchMode`
+  ([`SearchMode.tsx`](../../src/web/modes/search/SearchMode.tsx)),
   in the component, whatever the URL says. Hiding the toggle would not have been enough: `?match=`
   is ordinary query state and a pasted link walks straight past a control that was merely not drawn.
   The same pin `DiagramPanel` puts on `?diagram=`.

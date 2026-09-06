@@ -35,6 +35,7 @@ const glossaryMode = await readFile(
   "utf8",
 );
 const quotesMode = await readFile(path.join(ROOT, "src/web/modes/quotes/QuotesMode.tsx"), "utf8");
+const searchMode = await readFile(path.join(ROOT, "src/web/modes/search/SearchMode.tsx"), "utf8");
 const glossaryPanel = await readFile(path.join(ROOT, "src/web/GlossaryPanel.tsx"), "utf8");
 const quotesPanel = await readFile(path.join(ROOT, "src/web/QuotesPanel.tsx"), "utf8");
 const searchPanel = await readFile(path.join(ROOT, "src/web/SearchPanel.tsx"), "utf8");
@@ -111,8 +112,13 @@ describe("the threshold wiring", () => {
        panel goes to the prose, so a row in the list and a mark on the paragraph
        can never be a different set. A filter in `SearchPanel` would hide a row
        and leave its wash on the article. */
-    expect(app.match(/keepAbove\(/g) ?? []).toHaveLength(1);
+    expect(searchMode.match(/keepAbove\(/g) ?? []).toHaveLength(1);
     expect(searchPanel).not.toMatch(/keepAbove/);
+    /* And nowhere else in the reading view either — the count above is only
+       "exactly one" within the file that owns it, so the reader composition has
+       to be asked separately. `SearchMode.tsx` moved out of `App.tsx` on
+       2026-09-06 and this assertion moved with it. */
+    expect(app).not.toMatch(/keepAbove\(/);
   });
 
   it("lowers the gate before opening a term the bar is hiding, and only then", () => {
