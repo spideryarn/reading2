@@ -15,6 +15,14 @@
  * SEEN RED, 2026-08-30, twice, before being trusted: once with a single space
  * added to SYSTEM (the system-bytes assertion fired), once with EFFORT flipped
  * to "medium" (the output_config assertion fired). Both perturbations reverted.
+ *
+ * **RE-PINNED 2026-09-06 for `toc/6`**, and this is the only reason to touch the
+ * literal below: the GISTS block gained a per-depth length ceiling, a ban on
+ * meta-narration and a plain-word rule, so the bytes moved on purpose. It fired
+ * exactly as designed — the change reached this pin before it reached anything
+ * that costs money. Re-pin only alongside a deliberate edit to SYSTEM, and say
+ * which in the commit message.
+ * docs/plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md.
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -86,9 +94,30 @@ GISTS (internal nodes)
 - Exactly ONE sentence. This is what the reader sees at the zoom level above.
 - It must be a CLAIM or a MOVE, not a topic label.
 - Write a parent's gist from its children, not from the raw text.
+- LENGTH IS SET BY WHERE THE LINE IS READ, and it runs SHORTER as the node gets
+  coarser:
+    - the root: AT MOST 18 words. It is the shelf blurb — THE ONE claim the
+      piece makes, or its one governing move if it makes no single claim,
+      shorter than any chapter's gist. A root that runs "X stems from A and B,
+      so we should C while reaffirming D" is four gists wearing one full stop.
+      Pick the claim they add up to and stop there.
+    - depth 1: AT MOST 25 words. Chapter-level orientation.
+    - deeper than that: AT LEAST 22 words, and at most 32. The floor is the
+      half that will feel wrong, so obey it: down here a one-clause gist is too
+      SHORT, not admirably terse. A reader at this zoom is reading your sentence
+      INSTEAD of the paragraphs it covers, so give them the claim AND the ground
+      it stands on — its reason, contrast, consequence or example. The floor
+      does not apply where the RANGE itself is slight: a title, a credit line, a
+      URL, a heading with nothing under it. Never pad, never invent support, and
+      never move a boundary to reach a word count.
+- No narration of document order: not "the essay opens by", "the essay closes by
+  urging", "this section explores", "the author then turns to", "goes on to".
+  Say what the section CLAIMS; do not narrate that it is claiming. Ordinary
+  "then" and "next" inside a claim are fine — "if X, then Y" may BE the claim.
 - Keep the article's own words for the things it names — those are the reader's
-  handholds — and ordinary words for everything else. A gist is read at a glance
-  and has to land first time: plainer than the article, never further from it.
+  handholds — and ordinary words for everything else. Where a shorter, commoner
+  word loses nothing, use it. A gist is read at a glance and has to land first
+  time: plainer than the article, never further from it.
 
 QUESTIONS (the root and depth-1 nodes only)
 

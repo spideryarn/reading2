@@ -117,8 +117,12 @@
    segment's arrow keys on 2026-08-31 — the ref array was the roving tabindex's
    focus-follow, and the aliased type was that handler's parameter. The only
    keyboard listener left in this file is the drawer's Escape, which is on
-   `window` and takes the DOM's own type. See `DockModes`. */
-import { useEffect, useId, type ReactNode } from "react";
+   `window` and takes the DOM's own type. See `DockModes`.
+
+   `useRef` came back on 2026-09-06, for the drawer's focus rather than the
+   bar's — see § the drawer takes focus, and gives it back. The aliased type
+   has not. */
+import { useEffect, useRef, useId, type ReactNode } from "react";
 import {
   AlignLeft,
   BookA,
@@ -1010,6 +1014,43 @@ export function Dock({
     return () => window.removeEventListener("keydown", onKey, { capture: true });
   }, [open, onPanel]);
 
+  /**
+   * ## The drawer takes focus, and gives it back
+   *
+   * Until 2026-09-06 it did neither: opening left focus on the dock tab, so a
+   * keyboard reader pressed Enter and then Tab straight *past* the thing they
+   * had just opened, and closing dropped focus on `<body>` — reproduced in
+   * Chrome, docs/plans/260905h-a-mode-failure-should-leave-the-article-readable.md
+   * § Stage 2. One effect for both halves, because they are one fact: the
+   * opener is recorded when focus moves in and used when the drawer goes.
+   *
+   * **The close button is the target**, not the drawer itself: it is a real
+   * control, first in the drawer's own tab order, and the reader's way out.
+   *
+   * **And there is deliberately no trap.** `.dock` sits above the scrim and
+   * stays operable with the drawer open, so Tab is meant to leave — which is
+   * why `aria-modal` is not on the dialog below. tests/the-dock-drawer-is-not-a-modal.test.tsx
+   * holds the whole contract; docs/project/comments.md states it.
+   *
+   * The cleanup covers all four close paths — Escape, the scrim, the ×, and the
+   * same tab pressed again — because every one of them is `open` going false.
+   * `isConnected` is the guard for the fifth case, unmounting, where the bar
+   * the opener lived in may be on its way out.
+   */
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const opener = document.activeElement;
+    openerRef.current = opener instanceof HTMLElement ? opener : null;
+    closeRef.current?.focus();
+    return () => {
+      const back = openerRef.current;
+      openerRef.current = null;
+      if (back?.isConnected) back.focus();
+    };
+  }, [open]);
+
   return (
     <>
       {/* The dim. A button rather than a div so closing by clicking away is
@@ -1028,7 +1069,15 @@ export function Dock({
         <div
           className="dock-drawer"
           role="dialog"
-          aria-modal="true"
+          /* **No `aria-modal`, and it is not an omission.** It said `true`
+             until 2026-09-06, which was a false statement about this drawer:
+             the attribute tells assistive technology that everything outside
+             the dialog does not exist, while `.dock` sits above the scrim at
+             z-index 96 and stays visible, clickable and Tab-reachable. The
+             rest of the reader, including the prose, is behind the dim.
+             Reproduced in Chrome and written up
+             in docs/plans/260905h-a-mode-failure-should-leave-the-article-readable.md
+             § Stage 2; the contract is docs/project/comments.md. */
           aria-label={own ? TITLES[panel].own : TITLES[panel].visitor}
         >
           <div className="dock-drawer-head">
@@ -1044,6 +1093,9 @@ export function Dock({
             <button
               type="button"
               className="dock-close"
+              /* Where focus lands when the drawer opens — § the drawer takes
+                 focus, and gives it back. */
+              ref={closeRef}
               onClick={() => drawer.onPanel(null)}
               title="Close (Esc)"
               aria-label="Close"

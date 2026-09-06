@@ -98,7 +98,7 @@ import type { Block } from "./types.js";
  * question that did not ask for it, so it must read as a miss rather than be
  * resumed onto — which is the whole reason this string is in the key.
  */
-export const EXPAND_PROMPT_VERSION = "expand/2";
+export const EXPAND_PROMPT_VERSION = "expand/3";
 
 /**
  * **Both prompt versions, as one string** — the wave-1 prompt this outline came
@@ -252,7 +252,20 @@ TITLES AND GISTS
   no heading — do not send an empty one.
 - gist: exactly ONE sentence, on every child. It is a CLAIM or a MOVE, not a
   topic label. Keep the work's own words for the things it names and ordinary
-  words for everything else.
+  words for everything else; where a shorter, commoner word loses nothing, use
+  it.
+- These are the FINE rungs, and a fine gist is longer than a coarse one, not
+  shorter: AT LEAST 22 words, and at most 32. The floor is the half that will
+  feel wrong, so obey it: down here a one-clause gist is too SHORT, not
+  admirably terse. A reader at this zoom is reading your sentence INSTEAD of the
+  paragraphs it covers, so give them the claim AND the ground it stands on — its
+  reason, contrast, consequence or example. The floor does not apply where the
+  RANGE itself is slight: a title, a credit line, a URL, a heading with nothing
+  under it. Never pad, never invent support, and never move a boundary to reach
+  a word count. One sentence still.
+- No narration of document order: not "this section explores", "the author then
+  turns to", "goes on to". Say what the child CLAIMS; do not narrate that it is
+  claiming. Ordinary "then" and "next" inside a claim are fine.
 - Your titles must distinguish these children from EACH OTHER and from the
   sibling sections in the outline above. Four children that all mean
   "Background" is the failure to avoid.
