@@ -8,7 +8,7 @@ One setting, off by default, with **two controls**: a checkbox on
 > (which is what we want for most users). When on, it includes extra features that might be still
 > under development or not ready for production.
 
-**Five modes and four Diagram pictures are behind it** —
+**Four modes and four Diagram pictures are behind it** —
 [What is behind it today](#what-is-behind-it-today) names them. Features go behind it one at a time, each with a reason: the switch and the decision
 about which features are unfinished are two separate arguments, and taking them together means
 neither gets made properly.
@@ -41,7 +41,7 @@ the same code saying it: [`experimental-visibility.ts`](../../src/web/experiment
 one rule with two callers, `visibleModes` in [`Dock.tsx`](../../src/web/Dock.tsx) and `visibleKinds`
 in [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx). The switch is about clutter, not enforcement — an old bookmark keeps
 working, and a shared URL shows two people **the same band**, whatever their switches say. Their
-*bars* differ, which is the whole point: nine buttons for one and fourteen for the other, and one
+*bars* differ, which is the whole point: ten buttons for one and fourteen for the other, and one
 Diagram chip against five. A gate
 that redirected or 404'd would turn a preference into a broken link.
 
@@ -160,26 +160,36 @@ is a column rather than something in the browser's `localStorage`.
 
 ## What is behind it today
 
-**Five of the fourteen modes**, and **four of Diagram's five pictures**. Greg picked the first four
+**Four of the fourteen modes**, and **four of Diagram's five pictures**. Greg picked the first four
 on 2026-09-03
-([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)) and Debate joined
-them on 2026-09-05; each row is a required `experimental: boolean` in `MODES_UI`
-([`Dock.tsx`](../../src/web/Dock.tsx)), so mode fifteen cannot be added without somebody deciding
-which side of the line it is on.
+([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)), Debate joined
+them on 2026-09-05, and **Quotes came out on 2026-09-06**; each row is a required
+`experimental: boolean` in `MODES_UI` ([`Dock.tsx`](../../src/web/Dock.tsx)), so mode fifteen cannot
+be added without somebody deciding which side of the line it is on.
 
 | Mode | Why it is behind the switch |
 |---|---|
-| [Quotes](quotes.md) | Verification is finished and deliberately narrow — it proves the words are in the piece and **not who wrote them**, which is a real limit a reader meets without being told. And the selection has been calibrated against one article. |
 | [Timeline](timeline.md) | Four dating states, and drawing an undated row like a dated one throws away what the article actually said. Ten of twenty-six rows on the test article carry no date. |
 | [Referee](referee-mode.md) | **Not because it is unfinished** — its own doc opens by saying all four sub-modes are built and working. It is the newest mode and by far the narrowest: it is for somebody who has been *asked to peer-review* the piece, which most readers never are. Greg's call, and the one row here that is about audience rather than readiness. |
 | [Remember](remember-mode.md) | The name suggests saved notes and spaced repetition, neither of which exists; the quiz half is newer still. |
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
 
-**The nine that stay visible**: Plain, Hierarchy, Outline, Summary, Glossary, Ideas, Search, Chat,
-Diagram. Hierarchy and Outline are stand-ins for the merged **Structure** mode
+**The ten that stay visible**: Plain, Hierarchy, Outline, Summary, Glossary, Ideas, Quotes, Search,
+Chat, Diagram. Hierarchy and Outline are stand-ins for the merged **Structure** mode
 ([260903b](../plans/260903b-one-structure-mode-hierarchy-and-outline-merged.md)); when that lands it
-takes one default-visible slot and those two go, making it eight of thirteen. **Do not write
-eight/thirteen anywhere before then.**
+takes one default-visible slot and those two go, making it nine of thirteen. **Do not write
+nine/thirteen anywhere before then.**
+
+**Quotes left the table on 2026-09-06.** Greg:
+
+> Quotes mode is valuable enough that we should promote it to always show it, i.e. it should be
+> visible even when Experimental Features is false for the user.
+
+The limit its row named has not gone away — the check proves the words are in the piece and **not
+who said them** ([quotes.md](quotes.md)) — but it is now a thing a reader meets in a finished mode
+rather than a reason to hide the mode. Pressing the button starts a paid run, the same as Glossary
+and Ideas, so this is a third default-visible mode that spends on a press
+([`activation.ts`](../../src/web/activation.ts) § `MODE_TARGET`).
 
 ## The one thing that is gated below mode level
 

@@ -216,8 +216,10 @@ describe("the mode itself", () => {
   it("is in the bar for a reader who has asked for nothing", () => {
     const modes = visibleModes(false, undefined).map((m) => m.mode);
     expect(modes).toContain("diagram");
-    /* And the four that are still behind the switch are still behind it. */
-    for (const hidden of ["quotes", "timeline", "referee", "remember"]) {
+    /* And the four that are still behind the switch are still behind it.
+       Quotes was one of them until 2026-09-06 and Debate joined on 2026-09-05,
+       so this list is the modes hidden *today*, not the 2026-09-04 four. */
+    for (const hidden of ["timeline", "referee", "remember", "debate"]) {
       expect(modes, `${hidden} escaped`).not.toContain(hidden);
     }
   });

@@ -349,10 +349,10 @@ function Reading({ slug, start }: { slug: string; start: Mode }): ReactElement {
     mode === "diagram" && diagramKind() === "illustrated"
       ? createElement(IllustratedBand, { slug })
       : null,
-    /* **The switch on**, because three of the five modes this file presses —
-       Quotes, Timeline and Remember — went behind it on 2026-09-03, and a bar
-       with the default answer draws no Quotes button for `press("Quotes")` to
-       find. As a prop that is one literal; had `Dock` subscribed to the store
+    /* **The switch on**, because modes this file presses — Timeline and
+       Remember, and Quotes until it came out on 2026-09-06 — went behind it on
+       2026-09-03, and a bar with the default answer draws no Timeline button
+       for `press("Timeline")` to find. As a prop that is one literal; had `Dock` subscribed to the store
        itself it would be a posed session and an `/api/reader` body in a file
        whose subject is jobs. Dock.tsx § experimental. */
     createElement(Dock, {
