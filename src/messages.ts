@@ -2741,6 +2741,73 @@ export const PUBLIC_SHELF_BROWSE_LINK = "Browse shared articles →";
 export const TAKEDOWN_LINK = "If something here is yours, ask us to take it down";
 
 /**
+ * **The line under the shelf's lede**, and the replacement for `TAKEDOWN_LINK`
+ * at the foot of that page — moved on Greg's ask, 2026-09-06: *"we have this
+ * note … Let's move that to the top."*
+ *
+ * **It is three checkable facts and then an offer, in that order**, and that
+ * ordering is the whole design. `TAKEDOWN_LINK` alone at the top of the page
+ * would make the first thing anybody reads a note about takedowns, which reads
+ * as a warning about the articles underneath it — the exact failure the foot
+ * placement was chosen to avoid (docs/project/public-shelf.md). Saying what
+ * these articles *are* first turns the offer into a consequence of behaving
+ * openly rather than into an apology.
+ *
+ * **Two readers, one sentence.** A visitor browsing wants to know whose these
+ * are; an author who arrived from a search wants to know whether we are hiding
+ * anything. The facts serve both, which is why none of them is a reassurance:
+ * *written by somebody else*, *published somewhere else first*, *each links
+ * back*. All three are visible on the page itself within one click.
+ *
+ * **No completeness claim**, following every other sentence in this section:
+ * *"Every article here"* is about the page in front of the reader and not about
+ * the world, so the four exclusions in `publicLibraryQuery` cannot falsify it.
+ *
+ * The second sentence is the link, and the first is not, because the offer is
+ * the only part of it that goes anywhere.
+ */
+export const PUBLIC_SHELF_PROVENANCE =
+  "Every article here was written by somebody else and published somewhere else first, and each " +
+  "one links back to its original.";
+
+/** The offer, and the link out of it. Reads on from `PUBLIC_SHELF_PROVENANCE`. */
+export const PUBLIC_SHELF_TAKEDOWN = "If one is yours and you'd rather it weren't, ask us to take it down.";
+
+/**
+ * **The hover on the line above**, and the one place in this app where a
+ * `ControlTip` sits on a link to a *page* rather than on a control.
+ *
+ * > add a rich tooltip (see tooltips.md) to it, explaining that we have set up
+ * > the SEO canonical link to point to your original page … etc etc
+ * >
+ * > — Greg, 2026-09-06
+ *
+ * **Greg named five things and two of them are false**, which is why this is a
+ * `ControlTip` and not the five-claim panel the brief describes. Zero-data
+ * retention is set on dictation and nothing else (`AI_JOB_ROUTE`,
+ * src/ai-call.ts), and the canonical link is real but inert because no search
+ * engine is allowed to fetch the page in the first place. The five claims live
+ * on `/features/public-readable-sharing`, said accurately and at length; this
+ * card's job is to make somebody want to open it.
+ *
+ * So it obeys the idiom rather than fighting it
+ * (docs/project/tooltips.md § `ControlTip`): `what` is what pressing the link
+ * does, `how` is the two things a reader could not have guessed and that
+ * actually settle the question — **we are not in search engines at all**, which
+ * is the strong true version of Greg's canonical claim and the one a
+ * rights-holder is really asking about, and **you do not have to prove
+ * anything**, which is the only sentence here that is an action.
+ */
+export const TAKEDOWN_TIP_HEAD = "What we do with a shared article";
+export const TAKEDOWN_TIP_WHAT =
+  "Opens the page that sets out what happens when a reader makes an article public here: what goes " +
+  "out, what stays with the original, and how to have yours removed.";
+export const TAKEDOWN_TIP_HOW =
+  "None of these pages is in a search engine — every one is served noindex and our robots.txt " +
+  "disallows crawling. If a piece is yours, one email takes it down, and you don't have to prove " +
+  "anything first.";
+
+/**
  * The heading of the section at the other end of it, on `/privacy`.
  *
  * Here rather than inline in the page because two things need to agree on it —

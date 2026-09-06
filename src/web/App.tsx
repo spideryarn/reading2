@@ -33,6 +33,7 @@ import { ContactPage } from "./ContactPage.js";
 import { FeaturesPage } from "./FeaturesPage.js";
 import { PublicLibraryPage } from "./PublicLibraryPage.js";
 import { PricingPage } from "./PricingPage.js";
+import { PublicReadableSharingPage } from "./PublicReadableSharingPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
@@ -417,6 +418,13 @@ export function App() {
        landing page's "everything it does" link has to land somewhere a
        stranger can read. */
     if (route.kind === "features") return <FeaturesPage signedIn={false} />;
+    /* **The one page here whose reader may want nothing from us at all** — an
+       author who found their own writing on `/read/public`. Every other page in
+       this branch is reachable signed out because a stranger is deciding
+       whether to sign up; this one is reachable signed out because that reader
+       will never sign up, and a page they cannot open is a page that does not
+       exist. router.ts § `public-sharing`. */
+    if (route.kind === "public-sharing") return <PublicReadableSharingPage signedIn={false} />;
     /* The fifth, and the least arguable of them: a price somebody has to sign
        up to read is the thing people complain about, and this is the page one
        person sends another. */
@@ -604,6 +612,17 @@ function SignedIn({
             docs/plans/260904b-pricing-page-and-public-showcase.md, finding 1 —
             this half of it predates that stage. SiteBits.tsx § `signedIn`. */}
         <FeaturesPage signedIn />
+      </>
+    );
+  /* Mounted signed in as well, for the owner half of its two readers: somebody
+     weighing up the sharing switch is by definition signed in, and reaches this
+     from `/privacy` or from the shelf. `signedIn` for the reason the line above
+     it carries. */
+  if (route.kind === "public-sharing")
+    return (
+      <>
+        <HomeLogo />
+        <PublicReadableSharingPage signedIn />
       </>
     );
   if (route.kind === "contact")

@@ -211,6 +211,18 @@ export type Route =
    */
   | { kind: "features" }
   /**
+   * What happens when a reader makes an article public here, and what to do if
+   * the article is yours — `/features/public-readable-sharing`. See
+   * PublicReadableSharingPage.tsx and docs/project/public-readable-sharing.md.
+   *
+   * **The app's only nested address**, and the only one whose reader may have
+   * no interest in the product at all: a rights-holder who found their own
+   * writing on `/read/public`. Signed out for a stronger reason than `privacy`
+   * and `features` — that reader will never have an account, and a page they
+   * cannot open is a page that does not exist.
+   */
+  | { kind: "public-sharing" }
+  /**
    * What it costs — `/pricing`. See PricingPage.tsx and
    * docs/project/website-text.md. Signed out for the same reason as `privacy`
    * and `features`, and rather more so: a price you have to sign up to see is
@@ -310,6 +322,7 @@ const ADMIN_ONLY: Record<Route["kind"], boolean> = {
   admin: true,
   privacy: false,
   features: false,
+  "public-sharing": false,
   pricing: false,
   contact: false,
   callback: false,
@@ -421,6 +434,13 @@ export function parseRoute(pathname: string): Route {
   // because it is not about an article, and above the sign-in gate in App.tsx
   // because it is not about being signed in either.
   if (new RegExp(`^${PRIVACY_HREF}/?$`).test(pathname)) return { kind: "privacy" };
+  /* **Above `/features`, and that ordering is a habit rather than a necessity.**
+     The `/features` regex below is anchored `/?$`, so it cannot swallow a child
+     address today — but this is the app's only nested pair, and the rule that
+     the specific arm goes above the general one is what keeps `/read/public`
+     working above `/read/:slug`. Written in the order that stays correct if
+     somebody ever relaxes that anchor. */
+  if (new RegExp(`^${PUBLIC_SHARING_HREF}/?$`).test(pathname)) return { kind: "public-sharing" };
   if (new RegExp(`^${FEATURES_HREF}/?$`).test(pathname)) return { kind: "features" };
   if (new RegExp(`^${PRICING_HREF}/?$`).test(pathname)) return { kind: "pricing" };
   if (new RegExp(`^${CONTACT_HREF}/?$`).test(pathname)) return { kind: "contact" };
@@ -615,6 +635,22 @@ export const TAKEDOWN_HREF = `${PRIVACY_HREF}#${TAKEDOWN_SECTION_ID}`;
  * with "everything it does, with pictures".
  */
 export const FEATURES_HREF = "/features";
+/**
+ * **What we do with an article somebody has made public** — the single place
+ * those claims are written, and the one address on this site aimed at somebody
+ * who did not choose to be here.
+ *
+ * Greg, 2026-09-06, picked this address over a top-level `/republishing`, which
+ * was argued for on the ground that `/features` sells the product and a
+ * rights-holder should not be told their article is a feature of it. His call,
+ * and the consequence is that the page has to read correctly to **two** people:
+ * an owner deciding whether to share, and an author who found their own writing
+ * on `/read/public`.
+ *
+ * Built from `FEATURES_HREF` rather than spelled out, so the pair cannot come
+ * apart if `/features` ever moves. docs/project/public-readable-sharing.md.
+ */
+export const PUBLIC_SHARING_HREF = `${FEATURES_HREF}/public-readable-sharing`;
 /**
  * The pricing page. Linked from the landing page's footer and from beside the
  * plans table there, which is the same three rows: `/pricing` exists so there is
