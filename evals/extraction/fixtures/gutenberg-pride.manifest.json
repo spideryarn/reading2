@@ -1,0 +1,58 @@
+{
+  "fixture": "gutenberg-pride",
+  "file": "gutenberg.html",
+  "note": "131k words, 2,147 paragraphs — the size stress test, and the corpus's best SHORT DIALOGUE: complete lines of speech in two and three words, which any length rule deletes. The page numbers ({v}, {1}, {226}) are the junk beside them, and telling the two apart by length is impossible. STRUCTURE FLOORS, CHECKED 2026-09-05: the source's 65 <h2> are 61 chapter headings, two front-matter page markers ({ix}, {xxv}), the book title (Readability hoists that into `title`) and 'THE FULL PROJECT GUTENBERG™ LICENSE'; 61 is therefore the floor that is indisputably the book, and it leaves a correct extraction free to drop the licence heading and the page markers. Both <table> are the book's own — George Allen's imprint plate and the List of Illustrations. The single <blockquote> is the Gutenberg licence boilerplate, correctly dropped, so no blockquote floor. THE IMG FLOOR FAILS TODAY AND IS MEANT TO: all 164 <img src> in the source are Hugh Thomson's illustrations for the 1894 edition — this page carries no logo, no ad and no tracking pixel — and the shipped extraction returns 161. The three it loses were identified by comparing src values: images/front.png (the frontispiece, wrapped in an <h1>), images/i_008.png (the dedication plate, 'To J. Comyns Carr … these illustrations are gratefully inscribed'), and images/i_003.jpg ('Reading Jane's Letters. Chap 34.'). minArticleChars 700000: the source body holds 732,621 gistable characters and the two near-identical Project Gutenberg licence blocks account for 18,612 of them, which the shipped extraction correctly drops to leave 714,009. ARTICLE REGION AND THE FLOOR ON IT, MEASURED 2026-09-05: The novel is 589,148 characters against 605,179 for the whole source body; the difference is the two .pg-boilerplate licence blocks the region subtracts. The shipped extraction returns 588,393, 99.87% — the 755 characters it misses are chapter headings whose own text moves into a child, plus the hoisted title. The floor is 570,000, the region less 3%.",
+  "mustContain": [
+    {
+      "text": "“Not one.”",
+      "why": "a complete line of dialogue in two words",
+      "negativeControl": "short-dialogue"
+    },
+    {
+      "text": "“A little.”",
+      "why": "and another, three words",
+      "negativeControl": "short-dialogue"
+    },
+    {
+      "text": "“Indeed!”",
+      "why": "and one of eight characters",
+      "negativeControl": "short-dialogue"
+    },
+    {
+      "text": "truth universally acknowledged, that a single man in possession",
+      "why": "the first sentence; the opening 'I' is a drop cap in its own span, so the needle starts after it"
+    },
+    {
+      "text": "As it happened that Elizabeth had much rather not",
+      "why": "prose from chapter LXI, the last one, so a tail truncation shows"
+    }
+  ],
+  "mustNotContain": [
+    {
+      "text": "START OF THE PROJECT GUTENBERG",
+      "why": "the licence block bracketing the text at both ends"
+    }
+  ],
+  "structure": {
+    "h2": {
+      "atLeast": 61
+    },
+    "table": {
+      "atLeast": 2
+    },
+    "img": {
+      "atLeast": 164
+    }
+  },
+  "maxBlockChars": 12000,
+  "articleRegion": {
+    "within": [
+      "body"
+    ],
+    "except": [
+      ".pg-boilerplate"
+    ],
+    "why": "A Project Gutenberg page is flat: the book is the body, and the only non-book material is the two .pg-boilerplate blocks (the licence header and footer, 19,025 characters between them). There is no article container to name, so the region is stated as the page minus the two blocks that are provably not the novel."
+  },
+  "minArticleChars": 570000
+}

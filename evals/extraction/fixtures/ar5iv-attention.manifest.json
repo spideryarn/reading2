@@ -1,0 +1,66 @@
+{
+  "fixture": "ar5iv-attention",
+  "file": "ar5iv.html",
+  "note": "142 formulas and a SHORT HEADING: 'Encoder:' and 'Abstract' are one word each and are real section headings, which is why probe.mts excludes headings from its tiny-block count. The math floor is the failure characters cannot show — the prose around a discarded formula reads perfectly. STRUCTURE FLOORS ARE SOURCE TRUTH, counted 2026-09-05 over the source body with script/style/noscript/template/svg/head removed, and every count below was checked element by element to be the paper's own: all 142 <math> are inside <article>; all 9 <table> are the paper's (five are LaTeXML display-equation tables, four are Tables 1-4); all 9 <figure> are Figures 1-5 and Tables 1-4; the 9 <h2> are the seven numbered sections plus References plus Attention Visualizations; the 12 <h3> are subsections 3.1-6.3; the 3 <img> are the paper's diagrams (the source's other two are ar5iv's own logo and a 1x1 spacer, so img is floored at 3 rather than 5). THE MATH AND TABLE FLOORS FAIL TODAY AND ARE MEANT TO: the shipped extraction returns 7 tables and 116 math nodes, and the arithmetic is exact — Table 1 (per-layer complexity, 12 <math>) and Table 2 (BLEU and training cost, 14 <math>) are gone entirely, 142-12-14=116. Until 2026-09-05 the floors read 7 and 110, which were copied from that damaged output and could therefore never detect it. minArticleChars 26000: the source body holds 34,153 gistable characters and the paper's own bibliography accounts for 6,946 of them, so 26,000 is the paper without its reference list, rounded down — a floor a correct extraction clears even if it drops the bibliography, and one no truncation or needle-collage arm can reach. ARTICLE REGION AND THE FLOOR ON IT, MEASURED 2026-09-05: The paper's own text is 34,363 characters against 34,619 for the source body — LaTeXML's wrapper is the page. (It was 34,511 until the 148-character Google reproduction licence, #p1, was taken out of the region on 2026-09-05 for being text this manifest forbids.) The shipped extraction returns 33,270, 96.8%; the 1,093 characters it misses are almost entirely the cells of the two lost tables ('Complexity per Layer', 'Training Cost (FLOPs)') and the LaTeX annotations inside them. The floor is 28,000 rather than 33,000 because the region includes the bibliography (section#bib, about 5,700 characters) and dropping a reference list is a defensible extraction; the two missing tables are caught by the structure floors, which is where a loss of nine characters of table heading belongs.",
+  "mustContain": [
+    {
+      "text": "Encoder:",
+      "why": "a real heading of eight characters",
+      "negativeControl": "short-heading"
+    },
+    {
+      "text": "Abstract",
+      "why": "a real heading of eight characters, and the one every arm keeps",
+      "negativeControl": "short-heading"
+    },
+    {
+      "text": "The dominant sequence transduction models are based on complex recurrent",
+      "why": "the abstract itself"
+    },
+    {
+      "text": "Attention Visualizations",
+      "why": "the last section's heading, so a tail truncation shows"
+    }
+  ],
+  "mustNotContain": [
+    {
+      "text": "Provided proper attribution is provided, Google hereby grants permission",
+      "why": "a licence notice ar5iv puts above the paper; not the paper"
+    },
+    {
+      "text": "Privacy Policy",
+      "why": "ar5iv's own page footer. The falling half of the polarity pair needs a needle that lives in the page's chrome rather than inside the article"
+    }
+  ],
+  "structure": {
+    "math": {
+      "atLeast": 142
+    },
+    "table": {
+      "atLeast": 9
+    },
+    "figure": {
+      "atLeast": 9
+    },
+    "img": {
+      "atLeast": 3
+    },
+    "h2": {
+      "atLeast": 9
+    },
+    "h3": {
+      "atLeast": 12
+    }
+  },
+  "maxBlockChars": 4000,
+  "articleRegion": {
+    "within": [
+      "article.ltx_document"
+    ],
+    "why": "LaTeXML wraps the whole paper, abstract to bibliography, in article.ltx_document; everything outside it is ar5iv's own header, logo and footer. The region is the paper INCLUDING its reference list, which is the paper's own apparatus. EXCEPT #p1, which is the Google reproduction licence — the manifest's own mustNotContain forbids it, and a region that credits text the manifest forbids makes the two metrics disagree about what the article is (GPT Sol, 2026-09-05): removing the licence RAISED exclusionPrecision and LOWERED articleRecall at the same time. 148 squeezed characters.",
+    "except": [
+      "#p1"
+    ]
+  },
+  "minArticleChars": 28000
+}

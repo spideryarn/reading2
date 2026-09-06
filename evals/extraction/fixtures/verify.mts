@@ -26,7 +26,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { CORPUS, EXTRA_FIXTURES, FIXTURE_UA } from "../corpus.mjs";
+import { CORPUS, EXTRA_FIXTURES, FIXTURE_UA, SYNTHETIC_CONTROLS } from "../corpus.mjs";
 
 /**
  * Fixtures that are committed and hashed here but are **not** part of the
@@ -47,6 +47,23 @@ import { CORPUS, EXTRA_FIXTURES, FIXTURE_UA } from "../corpus.mjs";
  */
 const EXTRA = EXTRA_FIXTURES;
 
+/**
+ * **The hand-built control pages are hashed too**, and they are the third list
+ * because they are the third kind of thing.
+ *
+ * They are not snapshots of anybody's site, so `--refetch` has nothing to ask
+ * and is skipped for them. What they *do* share with the rest is that a set of
+ * assertions is written against their exact bytes — every `mustContain` needle
+ * in `synthetic/negative_controls.manifest.json` is a claim about this file — so
+ * an edit that moves a needle out from under a manifest has to be visible, and a
+ * hash is how it becomes visible.
+ *
+ * The orphan sweep below now walks `synthetic/` as well. Without that, a control
+ * page added there would have been unhashed and unswept, which is precisely the
+ * failure this file's header is about, repeated one directory down.
+ */
+const SYNTHETIC = SYNTHETIC_CONTROLS;
+
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const MANIFEST = path.join(HERE, "hashes.json");
 /** Same string the fixtures were captured with, so a server that varies by UA
@@ -65,7 +82,8 @@ async function main(): Promise<void> {
   let bad = 0;
   let drifted = 0;
 
-  const checking = [...CORPUS, ...EXTRA];
+  const checking = [...CORPUS, ...EXTRA, ...SYNTHETIC];
+  const synthetic = new Set(SYNTHETIC.map((c) => c.name));
 
   for (const c of checking) {
     const file = path.join(HERE, c.file);
@@ -94,7 +112,7 @@ async function main(): Promise<void> {
       line += "  (new)";
     }
 
-    if (refetch) {
+    if (refetch && !synthetic.has(c.name)) {
       try {
         const res = await fetch(c.url, { headers: { "User-Agent": UA }, redirect: "follow" });
         if (!res.ok) {
@@ -116,7 +134,13 @@ async function main(): Promise<void> {
      anything saying so — and it looks exactly like a fixture that was checked
      and matched. See EXTRA above for the day that happened. */
   const covered = new Set(checking.map((c) => c.file));
-  const orphans = (await readdir(HERE)).filter((f) => f.endsWith(".html") && !covered.has(f));
+  const listed: string[] = [];
+  for (const dir of ["", "synthetic"]) {
+    const here = path.join(HERE, dir);
+    if (!existsSync(here)) continue;
+    for (const f of await readdir(here)) listed.push(dir ? `${dir}/${f}` : f);
+  }
+  const orphans = listed.filter((f) => f.endsWith(".html") && !covered.has(f));
   for (const f of orphans) {
     console.log(`${f.padEnd(24)} UNCHECKED — not in CORPUS or EXTRA, so its hash is not verified`);
     bad++;
@@ -126,7 +150,12 @@ async function main(): Promise<void> {
     await writeFile(MANIFEST, `${JSON.stringify(next, null, 2)}\n`, "utf-8");
     console.log(`\nWrote ${MANIFEST}`);
   }
-  if (refetch) console.log(`\n${drifted}/${checking.length} pages have changed since capture.`);
+  if (refetch) {
+    console.log(
+      `\n${drifted}/${checking.length - synthetic.size} fetched pages have changed since capture` +
+        ` (${synthetic.size} hand-built control page(s) have no URL to re-fetch).`,
+    );
+  }
   if (bad) {
     console.error(`\n${bad} fixture(s) are missing, unchecked, or do not match. See the header before "fixing" a hash.`);
     process.exit(1);

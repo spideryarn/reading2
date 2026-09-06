@@ -268,6 +268,14 @@ describe("orderSteps", () => {
  * **The one step combination the queue refuses**, and it is refused at the door
  * rather than after it has run. See `unrunnableStepPlan` in src/jobs.ts for the
  * trap and for why the answer is a 400 and not a silently added model call.
+ *
+ * **No mutation, because there is no store under it.** `unrunnableStepPlan` is a
+ * pure function over a list of step names, and the block that asserts its wiring
+ * drives `parseJobRequest`, which reads the request and nothing else. Neither
+ * case opens a store, so there is no store behaviour a mutation here could
+ * prove present — the wiring is instead pinned the way this file pins its other
+ * pure rules, by stubbing the call site and watching the assertion go red
+ * (2026-09-05, stage A).
  */
 describe("unrunnableStepPlan", () => {
   it("refuses blocks without hierarchy, which is the request that strands an article", () => {

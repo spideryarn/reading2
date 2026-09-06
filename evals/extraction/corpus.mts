@@ -190,6 +190,44 @@ export const EXTRA_FIXTURES: { name: string; file: string; url: string; slot: st
 export const ALL_FIXTURES = [...CORPUS, ...EXTRA_FIXTURES];
 
 /**
+ * **Pages written by hand, not captured from the web** — and deliberately NOT in
+ * `ALL_FIXTURES`.
+ *
+ * Everything above is a snapshot of somebody else's page, and the README's whole
+ * argument for committing the bytes ("a URL is not a fixture") is about that.
+ * These are a different kind of object: a *control*, built to hold a shape the
+ * corpus does not contain, with no URL behind it and nothing to re-fetch.
+ *
+ * They are kept out of `ALL_FIXTURES` for a concrete reason as well as a
+ * taxonomic one. `provenance.mts` and `block-census.mts` both walk that list and
+ * publish totals from it — block-census exists *because* a denominator got
+ * published that nobody could reproduce — so adding a page there silently moves
+ * a number in
+ * [260904e](../../docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md).
+ *
+ * **What is in here and why**: the corpus contains no scoreline, no numeric
+ * table cell that reaches a block, and no symbol-only scene break that is
+ * article content rather than junk — checked over all 35 fixtures on 2026-09-05,
+ * and the gap `fixtures/README.md` already admits in "a page of genuinely one-
+ * and two-character article content is still missing here". Those shapes are
+ * what defeat a length-or-character-class rule, so a corpus without them cannot
+ * contradict one: 260830at's marker rule scored 246/246 on exactly this corpus.
+ *
+ * Being synthetic is a real cost, and it is why these are a *supplement* to the
+ * real negative controls rather than a replacement: `gutenberg-pride`'s
+ * two-word lines of dialogue, `ar5iv-attention`'s one-word headings,
+ * `aaronson`'s dated updates and `arxiv-abs`'s 250-word article are all genuine
+ * pages, and all four carry manifests.
+ */
+export const SYNTHETIC_CONTROLS: { name: string; file: string; url: string; slot: string }[] = [
+  { name: "negative-controls", file: "synthetic/negative_controls.html", slot: "—",
+    url: "https://example.invalid/braemar-result" },
+];
+
+/** Anything a manifest can be written against: captured pages and hand-built controls. */
+export const SCORABLE_FIXTURES = [...ALL_FIXTURES, ...SYNTHETIC_CONTROLS];
+
+/**
  * **This threshold was wrong in both directions and is kept as a warning.**
  *
  * It was stated up front — 5% of the page, in a run of 1,500+ characters — which
