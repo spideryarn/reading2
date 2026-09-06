@@ -5,15 +5,17 @@
  * under `SPIDERYARN_STORE=postgres` — which production has run since
  * 2026-08-27 — `GET` and `POST /api/referee/claims/:slug` both answered 501 and
  * *"Pull the paper's claims"* could not load, start or persist a run for
- * anybody. **No route test noticed**, because `SPIDERYARN_STORE` unset means
- * `files` (src/store/live.ts) and every route suite in this directory runs on
- * the default.
+ * anybody. **No route test noticed**, because `SPIDERYARN_STORE` unset meant
+ * `files` and every route suite in this directory ran on the default.
  * docs/postmortems/260901e-claims-shipped-filesystem-only-and-returned-501-in-production.md;
  * stage 3 of docs/plans/260901f-referee-mode-on-the-database-and-the-parity-that-would-have-caught-it.md.
  *
  * ## Why a separate suite rather than pinning the existing ones
  *
- * Three options were open, and this is the argument for the one taken.
+ * Three options were open, and this is the argument for the one taken. Written
+ * 2026-09-01; the two suites named below were converted to Postgres on
+ * 2026-09-04 and the filesystem store went on 2026-09-05, so the rest of this
+ * section is history.
  *
  * **Pinning `tests/referee-claims-routes.test.ts` and
  * `tests/referee-criteria-routes.test.ts` to `postgres`** would have cost the
@@ -26,19 +28,16 @@
  * been dropped.
  *
  * **Running them twice, once per store**, cannot be done inside one file at all:
- * `STORE` is read once at module load, deliberately (src/store/live.ts — "a
- * store that could change under a running request is a much worse thing to debug
- * than one that needs a restart"). One process is one store. So "twice" means a
+ * `STORE` was read once at module load, deliberately — "a store that could
+ * change under a running request is a much worse thing to debug than one that
+ * needs a restart". One process was one store. So "twice" meant a
  * second vitest project with a different env, which is real infrastructure and
  * doubles the runtime of every suite in it to cover two that needed it.
  *
- * **So: a small suite that pins the flag and says so.** The existing suites keep
- * their fixtures, their speed and their no-model guarantee; this one owns the
- * sentence *these routes work under Postgres*, needs a database, and fails
- * rather than skips under `REQUIRE_POSTGRES=1`. The cost is honest and worth
- * writing down: **the route logic is asserted on files and the store wiring is
- * asserted here**, so a guard added to a route without a case here is still only
- * tested on the store that does not deploy.
+ * **So: a small suite of its own.** The existing suites kept their fixtures,
+ * their speed and their no-model guarantee; this one owns the sentence *these
+ * routes work under Postgres*, needs a database, and fails rather than skips
+ * under `REQUIRE_POSTGRES=1`.
  *
  * ## Nothing here reaches a model either, and it is bought differently
  *

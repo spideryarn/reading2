@@ -288,6 +288,27 @@
    * has to move with it.
    */
   --hint-h: 0px;
+
+  /**
+   * **How much room the way-back chip takes at the bottom left**, and 0 when
+   * there is no chip — `--hint-h`'s arrangement, for the same reason: only the
+   * thing that is drawn knows whether it is drawn, and only a variable can tell
+   * the rest of the furniture.
+   *
+   * It exists so the offline strip can stand above the chip rather than over
+   * it. **Room, not height**, and the difference cost a browser check: the
+   * chip's own `bottom` stands it 0.75rem off the edge below, so a strip given
+   * only the chip's 2.5rem still clipped the top 7px of the button — measured
+   * at both 390px and 1280px, since it is arithmetic rather than a wrapping
+   * artefact. Counting the gap here rather than in the strip's rule keeps the
+   * no-chip case exactly as it was.
+   *
+   * The number is a constant because the chip is deliberately one truncating
+   * line — 2rem of button, `.install-hint-close`'s floor, plus its own padding
+   * and border — so unlike the strip it cannot grow when the window narrows.
+   * Set beside the chip's own rule, below.
+   */
+  --return-chip-h: 0px;
 }
 
 * { box-sizing: border-box; }
@@ -3666,7 +3687,15 @@ td.text.has-hit[data-hues="8"] {
   position: fixed;
   left: var(--safe-left);
   right: var(--safe-right);
-  bottom: calc(var(--dock-space) + var(--hint-h));
+  /* **`--return-chip-h` too**, because the two share this slot and the strip is
+     the one that can be told where to stand. The chip sat 0.75rem above the
+     same edge at z-index 46 and the strip covers it from 97, so at 390px —
+     where the offline sentence wraps to two lines — the way back was under it
+     and unreachable, while internal jumps and Back go on working offline. The
+     chip is a fixed single line, which is what makes *its* height a constant
+     and the strip's not: it truncates rather than wraps. GPT Sol F21,
+     2026-09-06. */
+  bottom: calc(var(--dock-space) + var(--hint-h) + var(--return-chip-h));
   /* Above the bar (96), its drawer (95) and the drawer's dim (92). A lost
      connection outranks everything the bar offers, because none of it is going
      to work — and the dim exists to say "deal with this first", which is a
@@ -3722,6 +3751,98 @@ td.text.has-hit[data-hues="8"] {
   cursor: pointer;
 }
 .install-hint-close:hover { color: var(--highlight); border-color: var(--highlight); }
+
+/* -------------------------------------------------------- the return chip --
+   "↩ back to <section>", above the bar, after a jump — ReturnChip.tsx, which
+   carries the words and the rule for when it is there at all.
+
+   **Bottom left, and the mirror of `.cmt-dialog`** (§ above), which is the
+   closest thing to it: a small fixed panel pinned above the bar, clear of the
+   hint band, that must not be under the dock or in the home-indicator strip.
+   The left, because the right is where the comment and chat dialogs open and a
+   chip that could be covered by one is a chip the reader cannot press.
+
+   **It clears the rail rather than starting at a flat gutter.** The plan said
+   `left: 1.25rem`, which is 20px and does clear the 12px spine — but only while
+   `--mode-w` is 0. Open chat on a wide window and the band takes real width
+   from that edge, and a chip written in a bare gutter would sit inside it. This
+   is the same expression `.reader`'s padding, `.masthead`, `.controls` and
+   `td.pin-left` all use for "after the furniture on the left", plus a gutter,
+   and it comes to the same 20px in the mode where the plan measured it. */
+/* 2.5rem of chip — 2rem of button, plus 0.15rem of padding and a 1px border
+   either side, measured at 38.78px rather than guessed — and then the 0.75rem
+   it stands off the edge below, because what the strip above needs is the room
+   the chip occupies rather than its height. `:root:has()`, the install hint's
+   arrangement, so that the strip can read it. Pinned by the browser check at
+   390px and 1280px: the two rectangles must not intersect. */
+:root:has(.return-chip) { --return-chip-h: 3.25rem; }
+
+.return-chip {
+  position: fixed;
+  left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left) + 0.5rem);
+  /* `--dock-space` rather than `--dock-bottom`, so it stays put while the bar
+     slides away — the install hint's reason, and it applies more here: this is
+     a target the reader is aiming at, and a target that moves while they reach
+     for it is worse than one a little further from the edge. */
+  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem);
+  /* Under the drawer (95), its dim (92) and the dock (96); above the mode band
+     (44) and the spine (45). `.install-hint`'s number and its reason — chrome
+     about the reading session rather than part of the article, which a modal
+     drawer must cover like everything else. */
+  z-index: 46;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  max-width: min(20rem, calc(100vw - 6rem));
+  padding: 0.15rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  /* The same lift `.cmt-dialog` has: it floats over prose, and a flat panel on
+     a dark ground reads as a hole in the article rather than as something in
+     front of it. */
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.return-chip-go {
+  /* One line, and the title is 2–6 words by construction — but the window can
+     be 390px wide, so it truncates rather than wrapping the chip into a block
+     of text sitting over the prose. */
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* 2rem, `.install-hint-close`'s floor and its reason: this is chrome about
+     getting somewhere, not one of the bar's own controls, and at 44px it would
+     read as an equal of them. */
+  min-height: 2rem;
+  padding: 0 0.5rem;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+.return-chip-go:hover { color: var(--ink); }
+
+.return-chip-close {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.return-chip-close:hover { color: var(--highlight); border-color: var(--highlight); }
 
 /* ------------------------------------------------- the small-screen hint --
    One banner, once, at the top of the reading view on a narrow touch screen —

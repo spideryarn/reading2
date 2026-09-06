@@ -36,8 +36,8 @@
  *
  * **One assertion was dropped rather than translated, and this is the record of
  * it.** `lookUpTerm("example", …)` rejecting with `/built-in example/` was the
- * `assertWritable` 403, and `src/store/index.ts` passes `assertWritable` **only
- * when the store is not Postgres** — because the 403 exists to stop a lookup
+ * `assertWritable` 403, and `src/store/index.ts` passed `assertWritable` **only
+ * when the store was not Postgres** — because the 403 exists to stop a lookup
  * editing the one committed article directory in the repo, and Postgres has no
  * such directory and no such article. Building a Postgres fixture so that a
  * filesystem-shaped guard could go on being tested would be a green test

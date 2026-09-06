@@ -17,7 +17,7 @@
  *    is the single biggest source of near-miss parity failures.
  * 2. **Errors carry a status.** `src/routes.ts` turns `status: 404` into a 404;
  *    an untagged throw becomes a 500. So "no such article" must be tagged here
- *    exactly as it is in src/api.ts, or a missing article starts reporting as a
+ *    exactly as it was in src/api.ts, or a missing article starts reporting as a
  *    server fault.
  * 3. **Staleness is computed at read time, never stored.** A flag written when
  *    the artefact was generated is right up until the moment it matters.
@@ -142,15 +142,15 @@ import { postgresBlobStore } from "./blobs.js";
 import { readRawDocument } from "./raw-document.js";
 import { pgReaderStore } from "./pg-reader.js";
 
-/** A 404 shaped exactly like src/api.ts's, so routes.ts cannot tell them apart. */
+/** A 404 shaped exactly like the filesystem store's, so routes.ts could not tell them apart. */
 export function notFound(slug: string): Error {
   return Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
 }
 
 /* **Moved to a leaf, and re-exported from here so nothing else changed** — the
    same move, for the same reason, as `ownedSlug` below. `pg.ts` imports
-   `src/api.ts`, so a store file that wanted only this guard would inherit the
-   whole read layer; [require-slug.ts](require-slug.ts) imports `isSlug` and
+   the read layer, so a store file that wanted only this guard would inherit the
+   whole of it; [require-slug.ts](require-slug.ts) imports `isSlug` and
    nothing else. It has a dozen callers here, so it is re-exported rather than
    re-imported at each of them. */
 export { requireSlug } from "./require-slug.js";
@@ -196,7 +196,7 @@ export function shelfFrom(article: typeof articles.$inferSelect): ShelfState {
  * they do not own. A 403 would confirm it exists.
  */
 /* **Moved to a leaf, and re-exported from here so nothing else changed.**
-   `pg.ts` imports `src/api.ts`, so anything importing this file inherits the
+   `pg.ts` imports the read layer, so anything importing this file inherits the
    whole read layer — which closed an import cycle the moment the AI ledger
    needed the predicate. [owned-slug.ts](owned-slug.ts) imports the schema and
    the owner and nothing else. It also takes an optional owner now, for a caller
@@ -1214,7 +1214,7 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
       : { context: { id: row.contextId, type: row.contextType as "callout" } }),
   }));
 
-  /* The same guard src/api.ts puts on the filesystem reader, because there are
+  /* The same guard src/api.ts put on the filesystem reader, because there were
      two `loadArticle`s and guarding one of them passes every test — the fs half
      is genuinely protected, the suite is green, and the store that is in the
      middle of *replacing* the filesystem serves old HTML unchecked.
@@ -1353,8 +1353,8 @@ export async function sourceHashFor(
 /**
  * Rebuild `Meta` from the revision's columns.
  *
- * The fallback matters: `src/api.ts` invents a title from the article's own
- * first `h1` when `meta.json` is absent, and keeps the slug only as a last
+ * The fallback matters: `src/api.ts` invented a title from the article's own
+ * first `h1` when `meta.json` was absent, and kept the slug only as a last
  * resort. An imported article with no `meta.json` has `title` null, so without
  * the same fallback here the reading view would show a slug where the
  * filesystem showed a heading — a visible, silent divergence.
@@ -1861,7 +1861,7 @@ export function listArticlesQuery(
     .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
     /* `is null` / `is not null`, never `= null`. The archived half is asked
        for by name so that both halves come out of this one query and cannot
-       disagree about what an article is — the same reason src/api.ts filters
+       disagree about what an article is — the same reason src/api.ts filtered
        after its walk rather than skipping during it. */
     .where(
       and(
@@ -2292,7 +2292,7 @@ const rawPgArticleReader: ArticleReader = {
     const blocks = await blocksFor(found.revision.id);
     const tree = found.revision.tree;
     // A revision with no tree is not a readable article — the same bar
-    // src/api.ts sets by requiring both blocks.json and tree.json.
+    // src/api.ts set by requiring both blocks.json and tree.json.
     if (!tree || !blocks.length) throw notFound(slug);
 
     const arc = found.revision.arc;
@@ -2330,7 +2330,7 @@ const rawPgArticleReader: ArticleReader = {
          mark has three states and one of them is *we could not say*, which is
          what the filesystem store's absence means. `describeArticle` keeps the
          key only when it says `public` because the shelf has no private twin
-         to draw (src/api.ts); this one draws a lock.
+         to draw (src/library-scalars.ts); this one draws a lock.
 
          The cast is the same boundary `articleMetadata` and `listArticles`
          cross: a `text` column with a CHECK on it (`articles_visibility`,
@@ -2829,7 +2829,7 @@ const rawPgArticleReader: ArticleReader = {
     }
     const glossaryTree = found.revision.tree as Tree | null;
     const glossaryMeta = metaFingerprintOf(found.revision);
-    /* Lookups are attached HERE, at the read seam, exactly as src/api.ts does
+    /* Lookups are attached HERE, at the read seam, exactly as src/api.ts did
        it — not stored on the entry. Forgetting this would not fail; it would
        quietly drop every "checked on the web" answer from the panel while the
        glossary itself looked perfectly correct.

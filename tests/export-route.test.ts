@@ -75,9 +75,9 @@ import { pgReady } from "./helpers/pg-ready.js";
 loadEnvLocal();
 
 /**
- * **Postgres, and set before `src/routes.ts` is ever imported** — `STORE` is
- * read once at module load in src/store/live.ts, which is why the import of
- * `handleApi` at the bottom of this block is dynamic and nothing else is.
+ * **Why the import of `handleApi` at the bottom of this block is dynamic and
+ * nothing else is** — `STORE` was read once at module load in
+ * src/store/live.ts, which went with the store flag on 2026-09-06.
  * tests/owner-isolation.test.ts has the long version.
  */
 

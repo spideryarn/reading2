@@ -31,7 +31,7 @@ import type { SearchRun } from "./types.js";
  * can ignore and a search they may choose to run again; being wrong the other
  * way is the bug this exists to fix, and it is silent.
  *
- * That is the same call src/api.ts makes for a glossary whose blocks it cannot
+ * That is the same call src/api.ts made for a glossary whose blocks it could not
  * read — *"Unknown counts as stale: the honest answer, and the safe way round
  * to be wrong."*
  */

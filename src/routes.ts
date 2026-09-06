@@ -4,7 +4,7 @@
  * Connect-shaped (`req`, `res`) but not Vite-specific — vite.config.ts mounts
  * this as dev middleware today, and the standalone Node server that
  * architecture.md § Server and client defers will mount the same function. The
- * actual work stays in src/api.ts, src/comments.ts and src/explain.ts; this file
+ * actual work stays in src/store/index.ts, src/comments.ts and src/explain.ts; this file
  * is only routing, parsing and status codes.
  *
  *   GET    /api/library         every article on the shelf, for the homepage
@@ -195,7 +195,7 @@ import { mirrorStream } from "./referee-mirror.js";
    `withRetry` import above states. The palette's *size* is deliberately not in
    it: see `SearchRun.colour`. */
 import { isStorableColour } from "./searches.js";
-/* Through the store, so SPIDERYARN_STORE moves comments and articles together.
+/* Through the store, so comments and articles stay together.
    They cannot be split: a comment anchors to a block id, and leaving the
    questions on disk while the paragraphs they point at come from Postgres puts
    the two halves in stores nothing keeps in step. */
@@ -508,11 +508,9 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
      one is right whenever `ownedSlug` is right, which is the property worth
      having. The answer is discarded — it is asked as a question, not read.
 
-     **Kept even though `sourceStore.readPdf` is owner-filtered too** (the
-     Postgres half joins through `ownedSlug`). Two independent refusals on the one route that
-     hands back somebody's private document is worth the round trip, and the
-     filesystem store has no owner column at all — which is the hole
-     src/store/index.ts refuses to boot into in production, and why it does. */
+     **Kept even though `sourceStore.readPdf` is owner-filtered too** (it joins
+     through `ownedSlug`). Two independent refusals on the one route that hands
+     back somebody's private document is worth the round trip. */
   await shelfStore.read(slug);
 
   /* **The store, not the disk** — and until 2026-08-31 this was the disk.
@@ -4466,7 +4464,7 @@ function part(m: RegExpExecArray, group: number): string {
  * docs/reusable/silent-success.md, and it is why this is written up in
  * docs/project/security.md rather than filed as a bug fix.
  *
- * That fallback is gone as of stage 1a: `candidateDirs` in src/api.ts offers
+ * That fallback is gone as of stage 1a: `candidateDirs` offered
  * `example/` for the fixture's own slug and for nothing else, so a slug with no
  * artefacts now answers 404 whether it is a typo or a traversal. The history
  * stays here because it is the reason this route validates the slug rather than
@@ -6721,7 +6719,7 @@ export async function serveAuthenticatedApi(
 
      GET *and* DELETE, which the thread does not have. Asking for the step again
      appends terms rather than replacing them (src/glossary.ts), so "start over"
-     needs a way to say so — see `deleteGlossary` in src/api.ts for why that is
+     needs a way to say so — see `deleteGlossary` in src/store/pg-glossary.ts for why that is
      two acts rather than one flag. There is still no POST: *finding* terms is a
      model call that takes tens of seconds, which is a job, not a request.
      POST /api/jobs { slug, steps: ["glossary"] } is how you ask. */

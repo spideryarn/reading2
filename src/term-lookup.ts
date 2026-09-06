@@ -164,18 +164,6 @@ export interface LookUpTermDeps {
   /** Where the answer goes. One row (or one key) per term. */
   readonly lookups: GlossaryLookupStore;
 
-  /**
-   * The 403 the filesystem needs and Postgres does not.
-   *
-   * The filesystem store can reach one article nobody owns — the committed
-   * `example/` — so without this a lookup on it edits the repo. An unknown slug
-   * is a 404 on both sides now that `articleDir` no longer falls through to the
-   * fixture (src/api.ts § `candidateDirs`); Postgres has no fixture at all, so
-   * it needs no counterpart to this. **A stated difference with a test on each
-   * side**, rather than something for somebody to discover.
-   */
-  readonly assertWritable?: (slug: string) => Promise<void>;
-
   /** Overridable so a test can drive the successful path without a model. */
   readonly explain?: typeof explainDefault;
 
@@ -234,12 +222,13 @@ export function makeLookUpTerm(
   const now = deps.now ?? (() => new Date().toISOString());
 
   return async function lookUpTerm(slug, termId, signal) {
-    /* First, and before the glossary is read: it is the check that answers
-       "there is no such article" and "that one is not yours", and both of those
-       have to be true before the reader is told anything about its terms. Order
-       preserved from the version that lived in src/api.ts. */
-    await deps.assertWritable?.(slug);
-
+    /* **`assertWritable` was called here and went on 2026-09-06.** It was the
+       filesystem store's extra 403 over the committed `example/` article, which
+       nobody owns; that store went on 2026-09-05 and nothing has supplied the
+       dependency since, so the call was a no-op — and a no-op in a permission
+       path reads as a permission check. `loadGlossary` below is the check now:
+       every read joins through `ownedSlug`, so a stranger's slug is a 404
+       before the reader learns anything about its terms. */
     const { glossary } = await deps.reader.loadGlossary(slug);
     const entry = glossary.entries.find((e) => e.id === termId);
     if (!entry) {
@@ -353,9 +342,6 @@ export interface AskAboutTermDeps {
   /** Where the article's blocks and meta come from. Owner-filtered — see below. */
   readonly reader: { loadArticle(slug: string): Promise<Article> };
 
-  /** The 403 the filesystem needs and Postgres does not. `LookUpTermDeps` has the reason. */
-  readonly assertWritable?: (slug: string) => Promise<void>;
-
   /** Overridable so a test can drive the successful path without a model. */
   readonly explain?: typeof explainDefault;
 
@@ -429,8 +415,9 @@ function appearsInsideAWord(term: string, blocks: readonly Block[]): boolean {
  * relies on: under Postgres every read joins through `ownedSlug`
  * (src/store/pg.ts), so a stranger's slug is a 404 before a byte of prose is
  * read — and it is read **first**, before the term is even parsed, so a
- * non-owner cannot tell a bad term from somebody else's article. `assertWritable`
- * is the filesystem store's extra 403 over the committed `example/` article.
+ * non-owner cannot tell a bad term from somebody else's article. It used to be
+ * preceded by `assertWritable`, the filesystem store's extra 403 over the
+ * committed `example/`, which went with that store.
  */
 export function makeAskAboutTerm(
   deps: AskAboutTermDeps,
@@ -442,8 +429,7 @@ export function makeAskAboutTerm(
     /* Ownership before anything else, `lookUpTerm`'s order and for its reason:
        "there is no such article" and "that one is not yours" have to be settled
        before the caller learns anything at all — including whether their term
-       was well-formed. */
-    await deps.assertWritable?.(slug);
+       was well-formed. `loadArticle` is what settles both. */
     const article = await deps.reader.loadArticle(slug);
 
     const parsed = parseAskedTerm(asked);
