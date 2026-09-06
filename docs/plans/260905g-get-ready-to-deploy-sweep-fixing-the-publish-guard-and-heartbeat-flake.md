@@ -225,3 +225,35 @@ somebody has seen it before.
 Round two of the GPT Sol review, scoped to the store-parity fix alone, returned **no findings**:
 the partition is a real partition and not an exclusion, the seeded state and the partition source
 are the same `shelf.json`, and the ordering assertion is correctly left on the active half.
+
+## Still red at the end, and left alone deliberately
+
+The second full `npm run check` came back with **726 test files passed, 13290 tests passed, 0
+failed** — and still failed the test gate, on one unhandled error outside any test:
+
+```
+ReferenceError: location is not defined
+  ❯ getSearchParamsSnapshotFromLocation  node_modules/nuqs/dist/debounce-Ynq26WfO.js:119
+  ❯ ThrottledQueue.applyPendingUpdates   …:207
+  ❯ Timeout.onTick                       …:78
+This error originated in "tests/conversation-band-send-new.test.tsx"
+```
+
+A `nuqs` throttled-queue timer surviving its file's jsdom teardown and reaching for `location`
+after the environment has gone. `afterEach` in that file already unmounts inside `act`, so the
+component is gone; the queue is module-global and its pending timer is not.
+
+**Measured incidence, 2026-09-06.** Absent from the first full check of the night, present in the
+second, and absent from **six consecutive solo runs** of the file. So it needs the loaded parallel
+run to appear at all, at something near half of them.
+
+**Not fixed, and the reason is the reason.** The candidate fix is one line — drain the queue in
+`afterEach`, after the unmount and before teardown, so the timer fires while `location` still
+exists. It is probably right. But at ~50% incidence and no way to reproduce it on demand, a green
+run after the change is not evidence: it is what the unfixed code does half the time anyway. That
+is precisely the shape [silent-success.md](../reusable/silent-success.md) is about, and shipping an
+unfalsifiable fix into a shared test file to turn a gate green is worse than leaving the gate
+honestly red. Whoever picks it up should get a reproduction first — running the jsdom lane alone
+under artificial load is the cheapest place to look — and then the one-line fix is fine.
+
+It is pre-existing, it is not this sweep's, and it was on `dev` before the merge.
