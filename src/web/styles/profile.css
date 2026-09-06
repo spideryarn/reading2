@@ -1,0 +1,553 @@
+/* profile.css — the reader-profile boxes and the microphone that fills them in:
+   the level meter, the timer and the device picker, the kept recording, the two
+   controls, and the profile popover. ProfileBox.tsx, MicLevel.tsx,
+   ProfilePanel.tsx, docs/project/reader-profile.md.
+
+   A handful more `.prof-mic-*` rules are stranded at the end of
+   diagram-drift.css, where the original order left them. */
+
+/* ---------------------------------------------------------- the profile --
+   The two reader-profile boxes and their microphone — /profile and the
+   metadata page. One set of rules for both, because the two differ only in
+   their words and their cap, and a microphone styled twice is a microphone
+   that looks like two different controls.
+   docs/project/reader-profile.md. */
+
+.prof-box-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+.prof-box-label {
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.81rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+/* The two free-text boxes in the app about what the reader wants — "about you"
+   and "why you're reading this one" — and they share this so they do not look
+   like two different mechanisms. There were three until 2026-08-30, when the
+   summary steer went (docs/plans/260830o-steer-becomes-the-profile.md) and .summ-steer-box
+   with it. The reading face, because this is a sentence somebody writes rather
+   than a setting they pick. */
+.prof-box-input {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-family: var(--font-reading);
+  font-size: 0.94rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+.prof-box-input:focus-visible {
+  outline: none;
+  border-color: var(--highlight);
+}
+.prof-box-input:disabled { opacity: 0.5; }
+
+.prof-box-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.35rem;
+}
+.prof-box-hint {
+  margin: 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.79rem;
+  line-height: 1.35;
+}
+/* Tabular figures so the count does not shuffle its own width as it climbs —
+   a number that jitters while you type reads as something going wrong. */
+.prof-count {
+  flex-shrink: 0;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.77rem;
+  font-variant-numeric: tabular-nums;
+}
+/* Over the cap. The box does NOT stop accepting text — the server refuses and
+   says the limit, and a cap you can see and go past is a cap you can decide
+   about. This is the warning, not the wall. */
+.prof-count.over { color: var(--highlight); }
+
+.prof-box-error {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0.35rem 0 0;
+  color: var(--highlight);
+  font-family: var(--font-ui);
+  font-size: 0.79rem;
+}
+
+/* -------------------------------------------- profile: dictation feedback --
+   The strip under the box while the microphone is on. It exists because the
+   old version rendered *nothing at all* until the first transcript came back —
+   a measured several seconds during which the layout was byte-for-byte what it
+   had been before the press, so the reader watching the box saw the feature not
+   happen. docs/plans/260827f-microphone-level-meter.md. */
+.prof-listening {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  margin: 0.35rem 0 0;
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+  line-height: 1.4;
+}
+.prof-listening-what {
+  flex: none;
+  color: var(--ink-faint);
+}
+
+/* The unconfirmed tail of a dictation. Italic and faint because it is a guess
+   the recogniser may still revise — and it is never saved. */
+.prof-interim {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-faint);
+  font-family: var(--font-reading);
+  font-size: 0.9rem;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* ---------------------------------------------------- the level meter ------
+   Five bars driven by one custom property, `--level`, in 0..1.
+
+   `--level` is set on `.mic-level` itself and never higher up. A custom
+   property invalidates style for everything below the element carrying it, so
+   putting this on :root would hand the whole page a recalculation thirty times
+   a second. src/web/MicLevel.tsx writes it from an animation frame.
+
+   `scaleY`, never `height`: a height animated per frame is a layout per frame,
+   a transform is composited and free. GPT Sol's review, 2026-08-27, item 8. */
+.mic-level {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  height: 0.85rem;
+  /* Declared so `var(--level)` resolves to something before the first frame
+     lands, and so the bars are at rest rather than absent for that frame. */
+  --level: 0;
+}
+.mic-level i {
+  width: 2px;
+  /* The full height a bar can reach. The scale below is what makes it shorter,
+     which is why this is a fixed number rather than a percentage of anything. */
+  height: 0.85rem;
+  border-radius: 1px;
+  background: var(--highlight);
+  /* Centre-symmetric, so the row reads as a waveform rather than as a bar
+     chart growing off a baseline. `--w` is the per-bar weight, set inline. */
+  transform-origin: center;
+  /* The 0.14 floor is what stops a silent microphone looking like a broken
+     one: at rest the bars are a row of faint dots, plainly present and plainly
+     doing nothing, which is a different thing from absent. */
+  transform: scaleY(calc(0.14 + 0.86 * var(--level) * var(--w, 1)));
+  opacity: calc(0.45 + 0.55 * var(--level));
+}
+
+/* The binary fallback, on browsers with no way to hand us the samples the
+   recogniser is using (Safari today — see src/web/useDictation.ts). The number
+   is the recogniser's own soundstart/soundend: a real observation of the real
+   audio, but a 0 or a 1.
+
+   **So the bars move as one, and the waveform shape is switched off** — `--w`
+   is forced to 1, overriding the per-bar weights. The centre-weighted shape
+   says "this is an amplitude"; drawing it from a yes/no signal would be a lie
+   told by the picture rather than by any sentence, and the reader has no way to
+   know which mode they are in. A row rising together reads as what it is: an
+   indicator. GPT Sol's code review, 2026-08-27, item 8.
+
+   The transition is what stops it snapping, and is deliberately NOT applied to
+   the measured meter, where it would smear a signal already smoothed. */
+.mic-level.detected i {
+  --w: 1;
+  transition: transform 180ms ease-out, opacity 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The meter stays. It is *informative* motion — it is the content, and it is
+     the one thing telling the reader their microphone works — so turning it off
+     would take away the answer rather than the decoration. It is calmed
+     instead: MicLevel keeps writing the property, and the transition here means
+     what the reader sees is a level easing rather than a bar twitching. */
+  .mic-level i {
+    transition: transform 220ms linear, opacity 220ms linear;
+  }
+}
+
+/* ------------------------------------------- the timer and the device -----
+   Both live in the strip, and both exist because of what the reader could not
+   tell apart without them. docs/plans/260827k-microphone-device-and-recording.md. */
+
+/* `m:ss`. Tabular figures so the row does not shuffle sideways every time the
+   seconds tick over — the one thing a timer must not do is draw attention to
+   itself once a second. */
+.prof-elapsed {
+  flex: none;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The microphone's own name, as the browser gives it. Shown only on the quiet
+   line: while sound is arriving the bars have already answered the question and
+   this is noise. It can be long ("Microsoft Teams Audio Device (Virtual)"), so
+   it is the one thing in the row allowed to shrink and clip. */
+.prof-mic-device {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  color: var(--ink-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prof-mic-device::before { content: "· "; }
+
+.prof-mic-change {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--highlight-ink, var(--highlight));
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.prof-mic-change:hover { color: var(--highlight); }
+
+.prof-mic-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.35rem 0 0;
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+  color: var(--ink-faint);
+}
+.prof-mic-picker select {
+  min-width: 0;
+  max-width: 22rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.prof-mic-picker-note { color: var(--ink-faint); opacity: 0.75; }
+
+/* ------------------------------------------------- the kept recording -----
+   Shown only after a dictation that transcribed nothing. The button downloads
+   a file; it deliberately does not promise to open Finder, which no web page
+   can do. src/web/mic-recording.ts. */
+.prof-recording {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.35rem 0 0;
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+  line-height: 1.4;
+}
+.prof-recording-what { min-width: 0; color: var(--ink-faint); }
+.prof-recording-retry,
+.prof-recording-save,
+.prof-recording-drop {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  cursor: pointer;
+}
+.prof-recording-retry:hover:not(:disabled),
+.prof-recording-save:hover,
+.prof-recording-drop:hover {
+  border-color: var(--highlight);
+  color: var(--highlight-ink, var(--highlight));
+}
+.prof-recording-drop { padding: 0.15rem 0.25rem; }
+/* The one the reader actually wants — the words, rather than a file to keep or
+   a thing to throw away — so it carries the ink the others do not. */
+.prof-recording-retry { color: var(--ink); }
+.prof-recording-retry:disabled { opacity: 0.5; cursor: default; }
+
+.prof-mic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.prof-mic:hover:not(:disabled) { color: var(--highlight-ink); border-color: var(--highlight); }
+.prof-mic:disabled { opacity: 0.4; cursor: default; }
+/* Armed, but the microphone is not open yet — a measured 1.1 seconds in Chrome
+   between start() and audiostart. Outlined rather than filled, because the
+   filled state is a claim to be listening and for this second it would be a
+   false one: anything said into it is gone. The button is still a stop button
+   throughout, which is why it is lit at all. */
+.prof-mic.opening {
+  border-color: var(--highlight);
+  color: var(--highlight-ink, var(--highlight));
+}
+/* Listening. A colour change AND a different glyph (Mic → MicOff), because
+   colour alone is not a state anyone should have to rely on — and because a
+   microphone that is live is the one control in this app it is worth being
+   unambiguous about. */
+.prof-mic.on {
+  border-color: var(--highlight);
+  background: var(--highlight);
+  color: var(--page);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .prof-mic.opening { animation: prof-mic-pulse 1s ease-in-out infinite; }
+  /* No pulse on `.on` any more. The bars beside it now carry the "this is
+     live" signal, and they carry it with real information in it; two things
+     throbbing at different rates on one line is noise. */
+}
+@keyframes prof-mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+/* --------------------------------------------- profile: the two controls --
+   A label that states what a piece of generated text was written with, and a
+   checkbox that decides what the next run uses. Two jobs, two controls, and
+   they deliberately do not look alike: one is a fact and the other is a
+   decision. src/web/WrittenForYou.tsx, docs/project/reader-profile.md. */
+
+/* The label. Quiet — it is provenance, not a warning, which is the same call
+   the glossary already made when it chose "a label instead of a warning
+   triangle". It must not compete with the heading it sits beside. */
+.prof-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.05rem 0.35rem;
+  /* A `<button>` since 2026-08-30, so the four things a button brings for free
+     and this pill does not want are turned off here: its own background, its
+     UA font, and the pointer that would make it look like the run button. It
+     opens the profile panel — src/web/ProfilePanel.tsx. */
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.prof-badge:hover,
+.prof-badge.open {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+}
+.prof-badge:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 1px;
+}
+/* Written for a profile the reader has since changed. Warmer, and still not a
+   warning triangle: nothing is wrong with the text, it was written for a
+   slightly different person. */
+.prof-badge.changed {
+  border-color: color-mix(in oklab, var(--highlight) 40%, transparent);
+  color: var(--highlight-ink);
+}
+
+
+/* The checkbox and its panel button, on one line. The row exists so the button
+   can sit OUTSIDE the `<label>`: a label turns every click inside it into a
+   toggle, and one target doing two things is decided by which pixel. */
+.prof-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* The way in to "what am I being written for". Shown whether or not there is a
+   profile, and never disabled — see src/web/WrittenForYou.tsx for both. */
+.prof-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* A word rides along when the checkbox is absent (WrittenForYou.tsx), so the
+     gap and the type are here rather than only the icon's padding. */
+  gap: 0.3rem;
+  padding: 0.12rem 0.25rem;
+  font-family: var(--font-ui);
+  font-size: 0.79rem;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.prof-open:hover,
+.prof-open.open {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+}
+.prof-open:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 1px;
+}
+
+/* ------------------------------------------------- profile: the panel --
+   What your profile currently says, and a working link to each of the two
+   places that edit it. src/web/ProfilePanel.tsx.
+
+   **Not a `.tooltip`.** It is a click-popover with links in it, so it must take
+   pointer events — the whole reason it is not a tooltip is that
+   `.tooltip-anchor` is `pointer-events: none` and the link that used to live in
+   one has never been clickable. It borrows the tooltip's *surface* (the same
+   raised background, rule and shadow, because it is the same kind of object)
+   and none of its behaviour. */
+.prof-panel {
+  z-index: 99;
+  width: 20rem;
+  /* **It may overhang the band, and that is fine** — 320px against a band that
+     is 400px at best and 288px at worst. Every floating card here does: the
+     tooltip is 352px in the same 400px. What it must not do is overhang the
+     *window*, where `shift` would pin it to an edge with nowhere to slide, so
+     the cap is the viewport rather than the band. Measured at both widths,
+     2026-08-30. */
+  max-width: calc(100vw - 1.75rem);
+  /* And never taller than the window: a 1,500-character profile is a lot of
+     prose, and it scrolls inside the panel rather than growing off the top of
+     the screen where the close is. */
+  max-height: min(24rem, calc(100vh - 3rem));
+  overflow-y: auto;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.5),
+    0 8px 24px -6px rgb(0 0 0 / 0.65);
+  font-family: var(--font-ui);
+}
+.prof-panel-lede {
+  margin: 0 0 0.5rem;
+  color: var(--ink-faint);
+  font-size: 0.83rem;
+  line-height: 1.45;
+}
+.prof-panel-box {
+  border-top: 1px solid var(--rule);
+  padding-top: 0.4rem;
+  margin-top: 0.4rem;
+}
+.prof-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.prof-panel-label {
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.prof-panel-edit {
+  color: var(--highlight);
+  font-size: 0.77rem;
+  white-space: nowrap;
+}
+.prof-panel-text {
+  margin: 0.2rem 0 0;
+  /* The reader's own prose, in the reading face — it is a paragraph they wrote,
+     not a value the interface is reporting. `--font-reading` rather than
+     Tailwind's `--font-prose` alias, because that alias is for `tw:` utility
+     classes and this file spells it the other way everywhere else. */
+  font-family: var(--font-reading);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+/* Not written yet, or not readable. Quieter, because it is our sentence rather
+   than theirs. */
+.prof-panel-text.quiet {
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+  color: var(--ink-faint);
+}
+
+/* The checkbox, wherever a run is about to be paid for. */
+.prof-use {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.79rem;
+  cursor: pointer;
+  user-select: none;
+}
+.prof-use input { accent-color: var(--highlight); cursor: pointer; }
+.prof-use:hover { color: var(--ink); }
+.prof-use input:disabled { cursor: default; }
+.prof-use:has(input:disabled) { opacity: 0.5; cursor: default; }
+
+/* The same row, saying what an automatic run chose rather than asking. It is a
+   statement, so it takes none of the checkbox's affordances — no pointer, no
+   hover, and not the greyed-out `opacity` a disabled tick gets, which is the
+   whole point of it not being one. src/web/WrittenForYou.tsx § `automatic`. */
+.prof-use.prof-said { cursor: default; }
+.prof-use.prof-said:hover { color: var(--ink-faint); }
+
+/* The checkbox and the run button, on one line — glossary's empty state and
+   its two stale banners. `wrap` because the band is 400px and "Use your
+   profile" beside "Find them again" is close to the limit. */
+.gloss-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+/* And in the foot, where "Find more" sits. The checkbox goes on its own line
+   above it rather than in the row, and it still should now that "Start again"
+   has gone from beside it (2026-09-05): the checkbox describes what the button
+   below would do rather than being a second thing to press, and a full-width
+   label reads that way. `.gloss-actions` is already `flex-wrap: wrap`, so the
+   basis is all it takes. */
+.gloss-actions .prof-row { flex-basis: 100%; }
+
+/* In the chat composer the checkbox sits on its own line under the input. The
+   composer is `display: flex` with `align-items: flex-end`, so a third item
+   would sit beside the textarea and squeeze it; `flex-wrap` plus a full-width
+   basis puts it on the next row instead, where it reads as a note about the
+   question rather than as part of the input. */
+.chat-composer { flex-wrap: wrap; }
+.chat-composer .prof-row {
+  flex-basis: 100%;
+  margin-top: 0.1rem;
+}
+

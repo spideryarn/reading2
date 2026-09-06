@@ -328,7 +328,7 @@ if (graphOut) {
  * The seam: everything the two lazy routes reach that the reader reaches too.
  *
  * Walked a second time from the route roots, and intersected. The two closures
- * overlap in 45 files and are otherwise disjoint — measured 2026-09-06, and the
+ * overlap in 47 files and are otherwise disjoint — measured 2026-09-06, and the
  * complement is exactly the six modules in `ROUTE_PRIVATE`, which is a pleasant
  * accident rather than something asserted.
  *
@@ -431,7 +431,7 @@ const ROUTE_PRIVATE = [
  * `lucide-react` are recorded as external and never enter either closure — this
  * list is about *this repo's* modules, not about node_modules.
  *
- * Sorted, one per line, so a diff reads as a decision. 45 of them on
+ * Sorted, one per line, so a diff reads as a decision. 47 of them on
  * 2026-09-06, against a 264-file eager closure and a 51-file route closure.
  */
 const SHARED_WITH_READER = [
@@ -474,6 +474,7 @@ const SHARED_WITH_READER = [
   "src/web/components/ui/button.tsx",
   "src/web/components/ui/toggle.tsx",
   "src/web/diagram.ts",
+  "src/web/jump-history.ts",
   "src/web/lib/DataTable.tsx",
   "src/web/lib/api.ts",
   "src/web/lib/offline-store.ts",

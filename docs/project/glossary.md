@@ -96,8 +96,8 @@ occurrence pass), [`src/term-match.ts`](../../src/term-match.ts) (the matching r
 [`src/store/pg.ts`](../../src/store/pg.ts) § `loadGlossary`, [`src/routes.ts`](../../src/routes.ts),
 [`src/web/GlossaryPanel.tsx`](../../src/web/GlossaryPanel.tsx),
 [`src/web/useGlossary.ts`](../../src/web/useGlossary.ts),
-[`src/web/annotate.ts`](../../src/web/annotate.ts) § `termMarks`, and `§ glossary mode` at the end of
-[`src/web/styles.css`](../../src/web/styles.css). Tests:
+[`src/web/annotate.ts`](../../src/web/annotate.ts) § `termMarks`, and `§ glossary mode` in
+[`src/web/styles/glossary.css`](../../src/web/styles/glossary.css). Tests:
 [`tests/glossary.test.ts`](../../tests/glossary.test.ts).
 
 ## Where it lives, and why that cost nothing
@@ -322,7 +322,7 @@ opened. Four things follow, and three of them are the interesting part:
 
 - **The line got quieter.** A wash behind one pressed term is a highlight; the same wash behind every
   term in the piece is a mottled paragraph the reader cannot turn off. The standing mark is the
-  dotted rule alone (`mark.term` in [`styles.css`](../../src/web/styles.css)); the wash moved to the
+  dotted rule alone (`mark.term` in [`styles/annotations.css`](../../src/web/styles/annotations.css)); the wash moved to the
   pressed one.
 - **Being selected had to stop meaning "having a mark"**, because everything has one now. It means a
   *different* mark — `mark.term[data-open]`, which is exactly what the open comment and the pressed

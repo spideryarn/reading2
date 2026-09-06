@@ -1445,8 +1445,8 @@ export interface Article {
    * (src/assets.ts), written by the `assets` step.
    *
    * **A required key holding `Assets | undefined`, not an optional one**, and
-   * the difference is the whole reason it is written this way. There are two
-   * places that build an `Article` — the filesystem loader (src/api.ts) and the
+   * the difference is the whole reason it is written this way. There were two
+   * places that built an `Article` — the filesystem loader (src/api.ts) and the
    * Postgres projection (src/store/pg.ts) — and with `assets?:` an omission in
    * either would typecheck perfectly while the reader went on hot-linking every
    * image to the publisher: the feature reporting success by doing nothing,
@@ -1764,7 +1764,7 @@ export interface StageState {
    * the repo. So it is shown as "ran 3 days ago" with the exact stamp on hover,
    * and nothing anywhere compares two of these to decide anything. The
    * staleness question is still answered by `sourceHash` or not at all —
-   * `articleMetadata` in src/api.ts § What this deliberately does not answer.
+   * `articleMetadata` in src/store/pg.ts.
    *
    * Deliberately computed over the outputs that **exist**, whatever `done`
    * says, so a stage that wrote half of what it owes still says when it did it.
@@ -3747,47 +3747,66 @@ export interface DebateGroup<Row> {
  * CLI and two model calls in it. The stage re-exports it, so it still has one
  * name on the server side.
  *
- * **A sum of every field rather than `Object.values`**, so a new loss reason
- * added to `DebateLosses` is a compile error at this line rather than a number
- * silently folded into a sentence nobody re-read.
- *
- * **The `rest` line is what makes that true, and it was added on 2026-09-06
- * because it was not.** The sentence above is older than this line and was a
- * claim rather than a mechanism: `sourceIsCopy` was added to `DebateLosses` that
- * day, every field below was still summed by hand, and nothing failed to
- * compile — the new counter would have been dropped from the reader's foot line
- * in silence, which is the one thing this function exists to prevent. A
- * docblock that states a rule the code does not make is the shape of this file's
- * worst bug (Sol's F24, `readDirectGroup`), so the rule is now under it: `rest`
- * must be empty, and an unlisted field makes it not.
+ * **A sum of every field rather than `Object.values` over the argument**, so a
+ * new loss reason added to `DebateLosses` is a compile error rather than a
+ * number silently folded into a sentence nobody re-read. `lossesOf` below is
+ * where that is enforced, and it is enforced rather than asserted: the sentence
+ * above is older than the mechanism and was a claim without one until
+ * 2026-09-06, when `sourceIsCopy` was added to `DebateLosses`, every field here
+ * was still summed by hand, and nothing failed to compile. A docblock stating a
+ * rule the code does not make is the shape of this file's worst bug (Sol's F24,
+ * `readDirectGroup`).
  */
 export function anyLost(lost: DebateLosses): boolean {
-  const {
-    uncited,
-    selfSource,
-    unverifiedSource,
-    directnessUnverified,
-    sourceIsCopy,
-    claimNotInBlock,
-    unknownBlockId,
-    malformed,
-    ...rest
-  } = lost;
-  /* Every field is named above, so there is nothing left. Add one to
-     `DebateLosses` without adding it here and this assignment stops compiling. */
-  const exhaustive: Record<string, never> = rest;
-  void exhaustive;
-  return (
-    uncited +
-      selfSource +
-      unverifiedSource +
-      directnessUnverified +
-      sourceIsCopy +
-      claimNotInBlock +
-      unknownBlockId +
-      malformed >
-    0
-  );
+  return Object.values(lossesOf(lost)).some((n) => n > 0);
+}
+
+/**
+ * **Every loss counter, off an artefact that may not carry them all.**
+ *
+ * Two jobs in one function because they are one fact.
+ *
+ * **It fills the gaps.** `sourceIsCopy` landed on 2026-09-06 and
+ * `isDebateDocument` validates two arrays and nothing else, so every debate
+ * stored before that day reads back with the key absent — as, that day, did
+ * every one in the local database. The type says `number` because that is what
+ * the stage writes; **JSONB read back is not bound by it**, and `undefined`
+ * through arithmetic is `NaN`, which fails every comparison silently. The panel
+ * met this for real: an old artefact printed *"offered 5 of these; 3 are shown —
+ * ."* with both counts intact and the whole explanation gone — the failure that
+ * counter was added to prevent, arriving through the counter itself.
+ *
+ * **And it is the exhaustiveness gate.** The returned object names every field,
+ * so a new one added to `DebateLosses` stops this literal compiling, and both
+ * `anyLost` and the panel pick it up rather than dropping it. One place to add a
+ * counter and one place to forget it, instead of a hand-written sum in each
+ * caller — which is how `sourceIsCopy` was nearly lost twice on the day it was
+ * written.
+ */
+export function lossesOf(lost: DebateLosses): DebateLosses {
+  return {
+    uncited: count(lost.uncited),
+    selfSource: count(lost.selfSource),
+    unverifiedSource: count(lost.unverifiedSource),
+    directnessUnverified: count(lost.directnessUnverified),
+    sourceIsCopy: count(lost.sourceIsCopy),
+    claimNotInBlock: count(lost.claimNotInBlock),
+    unknownBlockId: count(lost.unknownBlockId),
+    malformed: count(lost.malformed),
+  };
+}
+
+/**
+ * **A counter off stored JSONB, or zero.**
+ *
+ * Not `?? 0`: absent is the common case but it is not the only one this has to
+ * survive. A hand-edited artefact, a half-written one, or a future writer can
+ * put a string, a `null` or a negative here, and each of those reaches a
+ * sentence as *"-2 could not be checked"* or as a silent `NaN`. The type says
+ * `number`; the row came from a database.
+ */
+function count(value: number | undefined): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 /**

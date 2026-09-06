@@ -353,7 +353,7 @@ and which two are courtesies.
   below it was corrected on the same day the flag went and this one was not, which is the ordinary
   way a list rots: one line at a time, from the bottom.
 - ~~**`SPIDERYARN_STORE=files` has no isolation at all**~~ — **the configuration this warned about
-  cannot be reached since 2026-09-05**, when the flag and the filesystem store went
+  cannot be reached since 2026-09-05**, when the filesystem store went
   ([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F).
   What it said was true and is the reason we are here: that store had no owner column, so two
   signed-in readers on it shared the complete library, profile, comments, chat and searches, and

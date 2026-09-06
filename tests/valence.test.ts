@@ -26,6 +26,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { readerCss } from "./helpers/stylesheets.js";
 import type { RefereePoles } from "../src/referee-criteria.js";
 import { DIVERGING_SCALES } from "../src/referee-criteria.js";
 import {
@@ -272,10 +273,10 @@ describe("the words, which are the carrier the colour decorates", () => {
  * cannot drift from the panel's.
  */
 describe("the sign the mark wears, which only the stylesheet knows", () => {
-  const STYLES = readFileSync(
-    path.resolve(import.meta.dirname, "..", "src", "web", "styles.css"),
-    "utf8",
-  );
+  /* The reading-view sheets as a set: these four `::after` rules live in one of
+     thirty-seven files since 2026-09-06, and naming the file they are in today
+     is how this check would go green on a rule that had moved. */
+  const STYLES = readerCss();
 
   /**
    * The generated content of one `::after` rule — the glyph, and the
@@ -287,7 +288,10 @@ describe("the sign the mark wears, which only the stylesheet knows", () => {
    */
   function generated(selector: string): { glyph: string; alt: string } {
     const at = STYLES.indexOf(`${selector}::after {`);
-    expect(at, `styles.css has no ${selector}::after rule at all`).toBeGreaterThan(-1);
+    expect(
+      at,
+      `the reader stylesheets have no ${selector}::after rule at all`,
+    ).toBeGreaterThan(-1);
     const body = STYLES.slice(at, STYLES.indexOf("}", at));
     const decl = [...body.matchAll(/content:\s*"([^"]*)"\s*\/\s*"([^"]*)"\s*;/g)].at(-1);
     expect(decl, `${selector}::after has no content with alternative text`).toBeTruthy();

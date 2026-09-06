@@ -66,7 +66,7 @@ import type { Meta, Tree, TreeNode } from "./types.js";
  * and it is **`SKETCH_VERSION` itself**, not a second copy of the same string.
  *
  * `readSketch` stamps `SKETCH_VERSION` (src/sketch-scene.ts) onto every sketch
- * it builds, and src/api.ts reports `outdated` by comparing that stamp with
+ * it builds, and src/store/pg.ts reports `outdated` by comparing that stamp with
  * this. They were two literals until 2026-09-03, which meant bumping one alone
  * marked every sketch outdated *including ones generated a second later*, with
  * nothing to say which of the two was behind. One name, so there is nothing to

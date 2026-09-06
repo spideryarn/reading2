@@ -59,7 +59,7 @@
  * ## Why this file imports no `pg.ts`
  *
  * The same leaf discipline as [pg-visibility.ts](pg-visibility.ts): `pg.ts`
- * imports `src/api.ts`, which reaches `glossary.ts` and `arc.ts`, so importing
+ * imports `glossary.ts` and `arc.ts`, so importing
  * it here risks a cycle and `npm run cycles` is a gate. `ownedSlug`,
  * `requireSlug`, `READ_COMMITTED` and `leaseIsLive` all live in leaves of their
  * own, and the `notFound` below is this file's own three lines rather than
@@ -202,7 +202,7 @@ const rawPgGlossaryStore: Pick<GlossaryStore, "deleteGlossary"> = {
       /* **`glossary is not null` is what makes `deleted` honest**, and it is
          the whole difference between "there was one and now there is not" and
          "there was never one". It matches the filesystem's ENOENT →
-         `{ deleted: false }` (src/api.ts).
+         `{ deleted: false }`.
 
          **`revision_step_runs` is deliberately not touched** — see the header.
          It goes on saying `done`, and `hasArtefacts` answers false anyway

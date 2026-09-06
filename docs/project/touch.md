@@ -305,7 +305,7 @@ repeating, is in [260826f-ipad-touch-scrolling.md](../research/260826f-ipad-touc
 > — Greg, 2026-08-28
 
 The bottom bar's buttons are **52px tall and at least 40px wide on a coarse pointer**, up from
-roughly 35 × 30. `styles.css` § **a coarse pointer** — and three things about it are worth carrying
+roughly 35 × 30. [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css) § **a coarse pointer** — and three things about it are worth carrying
 to anything else that has to be pressed with a thumb:
 
 - **`pointer: coarse`, not `any-pointer: coarse`.** Everything else in this file keys on
@@ -394,8 +394,8 @@ large, fragile, iOS-only thing, and the reader's real need is to reach the butto
 ## One banner, once, when both will not fit
 
 Past a crossover the mode band stops taking room from the article and is laid **over** it instead —
-`bandCoversProse` in [`src/web/layout.ts`](../../src/web/layout.ts), and styles.css § a band with no
-room. That is the design ([reading-view-overview.md](reading-view-overview.md)), and from the outside
+`bandCoversProse` in [`src/web/layout.ts`](../../src/web/layout.ts), and
+[`styles/narrow-window.css`](../../src/web/styles/narrow-window.css) § a band with no room. That is the design ([reading-view-overview.md](reading-view-overview.md)), and from the outside
 it reads as the text having disappeared.
 
 > it's really designed for larger screens. It's possible to use it, but it can really only show

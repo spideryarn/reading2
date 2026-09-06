@@ -655,14 +655,29 @@ both would apply to any future schema change here.
 
 ### Stage: Make style ownership visible
 
-- [ ] Extract contiguous CSS sections in original order, keeping `@layer app` and one entry point.
-  Use separate commits from selector changes or visual adjustments.
-- [ ] Compare computed dimensions/positions and screenshots for Plain, Hierarchy, Outline,
-  two different bands, a modeless annotation, a true modal, visitor chrome and the shelf.
-- [ ] Preserve semantic classes used by geometry, selection and tests. Search their consumers
+**Done, 2026-09-06** — [260906d](260906d-make-style-ownership-visible-and-a-new-mode-fail-to-compile.md).
+15,489 lines became 37 sheets in cascade order, and the shipping CSS came out **byte-identical**
+(md5 `733c807548da26925bd8b120d7c026ac`, content-hash filename unchanged). The second half landed
+too: `MODE_TARGET` is a total tagged union, and a new mode now fails to compile at its
+presentation, visitor policy, label and activation.
+
+- [x] Extract contiguous CSS sections in original order, keeping `@layer app` and one entry point.
+  Use separate commits from selector changes or visual adjustments. — **nothing renamed and no
+  selector touched**; the cut points were all proved to be at brace depth 0 outside comments, a
+  check byte-concatenation cannot make.
+- [x] Compare computed dimensions/positions and screenshots for Plain, Hierarchy, Outline,
+  two different bands, a modeless annotation, a true modal, visitor chrome and the shelf. — 10
+  surfaces × 2 widths: **0 computed-style differences**, pixel diffs 0.00–0.24%. The one flagged
+  rect resolved by arithmetic: both states sum to exactly 792.00, so only content height moved.
+- [x] Preserve semantic classes used by geometry, selection and tests. Search their consumers
   before moving/renaming anything; shared stacking/token rules get a single owner.
-- [ ] Add representative real surfaces to `/design`; update the style map and remove stale
+- [x] Add representative real surfaces to `/design`; update the style map and remove stale
   inventories. Acceptance: the same cascade with files that tell an editor where a rule belongs.
+
+What it cost, recorded rather than glossed: three `noDescendingSpecificity` findings the linter can
+no longer see across file boundaries, and **nine sections that are not where their name says** —
+found by reading each sheet against its banner, and left in place, because moving them is a cascade
+change and this job was an extraction.
 
 ### Stage: Optimise annotation inputs, if measurements warrant it
 

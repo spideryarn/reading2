@@ -2658,7 +2658,7 @@ export async function keepTheOriginal(
  * 2026-08-31 and `readRaw`'s own header says so, which makes repeating it here
  * exactly the mistake this fix is part of a sweep for. What is actually lost is
  * **provenance across re-runs**: the object never reaches the bucket, and
- * `articleMetadata` in src/api.ts — the surviving caller — can no longer say
+ * `articleMetadata` in src/store/pg.ts — the surviving caller — can no longer say
  * where the document came from. The current invocation still extracts, because
  * it holds the bytes in memory. GPT Sol caught the overstatement in review.
  * Named and left alone on purpose in

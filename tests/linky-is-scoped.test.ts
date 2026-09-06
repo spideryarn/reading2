@@ -34,6 +34,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { readerCss } from "./helpers/stylesheets.js";
 
 const WEB = new URL("../src/web/", import.meta.url).pathname;
 
@@ -44,11 +45,17 @@ const WEB = new URL("../src/web/", import.meta.url).pathname;
  * this file exists.
  */
 async function scopes(): Promise<string[]> {
-  const css = await readFile(join(WEB, "styles.css"), "utf8");
+  /* The reading-view sheets as a set. `src/web/styles.css` became a list of
+     `@import`s on 2026-09-06 and holds no rule, so a test that named it would
+     have hit the guard below rather than reading the scopes. */
+  const css = readerCss();
   const found = [...css.matchAll(/^\.([a-z-]+) button\.linky \{/gm)].map((m) => m[1] as string);
   /* If this ever comes back empty the test would pass vacuously for every file
      — the exact shape of silent success it exists to catch. */
-  expect(found.length, "no `.<ancestor> button.linky` rules found in styles.css").toBeGreaterThan(0);
+  expect(
+    found.length,
+    "no `.<ancestor> button.linky` rules found in the reader stylesheets",
+  ).toBeGreaterThan(0);
   return found;
 }
 

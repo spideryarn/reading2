@@ -41,7 +41,7 @@
  * This one is looser, and it stays looser. Tightening it to match was tried on
  * 2026-08-26 and reverted, because **something real depends on the difference**:
  * `_`-prefixed directories mean "not an article" (see `listArticles` in
- * src/api.ts and src/library-search.ts, which both skip them), and reader-state
+ * src/store/pg.ts and src/library-search.ts, which both skip them), and reader-state
  * paths are asked about such names — `loadComments("_test-parse-json")` and
  * friends. Minting refuses a leading underscore; reading must not.
  *

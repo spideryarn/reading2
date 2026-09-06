@@ -343,11 +343,21 @@ const CJK_SEGMENT_BREAK = new RegExp(`(?<=[${CJK}])[^\\S\\n]*\\n\\s*(?=[${CJK}])
  * `article` is `null` when Readability declines the page — the caller decides
  * whether that is an error (`runExtract`: yes) or a row in a table (an eval:
  * no). It is deliberately not thrown from here.
+ *
+ * `refusal` is the same arrangement for the capability floor below: non-null
+ * means *this is too little text to build anything from*, `article` is whatever
+ * Readability handed back anyway, and it is the caller's business what to do
+ * about it.
  */
 export function readArticle(
   html: string,
   url: string,
-): { article: ReturnType<Readability["parse"]>; notes: NoteStats; callouts: CalloutStats } {
+): {
+  article: ReturnType<Readability["parse"]>;
+  refusal: TooLittleTextToRead | null;
+  notes: NoteStats;
+  callouts: CalloutStats;
+} {
   /* **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
      JSDOM's default forwards its own errors straight to `console`, and one of
      them quotes the page: a malformed `@import` produces `Could not parse CSS
@@ -367,7 +377,101 @@ export function readArticle(
      rather than ours. See docs/project/logging.md. */
   const dom = sourceDom(html, url);
   const { notes, callouts } = prepareDocument(dom.window.document);
-  return { article: new Readability(dom.window.document).parse(), notes, callouts };
+  const article = new Readability(dom.window.document).parse();
+  return { article, refusal: capabilityFloor(article), notes, callouts };
+}
+
+/**
+ * **Readability's own threshold, and the number is the library's rather than
+ * ours** — `DEFAULT_CHAR_THRESHOLD`, 500, in
+ * node_modules/@mozilla/readability/Readability.js.
+ *
+ * Below it Readability has already concluded the parse *failed*: it pushes the
+ * pass onto `_attempts`, drops a flag and tries again, and when it runs out of
+ * flags it hands back **the longest of its failures** rather than nothing at
+ * all. So a short return is all but always a parse the library disowned rather
+ * than a short article — see `visibleLength` for the one hair's-breadth case
+ * where that "all but" is doing work — and stage 2 published it anyway. `medium_about.html` became an
+ * article titled "Medium" with 185 characters in it, and a published article
+ * spends a paying reader's slot where a failed ingest is free
+ * (src/store/pg-session.ts § the settlement: `done` charges, every other ending
+ * releases).
+ *
+ * **Do not tune this to the corpus.** Measured across all 36 fixtures on
+ * 2026-09-06, the two walls are 130 (`pmc_article`) and 185 (`medium_about`),
+ * the shortest genuine page is 1,798 (`arxiv_abs`) and the next 3,901
+ * (`mkdocs_tabs`); nothing lies in between. That is 2.7× headroom over the
+ * tallest wall and 3.6× under the shortest real page, and it is evidence that
+ * the library's number is safe here rather than a reason to move it.
+ * `tests/extract-capability-floor.test.ts` pins it from **above** as well as
+ * below, because tightening it is the mistake with no symptom.
+ *
+ * docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md § C1a.
+ */
+export const MIN_ARTICLE_CHARS = 500;
+
+/**
+ * **Readability's own measure, computed the same way** — `_getInnerText(el,
+ * true)`, which is `textContent.trim()` with runs of whitespace collapsed
+ * (Readability.js § `REGEXPS.normalize`).
+ *
+ * `article.length` is *not* it: that is the raw `textContent.length`, which on
+ * `arxiv_abs` is 2,321 against 1,798 of text a reader would see. Collapsing is
+ * what makes the number in the reader's sentence a number about what they were
+ * looking at.
+ *
+ * **The same formula, on a slightly later document — and that is deliberate but
+ * it is not an identity.** Readability takes its own reading *before*
+ * `_postProcessContent`, which then runs `_simplifyNestedElements` and drops
+ * empty `DIV`/`SECTION` wrappers; removing one removes whitespace, so the text
+ * we measure can be a character or two shorter than the length the library
+ * compared. GPT Sol reproduced the boundary case: a page the library measured at
+ * exactly 500 and accepted, returning 499 here and refused. So this is **not**
+ * "we never override Readability" to the character — within a hair of the
+ * threshold the two can disagree, and we refuse.
+ *
+ * That is the right way round and worth stating rather than fixing: the question
+ * this floor asks is *is there enough text in the article we would publish*, and
+ * the post-processed document is that article. Reading the library's private
+ * decision instead would mean subclassing it to catch `_attempts`, which is a
+ * lot of coupling to move an edge case by one character. GPT Sol, 2026-09-06.
+ */
+function visibleLength(text: string | null | undefined): number {
+  return (text ?? "").trim().replace(/\s{2,}/g, " ").length;
+}
+
+/**
+ * **The capability floor** — the one shared decision, called by both read paths.
+ *
+ * It is a helper rather than a line in each of them, and that is the whole
+ * design: `readArticle` and `readArticleWithProvenance` are separate entry
+ * points that do not call each other, `runExtract` uses the first and the eval
+ * harness's `shippedOf` (evals/extraction/arms.mts) uses the second directly.
+ * Put this in `runExtract`'s catch or in src/pipeline.ts and production looks
+ * correct while `Candidate.refused` stays permanently false and the harness's
+ * `notAnArticle` support proves nothing — Sol P1-C03 arriving as a concrete
+ * seam, and the exact silent success docs/reusable/silent-success.md describes.
+ *
+ * **It decides nothing about any piece of content**, which is why it is allowed
+ * where the plan forbids shape rules. Every failed shape rule in this project
+ * decided what some text *was* — junk, marker, nav — and a wrong decision
+ * silently deleted a real article's words. This one says only that the whole
+ * page has too little text for this product to build anything from, which is
+ * equally true of a genuine 300-character page, and that is the point. Fable,
+ * 2026-09-06, quoted in the plan.
+ *
+ * **Not a bot-wall detector.** That is C1, a registry of conclusive markup, and
+ * this knows nothing about *what* the page is.
+ */
+function capabilityFloor(
+  article: { textContent: string | null | undefined } | null,
+): TooLittleTextToRead | null {
+  /* Readability declining outright is `ReadabilityRefused`'s branch, not this
+     one: two different findings deserve two different sentences, and a floor
+     that also answered for `null` would swallow it. */
+  if (!article) return null;
+  const chars = visibleLength(article.textContent);
+  return chars < MIN_ARTICLE_CHARS ? new TooLittleTextToRead(chars) : null;
 }
 
 /**
@@ -560,6 +664,14 @@ export function readArticleWithProvenance(
   url: string,
 ): {
   article: ReturnType<Readability<Element>["parse"]>;
+  /**
+   * **The capability floor's verdict, the same one the shipping path gets** —
+   * `capabilityFloor` is called here as well as in `readArticle` because the two
+   * are separate entry points and neither calls the other. Without this the
+   * harness's `Candidate.refused` is permanently false on the very pages the
+   * floor exists for, and `notAnArticle` scores a refusal that never happens.
+   */
+  refusal: TooLittleTextToRead | null;
   notes: NoteStats;
   callouts: CalloutStats;
   /** The stamped source, as Readability was handed it and before it pruned anything. */
@@ -592,6 +704,7 @@ export function readArticleWithProvenance(
   }).parse();
   return {
     article,
+    refusal: capabilityFloor(article),
     notes,
     callouts,
     source: prepared.window.document,
@@ -684,6 +797,43 @@ export class ReadabilityRefused extends Error {
 }
 
 /**
+ * **There is too little text on this page to build anything from** — the
+ * capability floor's refusal, and a different finding from the one above.
+ *
+ * `ReadabilityRefused` is *the library found no article at all*. This is *the
+ * library found something, disowned it, and handed back its longest failure
+ * anyway* — see `MIN_ARTICLE_CHARS`. Two branches, two sentences, two codes,
+ * because a code names a branch and whoever is helping a reader should be able
+ * to tell them apart from four characters.
+ *
+ * **Its own type rather than a reworded message**, and `ReadabilityRefused`'s
+ * docstring above is why: the pipeline classified that one by matching
+ * `/^Readability could not parse this page\./` against `err.message` until
+ * 2026-09-03, which rots the day somebody rewords the sentence and — being a
+ * prefix — could never prove that the whole of a matching message came from
+ * here. `instanceof` says it in the type system and says it exactly.
+ *
+ * `chars` is on the error rather than only in its message for the same reason:
+ * src/pipeline.ts puts the count in the reader's sentence, and parsing a number
+ * back out of prose is the shape this file has already paid for once.
+ *
+ * The message is for the log. What the reader is shown is
+ * `pageHadTooLittleText` in src/messages.ts, which says none of this.
+ */
+export class TooLittleTextToRead extends Error {
+  /** Readability's own measure of the page — see `visibleLength`. */
+  readonly chars: number;
+  constructor(chars: number) {
+    super(
+      `Readability returned ${chars} characters, below its own ${MIN_ARTICLE_CHARS}-character ` +
+        "threshold, so it had already concluded this parse failed.",
+    );
+    this.name = "TooLittleTextToRead";
+    this.chars = chars;
+  }
+}
+
+/**
  * Stage 2 over already-fetched HTML — **and it writes nothing.**
  *
  * It took `outFile` and `dataDir` until 2026-08-31 and wrote the page and
@@ -724,13 +874,21 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const { article, notes, callouts } = readArticle(opts.html, opts.url);
+  const { article, refusal, notes, callouts } = readArticle(opts.html, opts.url);
   if (!article) {
     throw new ReadabilityRefused();
   }
+  /* **The caller that decides the floor is an error**, which is what
+     `readArticle`'s header means by handing the verdict back rather than
+     throwing it. An eval wants the row; this is the path that publishes, and
+     publishing 185 characters of somebody's 404 page as an article is what
+     spends a reader's slot on nothing. */
+  if (refusal) {
+    throw refusal;
+  }
 
   /* The metadata is the article's identity — the only place the source URL, the
-     byline and the fetch date survive past this stage (src/api.ts reads it).
+     byline and the fetch date survive past this stage (src/store/pg.ts reads it).
      Rebuilt on every run: re-extracting is how you refresh a page, and the
      fetch date should follow. */
   /* Readability has been handing `publishedTime` back all along and this stage

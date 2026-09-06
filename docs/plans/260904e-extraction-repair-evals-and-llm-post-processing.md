@@ -2,7 +2,8 @@
 
 **Status: stages A and B are done. C is under way — rewritten 2026-09-06 into C0–C5 after review by
 Fable and GPT Sol and a re-measurement that found one of its six items already fixed and two of them
-misdescribed; C0 is in progress. D is not started. Scope narrowed after review.** The model repair pass Greg asked for is
+misdescribed; C0 is done and on `dev` (C0.1 the order-gate fix, C0.2 the shape corpus), and C1a
+is in progress. D is not started. Scope narrowed after review.** The model repair pass Greg asked for is
 **not** in this plan — GPT Sol's review found its operation layer not yet designable, and it moves to
 its own plan with the preconditions named in
 [What this plan deliberately does not build](#what-this-plan-deliberately-does-not-build-the-model-repair-pass).
@@ -1950,6 +1951,12 @@ than trusting either side's account of them.
   extractions they happen to belong where they landed, and *happen to* is the problem. The earlier
   framing of this as a hand-built shape's problem is retracted.
 
+  **Now 4 runs on 3, and the two that went are the walls.** C1a refuses `medium-about` and
+  `pmc-article`, which carried 5 of the 9 between them, so the branch is live on `wiki-gdp-table`,
+  `plos-biology` and `quanta-year-physics` — see § C1a's *what landed*. The reading above is kept
+  with its date because it is what the corpus said before the floor existed; the number to quote is
+  the one the run prints.
+
   **What the fix would cost, measured before anyone decides.** Sol's smallest change is to give
   every stamped visible element an empty `Ownership` when `sourceOwnership` first visits it; an
   ownerless ancestor then behaves like an owner that cannot supply the run, and only its subtree
@@ -2217,6 +2224,94 @@ ruler's five recorded preconditions, which are conditions on **how stage C may u
   `readArticleWithProvenance` directly and never goes through `runExtract`. Put it in `runExtract`'s
   catch or in `pipeline.ts` and production passes while `Candidate.refused` stays permanently false and
   `notAnArticle` silently proves nothing. This is Sol P1-C03's warning arriving as a concrete seam.
+
+  ##### What landed, 2026-09-06 — **C1a is done, and the seam it was warned about was the real work**
+
+  `MIN_ARTICLE_CHARS`, `visibleLength`, `capabilityFloor` and `TooLittleTextToRead` in
+  [`src/extract.ts`](../../src/extract.ts); `pageHadTooLittleText` and `[jb-too-little-text]` in
+  [`src/messages.ts`](../../src/messages.ts); the `instanceof` arm beside `ReadabilityRefused` in
+  [`src/pipeline.ts`](../../src/pipeline.ts); `Candidate.refused` in
+  [`arms.mts`](../../evals/extraction/arms.mts); the ladder in
+  `tests/extract-capability-floor.test.ts` and one case in `tests/job-failure.test.ts`.
+
+  **It measures the article we would publish, with the library's formula — and the first draft of
+  this paragraph claimed more than that.** `_getInnerText(articleContent, true)` — trimmed, runs of
+  whitespace collapsed — is what Readability compares against `DEFAULT_CHAR_THRESHOLD`, and
+  `visibleLength` computes it the same way, so on any real page the floor fires exactly on the
+  fallback branch that hands back the longest failed attempt. But the library takes its reading
+  *before* `_postProcessContent`, which drops empty `DIV`/`SECTION` wrappers and with them their
+  whitespace: **GPT Sol built the boundary case** — measured at exactly 500 and accepted by
+  Readability, 499 by the time we see it, refused. Within a character or two of the threshold we can
+  refuse a parse the library kept, and that is left as it is rather than fixed, because *is there
+  enough text in the article we would publish* is the question this floor is for and the
+  post-processed document is that article. Reading the library's private verdict instead means
+  subclassing it to catch `_attempts`. `article.length` would have been worse than either: it is the
+  raw `textContent.length`, 2,321 against 1,798 of visible text on `arxiv_abs`.
+
+  **The witness the floor cost, and where it went.** `drop-every-short-block` on `pmc-article` was
+  the corpus's only **real-page** case of partial flattening — Sol's ninth review of stage B, and the
+  one case in `tests/extraction-scorer.test.ts` not hand-built by whoever was fixing the bug. With
+  the shipped extraction empty it became an assertion about `""`, silently. Rather than retire it, one
+  test holds the floor open through `withoutTheCapabilityFloor` (`arms.mts`), which has no other
+  caller and which the runner never touches: *can the scorer see this* is a different question from
+  *should we publish this*, and only the second is the floor's. The corpus report is byte-identical
+  either way, checked by running it again after the seam existed.
+
+  **Red before green, on the tree rather than in argument.** The committed tree exported to a temp
+  directory, the new tests copied in: **18 of 19 fail there and all 19 pass here** — the one that
+  passes either way is the control, a real 749-character page going through untouched. The pipeline
+  case fails there with *"expected that to fail, and it did not"*: the silent success itself,
+  printed.
+
+  **The gates.** `npm test` 768 files / 13,926 tests green, `npm run typecheck` and `npm run check`
+  clean, `npx tsx evals/extraction/score.mts` exit 0.
+
+  **The corpus, every changed line accounted for.** `score.mts` at HEAD reproduced the C1a baseline
+  byte-for-byte; after the change **nine lines move and all nine are the two walls or a total over
+  them**. Both shipped rows go FAIL → PASS with `exclusionPrecision` 0.00 → 1.00 and the three
+  `notAnArticle` bullets gone; `raw-body` and `restore-everything` keep their numbers and gain
+  `worse: exclusionPrecision`, because the baseline they are compared against moved up; and
+  `first-20-percent` and `drop-every-short-block` become NOT EXERCISED on those pages, since an
+  empty shipped extraction gives them nothing to transform.
+
+  **The one consequence worth knowing about, and it is C0.2's instrument.** Refusing these two pages
+  takes them out of the placement totals: `owner` 14,066 → 14,062, `page` 64 → 57, and the ownerless
+  count **9 runs over five fixtures → 4 over three** (`medium-about` 4 and `pmc-article` 1 were the
+  pair that went). The ownerless-ancestor branch is still live on `wiki-gdp-table`, `plos-biology`
+  and `quanta-year-physics`, and `tests/extraction-shapes.test.ts` pins it on a synthetic shape
+  rather than on the corpus, so nothing is unpinned — but C0.2's *"live on five real pages"* is now
+  three, and the number above is where that is written down.
+
+  **What it does not do, named rather than implied.** The floor is prospective. Stage 2 does not
+  re-run when its artefact is already there, so an article published from a short page before today
+  keeps its revision and its spent slot, and a job that skips extraction settles `done` without ever
+  consulting the rule; a *forced* re-extraction refuses and leaves the reader on the revision they
+  had. Nothing audits or refunds the slots already spent. Retrospective would mean invalidating
+  extractions against a policy version — a schema-shaped change, not this one. GPT Sol's finding 5.
+
+  **Three breakages the brief did not mention.** `evals/extraction/block-census.mts` catches
+  `ReadabilityRefused` around `runExtract` and rethrows everything else, so a census over `--cut all`
+  would have died on the first wall; it catches both now.
+  `tests/acquire-extract-blocks-end-to-end.test.ts` carried a 310-character synthetic page through
+  the whole pipeline and four of its cases went red — **the floor meeting a genuinely short real page
+  inside our own suite**, which is the case the rule is honest about firing on; the page is six
+  paragraphs now and says why. And `tidy.mts` would have **paid a model** to tidy the blocks of a
+  page production refuses, which is the one of the three that costs money; it skips them and says so.
+
+  **What the cross-family review changed, and it found the claim above wrong.** GPT Sol, on the built
+  diff, ran three mutations past the first version of the tests and all three stayed green: a floor of
+  600, a decision of `chars < 200`, and a reader's sentence with `185` hardcoded into it. The cases
+  were pinning the *shape* of the rule and not its number. They pin 499 and 500 either side now, read
+  `DEFAULT_CHAR_THRESHOLD` off the dependency rather than repeating it, and assert two different
+  counts in two sentences; all four mutations — those three and removing the floor from the
+  provenance path — now go red, and the last one goes red six ways. Sol also found the
+  `_postProcessContent` gap recorded above, three instruments reporting refused pages as live output
+  (`provenance.mts` counted them among its live fixtures, `probe.mts` reported Medium as eleven blocks
+  of working extraction, and `tidy.mts` is the money one), the prospective boundary, and that
+  *"185 characters of text in all"* reads as the whole page when it is the extracted candidate —
+  Medium's shell has 249 characters visible and 185 extracted. One finding was rejected: that the
+  corpus is 35 fixtures rather than 36. `ALL_FIXTURES` has 35 and `SCORABLE_FIXTURES` has 36, the
+  extra being the synthetic `negative-controls` page, and the measurement was over the 36.
 
 - **C2 — the containment oracle.** Sol's precondition five says the ruler is text and order and
   cannot see a datum moved into the wrong row, so this must exist **before** C3, not alongside it:

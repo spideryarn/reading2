@@ -76,7 +76,7 @@ export const SANITIZER_VERSION = 5;
    *verdict* on a phrase, so an artefact cleaned under 4 could be carrying an
    article's own `−` beside our reader's sentence. Bumping costs one extra
    sanitise per stored article on its next read, plus the "predates the current
-   sanitiser" warn (src/api.ts), until stage 3 is re-run for it — nothing is
+   sanitiser" warn, until stage 3 is re-run for it — nothing is
    rewritten and no reader sees a difference. GPT Sol's finding 8, reviewing
    docs/plans/260902f-make-referee-mode-understandable.md, and the change that
    added `data-dir` had forgotten it. */

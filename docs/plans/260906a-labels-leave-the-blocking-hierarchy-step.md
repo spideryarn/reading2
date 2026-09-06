@@ -1,6 +1,6 @@
 # The labels leave the blocking step
 
-**Status: stage 1 landed and reviewed; stage 2 next.** Written 2026-09-06, out of
+**Status: stage 1 landed and reviewed; the stamp question settled ([below](#two-steps-one-stamp)); stage 2 building.** Written 2026-09-06, out of
 [260904d](260904d-deepen-fat-sections.md) § *Question 5*, where a measured run found that the thing
 blowing the ingest deadline was not the feature that plan was building.
 
@@ -510,6 +510,11 @@ in this plan's scope unless the review says otherwise:
 Researched 2026-09-06, against the code rather than from memory. Read this before starting stage 2;
 several of these reverse an assumption the stages above were written on.
 
+**Merge `origin/dev` before you start, and again before each commit.** Greg, 2026-09-06: *"pull the
+latest changes to avoid a big merge conflict at the end"*. Stage 2 touches the step registry, the job
+layer and the publication path — all of them shared — so a week-old base is where the expensive
+conflict comes from. Fetch and merge; never rebase.
+
 ### The P0 is satisfied by omission, not by a guard
 
 **The discriminator is one ternary**, [`routes.ts`](../../src/routes.ts):7927 — `request.url === undefined`
@@ -601,14 +606,182 @@ Also: **a test's name was the old specification.** `tests/jobs.test.ts` § *"kee
 cascade, because it cannot check itself"* had to be rewritten, and four other assertions in the same
 file silently expected the positional sweep. Grep `tests/jobs.test.ts` for `labels` before starting.
 
-### The open question that must be settled before any code <a id="two-steps-one-stamp"></a>
+### Who actually runs the successor, since nothing on the server does <a id="who-drives"></a>
 
-**Two steps would read their stamp off the same artefact.** This plan keeps
-`STAMP_SOURCE.hierarchy = "labels"` ([§ the stamp route](#stamp-route)) *and* adds a `labels` step
-that also writes the `labels` column. Nobody has thought that through against `assertStampAgrees`,
-`recordStamp` and `stampForStep`'s `StampDisagrees` throw — which is the very mechanism this plan
-measured producing 409s on 14 live articles. **It deserves its own pass, first.** If it does not
-hold, the stamp route has to be reopened rather than patched.
+Measured 2026-09-06 by reading the client, because Sol's F3 called a permanent `pending` a normal-use
+defect and the answer decides whether it is one.
+
+**The queue is driven by a module singleton, not by a mounted component**, and it drives **every**
+queued job the signed-in owner has — no slug filter, no "did this tab create it" filter:
+
+```ts
+/* src/web/jobEngine.ts:486 */
+for (const job of jobs) {
+  if (job.status === "queued" || job.status === "running") void drive(job.id);
+}
+```
+
+`jobEngine.start(readerId)` is called from `App()` itself, above every early return
+([`App.tsx`](../../src/web/App.tsx):350 → [`useJobs.ts`](../../src/web/useJobs.ts):185), and `start`
+polls immediately. So **any signed-in page in any tab is a driver** — the shelf, `/profile`, the
+landing page, not only the article. That was the point of lifting it out of `useJobs` on 2026-09-01:
+*"whether an import kept moving depended on whether the page you happened to open mounted one of
+those three."* Subscribers pick the **cadence** only; they never grant permission.
+
+So the three cases:
+
+- **The owner watches the ingest finish and closes the tab.** Driven, in that same tab, usually
+  within a second — the busy cadence is 1 s, so the next `GET /api/jobs` after publication already
+  carries the successor. The ingest card itself does not follow it (`AddPage` binds to the id it
+  created), which is right: the successor is not what the reader is watching.
+- **The owner never returns to the article, but opens Spideryarn anywhere.** Driven on that page
+  load, from the first poll.
+- **The owner never signs in again, anywhere.** **Queued for ever.** `settleExpired` is gated on
+  `status = 'running'` ([`pg-jobs.ts`](../../src/store/pg-jobs.ts):1052), `trimFinished` deletes only
+  terminal rows, `vercel.json` has no `crons` key, and `pump` returns early under `VERCEL`. Nothing
+  reaps a queued row and nothing else will run it: a stranger's advance is a 404
+  ([`jobs.ts`](../../src/jobs.ts):1975 scopes by `currentOwnerId`), and a signed-out reader gets no
+  engine at all.
+
+**The one shape worth naming for Greg** is the last case crossed with `/read/public`: an article
+whose owner abandoned it, shared publicly, shows *"Paragraph labels are still arriving"* to strangers
+indefinitely, and no stranger can make it stop. Narrow, and stage 1 already made the state honest
+rather than blank. Not a blocker; a thing to decide once somebody hits it.
+
+**A second job for the same article does not race it.** `blockedByAnother`
+([`pg-jobs.ts`](../../src/store/pg-jobs.ts):400) makes claims per-slug FIFO on `(created_at, id)`, so
+a lazy `arc` job queued behind the successor simply answers `busy` until the labels finish — and
+`useStepJob`'s own memo picks running-first-then-oldest with the same tie-break, so the reading
+view's spinner sits over the successor too.
+
+### The question that had to be settled first, and its answer <a id="two-steps-one-stamp"></a>
+
+**Settled 2026-09-06, before any stage 2 code.** The question was whether two steps could read their
+stamp off the same artefact — this plan keeps `STAMP_SOURCE.hierarchy = "labels"`
+([§ the stamp route](#stamp-route)) *and* adds a `labels` step that also writes the `labels` column,
+against `assertStampAgrees`, `recordStamp` and `stampForStep`'s `StampDisagrees` throw.
+
+**They can, and the reason was already in the code.** `hasArtefacts`
+([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts):684) asks the **asking step's own** run row
+before it looks at any artefact:
+
+```ts
+const run = await runRowFor(ref, exec, step);
+if (run?.status !== "done") return false;
+```
+
+`stepIsDone` ([`pipeline.ts`](../../src/pipeline.ts):966) is `interrupted → has(produces) →
+stamp/isDone`, so a step with no `done` row of its own cannot be skipped by an artefact somebody else
+wrote. Doneness is keyed on the receipt, not on the file.
+
+**And the pattern already exists.** `STORAGE` ([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts):200)
+maps **both** `blocks/blocks` and `hierarchy/blocks` to the same rows — *"The same rows as
+`blocks`/`blocks` above, not a second copy."* Two steps have shared one site all along; nobody had
+connected it to this question. [`tests/shared-site-run-row-gate.test.ts`](../../tests/shared-site-run-row-gate.test.ts)
+now pins it on that existing pair, watched red by neutering the run-row line (3 of its 5 cases fail,
+every one on an assertion rather than a timeout).
+
+#### The P0 the answer uncovered, which two reviewers found independently
+
+**Receipts are inherited, so "there is no `labels` run row" is false on re-ingest.** `beginDraftIn`
+([`pg-revisions.ts`](../../src/store/pg-revisions.ts):853) copies **every** `revision_step_runs` row
+forward into a new draft, in the same transaction as the columns and the block rows. So a second
+ingest of an article that already has labels starts with a `labels = done` receipt, and then
+`hierarchy` overwrites the labels column underneath it. Two ways that ends badly:
+
+- the blocks changed, so the carried row's `input_hash` and the fresh manifest's `sourceHash`
+  disagree, and `stampForStep` **throws** — inside `stepIsDone`, before `runStep`'s catch, so it
+  escapes as a 409 and leaves the claim to recovery;
+- or they happen to agree and the labels step **skips**, leaving the empty manifest for ever.
+
+The fix is one statement in the transaction that creates the inconsistency: **when `hierarchy` writes
+the pending manifest it deletes that revision's `labels` receipt**, atomically with the artefacts and
+the `pending` status. It is the honest thing to write down — the labels are not done in this revision
+— and it is what makes everything else fall out, because with no receipt `has` is false and
+`stepIsDone` returns before it ever reads a stamp.
+
+**It is also the structure-currency check**, which is why this plan carries no composite fingerprint.
+A re-cut tree can only come from `hierarchy` running, and `hierarchy` always writes a pending manifest
+and always invalidates. `StepStamp` has four fixed fields with no room for `structureHash`, and it
+does not need one.
+
+#### What the pending manifest carries
+
+`sourceHash`, `structureHash`, `structureVersion`, `slug`, `labels: {}`, `batches: null` — and
+**not** `version` or `generator`, which stay required on a completed file. Sol's option (c), and the
+honest one: no labels prompt and no model produced that payload. Recording the labels provenance
+anyway (option (a)) invents it and can make a carried receipt look current; recording the tree's
+`toc/N` in a field whose established meaning is the labels prompt (option (b)) re-introduces the
+exact clash that kept the stamp where it is, and `structureVersion` already holds the tree version.
+
+Omitting them costs nothing live: `hierarchy` has no `PipelineStep.stamp`, `isCurrent("hierarchy")`
+([`pg.ts`](../../src/store/pg.ts):2519) reads the run row's `input_hash` directly, and the remaining
+consumer of the hierarchy stamp is `copyArtefacts`, which has no production caller.
+
+#### Where Sol's remedy was not taken
+
+Sol's F2 (P1) asked for `STAMP_SOURCE` to become a per-step **extractor** — each step declaring which
+fields it reads and under what meaning, rather than just which artefact. The diagnosis is accepted:
+after the split, `stampForStep("hierarchy")` really does report `promptVersion: "labels/2"`, which is
+a different pass's provenance. The remedy is not, because the receipt invalidation above already
+closes both holes it was aimed at, and a fifth registration point is the opposite of fewer moving
+parts. ⟨Put to Fable as a declined P1 before landing — see below.⟩
+
+What *is* taken from it: **`beginStepRun` clears `prompt_version` and `model` when it reopens a
+row.** It already resets `input_hash` to a sentinel and leaves those two, so a stale value from an
+older code version sticks for the life of the row — which is why 3 live revisions carry `labels/1`
+on the row against `labels/2` in the artefact. A running row has no completed provenance yet. Those
+3 self-heal on their next `hierarchy` run; nothing is migrated.
+
+#### Fable's arbitration, and the one thing it moved <a id="fable-invalidation"></a>
+
+Put to Fable 2026-09-06 as a declined P1, per
+[engineering-manager.md](../reusable/engineering-manager.md). **Verdict: B, with one relocation** —
+and the relocation is better than what I had.
+
+**Key the invalidation on the artefact, not on the step's name.** I had the `hierarchy` step deleting
+the receipt. But `writeArtefacts` already has exactly this seam, and its own comment already states
+the principle — *"`parts.labels` rather than `step === "hierarchy"`, so the rule follows the
+artefact"* ([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts):1340). So the rule becomes:
+
+- `parts.labels` with **`batches === null`** → `nav_label_status = 'pending'` **and** delete this
+  revision's `labels` receipt.
+- `parts.labels` with a real `batches` → `'ready'`.
+- **`parts.tree` present and `parts.labels` absent → throw.** A tree written with no manifest beside
+  it is refused, so any future writer of the tree has to say what it did to the labels.
+
+**The reason is a writer we already know is coming.** The deepening wave
+([260904d](260904d-deepen-fat-sections.md), this same branch) is the obvious next thing to leave the
+blocking step the way the labels are leaving now — and it re-cuts the tree *without* running
+`hierarchy`. Under my version it would have had to remember a convention living inside one step's
+`run`. Under this one the store refuses it. That is the difference between a rule and a habit.
+
+Fable verified the structure-currency claim against the paths rather than the step registry, and it
+holds **today**: one code path writes the `tree` column (`writeArtefacts`, via
+`STORAGE.tree = {at:"column"}`), one step produces `tree`, the deepen wave has no entry point outside
+`generateHierarchy`, and `beginDraftIn` moves `tree`, `labels`, `navLabelStatus` and every run row in
+one transaction so a copy is never a re-cut. It also closed a race I had not asked about:
+`publishRevisionIn` ([`pg-revisions.ts`](../../src/store/pg-revisions.ts):1758) refuses a draft whose
+base is no longer current, so a slow labels job cannot publish an old tree over a newer one.
+
+**Three more things it asked for, all taken:**
+
+- **`LabelsFile` becomes a discriminated union.** The pending shape omits `version` and `generator`,
+  so it is two types pretending to be one bag of optionals — and this repo's rule is to let the
+  compiler refuse the wrong state.
+- **No `isDone` for `labels`.** It would be a second check of the fact the receipt already carries.
+  Keep a `stamp()` of `{inputHash: hashBlocks, promptVersion, model}` — which catches a prompt bump
+  *without* a `hierarchy` run — and one sentence saying that structure currency is the receipt
+  deletion, not this stamp.
+- **The F4 backfill is a second writer of `labels` run rows**, so it must copy `prompt_version` and
+  `model` off the manifest or leave them null. Otherwise the first successor job for a legacy article
+  throws `StampDisagrees` inside `stepIsDone`, before `runStep`'s catch — the same 409 as the carried
+  receipt.
+
+**And one cost, named rather than discovered.** Every `hierarchy` run buys a successor labels job,
+including one that resumes an identical tree from checkpoint. Cheap, because the batch checkpoints
+hit and a resumed batch costs nothing — but it is one job per publication, and it is the price of
+simplest-first here.
 
 Two smaller undecideds: whether the successor should carry a `profile` (the route resolves it from
 the reader today, and a server-enqueued job has no route), and whether `enqueueSuccessorIn` belongs

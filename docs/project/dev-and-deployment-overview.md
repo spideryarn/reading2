@@ -93,6 +93,11 @@ reference, and is authoritative wherever the two disagree.
   (measured, and it is not the RAM that blocks it), and both runbooks — the trunk flip to `dev`, run
   2026-09-02, and getting the Mac out of Dropbox, done 2026-09-01.
 
+- **[cron-scheduler.md](cron-scheduler.md)** — there is no scheduler, and nothing here runs on a
+  clock. Why that keeps producing sweepers with no caller (two of them so far, both correct code that
+  is never called), the rule that follows — don't write a cleanup you cannot call — what we do
+  instead, and the four jobs that would justify a real cron if it ever gets built.
+
 Connecting to the **remote** database — which host, the SSL `pg` does not do by default, and the
 command that migrated the wrong machine while printing success — is in
 [database.md § Connecting to the remote](database.md#connecting-to-the-remote).

@@ -374,19 +374,25 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      job resumes from its artefacts, the same reason `jb-gone` is. See
      `STEP_STOPPED`. */
   "jb-stopped": "retry",
-  /* **The seven steps that know why they stopped**, and six of them are
-     `blocked` — see § the steps that know why they stopped below for what that
-     narrows and why. They are `jb-` rather than `ai-` because none of them is a
-     model call: four are a document that is not there, is not what it claims, or
-     has no words in it, and three are a Sketch that has to be drawn before the
-     painting can be.
+  /* **The steps that know why they stopped** — seven when this note was
+     written, eight since the capability floor joined them on 2026-09-06, and
+     all but one `blocked`: see § the steps that know why they stopped below for
+     what that narrows and why. They are `jb-` rather than `ai-` because none of
+     them is a model call: five are a document that is not there, is not what it
+     claims, or has too few words in it to build from, and three are a Sketch
+     that has to be drawn before the painting can be.
 
-     `jb-source-damaged` is the one `bug` of the seven: a stored object that does
-     not hash to its own name is an invariant of ours that broke, and it is the
-     only one of the seven the reader has no move against. */
+     `jb-source-damaged` is the one `bug` of them: a stored object that does not
+     hash to its own name is an invariant of ours that broke, and it is the only
+     one the reader has no move against. */
   "jb-source-gone": "blocked",
   "jb-source-damaged": "bug",
   "jb-no-article": "blocked",
+  /* The capability floor, 2026-09-06: Readability handed back a parse it had
+     itself concluded had failed, and stage 2 used to publish it. Its own code
+     rather than `jb-no-article`'s because a code names a branch — there the
+     library found nothing at all, here it found too little. */
+  "jb-too-little-text": "blocked",
   "jb-no-text": "blocked",
   "jb-no-sketch": "blocked",
   "jb-sketch-stale": "blocked",
@@ -1010,6 +1016,52 @@ export const PAGE_HAS_NO_ARTICLE: ReaderFacingFailure = {
     "would be handed the same page again, so it is the address it came from that needs looking " +
     "at. [jb-no-article]",
 };
+
+/**
+ * **The page came back, and there was not enough of it to read** — the
+ * capability floor's sentence, and the count is in it deliberately.
+ *
+ * A factory rather than a constant for that one reason: *"there was no article"*
+ * is a verdict the reader can only take on trust, where *"185 characters"* is a
+ * fact they can check against the page they were looking at. It is also the
+ * fastest way for somebody reporting this to say which page they meant.
+ *
+ * **It says "usually", and it never says this is an error page.** The rule that
+ * produced it does not know that: it reads no markup and makes no claim about
+ * what the page *is* — only that there is too little text here to build
+ * anything from, which is equally true of a genuinely tiny real page
+ * (src/extract.ts § `capabilityFloor`). So the causes are named as the usual
+ * ones and the short-honest-page case is named beside them, because a reader
+ * whose genuinely 300-character page was refused must not be told they were shown a wall.
+ *
+ * **Its own code rather than `jb-no-article`'s**, on the rule the two failures
+ * either side of it already follow: a code names a branch, and a reader quoting
+ * four characters should land whoever is helping on the right one. The move is
+ * the same for all three; the finding is not.
+ *
+ * The floor is Readability's own constant, not ours —
+ * docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md § C1a.
+ */
+export function pageHadTooLittleText(chars: number): ReaderFacingFailure {
+  return {
+    kind: "blocked",
+    /* **The threshold is not in the sentence, only the count.** The reader has
+       no use for our number and cannot act on it — and `tests/messages.test.ts`
+       reads any bare 400-599 in a sentence as a leaked HTTP status, which 500
+       is. The count is the fact about *their* page; the threshold is ours. */
+    message:
+      /* **"could be read as article text", not "of text"**, which the reader
+         would hear as the whole page. It is the count of what the extractor got
+         out of it: Medium's 404 shell has 249 characters visible and this
+         reports 185, and a sentence that conflated the two would send somebody
+         to count words on a page. GPT Sol, 2026-09-06. */
+      `There was not enough on the page that was fetched to build an article from — only ${chars} ` +
+      "characters of it could be read as article text. That is usually a login wall, an error " +
+      "page, or a page whose words only appear once its own scripts have run, though a genuinely " +
+      "very short page ends the same way — and this step would be handed the same page again, so " +
+      "it is the address it came from that needs looking at. [jb-too-little-text]",
+  };
+}
 
 export const ARTICLE_HAD_NO_TEXT: ReaderFacingFailure = {
   kind: "blocked",
@@ -3755,18 +3807,35 @@ export const TIMELINE_THIN =
    below is about *this search*, and the grammar is what carries that.
    docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § 2.  */
 
+/* **These are lead sentences now, not the contents of a headed section.** Until
+   2026-09-06 the panel drew two headed groups, so each of these sat under a
+   heading that said which of the two searches it was about, and none of them had
+   to name its own search. The heading is gone — one list, each row
+   self-labelling — so **every sentence here has to say which search it is
+   about in its own words**, and that is why the two "unverified" forms were
+   rewritten rather than moved.
+   docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md § 1. */
+
 /**
- * **The search came back with no pages to look at.** Group one.
+ * **No page came back that responds to this piece.** The first of the two forms
+ * the lead sentence takes.
  *
  * `returnedSources === 0`: the pass ran, it reported a positive search count —
  * zero would have failed the whole step — and not one admissible page came back
  * with it.
+ *
+ * **It says *by name*, and that is the whole of the claim.** What a direct row
+ * has to prove is that the page identifies *this* article — its address, its
+ * words, or its title. A page that argues against the piece without ever having
+ * heard of it is not missing from this answer; it is in the rest of the list,
+ * which is what `DEBATE_CLAIMS_FOLLOW` goes on to say.
  */
-export const DEBATE_RESPONSES_NONE = "This search did not find any responses to this piece.";
+export const DEBATE_RESPONSES_NONE = "No page the search found responds to this piece by name.";
 
 /**
- * **The search came back with pages, and not one of them could be checked.**
- * Group one, and a different fact from the sentence above.
+ * **Pages came back, and not one of them could be checked.** The second form,
+ * and a different fact from the sentence above — which is why this one carries
+ * the count and that one cannot.
  *
  * Every quotation is located in the *extract the search engine returned*, which
  * ran 236–4,945 characters in the Stage 0 measurements, of pages that may run to
@@ -3774,18 +3843,44 @@ export const DEBATE_RESPONSES_NONE = "This search did not find any responses to 
  * slice loses its row (Sol's F18). That is the right direction to fail in — we
  * lose a true row rather than admit an unchecked one — and it is emphatically
  * not the same news as *nothing came back*.
+ *
+ * The number is `returnedSources`: **pages the search returned**, not rows the
+ * model reported and not rows we refused. A reader told *"4 pages"* can weigh
+ * how thin the answer is; told nothing, they cannot tell this sentence from the
+ * one above it.
  */
-export const DEBATE_RESPONSES_UNVERIFIED =
-  "The search returned possible responses, but the excerpts provided were not enough to verify " +
-  "them.";
+export function debateResponsesUnverified(pages: number): string {
+  return (
+    `The search found ${pages} ${pages === 1 ? "page" : "pages"} that might respond to this ` +
+    `piece, but ${pages === 1 ? "it could not be checked" : "none could be checked"} against ` +
+    "the words it returned."
+  );
+}
 
-/** The same pair for group two, whose search asks about the claims rather than the piece. */
+/** The same pair for the other search, which asks about the claims rather than the piece. */
 export const DEBATE_CLAIMS_NONE =
   "This search did not find anyone writing about what this piece claims.";
 
-/** …and the same distinction, which is why these are four strings and not two. */
-export const DEBATE_CLAIMS_UNVERIFIED =
-  "The search returned possible sources, but the excerpts provided were not enough to verify them.";
+/** …and the same distinction, which is why these are four sentences and not two. */
+export function debateClaimsUnverified(pages: number): string {
+  return (
+    `The search found ${pages} ${pages === 1 ? "page" : "pages"} that might answer what this ` +
+    `piece claims, but ${pages === 1 ? "it could not be checked" : "none could be checked"} ` +
+    "against the words it returned."
+  );
+}
+
+/**
+ * **What the reader is looking at instead.**
+ *
+ * Appended to whichever of the two sentences above fired for the *direct*
+ * search, and only when there are claim rows below it to be looking at. Without
+ * it the lead is a dead end — *no page responds to this piece* over a list of
+ * rows, with nothing saying what the rows are. With it, the empty answer reads
+ * as a finding and a hand-off rather than as a broken panel, which is what Greg
+ * asked for.
+ */
+export const DEBATE_CLAIMS_FOLLOW = "What follows takes up what it argues.";
 
 /**
  * **The order means nothing, said out loud.**

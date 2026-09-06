@@ -78,7 +78,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx) | the line under `/read/public`'s lede — **the app's only `ControlTip` on a link to a *page* rather than on a control**, and the only one whose reader may want nothing from us at all ([public-readable-sharing.md](public-readable-sharing.md)). Greg asked for five claims in it; two of the five were false, so the card carries the idiom's two paragraphs and the page carries the claims |
 | [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | the shelf card's five action buttons — the one row where a card also has to say *why this one does nothing* ([library.md § When a button cannot do its job](library.md#when-a-button-cannot-do-its-job)) |
 | [`src/web/AccessSharing.tsx`](../../src/web/AccessSharing.tsx) | the sharing card's three controls, and its two dozen inventory chips — where a tooltip is the *only* place a row's sentence is written, which is why each chip is a `<button>` rather than a `title` attribute ([security-map.md § the inventory](security-map.md#the-owner-is-shown-the-inventory-before-they-publish)) |
-| [`src/web/styles.css`](../../src/web/styles.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |
+| [`src/web/styles/tooltip.css`](../../src/web/styles/tooltip.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |
 
 `Tooltip` is deliberately generic — nothing in it knows about the spine.
 
@@ -288,7 +288,7 @@ blink the panel out and back.
 ## The pointer cannot enter a card, and that used to be exempt
 
 Every panel is `pointer-events: none` (`.tooltip-anchor` in
-[styles.css](../../src/web/styles.css)), so moving the pointer onto a card closes it: `useHover`
+[styles/tooltip.css](../../src/web/styles/tooltip.css)), so moving the pointer onto a card closes it: `useHover`
 sees the pointer leave the trigger, and the card is not somewhere the pointer can go. That is
 deliberate and it is right for the rail — a spine card that took hover would sit on top of the band
 you are pointing at and hold itself open. The single exception is `ProseHoverCard`, which carries

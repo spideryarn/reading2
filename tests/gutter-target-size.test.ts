@@ -32,15 +32,16 @@
  * width at a given root and cannot read CSS. A copy is only safe if something
  * fails when the two disagree. This is that something.
  */
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readerCssNoComments } from "./helpers/stylesheets.js";
 import { BLK_SLOT_MIN_PX, BLK_SLOT_REM, PROSE_ALONE_MAX_REM, proseAloneMaxPx } from "../src/web/layout.js";
 
-const css = readFileSync(new URL("../src/web/styles.css", import.meta.url), "utf8")
-  // Both files quote the declarations under test at length, so a check that read
-  // them raw would be satisfied by a sentence describing what the code used to
-  // do — the trap `tests/text-alone-centring.test.ts` documents.
-  .replace(/\/\*[\s\S]*?\*\//g, "");
+// The reading-view sheets as a set, comments stripped. Both files quote the
+// declarations under test at length, so a check that read them raw would be
+// satisfied by a sentence describing what the code used to do — the trap
+// `tests/text-alone-centring.test.ts` documents. The *set* rather than
+// `src/web/styles.css`, which has held nothing but `@import`s since 2026-09-06.
+const css = readerCssNoComments();
 
 /** Every root a reader can actually land on: Chrome's font-size settings. */
 const ROOTS = [9, 12, 16, 20, 24];
@@ -62,7 +63,7 @@ function rule(selector: string): string {
      down. Taking `exec`'s single match read a rule that was perfectly correct
      and had nothing to do with the question. */
   const found = [...css.matchAll(new RegExp(`^${escaped}\\s*\\{([^}]*)\\}`, "gm"))];
-  expect(found.length, `no rule for \`${selector}\` in styles.css`).toBeGreaterThan(0);
+  expect(found.length, `no rule for \`${selector}\` in the reader stylesheets`).toBeGreaterThan(0);
   return found.map((m) => m[1] ?? "").join(" ").replace(/\s+/g, " ").trim();
 }
 

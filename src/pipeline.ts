@@ -44,7 +44,7 @@ import {
   pdfFigureMarkersIn,
 } from "./collect-assets.js";
 import { collectPdfFigures, type PdfFiguresRun } from "./collect-pdf-figures.js";
-import { ReadabilityRefused, runExtract } from "./extract.js";
+import { ReadabilityRefused, TooLittleTextToRead, runExtract } from "./extract.js";
 import {
   fetchDocument,
   type RawManifest,
@@ -122,6 +122,7 @@ import {
   ILLUSTRATE_SKETCH_PROFILE,
   ILLUSTRATE_SKETCH_STALE,
   PAGE_HAS_NO_ARTICLE,
+  pageHadTooLittleText,
   pdfTooManyPages,
   type ReaderFacingFailure,
   SOURCE_DOCUMENT_DAMAGED,
@@ -828,7 +829,7 @@ function canonicalBlock(block: Block): string {
  * blocks artefact beside them: 7 ms for the smallest, 469 ms at 669 blocks, and
  * **934 ms for the 676 KB `consciousness`**, which is the worst case in the
  * corpus. It runs once per `stepIsDone` for this one step: once per job that
- * contains `blocks`, and once per metadata-page load (src/api.ts). Accepted as
+ * contains `blocks`, and once per metadata-page load (src/store/pg.ts). Accepted as
  * temporary, against the persisted binding above.
  *
  * It is **not** short-circuited on the filesystem, where the two reads return
@@ -960,7 +961,7 @@ async function blocksMatchTheirHtml(ctx: StepContext, store: ArtifactReads): Pro
  * answer about the filesystem — the silent-success shape this seam exists to
  * remove, sitting inside the seam. There is no correct value to fall back to,
  * so there is no fallback: src/jobs.ts passes the pipeline's store, and
- * src/api.ts passes its own because the metadata page falls back to the
+ * src/api.ts passed its own because the metadata page fell back to the
  * `example/` fixture.
  */
 export async function stepIsDone(
@@ -1880,6 +1881,22 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
             throw stageFailure(
               PAGE_HAS_NO_ARTICLE,
               "Readability found no article in the fetched page.",
+            );
+          }
+          /* **The same shape, one branch along** — and `blocked` for the same
+             reason: Retry never re-runs the step that fetched the bytes, so the
+             second attempt measures the identical page and refuses it
+             identically.
+
+             The count travels on the error rather than in its prose
+             (src/extract.ts § `TooLittleTextToRead`), so the reader's sentence
+             can carry the one fact about their page they can check, and the
+             diagnostic can keep the library's name for the log. */
+          if (err instanceof TooLittleTextToRead) {
+            throw stageFailure(
+              pageHadTooLittleText(err.chars),
+              "Readability returned less than its own threshold of text; the parse it disowned " +
+                "is what stage 2 used to publish.",
             );
           }
           throw err;
