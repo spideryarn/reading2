@@ -74,8 +74,8 @@ const LONG_SNIPPET = 400;
  */
 export interface Found {
   /** Unique within one result set — `blockId` alone is not, blocks repeat. */
-  key: string;
-  blockId: BlockId;
+  readonly key: string;
+  readonly blockId: BlockId;
   /**
    * The saved search this came from, or `null` for a literal match.
    *
@@ -85,7 +85,7 @@ export interface Found {
    * is a pile of passages with no provenance, which is precisely the failure
    * the colour exists to prevent.
    */
-  runId: string | null;
+  readonly runId: string | null;
   /**
    * Which palette slot that search wears — `null` for a literal match.
    *
@@ -94,15 +94,15 @@ export interface Found {
    * between. A literal match has no slot because it belongs to no saved search:
    * it wears the one fixed search hue, the way it always did.
    */
-  slot: number | null;
+  readonly slot: number | null;
   /** The block's position in the article. What `document` order sorts on. */
-  index: number;
+  readonly index: number;
   /** Inclusive, in the block's rendered-text offset space. */
-  start: number;
+  readonly start: number;
   /** Exclusive. */
-  end: number;
+  readonly end: number;
   /** 0–100 for a meaning hit; `null` for a literal one. */
-  confidence: number | null;
+  readonly confidence: number | null;
   /**
    * **Which way this passage cuts**, −100…+100 — a referee's for/against
    * criterion and nothing else. `null` everywhere else, which is every other
@@ -122,13 +122,13 @@ export interface Found {
    * because a wash scaled by |valence| would look informative and mean
    * something else entirely.
    */
-  valence: number | null;
+  readonly valence: number | null;
   /** The model's one line on why this matches; `null` for a literal match. */
-  reasoning: string | null;
+  readonly reasoning: string | null;
   /** What the list shows. */
-  short: string;
+  readonly short: string;
   /** What the hover card shows. */
-  long: string;
+  readonly long: string;
   /**
    * How far through the article this match falls, 0 at the first word and 1 at
    * the last.
@@ -145,7 +145,7 @@ export interface Found {
    * height. The offset *within* the block is folded in too, so two hits in one
    * long paragraph are not drawn in the same place.
    */
-  at: number;
+  readonly at: number;
   /**
    * True when the model's quote could not be found in the rendered prose and
    * the whole block is marked instead.
@@ -157,7 +157,7 @@ export interface Found {
    * The panel says so, so a reader can see which kind of mark they are looking
    * at rather than wondering why one result is a slab.
    */
-  whole: boolean;
+  readonly whole: boolean;
 }
 
 /**
@@ -190,7 +190,7 @@ interface Ruler {
   total: number;
 }
 
-function ruler(texts: string[]): Ruler {
+function ruler(texts: readonly string[]): Ruler {
   const lengths = texts.map((t) => t.length);
   const starts: number[] = [];
   let running = 0;
@@ -396,9 +396,9 @@ export interface ActiveRun {
  * each result's *place* against a scale reconstructed from the same numbers.
  */
 interface Page {
-  index: Map<BlockId, number>;
-  texts: string[];
-  scale: Ruler;
+  readonly index: ReadonlyMap<BlockId, number>;
+  readonly texts: readonly string[];
+  readonly scale: Ruler;
 }
 
 /**
@@ -424,8 +424,8 @@ interface Page {
  * components ask this question, and they should share one answer rather than
  * hold five.
  *
- * The `Page` handed back is **shared, and must not be mutated.** Everything
- * that takes one only reads it.
+ * The `Page` handed back is **shared**, and its fields are `readonly` so that
+ * stays true — everything that takes one only reads it.
  */
 const pages = new WeakMap<Block[], Page>();
 
@@ -1136,10 +1136,10 @@ const MIN_STRENGTH = 0.35;
  * marks** — see `unpressed` below, which is where that matters and why.
  */
 export function hitMarks(
-  found: Found[],
+  found: readonly Found[],
   openKey: string | null,
   scale: DivergingScale,
-): Map<BlockId, Mark[]> {
+): ReadonlyMap<BlockId, readonly Mark[]> {
   const base = baseMarks(found, scale);
   /* A copy of the map, so the per-block arrays below can differ from the cached
      ones without the cache ever seeing it. */
@@ -1171,13 +1171,26 @@ export function hitMarks(
  * 2026-08-26; `TermSelection.open` in annotate.ts gives the argument, and
  * docs/plans/260905i-… § Stage 2 has the measurement.
  *
- * The arrays handed back are **shared, and must not be mutated** — as `page`'s
- * are. Every caller either reads them or spreads them into a new array.
+ * The arrays and the map handed back are **shared**, and the types say so —
+ * `ReadonlyMap` and `readonly Mark[]`, over a `readonly Found[]` key whose
+ * fields are readonly too. That is not decoration: a caller that pushed into a
+ * returned array would poison every later result for that search, and one that
+ * edited a `Found` in place would keep the offsets it had when the cache was
+ * filled. Both were demonstrated by probe, on an implementation no caller was
+ * actually abusing — docs/plans/260905i-stage2-review-sol.md § F22, pinned by
+ * tests/search-hits.test.ts § "refuses at compile time".
  */
-const unpressed = new WeakMap<Found[], Map<DivergingScale, Map<BlockId, Mark[]>>>();
+const unpressed = new WeakMap<
+  readonly Found[],
+  Map<DivergingScale, ReadonlyMap<BlockId, readonly Mark[]>>
+>();
 
-function baseMarks(found: Found[], scale: DivergingScale): Map<BlockId, Mark[]> {
-  const byScale = unpressed.get(found) ?? new Map<DivergingScale, Map<BlockId, Mark[]>>();
+function baseMarks(
+  found: readonly Found[],
+  scale: DivergingScale,
+): ReadonlyMap<BlockId, readonly Mark[]> {
+  const byScale =
+    unpressed.get(found) ?? new Map<DivergingScale, ReadonlyMap<BlockId, readonly Mark[]>>();
   const had = byScale.get(scale);
   if (had) return had;
   const byBlock = new Map<BlockId, Mark[]>();

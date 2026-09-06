@@ -84,9 +84,10 @@ const ANNOUNCE_GAP_MS = 60;
  * three mark arrays **by identity**, and a fresh `[]` per block per render is a
  * different array every time — so a literal would miss on the ~455 unmarked
  * blocks of a 551-block article, which are exactly the blocks the reuse exists
- * for. Never mutated: everything here spreads it into a new array.
+ * for. Never mutated — and `readonly` rather than `Mark[]` so it cannot be:
+ * everything here spreads it into a new array.
  */
-const NO_MARKS: Mark[] = [];
+const NO_MARKS: readonly Mark[] = [];
 
 /**
  * What one block's prose was built from, beside the `{ __html }` built from it.
@@ -103,11 +104,11 @@ interface ProseEntry {
    */
   html: string;
   /** `marksByBlock`'s array for this block — comments and anchored chats. */
-  cmts: Mark[];
+  cmts: readonly Mark[];
   /** `termMarksByBlock`'s array for this block — every glossary occurrence. */
-  terms: Mark[];
+  terms: readonly Mark[];
   /** The `hitMarks` prop's array for this block — the search's marks. */
-  hits: Mark[];
+  hits: readonly Mark[];
   /**
    * `openTerm`, but **only when this block carries that term** — otherwise
    * null.
@@ -132,7 +133,7 @@ interface ProseEntry {
  * What changes a block's html is whether the newly or previously pressed term
  * has an occurrence in *this* block. See `ProseEntry.openTerm`.
  */
-function pressedIn(terms: Mark[], openTerm: string | null | undefined): string | null {
+function pressedIn(terms: readonly Mark[], openTerm: string | null | undefined): string | null {
   if (!openTerm) return null;
   return terms.some((m) => m.id === openTerm) ? openTerm : null;
 }
@@ -141,21 +142,35 @@ function pressedIn(terms: Mark[], openTerm: string | null | undefined): string |
  * Whether this block is drawn from exactly what last render's entry was drawn
  * from — the equality contract `proseHtml` reuses on, in one place.
  *
- * **Identity for the arrays, value for the html.** The arrays come from memos
- * and from `hitMarks`, all three of which now hand back the same array when
- * nothing about that block's marks has changed, so `===` is both cheap and
- * exact; comparing their contents would be a second pass over every mark in the
- * article to save a pass over one block. The html is compared by value because
- * a re-extraction produces an equal string in a new `Block`, and rebuilding
- * 551 unchanged paragraphs on a refetch would give back what this exists to
- * save. `ProseEntry` says what each field is for.
+ * **Identity for the arrays, value for the html.** `===` is cheap and exact;
+ * comparing their contents would be a second pass over every mark in the
+ * article to save a pass over one block.
+ *
+ * **What identity survives, and what it does not.** The three producers hand a
+ * block back its own array across the two gestures this exists for: a
+ * **selection change** — a different comment, chat, term or search result
+ * pressed, where only the blocks losing and gaining the ring get new arrays —
+ * and a **streamed delta**, where the comment objects and the array are all
+ * replaced but no anchor moves. They preserve nothing across a genuine change
+ * to a source: one moved anchor rebuilds every resolved array, a new `terms`
+ * rebuilds every term array, and a new `Found[]` rebuilds every base hit array.
+ * So writing one comment re-annotates every block that carries a comment or a
+ * chat, not only the block that gained it — the html usually comes back
+ * identical and React is handed the object it already has, but the parse is
+ * paid. That is the intended shape: the gestures that repeat are the ones made
+ * cheap.
+ *
+ * The html is compared by value because a re-extraction produces an equal
+ * string in a new `Block`, and rebuilding 551 unchanged paragraphs on a
+ * refetch would give back what this exists to save. `ProseEntry` says what
+ * each field is for.
  */
 function sameInputs(
   had: ProseEntry,
   block: Block,
-  cmts: Mark[],
-  terms: Mark[],
-  hits: Mark[],
+  cmts: readonly Mark[],
+  terms: readonly Mark[],
+  hits: readonly Mark[],
   openTerm: string | null,
 ): boolean {
   return (
@@ -179,7 +194,7 @@ function sameInputs(
  * comment or a chat, so a comment and a conversation sharing one anchor cannot
  * trade places unnoticed.
  */
-function anchorKey(comments: Comment[], chats: AnchoredThread[]): string {
+function anchorKey(comments: readonly Comment[], chats: readonly AnchoredThread[]): string {
   const parts: string[] = [];
   for (const c of comments) {
     parts.push(`c\n${c.id}\n${c.blockId}\n${c.start}\n${c.quote.length}\n${c.quote}`);
@@ -203,10 +218,10 @@ function anchorKey(comments: Comment[], chats: AnchoredThread[]): string {
  * Nothing here knows which comment is open: `applyOpen` puts that on top.
  */
 function resolveAnchors(
-  comments: Comment[],
-  chats: AnchoredThread[],
-  byId: Map<BlockId, Block>,
-): Map<BlockId, Mark[]> {
+  comments: readonly Comment[],
+  chats: readonly AnchoredThread[],
+  byId: ReadonlyMap<BlockId, Block>,
+): ReadonlyMap<BlockId, readonly Mark[]> {
   const byBlock = new Map<BlockId, Mark[]>();
   const push = (blockId: BlockId, mark: Mark) => {
     const list = byBlock.get(blockId) ?? [];
@@ -246,10 +261,10 @@ function resolveAnchors(
  * `false` here would be a second spelling of the same mark.
  */
 function applyOpen(
-  base: Map<BlockId, Mark[]>,
+  base: ReadonlyMap<BlockId, readonly Mark[]>,
   openComment: string | null,
   openChat: string | null,
-): Map<BlockId, Mark[]> {
+): ReadonlyMap<BlockId, readonly Mark[]> {
   if (openComment === null && openChat === null) return base;
   const isOpen = (m: Mark) => (m.kind === "chat" ? m.id === openChat : m.id === openComment);
   const out = new Map(base);
@@ -383,7 +398,7 @@ interface Props {
    * Optional for the same reason `term` is: nothing else on this page had to
    * learn that search exists.
    */
-  hitMarks?: Map<BlockId, Mark[]> | undefined;
+  hitMarks?: ReadonlyMap<BlockId, readonly Mark[]> | undefined;
   hitStrength?: Map<BlockId, number> | undefined;
   /** The palette slots of every search that matched in each block — `blockHues`. */
   hitHues?: Map<BlockId, number[]> | undefined;
@@ -590,7 +605,10 @@ function TableViewInner({
      O(comments x blocks) plus a DOM parse each time — and folding every anchored
      conversation into the same pass would have multiplied a cost that was
      already the expensive half of this memo. */
-  const byId = useMemo(() => new Map(blocks.map((b) => [b.id, b])), [blocks]);
+  const byId: ReadonlyMap<BlockId, Block> = useMemo(
+    () => new Map(blocks.map((b) => [b.id, b])),
+    [blocks],
+  );
 
   /**
    * Every comment grouped onto its block, for the gutter's marker.
@@ -652,13 +670,13 @@ function TableViewInner({
     /** The semantic anchors, as a string — see `anchorKey`. */
     key: string;
     /** The block map those anchors were resolved against. */
-    blocks: Map<BlockId, Block>;
+    blocks: ReadonlyMap<BlockId, Block>;
     /** The resolution, with nothing marked open. */
-    base: Map<BlockId, Mark[]>;
+    base: ReadonlyMap<BlockId, readonly Mark[]>;
     /** Which comment and chat were open when `out` was built. */
     open: string;
     /** `base` with `open` applied — what the memo actually returned. */
-    out: Map<BlockId, Mark[]>;
+    out: ReadonlyMap<BlockId, readonly Mark[]>;
   } | null>(null);
 
   /**

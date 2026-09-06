@@ -290,7 +290,7 @@ function findQuote(text: string, anchor: Anchor): { start: number; end: number }
  * on a sentence containing a glossary term draw one element with both classes
  * rather than two nested ones. See `MarkKind`.
  */
-export function annotateHtml(html: string, marks: Mark[]): string {
+export function annotateHtml(html: string, marks: readonly Mark[]): string {
   /* Wrapped rather than timed at each `return`, for the reason `resolveMark`
      above gives. The fast path counts as a call: `TableView` reaches it once
      per marked block per re-annotation, and hiding the cheap calls would
@@ -303,7 +303,7 @@ export function annotateHtml(html: string, marks: Mark[]): string {
 }
 
 /** `annotateHtml` without the stopwatch. */
-function annotate(html: string, marks: Mark[]): string {
+function annotate(html: string, marks: readonly Mark[]): string {
   const live = marks.filter((m) => m.end > m.start);
   if (live.length === 0) return html;
 

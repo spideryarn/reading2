@@ -595,3 +595,239 @@ it("a removed block goes, and an article swap serves no stale prose", async () =
     expect(proseText(block.id), `${block.id} served its stale prose`).toContain("SECONDEDITION");
   }
 });
+
+/* ------------------------------------------ which occurrence, and overlap --
+   The two mutations the Stage 2 review (docs/plans/260905i-stage2-review-sol.md
+   § F20, § F21) could make to the implementation with all nine tests above
+   still green. Both are about the *key*, not about the count: a cache that is
+   fast and serves the wrong block's html is worse than no cache. */
+
+/**
+ * The same block with prose we control entirely, under its stable id.
+ *
+ * The fixture's own paragraphs say what they say; these two cases need a
+ * repeated phrase, and one word that three different sources can all cover.
+ * Fabricating the html rather than hunting for a paragraph that happens to
+ * suit keeps the offsets exact and the failure legible.
+ */
+function retext(block: Block, text: string): Block {
+  return { ...block, html: `<p>${text}</p>`, text };
+}
+
+/**
+ * Where a mark begins in its block's rendered text — i.e. **which occurrence
+ * of a repeated quote it is drawn on.**
+ *
+ * The two occurrences are the same characters, so the mark's text says nothing
+ * about which one it is and only the offset can. Counted over the row's text
+ * nodes because that is the offset space marks speak (annotate.ts § Why the
+ * offsets are DOM offsets).
+ */
+function markStart(id: BlockId, selector: string): number | null {
+  const prose = host.querySelector(`tr[data-block="${id}"] .prose`);
+  if (!prose) return null;
+  const mark = prose.querySelector(selector);
+  if (!mark) return null;
+  const walker = document.createTreeWalker(prose, NodeFilter.SHOW_TEXT);
+  let offset = 0;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (mark.contains(node)) return offset;
+    offset += node.nodeValue?.length ?? 0;
+  }
+  return null;
+}
+
+/** A phrase this fabricated paragraph says twice, and the paragraph. */
+const TWICE = "the very same words";
+const REPEATED =
+  `An opening clause, and then ${TWICE}, said once here; a second clause, ` +
+  `long enough that this reads as real prose, and then ${TWICE} again to close.`;
+const FIRST_AT = REPEATED.indexOf(TWICE);
+const SECOND_AT = REPEATED.indexOf(TWICE, FIRST_AT + 1);
+
+/** The fixture with one block replaced by `text`, and that block. */
+async function withProse(text: string): Promise<{ loaded: Loaded; block: Block }> {
+  const loaded = await readArticleFromDir(DIR);
+  const [target] = bodyBlocks(loaded);
+  if (!target) throw new Error("fixture too small");
+  const block = retext(target, text);
+  return { loaded: withBlocks(loaded, loaded.blocks.map((b) => (b.id === block.id ? block : b))), block };
+}
+
+it("a comment moved to the other occurrence of the same quote moves its underline", async () => {
+  const { loaded, block } = await withProse(REPEATED);
+  expect(SECOND_AT, "the fabricated paragraph must say the phrase twice").toBeGreaterThan(FIRST_AT);
+  /* Same id, same blockId, same quote, new objects and a new array — every
+     input to `anchorKey` except `start` is unchanged, which is exactly the
+     shape the reuse key has to notice. */
+  const at = (start: number): Comment[] => [
+    {
+      id: "c1",
+      blockId: block.id,
+      quote: TWICE,
+      start,
+      createdAt: "2026-09-06T00:00:00.000Z",
+      status: "none",
+    },
+  ];
+
+  await act(async () => {
+    root.render(draw(loaded, { comments: at(SECOND_AT) }));
+  });
+  expectRows(loaded);
+  expect(markStart(block.id, "mark.cmt"), "the comment resolved to the wrong occurrence").toBe(
+    SECOND_AT,
+  );
+
+  const seen = await transition(() => {
+    root.render(draw(loaded, { comments: at(FIRST_AT) }));
+  });
+
+  expect(
+    markStart(block.id, "mark.cmt"),
+    "the underline stayed on the occurrence the comment left",
+  ).toBe(FIRST_AT);
+  expect(seen.touched, "only the comment's block may be rewritten").toEqual([block.id]);
+  expectRows(loaded);
+});
+
+it("an anchored chat moved to the other occurrence moves its underline too", async () => {
+  const { loaded, block } = await withProse(REPEATED);
+  /* The `AnchoredThread` shape useChatAnchors.ts § `anchored` produces, with a
+     quote-and-start anchor — the only kind that draws a mark at all. */
+  const at = (start: number) => [
+    { id: "th1", title: "A conversation", anchor: { blockId: block.id, quote: TWICE, start }, turns: 2 },
+  ];
+
+  await act(async () => {
+    root.render(draw(loaded, { chats: at(SECOND_AT) }));
+  });
+  expectRows(loaded);
+  expect(markStart(block.id, "mark.chat"), "the chat resolved to the wrong occurrence").toBe(
+    SECOND_AT,
+  );
+
+  const seen = await transition(() => {
+    root.render(draw(loaded, { chats: at(FIRST_AT) }));
+  });
+
+  expect(
+    markStart(block.id, "mark.chat"),
+    "the underline stayed on the occurrence the chat left",
+  ).toBe(FIRST_AT);
+  expect(seen.touched, "only the chat's block may be rewritten").toEqual([block.id]);
+  expectRows(loaded);
+});
+
+/* One word for a comment, a glossary term and a search hit to cover at once. */
+const SHARED = "thermostat";
+const THREEWAY =
+  `A paragraph of ordinary prose, in which the word ${SHARED} sits in the middle, ` +
+  `with enough said after it that the block looks like the real thing.`;
+const SHARED_AT = THREEWAY.indexOf(SHARED);
+
+/** The comment that covers the shared word and a little either side. */
+const threeWayComment = (id: BlockId): Comment[] => [
+  {
+    id: "c1",
+    blockId: id,
+    quote: THREEWAY.slice(SHARED_AT - 9, SHARED_AT + SHARED.length + 5),
+    start: SHARED_AT - 9,
+    createdAt: "2026-09-06T00:00:00.000Z",
+    status: "none",
+  },
+];
+
+/** A search hit over exactly the shared word, as `hitMarks` would hand it over. */
+const threeWayHits = (id: BlockId) =>
+  new Map<BlockId, Mark[]>([
+    [
+      id,
+      [
+        {
+          id: "h1",
+          start: SHARED_AT,
+          end: SHARED_AT + SHARED.length,
+          kind: "hit",
+          hue: "",
+          dir: "for",
+          slot: 0,
+        },
+      ] as Mark[],
+    ],
+  ]);
+
+/**
+ * The one element that carries all three — the property under test.
+ *
+ * `annotateHtml` cuts every text node at every mark boundary in one pass, so
+ * three sources over the same word produce **one** `<mark>` with three classes.
+ * Applying any of them in a second pass would nest instead, "which reads as a
+ * rendering bug" (annotate.ts § `annotateHtml`).
+ */
+const threeWayMarks = (id: BlockId): Element[] => [
+  ...host.querySelectorAll(`tr[data-block="${id}"] mark.cmt.term.hit`),
+];
+
+/** Nesting, which is what a second annotation pass produces. */
+const nested = (id: BlockId): Element | null =>
+  host.querySelector(`tr[data-block="${id}"] mark mark`);
+
+it("a comment, a term and a hit over one word share a single <mark>", async () => {
+  const { loaded, block } = await withProse(THREEWAY);
+  const terms: TermSelection[] = [{ id: "t1", forms: [SHARED], blocks: [block.id] }];
+  await act(async () => {
+    root.render(
+      draw(loaded, {
+        comments: threeWayComment(block.id),
+        terms,
+        hitMarks: threeWayHits(block.id),
+      }),
+    );
+  });
+  expectRows(loaded);
+
+  const marks = threeWayMarks(block.id);
+  expect(marks.length, "the three sources did not compose into one mark").toBe(1);
+  const only = marks[0];
+  expect(only?.textContent, "the shared mark covers the wrong words").toBe(SHARED);
+  expect(only?.getAttribute("data-comment")).toBe("c1");
+  expect(only?.getAttribute("data-term")).toBe("t1");
+  expect(only?.getAttribute("data-hit")).toBe("h1");
+  expect(nested(block.id), "marks nested instead of sharing").toBeNull();
+});
+
+it("a hit arriving last onto a reused block still joins the same <mark>", async () => {
+  const { loaded, block } = await withProse(THREEWAY);
+  const comments = threeWayComment(block.id);
+  const terms: TermSelection[] = [{ id: "t1", forms: [SHARED], blocks: [block.id] }];
+  await act(async () => {
+    root.render(draw(loaded, { comments, terms }));
+  });
+  expectRows(loaded);
+  expect(
+    host.querySelector(`tr[data-block="${block.id}"] mark.cmt.term`),
+    "the comment and the term must share one mark before the hit arrives",
+  ).not.toBeNull();
+
+  /* Through the reuse path first, so the hit lands on an entry that was passed
+     through untouched rather than on one just built. That is the state the
+     mutation in § F21 exploited: hits applied in their own pass are invisible
+     to everything the first pass already decided. */
+  const idle = await transition(() => {
+    root.render(draw(loaded, { comments, terms, openChat: "anything" }));
+  });
+  expect(idle.work.annotateHtml, "the reuse path was not taken, so this proves nothing").toBe(0);
+
+  const seen = await transition(() => {
+    root.render(draw(loaded, { comments, terms, hitMarks: threeWayHits(block.id) }));
+  });
+
+  const marks = threeWayMarks(block.id);
+  expect(marks.length, "the hit did not join the comment and the term in one mark").toBe(1);
+  expect(marks[0]?.textContent, "the shared mark covers the wrong words").toBe(SHARED);
+  expect(nested(block.id), "the hit nested inside the marks already there").toBeNull();
+  expect(seen.touched, "only the block that gained a hit may be rewritten").toEqual([block.id]);
+  expect(seen.work.annotateHtml, "the whole article was re-annotated to add one hit").toBe(1);
+  expectRows(loaded);
+});

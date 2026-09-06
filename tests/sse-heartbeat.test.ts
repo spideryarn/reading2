@@ -22,16 +22,45 @@ afterEach(async () => {
   if (s) await new Promise<void>((r) => s.close(() => r()));
 });
 
-/** A response that beats every 15ms and then finishes, with `after` on the wire at the end. */
-async function beatFor(ms: number, after: string): Promise<string> {
+/**
+ * A response that beats every 15ms until `heartbeat` has written `wantedBeats`
+ * pings, and then finishes with `after` on the end.
+ *
+ * **The end of the beating is a condition, not a clock.** This used to run for
+ * a fixed 120ms — eight beats' worth on an idle box — and assert that three
+ * arrived, which turned a perfectly live heartbeat red inside `npm run check`:
+ * a saturated event loop fires `setInterval` far fewer times per millisecond,
+ * so the count fell to two. Waiting for the writes themselves means a loaded
+ * box merely takes longer. A heartbeat that never fires — the failure this
+ * whole file exists for — still fails, now by hanging until vitest's own
+ * timeout, which is the right way for that one to break.
+ */
+async function beatUntil(wantedBeats: number, after: string): Promise<string> {
+  let enoughBeats: () => void = () => {};
+  const beaten = new Promise<void>((resolve) => {
+    enoughBeats = resolve;
+  });
   server = createServer((_req, res) => {
     res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8" });
+    /* Count the pings at the point `heartbeat` hands them to `res.write`, so
+       "enough beats" is a fact about what the code did rather than about the
+       clock. This counter decides only when to stop; it is not the assertion,
+       and it is deliberately weaker than one — it proves the frame was
+       attempted, not that it arrived. What proves arrival is the client
+       counting the pings back out of the response body below. */
+    let beats = 0;
+    const original = res.write.bind(res);
+    res.write = ((chunk: string) => {
+      if (chunk.startsWith(": ping") && ++beats === wantedBeats) enoughBeats();
+      return original(chunk);
+    }) as typeof res.write;
     const stop = heartbeat(res, () => !res.writableEnded && !res.destroyed, 15);
-    setTimeout(() => {
+    // A microtask later, so the response is never ended from inside its own write.
+    void beaten.then(() => {
       stop();
       res.write(after);
       res.end();
-    }, ms);
+    });
   });
   await new Promise<void>((r) => server?.listen(0, "127.0.0.1", r));
   const { port } = server.address() as AddressInfo;
@@ -41,7 +70,7 @@ async function beatFor(ms: number, after: string): Promise<string> {
 
 describe("heartbeat", () => {
   it("puts bytes on the wire while there is nothing to say", async () => {
-    const body = await beatFor(120, 'event: done\ndata: {"n":1}\n\n');
+    const body = await beatUntil(3, 'event: done\ndata: {"n":1}\n\n');
     const beats = body.split("\n\n").filter((f) => f.startsWith(": ping")).length;
     expect(beats).toBeGreaterThanOrEqual(3);
     expect(body.endsWith('event: done\ndata: {"n":1}\n\n')).toBe(true);
