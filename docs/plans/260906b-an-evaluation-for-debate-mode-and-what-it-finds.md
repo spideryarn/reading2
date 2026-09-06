@@ -519,10 +519,46 @@ were applied and all seven were caught.
 first, then claim rows, search order within each — `DEBATE_NO_RANKING` stands and the list is **not**
 sorted by level. Each row self-labels: direct rows carry the identification chip with the tooltip
 listing every signal found, claim rows keep `On what it claims` and their *Answering "…"* line. The
-empty first section becomes the one sentence, in its three forms, from § 1.
+empty first section becomes the one sentence from § 1.
 
-**Done:** the panel renders all three empty forms and a populated list, seen in a real browser by a
-Sonnet subagent, not inferred from tests.
+**§ 1 listed three forms and the panel needed four** — found while building it. The plan's pair covers
+only *direct empty, claims present*: if the **claims** search also comes back empty, *"What follows
+takes up what it argues"* is false and the claims-side finding vanishes with it. So the lead says both
+facts when both are empty, and promises what follows only when something does. The third form
+(everything hidden by the bar) stays P3's, and stays silent because `hiddenNote` already says it.
+
+**Done — landed 2026-09-06.** The `Group` component is gone; one list, direct rows then claim rows,
+search order within each, no sort by level. Each row self-labels with a chip — *Links this piece* /
+*Quotes this piece* / *Names this piece*, or *On what it claims* — and the direct chip's tooltip lists
+every signal from `identifiesOf` with the matched URL, the located quote, and coverage and density as
+two separately-named percentages. **The three levels are drawn identically**, ordered but not
+coloured along that order: a ramp over one fact is the composite this plan refused.
+
+**The bug the browser found and the tests could not.** Every debate artefact in the local database
+predates `sourceIsCopy`, and `isDebateDocument` validates two arrays and nothing else — so the counter
+read back `undefined`, `Math.min` made it `NaN`, `NaN` failed every clause guard, and the foot line
+printed *"offered 5 of these; 3 are shown — ."* with both counts intact and the whole explanation
+gone. **That is the exact failure the counter was added to prevent, arriving through the counter
+itself.** Reproduced red first, then fixed.
+
+That fix and `anyLost`'s hole — the same field, unguarded, in `src/types.ts` — were consolidated into
+one **`lossesOf`**, which fills every counter off a stored artefact *and* is the exhaustiveness gate:
+a new field stops its literal compiling, so both readers pick it up instead of dropping it. Checked by
+adding an unlisted field and watching it fail. It also hardens against a stored `null`, string or
+negative, because the type says `number` and the row came from a database.
+
+**Two findings from the screenshots, both left for the review to judge:**
+
+- **The density ceiling catches a *near-self* mirror, which `sameTarget` cannot.** Cargo Cult's own
+  address is `calteches.library.caltech.edu/51/2/CargoCult.htm`, and the search returned a different
+  path on that same host — admissible, 65% density. `selfSource` misses it because the paths differ,
+  and the plan cut "same host, different path" as zero information because anthropic.com hosts both
+  constitutions. Density answers both cases without a host rule.
+- **Two different numbers on one screen are both called "pages".** The panel header shows
+  `distinctSources` of the rows shown (*"7 pages"*), and the lead sentence shows the direct pass's
+  `returnedSources` (*"found 10 pages"*). Both are true and they are different facts. The header
+  predates this stage, but the headings that used to scope the sentence are gone, so the collision is
+  new. A wording call, not a counting bug.
 
 **P3 — the bar.** `src/web/threshold.ts` unchanged and reused, on the one fact, over direct rows only;
 claim rows carry no level and never sit under it. Three stops labelled with the words. New `?name` in
