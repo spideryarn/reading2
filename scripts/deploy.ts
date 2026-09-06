@@ -66,7 +66,6 @@ import {
   postApplyProblems,
   missingGateFixtures,
   readLogQuery,
-  retiredNotes,
   rollbackAdvice,
   sawSmokeLine,
   scanSql,
@@ -1153,11 +1152,6 @@ async function verifyHealth(expected: Expected): Promise<void> {
     return;
   }
   record("GET /api/health", judgeHealth(body, { ...expected, path: "/api/health", region: REGION }));
-
-  /* Reported, never failed on — see `retiredNotes`. This is the one place the
-     chore is visible to somebody who can actually do it: the Vercel credential
-     is on this machine and nowhere else the agents work. */
-  for (const note of retiredNotes(body)) info(`still to remove: ${note}`);
 
   /* The client half of the stamp. A working page in front of an API that has
      moved is the failure nothing else here would notice. */

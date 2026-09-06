@@ -23,12 +23,13 @@
  *
  * ## Where it goes, and where it does not
  *
- * Every page a reader *lands on and reads*, and there are eight:
- * `LandingPage`, `FeaturesPage`, `PricingPage`, `PrivacyPage`, `ContactPage`
- * and `SignInPage` signed out, and the signed-in pages of the same shape — the
- * shelf, `/profile`, and those same policy and marketing pages when a signed-in
- * reader opens them. `/pricing` is the seventh, since 2026-09-03, and
- * `/contact` the eighth, since 2026-09-05.
+ * Every page a reader *lands on and reads*, and there are nine:
+ * `LandingPage`, `FeaturesPage`, `PricingPage`, `PrivacyPage`, `ContactPage`,
+ * `ChangelogPage` and `SignInPage` signed out, and the signed-in pages of the
+ * same shape — the shelf, `/profile`, and those same policy and marketing
+ * pages when a signed-in reader opens them. `/pricing` is the seventh, since
+ * 2026-09-03, `/contact` the eighth, since 2026-09-05, and `/changelog` the
+ * ninth, since 2026-09-06.
  * `tests/site-footer.test.tsx` pins the list, so this paragraph and the code
  * cannot drift apart quietly — and it was the test, not this paragraph, that
  * was right for a day (GPT Sol, stage 2 code review, finding 6).
@@ -97,6 +98,7 @@ import type { ReactNode } from "react";
 
 import { Link } from "./Link.js";
 import {
+  CHANGELOG_HREF,
   CONTACT_HREF,
   FEATURES_HREF,
   LIBRARY_HREF,
@@ -126,7 +128,7 @@ import {
  */
 type FooterPage = Extract<
   Route["kind"],
-  "library" | "features" | "privacy" | "pricing" | "contact"
+  "library" | "features" | "privacy" | "pricing" | "contact" | "changelog"
 >;
 
 /**
@@ -154,6 +156,11 @@ const LINKS: readonly { href: string; label: string; here: FooterPage }[] = [
      page that also tells them the Feedback button is better, is the trade Greg
      took. docs/plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md. */
   { href: CONTACT_HREF, label: "Contact", here: "contact" },
+  /* Added 2026-09-06 with `/changelog` — same claim, same array-is-the-edit.
+     "What's new" rather than "Changelog": the latter is the internal name for
+     the process that writes the page (docs/project/changelog.md), and a
+     reader has never heard of it. */
+  { href: CHANGELOG_HREF, label: "What’s new", here: "changelog" },
 ];
 
 const LINK_CLASS = "tw:text-ink-faint tw:hover:text-highlight";

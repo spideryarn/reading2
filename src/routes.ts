@@ -690,8 +690,10 @@ async function sendPlate(
  *
  * **Immutable, and it can be**: the URL contains the hash of its own contents.
  * `private` because the article is one reader's — a shared cache must not hold
- * it. The public twin deliberately answers `no-store` instead, and
- * `servePublicAsset` in src/public/routes.ts says why.
+ * it. The public twin deliberately answers `no-store` instead: `sendBytes`
+ * (src/public/routes.ts) sets no `Cache-Control` at all, because `serveApi` has
+ * already set `no-store` across the whole public namespace before dispatch, and
+ * that function's header says why the two answers must differ.
  */
 async function sendArticleAsset(
   res: ServerResponse,

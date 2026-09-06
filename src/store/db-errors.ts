@@ -54,8 +54,8 @@
  *
  * 1. **An error carrying a numeric `status`.** That is this codebase's mark for
  *    "I chose this failure and I chose its wording" — a 404 for a slug with no
- *    article, a 501 from `notMigrated`. Translating those would tell a reader
- *    who mistyped a slug that the app is broken.
+ *    article, a 501 from a seam with no Postgres implementation. Translating
+ *    those would tell a reader who mistyped a slug that the app is broken.
  * 2. **`ChatConflict`.** src/routes.ts answers 409 on `instanceof`, so eating it
  *    would turn a stale second tab into a server fault. This used to add "nothing
  *    routed through the guard throws one yet — the Postgres chat store is not

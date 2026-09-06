@@ -33,8 +33,9 @@
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
  * § F; docs/project/testing.md § When a skip is not acceptable).
  *
- * The flag is still set below and nothing reads it. It stays for the length of
- * one deployment beside the tombstone in src/store/live.ts, and goes with it.
+ * The flag is still set below and nothing reads it — a leftover, kept only
+ * because removing it touches a dozen suite headers that cite it as the way to
+ * turn a skip into a failure. Nothing depends on its value.
  *
  * **`--offline` no longer buys a usable run of the test gate** — there is
  * nothing left for it to switch off — and it says so in the summary rather than

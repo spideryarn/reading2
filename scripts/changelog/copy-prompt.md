@@ -161,9 +161,12 @@ of preference:
 
 1. **The feature in the app**, when one exists. The addresses you may use are exactly these — do not
    guess others:
-   `/read` (your library), `/read/public`, `/features` (every mode, with a screenshot — the link for
-   any change to a mode), `/pricing`, `/profile`, `/contact`, `/privacy`. No fragments (`#…`): the
-   pages have none.
+   `/` (your library, the shelf), `/read/public`, `/features` (every mode, with a screenshot — the
+   link for any change to a mode), `/pricing`, `/profile`, `/contact`, `/privacy`.
+   No fragments (`#…`): the pages have none.
+   The shelf is the site root and nothing else — an address beginning `/read/` needs an article
+   after it, so the obvious-looking one for "your library" is a page that does not exist. That was
+   in this list until 2026-09-06 and 32 entries used it.
    Do not link to a specific article: you do not know which ones the reader has.
 2. **The commits**, on `https://github.com/spideryarn/reading2/commit/<full sha>`, for readers who
    want to see the work. One link labelled *the change* to the main commit is usually enough; if an
