@@ -3,7 +3,7 @@
  *
  * It lives in a module of its own because two things now say it out loud — the
  * masthead over an article you are already reading (src/web/Masthead.tsx), and
- * the library card you decide from before you open it (src/api.ts). Those run
+ * the library card you decide from before you open it (src/library-scalars.ts). Those run
  * on opposite sides of the wire, so nothing would ever have told us they had
  * drifted: the card would say 47 min, the masthead 54, and both would look
  * perfectly reasonable on their own page. See docs/reusable/silent-success.md.

@@ -106,19 +106,18 @@ await pgReady({
 const liveIt = it.skipIf(!auth.ready);
 
 /**
- * The route cases need the database. They do **not** need the Postgres store,
- * and requiring it was a mistake worth naming.
+ * The route cases need the database. Requiring the Postgres store on top of
+ * that was a mistake worth naming.
  *
- * `/api/admin/users` answers 501 on the filesystem store — `adminOnFiles` in
- * src/store/index.ts refuses rather than returning an empty list, deliberately.
+ * `/api/admin/users` answered 501 on the filesystem store — `adminOnFiles` in
+ * src/store/index.ts refused rather than returning an empty list, deliberately.
  * The first version of this file therefore skipped the route cases unless
  * `SPIDERYARN_STORE=postgres`, which meant that under a plain `npm test` the
  * real token never crossed the real gate at all: the one joint this file exists
  * for was the one it did not test. GPT Sol, on the built code, 2026-08-31.
  *
- * A 501 is *past* the gate — reaching `adminOnFiles` at all means the admin
- * check said yes — so it is the right assertion to make there. What the store
- * changes is only which success looks like success.
+ * A 501 was *past* the gate — reaching `adminOnFiles` at all meant the admin
+ * check said yes — so it was the right assertion to make there.
  */
 /* 200, unconditionally, since 2026-09-05: this used to be `501` whenever the
    flag was not `postgres`, because the admin page's filesystem side was a

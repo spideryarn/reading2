@@ -88,18 +88,16 @@ import { pgReady } from "./helpers/pg-ready.js";
 loadEnvLocal();
 
 /**
- * **Postgres, and set before `src/routes.ts` is ever imported.**
+ * **Why the import of `handleApi` below is dynamic and everything else is not.**
  *
- * `STORE` is read once at module load in src/store/live.ts, so this has to
- * happen above the dynamic import of `handleApi` below — which is why that one
- * import is dynamic while everything else in this file is not.
+ * `STORE` was read once at module load in src/store/live.ts, so the store had to
+ * be pinned above that import. The flag and that file went on 2026-09-06.
  *
- * The default is the filesystem store, and the first version of section 4 ran
+ * The default was the filesystem store, and the first version of section 4 ran
  * against it and **failed**: person B was handed person A's profile. That is
  * not a bug in the gate, it is the filesystem store having no owner column and
  * nowhere to put one — one directory per slug under `data/`, one profile file,
- * no second reader. It is why src/store/index.ts now refuses to boot on
- * `files` in production, and why that refusal is a throw rather than a warning.
+ * no second reader.
  */
 
 const ALICE = "00000000-0000-4000-8000-0000000000a1" as OwnerId;

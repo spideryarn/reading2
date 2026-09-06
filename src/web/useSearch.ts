@@ -41,7 +41,7 @@ import { apiFetch, failure, fetchOk, readJson } from "./lib/api.js";
  * A saved run, plus the one thing about it that is not on the run.
  *
  * `stale` is *derived here and never stored* — the same rule `loadGlossary` and
- * `loadTweets` follow on the server (src/api.ts): a flag written at generation
+ * `loadTweets` follow on the server (src/store/pg.ts): a flag written at generation
  * time is right until the moment it matters. The run carries the fingerprint of
  * the article it was answered against; the article carries its fingerprint now;
  * `isStale` compares them, and it is the same function the server uses so the

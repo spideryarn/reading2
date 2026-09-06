@@ -5,7 +5,7 @@
  * ## The choice is gone, and this is what that means here
  *
  * `SPIDERYARN_STORE` selected between a directory under `data/` and Postgres
- * until 2026-09-05, when the flag and the filesystem store went
+ * until 2026-09-05, when the filesystem store went
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
  * § F). Every seam below is now the Postgres adapter, unconditionally, and the
  * three refusals that used to stand in for a filesystem side — admin, sharing,
@@ -168,7 +168,7 @@ import { postgresBlobStore } from "./blobs.js";
  * because a check nobody runs is one somebody deletes.
  *
  * The store itself is discarded: the fetch and upload paths call `blobStore()`
- * for their own, following the credentials (blobs.ts § Why selection does not
+ * for their own, following the credentials (blobs.ts § Why selection never
  * read `SPIDERYARN_STORE`). Constructing one here is how the pair is checked.
  */
 if (!process.env.VITEST && process.env.NODE_ENV !== "test") {
@@ -252,7 +252,7 @@ export const chatStore: ChatStore = guarded("chat", pgChatStore);
 export const searchStore: SearchStore = guarded("searches", pgSearchStore);
 
 /**
- * **A referee's own criteria, run over the paper** — the same flag as the
+ * **A referee's own criteria, run over the paper** — the same store as the
  * searches beside it, and for the same reason plus one of its own.
  *
  * The general reason first: a criterion written to a file while the article it
@@ -262,7 +262,7 @@ export const searchStore: SearchStore = guarded("searches", pgSearchStore);
  *
  * The one of its own is `comments.criterion_id`. The referee's *own* placement
  * of a passage is a comment (drizzle/0043), and it carries a foreign key to
- * `(article_id, id)` on this table. Comments follow the flag; if criteria did
+ * `(article_id, id)` on this table. Comments live in Postgres; if criteria did
  * not, a referee's mark would point at a row that store cannot see.
  *
  * `guarded(...)` is not optional. The parameters Drizzle puts into a failed
@@ -505,17 +505,15 @@ export const fetchAllowanceStore: FetchAllowanceStore = guarded(
 /* -------------------------------------------------------- the AI ledger -- */
 
 /**
- * **Every model call this app has paid for**, in whichever store is live.
+ * **Every model call this app has paid for.**
  *
- * Selected and guarded in [ai-calls.ts](ai-calls.ts) rather than here, because
+ * Bound and guarded in [ai-calls.ts](ai-calls.ts) rather than here, because
  * `src/jobs.ts` needs it too and cannot import this file without closing a
- * cycle — the same reason `live.ts` is its own file. Re-exported so that a route
- * does not have to know where it lives.
+ * cycle. Re-exported so that a route does not have to know where it lives.
  *
- * The one thing worth saying that is not obvious from the line: **this is a
- * genuine second implementation, not the fallback the header forbids.** Nothing
- * catches a Postgres error and writes a file instead; the flag chooses at boot
- * and the other adapter is never consulted. The alternative — always Postgres,
+ * There was a second implementation until 2026-09-05, and it was a genuine one
+ * rather than the fallback the header forbids: nothing caught a Postgres error
+ * and wrote a file instead. The alternative — always Postgres,
  * warn and carry on when there is no `DATABASE_URL` — would have made the
  * **default** configuration the one that records nothing, with a warn line that
  * becomes background noise inside a week. GPT Sol's call, 2026-08-28; it
@@ -528,20 +526,12 @@ export { costStore } from "./ai-calls.js";
 /**
  * **The journal of live conversations** — issued, connected, closed.
  *
- * Selected the way `chatStore` and the rest are, with two real implementations
- * and a flag: `guarded()` is not used only because that helper is shaped for the
- * seams above it. There is nothing about a session journal a file cannot hold,
- * so this is deliberately **not** one of the filesystem *refusals* three
- * sections up — `AdminStore`, `VisibilityStore` and `FeedbackStore` refuse
- * because there is genuinely no user list, no visibility column and no feedback
- * table on a filesystem, and refusing here would only turn off a working feature
- * on every default checkout.
+ * `guarded(...)` like the seams above it.
  *
  * The row it writes is what makes a live conversation *visible* even when it
  * reports nothing at all — see `realtimeSessions` in ../db/schema.ts, and
  * docs/project/live-conversation.md. Postgres is where this belongs and where
- * production reads it; the filesystem adapter exists so the laptop default keeps
- * working.
+ * production reads it.
  */
 export const realtimeSessionStore: RealtimeSessionStore = guarded(
   "realtime-sessions",

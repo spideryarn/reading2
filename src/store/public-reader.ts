@@ -31,7 +31,7 @@
  * ## What this file may import
  *
  * The schema, the connection, `publicSlug`, the sanitiser, and pure helpers.
- * **Not** `src/api.ts`, `src/store/index.ts`, `src/store/pg.ts`, any writer, or
+ * **Not** `src/store/index.ts`, `src/store/pg.ts`, any writer, or
  * anything that can reach the AI gateway — tests/public-imports.test.ts walks
  * the graph from `src/public/routes.ts` and fails if any of those appear.
  * `currentOwnerId` is not in the graph either, and that is the fourth of the

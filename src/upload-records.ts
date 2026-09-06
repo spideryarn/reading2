@@ -49,7 +49,7 @@ export { isUploadId } from "./store/uploads.js";
  * than a note. This module imports one leaf adapter and closes nothing.
  *
  * It was `STORE === "postgres" ? pgUploadStore : fsUploadStore` until
- * 2026-09-05, when the flag and the filesystem store went.
+ * 2026-09-05, when the filesystem store went.
  */
 const store: UploadStore = pgUploadStore;
 

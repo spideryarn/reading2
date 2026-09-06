@@ -68,9 +68,7 @@ import { IllegalTransition } from "../src/store/uploads.js";
    underneath it, because the revision lifecycle was the one store selected by
    the flag at *use* rather than guarded at *export*. That store is gone
    (2026-09-01), and every store left below exports one already-guarded object
-   and consults no flag — which is what guarding at the export bought.
-   tests/db-error-scrub.test.ts still explains the hoisting trick if it is ever
-   needed again. */
+   and consults no flag — which is what guarding at the export bought. */
 
 /* --------------------------------------------------- 1. the stores, asked -- */
 
@@ -80,8 +78,8 @@ describe("the stores selected outside src/store/index.ts", () => {
    * `src/jobs.ts` and `src/upload-records.ts` get, so a future edit that hands
    * back a raw store fails here rather than in production.
    *
-   * No `SPIDERYARN_STORE` needed — these modules export one object each and do
-   * not consult the flag. That is what guarding at the export bought.
+   * These modules export one object each, already guarded. That is what
+   * guarding at the export bought.
    */
   it("hand out a guarded job store", async () => {
     const { pgJobStore } = await import("../src/store/pg-jobs.js");

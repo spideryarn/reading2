@@ -730,7 +730,7 @@ export async function runExtract(opts: {
   }
 
   /* The metadata is the article's identity — the only place the source URL, the
-     byline and the fetch date survive past this stage (src/api.ts reads it).
+     byline and the fetch date survive past this stage (src/store/pg.ts reads it).
      Rebuilt on every run: re-extracting is how you refresh a page, and the
      fetch date should follow. */
   /* Readability has been handing `publishedTime` back all along and this stage
