@@ -593,7 +593,10 @@ prompt half — make them easier — needs none of it and is being built.
 ## The result: the gate held, and it is anchor 2 that tripped it
 
 Run `output/summaries-runs/2026-09-05T18-04-46`, seven arms, seven documents, three judging repeats,
-854 of 854 calls returned, $2.5853 all in.
+854 of 854 calls returned, $2.5853 all in. That directory was gitignored and its worktree is gone;
+the `results.md` is promoted to
+[`evals/results/summaries/2026-09-05T18-04-46-socratic-questions.md`](../../evals/results/summaries/2026-09-05T18-04-46-socratic-questions.md)
+and is all that survives of the run.
 
 **No ranking is reported**, and that is the declared outcome rather than a disappointment. The
 calibration gate is `MAX_ANCHOR_INVERSIONS = 0`, written down before the run, and the run produced
