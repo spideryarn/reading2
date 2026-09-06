@@ -1,0 +1,342 @@
+/* diagram-illustrated.css — the Illustrated sub-mode of Diagram: the plate, the
+   scroller, full screen, and the words underneath a picture this stylesheet has
+   no opinion about a single pixel of. IllustratedView.tsx. */
+
+/* ---------------------------------------------------------- § illustrated ----
+ *
+ * The fifth diagram sub-mode: the Sketch's argument, painted by an image model
+ * — docs/project/diagram.md § Illustrated, src/web/IllustratedView.tsx.
+ *
+ * **This section owns almost nothing, and that is the point.** Every other
+ * picture in this file is paint: a `fill`, a `stroke-width`, a dash. This one
+ * is a JPEG fetched from `/api/illustrated/:slug/:hash.jpeg`, so the stylesheet
+ * has no opinion about a single pixel inside it. What is left is a frame, a
+ * scroller, and the type for the words underneath — which are the part a reader
+ * can check the picture against, and are therefore the part that has to be
+ * legible rather than the part that has to be pretty.
+ *
+ * **Deliberately a sibling of `§ sketch` above rather than a reuse of it.** The
+ * bar, the chip row and the overlay are the same three shapes at the same three
+ * sizes, and sharing `.sk-*` was tried in the head and rejected: the two views'
+ * bodies have nothing else in common (one is an `<svg>` with a card of fixed
+ * height under it, one is an `<img>` with a scrolling list), so a shared prefix
+ * would mean every future rule in either section having to be checked against a
+ * picture it was not written for. The cost is about twenty duplicated
+ * declarations, all of them one line, none of them arithmetic.
+ */
+
+.ill { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+
+/* The bar over the plate: which plate, and how big to show it.
+
+   **It wraps, where `.sk-bar` scrolls, and that is a correction made in a
+   browser rather than a preference.** Sketch's scene row scrolls horizontally
+   with no scrollbar, on the argument that a second line would push the picture
+   down. That works there because a Sketch scene's title is two or three words.
+   A plate's title is written by the brief model as a phrase — *"The Funnel, the
+   Fork, and the Return"* — and at 400px the first plate's chip filled the row,
+   the second was cut mid-word, and the **third was not on screen at all**, with
+   no scrollbar to say so. A reader cannot press a control they have no way of
+   knowing exists. There are at most `MAX_PLATES` of them, so wrapping costs a
+   line and only when there is more than one. Found at 1280 and 390 on
+   2026-09-03. */
+.ill-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.5rem;
+  padding: 0.3rem 0.6rem;
+  font-family: var(--font-ui); font-size: 0.81rem;
+}
+.ill-title { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Its own line, below Back and Enlarge — `flex-basis: 100%` on a wrapping row
+   is what puts it there without a second container. */
+.ill-plates { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 0.2rem; min-width: 0; order: 1; }
+/* **A visible edge on every chip, not only the selected one.** `.sk-scene` shows
+   the unselected ones as bare text and gets away with it because they sit in a
+   horizontal row, where the arrangement itself says *these are the options*.
+   These wrap onto a line each, and three lines of unboxed text read as a list of
+   headings rather than as three buttons — a control the reader cannot tell is a
+   control. Found in a browser at 1280 and 390, 2026-09-03. */
+.ill-plate-chip {
+  flex: 0 1 auto;
+  border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0.15rem 0.35rem;
+  color: var(--ink-faint); background: none; cursor: pointer;
+  font-family: inherit; font-size: inherit;
+  text-align: left;
+  /* Wraps inside the chip rather than being cut: two lines of a plate's name is
+     better than half of it, and the row is already on its own line. */
+  max-width: 100%; overflow-wrap: anywhere;
+}
+.ill-plate-chip:hover { color: var(--ink); background: var(--surface-raised); }
+/* The open one is not truncated — the one label in the row that has to be
+   readable is the one saying where you are. The row already scrolls. */
+.ill-plate-chip.on { color: var(--ink); border-color: var(--rule-strong); background: var(--surface-raised); }
+.ill-plate-chip:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.ill-up, .ill-zoom {
+  display: inline-flex; align-items: center; gap: 0.2rem;
+  border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  color: var(--ink-soft); background: none; cursor: pointer;
+  font-family: inherit; font-size: inherit;
+}
+.ill-up { flex: none; }
+.ill-zoom { margin-left: auto; }
+.ill-up:hover, .ill-zoom:hover { background: var(--surface-raised); color: var(--ink); }
+.ill-up:focus-visible, .ill-zoom:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+/* ---- the plate, and the three things it can be instead ---- */
+
+.ill-scroll {
+  flex: 1; min-height: 0; overflow: auto;
+  padding: 0 0.6rem 0.8rem;
+}
+/* **`max-width` and `max-height`, over the `width`/`height` attributes the
+   component sets from the stored record.** Those attributes are there to give
+   the browser the aspect ratio before the bytes arrive, so the list underneath
+   does not jump up the page and then back down — they are not a size, and a
+   rule that let them be one would draw a 1024px plate in a 288px band.
+
+   **The height cap is the band's, and it is what keeps the list on screen.**
+   Plates are 2:3 portrait, so at the full width of a 400px band one is 600px
+   tall and the *what it depicts* rows — the only part of this mode that can be
+   checked, and the only part that is clickable — begin below the fold with
+   nothing to say they are there. Enlarge is where a plate is actually looked
+   at, and it lifts the cap.
+
+   **38vh rather than the 46 it was first set to**, and the correction came from
+   a browser rather than from arithmetic: at 46 the first row still started 17
+   pixels below a 900-pixel viewport, because the budget above the picture is
+   not fixed — a plate row of three wrapped titles and a staleness note are both
+   real states and both real lines. The number now leaves room for those *and*
+   the first row or two. Nothing enforces it, so if the chrome above grows
+   again, measure it again rather than trusting this comment. */
+.ill-plate {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%; max-height: 38vh;
+  width: auto; height: auto;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--surface-raised);
+}
+/* A plate that is loading, that failed to fetch, or that the run never painted.
+   One rule for all three: they occupy the same place and say the same kind of
+   thing, and the words carry the difference.
+
+   **The same grey as every other failure in this band**, not a red — `.sk-failed`
+   above has the argument, including that `--destructive` is referenced in this
+   file six times and defined nowhere, so bare it is simply dropped. */
+.ill-plate-out {
+  display: flex; align-items: center; gap: 0.4rem;
+  margin: 0.4rem 0;
+  padding: 1.2rem 0.8rem;
+  border: 1px dashed var(--rule);
+  border-radius: 4px;
+  font-family: var(--font-ui); font-size: 0.81rem; line-height: 1.4;
+  color: var(--ink-faint);
+}
+
+/* ---- the sentence that says what this is ---- */
+
+/* **Not small print, and not a tooltip.** This is the one picture in the app
+   that cannot be checked against what it claims to depict, so the sentence
+   saying so sits directly under it at the same size as the rows below —
+   docs/project/diagram.md § It is an interpretation. The left rule is the same
+   device `.sk-card` uses for "this belongs to the thing above it". */
+.ill-says {
+  margin: 0.5rem 0 0.7rem;
+  padding: 0.4rem 0 0.4rem 0.55rem;
+  border-left: 2px solid var(--rule-strong);
+  font-family: var(--font-ui); font-size: 0.79rem; line-height: 1.45;
+  color: var(--ink-soft);
+}
+/* The register the model chose, in its own words — inside the brief, above the
+   prompt. Italic because it is a quote from the brief rather than our sentence. */
+.ill-style { font-style: italic; color: var(--ink-faint); }
+
+/* ---- what it depicts: the only clickable layer ---- */
+
+.ill-list-head {
+  margin: 0 0 0.3rem;
+  font-family: var(--font-ui); font-size: 0.75rem; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.ill-list { margin: 0; padding: 0; list-style: none; }
+.ill-list li + li { border-top: 1px solid var(--rule); }
+.ill-row {
+  display: block; width: 100%;
+  padding: 0.45rem 0.1rem;
+  border: none; background: none; cursor: pointer;
+  text-align: left;
+  font-family: var(--font-ui);
+}
+.ill-row:hover { background: var(--surface-raised); }
+.ill-row:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+/* **The caption that is lettered on the plate itself**, so the row and the
+   picture can be matched by eye. Small, tracked and quiet: it is a wayfinding
+   label, and the two lines under it — what is drawn, and the article's own
+   words — are what the row is actually for. Absent on a wordless plate. */
+.ill-caption {
+  display: block; margin-bottom: 0.15rem;
+  font-size: 0.68rem; line-height: 1.2; letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+.ill-row:hover .ill-caption { color: var(--highlight); }
+.ill-depicts { display: block; font-size: 0.82rem; line-height: 1.35; color: var(--ink); }
+/* **Wraps, and is never clamped.** The quote is how a reader reads the picture
+   back against the piece, so cutting it to an ellipsis would take away the
+   whole reason the row exists. `<q>` supplies its own marks, so none here. */
+.ill-quote {
+  display: block; margin-top: 0.2rem;
+  /* The article's own words, in the article's own face — `--font-reading` is
+     documented in styles/tokens.css as exactly that, and it is what makes a
+     quote read as lifted rather than as more chrome. */
+  font-family: var(--font-reading);
+  font-size: 0.82rem; line-height: 1.4; color: var(--ink-faint);
+}
+.ill-row:hover .ill-depicts { color: var(--highlight); }
+.ill-none {
+  margin: 0.4rem 0;
+  font-family: var(--font-ui); font-size: 0.79rem; line-height: 1.45; color: var(--ink-faint);
+}
+
+/* ---- the brief ---- */
+
+.ill-brief { margin-top: 0.8rem; font-family: var(--font-ui); font-size: 0.79rem; }
+.ill-brief summary { cursor: pointer; color: var(--ink-faint); }
+.ill-brief summary:hover { color: var(--ink); }
+.ill-brief p {
+  margin: 0.4rem 0 0;
+  padding-left: 0.55rem;
+  border-left: 2px solid var(--rule);
+  line-height: 1.5; color: var(--ink-soft);
+  /* The image model was sent one paragraph of prose; showing it as one is the
+     point. `pre-wrap` would honour whatever line breaks the brief model happened
+     to write, which is a fact about the JSON rather than about the brief. */
+  white-space: normal;
+}
+
+/* ---- full screen ---- */
+
+/* The same `<dialog>` `showModal()` § sketch above uses, for its four reasons.
+   The band is 288–400px and the plates are 2:3 portrait, so in the band a plate
+   is a thumbnail and **this is where one is actually looked at**. */
+.ill-full {
+  width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh;
+  margin: 0; padding: 0; border: none; background: transparent;
+  display: none;
+}
+.ill-full[open] { display: flex; align-items: flex-start; justify-content: center; }
+.ill-full::backdrop { background: rgb(0 0 0 / 0.72); }
+.ill-in-full {
+  /* Narrower than `.sk-in-full`'s 1120 because a 2:3 portrait plate at 1120px
+     wide is 1680px tall — taller than any window, so the reader would be
+     scrolling a picture instead of seeing one. At 720 it is 1080 tall, which
+     fits a laptop with the list beginning just below the fold. */
+  width: min(94vw, 720px);
+  /* **`flex: none`, or the `width` above is decoration.** This div also carries
+     `.ill`, which is `flex: 1` — and a non-`auto` `flex-basis` beats `width` for
+     the main-axis size, so inside the dialog's flex row the panel grew to fill
+     whatever space was left instead of stopping at 720. Measured in Chrome on
+     2026-09-05: 1280px of viewport gave a 1280px panel, and the 720 the comment
+     above reasons about had never once applied.
+
+     It went unnoticed because `.ill-in-full .ill-plate` caps the picture at
+     78vh, so the extra width was empty space around a correctly-sized plate
+     rather than the 1920-tall plate the comment warns of. It became visible
+     when the brief moved into a column beside it (SPIDERYARN-READING2-1P). */
+  flex: none;
+  height: 100dvh;
+  background: var(--page);
+  border-left: 1px solid var(--rule); border-right: 1px solid var(--rule);
+  display: flex; flex-direction: column;
+}
+.ill-in-full .ill-bar { padding: 0.5rem 0.8rem; font-size: 0.88rem; }
+/* The cap comes off: this is the whole reason the overlay exists. Still bounded
+   by the panel's own width, so a plate cannot run past the bottom of a laptop
+   screen and take the list with it. */
+.ill-in-full .ill-plate { max-height: 78vh; }
+/* `overscroll-behavior` stops a trackpad flick inside a tall plate scrolling
+   the article behind it — Lightbox.tsx § two things `<dialog>` does not do. */
+.ill-in-full .ill-scroll { padding: 0 0.9rem 1.2rem; overscroll-behavior: contain; }
+.ill-in-full .ill-says, .ill-in-full .ill-depicts, .ill-in-full .ill-quote { font-size: 0.86rem; }
+
+/* ---- the brief, as a column beside the plate ---- */
+
+/* SPIDERYARN-READING2-1P. A sibling of `.ill-in-full` inside the same dialog,
+   which is already a centred flex row, so the two columns sit side by side and
+   scroll independently without either knowing about the other.
+
+   **Hidden is the default, and the wide case is the exception.** Below the
+   breakpoint the band's own `<details>` is the prompt and this is not drawn;
+   above it, the two swap. One media query rather than two, so there is no
+   width at which both are on screen or neither is. */
+.ill-aside { display: none; }
+
+/* 720 for the plate column + 340 for this + the gutters. Under that, 94vw is
+   what bounds the plate and there is no room to put anything beside it. */
+@media (min-width: 1080px) {
+  .ill-aside {
+    display: flex; flex-direction: column;
+    width: 340px; height: 100dvh;
+    background: var(--page);
+    border-right: 1px solid var(--rule);
+    font-family: var(--font-ui);
+  }
+  .ill-aside-head {
+    margin: 0; padding: 0.62rem 0.9rem;
+    font-size: 0.79rem; font-weight: 600; color: var(--ink-faint);
+    border-bottom: 1px solid var(--rule);
+  }
+  /* The scroll this report asked for. `overscroll-behavior` for the same
+     reason `.ill-scroll` has it — a trackpad flick at the end of the prompt
+     must not scroll the article behind the overlay (Lightbox.tsx § two things
+     `<dialog>` does not do). */
+  .ill-aside-scroll {
+    flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+    padding: 0.7rem 0.9rem 1.2rem;
+  }
+  .ill-aside-prompt {
+    margin: 0.5rem 0 0;
+    font-size: 0.82rem; line-height: 1.62; color: var(--ink-soft);
+    /* One paragraph of prose, shown as one — `.ill-brief p`'s reasoning, which
+       is about the JSON's line breaks rather than the brief's. */
+    white-space: normal;
+  }
+  /* The band's copy stands down while this one is up, so the prompt is on
+     screen exactly once. `display: none` also takes the `<summary>` out of the
+     tab order, which a visually-hidden rule would not. */
+  .ill-in-full .ill-brief { display: none; }
+}
+
+/* What the band says while the overlay has the picture. */
+.ill.away { justify-content: flex-start; }
+.ill-elsewhere {
+  margin: 0; padding: 0.75rem 0.7rem;
+  font-family: var(--font-ui); font-size: 0.85rem; line-height: 1.45; color: var(--ink-faint);
+}
+.ill-back {
+  padding: 0; background: none; border: none; cursor: pointer;
+  font-family: inherit; font-size: inherit; color: var(--highlight);
+}
+.ill-back:hover { text-decoration: underline; }
+
+/* ---- the notes, the job, and before there is a picture ---- */
+
+.ill-note {
+  margin: 0 0.6rem 0.3rem;
+  font-family: var(--font-ui); font-size: 0.77rem; line-height: 1.35; color: var(--ink-faint);
+}
+.ill-busy, .ill-failed {
+  display: flex; align-items: center; gap: 0.4rem;
+  margin: 0;
+  padding: 0.15rem 0.7rem 0.3rem;
+  font-family: var(--font-ui); font-size: 0.81rem; color: var(--ink-faint);
+}
+.ill-wait, .ill-empty { padding: 0.75rem 0.7rem; font-family: var(--font-ui); font-size: 0.85rem; color: var(--ink-soft); }
+.ill-wait { display: flex; align-items: center; gap: 0.4rem; }
+.ill-empty p { margin: 0 0 0.5rem; line-height: 1.45; }
+.ill-empty-why { font-size: 0.81rem; color: var(--ink-faint); }
+.ill-run { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
+

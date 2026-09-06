@@ -16,7 +16,7 @@ Not the band. **The bar above it.**
 
 `index.html` carries `viewport-fit=cover`, so on a phone the document is laid out across the whole
 physical screen and each piece of fixed or sticky chrome adds back the edge it faces
-([styles.css § tokens](../../src/web/styles.css)). The controls bar does that with
+([styles/tokens.css § tokens](../../src/web/styles/tokens.css)). The controls bar does that with
 `top: var(--safe-top)` — it starts at the *bottom* of the status-bar strip, which is right, because
 that is where a bar belongs on a notched phone.
 
@@ -24,7 +24,7 @@ What sits in `[0, --safe-top)` is then somebody else's job, and on the reading v
 masthead's: `padding: calc(1.25rem + var(--safe-top)) …`, the article's title block painting itself
 up into the inset.
 
-And `styles.css § a band with no room` — the section that makes a mode a full-screen panel once the
+And `styles/narrow-window.css § a band with no room` — the section that makes a mode a full-screen panel once the
 band and the prose cannot share a screen — **hides the masthead**:
 
 ```css

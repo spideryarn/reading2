@@ -643,7 +643,7 @@ against itself and disagree with Chrome.
 A selection may start inside an `<em>` and end outside it. One `<mark>` around the whole range would
 be malformed (`<em>a<mark>b</em>c</mark>`) and the browser would quietly repair it into something
 else, so a mark becomes one `<mark>` per text node it touches. The last run carries `data-mark-end`,
-which is what the ✳ in [`styles.css`](../../src/web/styles.css) hangs off — a mark broken across
+which is what the ✳ in [`styles/annotations.css`](../../src/web/styles/annotations.css) hangs off — a mark broken across
 three runs still shows one marker. Overlapping comments share a single `<mark>` listing both ids
 rather than nesting, because two underlines on the same words read as a rendering bug.
 

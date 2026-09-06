@@ -116,7 +116,7 @@ brand specifically:
 Copy-pasteable, no new dependency. Written as plain CSS; adapt literal values to `tw:` arbitrary
 utilities per [design-css-overview.md](../project/design-css-overview.md) — chrome-level, one-off
 adjustments are Tailwind's job, and anything reused across sections should be a semantic class in
-`styles.css` rather than a repeated utility string, per that doc's rule of thumb.
+`src/web/styles/site.css` rather than a repeated utility string, per that doc's rule of thumb.
 
 ### 1. A single hero glow, reserved for one moment
 

@@ -1253,7 +1253,7 @@ function OwnedArticle({
    * The title the reader has just given this article, if they have.
    *
    * **Layered over the fetched payload rather than written into it**, which is
-   * the same shape the server uses: `titleFor` in src/api.ts does not edit the
+   * the same shape the server uses: `titleFor` in src/library-scalars.ts does not edit the
    * extractor's meta either, it picks the reader's title over it at the moment
    * of answering. Two reasons it matters here.
    *

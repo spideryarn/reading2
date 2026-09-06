@@ -24,24 +24,27 @@ here too.
 None of them blocks anything. Each is a few minutes of attention, and each has a note that already
 sets out the options and their cost.
 
-| arrived | report | the decision | written up in |
-|---|---|---|---|
-| 2026-09-05 | [1Z](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1Z) | **A yellow highlighter for quote marks?** A quote mark *is* a search hit by design, and the hue channel already means "which search found it". Yellow costs either borrowing that channel or adding a second way to draw a marked passage. | [note](260905_1754-quotes-marked-in-the-prose.md) |
-| 2026-09-05 | [21](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-21) | **The quiz slider — and the first of its three questions is fatal rather than awkward.** The centrality × easiness blend was proposed and killed on review: hard-central and easy-peripheral both sum to 6, so the tie-break opens with the hardest question, which is the complaint the report starts with. | [note](260905_1800-quiz-questions-too-hard.md) |
-| 2026-09-05 | [23](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-23) | **Was anything actually wrong?** The spinner shipped 2026-09-01 and is in production. If one that flashes for 80ms reads as no spinner, the fix is a ~300ms minimum — deliberate added latency on a path that currently has none. | [note](260905_1802-spinner-on-the-send-button.md) |
-| 2026-09-05 | [24](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-24) | **Which Socratic question wording, if any.** The eval's calibration gate failed, so it reports **no ranking** and nothing shipped. V4 reproduced Greg's own example almost word for word — and the variants that hit his shape are the longest lines on the page, against a brief that also asked for simpler language. | [plan § the lines themselves](../plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md) |
+<!-- All four were answered on 2026-09-06; see below. -->
 
-## One item that is nobody's report, and is still Greg's call
+**Answered 2026-09-06, in one sitting, and this is what happened to each** — kept here briefly
+rather than deleted, because "the file shrank" is only good news if you can see what it shrank into:
 
-**Do we re-run the structure stage across the library to pick up `toc/6`?**
+| report | the decision | what followed |
+|---|---|---|
+| [1Z](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1Z) — a yellow highlighter for quotes | **Neither option.** Greg proposed a *third* channel: a **border rather than a fill**, with stroke thickness and weight carrying the quote's priority — so search hits fill and quotes outline, and neither has to borrow from the other. Fluorescent yellow with pastel search marks is the named fallback | session `fb1z-quotes-outlined-by-priority`; [note](260905_1754-quotes-marked-in-the-prose.md) |
+| [21](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-21) — the quiz difficulty slider | **Declined, and replaced with something better.** The quiz goes **adaptive** — right answer, harder next; wrong answer, easier — which serves the goal the slider was for without a knob and without showing the reader a `band` or a `value` | session `fb21-adaptive-quiz`; [note](260905_1800-quiz-questions-too-hard.md) |
+| [23](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-23) — the send-button spinner | **No change.** The spinner shipped 2026-09-01, is in production, and a test pins it. A ~300ms minimum visible duration would mean deliberately adding latency to a path that has none, and there is no evidence yet that it is needed | [note](260905_1802-spinner-on-the-send-button.md) |
+| [24](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-24) — which Socratic wording | **Ship V4 now, then repair the eval, then tweak only if it teaches us something.** V4 reproduced Greg's own example almost verbatim; the eval's calibration gate failing is a separate defect and is not allowed to block the wording | session `fb1v-socratic-v4-and-the-eval`; [plan](../plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md) |
 
-The gist length changes (2026-09-06 — coarse lines shorter, fine lines longer, plainer words) reach
-**new articles only**. Verified rather than assumed: [`src/pipeline.ts`](../../src/pipeline.ts)
-imports only `generateHierarchy` from [`src/hierarchy.ts`](../../src/hierarchy.ts) and no version
-constant; the tree has no `outdated` mechanism of the kind glossary, quotes and ideas each have; and
-the tree-version chip came off the reading view on 2026-09-05. So an existing article keeps its
-`toc/5` gists silently and indefinitely, and the only route is *re-run a stage* on the metadata page.
+**The thing worth noticing about that sitting:** three of the four answers were **not** one of the
+options put to Greg. Two of them dissolved a trade-off an agent had accepted as fixed — the quote
+mark by using a channel nobody had thought to use, and the quiz by removing the control rather than
+tuning it. That is the argument for this file existing rather than for agents deciding faster.
 
-That is the right default — nothing is broken, nothing is charged, and nobody is shown a warning
-about a summary that reads perfectly well. But it does mean **the change Greg asked for is not
-visible on anything he has already read** until somebody decides to spend the calls.
+## Nothing is waiting on Greg
+
+Everything this file listed on 2026-09-06 has been answered. The `toc/6` question that stood here —
+whether to re-run the structure stage across the library so existing articles picked up the new gist
+lengths — was answered *"leave it, new articles only"*, and is now recorded where it belongs, in
+[hierarchy.md § A new prompt reaches new articles only](../project/hierarchy.md#prompt-versions),
+together with the re-run control that came out of the same answer.

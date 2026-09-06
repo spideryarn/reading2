@@ -4,13 +4,11 @@
  * Written ahead of the storage contracts (step 3 of
  * docs/plans/260825f-postgres-migration.md) because it is the artefact everything else
  * is judged against. **These tables are live for both reads and writes**: src/store/pg.ts
- * serves the reading view and the library out of them when
- * `SPIDERYARN_STORE=postgres`, src/store/pg-comments.ts writes to them, and a
- * pipeline job under Postgres commits its steps straight into a draft revision
- * here instead of writing `data/<slug>/*.json` — there is no importer keeping
- * the two in step any more (docs/project/database.md). Under the `files`
- * default these tables sit unused and the pipeline writes JSON as it always
- * has. docs/plans/260826e-postgres-storage-implementation.md tracks the rest of the cutover.
+ * serves the reading view and the library out of them, src/store/pg-comments.ts
+ * writes to them, and a pipeline job commits its steps straight into a draft
+ * revision here instead of writing `data/<slug>/*.json` — there is no importer
+ * keeping the two in step any more (docs/project/database.md).
+ * docs/plans/260826e-postgres-storage-implementation.md tracks the rest of the cutover.
  *
  * Two rules that outrank convenience, both from docs/project/block-ids.md:
  *
@@ -193,8 +191,8 @@ export const articles = spideryarn.table("articles", {
   /**
    * **This article is the shipped demo, not something a reader added.**
    *
-   * `example/` is a checked-in fixture that the filesystem reader serves as an
-   * ordinary article (src/api.ts § `FIXTURE_SLUG`), and at cutover it has to
+   * `example/` is a checked-in fixture that the filesystem reader served as an
+   * ordinary article, and at cutover it has to
    * exist in Postgres or a fresh clone opens onto an empty shelf. Greg's call
    * on 2026-08-26 was that it **goes in, marked as one** — so the flag is a
    * column rather than a slug the code special-cases, because "is this the

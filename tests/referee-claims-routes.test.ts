@@ -26,8 +26,8 @@
  * (docs/postmortems/260901e-claims-shipped-filesystem-only-and-returned-501-in-production.md).
  * Converting it is that postmortem's own remedy
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
- * § B). It now pins `postgres` before any import, seeds through
- * `scratchArticleInPg`, and reads back through `refereeClaimsStore`.
+ * § B). It now seeds through `scratchArticleInPg`, and reads back through
+ * `refereeClaimsStore`.
  *
  * tests/referee-routes-postgres.test.ts was written *because* this file could
  * not say anything about Postgres. Its header's argument for existing

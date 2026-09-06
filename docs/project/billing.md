@@ -867,9 +867,9 @@ otherwise, and there is one store now. Settlement joins the
 Postgres publish transaction, which has no filesystem counterpart, and writing a second
 filesystem ledger would be two implementations of one count.
 
-**This cannot leak into production**: [`src/store/index.ts`](../../src/store/index.ts) throws at
-*import* when a filesystem store is live there, so the app fails to start rather than serving
-unmetered ingests. Locally it is visible — `/api/health` warns about a non-Postgres store.
+**This cannot leak into production**: there is no second store to leak through. It used to rest on
+a boot refusal in `src/store/index.ts` and a `/api/health` warning, both of which went with the
+thing they were guarding against on 2026-09-05.
 
 ## Test and live must never cross
 

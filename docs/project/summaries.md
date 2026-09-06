@@ -36,7 +36,7 @@ nested and numbered, with one control — **Depth** — saying how far down to d
 
 Code: [`src/web/SummaryPanel.tsx`](../../src/web/SummaryPanel.tsx) (the panel),
 [`buildSummaryTree`](../../src/web/tree.ts) in `src/web/tree.ts` (the shape it draws), and
-`§ summary mode` at the end of [`src/web/styles.css`](../../src/web/styles.css). **There is no
+`§ summary mode` in [`src/web/styles/summary.css`](../../src/web/styles/summary.css). **There is no
 stage**, no artefact and no route: everything on screen arrives inside the article payload.
 
 ```
@@ -560,8 +560,8 @@ generating text nobody could see.
   [hierarchy.md](hierarchy.md), so that is where such a check would belong.
 - **A browser check reported the hover card rendering behind the pills. It does not.** Recorded
   because it cost half an hour and would cost it again. The tooltip layer is `z-index: 100`
-  (styles.css § `.tooltip-anchor`), above the spine at 45, the band at 44 and the drawer at 95, and
-  it portals into `<body>`, so nothing in the band can paint over it. What the screenshot caught was
+  (styles/tooltip.css § `.tooltip-anchor`), above the spine at 45, the band at 44 and the drawer at
+  95, and it portals into `<body>`, so nothing in the band can paint over it. What the screenshot caught was
   the 120ms opacity fade in `useTransitionStyles` — and the giveaway is in the screenshot itself: the
   card's *text* is drawn **over** the pills, uniformly translucent, rather than being occluded by
   them. A stacking failure looks like crisp pills hiding the card; this looked like both at once,

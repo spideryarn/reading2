@@ -486,7 +486,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
    * terms is one call over a whole article and belongs in the queue; checking a
    * single term is a question with a reader waiting on it, which is the shape
    * `useComments` already has. It reuses that call too — see `lookUpTerm` in
-   * src/api.ts.
+   * src/term-lookup.ts.
    *
    * **One at a time**, which is a deliberate limit and not a missing feature:
    * each of these is a model call the reader pays for, and a panel that will

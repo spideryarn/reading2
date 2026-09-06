@@ -29,7 +29,7 @@ this sits under.
 | [`src/web/PlanCards.tsx`](../../src/web/PlanCards.tsx) | the three plans, on all three pages — and, since 2026-09-04, the buttons that buy them on `/pricing` and `/profile` |
 | [`src/web/PublicShowcase.tsx`](../../src/web/PublicShowcase.tsx) | the block on `/` and `/features` that sends a stranger to a real shared article — every link in it derived from `/read/public`'s own listing, so an unshared article leaves none behind ([public-shelf.md](public-shelf.md)) |
 | [`src/web/shots.ts`](../../src/web/shots.ts) | every screenshot: file, pixel size, alt text |
-| `styles.css` § the site | the `site-*` classes — the whole visual language, in one block |
+| [`src/web/styles/site.css`](../../src/web/styles/site.css) § the site | the `site-*` classes — the whole visual language, in one file |
 
 The 2026-09-03 redesign, including the posture Greg chose and the advice he chose it against, is
 [260903g-redesign-the-signed-out-marketing-pages.md](../plans/260903g-redesign-the-signed-out-marketing-pages.md).
@@ -129,8 +129,8 @@ page was broken when it was not.
 
 ## The visual language, and the four rules in it
 
-All of it is `site-*` classes in one block at the foot of
-[`styles.css`](../../src/web/styles.css), with the reasoning beside each rule. Four things there are
+All of it is `site-*` classes in one file, loaded last —
+[`styles/site.css`](../../src/web/styles/site.css) — with the reasoning beside each rule. Four things there are
 decisions rather than taste, and are the ones to preserve:
 
 - **One glow per page.** Behind the hero, nowhere else. Every comparable site the research surveyed

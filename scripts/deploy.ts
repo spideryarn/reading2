@@ -496,8 +496,8 @@ async function preflight(): Promise<string> {
  * This list also carried `SPIDERYARN_STORE: "postgres"`, a `SUPABASE_URL` /
  * `SUPABASE_SERVICE_ROLE_KEY` pair, and `DATABASE_URL: undefined`. **None of
  * them was about the build.** `vite.config.ts` imported `src/routes.ts` at the
- * top level, which reaches `src/store/index.ts`, which throws at import when the
- * store is the filesystem one and `NODE_ENV=production` — and `vite build` sets
+ * top level, which reaches `src/store/index.ts`, which threw at import when the
+ * store was the filesystem one and `NODE_ENV=production` — and `vite build` set
  * that whatever you are doing. So the store name was here to dodge that import;
  * the Supabase pair was here because naming a Postgres store demands it; and
  * `DATABASE_URL` had to be *deleted* because an inherited real one would not
