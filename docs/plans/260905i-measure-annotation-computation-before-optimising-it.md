@@ -1,7 +1,10 @@
 # Measure annotation computation before optimising it
 
-Status as of 2026-09-06: Stage 1a measured and it convicts; Stage 1b skipped; Stage 2 built and
-tested; Stage 3 (the browser A/B) still to run.
+Status as of 2026-09-06: **done, and on `dev`.** Measured, optimised, verified in a real browser,
+reviewed by GPT Sol at every stage. Stage 1b was not needed. The headline, because it is the part
+worth carrying away: the annotation pipeline was over its budget by 3–4× and is now ~40× cheaper per
+gesture, and that moved end-to-end time by about 6% — annotation was only 10–14% of the gesture, and
+the rest is this review's A8.
 Source baseline
 `6eecb377f24d92446086a006d5b3103daae40aef` (branch `worktree-a7-annotation-measure`).
 
@@ -715,14 +718,23 @@ is what finds those, and it has been worth doing every single time here.
 - 2026-09-06 — Stage 2 built: anchor resolution keyed on the anchors rather than the comment
   objects, `open` applied in a second per-block pass, per-block input reuse in `proseHtml`, and
   `hitMarks` split from `openKey` so that reuse can hit. Nine new tests in
-  `tests/annotation-reuse.test.tsx`, four of them watched red first. Browser A/B (Stage 3) not yet
-  run, so **no reader-visible number is claimed yet.**
-- 2026-09-06 (later) — Stage 2 built, reviewed and accepted; Stage 3's A/B confirms it by
+  `tests/annotation-reuse.test.tsx`, four of them watched red first.
+- 2026-09-06 (later) — Stage 2 reviewed and accepted; Stage 3's A/B confirms it by
   deterministic call counts (`addZoomHandles` 551→1, `annotateHtml` 97→1 on a comment close) and all
   seven browser correctness checks pass. End-to-end moved ~6%, which is what a 10–14% share predicts,
   and the write-up says so rather than implying the click is fixed. Stage 2's review found two
   mutations the tests missed; both closed. A harness bug that recorded a no-op gesture as a fast one
   is fixed. Postmortem written on the pattern.
+- **Note on this log's own accuracy, 2026-09-06.** The status line at the top of this file said
+  "Stage 3 still to run" for an hour *after* Stage 3 had run and been written up two sections below.
+  The edit that should have corrected it was a string replacement with no assertion, made against
+  wording a subagent had since changed, so it matched nothing and reported success. Caught during the
+  debrief, by reading the file rather than by trusting the tool that wrote it. It is the class this
+  job's own postmortem is about
+  ([260906a](../postmortems/260906a-a-red-first-test-defends-the-change-not-the-code.md)), committed
+  in the doc that describes it — which is worth one line here, because the next person editing a long
+  plan doc with a script will reach for the same shortcut.
+
 - 2026-09-06 — the instrument landed (`src/web/annotation-cost.ts`, three modes, six sites). Stage 1a
   measured on a production build: **attributable annotation is ~30ms median per gesture on 551
   blocks, 3–4× over the 8ms threshold — optimise.** Stage 1b skipped. The breakdown cut Stage 2 from

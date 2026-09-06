@@ -63,15 +63,26 @@ that already names the mode and is already the way out of one. Then:
 
 ## What has to be worked out before this is buildable
 
-This is a sketch, not a spec. It is deliberately not staged yet, because these are the questions that
-decide the stages and none of them has been answered.
+This is a sketch, not a spec. **The blocking question — which pages — was answered on 2026-09-06 and
+is struck through below.** The rest are ordinary design work rather than things only Greg can settle,
+so this is stageable now; it has not been staged only because nobody has picked it up.
 
-- **Which pages.** The Dock is the reading view's. The wordmark is on the library, the profile, the
-  metadata page, the marketing pages and the signed-out shell — none of which has a Dock. So either
-  the corner survives everywhere except the reading view, which is an inconsistency a reader will
-  meet by navigating; or every page grows one; or the wordmark keeps a corner on pages with no
-  article to get in the way of. **This is the main design question and it should go to Greg before
-  anything is built.**
+- ~~**Which pages.**~~ **Decided by Greg, 2026-09-06: the reading view only. Every other page keeps
+  its top corners exactly as they are.** The two controls move into the Dock where there is a Dock,
+  and nowhere else — no page grows one to receive them.
+
+  The reasoning is that the reading view is the only place the 44px is expensive: it is the one page
+  whose whole job is a column of prose you scroll through, and the only one where a permanent strip
+  of chrome sits between the reader and it. The library and the profile are pages of cards and
+  fields, where a top bar is ordinary furniture and costs nothing anybody notices.
+
+  **The cost Greg accepted, stated rather than discovered later:** the wordmark moves as you
+  navigate. Going from the library into an article, the way home slides from the top-left corner to
+  the bottom-left. That is a real inconsistency and it is the price of the 44px. Two things make it
+  survivable and both should be honoured when this is built: the Dock is *already* where a reader
+  looks to leave the thing they are in, since it is how you leave a mode; and the wordmark should
+  keep its identity across the move — same glyph, same word, same colour — so it reads as the same
+  control in a different place rather than as two different controls.
 - **What the Dock can afford.** It already carries thirteen mode buttons and is under width pressure
   on a phone — `docs/project/touch.md` and § a coarse pointer in `styles.css`. Two more items is not
   free, and the wordmark is the widest single thing in the current chrome. Does it become an icon?
