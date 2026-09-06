@@ -79,7 +79,7 @@
  * three times the size of this one.
  */
 import { type MouseEvent, useRef, useState } from "react";
-import { ChevronRight, Layers } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { BlockId } from "../types.js";
 import { BlockRange } from "./BlockRef.js";
 import { TooltipGroup } from "./Tooltip.js";
@@ -181,10 +181,15 @@ export function SummaryPanel({ root, deep, onDeep, atRow, onJump }: Props) {
 
   return (
     <aside className="mode-band summ" aria-label="Summary">
-      <div className="band-head">
-        <Layers size={14} className="band-head-icon" />
-        <h2>Summary</h2>
-      </div>
+      {/* **No title row.** It said the mode's own name, which the Dock at the
+          foot of the page is already saying — Greg, 2026-09-05: *"I think we can
+          rely on the bottom bar to tell us what mode we're in, so for example
+          'Summary' mode doesn't need to say `Summary` at the top, nor o any
+          other modes."* Nothing else was in the row, so the row went with it and
+          the band starts at its content. The `<aside>`'s `aria-label` above is
+          what names the region, and always was — the `<h2>` was never carrying
+          that. docs/plans/260905d-declutter-the-reading-view-top-bars.md
+          § Stage 5. */}
 
       <div className="summ-controls">
         {/* Their structure panel's one control, and the one thing it proved:
@@ -434,7 +439,29 @@ function Entry({
           </div>
         )}
 
-        {entry.gist ? (
+        {/* **The question INSTEAD of the claim, where there is one.**
+            SPIDERYARN-READING2-24, Greg 2026-09-05, having read the first
+            version on a real article: *"I quite like some of these new Socratic
+            questions in the summary mode, but the intent wasn't that we would
+            show both the gist and the Socratic question, the intent was that we
+            would show only the Socratic question when we have one."*
+
+            That reverses what the block below this one used to argue, and the
+            argument is left standing further down rather than deleted, because
+            it was right about the questions it was written for. A question that
+            merely restated the gist could not carry a row alone; one that names
+            its topic, presupposes where the section lands and says how big the
+            answer is can. Which of those we generate is the prompt's business
+            (src/hierarchy.ts § QUESTIONS), and it is being chosen by
+            evals/summaries — the render is the same either way.
+
+            **A fallback, not a fault.** `question ?? gist` is the whole rule:
+            every article whose hierarchy predates 2026-09-05 has no question,
+            and there is nothing wrong with those rows. Only a row with neither
+            says so. */}
+        {entry.question ? (
+          <p className="summ-question">{entry.question}</p>
+        ) : entry.gist ? (
           <p className="summ-text">{entry.gist}</p>
         ) : (
           /* **Nor is the apparatus missing a summary.** A supplement node has
@@ -447,27 +474,33 @@ function Entry({
           )
         )}
 
-        {/* **The claim, then the thread it leaves open.** SPIDERYARN-READING2-1V,
-            Greg 2026-09-05: *"a bit more in the form of Socratic questions that
-            encourage the reader to read the actual text to get the full
-            answers."*
+        {/* **This is where the question used to draw a SECOND time**, under the
+            gist, from 1V that morning until 24 that evening. The argument for
+            that is worth keeping, because it was not wrong — it was scoped:
 
-            *"A bit more"* is the whole brief, and it is why this is a second
-            line rather than a rewritten gist. A panel of nothing but questions
-            fails the first thing [vision.md](../../docs/project/vision.md) asks
-            of this feature — *scan before you commit* — because a reader
-            deciding whether to descend needs to know what the section says. So
-            the gist keeps saying it, and the question is the door.
+            > *"A bit more"* is the whole brief, and it is why this is a second
+            > line rather than a rewritten gist. A panel of nothing but questions
+            > fails the first thing vision.md asks of this feature — *scan before
+            > you commit* — because a reader deciding whether to descend needs to
+            > know what the section says.
 
-            **Root and parts only**, enforced in `questionFor` rather than
-            merely asked for: one per section on a fifty-section article is
-            noise, and at the default `deep=1` these are the only rows drawn
-            anyway.
+            True of a question that restates its gist, which is what the first
+            prompt asked for in as many words (*"the question this node's text
+            answers and its gist does NOT"*), so the only honest output was a
+            bare why. It stops being true once the question carries its topic and
+            its direction. **The render did not need to be clever about which
+            kind it has**; the prompt decides, and the fallback above covers the
+            rest.
 
-            Absent on every article whose hierarchy predates 2026-09-05, and
-            nothing marks the gap — unlike a missing gist, which says so above,
-            because a missing gist is a fault and this is not. */}
-        {entry.question && <p className="summ-question">{entry.question}</p>}
+            **Root and parts only** is still enforced in `questionFor` rather
+            than merely asked for: one question per section on a fifty-section
+            article is noise, and at the default `deep=1` these are the only rows
+            drawn anyway. Note what that means now the question is the primary
+            line — a depth-1 node built by the deepening cascade has no question
+            at all, because `EXPAND_SYSTEM` has no such field, so it falls back
+            to its gist and the panel can mix the two forms at one depth. That
+            was invisible while the question was a faint second line.
+            docs/plans/260905f § P1-5. */}
 
         {/* Where this section starts and ends, as two ids you can press.
             The same pair a gist cell carries in TableView, and here for the

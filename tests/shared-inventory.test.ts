@@ -8,7 +8,7 @@
  * lists": it is the two specific failures.
  *
  * 1. **A mode drifts out of the list.** `sharedInventory` sweeps `MODES` through
- *    `visitorGap`, so a fourteenth mode is covered whether or not whoever adds
+ *    `visitorGap`, so a fifteenth mode is covered whether or not whoever adds
  *    it opens the file. The sweep below is what says so, and the positive
  *    control is that the same call, with the same modes, produces *different*
  *    buckets under different artefacts — a partition that never moves looks

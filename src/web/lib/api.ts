@@ -82,6 +82,8 @@ import {
   lastKnownUser,
   readCached,
   rememberUser,
+  reserveTicket,
+  type Ticket,
   writeCached,
 } from "./offline-store.js";
 import { noteNoConnection, noteReachedServer, noteServedCopy } from "../offline.js";
@@ -449,8 +451,23 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
    * 2026-09-03.
    */
   const { token, owner } = await accessToken();
+  /**
+   * **The queue place, taken before the request goes out.**
+   *
+   * Which of two answers to the same question is fresher has to be decided by
+   * the order they were *asked* in, and the only place that order exists is
+   * here, before `send`. See `reserveTicket` in
+   * [offline-store.ts](./offline-store.js).
+   *
+   * **After the token, not alongside it**, which costs one IndexedDB round trip
+   * on a cacheable GET. Reserving concurrently would need the owner before
+   * `accessToken()` has answered — a second `lastKnownUser()` lookup, which is
+   * precisely the cross-account race the comment above describes having fixed.
+   * GPT Sol's F12.
+   */
+  const ticket = await ticketFor(input, init, owner);
   const first = await attempt(input, init, () => send(token), owner);
-  if (first.status !== 401) return saving(input, init, first, owner);
+  if (first.status !== 401) return saving(input, init, first, owner, ticket);
 
   /* **Nobody was signed in, so there is nothing to refresh.** Without this the
      sign-in screen's own requests would each provoke a pointless refresh call,
@@ -481,12 +498,38 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
     return first;
   }
   if (!refreshed) return first;
+  /* **A fresh ticket, not the one above.** The retry is a newly issued request:
+     it may belong to a refreshed owner, and it has to see any mutation that
+     happened between the two attempts. Reusing the first ticket would let the
+     retry commit a body from before an invalidation that ran while we were
+     refreshing. */
+  const retryTicket = await ticketFor(input, init, refreshedOwner);
   return saving(
     input,
     init,
     await attempt(input, init, () => send(refreshed), refreshedOwner),
     refreshedOwner,
+    retryTicket,
   );
+}
+
+/**
+ * A place in the cache's queue for this request, or `null` if it will not be
+ * cached anyway.
+ *
+ * The two conditions are `saving`'s own, asked early so that a request that
+ * could never be kept — a POST, an uncacheable path — does not pay for a
+ * reservation. What is cached is still decided in `saving`; this only declines
+ * to reserve for what plainly is not.
+ */
+async function ticketFor(
+  input: string,
+  init: RequestInit,
+  owner: string | null,
+): Promise<Ticket | null> {
+  if ((init.method ?? "GET").toUpperCase() !== "GET") return null;
+  if (!cacheable(input)) return null;
+  return await reserveTicket(input, owner);
 }
 
 /**
@@ -661,6 +704,8 @@ function saving(
   res: Response,
   /** Whose cache to write, from when the request went out — see `apiFetch`. */
   owner: string | null,
+  /** This request's place in that reader's queue, reserved before it went out. */
+  ticket: Ticket | null,
 ): Response {
   if ((init.method ?? "GET").toUpperCase() !== "GET") {
     /* **A successful write makes our copy of that thing wrong.** Deleting a
@@ -717,7 +762,7 @@ function saving(
     const copy = res.clone();
     void copy
       .json()
-      .then((body) => writeCached(input, body, owner, slugOf(input)))
+      .then((body) => writeCached(input, body, ticket, slugOf(input)))
       .catch(() => {
         /* A body that dies after its headers arrived. Nothing to save, and the
            previous copy — if any — is left alone rather than replaced by half

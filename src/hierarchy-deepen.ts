@@ -106,6 +106,7 @@ import {
   expansionOverhead,
   expansionRequest,
   parseExpansionAnswer,
+  readRefusedShape,
   recordCandidate,
   renderFrozenOutline,
   tallyVerdicts,
@@ -113,6 +114,7 @@ import {
   type ExpansionAnswerChild,
   type ExpansionRequest,
   type OutlineEntry,
+  type RefusedAnswerShape,
   type VerdictTally,
 } from "./hierarchy-expand.js";
 /* Types only. `src/hierarchy.ts` is the module this one is imported *by*, so a
@@ -623,6 +625,18 @@ export class ExpansionRateLimited extends Error {
  * all-or-nothing anyway (`deepenTree` § "All of the wave, or none of it"),
  * "skip this one and publish the rest" is not on the table either.
  *
+ * **⟨That last sentence stopped being true on 2026-09-05, and this is a separate
+ * question rather than a change made in passing.⟩** "Skip this one and publish
+ * the rest" is now exactly what a *refused* call gets — `RefusedCall`, on the
+ * reasoning `MAX_EXPANSION_REDRAWS` already stated: a request the model declines
+ * three times is a request this recipe cannot ask. A truncation is not that. It
+ * is deterministic sizing we should be told about; it is thrown by the
+ * *executor* rather than by `readExpansion`, so the redraw loop rethrows it on
+ * purpose because re-asking would bury a bug. The behaviour here is therefore
+ * deliberately unchanged, and only its justification has moved: it now stands on
+ * "a sizing bug we should be told about" alone. **Whether a truncated target
+ * should join the refused ones is a real question and nobody has answered it.**
+ *
  * So the wave dies, the article keeps the tree wave 1 gave it, `deepenFailed`
  * goes on the run, and the number that has to move is `expectedChildren`. A
  * truncation is a sizing bug we should be told about, not a cost to absorb three
@@ -883,6 +897,60 @@ export interface ExpansionCallOutcome {
 }
 
 /** What a whole wave came to, including how much of it was already paid for. */
+/**
+ * **A call the model refused on every draw its budget allowed.**
+ *
+ * Not a wave failure. `MAX_EXPANSION_REDRAWS` already said why — *"a request the
+ * model refuses three times is not unlucky, it is a request this recipe cannot
+ * ask"* — and the code then treated it as unlucky anyway, killing the wave and
+ * withholding every peer that had already been paid for. The first paid run of
+ * stage 5b lost thirteen calls and $2.73 to one such target: Moby-Dick's title
+ * page, four blocks and twenty-one words, forced open by the heading rule
+ * because `By Herman Melville` is an `h2` no child starts on. The only
+ * protocol-compliant answer was to make the byline a spine row of its own; the
+ * model declined three times and said, truthfully, that this is one thing.
+ *
+ * **The pattern is `OversizedTarget`'s**, which `deepenTree` explicitly does not
+ * withhold the wave for. A refused target is left exactly as wave 1 made it,
+ * recorded, and the wave publishes without it.
+ *
+ * **The unit is the call's targets, not one section**, and that is a deliberate
+ * price rather than an oversight: `readExpansion` throws on the first bad
+ * section, the checkpoint row holds the whole raw answer, and a redraw has to be
+ * the same request or it is a different question under a different key. So up
+ * to `maxParentsPerBatch` good targets are lost beside the bad one, and there is
+ * one code path instead of two.
+ */
+export interface RefusedCall {
+  /** The checkpoint key this call would have been stored under, had it stood up. */
+  key: string;
+  /** Every target the call carried — all of them refused together. */
+  targets: readonly ExpansionTarget[];
+  reason: ExpansionRefused["reason"];
+  /** The refusal's own sentence. Shape and ordinals only; never the article. */
+  message: string;
+  /** Draws made, counting the first — so `MAX_EXPANSION_REDRAWS + 1` at exhaustion. */
+  draws: number;
+  /**
+   * **What every draw cost.** A refused call is a paid call; leaving it out
+   * understates the wave by exactly the calls the redraw budget exists to pay
+   * for, which is the argument the redraw loop already makes about tokens.
+   */
+  usage: ExpansionUsage;
+  /**
+   * **The shape of the last refused answer** — child counts, verdicts and the
+   * model's own `why`. The datum that says whether the model declined on the
+   * merits or fumbled the schema, and the one the old path destroyed. Carries
+   * article-adjacent text, so it goes in the records file and never in a log.
+   */
+  shape: RefusedAnswerShape;
+}
+
+/** Targets lost to a call the model refused on every draw. `RefusedCall`. */
+function refusedTargetsIn(wave: { refused: readonly RefusedCall[] }): number {
+  return wave.refused.reduce((n, call) => n + call.targets.length, 0);
+}
+
 export interface ExpansionWaveResult {
   /**
    * One per call that produced an answer, **in the order the batches were
@@ -890,6 +958,11 @@ export interface ExpansionWaveResult {
    * order is still the planner's".
    */
   calls: ExpansionCallOutcome[];
+  /**
+   * Calls refused on every draw. Their targets keep the shape wave 1 gave them
+   * and the wave is published without them — `RefusedCall`.
+   */
+  refused: RefusedCall[];
   /** Keys the wave looked up: one per call. */
   asked: number;
   /** Rows the store had. */
@@ -1373,6 +1446,11 @@ export async function runExpansionWave(opts: {
     }
   };
 
+  /* Parallel to `outcomes` and for the same reason: the planner's order, not the
+     order they finished in. A slot holds a call outcome or a refusal, never
+     both. */
+  const refusals: (RefusedCall | null)[] = prepared.map(() => null);
+
   const runOne = async (p: (typeof prepared)[number], at: number): Promise<void> => {
     const already = resumed.get(p.key);
     if (already !== undefined) {
@@ -1411,17 +1489,29 @@ export async function runExpansionWave(opts: {
            transport failure, and re-asking would bury it. */
         if (!(err instanceof ExpansionRefused)) throw err;
         if (redraws >= MAX_EXPANSION_REDRAWS) {
+          /* **The reason and the counts, and never the answer.** The shape of
+             what was refused carries the model's `why`, which is a dozen words
+             about the article — it goes on `RefusedCall.shape` and into the
+             records file, not here. docs/project/logging.md. */
           log("pipeline").warn(
             { slug, key: p.key, reason: err.reason, draws: redraws + 1 },
-            "an expansion call was refused on every draw its budget allowed",
+            "an expansion call was refused on every draw its budget allowed; " +
+              "its targets keep the shape wave 1 gave them and the wave goes on",
           );
-          /* **Rethrown as itself.** The wave wraps it once, at the top, in an
-             `ExpansionWaveFailed` that carries the partial telemetry — so a
-             caller reads the class and the reason off `cause`, and there is
-             exactly one wrapper rather than one per layer. The draw count is in
-             the line above, which is where it belongs: it is telemetry about
-             this wave, not a property of the model's answer. */
-          throw err;
+          /* **Recorded rather than rethrown**, which is the whole of the change.
+             A refusal is a fault in what the model said about *these* targets,
+             so it is those targets that fail — not the peers, which have already
+             been paid for and banked. `RefusedCall` has the argument. */
+          refusals[at] = {
+            key: p.key,
+            targets: p.batch.targets,
+            reason: err.reason,
+            message: err.message,
+            draws: redraws + 1,
+            usage,
+            shape: readRefusedShape(answer),
+          };
+          return;
         }
         redraws++;
         log("pipeline").warn(
@@ -1467,7 +1557,9 @@ export async function runExpansionWave(opts: {
 
   const summarise = (closed: GateWindow): ExpansionWaveResult => {
     const calls = outcomes.filter((o): o is ExpansionCallOutcome => o !== null);
+    const refused = refusals.filter((r): r is RefusedCall => r !== null);
     return {
+      refused,
       calls,
       asked: keys.length,
       found: stored.size,
@@ -1522,10 +1614,10 @@ export async function runExpansionWave(opts: {
  *
  * Read at call time rather than frozen at import, so a deployment can turn one
  * ingest deep without a rebuild and a test can move it — the rule
- * `jobConcurrency` (src/jobs.ts) and `dataRoot` (src/store/data-root.ts) already
- * state. Anything but `"1"` or `"true"` is off, a misspelling included: this is
- * the switch on a change that multiplies a book's bill several times over, and a
- * typo must fail closed.
+ * `jobConcurrency` (src/jobs.ts) already states, and `dataRoot` did too before
+ * src/store/data-root.ts was deleted 2026-09-05. Anything but `"1"` or `"true"`
+ * is off, a misspelling included: this is the switch on a change that
+ * multiplies a book's bill several times over, and a typo must fail closed.
  *
  * Whether it ever moves is **stage 8's decision**, with the evidence stage 5
  * measures — the same book read both ways, side by side, against the cost.
@@ -1690,13 +1782,22 @@ export interface DeepenRecordsFile {
    * Bump it when a field's meaning changes, so an old file cannot be read as a
    * new one.
    *
-   * `deepen-records/2` since 2026-09-05: `failed` and `reason` are new, every
-   * record carries its derived `range` (src/hierarchy-expand.ts §
-   * `CandidateRecord`), and `stats` gained `uncheckpointed` and `gate`. A `/1`
-   * file read as a `/2` would pair repeats on `where` alone, which is the
-   * pairing finding 6 was about.
+   * `deepen-records/2`, 2026-09-05: `failed` and `reason` are new, every record
+   * carries its derived `range` (src/hierarchy-expand.ts § `CandidateRecord`),
+   * and `stats` gained `uncheckpointed` and `gate`. A `/1` file read as a `/2`
+   * would pair repeats on `where` alone, which is the pairing finding 6 was
+   * about.
+   *
+   * `deepen-records/3`, later the same day: a record can carry `refused`, and
+   * `stats` gained `refusedTargets` — a call the model declines on every draw now
+   * fails its own targets rather than the wave. **The bump is not bookkeeping.**
+   * A `/2` file has no `refused` on any record, so the eval's `refusedRates`
+   * would read it as *nothing was refused* — over runs where a refusal was the
+   * whole story, since in `/2` a refusal killed the run before it could be
+   * written down. Refusing the older file is the only reading that is not a
+   * quiet zero. docs/reusable/silent-success.md.
    */
-  version: "deepen-records/2";
+  version: "deepen-records/3";
   slug: string;
   /** ISO 8601, so files from several runs sort and can be told apart. */
   writtenAt: string;
@@ -1772,7 +1873,7 @@ export async function saveDeepenRecords(
   const dir = process.env[DEEPEN_RECORDS_ENV];
   if (dir === undefined || dir.trim() === "") return;
   const file: DeepenRecordsFile = {
-    version: "deepen-records/2",
+    version: "deepen-records/3",
     slug,
     writtenAt: new Date().toISOString(),
     failed: failure !== undefined,
@@ -1874,6 +1975,13 @@ export interface DeepenStats {
    * They keep the shape wave 1 gave them. Normally 0.
    */
   oversized: number;
+  /**
+   * **Targets whose call the model refused on every draw its budget allowed** —
+   * left exactly as wave 1 made them, and the wave published without them.
+   * `RefusedCall`. 0 is the ordinary reading; a number that climbs on small
+   * nodes is the selector asking a question the recipe cannot ask.
+   */
+  refusedTargets: number;
   /** Calls the wave would not start because the step was running out of time. */
   outOfTime: number;
   /** 429s met. */
@@ -2104,6 +2212,36 @@ function readWaveAnswers(opts: {
       }
     }
   }
+
+  /**
+   * **A refused target keeps the shape wave 1 gave it, and says so.**
+   *
+   * Nothing is attached — that is the whole point — so the only trace is on the
+   * node's own record. Written here beside `retries` and `fanOut` for the same
+   * reason they are: it is not known until the answer fails to land.
+   *
+   * **Three states that must never share a spelling.** *Finished by the model*
+   * is `decision: "stop", because: "verdict"`. *Stopped by a bound* is
+   * `decision: "stop"` with the bound's name. *Refused* keeps the governor's own
+   * `decision: "expand"` — which is true, the governor did force it open — and
+   * carries this instead. Reading a refusal as "the model said it was finished"
+   * would be the move `granularity-zoom.md` § The supplement node already forbids
+   * one field over: never infer the role from a missing answer.
+   */
+  for (const call of wave.refused) {
+    for (const target of call.targets) {
+      const candidate = byTarget.get(target);
+      if (candidate === undefined) continue;
+      /* The draws this node cost, on the node they were spent on — the same
+         convention as an answered call's `redraws` above. */
+      candidate.record.retries = call.draws - 1;
+      candidate.record.refused = {
+        reason: call.reason,
+        draws: call.draws,
+        shape: call.shape,
+      };
+    }
+  }
   return { attachments, records, report };
 }
 
@@ -2265,6 +2403,7 @@ export async function deepenTree(opts: {
       calls: 0,
       resumed: 0,
       oversized: 0,
+      refusedTargets: 0,
       outOfTime: 0,
       rateLimited: 0,
       /* No call was made, so the gate was never asked anything. */
@@ -2394,6 +2533,7 @@ export async function deepenTree(opts: {
         calls: err.partial.calls.filter((c) => !c.resumed).length,
         resumed: err.partial.calls.filter((c) => c.resumed).length,
         oversized,
+        refusedTargets: refusedTargetsIn(err.partial),
         outOfTime: err.partial.outOfTime,
         rateLimited: err.partial.rateLimited,
         gate: err.partial.gate,
@@ -2466,6 +2606,7 @@ export async function deepenTree(opts: {
       calls: wave.calls.filter((c) => !c.resumed).length,
       resumed: wave.calls.filter((c) => c.resumed).length,
       oversized,
+      refusedTargets: refusedTargetsIn(wave),
       outOfTime: wave.outOfTime,
       rateLimited: wave.rateLimited,
       gate: wave.gate,

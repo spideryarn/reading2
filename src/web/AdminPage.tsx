@@ -30,13 +30,13 @@ import { functionalUpdate } from "@tanstack/react-table";
 import { throttle, useQueryState } from "nuqs";
 
 import type { AdminUser } from "../admin.js";
-import { ADMIN_CHIP_ORDER, ADMIN_DEFAULT_BY, adminColumns } from "./admin-columns.js";
+import { ADMIN_CHIP_ORDER, adminColumns } from "./admin-columns.js";
 import { buildCommit, buildTime, shortCommit } from "./build-stamp.js";
 import { DataTable, naturalDirections, SortChips, useSortedTable } from "./lib/DataTable.js";
 import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { adminByParam, sortDirParam } from "./params.js";
+import { ADMIN_DEFAULT_BY, adminByParam, sortDirParam } from "./params.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import {
   ADMIN_FEEDBACK_HREF,
@@ -231,10 +231,13 @@ export function AdminHome() {
 
             The odd one out on this page, and worth saying so rather than
             letting the next reader wonder: `/design` reads across nothing and
-            is not gated — any signed-in reader can type the address, exactly as
-            before. It is here because it is developer furniture rather than
-            because it is privileged, and drawing a link was never a gate in any
-            case (docs/project/admin.md § The three refusals). */}
+            has no server half to refuse anybody. It is here because it is
+            developer furniture rather than because it is privileged. Since
+            2026-09-05 it is on the administrator's list all the same
+            (router.ts § `ADMIN_ONLY`), so a reader who types the address gets
+            their shelf — **which hides nothing**: the page is in everybody's
+            bundle and the address answers 200 whoever asks
+            (docs/project/admin.md § The three refusals). */}
         <Entry
           href={DESIGN_HREF}
           icon={<Palette size={18} className="tw:shrink-0 tw:text-muted-foreground" />}

@@ -77,7 +77,7 @@
  * check rule 1. `evals/referee-mirror.ts` is the shape to copy.
  */
 
-import { openRouterStream, ProviderRefused } from "./ai-call.js";
+import { classifyEnd, openRouterStream, ProviderRefused } from "./ai-call.js";
 import {
   articleWithIds,
   cachedText,
@@ -97,7 +97,6 @@ import {
   collectCitations,
   explainAbort,
   providerFailedMidAnswer,
-  readerAborted,
   type StreamEnd,
   stoppedByReader,
   type Usage,
@@ -556,7 +555,6 @@ export async function* runCriterionStream({
   const extractor = hitExtractor("results");
   let emitted = 0;
   let used = model;
-  let finishReason: string | null = null;
   let usage: Usage | undefined;
   let searches: number | null = null;
   /* Keyed on the URL, which is what makes the dedupe a dedupe. Local, not
@@ -564,7 +562,11 @@ export async function* runCriterionStream({
      share an accumulator. */
   const consulted = new Map<string, Citation>();
   const end: StreamEnd = { terminated: false };
-  let stopped = false;
+  /* No `finishReason` and no `stopped` declared here any more. Both are read
+     once from `classifyEnd` after the loop — see the switch below and
+     docs/plans/260901g-one-stream-end-classification-shared-by-five-callers.md.
+     `stopped` used to be a flag set in two places, which is how the throwing
+     path and the clean-end path came to say different things about one event. */
 
   try {
     /* malformedFrames: "throw", like search and unlike chat and explain. Their
@@ -581,7 +583,10 @@ export async function* runCriterionStream({
       if (chunk.model) used = chunk.model;
       if (chunk.error) throw providerFailedMidAnswer();
       const choice = chunk.choices?.[0];
-      if (choice?.finish_reason) finishReason = choice.finish_reason;
+      /* No `finish_reason` scrape here any more: `openRouterStream` writes it
+         onto `end` for every caller, and `classifyEnd` below is what reads it.
+         This line was one of seven identical copies —
+         docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md. */
       /* The rules are in `collectCitations`, beside the wire shape they are
          about. `onDropped` takes no argument on purpose — the one thing it
          could carry is the URL, and a cited page is a fact about what this
@@ -616,14 +621,12 @@ export async function* runCriterionStream({
     }
   } catch (err) {
     if (stoppedByReader(err, signal, deadline, stall.signal)) {
-      stopped = true;
+      /* The referee gave up. Not an error, and not logged as one. **Nothing is
+         said or decided here**: this falls through to `classifyEnd`, which
+         reaches `abandoned` from the same signals, so the throwing path and the
+         clean-end path cannot come to say different things about one event.
+         They used to be two branches, and only one of them logged. */
       clearTimeout(stallTimer);
-      line.info(
-        { model: used, ms: since(started), chars: extractor.text().length, kind: config.kind },
-        answered
-          ? `referee criterion from ${used} was abandoned`
-          : `referee criterion was abandoned before ${model} replied`,
-      );
     } else if (err instanceof ProviderRefused) {
       // The status, not the body: OpenRouter's error text is the one place a
       // provider might echo what we sent, and what we sent is the whole paper.
@@ -653,30 +656,107 @@ export async function* runCriterionStream({
     clearTimeout(stallTimer);
   }
 
-  // An abort can also end the loop cleanly — src/explain.ts is where the bugs
-  // behind both of these checks were found.
-  if (!stopped && readerAborted(signal, deadline, stall.signal)) stopped = true;
+  /* **How did this stream end?** One question with one true answer, asked of
+     the shared classifier rather than re-derived here from three signals, a
+     boolean and a string. This file used to do that re-derivation in the same
+     order as six others, with the same broken guard in it —
+     docs/postmortems/260901c-the-success-signal-that-outlived-its-witness.md.
 
-  if (!stopped && (deadline.aborted || stall.signal.aborted)) {
-    line.error(
-      {
-        model: used,
-        ms: since(started),
-        timedOut: deadline.aborted,
-        stalled: stall.signal.aborted,
-        chars: extractor.text().length,
-      },
-      `stream from ${used} was cut off`,
-    );
-    throw explainAbort(new Error("aborted"), deadline, stall.signal, deadlineMs, silenceMs);
-  }
+     What each ending *means* is still this run's. It differs from quiz's in the
+     one way that matters: the payload is a single JSON object, so a reply that
+     stopped early usually fails the strict parse below and is caught there,
+     with a sentence about the answer rather than about the stream. */
+  const outcome = classifyEnd(end, { signal, deadline, stalled: stall.signal });
+  const finishReason = end.finishReason ?? null;
+  /* One reading of the classifier's answer rather than a flag set in two
+     places. Every check below that steps aside for a disconnected referee reads
+     this. */
+  const stopped = outcome.kind === "abandoned";
 
-  if (!stopped && !end.terminated && finishReason === null) {
-    line.error(
-      { model: used, ms: since(started), chars: extractor.text().length },
-      `stream from ${used} ended without finishing`,
-    );
-    throw new Error(ENDED_UNFINISHED.message);
+  switch (outcome.kind) {
+    case "abandoned":
+      /* **This line is new on one of the two paths, and that is the point.** A
+         referee-abort that *threw* was logged in the catch; one that ended the
+         loop cleanly — `sseChunks` cancels its reader, and a cancelled read
+         resolves `{ done: true }` — set a flag and said nothing. Same event,
+         two paths, one of them silent. So a clean abort can now produce this
+         line *and* one of the specific abandonment lines below it; that pairing
+         is not new, it is what the throwing path always did. */
+      line.info(
+        { model: used, ms: since(started), chars: extractor.text().length, kind: config.kind },
+        answered
+          ? `referee criterion from ${used} was abandoned`
+          : `referee criterion was abandoned before ${model} replied`,
+      );
+      break;
+
+    case "timed-out":
+    case "went-quiet":
+      line.error(
+        {
+          model: used,
+          ms: since(started),
+          timedOut: deadline.aborted,
+          stalled: stall.signal.aborted,
+          chars: extractor.text().length,
+        },
+        `stream from ${used} was cut off`,
+      );
+      throw explainAbort(new Error("aborted"), deadline, stall.signal, deadlineMs, silenceMs);
+
+    case "provider-failed":
+      /* The same failure as the `chunk.error` throw in the loop, arriving in a
+         field instead of as data — so the same sentence, deliberately. This is
+         the one behaviour this migration changed: under the old guard a
+         non-null reason could only make the conjunction *less* likely to fire,
+         so a provider that said `error` had its half-answer handed to
+         `parseHits` and reported, if it happened to parse, as a finished run. */
+      line.error(
+        { model: used, ms: since(started), chars: extractor.text().length, finishReason },
+        `the provider gave up mid-criterion from ${used}`,
+      );
+      throw providerFailedMidAnswer();
+
+    case "unterminated":
+      line.error(
+        { model: used, ms: since(started), chars: extractor.text().length },
+        `stream from ${used} ended without finishing`,
+      );
+      throw new Error(ENDED_UNFINISHED.message);
+
+    case "truncated":
+    case "filtered":
+      /* **Left to the strict parse below, which is a better witness here than
+         the reason is.** A criterion reply is one JSON object: cut it off
+         anywhere and it does not parse, and the referee gets
+         `ANSWER_OVERFLOWED_FIXED_ASK`, which names the actual problem. A
+         `length` that lands *after* the object closed is a legitimately short
+         answer, and refusing it would throw away results already on screen.
+         Quiz refuses both because a mark is prose with no parse to fail. */
+      break;
+
+    case "unknown-finish-reason":
+      /* Accepted as a clean stop, on the deny-list reasoning quiz-mark spells
+         out: a gateway spelling `stop` as `end_turn` would otherwise fail every
+         criterion run for that model. The reason is on the success log line. */
+      break;
+
+    case "wants-tools":
+      /* Not an instruction to act on here. A `literature` criterion does send a
+         tool, but `openrouter:web_search` is run server-side by the gateway —
+         see `request` above — so there is nothing for this process to call, and
+         the finished text arrives on the same stream. */
+      break;
+
+    case "finished":
+      break;
+
+    default: {
+      /* The point of the union. A tenth way for a stream to end becomes a
+         compile error here rather than a branch somebody forgot. */
+      const never: never = outcome;
+      throw new Error(`unhandled stream outcome: ${JSON.stringify(never)}`);
+    }
   }
 
   /* Two top-level `results` keys. `JSON.parse` keeps the last silently and the

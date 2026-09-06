@@ -1705,6 +1705,266 @@ driving proved instead of a table of zeroes.
 > failed job's draft revision is rolled back, so the second job finds no fetched document. That is
 > why phase D starts its three windows together with a start rendezvous rather than by pre-ingesting.
 
+#### A refused target no longer fails the wave <a id="refused-target-not-the-wave"></a>
+
+**2026-09-05, after the first paid run died at phase A having spent $2.73.** One target — Moby-Dick's
+title page, four blocks and twenty-one words — was refused on all three draws its budget allowed, and
+that took the whole wave with it: thirteen paid calls, every peer's answer withheld, `expanded: 0`.
+
+`MAX_EXPANSION_REDRAWS` had already written the rule down — *"a request the model refuses three times
+is not unlucky, it is a request this recipe cannot ask"* — and the code then treated it as unlucky.
+**The pattern to copy was already in the file**: `OversizedTarget`, which `deepenTree` explicitly does
+not withhold the wave for, because *"it was never asked about, the decision is deterministic, and the
+rest of the wave is complete over the batches that were planned."* A target refused on every draw is
+now in the same box: recorded, left exactly as wave 1 made it, and the wave published without it.
+
+- **The unit of failure is the call's targets** — at most `maxParentsPerBatch` — and not one section.
+  `readExpansion` throws on the first bad section, the checkpoint row holds the whole raw answer, and
+  a redraw has to be the same request or it is a different question under a different key. Losing up
+  to three good targets beside one bad one is the price of one code path instead of two, and it is
+  worth paying.
+- **The `not-an-expansion` refusal itself stays.** You cannot build a subtree from one child spanning
+  its parent; `tests/hierarchy-cascade.test.ts` is right about that and nothing here changes it.
+- **`assertCascadeComplete` now demands a record for a refused terminal node**, exactly as it does
+  for `capReached` — `CascadeState.refused`. Without it, a refused node is indistinguishable from one
+  that legitimately stopped, which is a whole level of the reader's tree gone in silence.
+- **`ExpansionTruncated` is deliberately unchanged**, but its docblock leaned on *"publication is
+  all-or-nothing anyway, so skip-this-one-and-publish-the-rest is not on the table"* — which has
+  stopped being true. The comment now says so and names *should a truncated target join the refused
+  ones?* as a separate, unanswered question.
+
+**And what was refused is now written down, which it never was before.** A refused answer is never
+checkpointed — correctly, since a stored refusal would replay for ever — and until now it was not
+kept anywhere else either, so nobody could tell whether the model had **declined on the merits or
+fumbled the schema**. That is the only question worth asking about a refusal, and it is exactly the
+one the title-page case turns on. So a refusal carries its reason, its draw count, and the *shape of
+the last refused answer*: child counts, the verdicts, and the model's own dozen-word `why`. The `why`
+goes in the **records file and never in a log line** — it is text about the article
+([logging.md](../project/logging.md)).
+
+Three states must never share a spelling: *finished by the model*, *stopped by a bound*, and
+*refused*. A refused node keeps the governor's `decision: "expand"` — true, it did force it open —
+and carries `refused` beside it. Reading a one-child answer as "finished" would be the move
+[granularity-zoom.md § The supplement node](../project/granularity-zoom.md) already forbids one field
+over: never infer the role from a missing answer.
+
+The records file is **`deepen-records/3`**, and the bump is not bookkeeping: a `/2` file has no
+`refused` on any record, so the eval would read it as *nothing was refused* — over exactly the runs
+where a refusal was the whole story.
+
+**The eval reports the refused rate by size bucket and by forcing bound** (`refusedRates`), beside
+Q2's yes rate, because a quiet absence needs something that prints when we are defeated. Two diseases
+wear one symptom: a model dodging genuinely fat sections shows up on `10+ blocks, 2000+ words` — the
+feature not working — while a **selector** fault shows up only on tiny nodes forced open by
+`authored-heading`. Different cures, and only the bucket tells them apart. Which is the question
+below.
+
+#### Open question for Greg: should the heading rule fire on a node that cannot be split? <a id="open-heading-rule-tiny-nodes"></a>
+
+**Deliberately not decided here.** The paid run of 2026-09-05 failed on the *first* target it chose,
+and what it ran into is a product judgment rather than a bug.
+
+**The question.** Should the heading rule force a node open when the split the protocol demands
+**cannot yield two children of two structural blocks or more**?
+
+**Scope, explicitly.** This is *not* a reopening of *"the heading rule beats the floor"*
+([§ The four bounds](#the-four-bounds-and-which-of-them-can-overrule-the-verdict)). That precedence
+is the most valuable line in this plan and nothing below argues against it. Only the narrow case
+above is in question.
+
+##### The stated rationale does not hold, though the rule may still
+
+[`shouldExpand`](../../src/hierarchy-cascade.ts) (`src/hierarchy-cascade.ts:607`) justifies its
+heading clause like this:
+
+> A node of eight blocks containing two of the author's own headings would stop, and its leaves would
+> then span a heading — which the prompt calls a hard boundary everywhere else.
+>
+> — `src/hierarchy-cascade.ts:596-600`
+
+But [`buildTree`](../../src/hierarchy.ts)'s own contract is that *"Every block gets exactly one leaf"*
+(`src/hierarchy.ts:1539`). A leaf **is** one block, so a leaf cannot span a heading, whatever the node
+above it does. What forcing the node open actually buys is a **spine row that begins on the heading** —
+the finest *titled* row respecting the author's boundary rather than merging across it. That is
+plainly right for "CHAPTER 34" and plainly absurd for a byline, and the rule as written cannot tell
+the two apart.
+
+##### The evidence: the first target of the paid run was a title page
+
+`evals/results/deepen-5b-2026-09-05-h21i14ig/records/` — the very first record, `root > child 1 >
+child 1`, range `spya-y22uzv … spya-zfhdft`: **4 structural blocks, 21 body words, 2 authored
+headings**, `effective: {decision: "expand", because: "authored-heading"}`. It is under the
+divisibility floor by a factor of two and a half, and the heading clause overruled that.
+
+Its range is Moby-Dick's opening. `output/2701-h.html` already carries stamped ids, and its first five
+blocks are:
+
+| id | tag | text |
+|---|---|---|
+| `spya-mctgxr` | `h1` | Moby Dick; or The Whale |
+| `spya-xf5635` | `p` | ` · ~1331 min read` |
+| `spya-vjuv0b` | `p` | `*** START OF THE PROJECT GUTENBERG EBOOK 2701 ***` |
+| `spya-qphj8e` | `h2` | By Herman Melville |
+| `spya-zfhdft` | `hr` | — |
+
+Four structural blocks (the `<hr>` is not one), 21 body words, two authored headings, ending on
+`spya-zfhdft`: the record's node is the title page and nothing else.
+
+The heading the rule wants resolved is **"By Herman Melville"**. Under the settled precedence — an
+authored heading always begins a child ([§ Where the author's headings and the fan-out target
+collide](#where-the-authors-headings-and-the-fan-out-target-collide-the-author-wins)) — the only
+protocol-compliant answer is to give the byline a spine row of its own, leaving children of three and
+one structural blocks. The model declined, three draws running (one plus `MAX_EXPANSION_REDRAWS = 2`,
+`src/hierarchy-cascade.ts:229`), and returned the truthful answer instead:
+
+> The expansion of root > child 1 > child 1 came back with 1 usable child from 1 proposed […] One
+> child covers its parent's whole range.
+>
+> — the run's `waveFailureReason`
+
+**It was right and the governor was wrong**, and the whole wave then failed: 32 targets, 0 expanded,
+13 calls bought and nothing kept.
+
+##### It is not one book's quirk
+
+Every Project Gutenberg text opens with a heading-tagged byline on its title page, so this fires on
+the first target of every book. Corroborated on Darwin — `output/1228-h.html`, which lives in the
+**primary checkout** rather than in this worktree (`docs/plans` § "For whoever picks this up" says
+so, and `output/` is gitignored) — whose first nine blocks are `h1, p, p, p, table, h4, h3, h2, h4`:
+
+| id | tag | text |
+|---|---|---|
+| `spya-uaqmvk` | `h4` | BY MEANS OF NATURAL SELECTION, |
+| `spya-j50kzt` | `h3` | OR THE PRESERVATION OF FAVOURED RACES… |
+| `spya-ppumnb` | `h2` | By Charles Darwin, M.A., |
+| `spya-v9nz84` | `h4` | Fellow Of The Royal, Geological, Linnæan, Etc., Societies;… |
+
+The 2026-09-04 wave-1 tree groups exactly those four as node `n0009`, titled **"Title Page"**
+(`evals/results/hierarchy-waves-2026-09-04/1228-h.tree.json`). Four blocks, four authored headings,
+three of them unresolved: the same shape, one level worse, and its only compliant split is four
+single-block children. ⟨Verified 2026-09-05 by reading both HTML fixtures and the record; the earlier
+claim that `1228-h.html` was missing was true of this worktree only.⟩
+
+##### The cheap options, none of them chosen
+
+- **A minimum-viable-split precondition on the heading rule** — force open only where the demanded
+  split yields at least two children of two structural blocks or more. Costs a predicate and a test,
+  and a fifth thing to explain in § The four bounds; it would also suppress a genuinely short
+  authored section (a two-block preamble above a two-block chapter), which is the case to check
+  before adopting it.
+- **Exclude a document's leading front matter.** Costs a definition of "front matter" that is not a
+  heuristic about Gutenberg. The pipeline has no such concept today, so this is a new idea in a stage
+  that currently has none.
+- **Leave it, and let the per-target refusal absorb it.** Costs three paid draws on the first target
+  of every book, forever, on a node nobody wants divided — cheap in money. What it really costs is
+  the signal: the refusal rate stops being evidence about the tree and becomes noise the governor
+  manufactures.
+
+**A sibling change is in flight as this is written**: a refused target will no longer fail the whole
+wave. That fixes the blast radius, not the question. This section asks whether we are putting a bad
+question to the model at all.
+
+#### What stage 5b actually measured <a id="stage-5b-results"></a>
+
+**Run `evals/results/deepen-5b-2026-09-05-e5aq8o9s/`, 2026-09-05, $8.98 and a floor.** Three passes of
+Moby-Dick (2,569 blocks) landed; the fourth hit its claim deadline and the run stopped itself rather
+than re-claiming, so **phases C and D were never bought and questions 4 and 5 are absent rather than
+zero**. Every number below is over three passes of one book, which is the sample — not a corpus.
+
+⟨A first attempt the same afternoon died at $2.73 in phase A, on the title-page refusal
+[§ A refused target no longer fails the wave](#refused-target-not-the-wave). Its single pass showed
+**4 raw yeses in 224 candidates**, which was read here as "the model barely contributes and the
+feature might be retired". **Three complete passes say the opposite**, and the retraction is the
+point: a partial pass from a wave that then threw is not evidence, and it was quoted as though it
+were.⟩
+
+##### Question 1 — the verdict is stable. The *division* is not.
+
+| | |
+|---|---|
+| verdict flips | **0 of 27 matched ranges — 0.0%** |
+| fan-out changed | **15 parents** |
+| boundaries moved at equal fan-out | 0 |
+
+Two different findings wearing one question. The model never once changed its mind about *whether* a
+section wants another level. It changed its mind about *how to divide one* on 15 of the 22 parents
+that appeared in all three passes — `root > child 6 > child 3` came back with 10, then 7, then 6
+children. **Stage 6 is governed by the verdict, and the verdict is what held still**; the tree the
+reader sees is what moved.
+
+##### Question 2 — it does not always say yes, and where it says yes is the story
+
+| bucket | raw yes |
+|---|---|
+| under the floor (<10 blocks) | 0 / 216 |
+| 10+ blocks, <800 words | 0 / 23 |
+| 10+ blocks, 800–2,000 words | 0 / 51 |
+| **10+ blocks, 2,000+ words** | **18 / 42 — 42.9%** |
+| overall | 18 / 332 — 5.4% |
+
+Not one request to go deeper on a small section, across 290 chances. This is the answer the question
+was designed to get, and it is a good one: **the verdict is selective**, so the yes-rate gate stage 6
+was going to need may not have much to gate.
+
+**Refusals: 0 of 121 targets asked**, in every bucket and under every forcing bound. The title page
+that killed the first run expanded cleanly three times here, so `not-an-expansion` is **luck of the
+draw rather than a property of the node** — which makes the per-target fix right and the
+[open question](#open-heading-rule-tiny-nodes) *harder*, not easier: the bad question gets a usable
+answer most of the time, so the refusal rate will not reliably tell us we are asking it.
+
+##### Question 3 — the heading rule is doing the work, not the model
+
+| | expand | | stop | |
+|---|---|---|---|---|
+| authored-heading | **100** | | divisibility-floor | 221 |
+| forced-open | 15 | | verdict | 68 |
+| unassessed-ceiling | 3 | | no-verdict | 9 |
+| verdict | **3** | | | |
+
+**100 of the 121 expansions came from the heading rule; the model's verdict independently opened
+three.** A bound overruled a stated verdict 34 times in 332 assessed (10.2%) — `authored-heading` 19,
+`forced-open` 15.
+
+So the honest answer to *"how often does a bound overrule the model?"* is that the question is
+slightly wrong. Overruling is rare; **pre-empting is the norm.** The model is mostly being asked
+about sections a mechanical rule has already decided to open, and it agrees or is ignored. That is
+the strongest available argument for settling
+[the heading-rule question](#open-heading-rule-tiny-nodes) before stage 6, because the rule under
+question is the one producing five sixths of the tree's new depth.
+
+##### Question 4 — the cost, as a floor
+
+| pass | |
+|---|---|
+| A book ingest, deepening on | $3.4845 — 3.5× the incumbent $1.00 |
+| B forced hierarchy, repeat 2 | $2.5355 — 2.5× |
+| B forced hierarchy, repeat 3 | $2.9563 — 3.0×, **one call never recorded** |
+| **total** | **$8.9763, INCOMPLETE — a floor** |
+
+Every row came in **well under the plan's estimate** ($8.40 and $7.40): the estimates were upper
+bounds from arithmetic, and the checkpoint resume is worth more than they assumed. The total refused
+to present itself as a bill, which is `LedgerTotal` working on its first real outing —
+[§ A refused target no longer takes the wave with it](#refused-target-not-the-wave).
+
+##### Question 5 — not measured, and it did not need to be
+
+Phase D never ran. **The deadline answered itself in phase B**: the book's `hierarchy` step took
+**574.5 s, then 516.2 s, then overran the 740 s claim deadline** and was handed back — uncontended,
+on a box at load 9–18.
+
+**This is the failure the whole plan exists to remove, and the cascade has made it worse rather than
+better.** A step that is marginal alone will not survive `DEFAULT_JOB_CONCURRENCY = 3`, and phase D
+would have been buying a more precise account of a thing already established. Nothing downstream
+should be built until this is answered; it belongs beside
+[stage 8](#stage-8) rather than after it.
+
+##### One job is still held
+
+`evaldeepen-e5aq8o9s-book-spya-yynkqz` (job `spya-fm4y2w`) is `queued` at requeue window 1 with paid
+answers in its checkpoint rows, deliberately **not** cleaned up — partial paid work is resumable only
+while its article exists. Resume it or delete the article by hand; leaving it costs a row, and
+`SPIDERYARN_DEEPEN_REASK` naming that slug is what would make a re-claim buy the whole wave again.
+
 ### Stage 6 — recursion, once the verdict has earned it
 
 Waves 3 and beyond, governed by the verdict, with the depth cap and the yes-rate gate. Only if stage
@@ -1787,6 +2047,9 @@ All 2026-09-04.
 - **Nothing in `src/` has changed.** The two spike scripts are new and throwaway
   (`scripts/spike-book-structure.ts`, `scripts/spike-expand-section.ts`); delete them when stages 3–5
   have made them redundant.
+- **There is one question waiting on Greg**, and it stopped the first paid run dead:
+  [§ Open question — should the heading rule fire on a node that cannot be split?](#open-heading-rule-tiny-nodes).
+  Nothing downstream of stage 5 should be tuned before it is answered.
 - **Start at [stage 3](#stage-3)**,
   which is pure and needs no network. Its first test is one that fails on today's
   `normaliseExpansion` because of the missing heading snap; write that red before anything else.

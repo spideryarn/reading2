@@ -48,6 +48,8 @@ import {
   revisionBlocks,
 } from "../src/db/schema.js";
 import { currentOwnerId } from "../src/owner.js";
+import { MAX_PURPOSE_CHARS } from "../src/profile.js";
+import { MAX_TITLE_CHARS } from "../src/shelf.js";
 import { deriveLibraryScalars } from "../src/library-scalars.js";
 import { pgArticleReader } from "../src/store/pg.js";
 import { pgLibrarySearch, pgShelfStore } from "../src/store/pg-shelf.js";
@@ -558,6 +560,87 @@ describe("the Postgres shelf and library search", () => {
 
       await pgShelfStore.patch(SLUG, { archived: false });
       expect((await pgArticleReader.listArticles()).some((a) => a.slug === SLUG)).toBe(true);
+    });
+
+    /* ---- ported from tests/shelf.test.ts, 2026-09-05 ----------------------
+       `patchShelf` on the filesystem side held the title cap, the three
+       blank-clears-it rules and every claim about `purpose`, and every one of
+       them was reaching Postgres through nothing at all: `pg-shelf.ts` re-states
+       the cap and re-runs `normaliseProfileText`, and no case here drove either.
+       They are the reader-facing refusals — a purpose silently truncated is one
+       the reader believes they gave — so they move rather than going.
+       docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md,
+       the stage-G section. */
+
+    it("refuses a title longer than the cap, and changes nothing", async () => {
+      // Refused, never truncated. And the refusal must leave the stored one
+      // alone, which is the half a `rejects.toThrow` on its own does not say.
+      await pgShelfStore.patch(SLUG, { title: "Keep me" });
+      await expect(
+        pgShelfStore.patch(SLUG, { title: "x".repeat(MAX_TITLE_CHARS + 1) }),
+      ).rejects.toMatchObject({ status: 400 });
+      expect((await pgShelfStore.read(SLUG)).title).toBe("Keep me");
+      await pgShelfStore.patch(SLUG, { title: null });
+    });
+
+    it("clears the title on a blank string, not only on null", async () => {
+      // A reader empties a box by selecting all and typing nothing, so "   "
+      // has to mean the same as `null`. `pg-shelf.ts` spells that `title || null`
+      // after a trim; without the trim it would store three spaces as a title.
+      await pgShelfStore.patch(SLUG, { title: "  My own name  " });
+      expect((await pgShelfStore.read(SLUG)).title).toBe("My own name");
+      await pgShelfStore.patch(SLUG, { title: "   " });
+      expect((await pgShelfStore.read(SLUG)).title).toBeUndefined();
+    });
+
+    it("stores a purpose, and clears it on blank", async () => {
+      // Same three rules as the title: absent leaves it, blank clears it,
+      // `null` clears it.
+      await pgShelfStore.patch(SLUG, { purpose: "  the evidence  " });
+      expect((await pgShelfStore.read(SLUG)).purpose).toBe("the evidence");
+      await pgShelfStore.patch(SLUG, { purpose: "   " });
+      expect((await pgShelfStore.read(SLUG)).purpose).toBeUndefined();
+      await pgShelfStore.patch(SLUG, { purpose: "again" });
+      expect((await pgShelfStore.read(SLUG)).purpose).toBe("again");
+      await pgShelfStore.patch(SLUG, { purpose: null });
+      expect((await pgShelfStore.read(SLUG)).purpose).toBeUndefined();
+    });
+
+    it("settles a pasted purpose's line endings before storing it", async () => {
+      /* Not cosmetic. This string is hashed onto every artefact generated from
+         it, and a `\r\n` from a paste would make the same purpose compare as a
+         different one — marking every glossary on the shelf "you changed your
+         profile" for a change nobody made. `normaliseProfileText`, not `trim()`
+         — src/profile.ts. */
+      await pgShelfStore.patch(SLUG, { purpose: "one\r\ntwo" });
+      expect((await pgShelfStore.read(SLUG)).purpose).toBe("one\ntwo");
+      await pgShelfStore.patch(SLUG, { purpose: null });
+    });
+
+    it("refuses a purpose longer than the cap, rather than shortening it", async () => {
+      await expect(
+        pgShelfStore.patch(SLUG, { purpose: "x".repeat(MAX_PURPOSE_CHARS + 1) }),
+      ).rejects.toMatchObject({ status: 400 });
+      expect((await pgShelfStore.read(SLUG)).purpose).toBeUndefined();
+    });
+
+    it("leaves the purpose alone when the patch does not mention it", async () => {
+      // `patch` builds its `SET` from the keys it was given, so an absent key
+      // must not become a `null`. Archiving is what a reader does next.
+      await pgShelfStore.patch(SLUG, { purpose: "the evidence" });
+      await pgShelfStore.patch(SLUG, { archived: true });
+      expect((await pgShelfStore.read(SLUG)).purpose).toBe("the evidence");
+      await pgShelfStore.patch(SLUG, { archived: false, purpose: null });
+    });
+
+    it("remembers when the last open was, not only how many there were", async () => {
+      // The tooltip says "opened 6 times, last on Tuesday". The count below is
+      // computed by Postgres; this is the other half of the same write.
+      const before = new Date();
+      await pgShelfStore.recordOpen(SLUG);
+      const after = (await pgShelfStore.read(SLUG)).lastOpenedAt;
+      expect(after).toBeTruthy();
+      expect(new Date(after as string).getTime()).toBeGreaterThanOrEqual(before.getTime() - 5_000);
     });
 
     it("counts concurrent opens without losing any", async () => {

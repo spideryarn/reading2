@@ -2134,7 +2134,7 @@ converted test that keeps calling one of their readers gets an empty answer:
 | [`src/chat.ts`](../../src/chat.ts) | `loadThreads` — **the one the pilot hit** |
 | [`src/comments.ts`](../../src/comments.ts) | `loadComments` |
 | [`src/searches.ts`](../../src/searches.ts) | `readSearches`, `loadRuns` |
-| [`src/referee-claims-store.ts`](../../src/referee-claims-store.ts) | `loadClaimsRun` |
+| `src/referee-claims-store.ts` | `loadClaimsRun` |
 | [`src/referee-criteria-store.ts`](../../src/referee-criteria-store.ts) | `loadCriteria` |
 | [`src/glossary-lookups.ts`](../../src/glossary-lookups.ts) | `loadLookups` |
 | [`src/shelf.ts`](../../src/shelf.ts) | `loadShelf` |
@@ -2146,7 +2146,7 @@ assume. That is the discriminator, and it is why the list is short enough to che
 
 **These are the filesystem adapter's implementation, exported from `src/*.ts` instead of from
 `src/store/`.** The only non-client caller of `loadThreads` in the tree is
-[`src/store/fs.ts`](../../src/store/fs.ts), which stage G deletes — the `src/web/` matches are a
+`src/store/fs.ts`, which stage G deletes — the `src/web/` matches are a
 different `loadThreads`, a client controller's effect. So calling one of these from a test is not
 merely reading the wrong store, it is **reaching past the selection into the condemned half**, which
 is the reach stage A's witness was built to count. This predicts which of the remaining 24 will hit
@@ -2269,7 +2269,7 @@ invalidates a Postgres assertion; both would leave stage G's account wrong.
    **C** is a stage.
 2. **`the-query-string-does-not-decide-the-route` uses a symbol from the condemned module.** Its GET
    always calls `sweepChat`, and the *Postgres* sweep writes `CHAT_SWEPT` — declared in
-   [`src/store/fs.ts`](../../src/store/fs.ts) line 390 and imported by
+   `src/store/fs.ts` line 390 and imported by
    [`src/store/pg-chat.ts`](../../src/store/pg-chat.ts) line 81. Not a filesystem read returning an
    empty answer; a shared symbol living in the half being deleted. Wants `shared-mechanism` naming
    it, and it is one for stage G's list: **deleting `fs.ts` moves this string, it does not remove
@@ -2475,7 +2475,7 @@ before it.
 #### The four queue suites, the `jobs-fs-adapter` split, and 25 of 26
 
 2026-09-04. `jobs`, `jobs-walk`, `jobs-commit-path`, `retry-is-only-for-a-failed-job`. **4 files, 80
-tests**, plus [`tests/jobs-fs-adapter.test.ts`](../../tests/jobs-fs-adapter.test.ts) at 12. Only
+tests**, plus `tests/jobs-fs-adapter.test.ts` at 12. Only
 `routes.test.ts` remains, and it is B2.
 
 **Two of this document's counts were wrong.** `jobs.test.ts` had **71** tests, not the *"~35"*
@@ -4711,7 +4711,7 @@ needs no stopping of the shared Supabase.
 The plan asked for this to be measured rather than assumed. It was, two ways.
 
 **Statically**, `outputs(ctx)` has exactly one caller in `src/`: `articleMetadata` in
-[`src/api.ts`](../../src/api.ts), which is the **filesystem** `ArticleReader`. After the hinge
+`src/api.ts`, which is the **filesystem** `ArticleReader`. After the hinge
 `src/store/index.ts` binds `pgArticleReader.articleMetadata`, so no route reaches it; the only
 importers of `src/api.js` left are `src/store/fs.ts` (the adapter itself), `src/store/pg.ts` (which
 takes `describeArticle` and `titleFor` only) and tests. `stepIsDone` and `assertProduced` stopped
@@ -5019,6 +5019,675 @@ purely because a file was deleted, and it will look unrelated.
 postcondition querying for leaked test identifiers; do not delete them.** Teardown quietly becoming
 a no-op leaves shared rows behind and produces cross-agent failures that look like somebody else's
 bug.
+
+#### G's cohort, frozen before any edit — 42 files, and the manifest's predicate sees 29 of them
+
+**The prediction, with its predicate in the same sentence** — the rule stages C and D each paid
+for once, and which this freeze exists to obey:
+
+> Stage G's cohort is **42 test files**, under the predicate *"has an `import` line naming a
+> condemned module or `src/api.js`, or calls `contextPaths(`, or reaches the filesystem store by
+> no import at all"*. Of those I predict **8 die**, **~25 are edited to drop a filesystem arm or
+> a single case**, and **~5 must have assertions ported** — because the predicate that governs a
+> file's **fate** is *whether the condemned module is its subject*, which is a different question
+> from the one that governs its **membership**.
+
+Two predicates, and keeping them apart is the whole of this freeze. Membership is about imports;
+fate is about assertions. Stage A's manifest used the first to answer the second, and that is
+where its three errors come from.
+
+The count, by how a file gets in (`scripts/` scratch: `g-cohort2.py`, run 2026-09-05):
+
+| | files | |
+|---|---|---|
+| A — imports a condemned `src/store/*` module | 29 | what stage A's manifest can see |
+| B — imports `src/api.ts` | +6 | invisible to A |
+| C — calls `contextPaths()`, neither of the above | +4 | invisible to A |
+| D — reaches by no import at all | +3 | invisible to **both** witnesses |
+| **total** | **42** | |
+
+**The manifest's predicate sees 29 of 42.** The thirteen it misses are
+`api`, `billing-settlement`, `jobs-commit-path`, `library`, `metadata-visibility-fs`,
+`pg-session-exact-base`, `public-imports`, `sanitize-stale-artefact`, `shelf`, `slug`,
+`store-artefact-manifest`, `store-carry-forward`, `store-session-isolation`.
+
+##### The third blind spot: the filesystem store has a room outside `src/store/`
+
+`src/api.ts` **is** the filesystem article reader — it reads `blocks.json` and `tree.json` off
+disk (`api.ts:217` `loadArticle`, through `candidateDirs`/`readJson`), and `src/store/fs.ts:113`
+assembles sixteen of its exports into `fsArticleReader`. It is instrumented by **nothing**:
+`CONDEMNED` (`vitest.witness.config.ts:44`), `TARGETS`
+(`scripts/store-migration-candidates.ts:57`) and `INSTRUMENTED`
+(`scripts/store-migration-witness.ts:94`) are the same eight `src/store/*.ts` modules, and
+`src/api.ts` is on none of them.
+
+So a test that calls `loadArticle` off `src/api.ts` executes the filesystem reader and **records
+nothing** — and the hole check at `store-migration-registry.test.ts:606` unions
+`ranAndTouchedNothing` into `accounted`, so the witness's silence is read as a clean bill.
+Measured against the committed witness:
+
+```
+tests/library.test.ts                 ranAndTouchedNothing: True   registry entry: False
+tests/sanitize-stale-artefact.test.ts ranAndTouchedNothing: True   registry entry: False
+tests/api.test.ts                     touched:              True   registry entry: True
+```
+
+`api.test.ts` was caught only by accident: it calls `articleMetadata`, which at `api.ts:1121`
+constructs `createFsArtifactStore` — an instrumented module, reached through a different door.
+The other two call `loadArticle`/`listArticles`, which never enter `src/store/` at all.
+
+`KNOWN_BLIND_SPOTS` (`store-migration-witness.ts:110`) records two, and this is neither. The two
+it knows are about *how* the instrument watches — a read rather than a call, a second module id.
+**This one is about where it looks**: the scope was defined as a directory, and the condemned
+implementation had a room outside it. A guard whose scope is drawn from the same assumption as
+the thing it guards agrees with the bug — [silent-success.md](../reusable/silent-success.md), and
+the fourth time this job has hit it.
+
+Naming the class, because it is not the one already written down: **the instrument's scope was a
+directory, and the condemned thing was a behaviour.** Every one of `fs.ts`'s sixteen imports from
+`../api.js` was visible in plain source for the whole job.
+
+##### Stage A's manifest is wrong on three files, all over-condemning
+
+Over-condemning is the direction that loses coverage silently, because a deleted assertion leaves
+nothing behind to go red.
+
+- `tests/pipeline-artifact-store.test.ts` — filed `filesystem-adapter-behaviour`, reason *"Every
+  claim is about `PATHS`, `pathFor` and `has()` parsing"*. It has **14 `describe` blocks and 54
+  cases**, among them `sameStamp`, `metaRawSha256`, glossary currency through the stamp, and a
+  14-case block driving a hand-rolled `ArtifactReads` fake. **~18 cases survive**; four die.
+- `tests/stage2c-raw-bytes.test.ts` — filed `filesystem-adapter-behaviour`. **One** of ~30 cases
+  uses the condemned import; the rest are `fsBlobs`/`writeRaw`, and `blobs-fs.ts` is out of scope.
+- `tests/store-realtime-sessions.test.ts` — the entry says *"Its Postgres half currently always
+  skips"*, inherited from the file's own header. **It cannot skip.** Stage F rewrote this file's
+  readiness handling (46 in, 54 out, `1481e196`), and `grep` now finds `skip` in it only inside
+  two comments; `describe(name, …)` at `:88` has no `skipIf`. The header contradicts itself
+  besides — the `beforeAll` at `:218` records *"All seven failed the first time they were allowed
+  to execute"*, which is a suite that ran. The header, the registry entry and the truth are three
+  different things, and the first two agree only because one copied the other.
+
+I wrote all three at stage A. They are one error, not three: a file classified by **what it
+imports** rather than by **what it asserts** — and an import list cannot see an assertion.
+
+##### Applied literally, G's own brief deletes coverage
+
+Stage G's brief says *"Each group deletes its filesystem-adapter behaviour tests from stage A's
+manifest in the same commit as its subject"*, and starts the groups with **uploads**.
+`tests/store-uploads-parity.test.ts` is the **only file in the tree that exercises `pgUploadStore`
+as a store contract** — the others (`upload-acquire`, `an-upload-is-queued-only-once-its-bytes-arrive`)
+are route-level. Its eleven cases reach Postgres through a `stores` array with two entries.
+Deleting the file to remove one entry loses all eleven: one-of-two-claims-wins, the three failure
+reasons, evidence through settle, an illegal transition, newest-first. **The correct edit is four
+lines.** The same shape holds for `store-jobs-parity` (52 Postgres cases behind the same framing),
+`store-reader-parity`, `store-realtime-sessions`, `store-ai-calls` and `source-store`.
+
+##### The plan's third stage-G instruction describes work stage B already did
+
+> **Job teardown is 11 files, not the appendix's eight.** They become permanent no-ops —
+> `readdir(...).catch(() => [])` over a directory that will never exist. **Replace each with a
+> database postcondition querying for leaked test identifiers; do not delete them.**
+
+**There is no such teardown.** `grep -rn "catch(() => \[\])" tests/ src/ scripts/` returns two hits
+on this tree: a *comment* at `tests/store-artefact-manifest.test.ts:78` recording that this used to
+be there three times, and one unrelated line in `scripts/live-spike.ts`. Stage B converted them;
+`tests/jobs.test.ts:61` records its own conversion in prose.
+
+Where the 11 came from: the plan review said *"the scan finds 11 files **referring to** job
+directories or helpers"*, and the plan restated that as *"job teardown is 11 files"*. Counted three
+ways today — teardowns that actually walk a jobs directory: **1**; files doing any filesystem job
+cleanup in a hook: **4**; files merely mentioning `data/_jobs` or `JOBS_DIR`: **~21**, nearly all
+header prose recording that the sweep was already converted. None of the four becomes a silent
+no-op, because all four are suites whose subject *is* `jobs-fs` and which die with it.
+
+**This is the C-and-D freeze error again, and this time it happened between two documents rather
+than inside one head**: a measurement taken with one predicate ("refers to") was reported with a
+narrower one ("does teardown in"), and nothing in between asked whether they were the same set.
+That is why this freeze states its predicate in the same sentence as its number.
+
+##### What would falsify this freeze
+
+Not "the suite is green". Each group's commit must show, for the files it touches, either a ported
+assertion running green in its new home, or an explicit line in the plan saying what was dropped
+and why. **A file deleted with no such line is the failure mode**, and no gate can see it.
+
+#### G1–G3 landed — the symbols, the callerless three, and the queue, 2026-09-05
+
+**G1 — two symbols left `fs.ts` before it could go.** `CHAT_SWEPT` and `requireTail` moved to
+[`src/chat.ts`](../../src/chat.ts), which already owned `ChatConflict` and every other operation on
+`ChatThread[]`, on the precedent of `COMMENT_SWEPT` in `src/comments.ts`. The registry had predicted
+this exact move and named these exact two symbols — worth recording beside the three files the same
+manifest got wrong, because it is the same document being right in advance about a thing it could
+see and wrong about a thing it could not. `SEARCH_SWEPT` needed no move: `pg-searches.ts` already
+carried a byte-identical private copy.
+
+**Changing `CHAT_SWEPT`'s value reddens no test, and that is correct.** Found by trying it. The
+sentence appears nowhere under `tests/`, and every comparison imports the constant, so the expected
+value and the produced value move together — this job's dominant class in a new place. It is
+deliberate: [`docs/project/copy.md`](../project/copy.md) says tests match on the code, not the
+prose, because *"a test that pins a sentence quietly makes the sentence permanent"*. Recorded rather
+than fixed; the obvious fix would have broken a documented rule. What was watched red instead:
+flipping `requireTail`'s comparison reddened all three cases in `store-chat-tail-guard`.
+
+**G2 — `uploads-fs.ts`, `ai-calls-fs.ts`, `realtime-sessions-fs.ts`**, 765 lines with no importer
+outside tests since the hinge. `tests/store-fs-write-chains.test.ts` went with them: both its cases
+were about a module-scope lock in two modules that no longer exist, and a transaction replaces that.
+
+The suites were **edited, not deleted** — uploads 22 → 11, realtime-sessions 14 → 7, ai-calls
+25 → 15, every Postgres case surviving. Two assertions were about to die with no home anywhere and
+were rewritten against Postgres in place: `pgCostStore.read`'s half-open range predicate, which
+`npm run cost` depends on, and `forJob`, whose only real-store test in the tree was the filesystem
+one. Both watched red (`lt` → `lte`, and a `.limit(1)`) before being put back.
+
+**G3 — `src/store/jobs-fs.ts`**, 1092 lines, the largest single adapter. `store-jobs-parity` went
+113 → 60 with all 53 Postgres loop cases intact; `jobs-fs-load`, `two-servers-one-queue`,
+`job-files-on-disk` and `tests/helpers/job-files.ts` died with their subject.
+`tests/jobs-fs-adapter.test.ts` was **split**: its `sweepStopped` block went with the adapter, and
+its `what a step counts as done` block became `tests/step-context-paths.test.ts` with
+`memoryArtefacts()` in place of `fsArtifacts`, carrying forward the rule its old header stated —
+*whoever removes `StepContext.dir`/`htmlFile` deletes this block, not whoever deletes the job
+store*. That is a later group.
+
+Two properties ceased to exist rather than moving, which is a different thing from being dropped:
+`jobs-fs-load`'s *"gives an ownerless record to this installation"* (`jobs.owner_id` is `not null`,
+so an ownerless record cannot exist) and all four of `two-servers-one-queue` (its hazard was a
+module-scope fence with two copies of the module; `claimIn`'s single conditional `update` abolishes
+it). `tests/slug.test.ts` lost the three lines that read `jobs-fs.ts` **as source text** — the
+outbound half of a two-directional invariant, deliberately not relocated, because `pg-jobs.ts` has
+no `path.join` and no directory for a slug to escape into.
+
+**Two gates go red purely because a file was deleted, and both look unrelated.** The plan already
+named `tests/slug.test.ts`. The other is `tests/doc-links.test.ts` — 17 dead links across 11 docs
+from G3 and 56 across 33 files from G4. It is a gate, not prose, so "sweep the prose at the end of
+the stage" does not cover it; each group fixes its own, converting a link to a plain code span
+where the file has gone. The record still says what it said, and only the clickable path goes.
+
+**And a gate that was red for none of these reasons.** `tests/no-provider-calls-guard.test.ts` asks
+`git ls-files --cached` which source files exist and then reads their bytes off the disk. Those two
+disagree for exactly as long as a deletion is uncommitted, so every group would have hit an `ENOENT`
+whose message said nothing about provider calls. Fixed once: a listed path the tree lacks is
+skipped, which is safe in the direction that matters, and the guard's existing "git listed fewer
+than fifty files" floor is what stops the filter swallowing everything. The inverse of
+[260831d](../postmortems/260831d-every-gate-reads-the-working-tree.md) — that one read the working
+tree when it wanted the commit; this read the index when it wanted the working tree.
+
+#### G4 landed — `src/store/fs.ts` and `src/api.ts`, 2026-09-05
+
+`src/api.ts` **was** the filesystem article reader, and `fs.ts` was sixteen of its exports wrapped
+in a value. Both are gone. `describeArticle` and `titleFor` — the only two things in `api.ts` that
+were not about directories — moved to [`src/library-scalars.ts`](../../src/library-scalars.ts),
+which is the file that exists *because* `describeArticle` needed a derivation neither store could
+own. `src/store/pg.ts` lost its `../api.js` import and gained two names on the
+`../library-scalars.js` import it already had.
+
+`assertOwnArticle` was deleted rather than moved: its only consumer was `fsAssertWritableGlossary`,
+which has had none since `src/store/index.ts` stopped supplying `assertWritable` on 2026-09-05.
+`readRaw` in [`src/fetch.ts`](../../src/fetch.ts) went with it — `loadSource` in `api.ts` was its
+last caller, and its own docstring named `articleMetadata`, which had never called it.
+
+**What was ported, and where it now lives**
+
+| from | to | the claim |
+|---|---|---|
+| `store-comments-parity`, step 4 | `store-comments.test.ts` | a create under a stored id with the placement **absent** must still refuse — `refuses a re-score` sends a *different* number, this sends none |
+| `store-comments-parity`, negative placement | `store-comments.test.ts` § `carries the referee's own placement` | `start` is still `12` — the valence did not reach the anchor |
+| `library.test.ts` § `describeArticle` | unchanged file, now the whole of it | eight pure cases, moved with the function |
+| `sanitize-stale-artefact` § `READERS` | same list | `src/store/public-reader.ts` replaced `api.ts` on it — a third reader of stored html that nothing had ever asked about |
+
+**What was dropped, named rather than waved away**
+
+- **`store-parity`'s whole-`Article` and whole-`LibraryEntry` deep equalities**, its block-order
+  equality and its two `toStrictEqual` absent-versus-undefined checks. A comparison needs two stores.
+  The block-order claim is pinned at the SQL level in `tests/store-block-reads.test.ts`; the other
+  two have no home and cannot have one.
+- **`store-parity`'s monotonic `opens`/`lastOpenedAt` assertion**, which existed only to replace an
+  equality inside a comparison that is gone.
+- **`sanitize-stale-artefact`'s behavioural sanitiser test.** It wrote a stamp-less `blocks.json`
+  and read it back through the one reader that needed no database — `src/api.ts`. What is left for
+  the surviving readers is that file's source read (a *call*, not a mention), which it had already
+  accepted for `pg.ts` and for the same reason. It cannot see a call whose result is thrown away.
+- **`store-carry-forward`'s filesystem half of `reports the three as not done`.** It asked the
+  step's own `stamp` and so got `assets` right for free, which is what `pg.ts`'s hand-written
+  `isCurrent` switch was being checked against. The Postgres half still fails if `case "assets"` is
+  deleted; the second opinion is not replaceable.
+- **`shelf.test.ts`'s five `listArticles`/`articleMetadata` cases.** Every one has a counterpart in
+  `tests/store-shelf-pg.test.ts` § *the shelf's writes*.
+- **`api.test.ts` entire (18 cases).** Its subject was `candidateDirs`. The one claim with no
+  Postgres home is `loadGlossary` reporting a list written by an older prompt as **outdated but not
+  stale**: `pg.ts` spells it `glossary.version !== PROMPT_VERSION` at nine sites and nothing drives
+  any of them through the read. Recorded here rather than fixed, because writing it needs a fixture
+  with a stale artefact row.
+
+**Three modules are now dead in `src/` and belong to a later group**, all of them reached only by
+`fs.ts`: `src/shelf.ts` (every export but `MAX_TITLE_CHARS`), `searchLibrary` in
+`src/library-search.ts` (`fold`/`parseQuery` survive, via `chat-tools.ts`), and the file-writing
+half of `src/referee-criteria-store.ts` (`withCriterion` and `CRITERION_SWEPT` survive, via
+`pg-referee-criteria.ts`). Their tests were left in place, minus the arms that reached the deleted
+reader, so that deleting the modules goes red rather than quiet.
+
+**The seam guard was the one thing this group left red**, deliberately and correctly — it is a
+decision, not a fix. `tests/store-seams-have-two-implementations.test.ts` demanded two
+implementations of every seam, and eleven seams lost their filesystem side in one commit.
+
+**Settled: the guard is narrowed, not extended and not deleted.** It now asserts *every seam has a
+Postgres implementation*. The postmortem that commissioned it asked for "two" because
+`SPIDERYARN_STORE` unset meant `files`, so a seam with no Postgres side was exercised by every test
+and every local run in the one configuration that was not deployed. **That reason is gone; the
+outage it guards is not** — a seam with no Postgres implementation is still a 501 for every reader,
+and still looks exactly like a seam that works.
+
+The narrowed guard is **strictly stronger** than what it replaces, which is what settles it against
+simply keeping the old one alive with exceptions. Every entry in `SEAM_ASYMMETRIES` excused a
+missing *files* side, so nothing that passed before fails now; and the door the map left open —
+declaring away a missing **Postgres** side, the direction its own type called *"a production outage
+with a date on it"* — is shut. `SEAM_ASYMMETRIES` and its type are deleted from
+[`src/store/live.ts`](../../src/store/live.ts), with a note in their place saying why they are not
+coming back. The `notMigrated` check survives untouched: a `pgFooStore` whose every method refuses
+is the same 501 by a longer route.
+
+Watched red before being believed: making `sideOf` stop recognising the `pg` prefix reddened three
+cases and named the seams. Nine tests became five; the four that went existed only to police the
+map. [`docs/project/database.md`](../project/database.md) § the seam rule was rewritten to match,
+because it described the retired mechanism as current.
+
+#### G5 landed — the last three modules, and the paths that outlived them, 2026-09-05
+
+`src/store/artifacts-fs.ts` (738 lines), `src/store/data-root.ts` (219) and `src/job-scope.ts` (59)
+are gone, and with them four things in `src/pipeline.ts` that had no caller left in `src/`:
+`PipelineStep.outputs(ctx): string[]` and its fifteen implementations, `StepContext.dir`,
+`StepContext.htmlFile`, `contextPaths(slug)` and `blocksPathFor`. `src/jobs.ts` no longer computes a
+directory per step of every job, and no longer opens a job scope.
+
+**The load-bearing claim was proved before anything was deleted, not after.** The group's whole
+premise is that nothing consumes the value of `contextPaths`. So it was made to return
+`/nonexistent/g5-poison` and ten pipeline, job and session suites were run against it —
+`acquire-extract-blocks-end-to-end`, `jobs-commit-path`, `store-pg-session`, `pg-session-exact-base`,
+`claim-session-postgres`, `upload-acquire`, `store-session-isolation`, `a-claim-that-lost-its-draft`,
+`a-long-pdf-is-refused-before-it-is-stored`, `billing-settlement`. **86 tests, all green.** That is a
+stronger statement than the greps that preceded it, because it covers the paths nothing names.
+
+The docstring at `pipeline.ts:672` claiming `assertProduced` iterates `outputs` was stale and is
+corrected: it has iterated `produces` through the store since 2026-08-26.
+
+**`runInJob` went too, and the accident that produced it is kept.** `src/job-scope.ts`'s own header
+said it existed for `dataRoot()` "and nothing else yet", which stayed true for its whole life. The
+wrapper had been written on 2026-08-30 with nothing calling it, so every deployed import failed at
+step one in 16ms; the case that stopped that happening twice —
+`tests/jobs-walk.test.ts` § *puts the job id in scope for the steps it runs* — is deleted with the
+mechanism and a tombstone left where it stood. Its mutation is the sixth of that file's seven, and
+the header now says six have a case to be red in.
+
+##### The four judgement calls, and what was decided
+
+**1. `assertScratchUntouched` — re-expressed, all eleven call sites kept.**
+[`store-migration-registry.ts`](../../tests/store-migration-registry.ts) had said in advance that
+these assertions are load-bearing and must be re-expressed rather than dropped, and it was right.
+The old form pointed `SPIDERYARN_DATA_ROOT` at a `mkdtemp` root per claim and asserted `readdir`
+came back `[]`. The new form is `assertNothingOnDisk(slug)`: `data/<slug>/` and
+`output/<slug>.html` under the **repository root** must not exist. It is stronger in one direction —
+the temp root only ever proved that nothing was written *to the root it had pinned*, while the
+repository root is where the deleted `dataRoot()` resolved on a laptop and where a rebuilt
+`path.resolve(import.meta.dirname, "..", "..")` lands, which is the exact bug `data-root.ts` was
+written against. It is weaker in another: a store rooted somewhere else entirely would escape it,
+and nothing reads an override any more, so there is no third place for it to be.
+
+**Watched red on purpose.** `data/claim-session-pg-ingest/arc.json` was planted by hand and case 1
+failed with `the ingest wrote the article to a disk: expected [ Array(1) ] to deeply equal []`; the
+directory was removed and it went green again. 11 of 11 in the file.
+
+**2. `store-pg-session` § *decides what to skip from the draft, not from the files on disk* —
+deleted, and the deletion is the point.** Its control was
+`expect(await onDisk.has(slug, "arc", ["arc"])).toBe(true)` through a `createFsArtifactStore`, and
+its own comment refused the case without one: *"a test where the files were not actually there would
+pass with `session.reads` swapped for anything at all"*. There is no store that can read a directory
+now, so there is **no control**, and keeping the case would leave exactly the vacuous test its own
+comment forbids — it would pass against a system with no disk concept, which is the system we have.
+Its surviving halves have homes: *not skipped when the draft lacks the artefact* is case 7's first
+request, and *the run phase reads the draft* is case 1's `seen.sawArc` asserted positively.
+
+**A third case of the same shape was found that the brief did not name**:
+`tests/tweets.test.ts` § *reads the store, not the directory the context happens to name*, which
+wrote a current `tweets.json` and `blocks.json` to a real directory, pointed `ctx.dir` at it, and
+asserted `stepIsDone` still said *not done*. Same reasoning, same verdict, same tombstone. With it
+went that file's `tempArticleDir()` and `ctxAt(dir)`, which is now `ctxFor()`.
+
+**3. `store-artefacts-pg` § *cover the same (step, kind) pairs* — deleted, and nothing real is
+lost.** It held `keysOf(STORAGE)` against `keysOf(PATHS)`: two *derived* maps. Its sibling holds
+`STORAGE` against `STEPS[step].produces`, which is where a step actually declares what it makes —
+strictly the better oracle, and it catches one thing the pair could not (a `PATHS` entry no step
+produces was invisible to a comparison of the two).
+
+**4. `store-artefact-manifest` — repointed at the committed corpus, deliberately.** Two of its five
+tests read the gitignored `data/`, on the argument that a laptop's own runs are where a brand-new
+artefact filename first appears — a *discovery canary*, and it caught `assets.json` and
+`quotes.json` that way. That argument died with the filesystem store: **nothing writes an article
+into `data/` any more**, so what is there is whatever `npm run worktree:setup` last copied out of
+the corpus, and the verdict would have passed or failed on whether somebody had run that script.
+That is [260902c](../postmortems/260902c-a-test-whose-evidence-was-one-laptop.md) from the other
+direction — there the evidence was one laptop's file, here it would be one laptop's absence. All
+three scans read the commit now. **What it costs, said plainly:** a new artefact is noticed when
+somebody commits an example of it rather than when a laptop first writes one, which is one step
+later; the file's header already instructs that commit, and there is no earlier moment left. 5 of 5.
+
+##### What died with no home, named rather than waved away
+
+- **`tests/data-root.test.ts` entire, 11 cases.** Every one was `chooseDataRoot`, `findRepoRoot`,
+  `dataRoot` or `fsLocations`. Its registry entry predicted this exactly — *"its `/var` and
+  warm-`/tmp` arguments have nowhere to go once no path is computed at all"*. The one worth naming
+  is *refuses an id that could climb out of the scratch directory*: `segment()` refused `..`,
+  `a/b`, `""` and `.` as a job id, and it was the **only** guard on a job id in the repository.
+  Checked before letting it go: **no job id is concatenated into a path anywhere in `src/`**, so
+  the property has ceased to exist rather than lost its coverage. Slugs are a different question and
+  `assertSlug` still answers it.
+- **`tests/step-context-paths.test.ts` entire, 4 cases — a file that lived one day.** G3 created it
+  because `jobs-fs-adapter`'s header asked that whoever deletes the job store must not also delete
+  that block; this group is the "whoever removes `StepContext.dir`" its own header named. Its three
+  path assertions died with `outputs`. **Its one portable claim went where it said it would**:
+  *a step must declare every artefact it writes* is
+  `tests/store-artefacts-pg.test.ts` § *has both of extract's and all three of hierarchy's*, and the
+  counts are the point — deleting `labels` from `hierarchy.produces` **and** from `STORAGE` leaves
+  the map assertion green while `hierarchy` calls itself finished with a tree and no labels. Its
+  fourth case went with it as § *is not done when the store holds nothing*.
+- **`blocks-baseline` § *refuses when stage 4's copy is over the size this store can read*.** A
+  decoder ceiling is a property of reading bytes off a disk; Postgres has no equivalent. The
+  store-agnostic half — *unusable is not absent* — survives in the neighbouring case, driven by
+  `plant`.
+- **`stage2c-raw-bytes` § *writes a raw.json the filesystem artefact store reads back as the
+  manifest*.** It held two constants in two modules against each other and one of them is gone.
+  Named in advance by the registry as the one thing in that file that dies with the adapter.
+- **`block-roles` § *survives the filesystem artefact store, field for field*.** Converted to
+  `memoryArtefacts()` first, then reverted and deleted: the registry entry written earlier the same
+  day argues that a memory fake makes it `toEqual` against the object it just put in, so the case
+  **cannot fail**. A case that cannot fail is worse than the reach it removes. The claim lives in
+  `tests/store-block-roles-pg.test.ts`, through the store production actually writes.
+- **`artefact-copy` § *copies nothing the reader owns* is weaker than it was**, and this is the one
+  weakening. It asserted four reader-state files were absent from the destination *directory*; there
+  is no directory and no way to ask a store for a file it was never given a name for. It is now
+  *has no kind for anything the reader owns* — no step's `produces` names any of the five — which is
+  the only way the old case could have gone red, but a narrower guard.
+- **`pipeline-artifact-store` § *has a path for every kind any step declares, and no orphans*,
+  § *keeps the two blocks.json files apart* and § *puts each kind where the table says the real file
+  is*.** All three are `PATHS`/`pathFor` against literal paths — the independent half of a round trip
+  whose other half is now a `Map`.
+- **`pipeline-artifact-store` § *reads null and says nothing about what the file contained*.**
+  Nothing decodes text into an artefact any more. Its control — that V8 really does quote the input
+  in a `JSON.parse` message — moved into the surviving `parseJsonFrom` case, which was otherwise
+  assertable-vacuously.
+- **The decoder's size ceiling, as a rule.** `DECODERS` gave each kind 4, 16 or 32 MiB and refused
+  what `read` could not read back; Postgres has none, and `whyUnusable` is shape only. The only
+  bound left in the repository is `MAX_BYTES` in `tests/helpers/fixture-artefacts.ts`, which guards
+  the fixture reader and says out loud that it is not the pipeline's ceiling.
+
+##### The finding worth more than the deletions
+
+**Two `blocks` cases would have asserted the opposite of the truth if they had been ported
+mechanically**, and only measuring caught it. `not done once a re-extraction has wiped the ids out
+of the HTML` and `not done when the HTML carries only some of the ids` were **pure filesystem
+aliasing**: on disk, `extract/extractedHtml` and `blocks/stampedHtml` were one `output/<slug>.html`,
+so wiping the ids clobbered both, and `blocksMatchTheirHtml` went red. Under two columns it does
+not. `blocksMatchTheirHtml` re-derives with the stored blocks as the baseline, and `splitIntoBlocks`
+**matches an id-free document against that baseline and carries the old ids over** — measured
+2026-09-05: `["spya-aaaaaa","spya-bbbbbb"]` back, and a byte-identical document. Ported unchanged,
+both cases would have gone green while asserting a falsehood about
+[block-ids.md](../project/block-ids.md)'s one contract. One was deleted; the other is
+*not done once stage 3's document has lost an id its blocks name*, which asks the two-column
+question honestly and keeps the block's unique claim that **`extract` is still done**.
+
+**A second `260902c` was found in the same file.** `pipeline-artifact-store` was reading its
+round-trip fixtures out of the gitignored `data/writes/…` rather than the committed corpus, and one
+block wrote into the real repository's `data/raw-shape/` through `fsLocations("raw-shape")`. Both
+are gone: the fixtures come through `requireFixture` now, and nothing in the file touches a disk.
+
+##### One assertion that was never there
+
+`tests/a-claim-that-lost-its-draft.test.ts` carried *"one scratch root for the file: no step here
+writes to a disk, and this proves it"* over a `mkdtemp` that **nothing ever read back** — no
+`readdir`, no assertion, in any case. It proved nothing, and it cited the file that did. Recorded in
+place rather than quietly dropped: a comment claiming an assertion that is not there is this job's
+dominant failure, and it was sitting inside a file about a lost draft.
+
+##### The counts
+
+| file | before → after | |
+|---|---|---|
+| `claim-session-postgres` | 11 → 11 | the eleven assertions re-expressed, not dropped |
+| `pipeline-artifact-store` | 75 → 67 | the plan predicted "~18 survive of 54"; it was counting `it()` **sites**, three of which are loops of 7, 11 and 6 |
+| `source-store` | 20 → 14 | the filesystem arm; every one has a Postgres counterpart |
+| `store-session` | 18 → 18 | |
+| `artefact-copy` | 18 → 19 | one row *gained*: `output/writes.html` was both `extract/extractedHtml` and `blocks/stampedHtml`, so a copy that dropped either left the file there |
+| `glossary-ideas-baseline` | 33 → 33 | |
+| `blocks-baseline` | 25 → 24 | |
+| `stage2c-raw-bytes` | 24 → 23 | |
+| `block-roles` | 24 → 23 | |
+| `store-pg-session` | 18 → 17 | |
+| `tweets` | 32 → 31 | |
+| `jobs-walk` | 10 → 9 | |
+| `store-artefacts-pg` | 71 → 72 | two ported in, one derived-map comparison out |
+| `data-root` | 14 → **0** | deleted |
+| `step-context-paths` | 4 → **0** | deleted |
+| `acquire-extract-blocks-end-to-end`, `upload-acquire`, `a-long-pdf…`, `jobs-commit-path`, `store-session-isolation`, `pg-session-exact-base`, `billing-settlement`, `job-failure`, `sanitize-stale-artefact`, `late-step-on-a-cold-instance`, `a-claim-that-lost-its-draft`, `empty-blocks-keep-their-ids`, `stage-stamp-agreement`, the three step-registrations, `article-cache-call-site`, both `all-skipped-*`, `glossary-delete-then-rebuild`, `retry-is-only-for-a-failed-job`, `store-artefact-manifest` | unchanged | context fields and dead scaffolding removed, no case touched |
+
+**Green, run individually:** the five job/session suites 43 of 43; eighteen more 265 of 265;
+`claim-session-postgres` 11 of 11; the five gates 27 of 27 plus `one-store-only`, `public-imports`
+and `store-seams-have-two-implementations`. `npx tsx scripts/typecheck.ts` is clean on `tsconfig.json`
+and on every file this group touched.
+
+##### The instrument now watches nothing condemned
+
+`CONDEMNED` (vitest.witness.config.ts), `TARGETS` (scripts/store-migration-candidates.ts) and
+`INSTRUMENTED` (scripts/store-migration-witness.ts) are down to `copy-artefacts` alone — which
+**survives**, since stage D gave it a store-agnostic `ArtifactSource`. So there is nothing left for
+the witness to witness, which is the state `tsconfig.json` predicted in prose. It is kept rather
+than retired here so stage H has a working instrument, and goes with the tombstone in stage I.
+`tests/data-root.test.ts` left `POSITIVE_CONTROLS`, `artefact-copy` kept the two sites that name the
+module it controls, and the read-only blind spot (`store-artefacts-pg` reading `PATHS`) is retired
+by the disappearance of the import rather than by the class being solved — `KNOWN_BLIND_SPOTS` still
+records the class.
+
+**Two floors in `store-migration-registry.test.ts` fell from 100 to 20**, and the number is measured
+rather than argued: 42 files reach `copy-artefacts`, 41 through `tests/helpers/load-article.ts` and
+one directly, none type-only. They are controls against a walk that parsed nothing, and that is
+still what they defend.
+
+##### And the gate that goes red for none of these reasons
+
+`tests/doc-links.test.ts` again — **42 dead links across 25 files**, all of them
+`](../../src/store/artifacts-fs.ts)` or `data-root.ts`. Each is now a plain code span with its
+sentence intact, which is the convention G3 set.
+
+#### G6 landed — the reader-state modules' filesystem halves, 2026-09-05
+
+Nine mixed modules, each holding pure domain logic the Postgres store calls *and* a file-reading
+half that `src/store/fs.ts` was the only thing wiring in. **1,968 lines of `src/` went; every module
+but one is still there**, because deleting the files would have taken `withCriterion`, `withRun`,
+`withTurn`, `CommentIdTaken` and the rest with them.
+
+| module | lines | what went | what stayed |
+|---|---|---|---|
+| `src/comments.ts` | 759 → 207 | every writer, the queue, the temp-and-rename | the vocabulary (`NewComment`, `MarkPatch`, `AnswerPatch`, both refusals, `COMMENT_SWEPT`) and `loadComments` |
+| `src/chat.ts` | 898 → 726 | `save`, `update`, `renameThread`, `deleteThread`, `beginTurn`, `finishTurn`, `retryTurn` | every `with*` decision, `requireTail`, `titleFrom`, `ChatConflict`, `CHAT_SWEPT`, `loadThreads` |
+| `src/searches.ts` | 564 → 268 | `beginRun`, `finishRun`, `deleteRun`, `recolourRun`, `readSearches`, `currentSourceHash`, `withColour` | `MAX_RUNS`, `withRun`, the colour rules, `loadRuns` |
+| `src/profile.ts` | 492 → 276 | the whole store section, and `SPIDERYARN_READER_FILE` with it | render, normalise, hash, `profileIsStale`, `PROFILE_RULES` |
+| `src/glossary-lookups.ts` | 167 → 109 | `saveLookup` and the read/write split behind it | `LookupsByTerm`, `loadLookups` |
+| `src/referee-claims-store.ts` | 177 → **deleted** | all of it | `CLAIMS_SWEPT` moved to `src/store/pg-referee-claims.ts`, on `SEARCH_SWEPT`'s precedent |
+| `src/referee-criteria-store.ts` | 303 → 131 | every writer, and `withColour` — `pg-referee-criteria.ts` never imported it | `withCriterion`, `CRITERION_SWEPT` |
+| `src/shelf.ts` | 238 → 93 | `patchShelf`, `setArchived`, `setTitle`, `recordOpen` | `MAX_TITLE_CHARS`, `loadShelf` |
+| `src/library-search.ts` | 291 → 111 | `searchLibrary` and the `data/` walk | `parseQuery`, `fold` — no imports left at all |
+
+##### The freeze was wrong about three things, and the third is the one that matters
+
+1. **`MAX_TITLE_CHARS` is not dead.** G4 recorded `src/shelf.ts` as "every export but
+   `MAX_TITLE_CHARS`" — correct — and the brief written from it inverted the exception.
+   `src/store/pg-shelf.ts:26` imports it and states the cap from it.
+2. **`searchLibrary` had a caller.** `evals/embedding-retrieval.ts:910` reached it through a
+   **string-built dynamic import**, which is invisible to an import-statement grep and was the one
+   thing keeping the `data/` walk alive. It is repaired rather than deleted — see below.
+3. **The five filesystem *readers* are not dead, and cannot go in this group.**
+   `tests/helpers/seed-reader-state.ts` reads a fixture's `shelf.json`, `comments.json`,
+   `chat.json`, `searches.json` and `glossary-lookups.json` through `loadShelf`, `loadComments`,
+   `loadThreads`, `loadRuns` and `loadLookups` to seed the columns Postgres keeps, and four live
+   suites stand on it: `store-parity`, `store-roundtrip`, `chat-anchor` and
+   `helpers-seed-reader-state`. So each of those five modules keeps a `ROOT`, a `fileFor` and one
+   read, and each now says in its own header that it is a fixture reader rather than a store.
+
+**Removing those five is its own piece of work.** The seeder's docstring names the reason: each of
+the five modules holds its own root at module scope and none of them can be told where to look,
+which is why `store-parity` and `store-roundtrip` read a developer's `data/` rather than the
+committed corpus. Its proposed fix — `dataRoot()` in `src/store/data-root.ts` — is **no longer
+available**: that module was deleted in the same day's work, and the seeder's docstring is stale
+about it. What is left is the shape `tests/helpers/load-article.ts` already uses: take a `root` and
+default it. The cheapest version is to move the five reads into the seeder itself, which is their
+only consumer and which is honest about being a fixture reader; the modules then lose their last
+import of `node:fs`. Doing it here would have been a change to fixture semantics for four Postgres
+suites, in the same commit as nine deletions.
+
+##### The eval's literal baseline was measuring the wrong corpus
+
+`evals/embedding-retrieval.ts` compares each embedding arm against "what the search we already ship
+would have found". It called `searchLibrary`, which walked the developer's own `data/` plus
+`example/` — while every arm is scored over `tests/fixtures/data-root/data/` plus `example/`. **The
+baseline and the arms were reading different corpora**, and on a fresh clone the baseline searched
+`example/` alone. It is now the same AND-scan written out over the `passages` the eval already
+loaded, importing `parseQuery` and `fold` from `src/library-search.ts` — the two parts of that
+module that were never about files. Repointing it at `pgLibrarySearch` was rejected: that stems, ORs
+and drops stop words, which is not the floor this column is asking about. **The number moves**, and
+`evals/results/embedding-retrieval-2026-08-26.md` is not comparable with a later run.
+
+##### `tests/parse-json.test.ts` again — and the rule it should have carried the first time
+
+It drives four store loaders that log a parse failure and rethrow, and its claim is about what
+reaches a **log line**, so it needs a caller that logs. Its fourth driver changed twice in one day:
+`src/api.ts`'s `loadArticle` → `loadClaimsRun` (G4) → `loadShelf` (here), because `loadClaimsRun`
+was deleted hours after it was chosen. The file now says, in its own header, that a later group
+deleting a driver must repoint the scenario at another live caller that logs — not drop the case,
+and not demote it to a unit test of `parseJsonFrom`. 59 cases, unchanged in number.
+
+##### What was ported, and where it now lives
+
+| from | to | the claim |
+|---|---|---|
+| `shelf.test.ts` ×7 | `store-shelf-pg` § *the shelf's writes* | the title cap, blank-clears-the-title, and all four `purpose` rules — stored, cleared on blank, line endings settled, cap refused, absent key left alone — plus `lastOpenedAt`. `pg-shelf.ts` re-states every one of them and **nothing was driving any of them** |
+| `searches.test.ts` ×2 | `store-searches-pg` | a stored failure read back still answers `worthRetrying` correctly — the round trip that stops a decorated error string turning every permanent failure back into a Retry button |
+| `comments.test.ts` ×1 | `store-comments` | a **malformed** client id is re-minted. The neighbouring case only sends an *absent* id, which the same line satisfies with the `isSpideryarnId` check deleted |
+| `referee-criteria-store.test.ts` ×1 | its own Postgres block | clearing a colour removes the key rather than storing `null` — `exactOptionalPropertyTypes` makes those different values on the wire |
+| `library-search.test.ts` → rewritten | itself | `parseQuery` and `fold` had **no direct test anywhere**: the three `fold` cases in `library-hits.test.ts` are the *client's* copy in `src/web/library-hits.ts`. Nine cases now cover the folding, the phrase quoting and the length-non-preservation hazard |
+
+##### What was dropped, named rather than waved away
+
+- **`shelf.test.ts`'s *"survives a re-extraction, like the title"***. On disk the hazard was exact —
+  stage 2 rewrites `meta.json` on every run, so a title stored there is silently undone weeks later.
+  In Postgres the override is a column on `articles` and an extraction writes a *revision*, so the
+  accident cannot be spelled. The nearest live guard is `store-shelf-pg` § *renames, and the reading
+  view agrees with the card*. A full equivalent has to publish a second revision and nothing in that
+  suite builds one.
+- **`searches.test.ts`'s four `currentSourceHash` cases** — fingerprinting the `example/` fixture
+  under its own slug and no other, ignoring a directory that is not a whole article, `readSearches`
+  handing the panel a list and a hash in one read, and a retried run being re-answered against
+  today's article. All four are about a candidate-directory walk that no longer exists.
+- **`comments.test.ts`'s *"patches one comment without disturbing the others"***. In SQL the `WHERE`
+  on the id is the whole of it.
+- **`glossary-lookups.test.ts`'s *"refuses to write over a file it could not read"*** and *"leaves no
+  temp file behind"*, and every suite's *"does not lose a write when two happen at once"*. These
+  were properties of a whole-file rewrite behind a per-process queue; SQL abolishes the hazard
+  rather than re-homing the claim, and each surviving suite says so where the case used to be.
+
+`comment-sweep`'s whole filesystem block went with **all four of its claims already covered** on the
+Postgres side, which is the one clean deletion in the group.
+
+##### Counts
+
+`shelf` 14 → 4, `glossary-lookups` 8 → 4, `library-search` 13 → 9, `searches` 37 → 13,
+`comments` 23 → 7, `comment-sweep` 15 → 11, `referee-criteria-store` 13 → 11.
+`store-shelf-pg` 23 → 30, `store-searches-pg` 25 → 27, `store-comments` 22 → 23.
+`profile` and `chat` were untouched — every case in both was already about the domain half, which is
+the measurement that says the split this group made was the split those files already had.
+
+**Watched red before being believed**, four times: swapping `loadShelf`'s `parseJsonFrom` for a bare
+`JSON.parse` reddened two cases in `parse-json` with `ZQSHELFAAA` quoted twice over, in the message
+*and* in the stack — the doubling that file exists to name; `MIN_TERM` 2 → 1 reddened the
+one-character-terms case; dropping the purpose cap and the `normaliseProfileText` call in
+`pg-shelf.ts` reddened exactly the two ported cases that assert them; and deleting `isSpideryarnId`
+from `pg-comments.ts`'s id guard reddened only the newly-ported malformed-id case, which is what
+says it was a real gap rather than a duplicate.
+
+**One thing worth knowing for stage H.** `knip` reports `loadThreads` as an unused export and is
+right in spirit: it is the one of the five readers whose only consumer is a test *helper* rather than
+a `.test.ts`. That is the shape the other four will take when their own suites stop importing them.
+
+#### Stage G's review — one round, three findings, all accepted, 2026-09-05
+
+Prompt: [`260903f-stage-g-code-review-prompt.md`](260903f-stage-g-code-review-prompt.md).
+Answer: [`260903f-stage-g-code-review-sol.md`](260903f-stage-g-code-review-sol.md). Candidate named
+as four SHAs rather than a range, because `dev` is shared and a merge-base range that evening
+covered twenty-seven other agents' commits.
+
+**No P0 or P1.** Sol independently confirmed the three *ceased to exist* claims, found no third form
+of string-built import, and checked that each reader-state split kept the half Postgres uses. Three
+findings, and none was overruled.
+
+##### F1 (P2) — the narrowed seam guard could not see a seam with **no** implementation
+
+`seams()` is implementations ∩ contracts, so a contract wired through a selector in
+`src/store/index.ts` with no adapter at all never enters `SEAMS`, and the Postgres check cannot look
+at what is not there. Sol proved it by mutation — a planted `ReviewMissingStore` with a selector and
+no adapter passed all five tests — and **I reproduced it before fixing it**, which is the rule.
+
+**This falsifies a claim in the commit message.** I wrote that the narrowing was *strictly
+stronger*. It is strictly stronger **for the seams it discovers**, and that qualifier is doing more
+work than I gave it credit for: with two stores the Claims outage arrived as *has a filesystem side,
+missing Postgres*, which is discoverable; with one store the same outage arrives as *contract,
+selector, nothing*, which is not. The old guard had the identical hole and it did not matter, because
+a half-built seam still had a half to be found by. **Removing the other store is what opened it** —
+the hazard was created by the change, not merely uncovered by it, and that is the kind of thing a
+cross-family reviewer is for.
+
+The fix derives a second candidate set from the **selectors**:
+`export const commentStore: CommentStore = guarded(…)` says *the app calls this contract*, which is
+the claim that matters, and a data shape never has a selector — so it closes the hole without
+flagging `RawSource`, `SweepOptions` and `Turn`, which is why the set was built from implementations
+in the first place. Still derived, never listed. A floor case asserts the selector scan found more
+than eight, because an empty list is what a parser that has stopped matching produces and it would
+satisfy the new check silently.
+
+##### F2 (P2) — a suite was deleted with nothing recording what went with it
+
+`tests/store-reader-state-parity.test.ts` went in `86a4ef7c` and **the plan does not name it**. That
+is exactly the failure this stage's own freeze defines — *"a file deleted with no such line is the
+failure mode, and no gate can see it"* — committed by the person who wrote the sentence. It is worth
+recording plainly rather than fixing quietly: the rule was written down, the mechanism to enforce it
+was a human reading a diff, and the human was me.
+
+It held three sequential walks. The comparison in them died with the second store; the **sequence**
+did not, and none of the 61 cases in `store-chat-pg` and `store-searches-pg` walks a state machine —
+they test each transition from a fresh state, which cannot see state leaking between them.
+
+Two are ported, one is not. The chat walk (begin → finish → begin → retry → edit → rename) and the
+search walk (begin → finish → fail → retry → finish → delete) are now single cases in the surviving
+Postgres suites, each comparison replaced by an assertion about what the store should actually hold
+at that step. The glossary walk is not ported, checked rather than assumed:
+`tests/store-lookups-pg.test.ts:70` and `:95` already cover both halves of it.
+
+**The port recovered coverage rather than performing it, and the evidence is that each break
+reddened only the new case.** Deleting `error: null` from `pg-chat.ts` § `retry` failed *"the failed
+attempt's error survived the retry"* and nothing else; dropping `eq(searchRuns.id, runId)` from
+`pg-searches.ts` § `remove` failed the new case and nothing else. Both properties were genuinely
+uncovered before.
+
+##### F3 (P3 as filed, and under-graded) — docs describing the deleted backend as live
+
+Sol filed three stale doc passages as non-behavioural. Two are.
+**`example/README.md` was not**: it promised that *"a fresh clone that has never run the pipeline
+still has the committed `example/` fixture to open"*, and that was `src/api.ts` falling back to
+`example/` on a read. There is no filesystem reader, so **a documented developer affordance changed**
+— which is a fact about the product, not a citation. The replacement exists and is now what the docs
+say: `npm run setup` runs `db:seed-dev`, which loads the committed corpus into Postgres.
+
+Losing that fallback is the point rather than a casualty. A reader who asked for a slug and was
+served the fixture's text under their own address is the bug the old note in that README describes;
+narrowing it to one slug was the 2026-08-30 fix, and it is now structurally impossible.
+
+`docs/project/library.md` § the seam table was the sharpest of the rest — it named the deleted file
+as **"the Postgres seam"**, which would have sent the next reader to a file that does not exist to
+learn about the store that does.
 
 ### H — tighten the contracts the filesystem store was weakening
 

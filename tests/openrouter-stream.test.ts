@@ -167,13 +167,60 @@ describe("classifyEnd", () => {
      last happened to say — so these three carry a finish reason *and* a fired
      signal, and the signal has to win. */
   it("blames our deadline before anything the provider said", () => {
+    /* **`terminated: false` here, and that is the whole fixture.** This case
+       said `terminated: true` until 2026-09-05, which made it assert the
+       opposite of what it meant to: a terminator is not something the provider
+       *said*, it is proof the whole response arrived, and a clock that fires
+       afterwards cannot make it incomplete. The three cases below are the other
+       half of that correction. GPT Sol, finding F5. */
+    expect(
+      classifyEnd(ended({ finishReason: "stop" }), {
+        signal: undefined,
+        deadline: fired(),
+        stalled: quiet(),
+      }),
+    ).toEqual({ kind: "timed-out" });
+  });
+
+  /* **But `[DONE]` beats all three of them**, because it is the one fact that is
+     not about *when* — the complete SSE response was received, and nothing that
+     happens later unreceives it. A deadline landing in the gap between the
+     terminator arriving and the classifier being called used to throw away a
+     whole answer the reader had already watched appear.
+     tests/converse-stream-end.test.ts has the end-to-end reproduction. */
+  it("keeps a terminated stream finished when our deadline fires after the terminator", () => {
     expect(
       classifyEnd(ended({ terminated: true, finishReason: "stop" }), {
         signal: undefined,
         deadline: fired(),
         stalled: quiet(),
       }),
-    ).toEqual({ kind: "timed-out" });
+    ).toEqual({ kind: "finished" });
+  });
+
+  it("keeps a terminated stream's own finish reason when the stall timer fires late", () => {
+    /* And the reason still decides *which* ending it was: a terminated stream
+       that ran out of room is `truncated`, not `finished` — the gate is only
+       about the three signal checks. */
+    expect(
+      classifyEnd(ended({ terminated: true, finishReason: "length" }), {
+        signal: undefined,
+        deadline: quiet(),
+        stalled: fired(),
+      }),
+    ).toEqual({ kind: "truncated" });
+  });
+
+  it("does not call it abandoned when the reader left after the terminator arrived", () => {
+    /* The reader pressed stop and got the whole answer anyway. Calling that a
+       stop would tell them they had interrupted something that had finished. */
+    expect(
+      classifyEnd(ended({ terminated: true, finishReason: "stop" }), {
+        signal: fired(),
+        deadline: quiet(),
+        stalled: quiet(),
+      }),
+    ).toEqual({ kind: "finished" });
   });
 
   it("blames our stall timer before anything the provider said", () => {

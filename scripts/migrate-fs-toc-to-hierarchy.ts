@@ -8,7 +8,8 @@
  * can reach:
  *
  * - `data/<slug>/steps/<step>.running` — the interruption marker
- *   (`markerFile` in src/store/artifacts-fs.ts).
+ *   (`markerFile`, which lived in src/store/artifacts-fs.ts until it was
+ *   deleted 2026-09-05).
  * - `data/<slug>/checkpoints/<namespace>/` — `toc-labels` became `hierarchy-labels`
  *   (`CheckpointNamespace` in src/store/checkpoints.ts).
  * - `data/_jobs/*.json` — `steps[].name`, a `JobStep[]` exactly as `jobs.steps` is.

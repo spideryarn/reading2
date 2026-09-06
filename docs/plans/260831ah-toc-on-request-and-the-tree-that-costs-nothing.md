@@ -195,7 +195,7 @@ separate exact-idempotence pin.
 1. **`assets` breaks the moment `toc` leaves the default list.** It reads `(toc, blocks)` for both its
    input hash ([`src/pipeline.ts`](../../src/pipeline.ts):868) and its run (:1861). Postgres maps
    `(blocks, blocks)` and `(toc, blocks)` onto the same rows so this hides there — but
-   [`artifacts-fs.ts`](../../src/store/artifacts-fs.ts):133 keeps them distinct, and **this plan
+   `artifacts-fs.ts`:133 keeps them distinct, and **this plan
    deliberately lands before the flip**, so it breaks the ordinary ingest on day one. Both must move
    to the canonical block-stage artefact. Finding 1.
 2. **"`blocks` publishes a tree" is not a protocol.** `checkProduct`

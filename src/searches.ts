@@ -1,13 +1,15 @@
 /**
- * Saved meaning-searches on disk — `data/<slug>/searches.json`.
+ * **What a saved meaning-search *is*** — the cap, the palette rule and the
+ * mint-or-retry decision that `pgSearchStore` (src/store/pg-searches.ts) is
+ * written against.
  *
- * The third file with this exact shape, after src/comments.ts and src/chat.ts:
- * reader state beside the article rather than in it, one JSON file, an atomic
- * write, and a serialised read-modify-write queue. That repetition is
- * deliberate. A second good way to store reader state would be one way too
- * many, and when this all moves to Postgres
- * (docs/plans/260825f-postgres-migration.md) three identical shapes become three
- * identical tables and none of these modules' interfaces change.
+ * The third file with this shape, after src/comments.ts and src/chat.ts, and
+ * for the same reason: the rules live in one place and the store runs them.
+ * Every write goes to Postgres, and the file-writing half of this module went
+ * with `src/store/fs.ts` on 2026-09-05
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G).
+ * `loadRuns` stays for one caller — `tests/helpers/seed-reader-state.ts`, which
+ * reads a fixture's `data/<slug>/searches.json` into rows.
  *
  * ## Why searches are saved at all
  *
@@ -37,139 +39,17 @@
  * message strings, so the only thing keeping prose out of the log is not
  * putting it in. Same rule as src/comments.ts and src/chat.ts.
  */
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { Block, SearchRun } from "./types.js";
+import type { SearchRun } from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { assertSlug } from "./slug.js";
-import { isStale } from "./search-stale.js";
-import { hashBlocks } from "./source-hash.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 const fileFor = (slug: string) => path.join(ROOT, "data", slug, "searches.json");
-
-/** The one slug whose article lives outside `data/` — the committed `example/`
-    fixture. A second copy of `FIXTURE_SLUG` in src/api.ts, for the same reason
-    `currentSourceHash` below is a second copy of `candidateDirs`: importing it
-    would pull that module's whole graph into a storage module. */
-const FIXTURE_SLUG = "example";
-
-/**
- * The fingerprint of the article as it stands right now, or `undefined` if the
- * blocks cannot be read.
- *
- * `hashBlocks`, the same function a tweet thread, a glossary and a set of
- * summaries are fingerprinted with — deliberately, and it is worth saying why a
- * *narrower* hash was rejected. A search's hits are anchored to particular
- * blocks, so the obvious economy is to hash only the blocks it cited: then a
- * re-extraction that leaves those paragraphs alone would not disturb the run.
- *
- * That is wrong twice.
- *
- * **A search was answered over the whole article, so the whole article is what
- * it depends on.** The model was shown every block and chose these; add a new
- * section and its answer is now incomplete in a way no hash over the old hits
- * could ever notice. The run would report itself current while the passage the
- * reader is actually looking for sits in text nothing has searched.
- *
- * **And it would be a second definition of "current" for one article.** That is
- * exactly what src/source-hash.ts was pulled out of src/tweets.ts to stop: two
- * fingerprints of the same thing can only ever disagree, and the day they do,
- * one artefact reports itself fresh against a rule nothing else uses.
- *
- * **It has to look where `loadArticle` looks.** `candidateDirs` in src/api.ts
- * tries `data/<slug>/`, adds `example/` for the fixture's own slug and for no
- * other, and accepts a directory only when it holds *both* `blocks.json` and
- * `tree.json`. Hashing `data/<slug>/blocks.json` unconditionally would be right
- * for every real article and wrong for exactly one: the demo, whose files are
- * not under `data/` — no file, no hash, and every saved search on it reads as
- * out of date for ever with nothing saying why. That the rule is written out
- * twice is the cost of not dragging src/api.ts's module graph — pipeline,
- * glossary, summaries — into a storage module; the two are pinned against each
- * other by a test rather than left to agree by memory.
- *
- * `example/` used to be tried for *every* slug here, mirroring the fallback
- * src/api.ts had at the time. When that fallback went, this had to go with it:
- * a slug the reader is now refused must not still have a fingerprint, and one
- * taken from prose they are not being shown is the worst kind to have.
- *
- * The Postgres half is src/store/pg-searches.ts, which asks its own store the
- * same question and gets the same number (tests/store-parity.test.ts).
- */
-export async function currentSourceHash(slug: string): Promise<string | undefined> {
-  assertSlug(slug);
-  const dirs = [path.join(ROOT, "data", slug)];
-  if (slug === FIXTURE_SLUG) dirs.push(path.join(ROOT, "example"));
-  for (const dir of dirs) {
-    const hash = await hashDir(dir, slug);
-    if (hash !== undefined) return hash;
-  }
-  return undefined;
-}
-
-/** One candidate directory: its blocks, hashed, or `undefined` if it is not an article. */
-async function hashDir(dir: string, slug: string): Promise<string | undefined> {
-  try {
-    /* `tree.json` too, because that is what `articleDir` requires before it
-       will serve a directory. Without the check, a `data/<slug>/` holding a
-       half-finished ingest would be hashed here while the reader is being shown
-       the fixture — the fingerprint and the article on screen would be of two
-       different pieces, which is the one thing this number must never be. */
-    await readFile(path.join(dir, "tree.json"), "utf8");
-    const parsed = parseJsonFrom<{ blocks?: Block[] }>(
-      await readFile(path.join(dir, "blocks.json"), "utf8"),
-      `blocks.json for ${slug}`,
-    );
-    return parsed.blocks ? hashBlocks(parsed.blocks) : undefined;
-  } catch {
-    /* Swallowed, and this is the one place in this module that swallows. An
-       article with no blocks.json is an article with no reading view, so the
-       panel is not on screen to be told anything; and a read failure here must
-       not take down the list of saved searches, which is what a throw would do.
-       `undefined` is the honest answer and `isStale` treats it as stale. */
-    return undefined;
-  }
-}
-
-/**
- * Does this run still describe the article on disk? — **re-exported.**
- *
- * The implementation is src/search-stale.ts, which imports nothing, because the
- * panel has to ask the identical question and nothing under `src/web/` may
- * reach this module (tests/client-imports.test.ts). Two implementations of a
- * rule this small is how a row and the marks it drew end up disagreeing about
- * whether they are out of date.
- *
- * Imported *and* re-exported rather than a bare `export … from`, so the name is
- * bound locally too — src/tweets.ts says why that matters where it does the
- * same for `hashBlocks`.
- */
-export { isStale };
-
-/**
- * The saved searches **and** the fingerprint to judge them against.
- *
- * One call rather than two, because the two halves have to be read close
- * together: the article can be re-extracted between them, and a list read
- * before a hash read would be compared against an article none of its runs ever
- * saw. Same shape and the same reasoning as `loadGlossary` and `loadTweets` in
- * src/api.ts, which attach `stale` at the read seam rather than storing it —
- * a flag stored at generation time is right until the moment it matters.
- *
- * The fingerprint is sent rather than a boolean per run so that the *reason*
- * travels with it: the client can tell "this run is old" from "we could not
- * check", and a run that arrives on the POST stream can be judged against the
- * same number without a second request.
- */
-export async function readSearches(
-  slug: string,
-): Promise<{ runs: SearchRun[]; sourceHash: string | undefined }> {
-  const runs = await loadRuns(slug);
-  return { runs, sourceHash: await currentSourceHash(slug) };
-}
 
 /**
  * How many saved searches one article keeps.
@@ -185,22 +65,6 @@ export async function readSearches(
  */
 export const MAX_RUNS = 30;
 
-/**
- * Read-modify-write serialised per process — see src/comments.ts for the full
- * reasoning.
- *
- * It matters here for the same reason it matters in src/chat.ts: a run is
- * written **twice**, tens of seconds apart, with the reader free to start a
- * second search in between. Without the chain, the second search reads the file
- * as it was before the first run landed and writes it back that way. Both
- * writes succeed. One search is simply gone.
- */
-let queue: Promise<unknown> = Promise.resolve();
-function serialised<T>(work: () => Promise<T>): Promise<T> {
-  const run = queue.then(work, work);
-  queue = run.catch(() => {});
-  return run;
-}
 
 export async function loadRuns(slug: string): Promise<SearchRun[]> {
   assertSlug(slug);
@@ -226,41 +90,6 @@ export async function loadRuns(slug: string): Promise<SearchRun[]> {
   }
 }
 
-/**
- * Write the file so a reader never sees a half-written one.
- *
- * `writeFile` truncates before it writes, so there is a window where the file
- * is empty or cut off mid-object; land in it and every later read throws,
- * wedging every saved search rather than losing the one being written. Writing
- * a neighbour and renaming over the top makes the swap atomic. The temp file
- * goes in the same directory because `rename` is only atomic within one
- * filesystem.
- */
-async function save(slug: string, runs: SearchRun[]): Promise<void> {
-  const file = fileFor(slug);
-  await mkdir(path.dirname(file), { recursive: true });
-  const temp = `${file}.${process.pid}.tmp`;
-  try {
-    await writeFile(temp, JSON.stringify({ runs }, null, 2), "utf8");
-    await rename(temp, file);
-  } catch (err) {
-    await rm(temp, { force: true });
-    throw err;
-  }
-}
-
-/** Apply `mutate` to the stored runs and write the result back. */
-export function update(
-  slug: string,
-  mutate: (runs: SearchRun[]) => SearchRun[],
-): Promise<SearchRun[]> {
-  assertSlug(slug);
-  return serialised(async () => {
-    const next = mutate(await loadRuns(slug));
-    await save(slug, next);
-    return next;
-  });
-}
 
 /**
  * Store the criterion and a `pending` run, before the model is called.
@@ -274,10 +103,11 @@ export function update(
  * The id is **minted by the client** so `?run=` can name something real from
  * the first frame, exactly as a comment id and a thread id are.
  *
- * **An id already in the file, with the same criterion, on a run that FAILED, is
- * a retry rather than a collision.** All three conditions, and the third took a
+ * **An id already stored, with the same criterion, on a run that FAILED, is a
+ * retry rather than a collision.** All three conditions, and the third took a
  * second pass to get right — see the comment at the check itself. This is the
- * branch `createComment` has always had, and its absence here was a real bug:
+ * branch `pgCommentStore.create` has always had, and its absence here was a
+ * real bug:
  * the client's `retry()` resends the failed run's own id, so treating that as
  * taken minted a *second* run and answered under the new id. The old row was never
  * named again, which left the spinner the reader was watching turning forever —
@@ -384,99 +214,6 @@ export function withRun(
   return { runs: [...runs, run].slice(-MAX_RUNS), run, kind: "minted" };
 }
 
-export async function beginRun(
-  slug: string,
-  criterion: string,
-  wantedId?: string,
-  now: () => string = () => new Date().toISOString(),
-): Promise<SearchRun> {
-  /* Read **before** the update, not inside it: `update` holds the process-wide
-     write queue, and a file read in there stalls every other search's write for
-     the length of a disk read.
-
-     Stamped at the start of the run rather than at the end of it. The blocks
-     the model is actually shown are loaded a moment later (src/routes.ts §
-     search), so there is a window — a re-extraction landing between these two
-     reads dates the answer to the article as it was a few milliseconds before
-     the model saw it. That window is milliseconds wide against a re-extraction
-     that takes seconds, and being wrong inside it costs one run one wrong
-     verdict. Closing it properly means the hash coming back from
-     `findPassagesStream` with the answer, which is a change to the route this
-     work was not allowed to touch. Written down rather than left to be found. */
-  const sourceHash = await currentSourceHash(slug);
-  let stored!: SearchRun;
-  await update(slug, (runs) => {
-    const { runs: next, run } = withRun(runs, criterion, wantedId, now(), sourceHash);
-    stored = run;
-    return next;
-  });
-  log("store").info({ slug, runId: stored.id }, "search started");
-  return stored;
-}
-
-/**
- * Write the finished (or failed) result over the `pending` run.
- *
- * Never appends. The row is already there — `beginRun` put it there — and
- * appending on completion would leave the pending one behind as a permanent
- * spinner nothing can clear. Same rule as `finishTurn` in src/chat.ts.
- *
- * A run whose id is not there any more is **not** re-added: the reader deleted
- * it while the model was thinking, and bringing it back would undo a deliberate
- * act. `patch` returning the whole list is what lets the caller notice.
- */
-export async function finishRun(
-  slug: string,
-  runId: string,
-  patch: Partial<SearchRun>,
-): Promise<SearchRun[]> {
-  const next = await update(slug, (runs) =>
-    runs.map((r) => (r.id === runId ? { ...r, ...patch, id: r.id, criterion: r.criterion } : r)),
-  );
-  /* The reader can see this — the run shows as failed — so it is not silent to
-     them. It is silent to whoever is running the server, who is the one who can
-     tell a bad API key from a model that timed out.
-
-     **The stored `error` string is deliberately NOT logged.** This line used to
-     carry it as `reason`, reasoning that it is "the stored error string, never
-     the criterion and never a quote". True, and not the point: the string is
-     whatever `search` threw, and one of the things it throws is
-     `OpenRouter ${status}: ${detail.slice(0, 400)}` (src/search.ts) — four
-     hundred characters of a provider's response body. A provider that echoes
-     the request back in an error puts the criterion, and the article prose sent
-     as context with it, into exactly the field this claimed could never hold it.
-     Redaction could not have caught it: it is path-based, and `reason` is not a
-     path anyone would think to list.
-
-     Nothing is lost. src/search.ts logs its own failure line with the model, the
-     HTTP status and the elapsed time, which is what separates a bad key from a
-     slow model.
-
-     **The durable fix landed on 2026-08-26.** src/search.ts no longer puts any
-     of the provider's body in what it throws (`ProviderRefused` in
-     src/ai-call.ts, `providerSpokeNonsense` in src/openrouter-stream.ts), so the string this line
-     declines to log is safe today. It still declines, because a rule that holds
-     only while every call site stays careful is not a rule.
-
-     **This is the third file to carry this bug**, after src/comments.ts (where
-     GPT/Codex found it) and src/chat.ts. All three were written by copying the
-     one before, and each copy brought along a comment explaining why the field
-     was safe. Keep all three in step, and see docs/project/logging.md — the
-     durable fix is at the throw site, not here. */
-  if (patch.status === "error") {
-    log("store").warn({ slug, runId }, "search failed");
-  }
-  return next;
-}
-
-export async function deleteRun(slug: string, runId: string): Promise<SearchRun[]> {
-  const remaining = await update(slug, (runs) => runs.filter((r) => r.id !== runId));
-  // Destructive with no undo, so it is logged — and `remaining` is the count,
-  // so a delete that removed nothing (a stale id from a second tab) can be told
-  // apart from one that did.
-  log("store").info({ slug, runId, remaining: remaining.length }, "search deleted");
-  return remaining;
-}
 
 /**
  * The ceiling on a stored colour — **not** the size of the palette.
@@ -529,36 +266,3 @@ export function requireColour(colour: number | null): void {
   }
 }
 
-/**
- * The reader's colour choice, applied to one run — pure, so both stores share it.
- *
- * `null` clears the override and puts the row back on the hash. Absent rather
- * than `colour: null` on the way out, because `exactOptionalPropertyTypes` is
- * on and because a `"colour": null` in searches.json would be a third state on
- * disk for a field that has two.
- *
- * A run id that names nothing is returned unchanged rather than thrown at: a
- * second tab can delete a search between this tab reading the list and pressing
- * a swatch, and recolouring a search that is gone is not a fault worth a 404 —
- * the list that comes back says it is gone, which is the answer.
- */
-export function withColour(
-  runs: SearchRun[],
-  runId: string,
-  colour: number | null,
-): SearchRun[] {
-  requireColour(colour);
-  return runs.map((run) => {
-    if (run.id !== runId) return run;
-    const { colour: _old, ...rest } = run;
-    return colour === null ? rest : { ...rest, colour };
-  });
-}
-
-export async function recolourRun(
-  slug: string,
-  runId: string,
-  colour: number | null,
-): Promise<SearchRun[]> {
-  return update(slug, (runs) => withColour(runs, runId, colour));
-}

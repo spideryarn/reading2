@@ -129,15 +129,16 @@ model call is reporting. Without the token, an attempt that stalled, had its row
 machine and then woke up would overwrite the retry the reader was watching arrive; with it, that
 write matches no row and `patch` answers `undefined`, which means *you were superseded* rather than
 *something failed*. `pgSearchStore.finish` made the same decision in August, and the two now read
-alike. The filesystem store has no token and needs none: one process, so `begun` in
-[`src/comments.ts`](../../src/comments.ts) can say whether an attempt is live without a clock.
+alike. The filesystem store had no token and needed none — one process, so `begun` in
+`src/comments.ts` could say whether an attempt was live without a clock. That half was deleted on
+2026-09-05; Postgres, and the token, are now the only way.
 
 The legacy answer patch is `AnswerPatch`, six fields wide, not `Partial<Comment>`. A generic patch
 was what let the one remaining writer reach the anchor and the reader's words.
 
 ### Asking the model, and the link back
 
-Ticking **Also ask the AI about it** saves the comment *first* — free, and on disk — and then opens
+Ticking **Also ask the AI about it** saves the comment *first* — free, and saved — and then opens
 the anchored chat that [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md) built, pre-filled with
 whatever was written. If the chat call fails, the reader still has their words.
 
@@ -153,9 +154,8 @@ dialog are right before the next reload rather than after it.
 `threadId` is **advisory and has no foreign key**, which reverses the reflex this schema follows
 everywhere else. A deleted conversation leaves a comment that is still the reader's mark, so
 whoever offers "Open the conversation this started" checks the summary list rather than trusting
-the stored id. The full reasoning — including that a constraint Postgres can keep and the
-filesystem store cannot is exactly what `tests/store-parity.test.ts` exists to catch — is in the
-plan.
+the stored id. The full reasoning — including that this is a constraint Postgres can keep and the
+now-deleted filesystem store never could — is in the plan.
 
 ### A click on a doubly-marked passage opens the comment
 
@@ -322,15 +322,16 @@ search needed". A claim about research that nobody can check is worth nothing.
 > [silent-success.md](../reusable/silent-success.md) twice over: the check you would naturally run
 > shares its assumption with the code.
 
-### Decision: comments persist on disk <a id="decision-persistence"></a>
+### Decision: comments persist <a id="decision-persistence"></a>
 
-They survive reload, back/forward and a pasted link, in the `reader.json`-shaped slot
-[architecture.md § Storage](architecture.md#storage) already reserves — as
-`data/<slug>/comments.json`. Written under `data/` even when the article itself came from the
-committed [`example/`](../../example/README.md) fixture: the fixture is shared, a reader's questions
-are not, and `data/` is gitignored. `loadArticle` requires *both* `blocks.json` and `tree.json`
-before it accepts a directory ([`src/api.ts`](../../src/api.ts)), so a lone `comments.json` cannot
-make an empty `data/<slug>/` shadow the fixture.
+They survive reload, back/forward and a pasted link. Until 2026-09-05 that meant a file, written
+under `data/<slug>/comments.json` even when the article itself came from the committed
+[`example/`](../../example/README.md) fixture — the fixture is shared, a reader's questions are not,
+and `data/` is gitignored. The filesystem half was deleted that day
+([260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md));
+comments now live in Postgres (`comments`, via
+[`src/store/pg-comments.ts`](../../src/store/pg-comments.ts)) whether the article is a reader's own or
+the committed fixture.
 
 ## Several at once <a id="several-at-once"></a>
 
@@ -339,9 +340,9 @@ Greg, 2026-08-25:
 > improve the UI so it's possible to kick off multiple selection-searches at the same time (and
 > navigate between them somehow, e.g. with next/prev arrows)
 
-Concurrency itself was never the obstacle — each POST is independent, `explain` runs *outside* the
-write mutex in [`src/comments.ts`](../../src/comments.ts), and the client never awaits one ask before
-allowing another. What was missing was any way to keep track. Three things fix that:
+Concurrency itself was never the obstacle — each POST is independent, `explain` runs against its own
+row, and the client never awaits one ask before allowing another. What was missing was any way to
+keep track. Three things fix that:
 
 - **Prev/next in the panel header**, with a `3 / 9` counter. The panel shows one comment, so this is
   how you get back to the ones you are not looking at.
@@ -476,19 +477,17 @@ rebuilt for Postgres when the question came up. What it would take is written do
 [260826o-streaming-the-slow-two.md](../plans/260826o-streaming-the-slow-two.md).
 
 > [!WARNING]
-> **A stream can end by simply stopping, and that looks exactly like finishing.** `[DONE]` is the
-> only clean end an SSE response has, so a connection cut two paragraphs in would be stored as a
-> complete answer with no error anywhere. `finish_reason` counts as a second witness. This is
-> [silent-success.md](../reusable/silent-success.md) and the check is in `explainStream`.
->
-> **And an abort can end it cleanly too.** `sseChunks` cancels the reader on abort, and a cancelled
-> read resolves `{ done: true }` rather than throwing — so a 45-second silence exited the loop with
-> no error at all and was filed as "the answer stopped arriving before it was finished". Both
-> sentences end in "try again", so no reader would ever notice; the loss is the log line, which is
-> the only thing that says whether to blame the network or the provider.
+> **A stream can end by simply stopping, and that looks exactly like finishing** — and an abort can
+> end it cleanly too, because `sseChunks` cancels the reader and a cancelled read resolves
+> `{ done: true }` rather than throwing. Both are one shared judgement now, `classifyEnd` in
+> [`src/ai-call.ts`](../../src/ai-call.ts):
+> [ai-gateway.md § How a stream ends](ai-gateway.md#stream-end) is where it is written down, and
+> `explainStream` is one of its callers rather than the place the check lives. The sentence that
+> used to be here — *"`finish_reason` counts as a second witness"* — was the bug, not the rule.
 
-The `begin` frame carries the whole comment, and that is the point of it: `createComment` re-mints an
-id that is malformed or collides, and a stream has no response body to carry the real one back.
+The `begin` frame carries the whole comment, and that is the point of it: `CommentStore.create`
+re-mints an id that is malformed or collides, and a stream has no response body to carry the real one
+back.
 Without it the client streams an answer into a row the server has never heard of.
 
 ### And a stream that stops without ending <a id="stall-clock"></a>
@@ -619,7 +618,7 @@ request handlers". This is the deliberate exception, and the reason is that its 
 until the reader makes it: a selection cannot be precomputed, cached on a content hash, or run
 ahead of time. Everything else about the stage discipline holds — the call is one transport-free
 function ([`src/explain.ts`](../../src/explain.ts)), the routes are a thin wrapper
-([`src/routes.ts`](../../src/routes.ts)), and the artefact is JSON on disk.
+([`src/routes.ts`](../../src/routes.ts)), and the artefact is a row in Postgres.
 
 It is also the only place the project talks to **OpenRouter** rather than the Anthropic SDK the
 pipeline uses, because `OPENROUTER_API_KEY` is the key this project has. The model defaults to
@@ -659,7 +658,7 @@ must not be able to dress itself up as the article.
 | [`src/web/comment-nav.ts`](../../src/web/comment-nav.ts) | reading order, stepping, and grouping onto blocks for the gutter |
 | [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts) | the same five operations against Postgres |
 | [`src/explain.ts`](../../src/explain.ts) | the OpenRouter call and the system prompt |
-| [`src/comments.ts`](../../src/comments.ts) | `data/<slug>/comments.json`, and the write serialisation |
+| [`src/comments.ts`](../../src/comments.ts) | the shared types and rules (`NewComment`, `MarkPatch`, `AnswerPatch`), and `loadComments` for fixtures |
 | [`src/routes.ts`](../../src/routes.ts) | the endpoints, mounted by [`vite.config.ts`](../../vite.config.ts) |
 | [`src/env.ts`](../../src/env.ts) | `.env.local` → `process.env` |
 
@@ -689,15 +688,16 @@ writes the link itself.
 The answer POST **is** the answer — it streams and then returns the finished comment, so there is
 nothing to poll.
 
-## Four things that fail silently here
+## Three things that fail silently here, and one that used to
 
-1. **Concurrent writes.** Every create is a read-modify-write of the whole file, and selecting two
-   passages in quick succession is the normal way to use this. Without the promise chain in
-   [`src/comments.ts`](../../src/comments.ts) the second read starts before the first write lands
-   and a comment vanishes — with *both* writes reporting success.
-   [`tests/comments.test.ts`](../../tests/comments.test.ts) pins it, and the test genuinely fails
-   when the chain is removed (7 of 8 comments lost). See
-   [silent-success.md](../reusable/silent-success.md).
+1. **Concurrent writes, until 2026-09-05.** Every create was a read-modify-write of the whole file,
+   and selecting two passages in quick succession is the normal way to use this. Without a promise
+   chain serialising them in `src/comments.ts`, the second read started before the first write
+   landed and a comment vanished — with *both* writes reporting success. A test genuinely failed
+   when the chain was removed (7 of 8 comments lost); see
+   [silent-success.md](../reusable/silent-success.md). The filesystem store, the chain and the race
+   it guarded against are gone with it — SQL's own row locking is what a create now competes
+   against, and a losing concurrent create gets a refusal rather than a raw key error.
 2. **A 200 with no completion.** OpenRouter answers `200` with an empty `content` when the model
    stops for its own reasons. `explain` throws on that rather than storing a blank comment that
    looks answered.
@@ -707,12 +707,13 @@ nothing to poll.
    [`App.tsx`](../../src/web/App.tsx) § `onSelect`.
 4. **Retry, which shipped broken and was caught in the browser.** `retry` fired the POST from
    inside a `setComments` updater. An updater must be pure — React StrictMode invokes it twice — so
-   one click sent *two* requests; and because `createComment` refused a client id that was already
-   taken, each reply came back under a **new** id. Result: two model calls paid for, two orphan
-   comments on disk, the original still marked `error`, and a dialog spinning forever on an id
+   one click sent *two* requests; and because `CommentStore.create` refused a client id that was
+   already taken, each reply came back under a **new** id. Result: two model calls paid for, two orphan
+   comments saved, the original still marked `error`, and a dialog spinning forever on an id
    nothing would ever answer. Every individual piece reported success. The fix is two-layered — the
-   updater is pure now, *and* `createComment` is idempotent on the id, so a duplicated POST resets
-   the comment in place instead of appending. `tests/comments.test.ts` pins the server half.
+   updater is pure now, *and* the store is idempotent on the id, so a duplicated POST resets the
+   comment in place instead of appending. [`tests/store-comments.test.ts`](../../tests/store-comments.test.ts)
+   pins the server half.
 
 The last of those is the shape [silent-success.md](../reusable/silent-success.md) describes almost
 exactly: it was invisible to the unit tests (both halves passed in isolation), invisible in the
@@ -797,9 +798,21 @@ rather than blanked, and if none survives the key comes off entirely.
 
 ## Deliberate limits
 
-- **A selection under 8 characters is ignored.** Every one of these costs a model call, and a
-  double-click that skidded should not fire one. `MIN_SELECTION_CHARS` in
+- **A selection under 2 characters is ignored** — and 2 is the whole floor, deliberately.
+  It was 8 until 2026-09-05, on the ground that *"every one of these costs a model call"*; that
+  reason died on 2026-08-28, when saving became free and the model became a tick-box, and the
+  constant outlived it. Meanwhile it refused `AI`, `GDP`, `Ryle` and `qualia` — the short selection
+  [§ The two questions a selection raises](#the-two-questions) calls *almost always the second
+  question*. What is left at 2 is the one-character skid, kept because a one-character quote is the
+  case `resolveMark` is likeliest to re-anchor over the wrong words
+  ([§ Anchoring](#anchoring)). `MIN_SELECTION_CHARS` in
   [`selection.ts`](../../src/web/selection.ts).
+- **A selection the floor refuses opens nothing at all** — not a comment box, and *not the mark it
+  happened to end in*. `readSelection` answers `"too-short"` rather than `null` so its caller can
+  tell a refused drag from no drag; collapsing the two is what made a skid inside a commented phrase
+  reopen that comment, against the rule that a real selection wins over the mark it lands in.
+  `SelectionRead` in [`selection.ts`](../../src/web/selection.ts), and
+  `tests/short-selection-in-a-mark.test.tsx`.
 - **A selection spanning two blocks is clamped to the first.** A comment addresses one block —
   that is what makes it storable against the id spine — and silently doing the first paragraph beats
   appearing to ignore the drag.
@@ -821,8 +834,9 @@ rather than blanked, and if none survives the key comes off entirely.
   answer while the reader watched it arrive; the lease alone would kill a long answer the server is
   still writing. `COMMENT_ANSWER_LEASE_MS` and `sweepPending` in
   [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts), and `CommentStore.sweepPending` in
-  [`src/store/contracts.ts`](../../src/store/contracts.ts) for why the filesystem store needs only
-  half of it. `tests/comment-sweep.test.ts` is the reproduction.
+  [`src/store/contracts.ts`](../../src/store/contracts.ts) for why the filesystem store — one
+  process, deleted 2026-09-05 — only ever needed half of it. `tests/comment-sweep.test.ts` is the
+  reproduction.
 - **The model call has a deadline**, and the lease above is derived from it so the two cannot drift.
   `fetch` has none of its own, so a request that never comes back would hold the comment `pending`
   for ever. `EXPLAIN_TIMEOUT_MS` in [`src/explain.ts`](../../src/explain.ts); the timeout is
@@ -852,7 +866,7 @@ belongs:
 | What you address | a span you selected | the whole article |
 | Where the answer goes | a dialog over the prose, anchored to the words | the band beside the prose |
 | The anchor back to the text | the quote itself | block ids the model cites |
-| Stored as | `comments.json`, one flat list | `chat.json`, threads |
+| Stored as | `comments`, one flat table | `chat_threads` / `chat_messages` |
 | Transport | one POST, the answer comes back with it | a stream |
 
 **Comments are the narrower and safer feature**, and the one whose scoping vision.md's anti-goals

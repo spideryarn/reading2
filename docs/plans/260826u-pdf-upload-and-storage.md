@@ -223,7 +223,7 @@ a health check cannot repair a shape that lies. So: a `RawSourceStore` (bounded 
 put-if-absent, remove), a separate `UploadGrantIssuer`, and an upload repository owning claim /
 verify / expire. Two further corrections it makes, both checked: the sketch above has no streaming,
 no abort signal and no way to do its own ranged read; and `head` must distinguish **absent** from
-**Storage returned 503**, which [`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts)
+**Storage returned 503**, which `src/store/artifacts-fs.ts`
 already does and is worth copying rather than reinventing. Blob selection should also **not** hang
 off `SPIDERYARN_STORE`, which selects article reads
 ([`src/store/live.ts`](../../src/store/live.ts)) and is a different question.
@@ -521,7 +521,7 @@ once its object is deleted**, which is real and now has its own rule in
 
 **And one correction to Sol.** It says the interface "conflates missing with every other `head`
 failure" — true of my sketch, and the fix is the one
-[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts) already uses, distinguishing absence
+`src/store/artifacts-fs.ts` already uses, distinguishing absence
 from operational failure. Worth naming because we do not have to invent it.
 
 **What this does to the build order.** Sol's central process point is that routes cannot be built

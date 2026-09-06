@@ -18,7 +18,9 @@ import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ADMIN_EMAIL } from "../src/admin.js";
 import { isSpideryarnId } from "../src/ids.js";
+import { CONTACT_EMAIL } from "../src/site-text.js";
 import { MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
 
 const posts: { input: string; init: RequestInit }[] = [];
@@ -110,7 +112,6 @@ function show(open: boolean) {
       createElement(FeedbackDialog, {
         open,
         onClose: () => {},
-        readerEmail: "reader@example.com",
         where: { url: "https://www.spideryarn.com/read/a-piece?q=footnotes", slug: "a-piece" },
       }),
     );
@@ -143,7 +144,6 @@ function mountControlled(): HTMLDialogElement {
     return createElement(FeedbackDialog, {
       open,
       onClose: () => setOpen(false),
-      readerEmail: "reader@example.com",
       where: { url: "https://www.spideryarn.com/read/a-piece", slug: "a-piece" },
     });
   }
@@ -643,6 +643,95 @@ describe("the feedback dialog", () => {
     /* And the address is on screen, because the message beside it says to send
        the report by email. */
     expect(host.querySelector<HTMLAnchorElement>('a[href^="mailto:"]')).not.toBeNull();
+  });
+
+  /* ---- one address on the site, and it is not a person's ---------------- */
+
+  /**
+   * **The dialog no longer reads the reader their own address back.**
+   *
+   * Greg, 2026-09-05, having filed the report from inside this dialog:
+   *
+   * > In the feedback box, it has the following: "It is sent as
+   * > greg@gregdetre.com, so we can reply.". Remove that sentence, and remove
+   * > any other mentions in the UI of my personal email address … The only
+   * > email address we should include on the site is hello@spideryarn.com.
+   *
+   * The sentence interpolated whoever was signed in, so on his screen it was his
+   * own address staring back. Nothing is lost by it going: the report still
+   * travels with the account's address — the *server* attaches it from the
+   * verified session, never the browser (src/feedback.ts) — and the hover card
+   * on the Feedback button is where a reader is told so
+   * (src/web/FeedbackButton.tsx, tests/feedback-button-tooltip.test.tsx).
+   */
+  it("does not read the reader their own address back", () => {
+    mount();
+    expect(host.textContent).not.toContain("so we can reply");
+    expect(host.querySelector(".fb-email")).toBeNull();
+  });
+
+  /**
+   * **The failed-send fallback points at the site's inbox.**
+   *
+   * It was `ADMIN_EMAIL` — the constant that decides who sees `/admin` — so the
+   * one screen in the app that asks a reader to send us an email named a person
+   * rather than the product. `hello@spideryarn.com` is the site's one address
+   * (src/site-text.ts, docs/project/website-text.md § The contact address), and
+   * `ADMIN_EMAIL` goes on meaning what it always meant: an identity for logs and
+   * for the seed, never something a reader is shown.
+   */
+  it("offers the site's address when a send fails, not a personal one", async () => {
+    mount();
+    type("It broke.");
+    answer = async () => {
+      throw new Error("offline");
+    };
+    send();
+    await act(async () => {});
+
+    const link = host.querySelector<HTMLAnchorElement>('a[href^="mailto:"]');
+    expect(link?.getAttribute("href")).toContain(`mailto:${CONTACT_EMAIL}`);
+    expect(host.textContent).toContain(CONTACT_EMAIL);
+    expect(host.textContent).not.toContain(ADMIN_EMAIL);
+  });
+
+  /* ---- the button says it is working ------------------------------------ */
+
+  /**
+   * **Send spins while the report is in flight, and cannot be pressed again.**
+   *
+   * Greg, 2026-09-05: *"When I click the send button in the feedback dialog,
+   * show a loading spinner while it's sending."* It already did — `.cmt-spinner`
+   * has been on this button since 2026-09-01 — and nothing pinned it, so a
+   * refactor of the four-way label below could have dropped it with every test
+   * in this file still green. That is what this is here for.
+   *
+   * The answer is held open deliberately: a `Promise` that has not settled is
+   * the only way to stand inside the `sending` stage and look at it.
+   */
+  it("spins on Send while the report is in flight", async () => {
+    mount();
+    type("It broke.");
+    const flight: { land: (() => void) | null } = { land: null };
+    answer = () =>
+      new Promise<Response>((resolve) => {
+        flight.land = () => resolve(new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+      });
+    send();
+    await act(async () => {});
+
+    const button = host.querySelector<HTMLButtonElement>("button.fb-send");
+    expect(button?.textContent).toContain("Sending");
+    /* The app's one spinner — docs/project/icons.md#the-loading-spinner. */
+    expect(button?.querySelector(".cmt-spinner")).not.toBeNull();
+    /* And it is not pressable meanwhile. The ref latch is what stops two clicks
+       in one frame (above); this is the half a reader can see. */
+    expect(button?.disabled).toBe(true);
+
+    await act(async () => {
+      flight.land?.();
+    });
+    expect(host.querySelector("button.fb-send")?.textContent).not.toContain("Sending");
   });
 });
 

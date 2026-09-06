@@ -61,7 +61,7 @@
  * ## Both ends, and what happens on a short article
  *
  * A batch is required to use both ends of the band scale, because asking nicely
- * does not work — that is what the spike measured. But "at least three easy and
+ * does not work — that is what the spike measured. But "at least five easy and
  * three hard" is right for a full twelve and is an *instruction to pad* a piece
  * that only supports four questions, and padding here produces a question about
  * nothing rather than a weak one the reader can skip.
@@ -75,10 +75,23 @@
  * twelve.**
  *
  * **The prompt asks for more than the gate demands, and that is deliberate.**
- * It asks for three of each end of a full batch; the gate refuses only a batch
- * missing an end outright. A target and a floor are different things, and
- * lowering the prompt's ask to one would make the emergency floor the normal
- * distribution.
+ * It asks for five `easy` and three `hard` in a full batch; the gate refuses
+ * only a batch missing an end outright. A target and a floor are different
+ * things, and lowering the prompt's ask to one would make the emergency floor
+ * the normal distribution.
+ *
+ * **The target leans easy since 2026-09-05** — it was three and three — because
+ * Greg said the quiz was too hard and *"should start much, much easier"*
+ * (SPIDERYARN-READING2-21;
+ * docs/plans/260905g-mark-every-visible-quote-and-make-the-quiz-start-easier.md).
+ * **The easy end went up; the hard end did not come down**, and that asymmetry
+ * is a correction from GPT Sol on the built change rather than the first
+ * instinct. Asking for two hard would have leaned the batch a little further
+ * easier and halved the margin the gate actually runs on: `missingBandEnds`
+ * measures what **survived validation**, so with two asked for, losing both to
+ * a bad quote throws away a paid batch, where three has to lose three. That is
+ * the failure of 260903c wearing a different number, and the lead the reader
+ * meets is decided by the easy end anyway.
  *
  * ### It used to be a proportion, and that was the bug
  *
@@ -173,8 +186,17 @@ import type {
  *
  * Exported so tests assert against the current value rather than pinning a
  * literal — a fixture that hardcodes the version tests the fixture.
+ *
+ * **`quiz/3`, 2026-09-05: the batch leads much easier.** The distribution the
+ * prompt asks for moved (five easy and two hard, from three and three), the
+ * definition of `easy` moved with it, and the questions are now asked to sit on
+ * what the argument leans on. That is squarely "what a question is" — unlike
+ * the 2026-09-03 edit recorded below `QUIZ_SYSTEM`, which deleted a false claim
+ * about our own failure handling and deliberately did not bump. A reader with a
+ * quiz gets the `outdated` sentence and a *Write them again* button, which is
+ * the honest offer: theirs is a harder quiz than the one this prompt now sets.
  */
-export const PROMPT_VERSION = "quiz/2";
+export const PROMPT_VERSION = "quiz/3";
 
 /**
  * The most questions one batch may carry into the artefact.
@@ -795,6 +817,15 @@ export interface QuizRun {
  * anything on its own but does put a "Write them again" button in front of
  * every reader who has one (src/web/QuizPanel.tsx), inviting a paid rebuild
  * apiece for a wording fix.
+ *
+ * **The 2026-09-05 edit did bump, and it is the same test answered the other
+ * way.** Greg: *"The quiz questions are too hard. Certainly, they should start
+ * much, much easier. And they should focus on what's most important."* So
+ * `easy` was redefined against the reader rather than the sentence, the target
+ * distribution moved to five and three, and a section was added asking for the
+ * questions to sit on what the argument leans on. Every one of those changes
+ * what a question is, and a reader whose quiz predates it is holding a harder
+ * quiz than this prompt now sets — which is exactly what `outdated` is for.
  */
 export const QUIZ_SYSTEM = `You are setting short-answer questions on an article, for the person who has
 just read it.
@@ -915,24 +946,37 @@ BAND — HOW THE ANSWER IS REACHED
 
 Not how clever the reader is. How the answer is got to:
 
-  "easy"   — stated in one passage, and the reader is recalling it.
+  "easy"   — stated plainly in one passage, and the reader is recalling it.
+             They answer it without effort, from one attentive read. If a reader
+             who understood the piece would have to stop and work something out,
+             it is not easy.
   "medium" — a distinction or a connection the article draws between two
              statements.
   "hard"   — a move the argument makes across several passages, which the reader
              has to reconstruct.
 
+Every question is easier to write than it is to answer, because you have the
+article in front of you and the reader has only what they remember of it. So a
+question that sits between two bands belongs in the harder one — and it is then
+not one of the easy questions this batch needs, so go and find a real one.
+
 THE SPREAD IS NOT OPTIONAL
 
-A full batch must contain at least three "easy" and at least three "hard". This
-is not a target to aim near — it is a condition.
+A full batch must contain at least five "easy" and at least three "hard". This
+is not a target to aim near — it is a condition, and both ends of it are.
+
+The reader meets the easy end first, so those are the questions they start on,
+and starting on something they can actually answer is most of what makes them
+carry on to the rest. A quiz that opens uphill is one they close.
 
 It is here because it does not happen by itself. Asked politely for a spread, a
 model returns twelve questions in the middle and the reader then meets them in
 an arbitrary order, which is the whole thing this ordering exists to prevent.
 
-If you cannot find three easy questions worth asking, you have not looked at the
-parts of the piece a reader remembers most easily. If you cannot find three hard
-ones, you have not found what the argument actually turns on.
+If you cannot find five easy questions worth asking, you have not looked at the
+parts of the piece a reader remembers most easily — what it is named for, the
+distinction it opens with, the example everybody takes away. If you cannot find
+three hard ones, you have not found what the argument actually turns on.
 
 VALUE — HOW CENTRAL THE THING ASKED ABOUT IS
 
@@ -946,6 +990,21 @@ Band and value are different axes and must not be collapsed into one. The
 hardest question about the central claim is band "hard", value 5. Something
 memorable that the argument does not lean on is band "easy", value 2. Both exist
 in most pieces.
+
+MOST OF THE BATCH IS ABOUT WHAT MATTERS MOST
+
+Set the questions on what the argument leans on. Most of a batch should be value
+4 or 5; ask a value 1 or 2 question only where it is genuinely worth a reader's
+minute. A detail nothing rests on is a detail, however neatly it asks.
+
+This is a rule about which questions you SET, not about the number you write
+beside them. Scoring a peripheral question 5 does not make it central.
+
+And note what the two rules together are asking for, because it is a real
+question and not a compromise: AN EASY QUESTION ABOUT A CENTRAL THING IS THE
+BEST QUESTION IN THE BATCH. Most pieces have several — the claim the whole
+article rests on is usually also the one it states most plainly, once, in a
+sentence a reader remembers.
 
 HOW MANY
 

@@ -590,10 +590,22 @@ describe("the store-migration registry", () => {
 
       /* Controls first. Both differences below are empty when the inputs are
          empty, so an unread witness or a walk that parsed nothing would pass
-         silently — which is the exact shape this whole plan exists to stop. */
-      expect(reports.length, "the graph walk produced no reports at all").toBeGreaterThan(100);
+         silently — which is the exact shape this whole plan exists to stop.
+
+         **The first two floors were 100 until 2026-09-05**, and they fell
+         because the condemned list did: stage G's last adapter group deleted
+         `src/store/artifacts-fs.ts` and `src/store/data-root.ts`, leaving
+         `TARGETS` naming `src/store/copy-artefacts.ts` alone — which is not
+         condemned at all, since stage D gave it a store-agnostic
+         `ArtifactSource`. Measured the same day: **42 files reach it, 41 of
+         them through `tests/helpers/load-article.ts` and one directly**, and
+         nothing reaches it type-only. So 20 is a floor under a walk that is
+         doing its job rather than a number with an argument behind it; the
+         control being defended is still "the walk parsed something", and the
+         instrument itself is retired with the tombstone in stage I. */
+      expect(reports.length, "the graph walk produced no reports at all").toBeGreaterThan(20);
       expect(reaching.size, "the graph walk found nothing reaching a condemned module")
-        .toBeGreaterThan(100);
+        .toBeGreaterThan(20);
       expect(
         witness.ranAndTouchedNothing.length,
         "the witness recorded nothing as having run and touched nothing",
@@ -633,10 +645,24 @@ describe("the store-migration registry", () => {
        spot; there were two, and the claim was in the JSON.
 
        This assertion is what stops a future edit quietly dropping either. An
-       unexplained absence is indistinguishable from an oversight. */
+       unexplained absence is indistinguishable from an oversight.
+
+       **The first blind spot is retired, and the check is inverted rather than
+       deleted.** `tests/store-fs-write-chains.test.ts` went with `ai-calls-fs`
+       and `realtime-sessions-fs` in stage G, 2026-09-05 — its whole subject was
+       a module-scope lock in two modules that no longer exist. The witness JSON
+       is a dated measurement and still records the blind spot, correctly, as
+       what was true on 2026-09-03; what has to stay true is that the record and
+       the tree agree about which of those two states we are in. So the file's
+       *absence* is now what is asserted: if somebody reinstates it, this goes
+       red and the blind spot is live again. */
     expect(witness.knownBlindSpots.join(" ")).toMatch(/store-fs-write-chains/);
     expect(witness.knownBlindSpots.join(" ")).toMatch(/CALLS, NOT READS/);
-    expect(existsSync(path.join(REPO, "tests/store-fs-write-chains.test.ts"))).toBe(true);
+    expect(
+      existsSync(path.join(REPO, "tests/store-fs-write-chains.test.ts")),
+      "deleted in stage G with the two modules it was about — if it is back, the witness's " +
+        "first blind spot is live again and this assertion should be flipped back",
+    ).toBe(false);
     /* And the file the second blind spot hid is now classified, not merely
        described — the record and the remedy have to travel together. */
     expect(Object.keys(STORE_MIGRATION)).toContain("tests/store-artefacts-pg.test.ts");

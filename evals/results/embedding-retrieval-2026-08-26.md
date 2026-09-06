@@ -5,6 +5,18 @@ Raw output: [`embedding-retrieval-2026-08-26T0907.json`](embedding-retrieval-202
 (judged by Claude Sonnet 5) and [`embedding-retrieval-2026-08-26T0908.json`](embedding-retrieval-2026-08-26T0908.json)
 (the same retrieval judged again by Claude Opus 5).
 
+> **The literal baseline in this run searched a different corpus from the arms it was compared
+> against, and a later run's baseline will not be comparable with this one.** Found on 2026-09-05
+> while deleting the filesystem store: `literalBaseline` called `searchLibrary`, which walked the
+> developer's own `data/` directory, while every embedding arm was scored over
+> `tests/fixtures/data-root/data/`. On a fresh clone the baseline searched `example/` alone. It is
+> now the same AND-scan written out over the `passages` the eval already loads, so baseline and arms
+> finally see one corpus. **The recommendation below does not rest on the baseline** — it is a
+> comparison between the four embedding arms, which were always scored over the same passages — but
+> any baseline number quoted from this file is measuring something else, and the gap between the
+> baseline and the arms is not a real margin.
+> [260903f](../../docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § G6.
+
 **Recommendation: `voyageai/voyage-4`.** It is statistically tied with the best arm on every measure
 under both judges, it is 1024 dimensions rather than 1536, and it bills to OpenRouter credits, which
 is where Greg wanted the billing. `openai/text-embedding-3-small` has the best point estimates but

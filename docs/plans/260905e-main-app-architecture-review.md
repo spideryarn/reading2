@@ -494,6 +494,14 @@ local classification in `referee-claims-run.ts`, `referee-criteria-run.ts`, `ref
 new stream. Classify each provider round and fold all rounds of a conversation; the last round's
 finish reason must not erase an earlier truncation. Preserve feature-specific stop/persist policy.
 
+**Done, 2026-09-05.** All four migrated, in
+[260901g](260901g-one-stream-end-classification-shared-by-five-callers.md) § Stages D, E and F.
+Both requirements above are met and tested: `converse` classifies once per round and folds, so a
+`length` on round two no longer vanishes when round three ends cleanly; every caller kept its own
+stop/persist policy, each now a written `case` with a comment rather than an absence. The one
+behaviour change is that `finish_reason: "error"` throws in all four, as it already did for the same
+event arriving as `chunk.error` data.
+
 ### A10. Organise styles and extension checks around ownership
 
 **Proved shared stylesheet and edit surface; maintainability judgement.** The semantic CSS model
@@ -531,7 +539,7 @@ and a migration pilot. Risk is regression risk while implementing, not finding s
 
 | Order | Work | Value | Effort | Risk | Stop condition |
 |---|---|---|---|---|---|
-| First | A0 cache-ordering reproduction and fence | Confirmed reliability gap | M | Medium | Reverse completion/mutation cannot restore stale cached data |
+| ~~First~~ **done** | A0 cache-ordering reproduction and fence — [260905g](260905g-cache-freshness-follows-issue-order-not-completion-order.md), 2026-09-05 | Confirmed reliability gap | M | Medium | Met: reverse completion and pre-mutation responses can no longer restore stale cached data |
 | Next | A2 local failure containment, with A1's smallest controller extraction | High reliability and a safe seam | S–M | Medium | A broken mode leaves readable prose and a working escape |
 | Next | A1 article/reader/feature files; A3 exhaustive dispatch | High maintenance/extensibility | M | Medium | New mode integration no longer requires editing access or position logic |
 | Next | A4 secondary-route lazy loading | Measured bundle opportunity | S–M | Low–medium | Measured initial graph shrinks; offline reader path remains intact |
@@ -554,6 +562,15 @@ project docs, runs the required gates and commits/pushes to `dev`. No production
 API migration is needed for the recommended first stages. Do not rename URLs or mode IDs.
 
 ### Stage: Close the cache-ordering gap
+
+**Done, 2026-09-05**, in [260905g](260905g-cache-freshness-follows-issue-order-not-completion-order.md).
+Greg scoped that run to A0 alone; every stage below remains a proposal. Two things this section got
+wrong are worth carrying forward. The mechanism it sketched was right and the cheaper substitute was
+not — see that plan for why ordering by a stamped issue time restores deleted data. And it did not
+foresee that **bumping `DB_VERSION` at all** can hang the offline read behind a tab still running the
+old code, nor that bounding the database *open* bounds nothing else, since a transaction can wait
+indefinitely behind a locked one in another tab. Both were found by GPT Sol with a real harness, and
+both would apply to any future schema change here.
 
 - [ ] Reproduce A0's two deferred-response sequences against the current cache seam. Check the
   introducing history and write the required bug-class postmortem before implementing the fix.
@@ -609,15 +626,15 @@ API migration is needed for the recommended first stages. Do not rename URLs or 
 
 ### Stage: Cut secondary-route startup cost
 
-- [ ] Record an emitted import graph and a production network trace for signed-out landing,
+- [x] Record an emitted import graph and a production network trace for signed-out landing,
   signed-in shelf, Plain reader and direct Admin/Design routes. Use the same source/config/device.
-- [ ] Lazy-load Admin and Design with local loading/error handling. If a shared import retains the
+- [x] Lazy-load Admin and Design with local loading/error handling. If a shared import retains the
   heavy graph, move only that shared constant/type to a small existing home and verify again.
-- [ ] Keep reader/shelf/mode code eager in this tranche. Test in-tab offline navigation and first
+- [x] Keep reader/shelf/mode code eager in this tranche. Test in-tab offline navigation and first
   cached-mode activation before accepting a bundle reduction.
-- [ ] Test a failed chunk load with a usable escape; session engines survive pending/rejected
+- [x] Test a failed chunk load with a usable escape; session engines survive pending/rejected
   imports, and loading a module emits zero generation requests.
-- [ ] Record before/after initial requested JS and time-to-readable-prose, not just the largest
+- [x] Record before/after initial requested JS and time-to-readable-prose, not just the largest
   emitted chunk. Update [performance](../project/performance.md). Stop if no meaningful gain.
 
 ### Stage: Make the common mode surface fit and behave consistently

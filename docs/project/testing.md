@@ -295,7 +295,7 @@ internet, and the `unit` lane reaches nothing at all.
 | [`tests/hierarchy-build.test.ts`](../../tests/hierarchy-build.test.ts) | `buildTree` — the model's proposal → the stored tree, and leaf growth |
 | [`tests/token-budget.test.ts`](../../tests/token-budget.test.ts) | that a model call's `max_tokens` **grows with the article**, and that the estimate clears what a real tree cost — written after a typed-in number failed a 360-block article ([postmortem](../postmortems/260826a-toc-max-tokens.md)) |
 | [`tests/labels-batching.test.ts`](../../tests/labels-batching.test.ts) | that cutting the article into label calls loses no block, duplicates none, and **never splits a sibling set** — plus the wire format that makes a dropped label a hard error instead of a shifted list ([260826h-toc-scaling.md](../plans/260826h-toc-scaling.md)) |
-| [`tests/api.test.ts`](../../tests/api.test.ts) | which directory answers a slug — and that `example/` answers for **its own slug only** — [web-client.md](web-client.md) |
+| `tests/api.test.ts` | which directory answers a slug — and that `example/` answers for **its own slug only** — [web-client.md](web-client.md) |
 | [`tests/url-state.test.ts`](../../tests/url-state.test.ts) | what a link means, and the section arithmetic behind `?at=` — [url-state.md](url-state.md) |
 | [`tests/layout.test.ts`](../../tests/layout.test.ts) | column fitting: the pixel widths [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) promises, and that a wider window never shows *less* of the article |
 | [`tests/keynav.test.ts`](../../tests/keynav.test.ts) | where ← / → land, and that → then ← is reversible — [keyboard.md](keyboard.md) |
@@ -460,7 +460,8 @@ quoting numbers the code no longer produces is worse than a doc quoting none.
 2. **`src/validate-tree.ts` is a CLI**, with top-level `await` and `process.exit`. It's exercised as
    a subprocess, so its tests are slower (~1.5s) than everything else combined. If it ever grows a
    pure `validateTree(blocks, tree)` export, move those tests to it.
-3. **Which artefact store to hand it, and never `createFsArtifactStore`.** Three answers, and the
+3. **Which artefact store to hand it** — `createFsArtifactStore` is gone, deleted 2026-09-05 with the
+   rest of the filesystem store, so this is no longer a temptation to resist. Three answers, and the
    choice is *what the test is about* rather than what is cheapest to construct:
    - the test is about **an article existing in Postgres** — a route, a reader, a comment to hang
      somewhere: [`scratchArticleInPg`](../../tests/helpers/scratch-article.ts), or
@@ -473,7 +474,7 @@ quoting numbers the code no longer produces is worse than a doc quoting none.
      slug)` to start from a fixture on disk. It applies the same shape rules as the real stores;
      it **copies on the way in and out**, so a value it handed you is not the one it holds, like
      both real stores and unlike a `Map`; and it deliberately does **not** put
-     `extractedHtml` and `stampedHtml` at one address the way the filesystem does;
+     `extractedHtml` and `stampedHtml` at one address the way the filesystem store used to;
    - the test is about **a job**, and the article is only there so the job may name it:
      [`bareArticles`](../../tests/helpers/bare-article.ts), which inserts an `articles` row and
      nothing else. Five suites needed it the day `enqueue` started refusing a bare-slug request for
@@ -482,6 +483,15 @@ quoting numbers the code no longer produces is worse than a doc quoting none.
      still counts as existing;
    - the test really is about **the adapter** — that is stage G's cohort, and the answer is in
      [`store-migration-registry.ts`](../../tests/store-migration-registry.ts).
+
+**And if it seeds a reader, put the file's name in the address.** `auth.users` has a unique partial
+index on `email`, and `seedAuthUser`'s `onConflictDoNothing` is `on conflict (id)` — so a *different*
+row already holding that address is not a conflict it knows about, and the insert fails on the email
+instead. Two suites sharing `bob@example.invalid` under two ids did exactly that on 2026-09-05, and
+the interesting half is where it landed: **it reddened the file that ran second**, which had done
+nothing wrong and passed when re-run alone. `bob-link-preview@example.invalid` cannot collide with
+anything. [`tests/fixture-ids.test.ts`](../../tests/fixture-ids.test.ts) catches the *id* half of
+this; nothing yet catches the email half, which is why it is written down here.
 
 ## Rendering a component, without a testing library
 
@@ -662,14 +672,27 @@ the same thing the same day by passing `--reporter=basic`, which vitest 4 does n
 never started and was again reported as exit 0.
 
 So run it in `tmux` and judge it by the suite's own `Test Files` line, never by an exit code that
-reached you through something else:
+reached you through something else. **Use [`scripts/tmux-job.ts`](../../scripts/tmux-job.ts)**, which
+picks a name nothing else has, prints the log path, and lets the session end when the command does:
 
 ```
-tmux new-session -d -s gate "npm test -- --reporter=dot > LOG 2>&1; echo EXIT=\$? >> LOG"
+npx tsx scripts/tmux-job.ts npm test -- --reporter=dot
 ```
+
+It prints the log; `tail -f` it, and the last line is `EXIT=<n>`. Same for anything else that takes
+minutes — `npm run typecheck`, an eval, a codex review.
 
 "It never ran" and "it passed" are indistinguishable from outside, which is the family this whole
 section belongs to — [silent-success.md](../reusable/silent-success.md).
+
+**Do not hand-roll the `tmux new-session` yourself, and never leave a bare session behind.** This
+section used to give the raw incantation with `-s gate` hard-coded in it, and both halves drifted:
+the second agent to run it in a minute got `duplicate session` and improvised a name, and agents who
+had lost a one-shot session to a quoting mistake made a bare `bash -l` session and typed into it
+instead. A bare session never exits. On 2026-09-05 eight of those husks were sitting on the box
+under names nobody recognised — `gateA`, `stageDbase`, `stage2base` — one of them fifteen hours old.
+`gjd-remote ls` now tells `shell busy` from `shell idle` so a husk is visible as one, and
+`gjd-remote kill <name>` will end any of them; the script above is so there is nothing to kill.
 
 ### `.env.local` is loaded into tests
 

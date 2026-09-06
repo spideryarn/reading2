@@ -96,7 +96,7 @@ was found.
 
 The suite was run twice — against a clone of `data/`+`output/`, then against an empty directory —
 through the `SPIDERYARN_DATA_ROOT` override that
-[`src/store/data-root.ts`](../../src/store/data-root.ts) documents as existing for exactly this
+`src/store/data-root.ts` documents as existing for exactly this
 ("for tests that want a scratch tree… without moving anything"). The real `data/` was not touched.
 
 ```
@@ -109,7 +109,7 @@ because [`scripts/deploy.ts:592`](../../scripts/deploy.ts) records **13 failures
 cascade-skips from what seemed to be the same situation.
 
 **It is not the same situation.** `SPIDERYARN_DATA_ROOT` redirects the filesystem *adapters*, through
-`fsLocations()` in [`artifacts-fs.ts`](../../src/store/artifacts-fs.ts). It does not redirect a test
+`fsLocations()` in `artifacts-fs.ts`. It does not redirect a test
 that computes its own root — and the tests that matter most here all do:
 
 ```

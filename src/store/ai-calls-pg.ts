@@ -22,7 +22,7 @@
 
 import { and, asc, eq, gte, lt } from "drizzle-orm";
 
-import type { AiCallRow } from "../ai-spend.js";
+import { type AiCallRow, lateCalls } from "../ai-spend.js";
 import { getDb } from "../db/client.js";
 import { aiCalls, articles } from "../db/schema.js";
 import { withoutPassword } from "../db/ssl.js";
@@ -236,17 +236,39 @@ export const pgCostStore: CostStore = {
       .orderBy(asc(aiCalls.startedAt));
     /* Nothing can be unreadable here — a row either parsed on the way in or was
        never written. The field exists so that the two stores answer the same
-       question in the same shape. */
-    return { rows: rows.map(toRow), unreadable: 0 };
+       question in the same shape. `lateCalls` is the other half of that, and it
+       is not zero for free: see `forJob` below and `LedgerRead` in contracts.ts.
+
+       On this path it is nearly always zero and says so honestly — `npm run
+       cost` is a fresh process that made no calls of its own, and a counter in
+       one process's memory cannot report what the server lost. */
+    return { rows: rows.map(toRow), unreadable: 0, lateCalls: lateCalls() };
   },
 
+  /**
+   * **A table cannot report a row that was never inserted**, so this asks the
+   * process instead.
+   *
+   * The failure it exists for: a call still in flight when its collector closed
+   * gets no row at all (src/ai-spend.ts § `collectSpend`, which sets `closed`
+   * before it drains the writes, on purpose). The query below then comes back
+   * short with `unreadable: 0` — indistinguishable from a job that genuinely
+   * cost less, which is how a run came to print `$2.7331` as a bill that was
+   * really higher.
+   *
+   * `lateCalls()` is process-global and cannot be attributed to `jobId`; that
+   * is stated at length on `LedgerRead` rather than repeated here, because the
+   * shape of the answer — "this may be short", not "this is short by n" — is a
+   * property of the field and not of this query. The real fix is a row written
+   * at call-open time: docs/plans/260827q-ai-cost-tracking.md.
+   */
   async forJob(jobId: string): Promise<LedgerRead> {
     const rows = await getDb()
       .select()
       .from(aiCalls)
       .where(eq(aiCalls.jobId, jobId))
       .orderBy(asc(aiCalls.startedAt));
-    return { rows: rows.map(toRow), unreadable: 0 };
+    return { rows: rows.map(toRow), unreadable: 0, lateCalls: lateCalls() };
   },
 
   /** Not a question a table answers cheaply, and nothing needs it to. */

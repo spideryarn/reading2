@@ -19,6 +19,8 @@
  *                                 — purpose is null without a slug
  *   PATCH  /api/reader           { profile?: string | null, experimental?: boolean }
  *                                 → { profile, experimentalSince }, both always
+ *   GET    /api/link-preview    `?slug=&url=` → what that destination says about itself
+ *   GET    /api/link-summary    `?slug=&url=&block=` → SSE: how it stands to the piece being read
  *   GET    /api/article/:slug    meta + blocks + tree, one payload
  *   GET    /api/source/:slug     the PDF an article was made from, for a reader to check it
  *   GET    /api/export/:slug     everything we hold for one article, as a zip to download
@@ -263,6 +265,12 @@ import {
 } from "./live.js";
 import { vocabularyTermsFor } from "./vocabulary-sources.js";
 import { isWebUrl } from "./urls.js";
+/* The fourth thing a link card can say: what the destination says about itself,
+   fetched by us once and cached for everybody. src/link-previews.ts. */
+import { linkPreview } from "./link-previews.js";
+/* The other half of the same card, and the half we wrote — a model call with a
+   reader hovering, so it streams. src/link-summary.ts, docs/project/links.md. */
+import { linkSummaryStream } from "./link-summary.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
 import {
   advanceJob,
@@ -511,9 +519,10 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
      § What the inventory found). Under `postgres` that answered *"this article
      did not come from a PDF"* about a PDF sitting in the `sources` bucket, and
      deployed it was the jobless `dataRoot()` caller that
-     src/store/data-root.ts names by route — where that function deliberately
-     throws, because both available answers are wrong. So the feature worked on
-     a laptop and 404d on every production request, for as long as it existed.
+     src/store/data-root.ts (deleted 2026-09-05) named by route — where that
+     function deliberately threw, because both available answers were wrong. So
+     the feature worked on a laptop and 404d on every production request, for
+     as long as it existed.
 
      `readPdf`, not "read the source document", because the content type is the
      boundary: an HTML source served from our own origin is stored XSS, so the
@@ -1055,11 +1064,14 @@ export function heartbeat(
  * Server-sent events on a response that is otherwise a plain Node one.
  *
  * Shared by chat and by comments, which were the only two things in this app a
- * reader waited on when this was extracted. **Six callers now** — add
- * meaning-search, quiz marking, both referee runs and the mirror — so "the only
- * two" stopped being true without anyone noticing, which is the ordinary way a
- * count in prose goes wrong. Corrected 2026-09-03; if you add a seventh, this
- * sentence is the one to fix. Note that `streamChat` writes its own SSE headers
+ * reader waited on when this was extracted. **Seven callers now** — add
+ * meaning-search, quiz marking, both referee runs, the mirror, and the link
+ * summary — so "the only two" stopped being true without anyone noticing, which
+ * is the ordinary way a count in prose goes wrong. Corrected 2026-09-03, and
+ * again on 2026-09-05 by the review of the seventh, which found the same
+ * sentence wrong the same way it says it went wrong: **a count in prose is a
+ * copy of the code that nothing checks.** If you add an eighth, this is the
+ * sentence to fix. Note that `streamChat` writes its own SSE headers
  * rather than coming through here, so a grep for callers of this function
  * undercounts the streams in this file by one.
  *
@@ -1559,6 +1571,86 @@ async function answer(
     }
   } finally {
     release();
+    res.end();
+  }
+}
+
+/**
+ * **How the page on the other end of a hyperlink stands to the piece being
+ * read** — `GET /api/link-summary?slug=…&url=…&block=…`, streamed.
+ *
+ * AGENTS.md's rule (*stream any model call a person is waiting on*) and
+ * `explain.ts` is the shape. The plan originally argued for a non-streaming v1
+ * and the review overturned it: the cited precedent is itself a stream whose
+ * batch interface drains the same generator, so this is the existing shape
+ * rather than extra machinery.
+ *
+ * **The two reads that can throw happen before a single header is written**, and
+ * that is `answer`'s rule one section up rather than a preference. `loadArticle`
+ * is owner-scoped and 404s on somebody else's slug; the profile is two queries
+ * with no timeout on them. Once `sse(res)` has run, a throw is a stream that
+ * stops, which the reader cannot tell from a model that failed.
+ *
+ * Frames are the `LinkSummaryEvent` members by name: any number of `delta`, then
+ * exactly one of `ready`, `unavailable`, `refused` or `pending`.
+ *
+ * **A failure ends as `pending`, and that is a decision rather than a
+ * convenience.** The client's rule — stage 2's P2-1, applied to the same four
+ * outcomes — is that it remembers what is a property of the *link* and forgets
+ * what is a property of *this moment*. A failure here is the second kind, and
+ * the commonest one measured on 2026-09-05 was not our bug at all: OpenRouter
+ * answering `429 … temporarily rate-limited upstream` in the middle of a
+ * perfectly good stream. Framing that as `unavailable` would silence that link
+ * for the rest of the session over a busy minute; framing nothing would do the
+ * same, because a stream with no terminal frame is cached as nothing. So the
+ * reader gets the same blank card either way and the *next* hover asks again.
+ *
+ * It is still reported: `captureFailure` runs first, so a real bug of ours is in
+ * Sentry rather than quietly retried for ever. The cost of being wrong this way
+ * is bounded by the limiter — a hard failure spends one fill per hover until the
+ * reader's allowance runs out and then refuses.
+ */
+async function streamLinkSummary(
+  slug: string,
+  url: unknown,
+  /**
+   * **Which of that URL's mentions the pointer is on**, or `null` when the
+   * client did not say. Validated where the article is — src/link-summary.ts —
+   * because that is the only place that can tell a block of this article
+   * carrying this link from any other string.
+   */
+  blockId: string | null,
+  res: ServerResponse,
+): Promise<void> {
+  const article = await loadArticle(slug);
+  /* Always the reader's own, never the client's word for it — `useProfile` above
+     says why that flag exists on the routes that have one, and this route
+     deliberately has none: there is no control on the card to turn it off, so
+     offering the client a way to would be a switch nobody can see. */
+  const profile = await resolveProfile(slug);
+
+  const { frame, gone } = sse(res);
+  try {
+    for await (const event of linkSummaryStream({
+      slug,
+      article,
+      url,
+      blockId,
+      profile,
+      signal: gone,
+    })) {
+      frame(event.kind, event);
+    }
+  } catch (err) {
+    /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
+       function owns the response and the outer catch never sees the error — the
+       same note `answer` carries, and a stream is exactly where a model call
+       fails. */
+    captureFailure(err, { route: "link-summary", slug });
+    /* And then `pending`, so the client forgets rather than remembers — see the
+       header. `frame` is a no-op on a socket the reader has already left. */
+    frame("pending", { kind: "pending" });
+  } finally {
     res.end();
   }
 }
@@ -2101,8 +2193,8 @@ function liveMessages(slug: string): Set<string> {
 /**
  * Turn abandoned `pending` answers into `error`, so the reader can ask again.
  *
- * The rule itself lives in the store now — `fsChatStore.sweepPending` for the
- * filesystem, an `UPDATE … WHERE` for Postgres — and what is left here is the
+ * The rule itself lives in the store now — `pgChatStore.sweepPending`, an
+ * `UPDATE … WHERE` — and what is left here is the
  * half only a running server knows: which rows this process is writing, and
  * how long another process's row is allowed to be silent. See `SweepOptions`
  * in src/store/contracts.ts for why neither half is sufficient alone.
@@ -4086,8 +4178,8 @@ function claimsProblem(blocks: Block[]): string | null {
  *   every instant rather than only at the end.
  * - **There is no id and no attempt.** One run per article, so `finish` writes
  *   over whatever `begin` wrote and identity is the slug. The cost of that is
- *   real and is written down in src/referee-claims-store.ts: two tabs running
- *   this at once will have the slower answer win, where a criterion's
+ *   real and is written down in src/store/pg-referee-claims.ts: two tabs
+ *   running this at once will have the slower answer win, where a criterion's
  *   `attempt` would have refused the stale one.
  *
  * The `dropped` counts come back on the outcome and are **not** sent to the
@@ -5344,7 +5436,8 @@ interface ReaderState {
  * stored, so the rule has to hold for every writer rather than for this one
  * route. (The summary steer was the counter-example — validated at the boundary
  * because it went straight into a prompt and never landed anywhere — and it is
- * gone: docs/plans/260830o-steer-becomes-the-profile.md.) src/profile.ts § saveReaderProfile throws with `status: 400`, which
+ * gone: docs/plans/260830o-steer-becomes-the-profile.md.) `pgReaderStore.writeProfile`
+ * (src/store/pg-reader.ts) throws with `status: 400`, which
  * `httpErrorFrom` below turns into the same answer this would have given.
  */
 async function patchReader(body: unknown): Promise<ReaderState> {
@@ -6479,6 +6572,43 @@ export async function serveAuthenticatedApi(
      come from the shelf or the profile page. src/feedback.ts and
      docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md. */
   const feedbackRoute = path === "/api/feedback";
+  /**
+   * **What the page on the other end of one of this article's hyperlinks says
+   * about itself** — fetched by us, once, and cached for everybody.
+   * src/link-previews.ts, docs/project/links.md.
+   *
+   * **In this table and not under `/api/public/`**, which is dispatched before
+   * the gate and sets no owner: an unauthenticated fetch endpoint is an open
+   * proxy and an open wallet.
+   *
+   * **Both the slug and the URL are in the query, and the slug's place is the
+   * one deviation from this file's habit.** Everything else that is about an
+   * article carries the slug in the path. Here the pair is the *question* — is
+   * this URL in that article, and does this reader own it — rather than a
+   * resource with a sub-resource: there is no `/api/link-preview/<slug>` worth
+   * asking for on its own, and the answer is not about the article at all. The
+   * URL cannot go in a path in any case (it carries its own `/` and `?`), so a
+   * split address would put half the question in each half of the URL. The plan
+   * fixed this shape: docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md.
+   *
+   * The URL is a **query parameter that is never logged** — `path` above is
+   * already stripped of the query for exactly this reason, and a hovered URL is
+   * a fact about what somebody was reading. docs/project/logging.md.
+   */
+  const linkPreviewRoute = path === "/api/link-preview";
+  /**
+   * **How that page stands to the piece the reader is holding** — the other half
+   * of the same card, and the half we wrote. src/link-summary.ts.
+   *
+   * **A `GET` that spends money**, which the file's own rule about counters
+   * argues against. It is deliberate and it is the sibling above's shape: the
+   * question is *(slug, url, block)* and nothing else, the client's cache is
+   * keyed on exactly that, and an SSE stream is a `GET` everywhere else in this
+   * app's client. Nothing prefetches an `/api/` address, and the spending is
+   * behind three things a prefetch could not satisfy anyway — article ownership, link
+   * membership, and a cache that answers almost every call.
+   */
+  const linkSummaryRoute = path === "/api/link-summary";
   const article = /^\/api\/article\/([\w.%-]+)$/.exec(path);
   /**
    * **The sharing switch, and it is a sub-resource rather than a field.**
@@ -6752,10 +6882,12 @@ export async function serveAuthenticatedApi(
        **403, not 404.** The usual rule here is that a thing you may not see
        does not exist (docs/project/auth.md § Whose data is it), and it is the
        right rule for another reader's article — a 404 refuses to confirm it is
-       there. It buys nothing at all here: the admin page's code is in the
-       JavaScript bundle every signed-in reader downloads, so its existence is
-       not a secret and pretending otherwise would only make a real refusal
-       unreadable in a log. */
+       there. It buys nothing at all here: the admin page's code is a public
+       asset served to anybody who requests it, so its existence is not a secret
+       and pretending otherwise would only make a real refusal unreadable in a
+       log. (Since 2026-09-05 it is not in every reader's *initial* download —
+       src/web/LazyPage.tsx — which changed the startup cost and nothing about
+       who may have it.) */
     if (adminNamespace && !isAdmin(user.id)) {
       /* One case is worth a line, and only one: the administrator's own address
          on an id we do not know. Fixed prose, nothing interpolated — see
@@ -6976,6 +7108,39 @@ export async function serveAuthenticatedApi(
     }
     if (article && req.method === "GET") {
       send(res, 200, await loadArticle(slugPart(article, 1)));
+      return;
+    }
+    if (linkPreviewRoute && req.method === "GET") {
+      /* **A bad slug is a 400**, which is the one thing this route says out
+         loud about the request itself: it is malformed rather than a
+         destination we could not reach, and answering it like a Cloudflare
+         challenge would hide a client bug for ever.
+
+         **An article that is not this reader's is a 404**, thrown by
+         `loadArticle` through the owner filter, exactly as every other
+         per-article route here answers — a slug that does not exist and one
+         that belongs to somebody else are the same miss, which is the property
+         that stops this confirming what other people own.
+
+         Everything *after* those two is a 200 carrying one of the four
+         `LinkPreviewResponse` members, because the card's rule is that a
+         failure leaves it exactly as it was. `refused` and `unavailable` look
+         identical to the reader and differ only to the client's cache —
+         src/link-previews.ts § `linkPreview` says why that distinction exists
+         and why it gives a caller nothing. */
+      const at = query.get("slug") ?? "";
+      if (!isSlug(at)) throw httpError(400, "Not a slug");
+      send(res, 200, await linkPreview(at, query.get("url")));
+      return;
+    }
+    if (linkSummaryRoute && req.method === "GET") {
+      const at = query.get("slug") ?? "";
+      if (!isSlug(at)) throw httpError(400, "Not a slug");
+      /* `query.get` is `null` for a parameter that was never sent, which is
+         exactly what "the client did not say which mention" means here — a
+         client from before this existed, and a chat link, which sits in no
+         block at all. */
+      await streamLinkSummary(at, query.get("url"), query.get("block"), res);
       return;
     }
     if (visibility && req.method === "PUT") {
@@ -7520,9 +7685,9 @@ export async function serveAuthenticatedApi(
     if (criteria && req.method === "GET") {
       const slug = slugPart(criteria, 1);
       /* Both halves in one response, and read close together, for the reason
-         `readSearches` gives: the paper can be re-extracted between them, and a
-         list read before a hash read would be compared against an article none
-         of its criteria ever saw. */
+         `SearchStore.sourceHash` gives (src/store/contracts.ts): the paper can
+         be re-extracted between them, and a list read before a hash read would
+         be compared against an article none of its criteria ever saw. */
       send(res, 200, {
         criteria: await sweepCriteria(slug),
         sourceHash: await refereeCriteriaStore.sourceHash(slug),
@@ -7567,9 +7732,9 @@ export async function serveAuthenticatedApi(
     if (refereeClaims && req.method === "GET") {
       const slug = slugPart(refereeClaims, 1);
       /* Both halves in one response, and read close together, for the reason
-         `readSearches` gives: the paper can be re-extracted between them, and a
-         run read before a hash read would be compared against an article it was
-         never answered about.
+         `SearchStore.sourceHash` gives (src/store/contracts.ts): the paper can
+         be re-extracted between them, and a run read before a hash read would
+         be compared against an article it was never answered about.
 
          The sweep is a *read* that repairs: a `pending` run this process is not
          running is one an earlier process died in the middle of, and leaving it

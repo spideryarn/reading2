@@ -45,18 +45,8 @@
  * and out, and tests/helpers/run-lock.ts because it claims jobs. Skips loudly
  * when there is no database; see tests/helpers/pg-ready.ts.
  */
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-
 import { eq } from "drizzle-orm";
-import { afterAll, describe, expect, it, vi } from "vitest";
-
-/** The scratch data root, before any import — see tests/claim-session-postgres.test.ts. */
-const HOISTED = vi.hoisted(() => {
-  const previousRoot = process.env.SPIDERYARN_DATA_ROOT;
-  return { previousRoot };
-});
+import { afterAll, describe, expect, it } from "vitest";
 
 import { getDb } from "../src/db/client.js";
 import { articleRevisions, articles, jobs as jobsTable } from "../src/db/schema.js";
@@ -69,7 +59,6 @@ import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEPS, type PipelineStep, type StepProduct } from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
 import type { ArtifactKind } from "../src/store/artifacts.js";
-import { DATA_ROOT_ENV } from "../src/store/data-root.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { Block, Job, JobStep, Quotes, StepName, Timeline, Tree } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -90,9 +79,18 @@ const SLUGS = {
   sequence: "lost-draft-two-jobs",
 } as const;
 
-/** One scratch root for the file: no step here writes to a disk, and this proves it. */
-const ROOT = await mkdtemp(path.join(tmpdir(), "spya-lost-draft-"));
-process.env[DATA_ROOT_ENV] = ROOT;
+/*
+ * **A scratch data root stood here until 2026-09-05, and its comment was
+ * false.** It read *"no step here writes to a disk, and this proves it"*,
+ * pointed `SPIDERYARN_DATA_ROOT` at a `mkdtemp` directory, and then **nothing
+ * ever read that directory back** — no `readdir`, no assertion, in any case.
+ * It proved nothing; `tests/claim-session-postgres.test.ts`, which it cited, was
+ * the file that actually asserted on its roots. Recorded rather than quietly
+ * dropped, because a comment claiming an assertion that is not there is this
+ * job's dominant failure and it was sitting inside a file about a lost draft.
+ * `SPIDERYARN_DATA_ROOT` went with the filesystem store in stage G of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md.
+ */
 
 const db = () => getDb();
 
@@ -174,7 +172,6 @@ function returningStep(
   return {
     name,
     label: STEPS[name].label,
-    outputs: () => [],
     produces: STEPS[name].produces,
     async run(): Promise<StepProduct> {
       await options.body?.();
@@ -276,9 +273,6 @@ describe("a claim whose draft is taken away mid-step", () => {
       await database.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, row.id));
       await database.delete(articles).where(eq(articles.id, row.id));
     }
-    if (ROOT) await rm(ROOT, { recursive: true, force: true });
-    if (HOISTED.previousRoot === undefined) delete process.env[DATA_ROOT_ENV];
-    else process.env[DATA_ROOT_ENV] = HOISTED.previousRoot;
     await runLock?.release();
   }, 60_000);
 

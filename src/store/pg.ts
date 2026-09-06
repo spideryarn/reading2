@@ -31,7 +31,6 @@
 
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
-import { describeArticle, titleFor } from "../api.js";
 import type { Assets } from "../assets.js";
 import { ASSETS_VERSION } from "../collect-assets.js";
 import { getDb } from "../db/client.js";
@@ -66,6 +65,7 @@ import {
 } from "../quiz.js";
 import {
   inputFingerprint as debateFingerprint,
+  isDebateDocument,
   isStale as debateIsStale,
   PROMPT_VERSION as DEBATE_PROMPT_VERSION,
 } from "../debate.js";
@@ -81,7 +81,13 @@ import {
   PROMPT_VERSION as ILLUSTRATED_PROMPT_VERSION,
 } from "../illustrated.js";
 import type { Illustrated } from "../illustrated-plate.js";
-import { deriveLibraryScalars, headingTitleOf, type LibraryScalars } from "../library-scalars.js";
+import {
+  deriveLibraryScalars,
+  describeArticle,
+  headingTitleOf,
+  titleFor,
+  type LibraryScalars,
+} from "../library-scalars.js";
 import { log } from "../log.js";
 import { CAPABLE_MODEL, modelFor } from "../models.js";
 import { currentOwnerId } from "../owner.js";
@@ -2981,7 +2987,11 @@ const rawPgArticleReader: ArticleReader = {
     if (!found) throw notFound(slug);
 
     const debate = found.revision.debate as Debate | null;
-    if (!debate) {
+    /* **The shape as well as the presence** — `isDebateDocument`, the same
+       question `SHAPE.debate` and `readDebate` ask (Sol's F29). This served any
+       non-null JSONB unchecked until 2026-09-05, so a half-written document
+       reached the panel here and was refused on the filesystem. */
+    if (!debate || !isDebateDocument(debate)) {
       throw Object.assign(
         new Error(
           `No debate for "${slug}" yet. Build one with ` +

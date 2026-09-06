@@ -426,14 +426,21 @@ halves live in different files and fail independently, which is why both are pin
 why there is a test asserting `loadArticle` really does call the helper, rather than only that the
 helper works.
 
-### There are two stores, and guarding one of them passes every test <a id="two-stores"></a>
+### There is more than one reader, and guarding one of them passes every test <a id="two-stores"></a>
 
-`loadArticle` exists **twice**: the filesystem reader in [`src/api.ts`](../../src/api.ts) and the
+Until 2026-09-05, `loadArticle` existed **twice**: the filesystem reader in `src/api.ts` and the
 Postgres reader in [`src/store/pg.ts`](../../src/store/pg.ts), whose `blocksFor` hands back
-`html: row.html` from `revision_blocks`. Guard only the first and the suite is green, the filesystem
-half is genuinely protected, and **the store that is in the middle of replacing the filesystem serves
-stored HTML unchecked**. That is the "fixed it in the half I was looking at" failure, and the check
-you would run — does `loadArticle` sanitise? — says yes, because one of them does.
+`html: row.html` from `revision_blocks`. Guarding only the first passed the suite, genuinely
+protected the filesystem half, and left **the store that was in the middle of replacing the
+filesystem serving stored HTML unchecked**. That was the "fixed it in the half I was looking at"
+failure, and the check you would run — does `loadArticle` sanitise? — said yes, because one of them
+did.
+
+The filesystem reader is gone with the rest of the filesystem store, but the shape of the risk
+outlived it: [`src/store/public-reader.ts`](../../src/store/public-reader.ts) is a second Postgres
+reader, building a `PublicArticle` out of `revision_blocks.html` for a logged-out stranger, and
+nothing had ever asked whether *it* sanitised. It does — the point being that a list of readers is
+decoration unless something keeps it complete.
 
 Two consequences for how this is built:
 
@@ -451,9 +458,9 @@ Where the stamp lives once blocks are rows: on **`article_revisions`**, one colu
 be storing the same number several hundred times and inviting a revision whose blocks disagree about
 when they were cleaned.
 
-`tests/sanitize-stale-artefact.test.ts` pins both readers by name. It reads the source rather than
-calling them, because the Postgres reader needs a live database and therefore skips on most machines —
-and a security guard whose test skips is not a guard.
+`tests/sanitize-stale-artefact.test.ts` pins every reader by name — `src/store/pg.ts` and
+`src/store/public-reader.ts`. It reads the source rather than calling them, because a live database
+is not available on most machines and a security guard whose test skips is not a guard.
 
 ### The stamp was written to a file nobody reads <a id="the-stamp-goes-missing"></a>
 
@@ -536,27 +543,31 @@ assumption with the code.
 The tests in [`tests/routes.test.ts`](../../tests/routes.test.ts) therefore use a deliberately deep
 escape, and say why — a short one would pass against the vulnerable code.
 
-**The fallback is gone, 2026-08-30.** `candidateDirs` in [`src/api.ts`](../../src/api.ts) offers
+**The fallback is gone, 2026-08-30.** `candidateDirs` in `src/api.ts` offered
 `example/` for the slug `example` and for nothing else, so an unknown slug — and a traversal, shallow
-or deep — is now an honest 404. What removed it was not this: it was the ToC moving off the critical
+or deep — became an honest 404. (`src/api.ts` itself, `candidateDirs` included, was deleted
+2026-09-05 with the rest of the filesystem store, and there is no longer a directory for any slug —
+`example` included — for a traversal to fall through to.) What removed the fallback was not
+this: it was the ToC moving off the critical
 path, which makes "blocks written, tree not" a normal few seconds of every ingest and would have had
 readers opening their own article onto the fixture's prose
 ([260830am-faster-ingest-and-concurrency.md](../plans/260830am-faster-ingest-and-concurrency.md)). The security case
 was already made and had been answered with a log line instead.
 
-That log line stays, as an assertion rather than a report: `loadArticle` still `warn`s — *"article
-served from the fixture, not from its own directory"* — if a slug other than `example` is ever
-answered out of `example/` again. See
+That log line stayed as an assertion rather than a report, until `src/api.ts` and `loadArticle` were
+themselves deleted on 2026-09-05 along with the rest of the filesystem store — Postgres has no
+directory to fall through to, so the whole failure mode is gone rather than merely guarded. See
 [logging.md § The fixture alarm](logging.md#the-fixture-alarm-and-what-it-can-never-fire-for), which
-also records the thing that surprised us: an *absent* `blocks.json` fell through to the fixture, but
-a *malformed* one threw a 500 and never reached it.
+also records the thing that surprised us at the time: an *absent* `blocks.json` fell through to the
+fixture, but a *malformed* one threw a 500 and never reached it.
 
 ### The write side, which was already guarded
 
-`POST /api/comments/:slug` would have been worse than a leak: `save()` in
-[`src/comments.ts`](../../src/comments.ts) does `mkdir(..., { recursive: true })` before writing, so
-an unchecked slug there is arbitrary directory creation plus an arbitrary write of a file called
-`comments.json`. It was not exploitable, because that module has always validated at its own door —
+`POST /api/comments/:slug` would have been worse than a leak: `save()` in `src/comments.ts` — deleted
+2026-09-05 along with the rest of the filesystem store — did `mkdir(..., { recursive: true })` before
+writing, so an unchecked slug there was arbitrary directory creation plus an arbitrary write of a
+file called `comments.json`. It was not exploitable, because that module had always validated at its
+own door —
 `assertSlug`, with the right instinct written beside it: *"anything that isn't [a path segment] is
 refused outright rather than sanitised, because sanitising invites arguing about whether it
 worked."* It surfaced as a 500 rather than a 400, which is now fixed at the route.
@@ -568,8 +579,9 @@ rather than leaving it to be inferred: **`part` for identifiers that are only ev
 list; `slugPart` for every capture that becomes a directory name.** The next person adding a route
 will copy whichever line they read first, so which is which has to be written down.
 
-Behind it, `requireSlug()` in [`src/api.ts`](../../src/api.ts) checks again at the point of the
-`path.join`. That is not redundancy for its own sake: the route is what turns a bad slug into a 400,
+Behind it, `requireSlug()` in [`src/store/require-slug.ts`](../../src/store/require-slug.ts) checks
+again at the point of the `path.join`. That is not redundancy for its own sake: the route is what
+turns a bad slug into a 400,
 and the store-level check is what stops the hole reopening the next time one of these functions is
 called from somewhere that is not a route — which already happens, in `answer()`.
 
@@ -753,8 +765,9 @@ does not get compared against the code unless somebody thinks to.
 under the answer ([`ChatPanel.tsx`](../../src/web/ChatPanel.tsx)). Allowlisted by `isWebUrl` in
 [`src/urls.ts`](../../src/urls.ts), and allowlisted **twice**: once in `collectCitations` in
 [`src/openrouter-stream.ts`](../../src/openrouter-stream.ts) before the URL is stored, and again in
-the panel before it is rendered. The repetition is deliberate — `chat.json` is a file on disk that
-predates the check and can be hand-edited, and the render is the boundary that actually matters.
+the panel before it is rendered. The repetition is deliberate — stored chat state (`chat.json` on
+disk until 2026-09-05, a `chat` row now) can predate the check or be edited directly, and the render
+is the boundary that actually matters.
 
 **The first of those two was itself two, until 2026-08-28.** Chat and explanations each read the
 model's `annotations` with their own byte-identical copy of the rule, so a fix to the check would
@@ -832,13 +845,14 @@ over the resolved addresses, the redirect limit, the size cap and the type sniff
 needed all of it first. **Writing a bare `fetch` in the tool would have been three lines and an SSRF
 hole**, and it would have looked completely ordinary in review.
 
-**Path traversal, again.** `read_library_passage` takes a slug, and a slug is a path segment in the
-filesystem store — which is exactly how the confirmed traversal in
-[§ The URL is the second untrusted party](#the-url-is-the-second-untrusted-party) got in. It is
+**Path traversal, historically.** `read_library_passage` takes a slug, and until 2026-09-05 a slug
+was a path segment in the filesystem store — which is exactly how the confirmed traversal in
+[§ The URL is the second untrusted party](#the-url-is-the-second-untrusted-party) got in. It is still
 checked with `isSlug` in [`src/chat-tools.ts`](../../src/chat-tools.ts) before it reaches the store,
-in addition to whatever the store does. The new fact is that **a model is now one of the things
-choosing that string**, so "only our own client sends this" was never true and is now not even
-nearly true.
+even now that the store is Postgres and a malformed slug there is a failed lookup rather than a wrong
+file — a slug is still an identifier worth validating at the door, not a string to trust because the
+consequence of getting it wrong changed. The fact that still matters: **a model is one of the things
+choosing that string**, so "only our own client sends this" was never true.
 
 ### Prompt injection, and what the fence does not do
 

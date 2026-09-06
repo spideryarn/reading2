@@ -68,9 +68,12 @@
  * provider ran **36 searches** for $0.10. What drove those 36 was an instruction
  * to *be thorough*; the well-behaved Stage 0 call ran 7 searches for $0.066 and
  * came back with the same capped evidence. So the prompts below are written for
- * **restraint**, and the ceiling is made of three things, none of them a request
- * field: a restrained prompt, an abort deadline that fires, and `webSearches` on
- * the `ai_calls` ledger row as the alarm.
+ * **restraint**, which is the only one of the three things the ceiling is made
+ * of that actually restrains anything: the second is the claim-wide abort at
+ * **740 s** — not `STEP_BUDGET_MS.debate`, which is consulted between steps and
+ * bounds nothing that is running (`src/jobs.ts`, Sol's F31) — and the third is
+ * `webSearches` on the `ai_calls` ledger row, which is an alarm that fires after
+ * the money is spent.
  *
  * ## What this cannot prove, said plainly because the panel must say it too
  *
@@ -144,8 +147,16 @@ import type {
   SearchEvidence,
   Tree,
 } from "./types.js";
-import { sameTarget } from "./urls.js";
+import { sameTarget, webLinks } from "./urls.js";
+/* **The two counting helpers live in `types.ts` and are re-exported here**, for
+   the reason the debate *types* do (types.ts § Why these are here and not in
+   src/debate.ts): the panel has to draw the foot line these answer, and
+   tests/client-imports.test.ts will not let `src/web/` import this file — it is
+   a stage with a CLI and two model calls in it. Re-exported rather than
+   imported by every server caller so the stage still has one name for them. */
+import { anyLost, distinctSources, isDebateDocument } from "./types.js";
 
+export { anyLost, distinctSources, isDebateDocument };
 export type {
   ClaimDebateRow,
   Debate,
@@ -274,10 +285,12 @@ export async function readDebate(dir: string): Promise<Debate | null> {
   const found = await readJsonOrNull<Debate>(path.join(dir, "debate.json"));
   /* A truncated write parses as `null`, and `null` is a perfectly good JSON
      document — without this a caller would report "nobody has asked the web
-     about this one yet", the artefact gone and nothing saying so. */
-  if (!found || typeof found !== "object") return null;
-  if (!Array.isArray(found.direct?.rows) || !Array.isArray(found.claims?.rows)) return null;
-  return found;
+     about this one yet", the artefact gone and nothing saying so.
+
+     **`isDebateDocument` rather than the two `Array.isArray` calls this used to
+     make.** The same question was asked three different ways, and the store's
+     shape table asked the weakest of them (Sol's F29). */
+  return isDebateDocument(found) ? found : null;
 }
 
 /* ------------------------------------------------------------- the counters -- */
@@ -309,44 +322,10 @@ export function emptyLosses(): DebateLosses {
   };
 }
 
-/** Did this group lose anything at all? */
-export function anyLost(lost: DebateLosses): boolean {
-  return (
-    lost.uncited +
-      lost.selfSource +
-      lost.unverifiedSource +
-      lost.directnessUnverified +
-      lost.claimNotInBlock +
-      lost.unknownBlockId +
-      lost.malformed >
-    0
-  );
-}
-
-/**
- * **How many distinct pages actually contribute to the rows shown.**
- *
- * The other half of the sentence `returnedSources` exists for: *"The search
- * returned evidence from N pages; M contribute to the rows shown"*, which the
- * foot line prints whenever the two differ. Rows are deliberately **not**
- * deduplicated by URL — one review can answer two different claims, and two
- * rows about one page is a real answer — so the count of rows and the count of
- * pages are different numbers and the sentence needs this one.
- */
-export function distinctSources(rows: readonly { url: string }[]): number {
-  return new Set(rows.map((r) => r.url)).size;
-}
-
 /* --------------------------------------------------------------- the fence -- */
 
-/**
- * Every fenced block in one answer, opening index and body.
- *
- * Copied from `referee-candidates`' `FENCE`, whose note applies unchanged: `m`
- * and `s` are deliberately absent, because the fence is line-anchored and a
- * stray ``` inside a JSON string would be an escaped one.
- */
-const FENCE = new RegExp(`(^|\\n)\`\`\`${DEBATE_FENCE}[^\\n]*\\n([\\s\\S]*?)(\`\`\`|$)`, "g");
+/** The line that opens a block — the ticks, the fence name, and whatever else. */
+const OPENS = "```" + DEBATE_FENCE;
 
 /**
  * The body of the **last closed** fenced block, or `null` if there is none.
@@ -355,14 +334,46 @@ const FENCE = new RegExp(`(^|\\n)\`\`\`${DEBATE_FENCE}[^\\n]*\\n([\\s\\S]*?)(\`\
  * corrected itself. **Closed**, because an unclosed fence is an answer that was
  * cut off — and unlike Candidates, which keeps the previous turn's list, there
  * is nothing here to fall back on: `null` fails the pass.
+ *
+ * ## Line-delimited, and a line scan rather than a regex
+ *
+ * This was `referee-candidates`' regex until 2026-09-05, and GPT Sol's F26
+ * showed it failing in both directions at once. It matched a ``` sequence
+ * **anywhere**, and the comment it carried explained that away by saying a stray
+ * one inside a JSON string "would be an escaped one" — which is simply untrue.
+ * JSON escapes quotes, backslashes and control characters; backticks are
+ * ordinary text. So:
+ *
+ *  - **valid JSON was rejected**: an `applies` sentence quoting a fenced block
+ *    ended the body mid-document and the pass failed;
+ *  - **worse, truncation was accepted**: a closed `[]` followed by a second
+ *    fence the answer was cut off inside took the earlier one, and this mode
+ *    manufactured *"the search found nothing"* — its commonest honest answer, so
+ *    nothing looked wrong.
+ *
+ * Now the opening and closing delimiters each have to occupy their own line, and
+ * **a later unmatched opener fails the whole pass** rather than falling back to
+ * an earlier fence. `src/debate.ts` § `parsePass` is what turns that `null` into
+ * a refused step.
  */
 function lastClosedFence(text: string): string | null {
   let body: string | null = null;
-  for (const m of text.matchAll(FENCE)) {
-    if (m[3] !== "```") continue;
-    body = m[2] ?? "";
+  let open: string[] | null = null;
+  for (const line of text.replace(/\r\n/g, "\n").split("\n")) {
+    if (open === null) {
+      if (line.startsWith(OPENS)) open = [];
+      continue;
+    }
+    if (line.trim() === "```") {
+      body = open.join("\n");
+      open = null;
+      continue;
+    }
+    open.push(line);
   }
-  return body;
+  /* An opener with no closing line after it is an answer that stopped in the
+     middle, whatever came before it. */
+  return open === null ? body : null;
 }
 
 /** A trimmed string, or `""` for anything that is not one. */
@@ -393,14 +404,128 @@ function str(value: unknown): string {
  * (src/ideas.ts) still pass the default and are a known gap; Debate must not
  * become the third.
  */
+/**
+ * **The floor under every quote check** — three words and sixteen characters,
+ * counted after trimming and collapsing runs of whitespace.
+ *
+ * GPT Sol's F25. Without it `locate` accepted any non-empty substring, so
+ * `sourceQuote: "a"` and `claimQuote: "a"` both passed and **both evidence
+ * checks collapsed into existence checks**: he built a row claiming an
+ * unrelated page *"disproves the article's central claim"* whose entire stored
+ * evidence on both sides was the letter `a`, and it passed every defence with
+ * every counter clean. The excerpt in the tooltip is the reader's one action,
+ * and one character is not one.
+ *
+ * **What these numbers admit**: a real short claim such as *"consciousness
+ * requires life"* — 3 words, 27 characters. **What they refuse**: single
+ * characters, single words, and two-word fragments like *"fed twice"* that
+ * appear on any page about the subject.
+ *
+ * **The risk being traded is losing a true short quotation against admitting a
+ * meaningless one, and we prefer to lose the row** — the direction § Attribution
+ * fails in throughout, and the same call the extract-not-the-page rule makes.
+ */
+export const MIN_QUOTE_WORDS = 3;
+/** @see MIN_QUOTE_WORDS — both floors apply, and a quote must clear each. */
+export const MIN_QUOTE_CHARS = 16;
+
+/** Words and characters, after trimming and collapsing runs of whitespace. */
+function collapse(text: string): string {
+  return text.trim().replace(/\s+/g, " ");
+}
+
+/**
+ * Is this quotation long enough to be worth looking for?
+ *
+ * Asked of the **model's** spelling, before `locate` goes near the haystack —
+ * so the floor cannot be got round by a one-character quote that happens to
+ * match.
+ */
+export function isSubstantiveQuote(quote: string): boolean {
+  const flat = collapse(quote);
+  if (flat.length < MIN_QUOTE_CHARS) return false;
+  return flat.split(" ").length >= MIN_QUOTE_WORDS;
+}
+
+/**
+ * **Do these words name *this* article?** — the rule group one's whole claim
+ * rests on, and the one `readDirectGroup` did not make until 2026-09-05 (Sol's
+ * F24).
+ *
+ * Three ways, and each is an *identification* rather than a topic match:
+ *
+ *  - **its address**, compared with `sameTarget` — the same request identity the
+ *    self-citation rule uses, so a fragment or a percent-encoded path is the
+ *    same page and there is one answer in this repo to "is that this article?"
+ *    rather than two;
+ *  - **its title**, when the title is substantial enough to be evidence on its
+ *    own. *"Notes on my sourdough starter, week 3"* names one piece; *"On rye"*
+ *    names a subject;
+ *  - **a shorter title together with the byline**, which is what turns a common
+ *    phrase back into a reference to one piece.
+ *
+ * Both text comparisons are case-insensitive with runs of whitespace collapsed,
+ * because the witness is a slice of a search extract and its spacing is
+ * whatever the extractor left behind.
+ */
+export function namesArticle(witness: string, article: ArticleIdentity): boolean {
+  if (article.url) {
+    /* `webLinks` rather than a second URL pattern: it already knows where a bare
+       address stops, hands back the sentence's full stop, and refuses the
+       credential form. */
+    for (const link of webLinks(witness)) {
+      if (sameTarget(link.url, article.url)) return true;
+    }
+  }
+
+  const hay = collapse(witness).toLowerCase();
+  const title = collapse(article.title ?? "").toLowerCase();
+  if (title === "" || !hay.includes(title)) return false;
+  if (title.length >= MIN_TITLE_EVIDENCE_CHARS) return true;
+
+  const byline = collapse(article.byline ?? "").toLowerCase();
+  return byline !== "" && hay.includes(byline);
+}
+
+/**
+ * How much title is evidence on its own.
+ *
+ * Twenty characters is a judgement rather than a measurement, and it is the
+ * conservative direction: below it the byline has to be there too, so the cost
+ * of being wrong is a lost row rather than an unproved claim.
+ */
+export const MIN_TITLE_EVIDENCE_CHARS = 20;
+
 export function locate(haystack: string, quote: string): string | null {
   const trimmed = quote.trim();
   if (trimmed === "" || haystack === "") return null;
+  /* **The floor, here rather than at the three call sites** — for the reason the
+     matcher argument is here: a fourth check must not be able to acquire the
+     rule by forgetting it. */
+  if (!isSubstantiveQuote(trimmed)) return null;
   const span = findQuote(haystack, trimmed, undefined, "spaced");
   return span ? haystack.slice(span.start, span.end) : null;
 }
 
 /* ------------------------------------------------------------ reading a group -- */
+
+/**
+ * **Who this article is**, as much of it as a page could name it by.
+ *
+ * Three fields rather than a URL alone because `namesArticle` needs all three:
+ * most pages that respond to a piece name it by its title, some link it, and a
+ * short title is only evidence when the byline is beside it. Every field is
+ * nullable — an article with no metadata at all is a legitimate input, and it
+ * simply cannot have a group-one row.
+ */
+export interface ArticleIdentity {
+  /** Its own address, or `null` for an article that has none. */
+  url: string | null;
+  /** Its title as the head has it, or `null`. */
+  title: string | null;
+  /** Its author, or `null`. */
+  byline: string | null;
+}
 
 /** What both group readers need to judge a row against. */
 export interface GroupInput {
@@ -415,15 +540,22 @@ export interface GroupInput {
    */
   admissible: ReadonlyMap<string, SearchEvidence>;
   /**
-   * The article's own address, or `null` for an article that has none.
+   * **Who the article is** — its address, its title and its byline.
    *
-   * **This, and not a second map of what was refused.** A first draft carried
-   * the pre-refusal annotations alongside, so that a row naming the article
-   * could be told from a row naming nothing — and it was dead weight: the
-   * `sameTarget` test below already answers that, before the map is consulted at
-   * all, which is what gives the loss its true name.
+   * The address answers `selfSource`: **this, and not a second map of what was
+   * refused.** A first draft carried the pre-refusal annotations alongside, so
+   * that a row naming the article could be told from a row naming nothing — and
+   * it was dead weight: the `sameTarget` test below already answers that, before
+   * the map is consulted at all, which is what gives the loss its true name.
+   *
+   * The title and byline answer `namesArticle`, and until 2026-09-05 they were
+   * not here at all — which is GPT Sol's F24 and the worst bug this file has
+   * had: `readDirectGroup` located the witness *somewhere in the extract* and
+   * never compared it with the article, so a genuine quotation from an unrelated
+   * page proved directness. The docblock above `readDirectGroup` already stated
+   * the correct rule, so the code and its own documentation disagreed.
    */
-  articleUrl: string | null;
+  article: ArticleIdentity;
 }
 
 /** Group two additionally has to resolve a block id and a quote inside it. */
@@ -469,10 +601,17 @@ type RowVerdict<Row> = { ok: true; row: Row } | { ok: false; reason: keyof Debat
  */
 function readShared(row: Record<string, unknown>, opts: GroupInput): SharedVerdict {
   const applies = str(row.applies);
-  const url = str(row.url);
-  if (applies === "" || url === "") return { ok: false, reason: "malformed" };
+  if (applies === "") return { ok: false, reason: "malformed" };
 
-  if (opts.articleUrl && sameTarget(url, opts.articleUrl)) {
+  /* **A missing address is `uncited`, not `malformed`** (Sol's F28). The two
+     were tested together until 2026-09-05, and `DebateLosses.uncited`
+     (src/types.ts) has always said "no URL, or a URL this run's own annotations
+     never returned" — so the panel's foot line named the wrong failure for a
+     row whose only fault was having no address. */
+  const url = str(row.url);
+  if (url === "") return { ok: false, reason: "uncited" };
+
+  if (opts.article.url && sameTarget(url, opts.article.url)) {
     return { ok: false, reason: "selfSource" };
   }
 
@@ -525,6 +664,13 @@ function readShared(row: Record<string, unknown>, opts: GroupInput): SharedVerdi
  * It costs real rows. A review that says only *"Seth's recent essay"* fails it.
  * That is the right direction to fail in, and it makes the honest empty state —
  * which Greg asked for by name — the common case rather than an embarrassment.
+ *
+ * **The rule above is `namesArticle`, and it was a sentence in this docblock
+ * with no code under it until 2026-09-05** (Sol's F24). Locating the witness in
+ * the extract was the whole check, which proves the page contains those words
+ * and nothing about whom they are about — so two genuine quotations from an
+ * unrelated returned page kept a row here with every counter clean. A docblock
+ * that states a rule the code does not make is worse than a silent gap.
  */
 export function readDirectGroup(
   rows: unknown[],
@@ -534,7 +680,15 @@ export function readDirectGroup(
   return readGroupWith(rows, MAX_DIRECT_ROWS, opts, webSearches, (row, shared) => {
     if (!shared.ok) return shared;
     const witness = locate(shared.evidence.excerpt ?? "", str(row.articleReferenceQuote));
-    if (witness === null) return { ok: false, reason: "directnessUnverified" };
+    /* **Two questions, and the second is the one that matters.** Locating the
+       witness says the page contains those words; `namesArticle` says the words
+       are about *this* piece. Sol passed two genuine quotations from an
+       unrelated returned page — one as `sourceQuote`, one as
+       `articleReferenceQuote` — and the row was kept here with nothing counted.
+       Same loss reason for both halves: the reader's sentence is the same. */
+    if (witness === null || !namesArticle(witness, opts.article)) {
+      return { ok: false, reason: "directnessUnverified" };
+    }
     return { ok: true, row: { ...shared.base, articleReferenceQuote: witness } };
   });
 }
@@ -937,6 +1091,23 @@ async function runPass(opts: {
        provider's own words about a request that carried the article. */
     throw stageFailure(MODEL_REFUSED, { authored: "the provider stopped its own answer" });
   }
+  /* **Everything else is a failed or unreadable pass** — an allowlist, and the
+     two cases above are only here to give the reader a better sentence than
+     this one.
+
+     It was a blocklist until 2026-09-05, refusing `length` and `content_filter`
+     and letting the rest through, and GPT Sol's F27 walked straight through it:
+     `finish_reason: "error"` with a positive search count and a closed `[]`
+     stored an apparently successful empty artefact. A blocklist is the wrong
+     shape for a field whose values the *provider* chooses — a missing one, a new
+     one, `"error"`, and `"tool_calls"` on a turn that was going to call another
+     tool are all answers that stopped early, and this step has no partial
+     success to fall back on. The provider's own word for it is deliberately not
+     in the message: it is unauthored text on a request that carried the
+     article. */
+  if (choice.finish_reason !== "stop") {
+    throw stageFailure(PROVIDER_UNREADABLE, { authored: "the answer did not finish cleanly" });
+  }
 
   /* **The search count, and a zero here is a failure rather than a result.** A
      model that did not search still answers, from memory, with real URLs it
@@ -1041,6 +1212,14 @@ export async function generateDebate(opts: {
   const meta: Meta = articleMeta ?? ({ title: fallbackHeadTitle(tree) } as Meta);
   const sourceHash = inputFingerprint(blocks, tree, articleMeta);
   const articleUrl = articleMeta?.url ?? null;
+  /* **The title is the one pass A was asked about**, fallback and all — a
+     witness rule judging a page against a title the search never carried would
+     refuse rows for naming exactly what we asked the web for. */
+  const identity: ArticleIdentity = {
+    url: articleUrl,
+    title: articleMeta?.title ?? fallbackHeadTitle(tree),
+    byline: articleMeta?.byline ?? null,
+  };
   const model = modelFor("debate");
   const started = Date.now();
 
@@ -1059,7 +1238,7 @@ export async function generateDebate(opts: {
   });
   const directRows = readDirectGroup(
     parsePass(direct.text),
-    { admissible: direct.admissible, articleUrl },
+    { admissible: direct.admissible, article: identity },
     direct.webSearches,
   );
 
@@ -1078,7 +1257,7 @@ export async function generateDebate(opts: {
     parsePass(claims.text),
     {
       admissible: claims.admissible,
-      articleUrl,
+      article: identity,
       blockText: blockTextById(evidence),
     },
     claims.webSearches,

@@ -92,6 +92,10 @@ const slugsHeld = vi.fn();
 vi.mock("../src/web/lib/offline-store.js", () => ({
   readCached: readCache,
   writeCached: writeCache,
+  /* The place in the cache's queue `apiFetch` reserves before it sends. Enough
+     of one to be handed back to the write, which is all this file looks at. */
+  reserveTicket: async (url: string, userId: string | null) =>
+    userId ? { userId, url, epoch: 0, seq: 1 } : null,
   invalidate: invalidateCache,
   cachedSlugs: slugsHeld,
   rememberUser: vi.fn(),
@@ -224,7 +228,12 @@ describe("every per-article artefact GET survives losing the connection", () => 
        whole articles rather than in loose responses. Asserting it, rather than
        merely that something was written, is what stops "the URL was on some
        list" passing for "this article's copy is on disk". */
-    expect(writeCache).toHaveBeenCalledWith(`/api/${kind}/gibbon`, { a: 1 }, "user-1", "gibbon");
+    expect(writeCache).toHaveBeenCalledWith(
+      `/api/${kind}/gibbon`,
+      { a: 1 },
+      expect.objectContaining({ userId: "user-1", url: `/api/${kind}/gibbon` }),
+      "gibbon",
+    );
   });
 });
 

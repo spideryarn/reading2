@@ -314,7 +314,7 @@ up in the same sitting would have changed two variables at once.
   search could have found a path if one were there — the control shared no assumption with the
   thing it was supposed to be validating, which is the exact shape of
   [silent-success.md](../reusable/silent-success.md).
-- A pathless regression is easy to construct: [`src/api.ts`](../../src/api.ts) derives a root path
+- A pathless regression is easy to construct: `src/api.ts` derives a root path
   and its `readJson` turns `ENOENT` into `null`, so a wrong root surfaces as a value assertion or a
   404, with no path in the message.
 

@@ -2504,13 +2504,29 @@ export interface ChatMessage {
    */
   stopped?: boolean;
   /**
-   * The model ran out of room mid-sentence. Assistant turns only.
+   * **At least one provider round hit its output limit after writing prose**, so
+   * the answer may be incomplete. Assistant turns only.
    *
    * `finish_reason: "length"` with text already written — which used to be
    * stored as an ordinary `done` answer, so a paragraph that stopped halfway
    * through a word looked like a model that had simply finished oddly. The
    * reader had no way to tell it apart from a complete answer, and "retry"
    * was not obviously the thing to do.
+   *
+   * **"May be" rather than "did", and that first line was reworded on
+   * 2026-09-05.** It used to say *"ran out of room mid-sentence"*, which claims
+   * more than any wire signal can support. A turn is up to four provider
+   * requests; since the fold in `src/converse.ts` this is true when an *earlier*
+   * round hit its ceiling after writing prose, and that round's prose can
+   * perfectly well have ended at a full stop with the truncation falling in the
+   * tool call after it. What is certain is that a step was cut off and content
+   * was lost; whether the stored text ends mid-sentence is not observable from
+   * `finish_reason`. GPT Sol, finding F6, with the reproduction in that review.
+   *
+   * **The panel's own sentence still says "stopped mid-sentence"**
+   * (`src/web/ChatPanel.tsx`), so it overclaims in that case. Changing what a
+   * reader is shown is Greg's call, not an agent's — see
+   * docs/project/copy.md — and it is written down here rather than quietly left.
    *
    * A flag rather than a status, for the same reason `stopped` is one: the
    * answer above it is real and worth keeping. Unlike `stopped`, this one **is**
@@ -3541,6 +3557,46 @@ export interface DebateGroup<Row> {
 }
 
 /**
+ * **Did this group lose anything at all?**
+ *
+ * Here rather than in src/debate.ts, where it started, for the reason the types
+ * above are here: the panel draws the foot line this answers, and
+ * tests/client-imports.test.ts will not let `src/web/` import a module with a
+ * CLI and two model calls in it. The stage re-exports it, so it still has one
+ * name on the server side.
+ *
+ * **A sum of every field rather than `Object.values`**, so a *fourth* group-two
+ * loss reason added to `DebateLosses` is a compile error at this line rather
+ * than a number silently folded into a sentence nobody re-read.
+ */
+export function anyLost(lost: DebateLosses): boolean {
+  return (
+    lost.uncited +
+      lost.selfSource +
+      lost.unverifiedSource +
+      lost.directnessUnverified +
+      lost.claimNotInBlock +
+      lost.unknownBlockId +
+      lost.malformed >
+    0
+  );
+}
+
+/**
+ * **How many distinct pages actually contribute to the rows shown.**
+ *
+ * The other half of the sentence `returnedSources` exists for: *"The search
+ * returned evidence from N pages; M contribute to the rows shown"*, which the
+ * foot line prints whenever the two differ. Rows are deliberately **not**
+ * deduplicated by URL — one review can answer two different claims, and two
+ * rows about one page is a real answer — so the count of rows and the count of
+ * pages are different numbers and the sentence needs this one.
+ */
+export function distinctSources(rows: readonly { url: string }[]): number {
+  return new Set(rows.map((r) => r.url)).size;
+}
+
+/**
  * The artefact. The `debate` column on `article_revisions`.
  *
  * **Two groups, from two separately metered model calls** — not one call
@@ -3581,6 +3637,32 @@ export interface Debate {
   /** About what it claims. */
   claims: DebateGroup<ClaimDebateRow>;
   elapsedMs: number;
+}
+
+/**
+ * **Is this value a debate document at all?** — the one shallow shape check,
+ * asked by all three readers.
+ *
+ * `SHAPE.debate` (src/store/artifacts.ts) asked only whether `direct` was an
+ * object, so `{"direct":{}}` passed it; `readDebate` (src/debate.ts) required
+ * both groups' rows; and the Postgres reader served any non-null JSONB
+ * unchecked. Three answers to one question, which is the drift `SHAPE` exists
+ * to prevent — GPT Sol's F29.
+ *
+ * **Both row arrays, and nothing about their contents.** Two empty groups is a
+ * perfectly good artefact and the commonest one, so this cannot ask for rows;
+ * what it has to tell apart is a *half-written or hand-edited document*, and a
+ * missing `claims` is exactly that.
+ *
+ * Here rather than in src/debate.ts for the reason `anyLost` is: the store's
+ * shape table is reachable from the client, and it may not import a module with
+ * a CLI and two model calls in it (tests/client-imports.test.ts). The stage
+ * re-exports it, so the server side still has one name for it.
+ */
+export function isDebateDocument(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const doc = value as { direct?: { rows?: unknown }; claims?: { rows?: unknown } };
+  return Array.isArray(doc.direct?.rows) && Array.isArray(doc.claims?.rows);
 }
 
 /**
@@ -3957,3 +4039,121 @@ export interface AdminFeedbackPage {
   /** Pass back as `?before=` to get the next page. `null` when there is no next page. */
   nextCursor: FeedbackCursor | null;
 }
+
+/* --------------------------------------------------------- link preview -- */
+
+/**
+ * **What the page on the other end of a hyperlink says about itself.**
+ *
+ * Four fields, all of them the destination's own words rather than ours — a
+ * summary is stage 3 and lives somewhere else. Every field is optional because
+ * the measured corpus really does vary: three of eight successes on 2026-09-05
+ * (plato.stanford, paulgraham, gwern) carry no `og:` tags at all, so the
+ * fallback chain is load-bearing and what survives it differs page by page.
+ *
+ * docs/project/links.md, and src/link-previews.ts for how each one is found.
+ */
+export interface PagePreview {
+  /** `og:title` → `twitter:title` → `<title>`. */
+  title?: string;
+  /** `og:site_name`. Never guessed from the host — the card already shows that. */
+  siteName?: string;
+  /** `og:description` → `twitter:description` → `<meta name=description>`. */
+  description?: string;
+  /**
+   * Readability's opening paragraph, and only when it looked like one.
+   *
+   * noema's is the word "Credits" — a byline artefact — so this is absent
+   * rather than wrong when the sanity check fails, and the card falls back to
+   * `description`.
+   */
+  firstParagraph?: string;
+  /** How long the destination is, in words. */
+  words?: number;
+}
+
+/**
+ * The answer to `GET /api/link-preview`.
+ *
+ * A discriminated union rather than a nullable page, because *nothing to show*
+ * and *ask again in a moment* are different things to a client and only one of
+ * them is worth a second request.
+ *
+ * **No timestamps, and that is a rule rather than an omission.** Returning when
+ * the row was fetched would tell a caller whether — and when — some prior reader
+ * caused a fetch of that URL. GPT Sol, 2026-09-05, finding P1-7;
+ * src/db/schema.ts § `linkPreviews`.
+ */
+export type LinkPreviewResponse =
+  /** We have something worth putting on the card. */
+  | { state: "ready"; page: PagePreview }
+  /**
+   * Somebody else holds the single-flight claim for this exact URL. Ask once
+   * more, shortly; do not treat it as an answer.
+   */
+  | { state: "pending" }
+  /**
+   * **We asked the destination and there is nothing to show.**
+   *
+   * Unreachable, refused by the far end, a PDF, a page with nothing in it. The
+   * card is left exactly as it was: two of ten destinations in this corpus are
+   * permanently behind a bot challenge, and that has to look like nothing
+   * happening rather than like an error.
+   *
+   * This is a fact about **the URL**, so the client caches it and stops asking.
+   */
+  | { state: "unavailable" }
+  /**
+   * **We did not ask**, and the reason is about this request rather than about
+   * the URL: the URL is not among this article's links, or it looks like it
+   * carries a key, or this reader's allowance is spent.
+   *
+   * The card looks exactly the same as for `unavailable` — the reader is told
+   * nothing either way. The distinction exists for the **client's cache**, and
+   * without it a single hover of a chat link (which is in no article, so always
+   * refused) or one rate-limited moment would silence that URL for the rest of
+   * the session, including on the prose link where it would have worked. GPT
+   * Sol, 2026-09-05, P2-1.
+   *
+   * It tells a caller nothing they did not have: they supplied the slug and the
+   * URL and they own the article, so they could already read its links.
+   */
+  | { state: "refused" };
+
+/**
+ * **What `GET /api/link-summary` sends**, one frame at a time.
+ *
+ * The other half of the card, and the half we wrote: how the destination stands
+ * to the piece the reader is holding. It streams — AGENTS.md's rule, and
+ * `explain.ts` is the shape — so the reader watches it arrive rather than
+ * watching a spinner. src/link-summary.ts.
+ *
+ * The four terminal members mirror `LinkPreviewResponse`'s deliberately, because
+ * the client's caching rule is the same rule: **cache what is a property of the
+ * question, and never what is a property of this request.** A `ready` and an
+ * `unavailable` are about this reader, this article and this address, and are
+ * remembered; a `refused` (a spent allowance) and a `pending` (somebody else is
+ * generating it, or the fetch has not landed yet) are about this moment and are
+ * not.
+ *
+ * `kind` rather than `state`, because these are frames rather than one answer:
+ * a `delta` is not a state anything is in.
+ */
+export type LinkSummaryEvent =
+  /** More of the answer. Any number of these, then exactly one terminal frame. */
+  | { kind: "delta"; text: string }
+  /** The whole summary — after the deltas, or on its own from the cache. */
+  | { kind: "ready"; summary: string }
+  /**
+   * There is nothing here to summarise: the destination could not be read, or
+   * what came back was a cookie notice rather than a piece. A property of the
+   * pairing, so the client remembers it and stops asking.
+   */
+  | { kind: "unavailable" }
+  /** We did not ask — the URL is not in this article, or the allowance is spent. */
+  | { kind: "refused" }
+  /**
+   * Not yet: the destination's own fetch has not landed, or another request is
+   * generating this very summary. Ask again shortly; it is not an answer.
+   */
+  | { kind: "pending" };

@@ -231,8 +231,6 @@ afterAll(async () => {
 function ctxFor(): StepContext {
   return {
     slug: SLUG,
-    dir: path.join(root, "nowhere", "data", SLUG),
-    htmlFile: path.join(root, "nowhere", "output", `${SLUG}.html`),
     report: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,

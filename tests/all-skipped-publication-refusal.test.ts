@@ -347,7 +347,6 @@ function fakeArc(): PipelineStep<"arc"> {
   return {
     name: "arc",
     label: "Reading the shape of the argument",
-    outputs: (ctx) => [path.join(ctx.dir, "arc.json")],
     produces: ["arc"],
     async run() {
       throw new Error("the arc step must not run: the fixture published a current one");

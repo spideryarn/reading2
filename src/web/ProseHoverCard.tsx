@@ -42,11 +42,19 @@ import {
   Globe,
   LoaderCircle,
   Plus,
+  /* The house mark for "a model wrote this" — `SearchPanel`'s meaning search and
+     `QuotesPanel` both use it for the same distinction, and using a different
+     icon here would make the same claim in a second vocabulary. */
+  Sparkles,
 } from "lucide-react";
 import { FloatingArrow, FloatingPortal } from "@floating-ui/react";
-import type { BlockId, GlossaryEntry, Job } from "../types.js";
+import type { BlockId, GlossaryEntry, Job, PagePreview } from "../types.js";
 import { urlKey } from "../ingest.js";
 import { hostOf } from "../urls.js";
+/* The same words-per-minute the masthead and the shelf card use. A second
+   arithmetic here would be a card and a masthead disagreeing about one page,
+   which is the drift src/reading-time.ts exists to make impossible. */
+import { readingMinutes } from "../reading-time.js";
 import { entryProse } from "./GlossaryPanel.js";
 import { useHoverCard } from "./useHoverCard.js";
 import { describeLink, type ExternalPreview, type LinkPreview } from "./link-preview.js";
@@ -75,6 +83,14 @@ interface Hit {
   link: LinkPreview | null;
   /** For an in-article anchor: the block it resolves to. */
   anchor: { blockId: BlockId; text: string } | null;
+  /**
+   * **The block the anchor itself sits in** — where the reader is standing,
+   * rather than where the link goes, which is `anchor` above.
+   *
+   * `null` off the prose: a link in a chat answer or in the sources under one is
+   * in no article's block, and the summary route refuses those anyway.
+   */
+  inBlock: BlockId | null;
   /** The raw href, for the foot of the card. */
   href: string | null;
   /**
@@ -91,6 +107,7 @@ interface Hit {
 
 export function ProseHoverCard({
   entries,
+  slug,
   sourceUrl,
   blockText,
   notes,
@@ -101,6 +118,29 @@ export function ProseHoverCard({
   canAddToShelf,
 }: {
   entries: GlossaryEntry[];
+  /**
+   * **Which article the reader is in**, and both server-side sources are
+   * article-scoped: `GET /api/link-preview` and, since 2026-09-05,
+   * `GET /api/link-summary`.
+   *
+   * Neither will touch a URL until it has proved the caller owns this article
+   * *and* that this article really points at that URL — which is what turns an
+   * arbitrary-URL fetch endpoint into one that can only ever reach things an
+   * author already published in a piece this reader owns. GPT Sol, 2026-09-05,
+   * P1-1; src/link-previews.ts.
+   *
+   * **The slug means something different to each of them, and the difference is
+   * the whole shape of the feature.** To the preview it is the *permission* and
+   * nothing more: what a page says about itself is a property of the address, so
+   * that cache is keyed on the address alone and shared with everybody. To the
+   * summary it is part of the *question* — how this destination stands to *this*
+   * piece — so that cache is keyed on the reader, the article and the address
+   * together, and is shared with nobody. src/link-summary.ts.
+   *
+   * `null` in any context that has no article — the card then keeps its two
+   * href-and-Wikipedia lookups and asks the server nothing.
+   */
+  slug: string | null;
   /**
    * Where the article itself came from.
    *
@@ -213,12 +253,28 @@ export function ProseHoverCard({
          anchor card: "elsewhere in this article", with the note's first 260
          characters under it, is a worse answer than the note. */
       const note = anchorEl ? noteMarkerAt(anchorEl, document, notes) : null;
-      if (note) return { termIds, link, anchor, href, note, back: false };
+
+      /* **Which paragraph the pointer is in**, read the way `onFollowNote` and
+         TableView's own link handler read it: the row is the block, and
+         `data-block` is the id every feature here addresses text by
+         (docs/project/block-ids.md). It is what tells the summary which of two
+         mentions of one destination the reader is actually looking at. */
+      const inBlock = anchorEl?.closest("tr[data-block]")?.getAttribute("data-block") ?? null;
+
+      if (note) return { termIds, link, anchor, inBlock, href, note, back: false };
 
       // Nothing to say. A bare `<a>` we cannot describe is not worth a panel.
       if (termIds.length === 0 && !link) return null;
       if (termIds.length === 0 && link?.kind === "anchor" && !anchor) return null;
-      return { termIds, link, anchor, href, note: null, back: !!anchorEl && isBackLink(anchorEl) };
+      return {
+        termIds,
+        link,
+        anchor,
+        inBlock,
+        href,
+        note: null,
+        back: !!anchorEl && isBackLink(anchorEl),
+      };
     },
     [byId, sourceUrl, blockText, notes],
   );
@@ -339,7 +395,7 @@ export function ProseHoverCard({
   });
 
   if (!shown) return null;
-  const { termIds, link, anchor, href, note, back } = shown.data;
+  const { termIds, link, anchor, inBlock, href, note, back } = shown.data;
   const found = termIds
     .map((id) => byId.get(id))
     .filter((e): e is GlossaryEntry => e !== undefined);
@@ -441,7 +497,7 @@ export function ProseHoverCard({
      has the caveat to that. */
   const withFacts = (add: AddToShelf) =>
     lookUpLinks ? (
-      <WithLinkFacts link={link} sourceUrl={sourceUrl}>
+      <WithLinkFacts link={link} sourceUrl={sourceUrl} slug={slug} inBlock={inBlock}>
         {(facts) => card(facts, add)}
       </WithLinkFacts>
     ) : (
@@ -505,13 +561,17 @@ export function ProseHoverCard({
 function WithLinkFacts({
   link,
   sourceUrl,
+  slug,
+  inBlock,
   children,
 }: {
   link: LinkPreview | null;
   sourceUrl: string | null;
+  slug: string | null;
+  inBlock: BlockId | null;
   children: (facts: LinkFacts) => ReactElement;
 }) {
-  return children(useLinkFacts(link, sourceUrl));
+  return children(useLinkFacts(link, sourceUrl, slug, inBlock));
 }
 
 /**
@@ -527,6 +587,14 @@ const NO_LINK_FACTS: LinkFacts = {
   library: null,
   wiki: null,
   shelfKnown: false,
+  /* And no server fetch on their behalf either — `/api/link-preview` is
+     authenticated and article-scoped, so a visitor could not call it if the
+     card tried. This is the same second lock on the same door. */
+  page: null,
+  /* And nothing bought on their behalf. `/api/link-summary` is behind the same
+     gate and, unlike the fetch, spends money — so this is the second lock on a
+     door that costs something to have opened. */
+  summary: null,
 };
 
 /* ------------------------------------------------- add it to my shelf --- */
@@ -846,10 +914,12 @@ export function describeAdd(state: Asked | undefined, job: Job | null, add: () =
  *    plainly rather than dressed up as a page.
  *
  * **The asynchronous half is additive, never load-bearing.** The card is drawn
- * and complete from the href alone; a shelf match or a Wikipedia summary is a
- * section that appears under it a moment later. Nothing above waits, and a
- * lookup that fails or finds nothing leaves a card that was already worth
- * reading. That is what lets those lookups be allowed to be slow.
+ * and complete from the href alone; a shelf match, a Wikipedia summary, what the
+ * page says about itself, and — since 2026-09-05 — a model's line on how that
+ * page stands to the piece being read are all sections that appear under it a
+ * moment later. Nothing above waits, and a lookup that fails or finds nothing
+ * leaves a card that was already worth reading. That is what lets those lookups
+ * be allowed to be slow, and the last of them to be allowed to *stream*.
  *
  * One thing above *does* change, and it is deliberate rather than a wobble: a
  * real title replaces the path trail rather than sitting under it, so the guess
@@ -932,6 +1002,90 @@ function LinkCard({
 }
 
 /**
+ * **What the page says about itself**, fetched by our server once and cached for
+ * everybody — the third source, and the only one that can answer for an
+ * arbitrary destination. src/link-previews.ts, docs/project/links.md.
+ *
+ * Every line of it is the destination's own words, so it is labelled as theirs
+ * in the same way Wikipedia's is: this is not a summary, and there is nothing
+ * here that we wrote.
+ *
+ * **The description and the opening paragraph are not both drawn.** Where a page
+ * has both they are usually the same sentences twice — an `og:description` is
+ * very often the first line of the piece — and the opening is the better of the
+ * two when it survived the sanity check (`saneParagraph` in
+ * src/link-previews.ts), because it is prose the author wrote rather than a
+ * field somebody's CMS filled in.
+ *
+ * Its own component rather than four more lines in `ExternalBody`, for the
+ * reason that function's own comment gives about the complexity lint: the branch
+ * had already become a card, and a fourth source in it would have been the same
+ * signal a second time.
+ */
+function PageSaid({ page }: { page: PagePreview }) {
+  const opening = page.firstParagraph ?? page.description;
+  return (
+    <div className="prose-card-part prose-card-part-page">
+      <p className="prose-card-label">
+        <Globe size={9} />
+        {page.siteName ? clip(page.siteName, 40) : "from the page itself"}
+      </p>
+      {page.title && <p className="prose-card-title">{clip(page.title, 120)}</p>}
+      {opening && <p className="prose-card-text">{clip(opening, 260)}</p>}
+      {page.words !== undefined && (
+        <p className="prose-card-meta">
+          {page.words.toLocaleString()} words · ~{readingMinutes(page.words)} min
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * **How the destination stands to the piece in your hands** — the one part of
+ * this card that we wrote, and the only one that costs money.
+ *
+ * Every other section is quoted: the shelf's own gist, Wikipedia's lead
+ * paragraph, the page's own `og:description`. This one is a model's answer, so
+ * it is labelled differently — *"in relation to what you're reading"* rather
+ * than a source's name — because a reader is owed the difference between a page
+ * saying something about itself and us saying something about it.
+ *
+ * **It streams, and the cursor is why the flag exists.** A paragraph that has
+ * stopped growing and a paragraph still arriving look identical, and the second
+ * one ending mid-sentence is a stream that broke rather than a summary that
+ * chose to stop. `LinkFacts.summary` carries `streaming` for exactly this.
+ *
+ * There is deliberately **no spinner before the first token**. The card is
+ * already useful and already complete-looking by then, and an empty section with
+ * a heading reads as a lookup that broke — `readSummary`'s rule, one source up.
+ * What the reader sees is nothing, and then a paragraph appearing.
+ */
+function LinkRelation({ summary }: { summary: { text: string; streaming: boolean } }) {
+  return (
+    <div className="prose-card-part prose-card-part-relation">
+      <p className="prose-card-label">
+        <Sparkles size={9} />
+        in relation to what you're reading
+      </p>
+      <p className="prose-card-text">
+        {/* **Clipped, and the number is a bound on the card rather than an
+            editorial view.** `.tooltip` has a width cap and no height cap, so an
+            answer that ran long would make a card taller than a phone with
+            nothing to scroll. Nine hundred characters is about a hundred and
+            fifty words against a prompt that asks for under a hundred, so it
+            should never bite — and if it starts biting, the prompt is what to
+            look at. The other sections clip at 220–260 for a different reason:
+            they are somebody else's blurb, and this is the section the reader is
+            here for. */}
+        {clip(summary.text, 900)}
+        {summary.streaming && <span className="prose-card-caret" aria-hidden="true" />}
+      </p>
+    </div>
+  );
+}
+
+/**
  * A link out — the commonest case, and the only one with more than one source.
  *
  * Its own component rather than a branch of `LinkCard`, because it is the half
@@ -955,7 +1109,7 @@ function ExternalBody({
   add: AddToShelf;
   href: string | null;
 }) {
-  const { library, wiki, loading, shelfKnown } = facts;
+  const { library, wiki, loading, shelfKnown, page, summary } = facts;
   /**
    * **Nothing to add when we already have it — or when we cannot yet say.**
    *
@@ -973,10 +1127,23 @@ function ExternalBody({
    * the first hover of a session. GPT Sol, P1-1.
    */
   const adding: AddToShelf = library !== null || !shelfKnown ? NO_ADD_TO_SHELF : add;
+  /**
+   * **What the destination itself said, but only when nobody better placed
+   * already answered.**
+   *
+   * The three sources overlap and their order is a ranking rather than a
+   * layout: an article on the reader's own shelf has a title, our gist and a
+   * real length, and Wikipedia's summary is a lead paragraph written by people.
+   * Both beat `og:description`. `link-facts.ts` already declines to *ask* in
+   * those two cases, and this is the same rule applied to drawing — because the
+   * shelf can arrive after the answer did, and a card is not a place to show
+   * two descriptions of one page and let the reader pick.
+   */
+  const said = library === null && wiki === null ? page : null;
   /* A real title supersedes the path trail rather than joining it. The trail is
      a guess read off an address; a title is a title, and printing both would
      show the reader our working next to the answer. */
-  const titled = library !== null || wiki !== null;
+  const titled = library !== null || wiki !== null || said?.title !== undefined;
 
   return (
     <>
@@ -1040,6 +1207,29 @@ function ExternalBody({
           <p className="prose-card-text">{clip(wiki.extract, 260)}</p>
         </div>
       )}
+
+      {/* **What the page says about itself**, fetched by our server once and
+          cached for everybody — the third source, and the only one that can
+          answer for an arbitrary destination. Every line of it is the
+          destination's own words, so it is labelled as theirs in the same way
+          Wikipedia's is; this is not a summary and there is nothing here we
+          wrote. src/link-previews.ts, docs/project/links.md.
+
+          The description and the opening paragraph are not both drawn. Where a
+          page has both they are usually the same sentences twice — an
+          `og:description` is very often the first line of the piece — and the
+          opening is the better of the two when it survived the sanity check
+          (`saneParagraph`), because it is prose the author wrote rather than a
+          field somebody's CMS filled in. */}
+      {said && <PageSaid page={said} />}
+
+      {/* **And what it has to do with the piece in your hands** — the only
+          section here that we wrote, streamed in under the destination's own
+          words once they have landed. It comes last on purpose: the reader
+          should meet what the page says about itself before they meet what a
+          model says about it, so the quoted half is never framed by ours.
+          src/link-summary.ts, docs/project/links.md. */}
+      {summary && <LinkRelation summary={summary} />}
 
       {/* Only while something is genuinely outstanding, and only when there is
           nothing yet to show — a spinner *under* an answer that has already

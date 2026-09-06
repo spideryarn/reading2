@@ -93,7 +93,7 @@ until you know what they are for.
 
 Code: [`src/glossary.ts`](../../src/glossary.ts) (stage 5d — the model call, the dedup, the
 occurrence pass), [`src/term-match.ts`](../../src/term-match.ts) (the matching rule, shared),
-[`src/api.ts`](../../src/api.ts) § `loadGlossary`, [`src/routes.ts`](../../src/routes.ts),
+[`src/store/pg.ts`](../../src/store/pg.ts) § `loadGlossary`, [`src/routes.ts`](../../src/routes.ts),
 [`src/web/GlossaryPanel.tsx`](../../src/web/GlossaryPanel.tsx),
 [`src/web/useGlossary.ts`](../../src/web/useGlossary.ts),
 [`src/web/annotate.ts`](../../src/web/annotate.ts) § `termMarks`, and `§ glossary mode` at the end of
@@ -137,7 +137,7 @@ Two consequences worth knowing:
 
 ## What is generated, and when
 
-Stage 5d writes `data/<slug>/glossary.json`. It is in `STEP_ORDER` and **not** in
+Stage 5d produces the `glossary` artefact (`data/<slug>/glossary.json` until 2026-09-05). It is in `STEP_ORDER` and **not** in
 `DEFAULT_INGEST_STEPS` — the same split `tweets` introduced, and the pair of them is what turned that
 from an exception into the shape of the list: everything up to `arc` makes the article readable, and
 everything after it is a thing somebody asks for.
@@ -527,19 +527,18 @@ Postgres store seam rather than on the streaming, is in
 store should do it then**, which is why this note is here rather than only in the plan.
 
 **Its answers live apart from the glossary, keyed by entry id** — one row per `(article, entry)` in
-Postgres ([`src/store/pg-lookups.ts`](../../src/store/pg-lookups.ts)), and
-`data/<slug>/glossary-lookups.json` on the filesystem store
-([`src/glossary-lookups.ts`](../../src/glossary-lookups.ts)) — never inside `glossary.json`. **Both
-halves exist and both are wired**; the sentence above about the Postgres seam is about *streaming*
-and nothing else. It has been read as saying lookups are files-only, which they have not been since
-the seam landed — checked against the code and against the deployed store, 2026-09-04. A lookup
-is *reader state*, which by this repo's own rule lives beside the artefact rather than in it; and
-sharing a file with the generating stage is unfixable rather than merely racy, because that stage
-holds its read across a minute-long model call. Worse, `glossary.json` is written with a bare
-`writeFile`, and a truncated one reads as `null` — which the panel reports as *"Nobody has found the
-terms for this one yet"*, the whole glossary gone and nothing saying so. The sidecar is
-temp-and-rename and serialised, both copied from [`src/comments.ts`](../../src/comments.ts).
-`loadGlossary` attaches them at read time, so the panel still just sees `entry.lookup`.
+Postgres ([`src/store/pg-lookups.ts`](../../src/store/pg-lookups.ts)) — never inside `glossary.json`.
+Until 2026-09-05 there was a second, file-backed half too: `data/<slug>/glossary-lookups.json`,
+written and read by `saveLookup` and a serialised queue in
+[`src/glossary-lookups.ts`](../../src/glossary-lookups.ts). That sidecar was deleted along with the
+rest of the filesystem store; `loadLookups` survives only as a fixture reader for
+`tests/helpers/seed-reader-state.ts`. A lookup is *reader state*, which by this repo's own rule lives
+beside the artefact rather than in it; sharing a file with the generating stage would have been
+unfixable rather than merely racy, because that stage holds its read across a minute-long model call.
+Worse, `glossary.json` is written with a bare `writeFile`, and a truncated one reads as `null` — which
+the panel reports as *"Nobody has found the terms for this one yet"*, the whole glossary gone and
+nothing saying so. `loadGlossary` attaches lookups at read time, so the panel still just sees
+`entry.lookup`.
 
 **It is `explain` with a different selection** — the same function comments use
 ([`src/explain.ts`](../../src/explain.ts)), with the form of the term the article really uses as the

@@ -32,7 +32,6 @@ import { createParser, debounce } from "nuqs";
 import { isSpideryarnId } from "../ids.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import type { ScatterAxis, ScatterHue } from "./scatter.js";
-import { ADMIN_DEFAULT_BY } from "./admin-columns.js";
 import { DEFAULT_BY } from "./library-columns.js";
 import { sameList } from "./lib/table-sort.js";
 import type { ShelfFilter, ShelfView } from "./ShelfControls.js";
@@ -370,8 +369,12 @@ export const termParam = parseAsBlockId.withOptions({ history: "replace" });
 export const ideaParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
- * Which quote is selected, and therefore which passage is marked in the prose
- * and painted down the rail.
+ * Which quote is selected, and therefore which marked passage wears the ring.
+ *
+ * **Not which passage is marked**, since 2026-09-05: every quote the panel is
+ * showing is washed in the prose and drawn in the rail, and the selection is
+ * only which of them the reader pressed (`mark.hit[data-hit-open]`).
+ * docs/project/quotes.md § Every visible quote is marked.
  *
  * A quote's id is minted by `mintId`, so it is a block id by construction and
  * the same parser validates it for free — and the same "a mangled link degrades
@@ -1234,6 +1237,29 @@ export const sortDirParam = createParser<("asc" | "desc")[]>({
   serialize: (v) => v.join(","),
   eq: sameList,
 }).withOptions({ history: "push" });
+
+/**
+ * The admin users table's default sort: **who signed up most recently, first.**
+ *
+ * A list of accounts is a list of things that arrived, which is the one shape
+ * where "newest first" is not a preference but the question — *who is new?*
+ * The shelf moved off that default because a shelf is not an inbox
+ * (library-columns.tsx § DEFAULT_BY); that page is.
+ *
+ * Single-key, for the same reason the shelf's is: a compound default lights two
+ * chips on a page nobody has clicked, which reads as somebody else's sort left
+ * behind.
+ *
+ * **It lives here rather than beside the columns it sorts**, which is where it
+ * was until 2026-09-05. This file is eager — the reader imports it to read an
+ * article — and `admin-columns.tsx` is 497 lines of administrator's table, so
+ * one three-word import held the whole thing in every reader's startup. Moving
+ * the page behind `React.lazy` without moving this would have changed nothing
+ * at all, which is the trap
+ * docs/plans/260905i-lazy-load-admin-and-design-routes.md is built around and
+ * tests/eager-client-graph.test.ts now watches for.
+ */
+export const ADMIN_DEFAULT_BY = ["signedUp"];
 
 /**
  * What the admin users table is sorted by — `?by=signedUp`.

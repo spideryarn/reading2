@@ -366,7 +366,7 @@ and the tooltip says 280. Ours should say one number in one place.)
 ## As built: where this plan met the code <a id="as-built-where-this-plan-met-the-code"></a>
 
 Landed 2026-08-25 as [`src/tweets.ts`](../../src/tweets.ts) (write), `loadTweets` in
-[`src/api.ts`](../../src/api.ts) and `GET /api/tweets/:slug` in
+`src/api.ts` and `GET /api/tweets/:slug` in
 [`src/routes.ts`](../../src/routes.ts) (read), with tests in
 [`tests/tweets.test.ts`](../../tests/tweets.test.ts), [`tests/jobs.test.ts`](../../tests/jobs.test.ts)
 and [`tests/routes.test.ts`](../../tests/routes.test.ts).

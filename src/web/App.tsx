@@ -26,7 +26,7 @@ import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { isAdmin } from "../admin.js";
-import { AdminFeedbackPage, AdminHome, AdminUsersPage } from "./AdminPage.js";
+import { LazyPage } from "./LazyPage.js";
 import { LandingPage } from "./LandingPage.js";
 import { NotFoundPage } from "./NotFoundPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
@@ -38,10 +38,10 @@ import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
 import { useExperimental } from "./useExperimental.js";
-import { DesignPage } from "./DesignPage.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
 import {
+  adminOnly,
   type ArticleView,
   LIBRARY_HREF,
   navigate,
@@ -57,11 +57,14 @@ import { IdeasPanel } from "./IdeasPanel.js";
 import { useIdeas } from "./useIdeas.js";
 import { TimelinePanel } from "./TimelinePanel.js";
 import { useTimeline } from "./useTimeline.js";
+import { DebatePanel } from "./DebatePanel.js";
+import { useDebate } from "./useDebate.js";
 import { QuizPanel, RememberSubModeToggle } from "./QuizPanel.js";
 import { useQuiz } from "./useQuiz.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
 import { TableView } from "./TableView.js";
+import type { SelectionAnchor } from "./selection.js";
 import type { TermSelection } from "./annotate.js";
 import { formsOf } from "../term-match.js";
 import { horizontalInset, safeAreaInsets } from "./safe-area.js";
@@ -80,14 +83,7 @@ import {
   PRIORITY_GATE,
   visibleEntries,
 } from "./GlossaryPanel.js";
-import {
-  barStops,
-  effectiveRank,
-  QUOTE_BAR_DEFAULT,
-  QuotesPanel,
-  snapToStop,
-  visibleQuotes,
-} from "./QuotesPanel.js";
+import { effectiveRank, markedQuotes, QuotesPanel } from "./QuotesPanel.js";
 import { useQuotes } from "./useQuotes.js";
 import { ProseHoverCard } from "./ProseHoverCard.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "./notes-view.js";
@@ -117,8 +113,9 @@ import {
   findLiteral,
   hitMarks as buildHitMarks,
   orderFound,
+  quoteMarkKey,
   resolveIdea,
-  resolveQuote,
+  resolveQuotes,
   resolveTimelineEvent,
   keepAbove,
   PRIORITY_CONF,
@@ -177,7 +174,7 @@ import {
   type Mode,
   type TermSort,
 } from "./params.js";
-import { ChevronDown, ChevronRight, ClipboardCheck } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   arrivalTarget,
   glideTarget,
@@ -297,6 +294,23 @@ const OWNER_HAS_EVERYTHING: PublicArtefacts = {
   timeline: true,
   sketch: true,
 };
+
+/**
+ * **The two routes whose code is not in the reader's initial download.**
+ * `LazyPage.tsx`
+ * has the reasoning; these are the four loaders it takes.
+ *
+ * Named-export adapters rather than `lazy(() => import("./AdminPage.js"))`,
+ * because `React.lazy` reads `module.default` and neither page has one — the
+ * bare form would send every visit to the failure surface. And **module
+ * scope**, because a loader's identity is a `useMemo` dependency: an inline
+ * arrow would build a new lazy type, and start a new fetch, on every render.
+ */
+const loadAdminHome = () => import("./AdminPage.js").then((m) => ({ default: m.AdminHome }));
+const loadAdminUsers = () => import("./AdminPage.js").then((m) => ({ default: m.AdminUsersPage }));
+const loadAdminFeedback = () =>
+  import("./AdminPage.js").then((m) => ({ default: m.AdminFeedbackPage }));
+const loadDesign = () => import("./DesignPage.js").then((m) => ({ default: m.DesignPage }));
 
 
 
@@ -458,7 +472,7 @@ export function App() {
   return (
     <>
       <SignedIn route={route} user={user} />
-      <FeedbackButton readerEmail={user.email ?? null} />
+      <FeedbackButton />
     </>
   );
 }
@@ -485,6 +499,37 @@ function SignedIn({
   route: Exclude<Route, { kind: "callback" }>;
   user: User;
 }) {
+  /* **The administrator's pages, refused before the branch chain rather than
+     inside it — and this is a courtesy, not a gate.**
+
+     `adminOnly` (router.ts) is one exhaustive map of route kinds, and it is
+     consulted here once, above everything, for the same reason the server's own
+     check sits above its route table (src/routes.ts): a check inside a branch
+     has to be *remembered* by whoever adds the next page. `/design` is the
+     proof — it moved onto the `/admin` index on 2026-09-05 and stayed open to
+     everybody, because the `if` was in the `admin` arm.
+
+     **Nothing is hidden by it.** These components are absent from the initial
+     reader download since 2026-09-05 (LazyPage.tsx), but their chunks are
+     public assets served to anyone who requests them, and the SPA rewrite
+     answers 200 at these addresses whoever asks; `/design` reads no data at
+     all, so there is nothing behind it to refuse either. **An unloaded chunk is
+     not a boundary**: the only refusal that counts is the server's on
+     `/api/admin/`, which would turn down a hand-written `fetch` from any of
+     these pages just the same. src/admin.ts § the two halves.
+
+     **The shelf, and deliberately not the 404 page** that arrived on 2026-09-03
+     for every address nobody minted (NotFoundPage.tsx). Same reason
+     docs/project/admin.md gives for the server answering 403 rather than 404:
+     these pages exist, visibly, and their code is there for anybody who asks,
+     so pretending the address means nothing buys nothing and costs a true
+     sentence.
+
+     `key` for the same reason the shelf below carries one — this is the same
+     component, reached a different way. */
+  if (adminOnly(route) && !isAdmin(user.id))
+    return <Library key={user.id} readerId={user.id} />;
+
   // The shelf is home, so it gets no way-home logo — a link to the page you are
   // already on is a dead control, and Library.tsx names the app in its own
   // `<h1>` anyway. Everywhere else, the corner. See HomeLogo.tsx.
@@ -521,7 +566,7 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        <DesignPage />
+        <LazyPage load={loadDesign} routeKey="design" />
       </>
     );
   // Signed in, the policy gets the corner logo like every other standalone
@@ -599,31 +644,20 @@ function SignedIn({
         <ProfilePage />
       </>
     );
-  /* **The admin pages, and the check here is not the gate.**
-
-     A reader who is not the administrator gets the shelf — **and since
-     2026-09-03 that is no longer the same thing as `/nonsense`**, which now has
-     a page of its own (NotFoundPage.tsx). This one deliberately did not follow
-     it. The reason is the one docs/project/admin.md already gives for the
-     server answering 403 rather than 404: these pages exist, visibly, in the
-     bundle every signed-in reader downloads, so pretending the address means
-     nothing buys nothing and costs a true sentence.
-
-     Nothing is being hidden by it: these components are in the bundle every
-     signed-in reader downloads, so the only refusal that counts is the server's
-     on `/api/admin/`, and it would refuse a hand-written `fetch` from this page
-     just the same. src/admin.ts § the two halves. */
+  /* The administrator's pages. Whether this reader may see them was settled at
+     the top of this function, by `adminOnly` — there is no second check here,
+     deliberately, so that nobody reading this branch comes away thinking it is
+     holding a door shut. */
   if (route.kind === "admin") {
-    if (!isAdmin(user.id)) return <Library key={user.id} readerId={user.id} />;
     return (
       <>
         <HomeLogo />
         {route.page === "users" ? (
-          <AdminUsersPage />
+          <LazyPage load={loadAdminUsers} routeKey="admin:users" />
         ) : route.page === "feedback" ? (
-          <AdminFeedbackPage />
+          <LazyPage load={loadAdminFeedback} routeKey="admin:feedback" />
         ) : (
-          <AdminHome />
+          <LazyPage load={loadAdminHome} routeKey="admin:home" />
         )}
       </>
     );
@@ -2244,9 +2278,15 @@ function Reader({
   /* **A third state rather than a third writer of `found`**, for the reason the
      comment above gives about the second: two modes sharing one state clear each
      other on the way out, and the mode arriving second wins by accident of
-     effect ordering. Quotes has no `openKey` of its own — a quote is exactly one
-     passage, so there is nothing to step between and nothing to leave open. */
+     effect ordering.
+
+     **And an `openKey` of its own since 2026-09-05.** This said quotes needed
+     none — *a quote is exactly one passage, so there is nothing to step between
+     and nothing to leave open* — which was true while the prose marked only the
+     selected quote. Now it marks every quote the panel is showing, and the ring
+     is the only thing on the page saying which of them the reader pressed. */
   const [quoteFound, setQuoteFound] = useState<Found[]>([]);
+  const [quoteOpenKey, setQuoteOpenKey] = useState<string | null>(null);
   /* **A fourth state, for the reason the second and third have their own**, and
      not because Timeline needs anything ideas do not: two modes sharing one
      `Found[]` clear each other on the way out, and which one wins is an
@@ -2298,7 +2338,7 @@ function Reader({
     mode === "ideas"
       ? openOccurrence
       : mode === "quotes"
-        ? null
+        ? quoteOpenKey
         : mode === "timeline"
           ? openTimelineKey
           : mode === "referee"
@@ -2706,8 +2746,10 @@ function Reader({
   );
 
   const selectProse = useCallback(
-    (anchor: { blockId: BlockId; quote: string; start: number } | null) => {
-      if (!anchor) return;
+    /* Always a real anchor since 2026-09-05: `readSelection` now distinguishes
+       a drag it refused from no drag at all, and TableView stops on the first
+       without calling in here. src/web/selection.ts § SelectionRead. */
+    (anchor: SelectionAnchor) => {
       /* **The one control a visitor meets by accident**, since selecting prose
          is something people do while reading rather than a button they chose to
          press. So it is silent: they keep their selection and the page does not
@@ -3211,6 +3253,12 @@ function Reader({
           be there in every mode too. */}
       <ProseHoverCard
         entries={terms}
+        /* Which article this is, and it is the *permission* for the third
+           lookup rather than part of its question: `GET /api/link-preview`
+           refuses to fetch a URL until it has proved this reader owns this
+           article and that this article really points at that URL.
+           ProseHoverCard.tsx § slug, src/link-previews.ts. */
+        slug={slug}
         sourceUrl={article.meta.url ?? null}
         /* A visitor's card describes a link and asks nobody about it. The
            lookups behind this are `GET /api/library`, which is authenticated,
@@ -3375,7 +3423,13 @@ function Reader({
         />
       )}
       {owner && mode === "quotes" && (
-        <QuotesBand slug={slug} blocks={article.blocks} onJump={jumpTo} onFound={setQuoteFound} />
+        <QuotesBand
+          slug={slug}
+          blocks={article.blocks}
+          onJump={jumpTo}
+          onFound={setQuoteFound}
+          onOpenKey={setQuoteOpenKey}
+        />
       )}
       {!owner && mode === "quotes" && artefacts?.quotes && (
         <VisitorQuotesBand
@@ -3383,6 +3437,7 @@ function Reader({
           blocks={article.blocks}
           onJump={jumpTo}
           onFound={setQuoteFound}
+          onOpenKey={setQuoteOpenKey}
         />
       )}
       {/* **The owner/visitor pair the ideas and the quotes have, since
@@ -3415,6 +3470,16 @@ function Reader({
           onOpenKey={setOpenTimelineKey}
         />
       )}
+      {/* **`owner &&` alone, and there is deliberately no visitor twin yet.**
+          Debate is meant to be shared — it is the artefact whose whole value is
+          that somebody else can check it — but a visitor's row must pass
+          `publicCitationUrl` at the boundary, where a refusal drops the whole
+          row, and that contract is Stage 4. Building the branch first is what a
+          GPT Sol review (F23) refused. Until then `POLICY.debate` is
+          `owners-only`, so a visitor meets the boundary sentence rather than an
+          empty band.
+          docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4. */}
+      {owner && mode === "debate" && <DebateBand slug={slug} onJump={jumpTo} />}
       {/* **The owner/visitor pair, since 2026-09-04.** It was `owner &&` alone
           until then, because search is the one mode where the reader's own
           question is the artefact. Greg drew the line at *making* one: a
@@ -4687,27 +4752,34 @@ function GlossaryBand({
  * `useQuotes` fetches on mount, and calling it up in `Reader` would charge every
  * reader of every article a request for a list almost none of them will open.
  *
- * What it pushes up is the **resolved** passage, not the stored quote. The panel
- * and the prose have to be showing the same thing, and the only way to
- * guarantee that is for one of them to compute it and hand it to the other —
- * the rule `SearchBand` and `IdeasBand` both follow. Resolution can drop a
- * quote whose block the article no longer has, which is exactly the case a
- * stale artefact produces here.
+ * What it pushes up is the **resolved** passages, not the stored quotes. The
+ * panel and the prose have to be choosing from the same list, and the only way
+ * to guarantee that is for one function to decide it — `markedQuotes`, called
+ * by both — which is the rule `SearchBand` and `IdeasBand` both follow.
+ *
+ * **Resolution can still drop one**, when the article no longer has the block a
+ * quote names, and that is the one place the list and the marks legitimately
+ * differ: the row stays in the panel with no wash beside it. Kept rather than
+ * hidden, because a list quietly shorter than the artefact is the failure
+ * docs/reusable/silent-success.md keeps catching, and the `stale` banner above
+ * it is already saying the article moved. GPT Sol's first finding, 2026-09-05.
  */
-function QuotesBand({
+export function QuotesBand({
   slug,
   blocks,
   onJump,
   onFound,
+  onOpenKey,
 }: {
   slug: string;
   blocks: Block[];
   onJump(id: BlockId): void;
   onFound(found: Found[]): void;
+  onOpenKey(key: string | null): void;
 }) {
   useRenderCount("QuotesBand");
   const quotes = useQuotes(slug);
-  const band = useQuotesMode({ quotes: quotes.quotes, blocks, onFound });
+  const band = useQuotesMode({ quotes: quotes.quotes, blocks, onFound, onOpenKey });
   return (
     <QuotesPanel
       access={{ kind: "owner", owner: quotes, quotes: quotes.quotes }}
@@ -4724,6 +4796,32 @@ function QuotesBand({
 const NO_QUOTES: Quote[] = [];
 
 /**
+ * The debate, and the fetch that belongs to it.
+ *
+ * A component of its own for the reason `TimelineBand` and `IdeasBand` are:
+ * `useDebate` fetches on mount, so calling it up in `Reader` would charge every
+ * reader of every article a request for a web search almost none of them will
+ * open.
+ *
+ * **The shortest band in this file, and that is the design rather than a stub.**
+ * The five passage-mode effects its neighbours carry are about marks in the
+ * prose, and Debate has none: a row is a page on the web, not a passage in the
+ * article, so there is no `Found` to resolve, no `openKey` to keep in step and
+ * no colour slot to assign. What it does hand down is `onJump`, because a
+ * group-two row names the block whose claim it answers and has to offer the way
+ * there. Marks are the first thing to add — the plan's § Deliberately not in v1
+ * — and adding them is what would bring the five effects with it.
+ *
+ * **Owner-only, so there is one of these and not two**, until Stage 4 builds
+ * the public contract. See the branch above.
+ */
+function DebateBand({ slug, onJump }: { slug: string; onJump(id: BlockId): void }) {
+  useRenderCount("DebateBand");
+  const debate = useDebate(slug);
+  return <DebatePanel access={{ kind: "owner", owner: debate }} onJump={onJump} />;
+}
+
+/**
  * **The same panel, for somebody who does not own the article.**
  *
  * No `useQuotes` and therefore no `useJobs`: the list came in the page's own
@@ -4735,14 +4833,16 @@ function VisitorQuotesBand({
   blocks,
   onJump,
   onFound,
+  onOpenKey,
 }: {
   quotes: PublicQuotes;
   blocks: Block[];
   onJump(id: BlockId): void;
   onFound(found: Found[]): void;
+  onOpenKey(key: string | null): void;
 }) {
   useRenderCount("VisitorQuotesBand");
-  const band = useQuotesMode({ quotes, blocks, onFound });
+  const band = useQuotesMode({ quotes, blocks, onFound, onOpenKey });
   return <QuotesPanel access={{ kind: "visitor", quotes }} {...band} onJump={onJump} />;
 }
 
@@ -4750,22 +4850,50 @@ function VisitorQuotesBand({
  * Everything the quotes band does that is not a fetch: `?quote=`, `?rank=`,
  * `?bar=`, and the resolved passage it pushes up.
  *
+ * **Every quote the panel is showing is marked, not only the selected one** —
+ * since 2026-09-05, and it is the whole of one feedback report. The memo below
+ * returned `[]` unless a row was selected, so quotes mode drew nothing at all on
+ * the page until you pressed something and the `?bar=` slider changed the list
+ * without changing the article. Greg asked to be able to *"skim through it just
+ * reading the stuff that is marked"*, and search has always done exactly this
+ * through the identical pipe.
+ *
+ * **What is marked is `markedQuotes`, which is what the panel lists.** One
+ * function, called by both, so the rows and the washes cannot come apart — and
+ * so the bar doubles as the highlight-density control, which is what makes it
+ * the thing Greg described rather than a filter on a list. The one exception is
+ * a quote whose block the article has lost: `resolveQuotes` drops it and the
+ * row stays — see `QuotesBand` above.
+ *
  * **No colour slot to assign**, which is the one thing this hook does not share
- * with `useIdeasMode`. Ideas paint every idea a lane so a colour does not depend
- * on which one is open; only one quote can be selected at a time and there is
- * never a second one on screen, so slot `0` is the whole palette question. It is
- * still a *real* slot rather than `null`, because `blockHues` drops `null` slots
- * and a quote without one would paint the rail and leave the paragraph bar
- * blank — which looks like a rendering bug and is not one.
+ * with `useIdeasMode`. Ideas paint every idea its own lane so a colour does not
+ * depend on which one is open; the quotes are **one source** — the categorical
+ * palette answers *which search found this*, and there is one thing here that
+ * found anything — so they share a slot and a run id, and `resolveQuotes` owns
+ * both. It is still a *real* slot rather than `null`, because `blockHues` drops
+ * `null` slots and a quote without one would paint the rail and leave the
+ * paragraph bar blank, which looks like a rendering bug and is not one.
  */
 function useQuotesMode({
   quotes,
   blocks,
   onFound,
+  onOpenKey,
 }: {
   quotes: { quotes: Quote[] } | null;
   blocks: Block[];
   onFound(found: Found[]): void;
+  /**
+   * Which mark wears the ring — `mark.hit[data-hit-open]`, the thing search
+   * uses to say *this washed phrase is the row you pressed*.
+   *
+   * Quotes did without one until the whole list was marked, and the old comment
+   * in `Reader` said why: a quote is exactly one passage, so there was nothing
+   * to step between and nothing to leave open. With sixteen marks on the page
+   * the ring is the only thing that distinguishes the reader's own selection
+   * from the fifteen the mode drew for them.
+   */
+  onOpenKey(key: string | null): void;
 }) {
   const [quoteId, setQuoteId] = useQueryState("quote", quoteParam);
   const [rank, setRank] = useQueryState("rank", rankParam);
@@ -4783,18 +4911,29 @@ function useQuotesMode({
    * rail, and lowering the bar later silently reopened a selection the reader
    * had watched disappear. The same rule search holds at `SearchBand`.
    *
-   * Scoped to `prioritised`, because that is the only rank with a bar: a
+   * Scoped to `prioritised`, because that is the only rank with a bar. Two
+   * reasons, and the second is why the guard survived the rewrite below: a
    * `?bar=` sitting in a URL must not clear a selection in a list nobody is
-   * looking at a threshold for. `snapToStop` first, exactly as the panel does,
-   * or this and the panel would be asking about two different bars.
+   * looking at a threshold for — and while the artefact is still being fetched
+   * `listed` is empty, so an unguarded "is my quote in the visible list" would
+   * strip a shared `?quote=` link out of the URL before its own data arrived.
    */
   const all = quotes?.quotes ?? NO_QUOTES;
+  /**
+   * **The list the panel is drawing** — the rows, and now the marks.
+   *
+   * `markedQuotes` is the panel's own three lines (`snapToStop`,
+   * `effectiveRank`, `rankQuotes`), called here rather than repeated here. They
+   * *were* repeated, in `hiddenSelection` below, which was safe while all they
+   * decided was whether to clear a selection; it is not safe now that they
+   * decide what the article is wearing.
+   */
+  const listed = useMemo(() => markedQuotes(all, rank, bar), [all, rank, bar]);
   const hiddenSelection = useMemo(() => {
     if (quoteId === null) return false;
     if (effectiveRank([...all], rank) !== "prioritised") return false;
-    const at = snapToStop(barStops([...all]), bar ?? QUOTE_BAR_DEFAULT);
-    return !visibleQuotes(all, at).visible.some((q) => q.id === quoteId);
-  }, [all, rank, bar, quoteId]);
+    return !listed.some((q) => q.id === quoteId);
+  }, [all, rank, listed, quoteId]);
   useEffect(() => {
     if (hiddenSelection) void setQuoteId(null);
   }, [hiddenSelection, setQuoteId]);
@@ -4804,32 +4943,42 @@ function useQuotesMode({
     [all, quoteId, hiddenSelection],
   );
 
-  const found = useMemo(() => {
-    if (!selected) return [];
-    return resolveQuote(blocks, {
-      id: selected.id,
-      slot: 0,
-      blockId: selected.blockId,
-      text: selected.text,
-      /* **`start` is not passed on**, and `resolveQuote` no longer takes it —
-         the stored offset is measured in `block.text` and this resolution
-         happens in the rendered text. It is still on the artefact, because it
-         is what `inDocumentOrder` sorts two quotes from one paragraph by. */
-      ...(selected.reason !== undefined && { reason: selected.reason }),
-    });
-  }, [selected, blocks]);
+  /* **`start` is not passed on**, and `resolveQuotes` does not take it — the
+     stored offset is measured in `block.text` and this resolution happens in
+     the rendered text. It is still on the artefact, because it is what
+     `inDocumentOrder` sorts two quotes from one paragraph by. */
+  const found = useMemo(() => resolveQuotes(blocks, listed), [listed, blocks]);
+
+  /* The ring, computed from the selection rather than looked up in `found`: a
+     quote whose block the article has lost resolves to nothing, and the honest
+     answer then is a key that matches no mark rather than the *previous*
+     quote's. `quoteMarkKey` so the shape lives in one file. */
+  const openKey = useMemo(
+    () => (selected ? quoteMarkKey(selected.id, selected.blockId) : null),
+    [selected],
+  );
 
   /* **`useLayoutEffect`, not `useEffect`** — a passive effect leaves one
      paintable frame in which the panel shows the new quote and the prose still
      marks the old one. Same reasoning, and the same pairing with an
-     unmount-only clear below, as `SearchBand` and `IdeasBand`. */
+     unmount-only clear below, as `SearchBand` and `IdeasBand`.
+
+     **Both in one effect**, so no paint can ever show the ring on one quote and
+     the washes of another set. */
   useLayoutEffect(() => {
     onFound(found);
-  }, [found, onFound]);
+    onOpenKey(openKey);
+  }, [found, openKey, onFound, onOpenKey]);
 
-  /* Leaving quotes mode must take the mark out of the prose. On unmount only:
+  /* Leaving quotes mode must take the marks out of the prose. On unmount only:
      clearing on every change would race the layout effect above. */
-  useEffect(() => () => onFound([]), [onFound]);
+  useEffect(
+    () => () => {
+      onFound([]);
+      onOpenKey(null);
+    },
+    [onFound, onOpenKey],
+  );
 
   return { quoteId, onQuote: setQuoteId, rank, onRank: setRank, bar, onBar: setBar };
 }
@@ -5661,8 +5810,9 @@ function RefereeBand({
   return (
     <aside className="mode-band gloss referee" aria-label="Referee">
       <div className="band-head">
-        <ClipboardCheck size={14} className="band-head-icon" />
-        <h2>Referee</h2>
+        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+            stays for the "how this works" button beside it. */}
         <RefereeHowButton open={how.open} onToggle={() => how.show(!how.open)} />
       </div>
 

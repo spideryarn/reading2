@@ -1,5 +1,5 @@
 /**
- * **Stages 1, 2 and 3 in one sequence, through the real artefact store.**
+ * **Stages 1, 2 and 3 in one sequence, through one artefact store.**
  *
  * Every other test in this repo asks about one seam. This one asks whether the
  * seams *join*: `fetch` stores a document and returns a manifest naming it,
@@ -39,18 +39,14 @@
  * from the store. So this asserts the ids are *identical*, not merely that the
  * count matches: two equal totals made of entirely different ids is the failure.
  */
-import { mkdtemp, rm } from "node:fs/promises";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { FetchedDocument } from "../src/fetch.js";
 import { writeRaw } from "../src/fetch.js";
 import { splitIntoBlocks } from "../src/blocks.js";
 import { STEPS, type StepContext } from "../src/pipeline.js";
-import { fsArtifacts } from "../src/store/artifacts-fs.js";
-import { DATA_ROOT_ENV } from "../src/store/data-root.js";
+import { memoryArtefacts } from "./helpers/memory-artefacts.js";
 
 const SLUG = "test-end-to-end-probe";
 
@@ -64,8 +60,19 @@ const HTML = `<!doctype html><html><head><title>A Probe Article</title></head><b
 <p>A third paragraph, so that the block splitter has more than two things to give ids to.</p>
 </article></body></html>`;
 
-let root = "";
-let saved: string | undefined;
+/**
+ * **One store for the whole file**, because the file is a sequence: each case
+ * reads what the case before it wrote.
+ *
+ * It was `fsArtifacts` under a scratch `SPIDERYARN_DATA_ROOT` until 2026-09-05,
+ * for no reason but that a store was needed — nothing here was ever about where
+ * the artefacts landed. The swap makes one thing stricter rather than looser,
+ * and the last case below is where that shows: `extractedHtml` and
+ * `stampedHtml` are two values here, as they are two columns in Postgres, so
+ * the re-extraction it stages is a real one rather than a re-read of stage 3's
+ * own document (tests/helpers/memory-artefacts.ts § *nothing is aliased*).
+ */
+const store = memoryArtefacts();
 
 /** The document `fetchDocument` would have returned, without the network. */
 function fetched(): FetchedDocument {
@@ -86,8 +93,6 @@ function ctx(): StepContext {
   return {
     slug: SLUG,
     url: "https://example.test/probe",
-    dir: path.join(root, "data", SLUG),
-    htmlFile: path.join(root, "output", `${SLUG}.html`),
     report: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
@@ -98,35 +103,23 @@ function ctx(): StepContext {
  * Run one step the way the coordinator does: begin, run, write what it
  * returned, finish.
  *
- * **Deliberately not `fsStoreSession`.** That would bring the job store in, and
+ * **Deliberately not a store session.** That would bring the job store in, and
  * a job row is not what this file is about; what matters is that the artefacts
  * a step returns are the artefacts the next step reads. `checkProduct` is
  * asserted separately below rather than borrowed from the session.
  */
 async function runStep(name: "extract" | "blocks"): Promise<Record<string, unknown>> {
-  const attempt = await fsArtifacts.beginStep(SLUG, name);
-  const product = await STEPS[name].run(ctx(), fsArtifacts, nullCheckpointStore());
+  const attempt = await store.beginStep(SLUG, name);
+  const product = await STEPS[name].run(ctx(), store, nullCheckpointStore());
   /* Every step in this pipeline is converted, so `parts` is required by the
      compiler — this asserts it at runtime too, because a `parts` that arrived
      as `undefined` through an `as` cast somewhere would otherwise write nothing
      and pass the postcondition against what the last run left. */
   expect(product.parts, `${name} returned no parts`).toBeDefined();
-  await fsArtifacts.write(SLUG, name, product.parts ?? {}, product.stamp ?? {});
-  await fsArtifacts.finishStep(SLUG, name, attempt);
+  await store.write(SLUG, name, product.parts ?? {}, product.stamp ?? {});
+  await store.finishStep(SLUG, name, attempt);
   return product.parts as Record<string, unknown>;
 }
-
-beforeAll(async () => {
-  saved = process.env[DATA_ROOT_ENV];
-  root = await mkdtemp(path.join(tmpdir(), "spya-end-to-end-"));
-  process.env[DATA_ROOT_ENV] = root;
-});
-
-afterAll(async () => {
-  if (saved === undefined) delete process.env[DATA_ROOT_ENV];
-  else process.env[DATA_ROOT_ENV] = saved;
-  if (root) await rm(root, { recursive: true, force: true });
-});
 
 describe("acquiring, extracting and splitting one article in one sequence", () => {
   let firstIds: string[] = [];
@@ -139,10 +132,10 @@ describe("acquiring, extracting and splitting one article in one sequence", () =
     expect(manifest.storedSha256).toMatch(/^[0-9a-f]{64}$/);
     expect(manifest.storedBytes).toBe(new TextEncoder().encode(HTML).byteLength);
 
-    const attempt = await fsArtifacts.beginStep(SLUG, "fetch");
-    await fsArtifacts.write(SLUG, "fetch", { raw: manifest }, {});
-    await fsArtifacts.finishStep(SLUG, "fetch", attempt);
-    expect(await fsArtifacts.read(SLUG, "fetch", "raw")).toMatchObject({
+    const attempt = await store.beginStep(SLUG, "fetch");
+    await store.write(SLUG, "fetch", { raw: manifest }, {});
+    await store.finishStep(SLUG, "fetch", attempt);
+    expect(await store.read(SLUG, "fetch", "raw")).toMatchObject({
       storedSha256: manifest.storedSha256,
     });
   });
@@ -157,7 +150,7 @@ describe("acquiring, extracting and splitting one article in one sequence", () =
     const parts = await runStep("blocks");
     expect(Object.keys(parts).sort()).toEqual(["blocks", "stampedHtml"]);
 
-    const stored = await fsArtifacts.read(SLUG, "blocks", "blocks");
+    const stored = await store.read(SLUG,"blocks", "blocks");
     firstIds = (stored?.blocks ?? []).map((b) => b.id);
     expect(firstIds.length).toBeGreaterThan(2);
 
@@ -167,7 +160,7 @@ describe("acquiring, extracting and splitting one article in one sequence", () =
        caught until 2026-08-31, because the guard that notices runs at the *next*
        skip check and answers "not current", so the step re-runs and writes the
        same wrong pair for ever. */
-    const stamped = await fsArtifacts.read(SLUG, "blocks", "stampedHtml");
+    const stamped = await store.read(SLUG,"blocks", "stampedHtml");
     for (const id of firstIds) expect(stamped ?? "", `${id} is not in the HTML`).toContain(id);
 
     /* **And the ids are not enough.** A pair whose ids all match while the
@@ -184,28 +177,34 @@ describe("acquiring, extracting and splitting one article in one sequence", () =
        missed, 2026-08-31. */
     const reread = splitIntoBlocks(stamped ?? "");
     expect(reread.blocks.map((b) => b.text)).toEqual(
-      (await fsArtifacts.read(SLUG, "blocks", "blocks"))?.blocks.map((b) => b.text),
+      (await store.read(SLUG,"blocks", "blocks"))?.blocks.map((b) => b.text),
     );
   });
 
   it("and then reports itself done, rather than stale for ever", async () => {
-    expect(await STEPS.blocks.isDone?.(ctx(), fsArtifacts)).toBe(true);
+    expect(await STEPS.blocks.isDone?.(ctx(), store)).toBe(true);
   });
 
   /**
    * **Re-extract first, and the re-extraction is the whole point.**
    *
    * A second `blocks` run on its own proves nothing here, and the first version
-   * of this test did exactly that and was vacuous. On the filesystem
-   * `extractedHtml` and `stampedHtml` are the same file, so stage 3 re-reads a
-   * document that *already carries the ids it wrote last time* and
-   * `splitIntoBlocks` simply reuses them. Deleting the baseline entirely —
-   * `previous = undefined` — left this green, which is how the hole was found.
+   * of this test did exactly that and was vacuous. **On the filesystem store,
+   * which stood here until 2026-09-05, `extractedHtml` and `stampedHtml` were
+   * the same file**, so stage 3 re-read a document that *already carried the ids
+   * it wrote last time* and `splitIntoBlocks` simply reused them. Deleting the
+   * baseline entirely — `previous = undefined` — left this green, which is how
+   * the hole was found.
    *
    * Running stage 2 again puts an id-free document back in place, which is what
-   * a real re-extraction does and what the contract exists for. Now the only
-   * place the old ids can come from is the baseline `previousBlocksFrom` reads
+   * a real re-extraction does and what the contract exists for. The only place
+   * the old ids can come from is then the baseline `previousBlocksFrom` reads
    * out of the store, so the assertion has something to be about.
+   *
+   * **The re-run is kept, and it is no longer the only thing separating the two
+   * documents**: this store holds them apart the way Postgres does. What it
+   * still buys is that this is the sequence a reader actually causes —
+   * re-ingest, then re-split — rather than a state only a fixture can be in.
    *
    * This is also fault 2 of docs/plans/260831b-finish-the-database-move.md in miniature:
    * in Postgres `extractedHtml` is a separate column that never carries ids, so
@@ -214,13 +213,13 @@ describe("acquiring, extracting and splitting one article in one sequence", () =
    */
   it("carries every id across a re-extraction, rather than minting new ones", async () => {
     await runStep("extract");
-    const extracted = await fsArtifacts.read(SLUG, "extract", "extractedHtml");
+    const extracted = await store.read(SLUG,"extract", "extractedHtml");
     for (const id of firstIds) {
       expect(extracted ?? "", "re-extraction must put an id-free document back").not.toContain(id);
     }
 
     await runStep("blocks");
-    const stored = await fsArtifacts.read(SLUG, "blocks", "blocks");
+    const stored = await store.read(SLUG,"blocks", "blocks");
     /* The ids themselves, in order — not the count. Two equal totals made of
        entirely different ids is the failure this guards, and it is the one that
        silently orphans every comment, highlight and note in the database. */
