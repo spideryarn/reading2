@@ -243,6 +243,69 @@ already has. Rendered as client-owned UI beside the prose, never as text inside 
 `src/web/annotate.ts` computes comment and highlight offsets from that text, and generated UI copy
 inside it would shift every anchor in the block.
 
+### Two of Sol's P0s, checked rather than believed
+
+**`maxImageSize` does guard the decode, and it removes the operation rather than reporting it.**
+`pdf.worker.mjs:40299` tests `w * h > maxImageSize` against the image *dictionary's* `/Width` and
+`/Height`, before any decoding — so the cap genuinely prevents the allocation, which is what Sol
+said. But the branch beside it is `if (!ignoreErrors) throw`, and `pdf.mjs:21565` sets
+`ignoreErrors = src.stopAtErrors !== true` — so with the default options an oversized image is
+**warned about and dropped from the operator list**. The page then looks as though it never had an
+image.
+
+That is a silent-success shape, and it is worth naming: with the cap on, *a figure too big to
+decode is indistinguishable from a figure that was never a bitmap*. Two consequences we accept and
+one we do not.
+
+- Accepted: the manifest reason has to be honest about the ambiguity — "nothing recoverable here",
+  not "this figure is vector art".
+- Accepted: the cap is set where the corpus makes it rare rather than where it is tight. 12
+  megapixels; the largest figure measured anywhere in the corpus is the ball-lightning paper's
+  2067×3329 at 6.9 Mpx.
+- Not accepted as permanent: if telling the two apart ever matters, `pdf-lib` is **already a
+  dependency** — `openPdfCuts` uses it — and can read a page's XObject `/Width` and `/Height` out
+  of the dictionary without decoding anything. That is the fix, and it is written here so the next
+  person does not have to rediscover it.
+
+**The assets freshness stamp really would not notice.** `STEPS.assets.stamp` calls `inputHashFor`
+(`src/pipeline.ts:990`), which is `hashBlocks(blocks)`, and `hashBlocks` builds its canonical string
+from `id`, `text`, `role` and `treatment` (`src/source-hash.ts:143`) — **`block.html` is not in it**.
+Adding a marker to a captioned figure changes the html and nothing else, so a carried-forward empty
+manifest would go on reporting itself current and the step would never run.
+
+This is a family this codebase has already been bitten by and named: `src/pipeline.ts:1006` records
+three stages that stamped this same hash while consuming the tree and the metadata head, and so
+"went on reporting themselves current" when their real inputs changed.
+
+**The fix, and it makes the step more honest rather than less.** Stamp the assets step on *what it
+actually consumes*: the image URLs in the blocks and the figure refs in the blocks. Both are already
+extracted by functions that exist for the purpose, the ref already carries the raw PDF's sha256, and
+the result is a hash whose inputs are the step's inputs — which is the rule `articleFingerprint`
+states and the three stages above broke. `ASSETS_VERSION` bumps with it.
+
+### The scan rule, and where it can be computed for free
+
+Sol's D2-4 asks for the scan exclusion to be explicit rather than left to the figure-record gate,
+and the Wellcome measurement is why: 17 pages, 17 full-page images, every one of them opaque and
+"real".
+
+`Pass0.isScan` already exists (`src/pdf.ts:234`) and is judged on the *content* pages rather than
+all of them — its comment records that Wellcome's own generated rights page is the only text in the
+file, so "every page is empty" would say that document is not a scan. But `pass0` runs in stage 2
+and the extraction runs in the assets step, so reaching for it would mean plumbing a fact across a
+stage boundary.
+
+It does not need plumbing. The extraction is already standing on the page with pdf.js open, and
+`page.getTextContent()` there is nearly free. So the rule is local and per-page, which is *better*
+than the whole-document flag because it also covers the mixed document — a scanned plate bound into
+a typeset paper:
+
+> **A page carrying fewer than `SCAN_WORDS_PER_PAGE` words of text layer is a photograph of a page.
+> Its image is the page, not a figure.** Take nothing from it.
+
+`SCAN_WORDS_PER_PAGE` is 20 (`src/pdf.ts:352`) and is exported from the one file that owns the
+judgement, so there is no second threshold to keep in step.
+
 ## What Sol settled, 2026-09-06
 
 Full review in [260906a-figures-plan-review-sol.md](260906a-figures-plan-review-sol.md). The P0s
@@ -252,9 +315,18 @@ that changed the design are folded in above; the rest, held as build constraints
   too late — building the operator list is what decodes the image and sends the buffer. Pass
   `maxImageSize` to `getDocument`, which checks width × height *before* decoding. A refused image
   is recorded as "no recoverable raster", because pdf.js drops the operation entirely.
-- **Cap the deliverable bytes at 4 MiB, not `MAX_IMAGE_BYTES`.** A Vercel function response is
-  limited to 4.5 MB and `MAX_IMAGE_BYTES` is 16 MiB, so the existing cap and a proxying route
-  contradict each other. The largest figure measured here is 756 KB, well inside it.
+- **~~Cap the deliverable bytes at 4 MiB~~ — this one is wrong, and the repo already says so.**
+  Sol's D5-2 argues a Vercel function response is capped at 4.5 MB. That number is the **request
+  body** limit, not the response: [ingest-queue.md](../project/ingest-queue.md) states it in those
+  words — *"A Vercel function refuses a request body over 4.5 MB — flat, unraisable"* — and it is
+  the whole reason uploads go straight to Storage. On the way out, `sendSource`
+  (`src/routes.ts:491`) already `res.end()`s an entire uploaded PDF through that same function, and
+  `MAX_UPLOAD_BYTES` is **50 MB** (`src/uploads.ts:31`). If a 4.5 MB response cap applied, that
+  shipping route would be broken for most of this project's own eval corpus.
+
+  A cap is still worth having, on the honest grounds — what the reader has to download — rather
+  than on a platform limit that is not there. The largest figure measured anywhere in the corpus is
+  756 KB.
 - **Drop the second blankness clause.** "Every pixel within tolerance of one colour" buys nothing
   the corpus needs and introduces the one false negative that matters — a near-white diagram or a
   faint grid deleted silently. Only exact transparency, only for `RGBA_32BPP`. Keeping a flat
@@ -308,16 +380,21 @@ Asked to arbitrate the product calls rather than the plumbing.
 ## Stages
 
 Each ends with the gates green and the tree safe to commit. Nothing a reader sees changes until D.
+Greg's two calls, 2026-09-06: **delivery is generic but lands PDF-only first**, then web images are
+switched on in the same piece of work; and an unrecovered figure gets **a muted line plus a link to
+the original**.
 
 | | Stage | Lands | State |
 |---|---|---|---|
-| A | **The pure module** | `src/pdf-figures.ts` — the blankness rule, the PNG writer, the one-figure-one-image gate. No pdf.js, no network, no store. Tests on fixture pixel arrays. | |
-| B | **The extraction** | reading real XObjects out of a real PDF, behind the pure module. Pinned against the four known-blank keys and the eight known-real ones in the table above. | |
-| C | **Storage and the step** | `storeRawSource` for the bytes, the artefact, the step, its freshness hash. Nothing served yet. | |
-| D | **Delivery and the prose** | `sendFigure` after `sendPlate`; `<img>` in the HTML; the honest line where nothing was recovered. **The first stage a reader can see.** | |
-| E | **Proof and docs** | the browser pass on a real ingest, `article-images.md`, `content-extraction.md`, this file. | |
+| A | **The pure module** | `src/pdf-figures.ts` — the transparency rule, the validator, the PNG writer, the pairing gate, the ref. No pdf.js, no store. | |
+| B | **The extraction** | real XObjects out of a real PDF through `loadPdfjs`, `maxImageSize` on the document, pinned against the eight known-real and eight known-blank keys. | |
+| C | **The marker, the manifest and the step** | `data-spya-pdf-figure` in `renderHtml` and `src/reserved.ts`; `pdfFigures` on `Assets`; the assets step extended; **the freshness stamp fixed and `ASSETS_VERSION` bumped**. Nothing served yet. | |
+| D | **Delivery and the prose** | the generic asset route after `sendPlate`; `rehostImages` after `sanitizeArticle`; the muted line and its link. PDF figures only. **The first stage a reader can see.** | |
+| E | **Web images through the same door** | the article's own images switched on — 260829b's stages C and D finished, and readers stop announcing themselves to publishers' CDNs. | |
+| F | **Proof and docs** | the browser pass on a real ingest, `article-images.md`, `content-extraction.md`, `export.md`, this file. | |
 
 **Done looks like:** the Analog Cognition PDF re-ingested locally against Postgres shows eight
 figures under their eight captions; the ball-lightning paper shows four and refuses the masthead;
-the Wellcome scan shows none and staples no page of the book under a caption; and
-`evals/pdf/easy` — which has no raster at all — is untouched and costs nothing.
+the Wellcome scan shows none and staples no page of the book under a caption; `evals/pdf/easy` —
+which has no raster at all — is untouched and costs nothing; and no reader's browser fetches
+anything from a publisher.
