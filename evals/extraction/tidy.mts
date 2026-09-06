@@ -415,6 +415,20 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     const html = await readFile(path.join(FIXTURES, c.file), "utf8");
+    /* **A page stage 2 refuses is not tidied, and this check is here because the
+       next line costs money.** The blocks below come from Readability's output,
+       and on a refused page that output is a parse the library itself disowned —
+       so every id the model was asked about would belong to an article no reader
+       can ever be shown, and we would pay for the answer. GPT Sol, reviewing
+       C1a; src/extract.ts § `capabilityFloor`. */
+    const refusal = readArticle(html, c.url).refusal;
+    if (refusal) {
+      console.log(
+        `\n${name}  —  NOT EXERCISED: stage 2 refuses this page (${refusal.chars} characters of ` +
+          "article text), so there is nothing here that would ever be published",
+      );
+      continue;
+    }
     const rows = blocksOf(html, c.url);
     const p = probeHtml(html, c.url);
 
