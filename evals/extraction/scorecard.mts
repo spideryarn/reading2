@@ -307,12 +307,97 @@ export interface GateResult {
   detail: string;
 }
 
+/**
+ * **Which branch of the gates each output node and each text run actually took.**
+ *
+ * A gate reports `passed` and `exercised`, and neither says *how* a green was
+ * reached. That gap is not theoretical: twice in this file's history a green was
+ * green because a run had been silently dropped from the alignment, and from
+ * outside a dropped run and a placed one look identical — `provenanceForm`'s
+ * "could not be placed" red exists because the second of those went unnoticed
+ * for a day.
+ *
+ * So every card carries the census. The shape corpus
+ * ([shapes.mts](shapes.mts)) pins these numbers per case, which is what makes a
+ * green there evidence rather than a shrug: a case cannot go green by abstaining,
+ * because the branch it claims to exercise is a number it has to hit.
+ */
+export type RunPlacement =
+  /** Placed inside its own element's own text, where the stamp says it belongs. */
+  | "owner"
+  /** The owner placed it, and the ancestor's subtree placed it *earlier*. */
+  | "subtreeEarlier"
+  /** **The owner could not supply it at all, and the subtree did.** GPT Sol's
+   *  eighth review. Zero across the fifteen shipped extractions. */
+  | "subtreeOnly"
+  /** No owner to ask — a `descendant` or unstamped node, matched page-wide. */
+  | "page"
+  /** The only place its owner or the page has it is behind the cursor. */
+  | "behind"
+  /** The same, diagnosed inside the ancestor's subtree. */
+  | "behindSubtree"
+  /** Nowhere its owner, its subtree or the page could supply it. */
+  | "unplaceable";
+
+export const RUN_PLACEMENTS = [
+  "owner", "subtreeEarlier", "subtreeOnly", "page", "behind", "behindSubtree", "unplaceable",
+] as const;
+
+export interface ProvenanceTally {
+  /** Which form of the gates answered. `provenance` is the strong one. */
+  form: "provenance" | "text" | "abstained";
+  /** Output nodes carrying own text, by how `sourceRefOf` resolved them. Sums to
+   *  the attribution gate's exposure count. */
+  carriers: Record<"direct" | "descendant" | "ancestor" | "none", number>;
+  /** Every text run the order walk judged, by the branch that placed it. Sums to
+   *  the source-order gate's exposure count. */
+  runs: Record<RunPlacement, number>;
+  /**
+   * **Runs whose element carried a `direct` or `ancestor` stamp and for which
+   * `owners` holds no `Ownership` at all**, so `placeRun` took its ownerless,
+   * page-wide branch.
+   *
+   * `owners` is populated only from text nodes, so a wrapper with no own text —
+   * `<div s1><p s2>…</p></div>` — is invisible to it, and a generated node under
+   * such a wrapper may be placed anywhere on the page. It is a known hole rather
+   * than a bug being reported: see [shapes.mts](shapes.mts)
+   * § `borrowing-under-a-text-free-wrapper`, which pins it and is deliberately
+   * green on the behaviour as it stands.
+   *
+   * **And it is not hypothetical.** Measured 2026-09-06 over the shipped
+   * extraction of all fifteen fixtures: **9 runs on 5 of them** — `medium-about`
+   * 4, `quanta-year-physics` 2, `wiki-gdp-table` 1, `plos-biology` 1,
+   * `pmc-article` 1, reproduced independently. Their **global order is still
+   * checked**; what is missing is any claim about which container they belong
+   * in. [score.mts](score.mts) prints the line, so the number is read from the
+   * run rather than quoted from here.
+   */
+  ownerlessStamped: number;
+}
+
+function emptyTally(form: ProvenanceTally["form"]): ProvenanceTally {
+  return {
+    form,
+    carriers: { direct: 0, descendant: 0, ancestor: 0, none: 0 },
+    runs: {
+      owner: 0, subtreeEarlier: 0, subtreeOnly: 0, page: 0,
+      behind: 0, behindSubtree: 0, unplaceable: 0,
+    },
+    ownerlessStamped: 0,
+  };
+}
+
 export interface Scorecard {
   fixture: string;
   arm: string;
   tier: "gold" | "manifest" | "none";
   metrics: Record<MetricName, Metric>;
   gates: Record<GateName, GateResult>;
+  /**
+   * **How each gate reached its verdict**, branch by branch. Never a verdict of
+   * its own; the thing that makes a verdict readable. See `ProvenanceTally`.
+   */
+  placements: ProvenanceTally;
   /**
    * **Binary, per fixture, never averaged.** Every declared assertion held.
    * `null` when there was no manifest to hold.
@@ -1102,12 +1187,14 @@ export function score(input: ScoreInput): Scorecard {
     structureFidelity, metadataExactness, blockCleanliness,
   };
 
+  const { gates, tally } = gatesFor(input, blocks);
   return {
     fixture: input.fixture,
     arm: input.arm,
     tier: gold ? "gold" : manifest ? "manifest" : "none",
     metrics,
-    gates: gatesFor(input, blocks),
+    gates,
+    placements: tally,
     assertionsPassed: manifest ? failures.length === 0 : null,
     article,
     failures,
@@ -1202,18 +1289,26 @@ export function score(input: ScoreInput): Scorecard {
  *   that half.
  * - **A word swapped inside a node Readability generated**, which resolves only
  *   to an ancestor and is therefore judged against the whole page.
+ * - **Where a run under an own-text-free wrapper belongs.** Such a wrapper has no
+ *   `Ownership`, so its runs take `placeRun`'s page-wide branch and any
+ *   occurrence anywhere will do — see `ProvenanceTally.ownerlessStamped`, which
+ *   counts them, and `shapes.mts` § `borrowing-under-a-text-free-wrapper`, which
+ *   shows the same borrowing caught when the wrapper carries one word of its own.
  */
 function gatesFor(
   input: ScoreInput,
   blocks: ReturnType<typeof splitIntoBlocks>["blocks"],
-): Record<GateName, GateResult> {
+): { gates: Record<GateName, GateResult>; tally: ProvenanceTally } {
   const abstain = (name: GateName, why: string): GateResult => ({
     name, passed: null, exercised: 0, detail: why,
   });
   if (!input.sourceHtml) {
     return {
-      attribution: abstain("attribution", "no source HTML supplied"),
-      sourceOrder: abstain("sourceOrder", "no source HTML supplied"),
+      gates: {
+        attribution: abstain("attribution", "no source HTML supplied"),
+        sourceOrder: abstain("sourceOrder", "no source HTML supplied"),
+      },
+      tally: emptyTally("abstained"),
     };
   }
   /**
@@ -1233,25 +1328,28 @@ function gatesFor(
    */
   const form =
     input.stampedHtml === undefined
-      ? { ...textForm(input.sourceHtml, blocks), strong: false }
+      ? { ...textForm(input.sourceHtml, blocks), strong: false, tally: emptyTally("text") }
       : { ...provenanceForm(input.stampedHtml, input.sourceHtml), strong: true };
 
   return {
-    attribution: {
-      name: "attribution",
-      passed: form.judged ? form.attribution.length === 0 : null,
-      exercised: form.judged,
-      detail: form.attribution.length
-        ? `${form.attribution.length} problem(s): ${form.attribution[0]}`
-        : `${form.judged} ${form.strong ? "output node(s) each say what their own source element said" : "block(s) found in the source — the WEAK text form, no stamped output"}`,
-    },
-    sourceOrder: {
-      name: "sourceOrder",
-      passed: form.ordered > 1 ? form.order.length === 0 : null,
-      exercised: form.ordered,
-      detail: form.order.length
-        ? `${form.order.length} problem(s): ${form.order[0]}`
-        : `${form.ordered} ${form.strong ? "text run(s) placed in source order; no DIRECTLY stamped node said twice" : "block(s) in source order (WEAK text form)"}`,
+    tally: form.tally,
+    gates: {
+      attribution: {
+        name: "attribution",
+        passed: form.judged ? form.attribution.length === 0 : null,
+        exercised: form.judged,
+        detail: form.attribution.length
+          ? `${form.attribution.length} problem(s): ${form.attribution[0]}`
+          : `${form.judged} ${form.strong ? "output node(s) each say what their own source element said" : "block(s) found in the source — the WEAK text form, no stamped output"}`,
+      },
+      sourceOrder: {
+        name: "sourceOrder",
+        passed: form.ordered > 1 ? form.order.length === 0 : null,
+        exercised: form.ordered,
+        detail: form.order.length
+          ? `${form.order.length} problem(s): ${form.order[0]}`
+          : `${form.ordered} ${form.strong ? "text run(s) placed in source order; no DIRECTLY stamped node said twice" : "block(s) in source order (WEAK text form)"}`,
+      },
     },
   };
 }
@@ -1638,7 +1736,14 @@ function textForm(
 function provenanceForm(
   stampedHtml: string,
   sourceHtml: string,
-): { attribution: string[]; order: string[]; judged: number; ordered: number } {
+): {
+  attribution: string[];
+  order: string[];
+  judged: number;
+  ordered: number;
+  tally: ProvenanceTally;
+} {
+  const tally = emptyTally("provenance");
   const doc = docOf(stampedHtml);
   const wholePage = squeeze(textOf(sourceHtml));
   const attribution: string[] = [];
@@ -1653,6 +1758,7 @@ function provenanceForm(
     const { id, how } = sourceRefOf(el);
     if (carriesText) {
       carriers += 1;
+      tally.carriers[how] += 1;
       if (how === "none") {
         attribution.push(
           `no source element for ${JSON.stringify(own.slice(0, 60))} — this node was fabricated`,
@@ -1835,6 +1941,15 @@ function provenanceForm(
     const { id, how } = sourceRefOf(el);
     const owner = (how === "direct" || how === "ancestor") && id ? owners.get(id) : undefined;
     /**
+     * **A stamp that `owners` has never heard of.** `sourceOwnership` builds an
+     * `Ownership` only from text nodes, so a wrapper with no own text of its own
+     * has none — and every run under it takes `placeRun`'s ownerless, page-wide
+     * branch, where any occurrence anywhere on the page will do. Counted rather
+     * than fixed: [shapes.mts](shapes.mts)
+     * § `borrowing-under-a-text-free-wrapper` pins what that costs.
+     */
+    const stampedWithoutOwner = (how === "direct" || how === "ancestor") && !!id && !owner;
+    /**
      * **A generated node's admissible set is its ancestor's whole subtree**, and
      * the ancestor's own text is only part of it — the rest is whatever children
      * the flattening kept. Looked up once per element rather than once per run;
@@ -1850,8 +1965,11 @@ function provenanceForm(
       const run = squeeze(node.textContent ?? "");
       if (!run) continue;
       judged += 1;
+      if (stampedWithoutOwner) tally.ownerlessStamped += 1;
       const placed = placeRun(pageText, run, cursor, owner);
       let span = placed.span;
+      /** Which branch placed this run. Exactly one is counted, always. */
+      let via: RunPlacement = owner ? "owner" : "page";
 
       /**
        * **The ancestor's subtree, as an alignment rather than an exact match.**
@@ -1871,12 +1989,26 @@ function provenanceForm(
         const lo = Math.max(cursor, subtree.from);
         const hi = Math.min(subtree.to, span ? span[1] : subtree.to);
         const inSubtree = lo < hi ? placeInSpan(pageText, run, lo, hi) : null;
-        if (inSubtree) span = inSubtree;
+        if (inSubtree) {
+          /* **`subtreeEarlier` means the subtree actually moved the answer.** The
+             window is bounded above by the owner's placement, so a subtree cover
+             can only end where the owner did or sooner; counting the equal case
+             as a subtree placement would make the branch fire on every ordinary
+             `ancestor` node and say nothing. */
+          if (!span) via = "subtreeOnly";
+          else if (inSubtree[1] < span[1]) via = "subtreeEarlier";
+          span = inSubtree;
+        }
       }
 
-      if (span) { cursor = span[1]; continue; }
-      if (placed.behind) { reordering(run, id ? `source element ${id}` : "the page"); continue; }
+      if (span) { tally.runs[via] += 1; cursor = span[1]; continue; }
+      if (placed.behind) {
+        tally.runs.behind += 1;
+        reordering(run, id ? `source element ${id}` : "the page");
+        continue;
+      }
       if (subtree && placeInSpan(pageText, run, subtree.from, subtree.to)) {
+        tally.runs.behindSubtree += 1;
         reordering(run, `the subtree of source element ${id}`);
         continue;
       }
@@ -1927,6 +2059,7 @@ function provenanceForm(
        * subtree arrives here too, so the message below names both possibilities
        * rather than asserting the one the old wording asserted.
        */
+      tally.runs.unplaceable += 1;
       order.push(
         `${JSON.stringify(run.slice(0, 60))} could not be placed in the source at all — the ` +
           "order gate can say nothing about where it belongs" +
@@ -1939,7 +2072,20 @@ function provenanceForm(
   };
   if (doc.body) walk(doc.body);
 
-  return { attribution, order, judged: carriers, ordered: judged };
+  /**
+   * **Every judged run took exactly one branch, and this is where that is
+   * checked rather than assumed.** The tally is what the shape corpus pins, so a
+   * run that fell out of the census would let a case claim a branch it never
+   * exercised — the abstention-shaped green this whole file is built against.
+   */
+  const counted = RUN_PLACEMENTS.reduce((n, k) => n + tally.runs[k], 0);
+  if (counted !== judged) {
+    throw new Error(
+      `the order walk judged ${judged} run(s) and accounted for ${counted} — a run took no ` +
+        "branch of the placement census, which is an instrument bug",
+    );
+  }
+  return { attribution, order, judged: carriers, ordered: judged, tally };
 }
 
 /**
@@ -2066,6 +2212,60 @@ function placeRun(
 }
 
 /**
+ * **The mutation-testing seam for the placement floor, and nothing else.**
+ *
+ * `null` in every normal run, and the shape corpus asserts that it is. It exists
+ * because this file's own rule is that a check nobody has seen fail is not
+ * evidence, and until 2026-09-06 the floor below was in exactly that position:
+ * dropping it from 8 to 1 — which turns the cover into a bare character
+ * subsequence, so the subtree boundary stops being a boundary — left all 66
+ * cases in `tests/extraction-scorer.test.ts` green, while the six other
+ * mutations of this branch were each caught.
+ *
+ * A constant nobody can move is a constant nobody can watch fail. So the corpus
+ * moves it, under `withPlacementFloor`, and
+ * [shapes.mts](shapes.mts) § `borrowed-phrase-spelled-out-by-the-subtree` is the
+ * shape that comes apart when it does.
+ */
+let placementFloor: number | null = null;
+
+/**
+ * Run `fn` with `placeInSpan`'s run floor moved. **For mutation testing only** —
+ * restored in a `finally`, so a throwing case cannot leave the instrument
+ * mutated for the next one, and nesting restores the outer floor rather than the
+ * default.
+ *
+ * **Synchronous only, and it says so rather than hoping.** `finally` runs when
+ * the callback *returns*, so an `async` callback would restore the floor at its
+ * first `await` and every line after that would run at the shipped floor while
+ * looking as though it ran at the mutated one — a silent success inside the seam
+ * built to prevent one. `score()` is synchronous and nothing here needs a
+ * promise, so a thenable is refused rather than documented. GPT Sol, 2026-09-06.
+ */
+export function withPlacementFloor<T>(floor: number, fn: () => T): T {
+  const was = placementFloor;
+  placementFloor = floor;
+  try {
+    const out = fn();
+    if (out !== null && typeof (out as { then?: unknown } | null)?.then === "function") {
+      throw new Error(
+        "withPlacementFloor was given an asynchronous callback — the floor is restored when the " +
+          "callback returns, so anything after an await would run at the shipped floor while " +
+          "appearing to run at the mutated one",
+      );
+    }
+    return out;
+  } finally {
+    placementFloor = was;
+  }
+}
+
+/** The floor as it stands, so the corpus can assert nothing left it moved. */
+export function currentPlacementFloor(): number {
+  return placementFloor ?? MIN_RUN_IN_ELEMENT;
+}
+
+/**
  * **Where this run sits inside one stretch of the page, allowing for children
  * the extraction dropped.** `null` when it does not sit there at all.
  *
@@ -2099,12 +2299,24 @@ function placeRun(
  * `pg-greatwork` 65 → 103 ms — the last is where the 216 generated leaves are,
  * and 38 ms is what asking this question of every one of them costs.
  *
- * **The floor is not pinned by any test**, said out loud because this file's
- * rule is that a check nobody has seen fail is not evidence: dropping it to 1,
- * which turns the cover into a bare character subsequence, leaves all 66 cases
- * in `tests/extraction-scorer.test.ts` green (measured 2026-09-06, with the six
- * other mutations of this branch all caught). No shape anybody has written
- * distinguishes the two, and finding one belongs with C0's shape corpus.
+ * **The floor is pinned by one shape, and by nothing else.** It was pinned by
+ * nothing at all until 2026-09-06: dropping it to 1 — which turns the cover into
+ * a bare character subsequence — left all 66 cases in
+ * `tests/extraction-scorer.test.ts` green, while the six other mutations of this
+ * branch were each caught. What distinguishes the two is a **generated node
+ * borrowing a phrase from another container, where the ancestor's own subtree
+ * happens to spell that phrase letter by letter**: at floor 8 the subtree cannot
+ * cover it and the gate reddens, at floor 1 it can and the gate passes. So the
+ * floor is what stops the subtree from being a boundary in name only, and
+ * [shapes.mts](shapes.mts) § `borrowed-phrase-spelled-out-by-the-subtree`
+ * asserts both sides of that through `withPlacementFloor`.
+ *
+ * **Where that case puts the boundary, measured rather than assumed.** Run at
+ * every floor from 1 to 12 on 2026-09-06: **green at 1 and 2, red at 3 and
+ * above.** So it rejects a floor of 1 or 2 and says nothing about **3 through
+ * 8** — the genuinely unpinned interval, and the first version of this note
+ * said 2 through 8 because nobody had run the sweep. GPT Sol's third finding.
+ * The case pins all three of those floors, so the sweep cannot go stale.
  */
 function placeInSpan(
   pageText: string,
@@ -2113,7 +2325,7 @@ function placeInSpan(
   hi: number,
 ): [number, number] | null {
   if (hi <= lo) return null;
-  const cover = coverOf(pageText.slice(lo, hi), run, MIN_RUN_IN_ELEMENT);
+  const cover = coverOf(pageText.slice(lo, hi), run, placementFloor ?? MIN_RUN_IN_ELEMENT);
   /* `from < 0` is a cover made entirely of forgiven fragments — nothing was
      actually matched, so there is no position to claim. */
   if (cover.uncovered !== null || cover.from < 0) return null;
