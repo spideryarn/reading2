@@ -916,6 +916,26 @@ chmod 0644 "$CLAUDE_SETTINGS_SH" "$CLAUDE_STATUSLINE_SH"
 run 30 "claude settings" "${AS_USER[@]}" "bash $CLAUDE_SETTINGS_SH $CLAUDE_STATUSLINE_SH"
 rm -f "$CLAUDE_SETTINGS_SH" "$CLAUDE_STATUSLINE_SH"
 
+echo "=== test worker cap ==="
+# How many test files ONE vitest run may run at once here. This box is not a
+# machine running a suite, it is a machine running ten of them, and vitest's
+# default of `cores - 1` is decided by each run in ignorance of the rest -- the
+# same shape as the MCP heap cap below, arriving through the test runner.
+# docs/plans/260906h-cap-vitest-workers-so-one-box-can-hold-ten-suites.md has
+# the incident and the arithmetic.
+#
+# 3 rather than the repo's own default of half the cores (8 here): that default
+# has to be right for a laptop running one suite, and this file is where a
+# machine gets to say it is crowded.
+#
+# A FILE, not the `env` block of ~/.claude/settings.json where this obviously
+# belonged: measured on this box, nothing in that block reaches a Claude Bash
+# tool call, not even the CLAUDE_CODE_SCROLL_SPEED that has been in it since the
+# box was built. A file vitest.config.ts reads has no propagation to be wrong
+# about. Written every run, not merged: one number, ours, nobody else's to keep.
+run 30 "test worker cap" "${AS_USER[@]}" \
+  "mkdir -p \$HOME/.config/spideryarn && printf '3\n' > \$HOME/.config/spideryarn/vitest-max-workers"
+
 echo "=== mcp servers ==="
 # Pin at provision time rather than resolving @latest on every session
 # launch: that is a supply-chain surface and makes two sessions able to run
@@ -1133,6 +1153,11 @@ fi
 
 check "/home is the volume"      'test "$(stat -c %d /home)" = "$(stat -c %d /mnt/data/home)"'
 check "swap active"              'swapon --show | grep -q swapfile'
+# The number, not the file: an EMPTY file is what vitest.config.ts treats as
+# "this machine has nothing to say", so a check for existence alone would pass
+# on the state that silently gives the box back the repo's own default of half
+# the cores -- 8 here, and no complaint from anything.
+check "test worker cap set"      'su - '"$USER_NAME"' -c "cat ~/.config/spideryarn/vitest-max-workers" | grep -qx "3"'
 check "node is the wanted major" 'su - '"$USER_NAME"' -c "node -v" | grep -q "^v${GJD_NODE_MAJOR}\."'
 check "npm present"              'su - '"$USER_NAME"' -c "command -v npm"'
 # The check that would have caught the bug. `claude --version` stayed green for
