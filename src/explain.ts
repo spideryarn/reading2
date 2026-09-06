@@ -831,7 +831,7 @@ export async function* explainStream({
  *
  * A thin drain of `explainStream`, so there is one implementation of the
  * request, the clocks and the end-of-stream invariants rather than two. The
- * glossary's per-term web lookup (`lookUpTerm`, src/api.ts) uses this: its panel
+ * glossary's per-term web lookup (`lookUpTerm`, src/term-lookup.ts) uses this: its panel
  * shows one answer appearing at a time and has nowhere to put a half-written
  * one, so it waits.
  */

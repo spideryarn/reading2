@@ -1445,8 +1445,8 @@ export interface Article {
    * (src/assets.ts), written by the `assets` step.
    *
    * **A required key holding `Assets | undefined`, not an optional one**, and
-   * the difference is the whole reason it is written this way. There are two
-   * places that build an `Article` — the filesystem loader (src/api.ts) and the
+   * the difference is the whole reason it is written this way. There were two
+   * places that built an `Article` — the filesystem loader (src/api.ts) and the
    * Postgres projection (src/store/pg.ts) — and with `assets?:` an omission in
    * either would typecheck perfectly while the reader went on hot-linking every
    * image to the publisher: the feature reporting success by doing nothing,
@@ -1764,7 +1764,7 @@ export interface StageState {
    * the repo. So it is shown as "ran 3 days ago" with the exact stamp on hover,
    * and nothing anywhere compares two of these to decide anything. The
    * staleness question is still answered by `sourceHash` or not at all —
-   * `articleMetadata` in src/api.ts § What this deliberately does not answer.
+   * `articleMetadata` in src/store/pg.ts.
    *
    * Deliberately computed over the outputs that **exist**, whatever `done`
    * says, so a stage that wrote half of what it owes still says when it did it.

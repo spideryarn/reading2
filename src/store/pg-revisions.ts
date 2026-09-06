@@ -1613,7 +1613,7 @@ interface PublicationVerdict {
  * ## What it refuses, and the one that is a behaviour change
  *
  * 1. **No blocks, or no tree.** A revision with either missing is not a
- *    readable article — the same bar src/api.ts sets by requiring both
+ *    readable article — the same bar src/api.ts set by requiring both
  *    `blocks.json` and `tree.json`.
  * 2. **A tree that does not describe these blocks.** Not "every id in a `range`
  *    exists" — that proves only *tree ids ⊆ block ids*, and two ordinary

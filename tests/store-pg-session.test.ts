@@ -2,18 +2,17 @@
  * The transactional store session: artefacts, postcondition, step completion,
  * publication and job transition, in **one** transaction or none of them.
  *
- * `tests/store-session.test.ts` is the filesystem half of the seam, where there
- * is no transaction to hold and the file says so out loud. This is the Postgres
+ * `tests/store-session.test.ts` is the other half of the seam, where there is
+ * no transaction to hold and the file says so out loud. This is the Postgres
  * half — `src/store/pg-session.ts`, D1b of docs/plans/260827aa-delete-the-importer.md —
  * and everything here is a claim that could not be made on the filesystem.
  *
  * ## The eight, and what each is for
  *
  * Sixteen cases. Three of them are checks on the other thirteen rather than on the
- * session: the first asks whether `SPIDERYARN_STORE=postgres` actually took and
- * whether the returned object is still guarded, the lock-order one exists
- * because deleting `lockArticleFor` leaves every other case green, and the last
- * one compiles rather than runs.
+ * session: the first asks whether the returned object is still guarded, the
+ * lock-order one exists because deleting `lockArticleFor` leaves every other
+ * case green, and the last one compiles rather than runs.
  *
  * 1. **The positive one, through the real coordinator.** A successful final step
  *    proves all five of: the artefacts landed, the run completed, the revision
@@ -70,17 +69,6 @@
  * was written, so `advanceJobWith` takes the session factory and the step
  * registry as arguments and production supplies today's defaults. GPT Sol,
  * 2026-08-29, docs/plans/260827aa-delete-the-importer-d1b-design-sol.md finding 4.
- *
- * ## `SPIDERYARN_STORE=postgres`, set before any import runs
- *
- * `src/jobs.ts` picks its job store at module load from `src/store/live.ts`,
- * which reads the flag once. A session that settles the job in Postgres while
- * the coordinator claims it on the filesystem is two stores disagreeing about
- * one row, so the flag has to be set before the import — hence `vi.hoisted`,
- * which runs above the import statements, and hence the restore immediately
- * after them (vitest reuses a worker across files). The first case below asks
- * the module what it actually got, because a flag that silently failed to take
- * would leave every test here passing against the filesystem.
  *
  * ## Why it takes tests/store-jobs-parity.test.ts's advisory lock
  *
@@ -909,11 +897,9 @@ describe("the transactional session", () => {
   });
 
   /**
-   * **The flag took, and the object is wrapped.**
+   * **The object is wrapped.**
    *
-   * Both halves are checks on the other checks rather than on the session. A
-   * `SPIDERYARN_STORE` that failed to take leaves every case below driving the
-   * *filesystem* job store — green, and about nothing. And `guardDbStore`
+   * A check on the other checks rather than on the session: `guardDbStore`
    * returns a new object, so a wrapper that had quietly stopped being applied
    * would only show up as a raw Drizzle error on somebody's homepage.
    */

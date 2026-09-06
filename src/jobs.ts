@@ -1820,10 +1820,8 @@ export type StepRegistry = { [K in StepName]: PipelineStep<K> };
 /**
  * The session one claim runs on, and **the one place a finished job publishes.**
  *
- * Two stores, one seam. Which one a claim gets is decided here and nowhere else,
- * on the live flag and nothing else — `SPIDERYARN_STORE` unset is a laptop and
- * gets the filesystem session it has always had; `postgres` gets a session over
- * this claim's own draft revision, whose `commit` is one transaction.
+ * One store, one seam. Every claim gets a session over its own draft revision,
+ * whose `commit` is one transaction.
  *
  * ## The Postgres side
  *

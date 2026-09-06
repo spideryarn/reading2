@@ -51,7 +51,9 @@
  * summaries branch when it carries ?summary=1* and *ignores a query string
  * nothing reads*, both on `expected 'No API route for GET /api/chat/test-t…'
  * not to match /^No API route for/`. The two that stayed green are the control
- * pair: the no-query-string case, and the `STORE` check.
+ * pair: the no-query-string case, and the `STORE` check. **There are three cases
+ * here now, not four**: that `STORE` control went with the flag on 2026-09-06,
+ * which is why the count above no longer adds up against the file.
  *
  * **Mutation.** 2 — the Postgres-only half of the sentence above, and it
  * STAYED GREEN. `src/store/owned-slug.ts` § `ownedSlug`: `return

@@ -17,10 +17,6 @@
  * Principles, and the reason is that one is paid once and the other is paid
  * every time somebody presses something.
  *
- * `npm run eval:cost:interactions` is the way in because it sets
- * `SPIDERYARN_STORE=postgres`, which is read at module load — so this file can
- * only *assert* it, exactly as run.ts can.
- *
  * ## It needs an article, and the article has to be the eval owner's
  *
  * `--slug` names one rather than ingesting one: ingesting is what run.ts does,
@@ -98,12 +94,9 @@ import {
   totalSpend,
   withSpendAttribution,
 } from "../../src/ai-spend.js";
-/* **`src/store/index.js`, not `src/api.js`.** The one in `src/api.ts` is the
-   filesystem reader; this is the store-aware binding routes.ts uses, and under
-   `SPIDERYARN_STORE=postgres` it is the only one that can see an article the
-   pipeline wrote to Postgres. Getting this wrong is not an error — the
-   filesystem reader answers "no article artefacts", which reads as a missing
-   article rather than as the wrong reader. */
+/* **`src/store/index.js`, not `src/api.js`.** `src/api.ts` was the filesystem
+   reader and went with the filesystem store on 2026-09-05; this is the
+   store-aware binding routes.ts uses. */
 import { loadArticle } from "../../src/store/index.js";
 import { articleVectors } from "../../src/article-vectors.js";
 import { withLedger } from "../../src/cli-ledger.js";

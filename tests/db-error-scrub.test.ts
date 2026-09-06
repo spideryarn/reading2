@@ -74,20 +74,14 @@ await pgReady({
 });
 
 /**
- * The store as `SPIDERYARN_STORE=postgres` selects it — asserted, not assumed.
+ * The store. There is one since 2026-09-05, and it is Postgres.
  *
- * The flag comes from the `vi.hoisted` block at the top; see the note there for
- * why it cannot be an ordinary statement. The check is the other half of the
- * same lesson: without it, this file passed for two hours while running every
- * assertion against the filesystem store, because a failure to *select* the
- * Postgres store looks exactly like the Postgres store behaving well.
+ * It used to be chosen by a flag, and without a check that the choice had taken
+ * this file passed for two hours while running every assertion against the
+ * filesystem store, because a failure to *select* the Postgres store looks
+ * exactly like the Postgres store behaving well.
  */
 const { commentStore } = await import("../src/store/index.js");
-
-/* Put back straight after the import, because vitest reuses a worker process
-   across test files and `process.env` is not reset between them — the modules
-   above have already captured the flag, so nothing here needs it any more, and
-   leaving it set hands the next file a store it did not ask for. */
 
 /**
  * Every string an error could put on a wire, in a log line, or in a stored
