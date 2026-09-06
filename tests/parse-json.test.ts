@@ -521,6 +521,122 @@ describe("parseJsonAnswer", () => {
     }
   });
 
+  /* ------------------------------------------------ the trailing comma -- */
+
+  /**
+   * **The model's habit, not a slip.** `src/hierarchy.ts` asks for `question`
+   * on the root and depth-1 nodes and for it to be OMITTED deeper — so on a
+   * deep node the model writes the comma that would have preceded the field and
+   * then obeys the instruction, leaving `{"gist":"…",}`.
+   *
+   * Found on 2026-09-06 while measuring the `toc/6` gist rules: **five of twenty
+   * live answers**, and one captured answer carries **twenty** commas, one on
+   * essentially every deep node. Any count above zero fails the whole parse, so
+   * the broken rate understates how close the clean answers are. The raw bytes
+   * are in `evals/results/summaries/trailing-comma/`.
+   *
+   * A production hierarchy build fails on this, and nothing keeps the response
+   * — so there is nothing to diagnose it from afterwards.
+   */
+  it("reads a document the model closed with a trailing comma", () => {
+    const raw = `{"nodes":{"n0002":{"gist":"GPT-3 learns from scale.",},"n0003":{"gist":"And again.",},},}`;
+    expect(parseJsonAnswer(raw, "the model's answer")).toEqual({
+      nodes: { n0002: { gist: "GPT-3 learns from scale." }, n0003: { gist: "And again." } },
+    });
+  });
+
+  it("reads a trailing comma inside an array too", () => {
+    expect(parseJsonAnswer(`{"range":["spya-a","spya-b",],}`, "the model's answer")).toEqual({
+      range: ["spya-a", "spya-b"],
+    });
+  });
+
+  /**
+   * **The reason this is a scanner and not a regular expression.**
+   *
+   * `raw.replace(/,(\s*[}\]])/g, "$1")` is the obvious one-liner and it edits
+   * article prose: every gist, quote and glossary definition is the author's
+   * own words, and a sentence may end `…, }` inside a string. The repair below
+   * tracks string and escape state exactly as `objectEnd` does, so a comma
+   * inside a value is not a trailing comma.
+   *
+   * This input has both: a real one to remove, and a decoy that must survive
+   * byte for byte.
+   */
+  it("does not repair a comma that is inside a string", () => {
+    const raw = `{"gist":"the set was written {a, b, } in the paper","n":2,}`;
+    expect(parseJsonAnswer(raw, "the model's answer")).toEqual({
+      gist: "the set was written {a, b, } in the paper",
+      n: 2,
+    });
+  });
+
+  it("repairs an escaped quote without losing its place", () => {
+    /* An escaped quote inside a string is what makes `escaped` load-bearing
+       rather than decorative: read `\"` as the end of the string and the
+       scanner's idea of inside and outside inverts for the rest of the
+       document. */
+    const raw = String.raw`{"gist":"he said \"yes, \" and left","n":2,}`;
+    expect(parseJsonAnswer(raw, "the model's answer")).toEqual({
+      gist: String.raw`he said "yes, " and left`,
+      n: 2,
+    });
+  });
+
+  /**
+   * **The real bytes, not a fixture I wrote.** Three answers captured from live
+   * calls on 2026-09-06 and kept because they cost money to get:
+   * `evals/results/summaries/trailing-comma/`. All three fail a bare
+   * `JSON.parse`, and between them they carry both ways a model disobeys
+   * *"JSON only, no prose, no code fence"* — twenty trailing commas in one, a
+   * single one in another, and a code fence around the third, which was labelled
+   * *clean* until somebody actually ran it.
+   *
+   * Which of the two you survive is luck, and that is the point of asserting on
+   * the files rather than on my own inputs: a fixture only ever contains the
+   * failure its author already understood.
+   */
+  it("reads all three captured answers that a bare JSON.parse refuses", async () => {
+    const dir = path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "..",
+      "evals",
+      "results",
+      "summaries",
+      "trailing-comma",
+    );
+    const files = (await readdir(dir)).filter((f) => f.endsWith(".json")).sort();
+    /* Test the test: if the directory is ever emptied, this must fail rather
+       than pass over nothing. docs/reusable/silent-success.md. */
+    expect(files.length).toBe(3);
+
+    for (const file of files) {
+      const raw = await readFile(path.join(dir, file), "utf8");
+      expect(() => JSON.parse(raw), `${file}: strict parse should still refuse it`).toThrow();
+      const doc = parseJsonAnswer<{ nodes: Record<string, { gist?: string }> }>(
+        raw,
+        "the model's answer",
+      );
+      expect(Object.keys(doc.nodes).length, `${file}: nodes`).toBeGreaterThan(0);
+      /* Every node still has its gist — a repair that dropped content would
+         parse just as happily as one that did not. */
+      for (const [id, node] of Object.entries(doc.nodes)) {
+        expect(typeof node.gist, `${file}: ${id} lost its gist`).toBe("string");
+      }
+    }
+  });
+
+  it("still refuses a document that a comma repair cannot save", () => {
+    /* The repair is not a licence to guess. It runs only after a strict parse
+       has failed, and its result is only taken if THAT parses — so a genuinely
+       broken answer still throws, with no content in the message. */
+    const err = grab(() =>
+      parseJsonAnswer(`{"a" 1, "note":"ZQCOMMAAA",}`, "the model's answer"),
+    );
+    expect(err).toBeInstanceOf(MalformedJson);
+    expect(err.message).not.toContain("ZQCOMMAAA");
+  });
+
   it("still throws MalformedJson on a genuine syntax error, with no content", () => {
     const err = grab(() =>
       parseJsonAnswer(`${F}json\n{"a" 1, "note":"ZQANSWERAA"}\n${F}`, "the model's answer"),
