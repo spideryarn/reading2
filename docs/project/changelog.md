@@ -123,6 +123,24 @@ Merge commits are dropped from the trawl (they carry no change of their own here
 is a `Merge remote-tracking branch 'origin/dev'`) but they stay in `commit_count`, which counts the
 range.
 
+**A commit that touches no code cannot change what a reader sees**, so it is classified without a
+model call, with its path list as the evidence. That was 1,071 of 2,066 on the first run. The paths
+that count as code are deliberately generous — `styles/` and `public/` are in, because a stylesheet
+and a favicon are both things a reader meets.
+
+**Use `git log --full-history -- <paths>` for that split.** Without it, default history
+simplification prunes side-branch commits in a merge-heavy history and the excluded set silently
+grows: the first run lost a real `src/store/pg-jobs.ts` change that way, and found it only by
+enumerating every path prefix the excluded set touched instead of trusting the filter.
+
+**An item belongs to the version containing its *last* commit** — the deploy that first shipped all
+of it. An item whose commits straddle two deploys would otherwise be duplicated or cut in half, and
+both lie about when a reader could first use the thing.
+
+**An item whose commits are in no version yet is not dropped.** Work that is committed but not
+deployed belongs to no version — check with `git merge-base --is-ancestor` against the last deployed
+sha — and the watermark picks it up on the run after it ships.
+
 ### 2. Trawl — many small agents, in parallel
 
 **Lots of subagents, Sonnet or Luna, one per batch of roughly six to ten commits.** They are reading
@@ -165,6 +183,12 @@ arrived**, exit code *and* answer file.
 An item Sol rejects is dropped. An item it corrects keeps the correction and records that it was
 corrected. Its findings are not automatically right either — check the ones that surprise you.
 
+**This stage is not optional, and the numbers say why.** Across the 506 rulings of the 2026-09-06
+retrospective run it **corrected 51%** of the trawl's user-facing items, found **36 changes no
+trawler mentioned**, and moved **16 items back from invisible to visible** — those last are the
+expensive ones, because they would have vanished from the page with nothing to notice. Of the entries
+that shipped, only a third rest purely on claims the trawl got right first time.
+
 ### 4. Copy
 
 The verified items go to one model call whose prompt is
@@ -187,6 +211,11 @@ agent would otherwise re-decide:
 - **A closed list of app addresses it may link to**, because a guessed one is a 404 in the one place
   a reader is most likely to click.
 
+**Re-verify every sha the copy stage emits** against that version's own input — 40 hex characters,
+and present in the input. It is a model writing them out, and on the first run one agent reported
+catching and correcting a mistyped sha in its own output, so the stage can produce one. A wrong sha
+is a 404 in the one place a reader is most likely to click.
+
 **The copy stage may not introduce a fact.** It rewrites verified items; it does not learn anything
 new about the code. Each entry carries `sources`, the indexes of the items it drew on, so an entry
 with nothing behind it is detectable rather than merely wrong — and a number that is not in an item's
@@ -207,6 +236,11 @@ starting rather than discovering at commit 900:
 - **The first 239 commits were pushed in one go** when the remote was created
   ([version-control.md](version-control.md)), so they predate any deploy at all. They belong to the
   first version, whose entry is honestly just "the app existed".
+
+**So the first version is a launch note, not a change list.** On the 2026-09-06 run it held 388
+commits and 143 verified items, and nothing preceded them — there was nothing for them to be a change
+*from*. It is written as what the app could do on the day it first went live, one entry per capability
+area, and the two-headline cap is lifted for that version alone.
 
 ## The page
 
@@ -235,6 +269,10 @@ reader of it.
   they exist because [silent success](../reusable/silent-success.md) is how most of a day's bugs go
   here. Assert on `commit_count` per version and on entries-per-1000-commits across a run; a number
   that collapses is the signal.
+- **A late agent overwriting a finished output.** Launch a stage's agents once, and before you write
+  the file check that no stage output is newer than it. On the first run two versions were re-copied
+  by agents launched twice by mistake, after the NDJSON had already been written from the earlier
+  answers, and it had to be regenerated.
 - **Never quote a commit message to a reader.** They are written for us, they name internal files,
   and several of them describe production breaking. The copy stage translates; it does not excerpt.
 - **Article prose never reaches the changelog.** Nothing in this process should touch reader data at
