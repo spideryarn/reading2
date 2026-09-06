@@ -49,7 +49,7 @@ import {
 } from "../src/web/jump-history.js";
 import { beginJump } from "../src/web/keynav.js";
 import { atParam } from "../src/web/params.js";
-import { watchHistoryWrites } from "../src/web/router.js";
+import { dismissJumpOrigin, watchHistoryWrites } from "../src/web/router.js";
 
 /* `scrollToBlock` is stubbed rather than run: jsdom has no layout, and § does
    nothing at all has to assert that the reader was *not moved*, which is a claim
@@ -246,6 +246,10 @@ describe("which entries carry a stamp", () => {
   beforeEach(() => {
     history.replaceState(null, "", "/read/x");
     clearArmedJump();
+    /* A same-path replace preserves the stamp on purpose, so the line above
+       resets the address and not the entry. Without this the previous test's
+       origin rides in. GPT Sol F27, 2026-09-06. */
+    dismissJumpOrigin();
   });
 
   it("stamps the push its jump armed", () => {
@@ -473,6 +477,7 @@ describe("the jump transaction", () => {
        short-circuiting to the top. jsdom's scrollY is writable. */
     Object.defineProperty(window, "scrollY", { value: 1000, writable: true, configurable: true });
     clearArmedJump();
+    dismissJumpOrigin();
     document.body.replaceChildren();
     scrolled.length = 0;
     seen = [];

@@ -1,14 +1,18 @@
 # Back to where you jumped from
 
-Status as of 2026-09-06: **every stage and the docs are built** — evidence:
-`src/web/ReturnChip.tsx` and `src/web/comment-jump.ts` exist, and `Spine.tsx` draws a `.spine-from`
-mark for a jump origin. Stage C has not been through a cross-family review.
-**Four cross-family reviews, four refusals** — [round 1](260906g-plan-review-sol.md) and
-[round 2](260906g-plan-review2-sol.md) on the plan, [round 3](260906g-stage-a-review-sol.md) on
-Stage A's code and [round 4](260906g-stage-b-review-sol.md) on Stage B's. What each changed is in
+Status as of 2026-09-06: **every stage, every review and the docs are done** — evidence:
+`src/web/ReturnChip.tsx` and `src/web/comment-jump.ts` exist, `Spine.tsx` draws a `.spine-from` mark
+for a jump origin, and every stage has been through a cross-family review whose findings are all
+either fixed or written down below as deliberately not.
+
+**Six cross-family reviews, five refusals and one acceptance** —
+[round 1](260906g-plan-review-sol.md) and [round 2](260906g-plan-review2-sol.md) on the plan, then
+[round 3](260906g-stage-a-review-sol.md), [round 4](260906g-stage-b-review-sol.md),
+[round 5](260906g-stage-b2-review-sol.md) and [round 6](260906g-stage-c-review-sol.md) on the code
+of Stages A, B, B2 and C. What each changed is in
 [§ What the reviews changed](#what-the-reviews-changed).
-Twenty-one findings over four rounds, all accepted, none overruled — the fourth also re-checked the
-third's fixes rather than trusting them, and found one still open.
+Thirty-one findings over six rounds, all accepted, none overruled — the fourth and sixth also
+re-checked earlier rounds' fixes rather than trusting them, and each found one still open.
 
 A reader clicks a glossary term, lands three thousand words away, and cannot find their way home.
 On a desktop browser they press Back and it mostly works. Added to an iOS home screen — which is
@@ -116,12 +120,21 @@ dropdown's function without its machinery.
 
 ### Why not the fading spine trail
 
-Greg floated marks in the spine, fading over time. Recommended **against** in that form, and the
-reason is the rail's own stated rule: it *"acquires marks when the reader asks for them and at no
-other time"* ([`Spine.tsx`](../../src/web/Spine.tsx)). It is a 12px strip already carrying the
-bands, the you-are-here marker and one lane per active search
-([`spine-marks.ts`](../../src/web/spine-marks.ts)). A decaying trail is ambient information with no
-action attached and a legend the reader would have to learn.
+Greg floated marks in the spine, fading over time. Recommended **against** in that form, for two
+reasons — and a third that was offered first and does not hold up.
+
+- **Simpler first.** A trail needs a history store of our own, with retention and decay rules,
+  because the browser's stack cannot be read. Stage C's machinery does not remove any of that: it
+  draws *one* mark from a stamp that is already there.
+- **Rail density.** It is a 12px strip already carrying the bands, the you-are-here marker and one
+  lane per active search ([`spine-marks.ts`](../../src/web/spine-marks.ts)). A decaying trail is
+  ambient information with no action attached and a legend the reader would have to learn.
+
+The argument first given here was the rail's own stated rule — that it *"acquires marks when the
+reader asks for them and at no other time"* ([`Spine.tsx`](../../src/web/Spine.tsx)) — and the Stage
+C review was right that it is the **weakest** of the three: every entry in the trail would also have
+originated in a jump the reader asked for, so the rule does not actually exclude it. Left in as a
+correction rather than quietly swapped, because the plan was leaning on it.
 
 The single-mark version earns its place, because it answers something the chip's label cannot —
 *how far did I come?* **One faint tick at the block you jumped from, drawn only while the chip is
@@ -211,6 +224,46 @@ the six closed — F18 was not, and its remaining defects are corrected above.
 The three suspicions were closed rather than confirmed: `useJumpOrigin`'s cache has no defect;
 `useArticleAccess` refuses a previous slug's payload synchronously, so there is no paint combining a
 new entry's stamp with the old article's sections; and the empty-title fallback is the right trade.
+
+### Round five: Stage B2
+
+[The Stage B2 review](260906g-stage-b2-review-sol.md), against `c09d4db1`. **A fifth refusal**, on
+three P1s — and the through-line is that all three are the *history* being right while the *page*
+does nothing, which is the one shape this whole feature can least afford: a chip is a promise about
+movement.
+
+| ID | Finding | What changed |
+|----|---------|--------------|
+| F10 | P1 — **the same finding again, in the path B2 created.** `isBlockOnScreen` requires the whole row to fit between the bars, so a paragraph *taller than the viewport* can never satisfy it at any scroll position — and stepping between two questions inside one jolted to its top, the exact case the guard exists to prevent. Reproduced with a row at `top=-300, bottom=1200` | **Accepted.** A row *crossing the reading line* now counts as where the reader is — the same line `measureRow` uses for "which item am I in", so the two cannot disagree |
+| F22 | P1 — **an on-screen step did not stop the glide about to carry it away.** A step to a far question starts a 200ms glide; while it passes a nearer one the reader presses Prev; the note changes and the glide carries serenely on, leaving the question they asked for off screen. `scrollToBlock` is also where an in-flight animation is cancelled, and the on-screen branch does not go through it | **Accepted.** `abandonScroll` — `cancel` with none of its other duties, since the reader has not taken over and nothing new is starting |
+| F23 | P1 — **selecting an orphan comment pushed without moving.** A comment whose block went in a re-extraction is deliberately kept and sorted to the end of the drawer; its row is not in the document, so `scrollToBlock` returns at its missing-row guard while the push has already happened. `history.length` 1 → 2, scroll count 0 — a chip offering the way back from a journey that never happened | **Accepted**, and the harness was as much at fault as the code: the test recorded every `scrollToBlock` **call** as a scroll, while the real one returns without moving. The decision now has three answers rather than two, and `nowhere` opens the dialog and does nothing else |
+| F24 | P2 — the seventh closure declares `id: BlockId` and receives a comment id; it compiles only because `BlockId` is an alias for `string` | **Accepted.** `string`, with a comment saying why that closure moves nothing |
+| F25 | P3 — `url-state.md` still called clicking a gist "the one exception" | **Accepted.** The exception is *a deliberate jump*, with the gist and the drawer as its two examples and the arrows as the deliberate non-example |
+| F26 | P3 — two sentences in `comments.md` overstated the implementation | **Accepted**: the arrows add no history *entries* rather than writing no history, and both paths check where the passage is *before moving* rather than asking `isBlockOnScreen` *first* — they open the note first |
+
+Sol confirmed the six call sites are wired correctly today, and — asked for a cheap type-level
+guarantee that an arrow closure cannot call the pushing path — said plainly that there is none worth
+having: both intents consume the same comment id and both have side effects, so a discriminated
+action would document the intent without preventing the wrong one being chosen. **The gap stands,
+recorded rather than papered over**, and the cheap protection it named is an App-level wiring test
+rather than a type.
+
+### Round six: Stage C — **accepted**
+
+[The Stage C review](260906g-stage-c-review-sol.md), against `1df91b3b`. The first acceptance in six
+rounds: no established P0 or P1 in the implementation. Five findings, all taken.
+
+| ID | Finding | What changed |
+|----|---------|--------------|
+| F27 | P2 — **the new suite leaked jump stamps between its own tests.** A same-path replace preserves the stamp on purpose, so `beforeEach` reset the address and not the entry, and a later test mounted with the previous test's mark already drawn. Established by running the file with `--sequence.shuffle.tests --sequence.seed=2` | **Accepted**, and it was worse than reported: three of the four suites in this feature had it, not one. All four now call `dismissJumpOrigin()` in `beforeEach`, and all four pass under three shuffle seeds. This is also the trap that caught the orphan test being written the same evening — the same fact, met twice in an hour |
+| F28 | P3 — the plan's header claimed four reviews and twenty-one findings at a commit that added the fifth, and called every stage built while three P1s stood against Stage B2 | **Accepted**, corrected here |
+| F29 | P3 — the rail's comment said only a jump, Back or dismissal re-renders it; Forward and a stamp-stripping push do too | **Accepted** |
+| F30 | P3 — the same comment called `top` and an unresolvable stamp "two cases where the chip stands without a mark", but only `top` keeps the chip | **Accepted** |
+| F31 | P3 — this plan overstated the pre-existing `.spine-match` bug as "clipped away" | **Accepted** — what is lost is the 3px floor, not the mark |
+
+Sol also answered the product question properly, and against the plan: **one mark is still the right
+v1**, but not for the reason § Why not the fading spine trail gave first. That section is corrected
+above.
 
 #### F21's fix was wrong the first time, and the browser is what caught it
 
@@ -553,10 +606,14 @@ grows the box downward from `top`, so a mark placed in the last rows of the arti
 `.spine { overflow: hidden }` and disappears — and a jump made from the end of a long piece is
 exactly the one whose reader is furthest from home. Same `--from-top` custom property, same
 `min()` in the stylesheet, same reason it cannot be a `calc()` written inline (jsdom's CSSOM mangles
-it into a string every assertion would agree with). **`.spine-match` still has this bug**: 3px floor,
-no clamp, so a search hit in the article's final block is clipped away. Not touched here — it is the
-search feature's, and fixing it inside this stage would have meant editing the one thing Stage C was
-told not to disturb.
+it into a string every assertion would agree with). **`.spine-match` had the same bug**, and the
+precise statement of it is Sol's rather than the first draft's (F31): the clip does not remove the
+mark, it removes the **3px floor** — the overflow cuts the box back to the row's own proportional
+height, so a final block that is short enough disappears and one that is merely small is left as a
+sliver. Confirmed in a browser on `antikythera-mechanism-spya-zhxrzm`, whose last block is a short
+citation: a mark for a word unique to it was drawn at `top: 798.9, bottom: 801.9` against a rail
+ending at 800, so two thirds of it was outside. Fixed in its own commit rather than inside Stage C,
+which was told not to disturb the search marks.
 
 **"Takes no lane" is a shape, not a discipline.** The origin is not a `SpineMark`: that type carries
 a `lane` and an `rgb`, and lanes are *packed* by `laneOrder`, so anything holding one has to be given

@@ -394,7 +394,9 @@ describe only half of it. Both paths went through one function, and they are two
   no Back button at all
   ([260906g](../plans/260906g-back-to-where-you-jumped-from.md)).
 - **The dialog's arrows** are traversal, and the paragraph above still holds for them in full. They
-  replace `?note=` and scroll, and write no history. Twenty questions spread through an article must
+  replace `?note=` and scroll, and add **no history entries** — they do write history, with
+  `replaceState`, which is how the address stays current without the stack growing. Twenty questions
+  spread through an article must
   not cost twenty presses of Back — the misery `keynav.ts` refuses for a keypress, and browsers
   throttle rapid Back, so it is not merely tedious. GPT Sol F9, 2026-09-06.
 
@@ -402,8 +404,15 @@ describe only half of it. Both paths went through one function, and they are two
 the entry's stamp, so after stepping through eight questions the chip still points at the place the
 reader **entered** the traversal from rather than at the previous question.
 
-Both paths ask `isBlockOnScreen` first, so neither moves the page — and the drawer's neither moves
-nor pushes — for a passage the reader is already looking at.
+Both paths open the note first and **check where the passage is before moving**, so neither jolts
+the page — and the drawer's neither moves nor pushes — for one the reader is already looking at.
+That check has three answers rather than two, and the two extra ones were both bugs found in review
+(GPT Sol F10, F22, F23, 2026-09-06): a paragraph **taller than the viewport** counts as *here*,
+because it can never fit between the bars and the reader is standing inside it; a comment whose
+passage is **no longer on the page** — an orphan, kept and sorted to the end — opens its dialog and
+does nothing else, since a push would buy an entry for a journey that cannot happen; and deciding
+*here* now also **stops a glide still running** from the last step, which would otherwise carry the
+reader away from what they just asked for.
 [`src/web/comment-jump.ts`](../../src/web/comment-jump.ts) holds both, and
 [`tests/comment-jump.test.ts`](../../tests/comment-jump.test.ts) pins the entry count on each, which
 is the only assertion that can tell the two apart.

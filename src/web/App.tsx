@@ -2914,7 +2914,22 @@ function Reader({
     [owner, setNote, setThread],
   );
 
-  const openCommentDialog = useCallback((id: BlockId) => void setNote(id), [setNote]);
+  /**
+   * Open a comment's dialog and **move nothing** — the third `onOpenComment`,
+   * and the one that is not a jump.
+   *
+   * `TableView`'s inline mark and gutter bookmark are controls attached to the
+   * block the reader is looking at, so the passage is on screen by
+   * construction; there is nothing to scroll to and nothing to push. The
+   * drawer's two closures go through `openCommentFromDrawer` instead, and the
+   * dialog's four arrows through `stepToNeighbouringComment` (comment-jump.ts).
+   *
+   * **`string`, not `BlockId`**: what arrives is a *comment* id, read off
+   * `data-comment`. It compiled as `BlockId` only because that is an alias for
+   * `string`, so the annotation was a lie a reader would have believed. GPT Sol
+   * F24, 2026-09-06.
+   */
+  const openCommentDialog = useCallback((id: string) => void setNote(id), [setNote]);
 
   /**
    * The whole address, subscribed to — the input to the block permalinks.

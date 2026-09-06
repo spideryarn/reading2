@@ -346,9 +346,12 @@ never crawls you back up the page one screen at a time, and it always eventually
 which a scroll-history would make miserable (browsers throttle rapid Back, so 200 entries is not
 merely tedious).
 
-The one exception is **clicking a gist to jump**, which pushes. That is a scroll, but it is a
-deliberate act — you flung yourself across the article and may well want that undone. The override is
-per-call in `App.tsx`, not in the parser.
+The exception is **a deliberate jump**, which pushes. That is a scroll, but you flung yourself
+across the article and may well want it undone. Clicking a gist is the original case; choosing a
+question out of the comments drawer is another, added 2026-09-06
+([comments.md § Opening a question is a jump](comments.md#opening-is-a-jump)) — and the dialog's
+Prev/Next deliberately are *not*, because stepping through twenty questions must not cost twenty
+presses of Back. The override is per-call in `App.tsx`, not in the parser.
 
 #### The pushed entry says where you came from
 

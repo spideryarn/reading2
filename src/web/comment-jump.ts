@@ -32,7 +32,7 @@
  * tell the two apart. docs/plans/260906g-back-to-where-you-jumped-from.md § Stage B2.
  */
 import type { BlockId } from "../types.js";
-import { isBlockOnScreen, scrollToBlock } from "./scroll.js";
+import { abandonScroll, scrollToBlock, type Whereabouts, whereIsBlock } from "./scroll.js";
 
 /** As much of a comment as moving to one needs: which passage it is about. */
 export interface AnchoredComment {
@@ -41,21 +41,33 @@ export interface AnchoredComment {
 }
 
 /**
- * The passage a comment is about, **or null when the reader is already looking
- * at it** — and null too when the comment is not one we hold.
+ * **What moving to this comment would involve**, in the three answers that need
+ * different things done — and both paths below ask this one question, so they
+ * cannot come to different views of the same situation.
  *
- * Two comments in one paragraph is the common case, and jolting the page
- * between them costs the reader their place for nothing
- * (docs/project/comments.md § Reading order). Both paths below ask this first,
- * so "already on screen" means the same thing on both of them.
+ *  - **`nowhere`** — no such comment, or its passage is not on this page. An
+ *    *orphan* comment is the real case: a comment whose block went in a
+ *    re-extraction is deliberately kept and sorted to the end of the list
+ *    (comment-nav.ts, docs/project/comments.md). Opening one must move nothing
+ *    and, above all, must push nothing: `scrollToBlock` returns at its
+ *    missing-row guard, so a push would buy a history entry for a journey that
+ *    never happened, and a chip offering the way back from it. GPT Sol F23.
+ *  - **`here`** — the reader is already looking at the passage. Two comments in
+ *    one paragraph is the common case and jolting between them costs them their
+ *    place for nothing (docs/project/comments.md § Reading order). This
+ *    includes a paragraph *taller than the viewport*, which can never "fit
+ *    between the bars" and so used to count as away — F10.
+ *  - **`away`** — bring them to it.
  */
-function passageToBringIntoView(
-  comments: readonly AnchoredComment[],
-  id: string,
-): BlockId | null {
+function whereabouts(comments: readonly AnchoredComment[], id: string): Whereabouts {
   const target = comments.find((c) => c.id === id);
-  if (target === undefined) return null;
-  return isBlockOnScreen(target.blockId) ? null : target.blockId;
+  if (target === undefined) return "nowhere";
+  return whereIsBlock(target.blockId);
+}
+
+/** The passage itself, once `whereabouts` has said it is worth moving to. */
+function passageOf(comments: readonly AnchoredComment[], id: string): BlockId | null {
+  return comments.find((c) => c.id === id)?.blockId ?? null;
 }
 
 /**
@@ -77,7 +89,11 @@ export function jumpToComment(
   jumpTo: (blockId: BlockId) => void,
 ): void {
   void setNote(id);
-  const passage = passageToBringIntoView(comments, id);
+  const where = whereabouts(comments, id);
+  /* Already there: stop whatever we had them gliding towards, or it carries
+     them away from the thing they just asked for (F22). */
+  if (where === "here") abandonScroll();
+  const passage = where === "away" ? passageOf(comments, id) : null;
   if (passage !== null) jumpTo(passage);
 }
 
@@ -100,6 +116,8 @@ export function stepToComment(
 ): void {
   if (id === null) return;
   void setNote(id);
-  const passage = passageToBringIntoView(comments, id);
+  const where = whereabouts(comments, id);
+  if (where === "here") abandonScroll();
+  const passage = where === "away" ? passageOf(comments, id) : null;
   if (passage !== null) scrollToBlock(passage);
 }

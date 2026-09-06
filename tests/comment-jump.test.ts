@@ -33,20 +33,32 @@ import { type AnchoredComment, jumpToComment, stepToComment } from "../src/web/c
 import { clearArmedJump, readStamp } from "../src/web/jump-history.js";
 import { beginJump } from "../src/web/keynav.js";
 import { atParam, noteParam } from "../src/web/params.js";
-import { watchHistoryWrites } from "../src/web/router.js";
+import { dismissJumpOrigin, watchHistoryWrites } from "../src/web/router.js";
 
 /* `scrollToBlock` is recorded rather than run — jsdom has no layout, and the
    claim being made about stepping is precisely that it *scrolls* rather than
    pushing. `isBlockOnScreen` stays real: the guard it applies is under test in
    § already on screen, and stubbing it would leave that test asserting against
    its own stub. `vi.hoisted` because `vi.mock` is lifted above declarations. */
-const { scrolled } = vi.hoisted(() => ({ scrolled: [] as string[] }));
+const { scrolled, abandoned } = vi.hoisted(() => ({
+  scrolled: [] as string[],
+  abandoned: [] as true[],
+}));
 vi.mock("../src/web/scroll.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/web/scroll.js")>();
   return {
     ...actual,
     scrollToBlock: (id: string) => {
       scrolled.push(id);
+    },
+    /* **Recorded rather than run, and that is the honest limit here.** The
+       thing `abandonScroll` stops is a rAF glide driven by `window.scrollTo`,
+       which jsdom does not implement — so a test that "ran" it would be
+       watching nothing happen and calling that a pass. What is under test is
+       the decision: when the reader is already at the passage, the movement we
+       started must be called off. GPT Sol F22, 2026-09-06. */
+    abandonScroll: () => {
+      abandoned.push(true);
     },
   };
 });
@@ -122,6 +134,26 @@ function layOut(): void {
   document.body.append(table);
 }
 
+/**
+ * **A comment whose passage is not on this page** — an orphan, in the shape
+ * `comment-nav.ts` deliberately keeps and sorts to the end of the list when a
+ * re-extraction takes its block away (docs/project/comments.md).
+ */
+const ORPHAN: AnchoredComment = { id: comment(99), blockId: block(99) };
+
+/**
+ * Reshape one row so that it **crosses the reading line** — top above it,
+ * bottom far below — which is what a paragraph taller than the viewport looks
+ * like. Nothing in `bandTop` can express it, because every row there is drawn
+ * with `bottom: top`.
+ */
+function makeTall(row: number): void {
+  const tr = document.querySelector<HTMLElement>(`tr[data-block="${block(row)}"]`);
+  if (tr === null) throw new Error(`no row for ${block(row)}`);
+  tr.getBoundingClientRect = () =>
+    ({ top: -300, bottom: 1200, left: 0, right: 0, width: 0, height: 1500, x: 0, y: -300 }) as DOMRect;
+}
+
 /** The origin every jump below is made from — the row at the reading line. */
 const ORIGIN = block(15);
 /** Off screen, so both paths have something to bring into view. */
@@ -184,8 +216,12 @@ describe("moving to a comment", () => {
        short-circuiting to the top of the article. */
     Object.defineProperty(window, "scrollY", { value: 1000, writable: true, configurable: true });
     clearArmedJump();
+    /* A same-path replace preserves the stamp on purpose, so resetting the
+       address does not reset the entry — GPT Sol F27, 2026-09-06. */
+    dismissJumpOrigin();
     document.body.replaceChildren();
     scrolled.length = 0;
+    abandoned.length = 0;
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
@@ -323,5 +359,77 @@ describe("moving to a comment", () => {
     await settled();
     expect(scrolled).toEqual([]);
     expect(param("note")).toBe(comment(NEAR));
+  });
+
+  /**
+   * **A paragraph taller than the viewport is somewhere the reader already
+   * is.** It can never satisfy "fits between the bars" at any scroll position,
+   * so it used to count as off screen — and stepping between two questions
+   * inside one such paragraph jolted to its top, which is the exact case the
+   * no-jolt guard exists to prevent. GPT Sol F10, 2026-09-06, reproduced with a
+   * row at `top=-300, bottom=1200`.
+   */
+  it("treats a paragraph taller than the viewport as somewhere the reader is", async () => {
+    makeTall(NEAR + 4);
+    const before = history.length;
+    act(() => stepToComment(COMMENTS, comment(NEAR + 4), note));
+    act(() => jumpToComment(COMMENTS, comment(NEAR + 4), note, jumpTo));
+    await settled();
+    expect(scrolled).toEqual([]);
+    expect(history.length).toBe(before);
+  });
+
+  /**
+   * **And deciding "already here" has to stop the movement already running.**
+   *
+   * A step to a far question starts a 200ms glide; while it is passing a nearer
+   * one the reader presses Prev. Without this the note changes and the glide
+   * carries serenely on, leaving the question they asked for off screen. GPT
+   * Sol F22, 2026-09-06.
+   */
+  it("calls off a glide in flight when the reader is already at the question", async () => {
+    act(() => stepToComment(COMMENTS, comment(FAR), note));
+    expect(abandoned).toEqual([]);
+    act(() => stepToComment(COMMENTS, comment(NEAR), note));
+    expect(abandoned).toEqual([true]);
+  });
+
+  /**
+   * **An orphan comment must not buy a history entry for a journey that cannot
+   * happen.**
+   *
+   * A comment whose block went in a re-extraction is deliberately kept and
+   * sorted to the end of the drawer (comment-nav.ts). Its row is not in the
+   * document, so `scrollToBlock` returns at its missing-row guard and nothing
+   * moves — but the push had already happened, and the chip then offered the
+   * way back from somewhere the reader never went. GPT Sol F23, 2026-09-06.
+   *
+   * The old test could not have caught this: it recorded every `scrollToBlock`
+   * call as a scroll, while the real one returns without moving. The assertion
+   * that survives that is the **entry count**.
+   */
+  it("opens an orphan question without pushing or moving", async () => {
+    const comments = [...COMMENTS, ORPHAN];
+    const before = history.length;
+    /* Whatever the way back was, it is **unchanged** — not `null`, which this
+       entry need not have been: a replace preserves the stamp on purpose
+       (router.ts § the wrapper's three rules), so the reset in `beforeEach`
+       carries the previous test's stamp in with it. "Nothing about the way home
+       moved" is the claim, and it is the stronger one. */
+    const wayBack = readStamp(history.state);
+    act(() => jumpToComment(comments, ORPHAN.id, note, jumpTo));
+    await settled();
+    expect(history.length).toBe(before);
+    expect(param("at")).toBeNull();
+    expect(readStamp(history.state)).toEqual(wayBack);
+    expect(param("note")).toBe(ORPHAN.id);
+  });
+
+  it("steps to an orphan question without moving", async () => {
+    const comments = [...COMMENTS, ORPHAN];
+    act(() => stepToComment(comments, ORPHAN.id, note));
+    await settled();
+    expect(scrolled).toEqual([]);
+    expect(param("note")).toBe(ORPHAN.id);
   });
 });
