@@ -201,3 +201,29 @@ committed bytes are the fixture. It exists so that "how was this file made?" has
 run rather than a paragraph you have to believe, and so that the one derived file set here is derived
 by a program instead of by hand. It reads `data/` and `output/` and never writes to them, so it needs
 a laptop that still has those five articles.
+
+## Whose words these are
+
+Third-party prose, kept as test input and nothing else. Each article's `meta.json` carries the URL it
+was fetched from; this table names the rights holder, which a URL does not. Greg, 2026-09-04, on the
+same question for [`evals/extraction/fixtures/`](../../../evals/extraction/fixtures/README.md#the-five-added-2026-09-04-on-gregs-copyright-decision):
+
+> It's fine to include copyrighted material in the eval, as long as we attribute it to them. We're
+> not publishing or stealing it.
+
+| slug | article | rights holder |
+|---|---|---|
+| `constitution` | *Claude's Constitution* | Anthropic PBC |
+| `noema-mythology-of-conscious-ai` | *The Mythology Of Conscious AI* | © Anil Seth / Noema Magazine (Berggruen Institute) |
+| `openai-huggingface` | *The Rise and Fall of Agent Civilizations* — the slug is the URL's, not the title's | © Dwarkesh Patel |
+| `todo` | *The Top of My Todo List* | © Paul Graham |
+| `writes` | *Writes and Write-Nots* | © Paul Graham |
+
+`writes` is the exception: its reader state is hand-authored rather than copied, as *"What is not
+here"* above says. The prose is still Paul Graham's.
+
+The same statement for the other two corpora is in
+[`evals/pdf/README.md`](../../../evals/pdf/README.md) (a `LICENCE.md` per directory) and
+[`evals/extraction/fixtures/README.md`](../../../evals/extraction/fixtures/README.md) (a table). The
+repository's [`LICENSE`](../../../LICENSE) covers this project's own code and docs and explicitly
+does not cover any of it.
