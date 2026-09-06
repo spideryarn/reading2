@@ -123,6 +123,8 @@ export interface RepairOperation extends Registered {
    * narrowing, 2026-08-28.
    */
   saw: ChatThread | null;
+  /** A refused spoken append keeps drawing until this read establishes whether it landed. */
+  spoken?: { operation: SpokenOperation; error: string };
 }
 
 /** Stop this answer, or throw the whole conversation away. Never both. */
@@ -331,8 +333,8 @@ export interface TurnOperation extends Registered {
  * opposite of a send, and the rule is the one `project.ts` states: an operation
  * projects what can still be *withdrawn*. A send's rows stay because the reader
  * typed them and nothing takes them back. These can be taken back — the server
- * refuses an append behind a conversation that has moved on — and when it does,
- * dropping this operation is the whole of putting the screen right.
+ * refuses an append behind a conversation that has moved on. Its repair keeps
+ * the provisional rows until a read establishes whether the append landed.
  *
  * ## Why there is no client-minted id for the exchange
  *
@@ -694,12 +696,12 @@ export type ChatResult =
    */
   | { type: "spoken.succeeded"; opId: OpId; thread: ChatThread }
   /**
-   * A 409: the conversation moved on since the live session read its tail.
+   * A 409 or an uncertain write: inspect the conversation before deciding.
    *
    * Somebody typed a turn, or edited one away, or this very request already
-   * succeeded and its response was lost. All three want the same answer — drop
-   * what was drawn and go and look — so they are one event, and it carries the
-   * repair's id for the same reason `turn.refused` does: dropping and repairing
+   * succeeded and its response was lost. All three must be checked before the
+   * provisional rows can be withdrawn, so this event transfers them to the
+   * repair. It carries the repair's id for the same reason `turn.refused` does: handing over and repairing
    * are one decision, and split across two transitions there is a moment where
    * neither is true.
    */

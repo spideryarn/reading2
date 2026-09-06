@@ -16,6 +16,37 @@ Send, or Live again, and they are back to typing in the same thread.
 stored as an ordinary pair of chat rows, so the typed turn after it can see what was said and the
 reader can read the whole thing back a week later. That is the requirement everything below serves.
 
+> I should be able to use that button to start a new conversation, or resume an existing one, and when I hang up I should be able to resume or switch to typing/dictation.
+>
+> — Greg, 2026-09-06
+
+## The controls must say what is happening
+
+The Live button starts a conversation from Chat's list or resumes the open thread. Its tooltip
+explains two-way speech. The session shows connecting, listening, thinking/tool work and speaking;
+connecting can be cancelled. Hang up releases the microphone and saves the final exchange before
+the typed path continues. Transcript display starts on; hiding it does not stop transcription or
+saving.
+
+The microphone is the same remembered input dictation uses, named from the acquired track. The
+level meter reads that exact track through `useAudioLevel`, never a second capture. **Auto,
+Headphones and Laptop mic describe noise reduction, not which device to open.** The device picker
+answers the other question. A missing saved device falls back with a visible explanation. A quiet
+meter is an observation, not a claim that the reader's microphone is broken.
+
+Failures belong in the Chat panel, with a retry and the option to type or dictate. Browser-blocked
+playback gets an explicit **Enable sound** action. If a write cannot be confirmed, retain its words
+locally when retrying the same conversation, with an honest uncertainty notice. A valid session ticket is not proof that a
+microphone opened, a response event is not proof that sound played, and the preview's transcript is
+not proof that Chat displayed or stored it. The repair and its evidence are in
+[260906f](../plans/260906f-repair-realtime-chat.md).
+
+Keep the existing Live control in an open Remember conversation too; it shares this reading
+companion. Remember-specific spoken reply stances are not implemented. The earlier claim below
+that this control was not built was stale: `94ddccd42` deliberately labelled it in that composer,
+and `028676677` preserved it through the Review-to-Remember rename. New list-level spoken
+conversations start in Chat.
+
 ## Where the pieces are
 
 | | |
@@ -25,7 +56,10 @@ reader can read the whole thing back a week later. That is the requirement every
 | [`src/web/live/exchanges.ts`](../../src/web/live/exchanges.ts) | Turns a stream of events into conversation turns. Read its header before touching anything about ordering. |
 | [`src/web/live/wiring.ts`](../../src/web/live/wiring.ts) | The two requests a session makes of our own server *before* it has anything to write, behind one seam. |
 | [`src/web/live/mic-placement.ts`](../../src/web/live/mic-placement.ts) | Where the microphone is, which is what noise reduction wants to know. |
-| [`src/web/live/LiveButton.tsx`](../../src/web/live/LiveButton.tsx) | The button and the one control beside it. |
+| [`src/web/live/LiveButton.tsx`](../../src/web/live/LiveButton.tsx) | Start, resume, cancel, hangup and microphone placement. |
+| [`src/web/live/LiveStatus.tsx`](../../src/web/live/LiveStatus.tsx) | Streaming words, input level and device choice, session state, and recovery actions in the real composer. |
+| [`src/web/live/tool-responses.ts`](../../src/web/live/tool-responses.ts) | One continuation after a response's tool results settle; a newer spoken turn supersedes the old continuation. |
+| [`src/web/PassageLinks.tsx`](../../src/web/PassageLinks.tsx) | Shared live and saved passage references, using stable block ids. |
 | [`src/chat.ts`](../../src/chat.ts) `withSpokenTurn` | The write: both rows, both `done`, one transaction. |
 
 The plans are [live-conversation.md](../plans/260831g-live-conversation.md) — the wire, proven first as a
@@ -141,15 +175,15 @@ retry, deliberately: GPT Sol cut both as what an invoice needs rather than what 
 does. *"Add the durable outbox before usage affects an allowance, an invoice, or a promise made to
 users."*
 
-**What is still unproved**, said plainly: `realtime_sessions` could not be created on the shared dev
-box while a peer's migration ledger row blocked `npm run db:migrate`, so **no real conversation has
-produced a real Postgres row**. What is proved is everything between: in
-[`tests/live-session-routes.test.ts`](../../tests/live-session-routes.test.ts) a raw provider event
-goes through the client's own projection, over the HTTP route as JSON, and out as a priced row in
-the filesystem ledger — for both bills. What is left is a browser and a database.
-The first real session is also the first chance to see
-whether `gpt-live-transcribe` reports its usage as a duration (which this prices) or as tokens
-(which it counts and refuses to guess at, saying so in the console).
+**Verification, 2026-09-06:** the journal exists in local Postgres; the earlier migration blocker
+is no longer current. [`tests/live-session-routes.test.ts`](../../tests/live-session-routes.test.ts)
+now exercises the client's projection, HTTP route and priced Postgres rows for both bills. The
+ticket, journal and spoken-turn suites passed together (27 tests). The real browser minted a
+journalled ticket; the separate silent-input preview exercised provider speech and tools. These
+are different checks, and neither proves physical microphone capture or audible speakers. See
+the [repair evidence](../plans/260906f-repair-realtime-chat-browser-results.md). A real spoken
+session remains needed to verify the transcriber's actual usage shape; token-only reports remain
+explicitly unpriced rather than guessed.
 
 ## The three orderings, and why each is a rule
 
@@ -242,11 +276,11 @@ not this feature's, and it went when the filesystem store did.
 - **`passages`** — what the answer pointed at. A spoken answer never cites in its text, because it
   is forbidden to say `spya-k3m9qt` aloud and is given `show_passage` instead. Without a stored
   field these would be uncited claims, which is what the chat contract exists to prevent.
-- **`interrupted`** — the reader talked over it. Not `stopped`: that means "what is stored is what
-  they read", and this means the opposite — the server truncated the audio and kept the transcript
-  whole, so the text may run *past* what was heard. It is kept out of `recentHistory`
-  ([`src/converse.ts`](../../src/converse.ts)) so unheard words are never fed silently into the next
-  typed turn.
+- **`interrupted`** — the spoken answer ended early, through interruption, hangup or provider
+  failure. Its transcript may be incomplete or run past what was heard. The saved row says so
+  without blaming the reader, and `recentHistory` ([`src/converse.ts`](../../src/converse.ts))
+  excludes the pair from future model context. The existing flag carries this; no invented
+  assistant text or new status is needed.
 - **`model`** — set server-side to `LIVE_MODEL`, never taken from the browser. It is what lets the
   citation instruments tell a spoken answer from a typed one that happened to cite nothing.
 
@@ -282,16 +316,16 @@ thread, and start a fresh seeded session if the reader wants one.
 | **Thread switch** | Ends it. A session is seeded from one conversation and appends to it. |
 | **Leaving chat mode, or the article** | Ends it — the hook is owned by `ConversationBand`, above the keyed panel, for exactly this. |
 | **`pagehide`** | Ends it. Not `visibilitychange`: a reader looking at another tab while talking is having a conversation, not abandoning one. |
-| **A dead connection** | `failed` or `closed` ends it. `disconnected` does not — it is transient and recovers, and hanging up on a two-second blip is worse than the blip. |
+| **A dead connection** | `failed` or `closed` ends it. `disconnected` gets a short recovery window, then ends with a retryable error if it persists. |
 | **The data channel closing** | Ends it. The far end hung up. |
 | **An append refused or lost** | Ends it, and stops the ones queued behind it. No later tail can be vouched for. |
 | **An edit, a retry or a delete in the same thread** | Not intercepted, and deliberately: the next spoken append claims a tail that has moved, gets a 409, and *that* ends the session and reloads the conversation. One mechanism instead of three, and it is the one that also covers a second tab. The cost is that the model is briefly seeded with a history that has changed under it, for the length of one answer. |
 | **Leaving mid-connect** | A session epoch is bumped by every start and every stop and checked after every `await`, so an abandoned `start` never opens a connection or claims a microphone. Without it the cleanup found nothing to tear down and the abandoned attempt carried on. |
+| **Startup never finishes** | One deadline covers device discovery, ticket, permission, transport and seed acknowledgements. It belongs to that attempt and is cleared on every exit; Cancel stays available throughout. |
 
-**Every one of those endings names itself** to the session journal — `reader`, `idle-cap`,
-`session-cap`, `pagehide`, `connection-lost`, `channel-closed`, `thread-moved`, `seed-timeout`,
-`microphone-taken`, `append-refused`, `failed-to-start`, `unmounted`. Free text with a length bound
-on the server rather than a union, deliberately: the list belongs to the browser, and a server-side
+**Every one of those endings names itself** to the session journal; the current reasons live beside
+`endedBecause` in [`useLiveConversation.ts`](../../src/web/live/useLiveConversation.ts). Free text
+with a length bound on the server rather than a union, deliberately: the list belongs to the browser, and a server-side
 union that lagged it would refuse a true report about how a conversation ended. It is best-effort
 either way — a closed laptop says nothing, and a session with no `closed_at` is ordinary rather than
 one still running.
@@ -308,9 +342,8 @@ one still running.
   minutes rather than the hour OpenAI would allow. Only the reader's own voice resets the idle
   clock — a session that kept itself alive by answering its own last question would be exactly the
   case the cap is for.
-- **Live conversation anywhere but chat.** Greg's "other places too later": the comment dialog and
-  Remember's composer. Chat was done first because it is the hardest — the only surface with a
-  thread to keep in step.
+- **Live conversation in the comment dialog.** Chat and the existing Remember composer share
+  the thread-backed controls; comments do not yet have them.
 
 ## See also
 

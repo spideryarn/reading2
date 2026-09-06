@@ -235,16 +235,18 @@ const SPOKEN_GAP_MS = 600;
  */
 const SPOKEN_TIMEOUT_MS = 10_000;
 
-/** Either the exchange is on disk, or why it is not — and whether to look. */
+/** Confirmed storage, definite rejection, or a write whose outcome needs a read. */
 export type SpokenOutcome =
   | { ok: true; thread: ChatThread }
   /**
    * `conflict` is the 409, and it is a different instruction from a failure:
    * the exchange may well be on disk (this request may have already succeeded
    * once), so the answer is to go and look rather than to tell the reader it
-   * was lost.
+   * was lost. `uncertain` makes the same request after exhausted network,
+   * timeout, server-error or malformed-success responses. A definite first
+   * rejection has neither marker.
    */
-  | { ok: false; conflict: boolean; error: string };
+  | { ok: false; conflict: boolean; error: string; uncertain?: true };
 
 /**
  * **Write one finished spoken exchange.** One request, no stream, no frames.
@@ -265,6 +267,9 @@ export async function appendSpoken(
   gapMs = SPOKEN_GAP_MS,
 ): Promise<SpokenOutcome> {
   let last = "";
+  // A later definite refusal cannot establish what an earlier lost response
+  // meant. Carry that uncertainty across the existing retry loop.
+  let uncertain = false;
   for (let attempt = 0; attempt < SPOKEN_ATTEMPTS; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, gapMs));
     /**
@@ -303,7 +308,10 @@ export async function appendSpoken(
            a 5xx is worth another go: it is the server having a moment, and this
            request is safe to repeat. */
         const why = (await failure(res)).message;
-        if (res.status < 500) return { ok: false, conflict: false, error: why };
+        if (res.status < 500) return {
+          ok: false, conflict: false, error: why, ...(uncertain ? { uncertain: true } : {}),
+        };
+        uncertain = true;
         last = why;
         continue;
       }
@@ -312,6 +320,7 @@ export async function appendSpoken(
          for one would retire the operation with nothing to commit — the drawn
          rows would vanish and nothing would replace them. */
       if (!parsed.thread) {
+        uncertain = true;
         last = parsed.error ?? "The server saved that but did not say where.";
         continue;
       }
@@ -322,6 +331,7 @@ export async function appendSpoken(
          varies by engine, and reading a reader-facing sentence off it would be
          reading whichever one this browser happens to use. `runTurn` above
          does the same. */
+      uncertain = true;
       last = late.signal.aborted
         ? "The server did not answer in time."
         : describeFetchFailure(e as Error);
@@ -329,7 +339,7 @@ export async function appendSpoken(
       clearTimeout(by);
     }
   }
-  return { ok: false, conflict: false, error: last };
+  return { ok: false, conflict: false, error: last, uncertain: true };
 }
 
 /**
@@ -378,10 +388,10 @@ export async function settledAnswer(
  * to a reader waiting for a list they are the same thing and used to be handled
  * in three places.
  */
-export async function askForThreads(slug: string): Promise<ThreadsOutcome> {
+export async function askForThreads(slug: string, signal?: AbortSignal): Promise<ThreadsOutcome> {
   try {
     const body = await readJson<{ threads?: ChatThread[]; error?: string }>(
-      await apiFetch(`/api/chat/${encodeURIComponent(slug)}`),
+      await apiFetch(`/api/chat/${encodeURIComponent(slug)}`, signal ? { signal } : undefined),
     );
     if (body.error) return { ok: false, error: body.error };
     return { ok: true, threads: body.threads ?? [] };

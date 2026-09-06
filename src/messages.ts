@@ -25,6 +25,7 @@
  *    brackets and last, so it is skippable by a reader who does not want it and
  *    quotable by one reporting a problem.
  */
+import { readableDay } from "./billing-plan.js";
 import type { Mode } from "./modes.js";
 import type { DateRejection, EmbeddingReason, StepName } from "./types.js";
 import { MAX_PAGES, MAX_UPLOAD_BYTES } from "./uploads.js";
@@ -299,6 +300,39 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-filtered": "blocked",
   "ai-no-room": "blocked",
   "ai-empty": "retry",
+  /* **Raised outside this file**, by `CLAIMS_UNUSABLE` (src/referee-claims-run.ts)
+     and `ANSWER_UNUSABLE` (src/referee-criteria-run.ts): the model answered and
+     none of what came back could be found in the paper. `retry` because both
+     sentences end "asking again usually works", which is true — it is a fact
+     about that answer, never about the paper.
+
+     Both sites had asked in prose since 2026-09-02 to be registered here, and
+     `referee-criteria-run.ts` said exactly why it would not happen: *"Skipping
+     the second has no symptom here — `kindOfMessage` returns null,
+     `worthRetrying` says yes, and Retry is the right answer anyway."* It was
+     right, and being right by a default's coincidence is not the same as being
+     declared. tests/every-ai-code-is-registered.test.ts is what now says so.
+
+     **Registering a code is not only bookkeeping**, which GPT Sol pointed out
+     and this entry is the first case of: `authored()` in src/monitoring-scrub.ts
+     is `kindOfMessage(message) !== null`, so a message ending in a registered
+     code has its **full text forwarded to Sentry** instead of being withheld.
+     That is correct for these two — both are fixed literals with nothing
+     interpolated into them, which is exactly what that allowlist is for. But
+     note what it means for the next sentence given this code: it must stay free
+     of article prose and of anything a reader typed (docs/project/logging.md).
+     `monitoring-scrub.ts`'s own reasoning says the vocabulary is closed because
+     "tests/messages.test.ts round-trips every sentence in that file", and these
+     two sentences are not in this file — which is the sharpest argument for
+     moving them here, still open, and belonging to docs/project/copy.md's own
+     batch rather than to this line.
+
+     **Two different sentences share this one code**, which the "one distinct
+     sentence, one code" rule says they must not — see
+     docs/plans/260906h-improve-the-codebase-fourth-sweep.md § T2.8. Recorded
+     rather than fixed here: unifying them or splitting the code changes what a
+     reader is shown, which is copy.md's call and not a sweep's. */
+  "ai-unusable": "retry",
   /* Not a model call, and not the reader's fault either. `retry` on purpose:
      an interrupted job resumes from its artefacts rather than starting again,
      so another go is both allowed and cheap. See `INTERRUPTED`. */
@@ -2741,6 +2775,73 @@ export const PUBLIC_SHELF_BROWSE_LINK = "Browse shared articles →";
 export const TAKEDOWN_LINK = "If something here is yours, ask us to take it down";
 
 /**
+ * **The line under the shelf's lede**, and the replacement for `TAKEDOWN_LINK`
+ * at the foot of that page — moved on Greg's ask, 2026-09-06: *"we have this
+ * note … Let's move that to the top."*
+ *
+ * **It is three checkable facts and then an offer, in that order**, and that
+ * ordering is the whole design. `TAKEDOWN_LINK` alone at the top of the page
+ * would make the first thing anybody reads a note about takedowns, which reads
+ * as a warning about the articles underneath it — the exact failure the foot
+ * placement was chosen to avoid (docs/project/public-shelf.md). Saying what
+ * these articles *are* first turns the offer into a consequence of behaving
+ * openly rather than into an apology.
+ *
+ * **Two readers, one sentence.** A visitor browsing wants to know whose these
+ * are; an author who arrived from a search wants to know whether we are hiding
+ * anything. The facts serve both, which is why none of them is a reassurance:
+ * *written by somebody else*, *published somewhere else first*, *each links
+ * back*. All three are visible on the page itself within one click.
+ *
+ * **No completeness claim**, following every other sentence in this section:
+ * *"Every article here"* is about the page in front of the reader and not about
+ * the world, so the four exclusions in `publicLibraryQuery` cannot falsify it.
+ *
+ * The second sentence is the link, and the first is not, because the offer is
+ * the only part of it that goes anywhere.
+ */
+export const PUBLIC_SHELF_PROVENANCE =
+  "Every article here was written by somebody else and published somewhere else first, and each " +
+  "one links back to its original.";
+
+/** The offer, and the link out of it. Reads on from `PUBLIC_SHELF_PROVENANCE`. */
+export const PUBLIC_SHELF_TAKEDOWN = "If one is yours and you'd rather it weren't, ask us to take it down.";
+
+/**
+ * **The hover on the line above**, and the one place in this app where a
+ * `ControlTip` sits on a link to a *page* rather than on a control.
+ *
+ * > add a rich tooltip (see tooltips.md) to it, explaining that we have set up
+ * > the SEO canonical link to point to your original page … etc etc
+ * >
+ * > — Greg, 2026-09-06
+ *
+ * **Greg named five things and two of them are false**, which is why this is a
+ * `ControlTip` and not the five-claim panel the brief describes. Zero-data
+ * retention is set on dictation and nothing else (`AI_JOB_ROUTE`,
+ * src/ai-call.ts), and the canonical link is real but inert because no search
+ * engine is allowed to fetch the page in the first place. The five claims live
+ * on `/features/public-readable-sharing`, said accurately and at length; this
+ * card's job is to make somebody want to open it.
+ *
+ * So it obeys the idiom rather than fighting it
+ * (docs/project/tooltips.md § `ControlTip`): `what` is what pressing the link
+ * does, `how` is the two things a reader could not have guessed and that
+ * actually settle the question — **we are not in search engines at all**, which
+ * is the strong true version of Greg's canonical claim and the one a
+ * rights-holder is really asking about, and **you do not have to prove
+ * anything**, which is the only sentence here that is an action.
+ */
+export const TAKEDOWN_TIP_HEAD = "What we do with a shared article";
+export const TAKEDOWN_TIP_WHAT =
+  "Opens the page that sets out what happens when a reader makes an article public here: what goes " +
+  "out, what stays with the original, and how to have yours removed.";
+export const TAKEDOWN_TIP_HOW =
+  "None of these pages is in a search engine — every one is served noindex and our robots.txt " +
+  "disallows crawling. If a piece is yours, one email takes it down, and you don't have to prove " +
+  "anything first.";
+
+/**
  * The heading of the section at the other end of it, on `/privacy`.
  *
  * Here rather than inline in the page because two things need to agree on it —
@@ -4094,15 +4195,14 @@ export function ingestQuotaReached(quota: {
     };
   }
 
-  /* Day, month and year, in the reader's words rather than an ISO stamp. `UTC`
-     so the sentence does not change depending on where the server is standing —
-     the boundary itself is Stripe's, and it is not to the hour anyway. */
-  const when = quota.resetAt.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+  /* Day, month and year, in the reader's words rather than an ISO stamp, and
+     `UTC` so the sentence does not change depending on where the server is
+     standing — the boundary itself is Stripe's, and it is not to the hour
+     anyway. All of which is now said once, in `readableDay`: this used to spell
+     the same four options out again, and the only thing keeping the refusal and
+     the /profile page naming one day was a sentence in billing-plan.ts saying
+     they must. */
+  const when = readableDay(quota.resetAt);
   return {
     kind: "blocked",
     message:

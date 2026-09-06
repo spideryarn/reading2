@@ -6,10 +6,33 @@
  * be turned into. Everything here is one click from the reading view and none
  * of it is in the way of it.
  *
- * **The way home is not here any more.** It was the leftmost button until
- * 2026-08-26; it is now the wordmark fixed in the very top-left of the window
- * (HomeLogo.tsx), which is where every site on the web has kept it for twenty
- * years. Greg's call, and it buys the bar a slot back.
+ * ## The way home is back, and the honest reason is not the one first offered
+ *
+ * It was the leftmost button until 2026-08-26, when Greg took it out —
+ * *"the way out of a document is not one of the things the document can be"* —
+ * and it became the wordmark fixed in the very top-left of the window
+ * (HomeLogo.tsx). Since 2026-09-06 it is `DockHome`, at the left-hand end of
+ * this bar again, and the corner is being abolished
+ * (docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md).
+ *
+ * **The tempting argument for that is wrong and is written down here so nobody
+ * reaches for it again.** I first said a wordmark is a different kind of thing
+ * from a `Home` button; Fable called that half invented, and it is. It is still
+ * a link out of the article, in the slot Greg emptied.
+ *
+ * What has actually changed is **the bar**. It had one kind of button then and
+ * has three now, one of them explicitly app-level (the experimental switch, the
+ * only button in the bar that is about the app rather than about this article).
+ * And the modes have grown a hairline frame of their own — `.dock-modes` is
+ * what says *these are the things the document can be*, so a control outside
+ * that frame is not making the claim Greg objected to. The markup says it three
+ * ways: outside the `role="radiogroup"`, a `Link` rather than an `aria-checked`
+ * button, and never `.dock-btn.on`. Meanwhile the better place that took the way
+ * home off this bar — a free top-left corner — stops existing on these pages.
+ *
+ * The Feedback button makes the same move at the other end, and both are drawn
+ * only where there is a bar to draw them in: every page without a `Dock` keeps
+ * its corners exactly as they were.
  *
  * ## Why the bottom
  *
@@ -185,7 +208,11 @@ import { shownBehindTheSwitch } from "./experimental-visibility.js";
 import type { DiagramKind } from "./diagram.js";
 import { DEFAULT_MODE, diagramInSearch, type Mode, type Panel } from "./params.js";
 import { Link } from "./Link.js";
-import { type ArticleView, carriedSearch, readHref } from "./router.js";
+/* The trigger only — the dialog and the `open` state stay mounted at the
+   signed-in `App` level, where a `Dock` unmounting cannot destroy a draft.
+   FeedbackButton.tsx § One dialog, two triggers. */
+import { FeedbackTrigger } from "./FeedbackButton.js";
+import { type ArticleView, carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSlow } from "./useSlow.js";
 import { InstallHint } from "./InstallHint.js";
@@ -491,11 +518,17 @@ interface ModeUi {
    element type a union of thirteen distinct shapes, twelve of which have no
    `keepLabel` key at all, so `m.keepLabel` below would stop compiling. */
 const MODES_UI = [
-  /* **First, because it is the way out.** Greg asked for it in those terms —
+  /* **First among the modes, because it is the way out of one.** Greg asked for
+     it in those terms —
      *"the first (and largest?) icon in the bottom-bar, to make it easy for the
      user to use that to get out of a mode to the text"*, 2026-08-31 — and it is
      also the default, which is the rule this list already followed when
      Hierarchy was leftmost.
+
+     **"The way out" now means out of a *mode*, not out of the article.** Since
+     2026-09-06 the way off this page is `DockHome`, to the left of the segment
+     and outside it — so this row is the first of the things the document can
+     be, and the exit from the document is not one of them. See the header.
 
      Not drawn larger, and that is a deliberate departure from the ask. A
      radiogroup of ten peers with one of them enlarged reads as a mistake before
@@ -890,10 +923,20 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
  * What the bar has in it, as one string, so `useDockFit` re-measures when the
  * row's width could have changed and not on every render of the page it sits on.
  *
- * The four things that vary: the modes are one segment on the reading view and
+ * The five things that vary: the modes are one segment on the reading view and
  * loose links elsewhere; Comments is a drawer trigger here and a link
- * elsewhere; its count grows a digit; and the bar's own experimental switch is
- * absent, or drawn in one of six appearances.
+ * elsewhere; its count grows a digit; the bar's own experimental switch is
+ * absent, or drawn in one of six appearances; and the Feedback trigger at the
+ * end of the row is there for a signed-in reader and not for a stranger.
+ *
+ * **Feedback is its own term even though it moves with the switch's**, and that
+ * is worth saying rather than leaving a reader to notice the redundancy and
+ * delete it. `toggleVariant` returns `null` exactly when `signedIn` is false,
+ * which is the same condition the Feedback trigger is gated on, so today the
+ * two terms cannot disagree. They are two different gates that happen to agree:
+ * one is *is there an account to save a setting to*, the other is *is there an
+ * account for a report to belong to*. If either moves, the row's width still
+ * has a term that follows it.
  *
  * **The switch goes in by variant, not by presence.** `null` for a signed-out
  * reader and one word otherwise, because the six do not draw the same width: a
@@ -929,11 +972,44 @@ export function fitSignature(
   drawer: Props["drawer"],
   own: { comments: Comment[] } | null,
   variant: ExperimentalVariant | null,
+  feedback: boolean,
 ): string {
   const shape = mode !== undefined && onMode ? "seg" : "links";
   const modes = visible.map((m) => m.mode).join(",");
   const count = own ? own.comments.length : "";
-  return `${modes}|${shape}|${drawer ? "drawer" : "link"}|${count}|${variant ?? "none"}`;
+  /**
+   * **Which mode is on, and not only which are drawn.**
+   *
+   * The identities rule above catches a *different* set of modes. This catches
+   * the same set with a different one of them selected, which changed the row's
+   * width on 2026-09-05 and had nothing watching it: § the bar's fit ladder
+   * gives the open mode its word back at rung 2, so Plain → Summary draws one
+   * more label than it did — same `visible` list, same count, same everything
+   * else this string knew about. The bar stayed on the rung it was measured for
+   * and scrolled where it should have stepped down.
+   *
+   * **No `shape` guard on it, and the guard was written and then removed.**
+   * The obvious version was `shape === "seg" ? mode : ""`, on the reasoning
+   * that a loose link is never `.on` so its mode cannot change the row. That is
+   * true and the guard is still dead code: `shape` is `"links"` exactly when
+   * `mode` is absent in every arrangement `Dock`'s four mount sites produce, so
+   * both spellings return the same string for every bar that exists. The test
+   * written to defend it could not be made to fail — which is the tell this
+   * repo keeps meeting (docs/reusable/silent-success.md) — so the branch went
+   * rather than the test being contorted into an unreachable arrangement to
+   * justify it. GPT Sol, S1, reviewing the built code.
+   *
+   * **And the guard would have been actively wrong later**, which is the
+   * argument that settles it rather than merely permits it. If the loose links
+   * ever gain an `.on` state of their own, the term this string wants is the
+   * bar's *effective* mode — `mode ?? modeInSearch(search)` — on both shapes,
+   * and a `shape === "seg"` guard would be the thing standing in the way. GPT
+   * Sol, second pass.
+   */
+  const active = mode ?? "";
+  return `${modes}|${shape}|${active}|${drawer ? "drawer" : "link"}|${count}|${
+    variant ?? "none"
+  }|${feedback ? "fb" : "no-fb"}`;
 }
 
 export function Dock({
@@ -994,6 +1070,13 @@ export function Dock({
      for the next change to only half-land. */
   const toggle = toggleVariant(experimental);
 
+  /* **Whether the bar draws a Feedback trigger**, which is one more button's
+     width in the row — so it is read here as well as by `DockFeedback`, where
+     the condition is argued. Computed once, above the fit measurement, the way
+     `toggle` is: two reads could not disagree, but one is one fewer place for
+     the next change to only half-land. */
+  const feedback = experimental.signedIn;
+
   /* **How much of itself the bar spells out is measured, not guessed** — the
      row is asked whether it overflows and drops labels until it does not. It
      was a `max-width: 1100px` media query until 2026-09-02, and that number was
@@ -1003,7 +1086,7 @@ export function Dock({
      automatic/dynamic (so that we don't have to keep tweaking some
      constant)"*. */
   const { ref: dockRef, fitClass } = useDockFit(
-    fitSignature(visible, mode, onMode, drawer, own, toggle),
+    fitSignature(visible, mode, onMode, drawer, own, toggle, feedback),
   );
 
   /**
@@ -1109,9 +1192,15 @@ export function Dock({
                 the reason was that the drawer is shut while you read, so the
                 brand was present without ever sitting beside the article's own
                 title. That sentence stopped being true on 2026-08-26, when the
-                logo took the top-left corner of the window (HomeLogo.tsx). Two
-                wordmarks on screen at once is one too many, and the one in the
-                corner is the one that is always there, so this one went. */}
+                logo took the top-left corner of the window (HomeLogo.tsx), and
+                two wordmarks on screen at once is one too many.
+
+                **The conclusion survives 2026-09-06 and the reason had to
+                move.** The corner is gone on this page; the wordmark it held is
+                now `DockHome`, in the bar directly below this drawer and
+                visible while the drawer is open (the bar sits above the scrim).
+                So the one that is always there is nearer than it was, and a
+                second copy in this heading would be a repeat six lines apart. */}
             <h2>{own ? TITLES[panel].own : TITLES[panel].visitor}</h2>
             <button
               type="button"
@@ -1157,7 +1246,13 @@ export function Dock({
       <InstallHint />
 
       <div className={`dock${fitClass}`} ref={dockRef}>
-        {/* **The modes, as one control, and first in the bar.** Chat and
+        {/* **The way off this page, and the first thing in the bar.** See the
+            header for why it is back here after 2026-08-26 took it away, and
+            why the reason is the bar having changed rather than a wordmark
+            being a different kind of thing from a `Home` button. */}
+        <DockHome />
+
+        {/* **The modes, as one control, and first among the modes.** Chat and
             Glossary used to be two independent toggles beside each other, with
             `toc` unrepresented — you left a mode by pressing the one you were
             in. That worked and it lied about the shape of the thing: the middle
@@ -1197,10 +1292,11 @@ export function Dock({
               label={MODE_LABEL[m.mode]}
               /* `dock-mode` says *this is one of the modes* on a page where
                  they are fourteen loose links rather than one segment, so
-                 § the bar's fit ladder can take their labels at rung 1 the way
-                 it takes the segment's. Without it rung 1 does nothing on the
-                 metadata and tweets pages, and the bar there skips straight
-                 from every label to none. GPT Sol, reviewing the design. */
+                 § the bar's fit ladder can take their labels at the mode rung
+                 the way it takes the segment's. Without it that rung does
+                 nothing on the metadata and tweets pages, and the bar there
+                 skips straight from every label to none. GPT Sol, reviewing
+                 the design. */
               className={`dock-mode${marked?.has(m.mode) ? ` ${MARKED}` : ""}`}
               keepLabel={m.keepLabel}
               title={`${m.blurb} — back in the article itself`}
@@ -1327,6 +1423,31 @@ export function Dock({
         {toggle !== null && (
           <DockExperimentalSwitch setting={experimental} variant={toggle} />
         )}
+
+        {/* **Feedback, at the far end, and only for somebody a report can
+            belong to.** It left the top-right corner on 2026-09-06 for the same
+            reason the wordmark left the top-left: the corner is being abolished
+            on the pages that have a bar (FeedbackButton.tsx § One dialog, two
+            triggers). The dialog it opens is mounted far above this bar and
+            survives every navigation the bar does not.
+
+            **After the switch**, because the two are the bar's app-level pair
+            and this is the least urgent thing in the row — which is also why
+            the fit ladder takes its word first (dock-fit.ts § the rungs).
+
+            The one thing this makes worse, recorded rather than discovered
+            later: on a phone the row already overflows and scrolls, and this
+            button is at the end a reader has to drag to, where it used to be
+            fixed in the corner. Taken anyway — the plan's § The one thing this
+            makes worse. If reports from phones fall off, look here first.
+
+            **The gate is inside `DockFeedback` rather than in a `&&` here**,
+            and that is Biome rather than taste: this function was already at
+            the cognitive-complexity ceiling (see `fitSignature`, which was
+            split out of it for the same reason), and one more conditional in
+            the markup put it over. The condition itself is unchanged and is
+            argued on that component. */}
+        <DockFeedback signedIn={feedback} />
 
         {/* **The trailing gutter, and the ladder's font-metric probe.** It is a
             child rather than the bar's `padding-right` because the fit
@@ -1640,6 +1761,114 @@ function DockModes({
 }
 
 /**
+ * **The wordmark, and the way home**, at the left-hand end of the bar.
+ *
+ * Not `HomeLogo` rendered somewhere else: that component is `position: fixed`
+ * in the top-left of the window, and a control carrying its own position cannot
+ * be re-homed by being moved in the markup. What it shares is its *identity* —
+ * the same glyph, the same word, the same `--highlight` — which is the thing
+ * Greg's decision to move it turned on: the way home moves from the top-left
+ * corner to the bottom-left as you go from the shelf into an article, and it is
+ * survivable only because it still looks like itself.
+ *
+ * ## Three ways this says it is not a fourteenth mode
+ *
+ * The risk here is colour rather than position: in this bar `--highlight` means
+ * *hovered or selected*, so an orange control beside the modes could read as one
+ * of them. Fable's arbitration, 2026-09-06, and the answers are cheap:
+ *
+ *  - **Outside the `role="radiogroup"` entirely** — a sibling of `.dock-modes`,
+ *    never a child, so a screen reader is never told it is one of a set. That
+ *    frame is also the sighted half of the same claim: the hairline box says
+ *    *these are the things the document can be*, and this is outside it.
+ *  - **A `Link`, never `aria-checked`, never `.dock-btn.on`.** And **no
+ *    `aria-current="page"`**, which `DockLink` does carry: this is not a link to
+ *    the page you are on, it is the way off it.
+ *  - **`.dock-home`, not `.dock-btn`**, so it does not inherit
+ *    `.dock-btn:hover { background: var(--panel) }`. A wash in this bar means
+ *    hovered-or-selected, and that is the one thing that would make it look like
+ *    a mode. It still hovers — by opacity, the way `.logo-home` does.
+ *
+ * The glyph helps too, for free: it is an image where every mode is a lucide
+ * icon, so it is already a different species. If a screenshot at the last rung
+ * still reads as fourteen glyphs, the fix is a hairline `border-right` on this
+ * element rather than a divider of its own.
+ *
+ * ## The word, and which mechanism takes it away
+ *
+ * In a `dock-btn-label`, so § the bar's fit ladder decides when the brand is
+ * affordable — the same rule as every other word in the row, rather than a
+ * second mechanism. It is the first word the ladder takes (rung 1, with
+ * Feedback's), because these two pay least.
+ *
+ * **Deliberately not `.logo-text`**, which is what `HomeLogo` wraps its letters
+ * in: that class is hidden by the 731px query, which would be a second and
+ * invisible authority over a word the ladder is supposed to own. The
+ * `.logo-letter` spans inside are kept, because they are what the original
+ * app's CSS-only logo animations key on and dropping that file in later is the
+ * point of them — docs/project/original-version/design-system.md. Anything
+ * animating `.logo-text .logo-letter` will need this element's selector adding.
+ */
+function DockHome() {
+  return (
+    <Link
+      href={LIBRARY_HREF}
+      className="logo dock-home"
+      title="Spideryarn — back to the library"
+      /* Explicit, for the reason `DockLink` gives: the ladder hides the visible
+         word, and an accessible name computed from the text would go with it —
+         leaving `title`, which is the long sentence rather than the name. */
+      aria-label="Spideryarn"
+    >
+      {/* `alt=""` and not "Spideryarn": the wordmark beside it already says the
+          name, and a screen reader reading it twice is how a decorative image
+          becomes noise. HomeLogo.tsx says the same in the corner. */}
+      <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
+      <span className="dock-btn-label">
+        {"Spideryarn".split("").map((ch, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: fixed string, rebuilt whole
+          <span className="logo-letter" key={i}>
+            {ch}
+          </span>
+        ))}
+      </span>
+    </Link>
+  );
+}
+
+/**
+ * **The bar's Feedback trigger, and the gate on it.**
+ *
+ * A wrapper around one line of markup, and the reason it is a component is the
+ * gate rather than the markup: `VisitorDock` in PublicPages.tsx mounts a bar
+ * for a signed-out stranger, and `FeedbackTrigger` has no gate of its own by
+ * design — the rule that decides who may file a report is one line in App.tsx,
+ * next to the gate that decides everything else about being signed in
+ * (FeedbackButton.tsx § Who sees it). Drawn unconditionally in this bar it
+ * would hand a stranger a button whose `POST /api/feedback` can only answer
+ * 401. GPT Sol, G2.
+ *
+ * **`experimental.signedIn`, not a new prop**, for the reason § the
+ * `experimental` prop gives at length: that field comes from the store, which
+ * knows the session, so it has one answer on every page — where a prop is
+ * something four mount sites can forget, and a control present on one page of
+ * an article and gone on the next is the failure the deleted `signedIn` prop
+ * actually caused.
+ *
+ * The trigger *also* renders nothing when it finds no `FeedbackHost` above it,
+ * which for a signed-out reader it does not — so on every page the router can
+ * produce these two agree, and a test walking the routes cannot tell them
+ * apart. That was measured: deleting this gate left the whole route walk green.
+ * They are kept as a pair because they answer different questions, and
+ * tests/dock-corner-controls.test.tsx § the bar's Feedback trigger is gated on
+ * its own is what stops this one becoming a line nothing has an opinion about.
+ */
+function DockFeedback({ signedIn }: { signedIn: boolean }) {
+  if (!signedIn) return null;
+  return <FeedbackTrigger variant="dock" />;
+}
+
+/**
  * A bar button that goes somewhere.
  *
  * `aria-current="page"` and not `aria-expanded`: this opens no drawer, and
@@ -1694,7 +1923,7 @@ function DockLink({
          with it. `title` would step in as a fallback, but `title` is the long
          sentence — a screen reader would read the whole blurb where the name
          is wanted. Not hypothetical since 2026-08-27: these three lose their
-         labels on rung 2 too, not just the modes.
+         labels on the last rung too, not just the modes.
 
          So `title` is now the hover description and **not** the accessible
          name — this attribute is. Anything below claiming otherwise is stale. */

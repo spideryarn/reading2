@@ -27,6 +27,9 @@ actually running, which has been the answer more than once.
   `/api/health` cannot tell you whether it is alive.
 - **[deployment.md](deployment.md)** — the deploy process itself, and **what is known to be broken
   in production today**. Check here before debugging something already written down.
+- **[260906a-deployment-and-infrastructure.html](../tutorials/260906a-deployment-and-infrastructure.html)**
+  — not for the middle of an incident, but read it once beforehand: what the pieces are, and the
+  five failures that reported success, told as one pattern.
 
 ## Something is wrong on my laptop
 

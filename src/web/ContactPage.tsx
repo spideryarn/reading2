@@ -10,8 +10,12 @@
  *
  * So the page says those things and stops. docs/project/website-text.md is the
  * doc; docs/plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md is the
- * plan, and names the one judgment call in it — the footer keeps its `mailto:`
- * as well as gaining a link here.
+ * plan, and names the one judgment call in it — the footer kept its `mailto:`
+ * as well as gaining a link here. **That lasted a day**: Greg, 2026-09-06,
+ * *"Remove the hello@spideryarn.com from the footer — just keep the Contact
+ * page, which already points to that — that's sufficient."* So this page is now
+ * the only place in the chrome the address appears, which is the argument for
+ * the fallback paragraph below rather than against it.
  *
  * ## Why it looks like `/privacy` and not like `/features`
  *

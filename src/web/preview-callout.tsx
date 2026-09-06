@@ -77,6 +77,7 @@ const ARTICLE: Article = {
   blocks: BLOCKS,
   tree,
   assets: undefined,
+  navLabelStatus: "ready",
 };
 
 /** The prose column on its own, at one width, with no gist columns beside it. */

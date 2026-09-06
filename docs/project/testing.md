@@ -32,6 +32,52 @@ them out of the stages it checks. They are not unchecked, though: they have a pr
 [`tests/tsconfig.json`](../../tests/tsconfig.json), because vitest strips their types without
 looking at them — see [typechecking.md](typechecking.md).
 
+## A run is not the only thing on the machine
+
+**One suite gets half the cores, not all of them.** Vitest's default is `availableParallelism() - 1`,
+decided by each run in ignorance of every other — fine on a machine running one suite, and not what
+either of ours is. On 2026-09-06 eight concurrent runs put 76 fork workers on the 16-core box and
+made it unusable for everybody, including the agents whose tests they were. The numbers, the cost of
+the cap and the options passed over are in
+[260906h](../plans/260906h-cap-vitest-workers-so-one-box-can-hold-ten-suites.md).
+
+It matters here rather than only in `top`, because this file already argues one of its consequences:
+the 30s `testTimeout` below is set "because this box is never idle", after a `npm run check` came
+back with seven failures of which six were contention and one was real — and the six hid the one for
+an extra pass. **Contention does not only make the suite slow; it makes the suite lie.**
+
+Three layers, in [`vitest.config.ts`](../../vitest.config.ts) (`resolveParallelWorkers`), which is
+the one place every invocation passes through — `npm test`, `npm run check`, and the bare
+`npx vitest run tests/foo.test.ts` an agent types:
+
+| | says | set by |
+| --- | --- | --- |
+| `VITEST_MAX_WORKERS=8 npm test` | this run is alone, go faster | you, per run |
+| `~/.config/spideryarn/vitest-max-workers` | this machine is crowded | `infra/hetzner/provision.sh` writes `3` |
+| half the cores, at least 2 | everywhere else | the default |
+
+A *file* for the middle one, because the obvious environment variable never arrives: nothing in the
+`env` block of `~/.claude/settings.json` reaches a Claude Bash tool call — measured, including the
+`CLAUDE_CODE_SCROLL_SPEED` that has been in it since the box was built. `vitest --maxWorkers=N` still
+works too, which is why the cap sits at the config root and not on the projects.
+
+### Why the config takes that variable away from vitest
+
+Vitest reads `VITEST_MAX_WORKERS` itself — in `resolveConfig`, **after** the line that turns
+`fileParallelism: false` into `maxWorkers: 1`, and for every project. Setting it therefore
+**de-serialises the private-postgres lane**, whose files share one database and one job-queue
+singleton and which is serial on purpose. A flag meaning "use less of this machine" silently changed
+what the suite tests, and bought back the nondeterministic red that
+[260903e](../plans/260903e-a-private-test-database-so-the-suite-stops-racing-dev-servers.md) exists
+to remove. It had already been typed in good faith: 260906f records
+`VITEST_MAX_WORKERS=4 npm run check` as a "reduced-contention full gate".
+
+So `resolveParallelWorkers()` reads the variable and `delete`s it, which is the only lever a config
+file has — everything vitest does with it happens later.
+[`tests/vitest-worker-caps.test.ts`](../../tests/vitest-worker-caps.test.ts) pins **vitest's**
+behaviour as well as ours, so a release that fixes the ordering upstream turns red here instead of
+leaving behind a defence nobody dares delete.
+
 ## Three lanes, and which one your test is in
 
 `npm test` runs **three disjoint vitest projects**. You do not choose; the lane is a property of the
@@ -313,7 +359,7 @@ internet, and the `unit` lane reaches nothing at all.
 | [`tests/turn-order.test.ts`](../../tests/turn-order.test.ts) | the per-conversation lock, on its own: that it excludes, keeps its order, lets two conversations run at once, and lets a turn queued behind a failing one through. Not that the routes *use* it — the window it closes cannot be held open from outside the process, and the test that tried passed with the lock removed |
 | [`tests/chat-live-turn.test.ts`](../../tests/chat-live-turn.test.ts) | what a second tab can do to an answer the first one is watching — a stale retry must not stop it on its way to a 409, and a stop must name the *attempt* it was pressed on rather than the row, which a retry reuses. Needs a genuinely live stream, so `fetch` returns a body that says one word and then hangs |
 | [`tests/chat-client.test.ts`](../../tests/chat-client.test.ts) | the client's half of the same contract — `withServerIds`, which believes the server about what things are called, and `withoutEmpty`, which decides whether a conversation nobody spoke in ever existed |
-| [`tests/client-imports.test.ts`](../../tests/client-imports.test.ts) | that nothing under `src/web/` can reach a server module — a rule with a bundle-size measurement behind it, not a preference |
+| [`tests/client-imports.test.ts`](../../tests/client-imports.test.ts) | that nothing under `src/web/` can reach a server module — a rule with a bundle-size measurement behind it, not a preference. **`import type` counts**, which is the part people get wrong: a type-only edge is a real dependency in the source, and the relaxation has been written and reverted at least twice, once inside a day. The fix when it fails is never the allowlist; it is to move the shared thing into a module that imports nothing |
 | [`tests/article-prompt.test.ts`](../../tests/article-prompt.test.ts) | that the **cached prompt prefix is the same bytes** whatever is being asked — across two questions, two selections, two reading positions and a growing conversation — and that `←READER IS HERE` never gets back into the article body, which is what made explain uncacheable for its whole life. It cannot prove anything is *cached*; only [`evals/prompt-caching.ts`](../../evals/prompt-caching.ts) can ([prompt-caching.md](prompt-caching.md)) |
 | [`tests/article-cache-group.test.ts`](../../tests/article-cache-group.test.ts) | **which stages share a cached article, and whether paying for one is worth it** — that arc and tweets are in a group and glossary is not (because `output_config.effort` is part of the cache key, which was measured, not assumed), and that an ordinary ingest marks no breakpoint at all, since nothing runs behind `arc` to read it. Both of those were wrong once and neither could throw |
 | [`tests/doc-links.test.ts`](../../tests/doc-links.test.ts) | every reference to a doc resolves — **file and anchor**, in source comments as well as markdown |

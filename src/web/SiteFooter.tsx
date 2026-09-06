@@ -95,7 +95,6 @@
  */
 import type { ReactNode } from "react";
 
-import { CONTACT_EMAIL } from "../site-text.js";
 import { Link } from "./Link.js";
 import {
   CONTACT_HREF,
@@ -147,11 +146,13 @@ const LINKS: readonly { href: string; label: string; here: FooterPage }[] = [
   /* Added 2026-09-05 with `/contact`, and — like `/pricing` before it — this
      array is the whole edit, which is the claim this file's header makes.
 
-     **It does not replace the address below**, and that is a decision rather
-     than an oversight. The `mailto:` is the only thing in this row a reader who
-     is stuck can act on in one press; the page is where somebody who went
-     looking for "contact us" lands, and it says the Feedback button is better
-     than either. docs/plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md. */
+     **It replaced the address**, which this row carried beside it for a day.
+     Greg, 2026-09-06: *"Remove the hello@spideryarn.com from the footer — just
+     keep the Contact page, which already points to that — that's sufficient."*
+     The earlier decision had been to keep both, on the grounds that a
+     `mailto:` is one press for a reader who is stuck; one press more, through a
+     page that also tells them the Feedback button is better, is the trade Greg
+     took. docs/plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md. */
   { href: CONTACT_HREF, label: "Contact", here: "contact" },
 ];
 
@@ -206,21 +207,18 @@ export function SiteFooter({
     >
       {children && <p className="tw:m-0">{children}</p>}
       <p className={children ? "tw:mt-2 tw:mb-0" : "tw:m-0"}>
-        {links.map((l) => (
+        {/* The separator goes *between*, so the row cannot end in a dangling
+            `·`. It used to be a trailing one on every link, which was correct
+            only because the contact address was always drawn last after them —
+            and stopped being correct the moment that address left. */}
+        {links.map((l, i) => (
           <span key={l.href}>
+            {i > 0 && " · "}
             <Link href={l.href} className={LINK_CLASS}>
               {l.label}
             </Link>
-            {" · "}
           </span>
         ))}
-        {/* Last, and always drawn — it is the only one that is not a page, and
-            the only thing here a reader who is stuck can actually use.
-            docs/project/website-text.md § The contact address is why it is
-            imported rather than typed. */}
-        <a href={`mailto:${CONTACT_EMAIL}`} className={LINK_CLASS}>
-          {CONTACT_EMAIL}
-        </a>
       </p>
     </footer>
   );

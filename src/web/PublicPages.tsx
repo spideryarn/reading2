@@ -60,6 +60,19 @@ function SourceRow({ url }: { url: string | null }) {
 const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-space)_+_2rem)]";
 
 /**
+ * And room at the top, which is `--safe-top` for the clock and 2.5rem of
+ * ordinary breathing space — Metadata.tsx carries the whole note.
+ *
+ * **It was 3.5rem in three places until 2026-09-06**, the extra rem being room
+ * for the corner wordmark, which these pages draw in their `Dock` now. Three
+ * copies is how it came to be missed when the plan was written: it counted the
+ * two owner-side `main`s and not these (GPT Sol, G4,
+ * docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md).
+ * One name, so the next reader has one thing to change.
+ */
+const TOP_CLEARANCE = "tw:pt-[calc(2.5rem_+_var(--safe-top))]";
+
+/**
  * What a visitor is told about the article, which is a different question from
  * what the owner's page answers.
  *
@@ -93,7 +106,7 @@ export function PublicMetadataPage({
 
   return (
     <>
-      <main className={`tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}>
+      <main className={`tw:mx-auto tw:max-w-3xl tw:px-6 ${TOP_CLEARANCE} tw:font-sans ${DOCK_CLEARANCE}`}>
         <BackToArticle slug={slug} />
         <h1 className="tw:m-0 tw:mb-2 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
           {meta.title}
@@ -262,7 +275,7 @@ export function VisitorPage({
   useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view }));
   return (
     <>
-      <main className={`tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}>
+      <main className={`tw:mx-auto tw:max-w-2xl tw:px-6 ${TOP_CLEARANCE} tw:font-sans ${DOCK_CLEARANCE}`}>
         <BackToArticle slug={slug} />
         <h1 className="tw:m-0 tw:mb-4 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
           {article.meta.title}
@@ -360,7 +373,7 @@ export function VisitorTweetsPage({
 
   return (
     <>
-      <main className={`tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}>
+      <main className={`tw:mx-auto tw:max-w-2xl tw:px-6 ${TOP_CLEARANCE} tw:font-sans ${DOCK_CLEARANCE}`}>
         <BackToArticle slug={slug} />
         <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
           {article.meta.title}

@@ -1,0 +1,42 @@
+-- A state that says "still arriving" rather than an absence that says nothing
+-- — docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md, stage 1.
+--
+-- One column and one CHECK, and neither of them touches `revision_step_runs`:
+-- this adds no step name, so the constraint that has drifted twice
+-- (drizzle/20260905143113_debate.sql, tests/db-step-constraint.test.ts) is left
+-- exactly as it is.
+--
+-- `article_revisions.nav_label_status` is the first column on this table that is
+-- neither an artefact nor a fact about the source document. It is a lifecycle,
+-- and it exists because `TreeNode.navLabel` already has a legal absence meaning
+-- something else: a leaf with no label is a caption, a pull-quote or a rule,
+-- deliberately unlabelled and rendered that way on purpose. *Not written yet* is
+-- a second claim about the same missing field, and until now there was nowhere
+-- to make it — so the reader's `Paragraphs` column had one answer for both and
+-- drew a run of blank cells either way (src/web/tree.ts).
+--
+-- **Revision-scoped storage rather than a field on `tree` or `labels`**, which
+-- is GPT Sol's F6 rather than a preference. Once the labels leave the blocking
+-- `hierarchy` step (stage 2), a labels run that fails has to mark **the revision
+-- the reader is actually looking at** — the published one. Its own candidate
+-- tree is discarded on failure and a terminal job's history is not permanent, so
+-- neither of those can hold the answer. A column can be reached and updated in
+-- place on a published revision, which is what `pgGlossaryStore.deleteGlossary`
+-- already does and what src/db/schema.ts:~1740 writes down the price of.
+--
+-- **`not null default 'ready'` backfills nothing, because 'ready' is true of
+-- every existing row.** Until stage 2 the `hierarchy` step could not finish
+-- without producing the labels — `assertEveryBlockLabelled` and
+-- `assertInsideCoverageFloor` are inside it — so a revision that exists has its
+-- labels. No null, therefore no fourth state for anybody to read as a third
+-- meaning of absence.
+--
+-- The CHECK's literal is **hand-kept**, exactly as `revision_step_runs_step`'s
+-- is: drizzle-kit 0.31.10 emitted both statements below unprompted, but it
+-- diffs the TypeScript and knows nothing about a CHECK expression, so a fourth
+-- member of `NavLabelStatus` (src/types.ts) would compile, migrate cleanly and
+-- then be rejected at the UPDATE with a `23514 check_violation` naming none of
+-- this. tests/nav-label-status.test.ts is what makes there not be a drift.
+
+ALTER TABLE "spideryarn"."article_revisions" ADD COLUMN "nav_label_status" text DEFAULT 'ready' NOT NULL;--> statement-breakpoint
+ALTER TABLE "spideryarn"."article_revisions" ADD CONSTRAINT "article_revisions_nav_label_status" CHECK ("spideryarn"."article_revisions"."nav_label_status" in ('pending','ready','failed'));
