@@ -62,8 +62,21 @@ export class AppBoundary extends Component<Props, State> {
        two hundred calls were slow, which 500'd, which never left — and that is
        the half a reader filing a report can give us and a stack trace cannot.
        The name only: `error.message` is not sent for the same reason it is not
-       rendered above. See src/web/log-buffer.ts § ClientErrorLogEntry. */
-    recordLog({ kind: "client-error", source: "boundary", name: error.name });
+       rendered above. See src/web/log-buffer.ts § ClientErrorLogEntry.
+
+       Derived defensively: the parameter is typed `Error`, but React hands this
+       the thrown value unchanged and `throw null` is a real thing a component
+       can do. Reading `.name` off it threw a second time, out of the boundary
+       itself, and there is nothing above this one to catch that — so the reader
+       got an empty page instead of the apology below. */
+    let name = "Error";
+    try {
+      const candidate = (error as unknown as { name?: unknown } | null)?.name;
+      if (typeof candidate === "string") name = candidate;
+    } catch {
+      /* Keep the default. A diagnostic must not replace the failure it records. */
+    }
+    recordLog({ kind: "client-error", source: "boundary", name });
   }
 
   override render(): ReactNode {

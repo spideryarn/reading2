@@ -171,6 +171,24 @@ running for a while"* would invite a bug report about a step that is working. Th
 import can have already have codes, and they come from `src/messages.ts` through
 `failureKind` as they always did.
 
+**The three error boundaries are the third exception.** `[render]` is the whole
+app failing to draw, `[chunk]` is a lazy route failing to arrive, and
+`[mode-render]` is one mode failing while the article stays readable. In that order:
+[`AppBoundary.tsx`](../../src/web/AppBoundary.tsx) (2026-08-27),
+[`LazyPage.tsx`](../../src/web/LazyPage.tsx) § `ChunkBoundary` (2026-09-06) and
+[`FeatureBoundary.tsx`](../../src/web/FeatureBoundary.tsx) (2026-09-05 —
+[web-client.md § A mode that breaks](web-client.md#a-mode-that-breaks-does-not-take-the-article-with-it)).
+They are the `mic-` argument again in a different place. All three sentences live in the component
+rather than in `src/messages.ts`, because that file is about
+**failures a model call can return** and a component that threw while being drawn is not one; and
+none of them has anything to say to `worthRetrying`, which is why `[render]` says outright that
+reloading will probably hit it again, `[chunk]` says reloading usually fixes it — the commonest
+cause is a deploy replacing the assets under an open tab — and `[mode-render]` offers a retry the
+boundary itself performs. What
+they take from this section is the part about the reader: a code, last, in brackets. And, like every
+message here, **no `error.message`** — its text can be a provider's body, a model's output or the
+article itself, and the boundary cannot know which.
+
 **There was a `ARTICLE_IS_BUSY` in that family and it is worth saying why it went**, because the
 argument it was used to test is still the argument. It was the 409 you got for asking for work on an
 article that already had a job in flight — the first of the family the *server* raised, and the first

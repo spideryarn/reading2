@@ -39,6 +39,7 @@ import {
   SUMMARY_MAX_COMPLETION_TOKENS,
   summaryRequest,
 } from "../src/link-summary.js";
+import type { LinkOccurrence } from "../src/link-previews.js";
 import type { Article, Block, Meta, Tree } from "../src/types.js";
 
 const block = (id: string, text: string): Block => ({
@@ -84,7 +85,21 @@ function anArticle(overrides: { blocks?: Block[]; gist?: string } = {}): Article
   } as Article;
 }
 
-const LINK = { text: "Bell settled the easy half", blockIds: ["spya-aaaaaa"] };
+/**
+ * One sighting of one link — what `linkInArticle` hands the route.
+ *
+ * *Which* sighting is `tests/link-summary-occurrence.test.ts`'s subject, not
+ * this file's; here it is only the pair the prompt is built from.
+ */
+const LINK: LinkOccurrence = {
+  link: {
+    blockIds: ["spya-aaaaaa"],
+    text: "Bell settled the easy half",
+    url: "https://destination.example/bell",
+    targetBlockId: null,
+  },
+  blockId: "spya-aaaaaa",
+};
 
 describe("what the reader is standing in", () => {
   it("carries the title, the gist, the link's own words and the passage", () => {
@@ -112,7 +127,10 @@ describe("what the reader is standing in", () => {
   });
 
   it("says so rather than inventing one when the passage cannot be found", () => {
-    const context = readerContext(anArticle(), { text: "somewhere", blockIds: ["spya-zzzzzz"] });
+    const context = readerContext(anArticle(), {
+      link: { ...LINK.link, blockIds: ["spya-zzzzzz"] },
+      blockId: "spya-zzzzzz",
+    });
     expect(context).toContain("could not be found");
   });
 

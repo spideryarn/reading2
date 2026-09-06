@@ -83,6 +83,14 @@ interface Hit {
   link: LinkPreview | null;
   /** For an in-article anchor: the block it resolves to. */
   anchor: { blockId: BlockId; text: string } | null;
+  /**
+   * **The block the anchor itself sits in** — where the reader is standing,
+   * rather than where the link goes, which is `anchor` above.
+   *
+   * `null` off the prose: a link in a chat answer or in the sources under one is
+   * in no article's block, and the summary route refuses those anyway.
+   */
+  inBlock: BlockId | null;
   /** The raw href, for the foot of the card. */
   href: string | null;
   /**
@@ -245,12 +253,28 @@ export function ProseHoverCard({
          anchor card: "elsewhere in this article", with the note's first 260
          characters under it, is a worse answer than the note. */
       const note = anchorEl ? noteMarkerAt(anchorEl, document, notes) : null;
-      if (note) return { termIds, link, anchor, href, note, back: false };
+
+      /* **Which paragraph the pointer is in**, read the way `onFollowNote` and
+         TableView's own link handler read it: the row is the block, and
+         `data-block` is the id every feature here addresses text by
+         (docs/project/block-ids.md). It is what tells the summary which of two
+         mentions of one destination the reader is actually looking at. */
+      const inBlock = anchorEl?.closest("tr[data-block]")?.getAttribute("data-block") ?? null;
+
+      if (note) return { termIds, link, anchor, inBlock, href, note, back: false };
 
       // Nothing to say. A bare `<a>` we cannot describe is not worth a panel.
       if (termIds.length === 0 && !link) return null;
       if (termIds.length === 0 && link?.kind === "anchor" && !anchor) return null;
-      return { termIds, link, anchor, href, note: null, back: !!anchorEl && isBackLink(anchorEl) };
+      return {
+        termIds,
+        link,
+        anchor,
+        inBlock,
+        href,
+        note: null,
+        back: !!anchorEl && isBackLink(anchorEl),
+      };
     },
     [byId, sourceUrl, blockText, notes],
   );
@@ -371,7 +395,7 @@ export function ProseHoverCard({
   });
 
   if (!shown) return null;
-  const { termIds, link, anchor, href, note, back } = shown.data;
+  const { termIds, link, anchor, inBlock, href, note, back } = shown.data;
   const found = termIds
     .map((id) => byId.get(id))
     .filter((e): e is GlossaryEntry => e !== undefined);
@@ -473,7 +497,7 @@ export function ProseHoverCard({
      has the caveat to that. */
   const withFacts = (add: AddToShelf) =>
     lookUpLinks ? (
-      <WithLinkFacts link={link} sourceUrl={sourceUrl} slug={slug}>
+      <WithLinkFacts link={link} sourceUrl={sourceUrl} slug={slug} inBlock={inBlock}>
         {(facts) => card(facts, add)}
       </WithLinkFacts>
     ) : (
@@ -538,14 +562,16 @@ function WithLinkFacts({
   link,
   sourceUrl,
   slug,
+  inBlock,
   children,
 }: {
   link: LinkPreview | null;
   sourceUrl: string | null;
   slug: string | null;
+  inBlock: BlockId | null;
   children: (facts: LinkFacts) => ReactElement;
 }) {
-  return children(useLinkFacts(link, sourceUrl, slug));
+  return children(useLinkFacts(link, sourceUrl, slug, inBlock));
 }
 
 /**

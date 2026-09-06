@@ -15,7 +15,6 @@ import type {
   ChatThread,
   Comment,
   GlossaryEntry,
-  Idea,
   Quote,
   RememberStance,
   ThreadKind,
@@ -26,7 +25,7 @@ import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { isAdmin } from "../admin.js";
-import { AdminFeedbackPage, AdminHome, AdminUsersPage } from "./AdminPage.js";
+import { LazyPage } from "./LazyPage.js";
 import { LandingPage } from "./LandingPage.js";
 import { NotFoundPage } from "./NotFoundPage.js";
 import { PrivacyPage } from "./PrivacyPage.js";
@@ -38,7 +37,6 @@ import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
 import { useExperimental } from "./useExperimental.js";
-import { DesignPage } from "./DesignPage.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
 import {
@@ -54,8 +52,8 @@ import {
 import type { User } from "@supabase/supabase-js";
 import { FeedbackButton } from "./FeedbackButton.js";
 import { Metadata } from "./Metadata.js";
-import { IdeasPanel } from "./IdeasPanel.js";
-import { useIdeas } from "./useIdeas.js";
+import { IdeasBand, VisitorIdeasBand } from "./modes/ideas/IdeasMode.js";
+import { FeatureBoundary } from "./FeatureBoundary.js";
 import { TimelinePanel } from "./TimelinePanel.js";
 import { useTimeline } from "./useTimeline.js";
 import { DebatePanel } from "./DebatePanel.js";
@@ -115,7 +113,6 @@ import {
   hitMarks as buildHitMarks,
   orderFound,
   quoteMarkKey,
-  resolveIdea,
   resolveQuotes,
   resolveTimelineEvent,
   keepAbove,
@@ -156,7 +153,6 @@ import {
   rememberParam,
   barParam,
   eventParam,
-  ideaParam,
   termParam,
   findParam,
   matchParam,
@@ -221,7 +217,6 @@ import type {
   PublicArticle,
   PublicGlossary,
   PublicQuotes,
-  PublicIdeas,
   PublicTimeline,
 } from "../public-types.js";
 import {
@@ -295,6 +290,23 @@ const OWNER_HAS_EVERYTHING: PublicArtefacts = {
   timeline: true,
   sketch: true,
 };
+
+/**
+ * **The two routes whose code is not in the reader's initial download.**
+ * `LazyPage.tsx`
+ * has the reasoning; these are the four loaders it takes.
+ *
+ * Named-export adapters rather than `lazy(() => import("./AdminPage.js"))`,
+ * because `React.lazy` reads `module.default` and neither page has one — the
+ * bare form would send every visit to the failure surface. And **module
+ * scope**, because a loader's identity is a `useMemo` dependency: an inline
+ * arrow would build a new lazy type, and start a new fetch, on every render.
+ */
+const loadAdminHome = () => import("./AdminPage.js").then((m) => ({ default: m.AdminHome }));
+const loadAdminUsers = () => import("./AdminPage.js").then((m) => ({ default: m.AdminUsersPage }));
+const loadAdminFeedback = () =>
+  import("./AdminPage.js").then((m) => ({ default: m.AdminFeedbackPage }));
+const loadDesign = () => import("./DesignPage.js").then((m) => ({ default: m.DesignPage }));
 
 
 
@@ -493,18 +505,21 @@ function SignedIn({
      proof — it moved onto the `/admin` index on 2026-09-05 and stayed open to
      everybody, because the `if` was in the `admin` arm.
 
-     **Nothing is hidden by it.** These components are in the bundle every
-     signed-in reader downloads, and the SPA rewrite answers 200 at these
-     addresses whoever asks; `/design` reads no data at all, so there is nothing
-     behind it to refuse either. The only refusal that counts is the server's on
+     **Nothing is hidden by it.** These components are absent from the initial
+     reader download since 2026-09-05 (LazyPage.tsx), but their chunks are
+     public assets served to anyone who requests them, and the SPA rewrite
+     answers 200 at these addresses whoever asks; `/design` reads no data at
+     all, so there is nothing behind it to refuse either. **An unloaded chunk is
+     not a boundary**: the only refusal that counts is the server's on
      `/api/admin/`, which would turn down a hand-written `fetch` from any of
      these pages just the same. src/admin.ts § the two halves.
 
      **The shelf, and deliberately not the 404 page** that arrived on 2026-09-03
      for every address nobody minted (NotFoundPage.tsx). Same reason
      docs/project/admin.md gives for the server answering 403 rather than 404:
-     these pages exist, visibly, in everybody's bundle, so pretending the address
-     means nothing buys nothing and costs a true sentence.
+     these pages exist, visibly, and their code is there for anybody who asks,
+     so pretending the address means nothing buys nothing and costs a true
+     sentence.
 
      `key` for the same reason the shelf below carries one — this is the same
      component, reached a different way. */
@@ -547,7 +562,7 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        <DesignPage />
+        <LazyPage load={loadDesign} routeKey="design" />
       </>
     );
   // Signed in, the policy gets the corner logo like every other standalone
@@ -634,11 +649,11 @@ function SignedIn({
       <>
         <HomeLogo />
         {route.page === "users" ? (
-          <AdminUsersPage />
+          <LazyPage load={loadAdminUsers} routeKey="admin:users" />
         ) : route.page === "feedback" ? (
-          <AdminFeedbackPage />
+          <LazyPage load={loadAdminFeedback} routeKey="admin:feedback" />
         ) : (
-          <AdminHome />
+          <LazyPage load={loadAdminHome} routeKey="admin:home" />
         )}
       </>
     );
@@ -3383,25 +3398,49 @@ function Reader({
           onJump={jumpTo}
         />
       )}
-      {owner && mode === "ideas" && (
-        <IdeasBand
+      {/* **The first mode that may break on its own.** One boundary around both
+          Ideas branches — the controller as well as its panel, which is why the
+          controller had to leave this file — so a throw in there costs the
+          reader Ideas and not the article.
+          docs/plans/260905h-a-mode-failure-should-leave-the-article-readable.md. */}
+      {/* **Gated on the mode, so the boundary exists only where it can catch
+          anything.** Wrapping the two branches while leaving the element itself
+          unconditional worked, but it put a live activation subscription in the
+          other thirteen modes for no reason. That gate is also why `mode` is
+          **not** in the key: it cannot change while this boundary is alive, and
+          a feature that has a genuine sub-mode would not change the top-level
+          `mode` either — so it appends that sub-mode's own identity here, not
+          this. Sol, 2026-09-06, F18. */}
+      {mode === "ideas" && (
+        <FeatureBoundary
+          name="Ideas"
           slug={slug}
-          blocks={article.blocks}
-          onJump={jumpTo}
-          onFound={setIdeaFound}
-          openKey={openOccurrence}
-          onOpenKey={setOpenOccurrence}
-        />
-      )}
-      {!owner && mode === "ideas" && artefacts?.ideas && (
-        <VisitorIdeasBand
-          ideas={artefacts.ideas}
-          blocks={article.blocks}
-          onJump={jumpTo}
-          onFound={setIdeaFound}
-          openKey={openOccurrence}
-          onOpenKey={setOpenOccurrence}
-        />
+          /* A visitor's band never auto-runs, so there is no press to retire. */
+          target={owner ? "ideas" : null}
+          resetKey={`${slug}|${owner ? "owner" : "visitor"}`}
+          onPlain={() => void setMode("plain")}
+        >
+          {owner && (
+            <IdeasBand
+              slug={slug}
+              blocks={article.blocks}
+              onJump={jumpTo}
+              onFound={setIdeaFound}
+              openKey={openOccurrence}
+              onOpenKey={setOpenOccurrence}
+            />
+          )}
+          {!owner && artefacts?.ideas && (
+            <VisitorIdeasBand
+              ideas={artefacts.ideas}
+              blocks={article.blocks}
+              onJump={jumpTo}
+              onFound={setIdeaFound}
+              openKey={openOccurrence}
+              onOpenKey={setOpenOccurrence}
+            />
+          )}
+        </FeatureBoundary>
       )}
       {owner && mode === "quotes" && (
         <QuotesBand
@@ -3622,262 +3661,6 @@ function Reader({
       />
     </div>
   );
-}
-
-/**
- * Ideas, and the fetch that belongs to it.
- *
- * A component of its own for the reason `ConversationBand` and `GlossaryBand` are:
- * `useIdeas` fetches on mount, and calling it up in `Reader` would charge every
- * reader of every article a request for a list almost none of them will open.
- *
- * What it pushes up is the **resolved** passages, not the stored occurrences.
- * The panel and the prose have to be showing the same set, and the only way to
- * guarantee that is for one of them to compute it and hand it to the other —
- * the same rule `SearchBand` follows. Resolution can drop occurrences (a block
- * the article no longer has), so a panel counting the stored list would say
- * "2 of 5" and step through three.
- *
- * **Exported for tests/passage-mode-cleanup.test.tsx**, which mounts this band,
- * `TimelineBand` and `CriteriaBand` side by side to pin the one contract all
- * three share — see the note on `TimelineBand`'s five effects. `RememberBand`
- * and `ConversationBand` are exported for the same reason.
- */
-export function IdeasBand({
-  slug,
-  blocks,
-  onJump,
-  onFound,
-  openKey,
-  onOpenKey,
-}: {
-  slug: string;
-  blocks: Block[];
-  onJump(id: BlockId): void;
-  onFound(found: Found[]): void;
-  openKey: string | null;
-  onOpenKey(key: string | null): void;
-}) {
-  useRenderCount("IdeasBand");
-  const ideas = useIdeas(slug);
-  const band = useIdeasMode({
-    ideas: ideas.ideas,
-    /* The artefact's own clock, which src/ideas.ts fixes at write time so the
-       palette cannot reshuffle. See `useIdeasMode`. */
-    generatedAt: ideas.ideas?.generatedAt ?? "",
-    blocks,
-    onFound,
-    openKey,
-    onOpenKey,
-    onJump,
-  });
-  return (
-    <IdeasPanel
-      access={{ kind: "owner", owner: ideas, ideas: ideas.ideas }}
-      {...band}
-      openKey={openKey}
-      onOpenKey={onOpenKey}
-      onJump={onJump}
-    />
-  );
-}
-
-/**
- * **The same panel, for somebody who does not own the article.**
- *
- * No `useIdeas` and therefore no `useJobs`: the list came in the page's own
- * payload. See `VisitorGlossaryBand` for why this is a second band and not a
- * second panel.
- */
-function VisitorIdeasBand({
-  ideas,
-  blocks,
-  onJump,
-  onFound,
-  openKey,
-  onOpenKey,
-}: {
-  ideas: PublicIdeas;
-  blocks: Block[];
-  onJump(id: BlockId): void;
-  onFound(found: Found[]): void;
-  openKey: string | null;
-  onOpenKey(key: string | null): void;
-}) {
-  useRenderCount("VisitorIdeasBand");
-  const band = useIdeasMode({
-    ideas,
-    /* **No clock, and it does not need one.** `generatedAt` seeds the tie-break
-       `assignSlots` uses to colour the ideas in a stable order, and the index
-       already breaks the tie — the artefact's timestamp is provenance the
-       public projection drops on purpose (src/public/dto.ts). What matters is
-       that every idea gets the same seed, which the empty string gives. */
-    generatedAt: "",
-    blocks,
-    onFound,
-    openKey,
-    onOpenKey,
-    onJump,
-  });
-  return (
-    <IdeasPanel
-      access={{ kind: "visitor", ideas }}
-      {...band}
-      openKey={openKey}
-      onOpenKey={onOpenKey}
-      onJump={onJump}
-    />
-  );
-}
-
-/**
- * Everything the ideas band does that is not a fetch: `?idea=`, the colour
- * slots, and the resolved passages it pushes up.
- *
- * What it pushes up is the **resolved** passages, not the stored occurrences.
- * The panel and the prose have to be showing the same set, and the only way to
- * guarantee that is for one of them to compute it and hand it to the other —
- * the same rule `SearchBand` follows. Resolution can drop occurrences (a block
- * the article no longer has), so a panel counting the stored list would say
- * "2 of 5" and step through three.
- */
-function useIdeasMode({
-  ideas,
-  generatedAt,
-  blocks,
-  onFound,
-  openKey,
-  onOpenKey,
-  onJump,
-}: {
-  ideas: { ideas: Idea[] } | null;
-  generatedAt: string;
-  blocks: Block[];
-  onFound(found: Found[]): void;
-  openKey: string | null;
-  onOpenKey(key: string | null): void;
-  onJump(id: BlockId): void;
-}) {
-  const [ideaId, setIdeaId] = useQueryState("idea", ideaParam);
-
-  /* The palette slot, assigned over **every** idea rather than only the
-     selected one, so an idea's colour does not depend on which one is open —
-     the same guarantee `assignSlots` gives saved searches, and the same reason
-     App.tsx calls it over all runs rather than the active ones.
-
-     A clock for every idea, so `inCreationOrder` walks them in the order the
-     artefact stores — which src/ideas.ts fixes at write time precisely so this
-     cannot reshuffle. Ideas have no clock of their own; the artefact's is the
-     honest stand-in, and the index breaks the tie. */
-  const slots = useMemo(() => {
-    const list = ideas?.ideas ?? [];
-    return assignSlots(list.map((idea, i) => ({ id: idea.id, createdAt: `${generatedAt}#${i}` })));
-  }, [ideas, generatedAt]);
-
-  const selected = useMemo(
-    () => ideas?.ideas.find((i) => i.id === ideaId) ?? null,
-    [ideas, ideaId],
-  );
-
-  /* Document order, so the stepper's "2 of 4" counts the way the reader moves
-     through the article rather than the order the model happened to list them. */
-  const found = useMemo(() => {
-    if (!selected) return [];
-    return orderFound(
-      resolveIdea(blocks, {
-        id: selected.id,
-        slot: slots.get(selected.id) ?? 0,
-        occurrences: selected.occurrences,
-      }),
-      "document",
-    );
-  }, [selected, blocks, slots]);
-
-  /* **`useLayoutEffect`, not `useEffect`** — a passive effect leaves one
-     paintable frame in which the panel shows the new idea and the prose still
-     marks the old one. Same reasoning, and the same pairing with an
-     unmount-only clear below, as `SearchBand`. */
-  useLayoutEffect(() => {
-    onFound(found);
-  }, [found, onFound]);
-
-  /* An open occurrence that is no longer in the list cannot stay open.
-     Regenerating mints new keys for every passage, and a re-extraction can drop
-     one — either way the row and its mark both go, while `openKey` survives and
-     the stepper reads "– / 3" over a list the reader has not left. `SearchBand`
-     has the same effect for the same reason, and it was missing here.
-     Keyed on absence from `found`, so ordinary selection changes are left
-     alone. GPT Sol, 2026-08-27. */
-  useEffect(() => {
-    if (openKey && !found.some((f) => f.key === openKey)) onOpenKey(null);
-  }, [found, openKey, onOpenKey]);
-
-  /* Standing on the first passage is the state a selected idea is *in* — and it
-     is the state whether the reader got there by pressing the row or by opening
-     a URL that already had `?idea=` in it. The jump below only fires on a press,
-     so a deep link drew three washed passages, emphasised none of them, and put
-     "– / 3" in the stepper; the reader's first press of › then took them to
-     passage two. Same bug the glossary had, fixed there by deriving rather than
-     seeding, and it reaches this panel from the other end. Browser, 2026-08-27.
-
-     **It opens without moving anybody.** A shared URL carries `?at=` too, and
-     the reader's own position in the article beats our idea of where they
-     should be looking. Only the press earns the scroll. */
-  useEffect(() => {
-    if (openKey === null && found.length > 0) onOpenKey(found[0]!.key);
-  }, [found, openKey, onOpenKey]);
-
-  /* Selecting an idea arrives at its first passage — and it has to be the first
-     one that RESOLVED, which cannot be decided in the panel: until the
-     selection changes, nothing has resolved that idea's occurrences at all.
-     So the press records an intention and this effect spends it once the list
-     exists.
-
-     A ref rather than state, so spending it does not cause a render; and
-     cleared before the jump rather than after, so a `found` that changes again
-     while the reader is reading cannot fling them back to the top. */
-  const wantsJump = useRef(false);
-  useEffect(() => {
-    if (!wantsJump.current || found.length === 0) return;
-    wantsJump.current = false;
-    const first = found[0]!;
-    /* **Open it as well as go to it.** Without this the reader is standing on
-       occurrence one — the page has scrolled there and the words are washed —
-       while the stepper reads "– / 3", and their first press of › appears to do
-       nothing because it moves them to the passage they are already looking at.
-       Found in the browser, 2026-08-27; it is exactly the kind of thing that is
-       invisible from the code, where "nothing selected yet" and "on the first"
-       are two perfectly reasonable states that happen to look identical here. */
-    onOpenKey(first.key);
-    onJump(first.blockId);
-  }, [found, onJump, onOpenKey]);
-
-  /* Unmount only, with no data dependencies: leaving the mode must take the
-     marks out of the prose with it, and folding this into the effect above
-     would clear them on every change before setting them again — one frame of
-     flicker on every keypress-equivalent. */
-  useEffect(
-    () => () => {
-      onFound([]);
-      onOpenKey(null);
-    },
-    [onFound, onOpenKey],
-  );
-
-  return {
-    ideaId,
-    onIdea: (next: string | null) => {
-      void setIdeaId(next);
-      /* A new idea means the old occurrence is meaningless — its key names an
-         idea nobody is looking at, so the stepper would read "0 / 3". */
-      onOpenKey(null);
-      /* Only on selecting, never on clearing: pressing the open idea again
-         takes the marks away, and throwing the reader down the article as it
-         does would be the opposite of what that gesture means. */
-      wantsJump.current = next !== null;
-    },
-    found,
-  };
 }
 
 /**

@@ -416,6 +416,29 @@ const UNAVAILABLE: LinkPreviewResponse = { state: "unavailable" };
 const REFUSED: LinkPreviewResponse = { state: "refused" };
 
 /**
+ * **Which sighting of a link the caller means.**
+ *
+ * A two-member union rather than an optional block id, so that "I did not say"
+ * and "I said, and it did not match" cannot arrive at `linkInArticle` looking
+ * the same — the second is a refusal and the first is not.
+ */
+export type LinkSighting = "first" | { blockId: string };
+
+/**
+ * One anchor: the row `articleLinks` reports, and the one block *this* anchor
+ * sits in.
+ *
+ * The pair travels together because they are separately wrong: `link.text` is
+ * the author's words for the destination and `blockId` is where the reader is
+ * standing, and a summary needs both to say how one stands to the other.
+ * `blockId` is always one of `link.blockIds`.
+ */
+export interface LinkOccurrence {
+  link: ArticleLink;
+  blockId: string;
+}
+
+/**
  * Does this article really point at this address?
  *
  * `articleLinks` rather than a second parse of `block.html`, and the comment on
@@ -442,27 +465,47 @@ const REFUSED: LinkPreviewResponse = { state: "refused" };
  * to the passage the reader is in (src/link-summary.ts § `readerContext`) — and
  * it costs nothing extra, because the walk was already happening.
  *
- * **First match wins, and that is a known defect rather than a nicety.** The
- * same URL linked twice in one article is ordinary — the noema essay has two
- * such pairs in sixty-two links — and hovering the *second* mention gets, and
- * caches, the paragraph the *first* one sits in. The summary is then fluent,
- * about a real relationship in this piece, and about the wrong sentence, which
- * is worse than saying nothing. Membership is unaffected: the yes/no answer is
- * the same either way.
+ * **And since 2026-09-05 it answers with *which sighting*, because "the first
+ * one" was a bug.** A destination linked twice in one article is ordinary — the
+ * noema essay has two such pairs in sixty-two links — and taking the first match
+ * meant hovering the *second* mention got, and cached, the paragraph the *first*
+ * one sits in: fluent, about a real relationship in this piece, and about the
+ * wrong sentence, which is worse than saying nothing.
  *
- * The fix is the card sending the hovered anchor's **block id**, this function
- * checking that occurrence against the target, and the id joining the summary's
- * identity so two mentions are two rows. It is a change to what the client
- * sends rather than a tweak here, which is why it is written down instead of
- * done. GPT Sol, 2026-09-05; docs/project/links.md § Two known limitations.
+ * So `at` is the question rather than a hint. `"first"` is *whichever comes
+ * first, and I am not telling you where I am* — what the membership check wants,
+ * and what a caller with no block id gets. `{ blockId }` is *this sighting and
+ * no other*: it answers `null` when the link does not occur in that block, which
+ * is a refusal at the route rather than a quiet slide back to the first
+ * paragraph. **There is deliberately no third behaviour** — an optional block id
+ * that fell back on a mismatch would put the original bug back, one call site
+ * along, and nothing would look wrong.
+ *
+ * **Two shapes, and handling only one of them is the likely mistake.**
+ * `articleLinks` dedupes on address *plus text*, so two mentions under the same
+ * words are one row with two `blockIds`, and two mentions under different words
+ * are two rows with one each. The loop below therefore searches every row for a
+ * matching `blockIds` entry rather than looking inside the first row it matches.
+ *
+ * GPT Sol, 2026-09-05, P1-1; docs/project/links.md.
  */
 export function linkInArticle(
   blocks: Parameters<typeof articleLinks>[0],
   baseUrl: string | undefined,
   target: string,
-): ArticleLink | null {
+  at: LinkSighting = "first",
+): LinkOccurrence | null {
   for (const link of articleLinks(blocks, baseUrl)) {
-    if (link.url !== null && requestTarget(link.url) === target) return link;
+    if (link.url === null || requestTarget(link.url) !== target) continue;
+    if (at === "first") {
+      /* `blockIds` is never empty — a row exists because an anchor was found in
+         a block — but `noUncheckedIndexedAccess` is right that the type does not
+         say so, and a row with no sighting is not a sighting. */
+      const [blockId] = link.blockIds;
+      if (blockId !== undefined) return { link, blockId };
+      continue;
+    }
+    if (link.blockIds.includes(at.blockId)) return { link, blockId: at.blockId };
   }
   return null;
 }
