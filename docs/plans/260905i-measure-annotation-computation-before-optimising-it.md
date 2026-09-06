@@ -512,6 +512,28 @@ works; the DOM identity property still holds. Append the result to
 [260905e](260905e-main-app-architecture-review.md) and nothing else in that file. Full gates, push
 to `dev`.
 
+## What is left, and deliberately
+
+- **A genuine change to any source still rebuilds every array of that kind.** One moved anchor
+  rebuilds every resolved array, a new `terms` rebuilds every term array, a new `Found[]` rebuilds
+  every base hit array. So *writing* a comment still re-annotates every block carrying a comment or
+  a chat — the html usually comes back identical and React is handed the object it already has, but
+  the parse is paid. The gestures made cheap are the ones that **repeat**: selection changes and
+  streamed deltas. Reconciling per anchor rather than rebuilding wholesale is the next step if a
+  workload ever asks for it; nothing measured here does.
+- **The comment-answer streaming path is untested against a real stream.** It is unreachable without
+  seeding, so Stage 1a measured the chat path instead. Stage 2 removes the case by construction and
+  there is a jsdom test for it, but no browser has driven it.
+- **The shared rendered-text cache is deferred, not disproved** — see § Where the time actually
+  goes. Five anchors decided it; a hundred-comment article might not.
+- **`Block.html` and `Article.blocks` are still mutable types**, so `byId`'s identity key and
+  `search-hits.ts`'s `pages`/`folds` WeakMaps remain sound by convention rather than by compiler.
+  Making that a type reaches into the pipeline, the stores and the server, which is a sprawl this
+  job declined.
+- **The other ~85% of the gesture is untouched**, and it is where a reader's complaint actually
+  lives. That is A8's ground: three passes still measure the whole article on every mode switch
+  ([performance.md § What is left](../project/performance.md#what-is-left-and-it-is-a-design-decision-rather-than-a-patch)).
+
 ## Reviews
 
 GPT Sol on this plan before any code, and at the end of every stage; two rounds each, then settled
@@ -595,6 +617,93 @@ limitation is real, so it is written into `annotation-cost.ts`: **`maxMs` is per
 memo maxima may come from different renders — do not add them and call the result a delta.** If a
 later job needs that number, this is the note that says what to build.
 
+### Stage 3 result, 2026-09-06 — it works, and it does not make the gesture feel faster
+
+Two builds, one browser session, one workload, as § Stage 3 requires. `c7835411` (instrument, no
+optimisation) on port 5391 against `14253086` (optimised) on 5392, **bundle hashes checked distinct**
+— `index-D9RIP3o6.js` and `index-DQQLlviO.js` — because performance.md records a day lost to
+`vite preview` serving one bundle to two ports. Population identical on both: 551 rows, 177 term
+marks (20 distinct), 17 comments, 20,352 nodes. Six repetitions, first discarded.
+
+**The call counts are the evidence, and they are deterministic** — identical on every single
+repetition on both builds, immune to the noise of a box a dozen agents share:
+
+| comment close, per gesture | before | after |
+|---|---:|---:|
+| `addZoomHandles` | **551** | **1** |
+| `annotateHtml` | **97** | **1** |
+| `renderedText` | 18 | **0** |
+| `resolveMark` | 18 | **0** |
+| attributable, median | 34.6 ms | **0.80 ms** |
+
+`renderedText` and `resolveMark` going to zero is Stage 2 step 1 working: a selection change moves no
+anchor, so nothing is re-resolved. The rest is step 2.
+
+**The glossary press proves the reuse is per-block rather than global.** Before, all six presses read
+exactly 97/551 *whichever term was pressed*. After, the count tracks how many blocks that particular
+term occurs in — 3, 24, 46, 38, 27, 11 — and never once sat at 97/551. Attributable median 22.8ms →
+10.9ms, with every matched pair improving.
+
+Controls: a find-box keystroke and a hover read 0.00ms attributable on both builds. **Those two
+numbers are now unverified**, and the reason is the same bug class again: `input.value += "x"`
+updates React's value tracker, so `onChange` very likely never fired, and hover was dispatched
+without `pointerType: "mouse"`, the only kind `useHoverCard` acts on. Both were found while fixing
+the detached-node bug and both are now driven properly. **What still stands is the conviction**,
+which never rested on the controls: it rests on gestures whose counters moved by hundreds, on the
+same page in the same session. But "the flat controls prove the page was live" was a weaker claim
+than it read as — a gesture that never reaches the app is flat too.
+
+**And the part that must not be buried: end-to-end barely moved.** Comment close 211.7ms → 198.6ms;
+the glossary median actually rose, though that compares different terms on a shared box. This is
+exactly what Stage 1a predicted — annotation was 10–14% of the gesture, this removes almost all of
+that share, and it does not touch the other ~85%. **Nobody should read this as "opening a comment got
+faster to the eye". It did not, measurably, on this box today.** What is gone is provably unnecessary
+recomputation; what remains is A8's ground.
+
+**Part 2, correctness in a real browser on the optimised build — all seven pass.** Comment marks
+underline in the right place and `data-cmt-open` lands on exactly the clicked one; pressing a second
+glossary term moves `data-term-open` off the first; a search marks 63 occurrences and one result
+takes `data-hit-open`; **overlap was found naturally rather than seeded** — one
+`<mark class="cmt term" data-comment="spya-tpgvdy" data-term="spya-vzgcap">`, a single element
+carrying both, not nested; a 1,193-character prose selection round-trips exactly; a figure's ⤢ opens
+the lightbox; and note navigation works on an article with 387 citation markers, jumping and setting
+`data-came-from` for the return.
+
+**One bug found, in the harness rather than the app**, and it is worth its paragraph because it is
+the same class as everything else this job kept tripping over. The `comment-open` gesture grabbed the
+`mark[data-comment]` element *before* clicking close — but opening and closing genuinely rewrites
+that block's html, so the close detached the node already held, and the next dispatch hit a node that
+was no longer in the document. It did nothing, cost nothing, and was recorded as a fast gesture. The
+vector was `[25.6, 0, 22.4, 0, 35.3, 0]` **on both builds**, which is how it nearly passed for a
+property of the code. Fixed, and the script now requires each gesture to declare an observable effect
+so a no-op cannot be reported as a fast one.
+
+### Stage 2 review — `260905i-stage2-review-sol.md`, verdict "accept"
+
+No established P0 or P1, and the correctness audit is the substantive part: the reviewer enumerated
+everything the injected prose html actually depends on — block html, comment/chat marks and their
+resolved offsets and open flags, term marks and the per-block `openTerm`, search marks with their
+offsets, strength, palette and open flags, and `addZoomHandles` as a pure function of the annotated
+html — and found **all of them represented** in `ProseEntry`/`sameInputs`. It separately cleared
+`anchorKey` against separator collisions (ids and block ids contain no newlines, and the quote length
+disambiguates embedded ones), cleared `byId` identity for current producers, and cleared
+`applyOpen(base, null, null) === base` as safe because every caller only reads or spreads.
+
+**The findings that mattered were about the tests, not the code**, and they were found by mutation:
+
+| ID | Sev | Finding | Settled |
+|---|---|---|---|
+| F20 | P2 | Deleting `start` from `anchorKey` left **all 9 tests green** — yet `start` is what says *which* occurrence of a repeated quote a comment is on, so losing it draws on the stale one | Regression added: repeated quote, comment moved by `start` alone, underline must move. Mutation seen red |
+| F21 | P2 | Applying hits through a **second** `annotateHtml` pass left all 9 green, though comment + term + hit then produced nested `<mark>`s | Three-way overlap now guarded at the `TableView` composition seam, including a hit arriving last onto a block already through the reuse path. Mutation seen red |
+| F22 | P2 | The identity caches' immutability was prose: mutating a `Found` in place returns stale offsets, and pushing into a returned array **permanently poisons** later results. No caller does either today | `readonly` types where it stays contained: `Found`'s own fields, `hitMarks`/`baseMarks`/`unpressed`, the private `Page`, and `TableView`'s mark arrays, `byId` and `hitMarks` prop — no edit needed in `App.tsx` or any test, and pinned by three `@ts-expect-error`s in `tests/search-hits.test.ts`. **Stopped at `Article.blocks` and `Block.html`**, which is where it leaves the client |
+| F23 | P3 | `sameInputs`' docstring overstated producer identity preservation — true for selection and streaming, false when any source genuinely changes | Comment corrected |
+
+**The two misses are the same shape as F17 one stage earlier**, and that is the pattern worth
+naming: this job has now written three test suites, and a cross-family reviewer has found a mutation
+that survives all of them **every time**. Writing the test first makes it fail for the reason you
+expected; it does not make it fail for the reasons you did not think of. Mutating the finished code
+is what finds those, and it has been worth doing every single time here.
+
 ## Log
 
 - 2026-09-05 — plan written; local corpus surveyed; GPT Sol rounds 1 and 2 both returned "do not
@@ -608,6 +717,12 @@ later job needs that number, this is the note that says what to build.
   `hitMarks` split from `openKey` so that reuse can hit. Nine new tests in
   `tests/annotation-reuse.test.tsx`, four of them watched red first. Browser A/B (Stage 3) not yet
   run, so **no reader-visible number is claimed yet.**
+- 2026-09-06 (later) — Stage 2 built, reviewed and accepted; Stage 3's A/B confirms it by
+  deterministic call counts (`addZoomHandles` 551→1, `annotateHtml` 97→1 on a comment close) and all
+  seven browser correctness checks pass. End-to-end moved ~6%, which is what a 10–14% share predicts,
+  and the write-up says so rather than implying the click is fixed. Stage 2's review found two
+  mutations the tests missed; both closed. A harness bug that recorded a no-op gesture as a fast one
+  is fixed. Postmortem written on the pattern.
 - 2026-09-06 — the instrument landed (`src/web/annotation-cost.ts`, three modes, six sites). Stage 1a
   measured on a production build: **attributable annotation is ~30ms median per gesture on 551
   blocks, 3–4× over the 8ms threshold — optimise.** Stage 1b skipped. The breakdown cut Stage 2 from
