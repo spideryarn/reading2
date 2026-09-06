@@ -273,6 +273,27 @@
    * has to move with it.
    */
   --hint-h: 0px;
+
+  /**
+   * **How much room the way-back chip takes at the bottom left**, and 0 when
+   * there is no chip — `--hint-h`'s arrangement, for the same reason: only the
+   * thing that is drawn knows whether it is drawn, and only a variable can tell
+   * the rest of the furniture.
+   *
+   * It exists so the offline strip can stand above the chip rather than over
+   * it. **Room, not height**, and the difference cost a browser check: the
+   * chip's own `bottom` stands it 0.75rem off the edge below, so a strip given
+   * only the chip's 2.5rem still clipped the top 7px of the button — measured
+   * at both 390px and 1280px, since it is arithmetic rather than a wrapping
+   * artefact. Counting the gap here rather than in the strip's rule keeps the
+   * no-chip case exactly as it was.
+   *
+   * The number is a constant because the chip is deliberately one truncating
+   * line — 2rem of button, `.install-hint-close`'s floor, plus its own padding
+   * and border — so unlike the strip it cannot grow when the window narrows.
+   * Set beside the chip's own rule, below.
+   */
+  --return-chip-h: 0px;
 }
 
 * { box-sizing: border-box; }

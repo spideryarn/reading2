@@ -112,22 +112,42 @@ export function activeSectionIndex(tops: number[], line: number): number {
 }
 
 /**
- * **The section a block sits inside** — that section's own first block, which
- * is the id the address uses for it.
+ * **Which section a block sits inside**, as an index into `sections`.
  *
  * `rowOf` is the article's block → row index. A block it does not know is not a
  * position we can place, and the answer is `null` rather than a guess: an id
- * the article no longer has must not pin the reader's position forever.
+ * the article no longer has must not pin the reader's position forever — nor,
+ * since 2026-09-06, name a section on the return chip (ReturnChip.tsx).
+ *
+ * Split out of `sectionContaining` below because its two callers want different
+ * things out of the same walk: the spy wants the section's **first block**,
+ * which is how the address spells it, and the chip wants its **title**, which
+ * is the only part of it a reader recognises. One walk, so the two cannot come
+ * to disagree about which section a block is in.
+ */
+export function sectionIndexContaining(
+  sections: readonly Section[],
+  rowOf: ReadonlyMap<BlockId, number>,
+  blockId: BlockId | null,
+): number | null {
+  if (blockId === null) return null;
+  const row = rowOf.get(blockId);
+  if (row === undefined) return null;
+  const index = activeSectionIndex(sections.map((s) => s.row), row);
+  return sections[index] === undefined ? null : index;
+}
+
+/**
+ * **The section a block sits inside** — that section's own first block, which
+ * is the id the address uses for it.
  */
 export function sectionContaining(
   sections: Section[],
   rowOf: ReadonlyMap<BlockId, number>,
   blockId: BlockId | null,
 ): BlockId | null {
-  if (blockId === null) return null;
-  const row = rowOf.get(blockId);
-  if (row === undefined) return null;
-  return sections[activeSectionIndex(sections.map((s) => s.row), row)]?.blockId ?? null;
+  const index = sectionIndexContaining(sections, rowOf, blockId);
+  return index === null ? null : sections[index]?.blockId ?? null;
 }
 
 /**

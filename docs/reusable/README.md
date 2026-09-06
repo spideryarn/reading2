@@ -38,6 +38,7 @@ inventing a process.
 | [long-waits.md](long-waits.md) | waiting hours rather than minutes — which mechanism survives what, and the two that outlive the session |
 | [gjd-remote.md](gjd-remote.md) | driving the always-on box — the commands you actually type, and what bites when you run it from a repo that has never heard of it ([hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md) is the whole of it) |
 | [count-lines-in-a-repo.md](count-lines-in-a-repo.md) | making "how big is this thing" a command rather than an argument — take the file list from git, categorise by purpose, and the four ways cloc goes quiet |
+| [find-big-files.md](find-big-files.md) | "which files are biggest, and should we worry" — rank by code rather than lines, then size × churn × braiding, because a long file nobody touches costs nothing |
 | [diagnose-box-resources.md](diagnose-box-resources.md) | a shared box is slow, or something got OOM-killed — measure, attribute, and add swap without disrupting anyone |
 
 ## Traps, before you meet them

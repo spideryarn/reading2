@@ -51,47 +51,87 @@
    two disclaimers beside it give up. */
 .dbt-searched { color: var(--ink-soft); font-weight: 600; }
 
-/* The two groups. A heavier rule between them than between two rows, because
-   "pages about this piece" and "pages about what it claims" are two different
-   questions rather than two parts of one list — the same call § timeline mode
-   makes between what happened and what is merely expected. */
-.dbt-group { margin: 0; padding: 0.5rem 0 0; }
-.dbt-group + .dbt-group {
-  margin-top: 0.7rem;
-  border-top: 1px solid var(--rule-strong);
-}
-.dbt-group > h3 {
-  /* Sticky, so *which of the two searches am I reading* survives scrolling —
-     docs/reusable/css-sticky-containing-block.md for the case where this
-     silently does nothing. */
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-  margin: 0;
-  padding: 0.35rem 0 0.2rem;
-  background: var(--panel);
+/* **There are no group headings, and that is the design** (DebatePanel.tsx §
+   One list). Two searches run, but which of them a row came from is our
+   epistemics rather than the reader's question, and drawn as two headed
+   sections it produced two headings, two blurbs, an empty-state paragraph and
+   two foot lines stacked over zero rows. `.dbt-mark` below is what replaced
+   them: the label moved onto the row, where it can say something per row that a
+   heading could only say per section. */
+
+/* **The lead sentence is drawn like an answer, not like a gap.** Finding no
+   page that responds to a piece is this mode's commonest correct output, so it
+   gets the ordinary quiet ink and ordinary padding — dimming it further, or
+   setting it in italics as an aside, would teach the reader that the honest
+   answer is a failure. */
+.dbt-empty { padding: 0.4rem 0 0.7rem; font-size: 0.86rem; line-height: 1.45; }
+
+/* **The row's own label**, carrying what the two headings used to. It is a
+   chip rather than a line of text so it reads as a property of the row at a
+   glance, and it sits between the host and the title because it answers *why
+   is this here*, which a reader asks before they read a title.
+
+   **The three identification levels are drawn identically**, and that is a
+   decision this file must not quietly undo. They are ordered — a link is
+   stronger than a title — but colouring them along that order would be a scale,
+   and a scale over one fact is precisely the composite this mode refused
+   (docs/project/quotes.md). The order is in the threshold, where the reader
+   sets it; on the row it is a name.
+
+   The claim chip is the one that differs, because it is a different *kind* of
+   thing rather than a weaker one: dotted where the others are solid, the same
+   distinction `.dbt-claim` draws against `.dbt-quote` two rules down. */
+.dbt-mark-line { margin: 0.3rem 0 0; }
+.dbt-mark {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.08rem 0.4rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: none;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.77rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.dbt-group > h3 > .gloss-count { margin-left: auto; letter-spacing: 0; }
-.dbt-blurb {
-  margin: 0.15rem 0 0.4rem;
+/* A button, because it opens a card — and it does nothing on press, which is
+   what `help` says. Same affordance as the ⓘ at the end of the row above it. */
+button.dbt-mark { cursor: help; }
+button.dbt-mark:hover { color: var(--ink); border-color: var(--ink-faint); }
+button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.dbt-mark-claim {
+  border-style: dotted;
+  border-color: var(--rule);
   color: var(--ink-faint);
-  font-size: 0.79rem;
-  line-height: 1.35;
 }
-/* **The empty sentence is drawn like an answer, not like a gap.** Group one
-   being empty is this mode's commonest correct output, so it gets the ordinary
-   quiet ink and ordinary padding — dimming it further, or setting it in italics
-   as an aside, would teach the reader that the honest answer is a failure. */
-.dbt-empty { padding: 0.2rem 0 0.6rem; font-size: 0.86rem; line-height: 1.45; }
+
+/* The card behind the chip: every signal found, one to a line. Narrow like the
+   ⓘ card next door, and for the same reason — the band it hangs off is 288px at
+   its narrowest (`MODE_MIN` in layout.ts). */
+.tooltip.dbt-mark-card { max-width: 21rem; }
+.dbt-mark-card-head {
+  display: block;
+  margin: 0 0 0.35rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.dbt-mark-card-list {
+  margin: 0;
+  padding: 0 0 0 1rem;
+  color: var(--ink);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.dbt-mark-card-list li + li { margin-top: 0.3rem; }
+/* A URL in a signal is the evidence itself, so it wraps rather than truncating:
+   half an address is not one. */
+.dbt-mark-card-list li { overflow-wrap: anywhere; }
 
 .dbt-list { margin: 0; padding: 0; list-style: none; }
 .dbt-item { padding: 0.55rem 0; border-top: 1px solid var(--rule); }
@@ -268,10 +308,12 @@
   line-height: 1.4;
 }
 
-/* The two foot lines under each group — what the model offered against what
-   survived, and what the search returned against what got into the answer.
-   Modelled on `.quotes-discarded`, and quiet for the same reason: this is
-   provenance, not an error. */
+/* The foot lines under the one list — what each search offered against what
+   survived, and what each returned against what got into the answer. Up to four
+   sentences, because the two searches keep their own numbers (DebatePanel.tsx §
+   `footLines` has the reason they cannot be summed). Modelled on
+   `.quotes-discarded`, and quiet for the same reason: this is provenance, not an
+   error. */
 .dbt-foot {
   margin: 0.5rem 0 0;
   padding: 0.4rem 0 0;

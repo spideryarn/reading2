@@ -521,6 +521,21 @@ landed at `npm run typecheck` rather than at runtime. `NO_LOSSES` and `COUNTS` a
 `DebateLosses` and `DebateCounts` rather than inferred, so the next added field is one error at the
 declaration instead of one at every use.
 
+### The third merge, an hour later — and the argument for doing it often
+
+21 more commits and another 202 insertions / 39 deletions, in the hour between committing the second
+merge and pushing it. That is the whole case for Greg's instruction to pull on every wake-up, and
+the numbers make it concrete: **37 hunks after five hours, 5 hunks after one.** The work is roughly
+linear in elapsed time, and the *risk* is not — a five-hunk merge is one where each placement can be
+checked by eye, and a thirty-seven-hunk one is where a mistake hides.
+
+Same method, and by now it is machinery rather than a judgement call: resolve `styles.css` back to
+its 65 lines, build the oracle, place each hunk by trying it against all 37 sheets, require exactly
+one to accept. All five unambiguous this time — `tokens.css`, `dock.css` ×2, `debate.css` ×2 — and
+the merge-2 manual override was deliberately cleared rather than carried forward, since a stale
+override is a hand-placed hunk that stops being examined. Arithmetic again: base 16,003 + ours 65 +
+theirs 163 = **16,231**, and the sheets concatenate to exactly that.
+
 ### Stage 5 — the docs, 2026-09-06
 
 83 references to `styles.css` found across `docs/`; **53 repointed** at the sheet that now owns the
@@ -651,6 +666,31 @@ to check each finding yourself:
 F18's fix also needed `aimed-column.test.ts` moved to the jsdom environment, which broke its
 `new URL(…, import.meta.url)` reads — jsdom hands back an `http` `import.meta.url` — so those
 became cwd-relative, matching the sibling style tests.
+
+#### `npm run check:staged-revert` cannot read a merge, and says so as four false positives
+
+Worth knowing before somebody trusts it or "fixes" what it reports. Run mid-merge, it flagged
+`scripts/deploy.ts` as *"staged content is exactly what this path held before 1481e19"* and three
+files as *"staged for DELETION though HEAD still has it"*, plus a wall of
+`fatal: path … exists on disk, but not in <sha>^`.
+
+Every one of them was **origin/dev's own deliberate work arriving** — `219c4bc1` "Retire the
+SPIDERYARN_STORE tombstone, and the sensor that watched for it" removes `src/store/live.ts` and two
+tests and takes `deploy.ts` back to its pre-Stage-F content. Verified before believing it:
+`git cat-file -e origin/dev:src/store/live.ts` fails, and `git log origin/dev -- src/store/live.ts`
+names the commit.
+
+The guard's premise is the *"commit your own files by name"* flow, where the index should differ
+from `HEAD` only by your own edits. During a merge the index legitimately holds someone else's
+whole branch, so "this content is older than `HEAD`" stops meaning "somebody's work is being
+quietly undone" and starts meaning "the branch you are merging decided to go back". Its verdict is
+sound and its interpretation does not survive the context.
+
+Not fixed here, and not written into
+[version-control.md](../project/version-control.md) either — that file's wording is a rule, so it
+goes through [edit-important-docs.md](../reusable/edit-important-docs.md) rather than being
+amended in passing. The suggestion for Greg is one line in the script: if `MERGE_HEAD` exists, say
+which findings are incoming rather than staged.
 
 ### Round 2, on the code — [260906d-code-review-round2-sol.md](260906d-code-review-round2-sol.md)
 
