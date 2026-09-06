@@ -284,3 +284,61 @@ Nothing here touches `EXPAND_SYSTEM` in `src/hierarchy-expand.ts`, which has **n
 all** (plan § P1-5). Whichever variant wins needs the same block there, or the deepening cascade
 produces depth-1 rows with no question — which is invisible while the question is a faint second
 line and obvious the moment it becomes the only one.
+
+---
+
+## The shipped GISTS block, toc/6
+
+**Copied out of `src/hierarchy.ts` § SYSTEM, verbatim** — the block the `toc/6` bump added a
+per-depth length ceiling to (root at most 18 words, depth 1 at most 25, deeper 22–32), plus the
+no-meta-narration rule and *"where a shorter, commoner word loses nothing, use it"*.
+
+It is copied rather than sliced live because the arm that carries it has to stay put while
+`src/hierarchy.ts` moves on; `tests/summaries-eval.test.ts` asserts the copy is
+character-for-character what production sends today, so a drift is a red test rather than a
+measurement of something we do not ship.
+
+```
+GISTS (internal nodes)
+
+- Exactly ONE sentence. This is what the reader sees at the zoom level above.
+- It must be a CLAIM or a MOVE, not a topic label.
+- Write a parent's gist from its children, not from the raw text.
+- LENGTH RUNS THE OPPOSITE WAY TO WHAT YOU WOULD EXPECT. The coarser the node,
+  the SHORTER its gist. Budgets, and they are ceilings rather than targets:
+    - the root: AT MOST 18 words. It is the shelf blurb — the one claim the
+      piece makes, shorter than any chapter's gist.
+    - depth 1: AT MOST 25 words.
+    - deeper than that: 22-32 words, and use them. This is the level a reader
+      reads INSTEAD of the paragraphs under it, so it can afford a subordinate
+      clause the root cannot.
+  A root that runs "X stems from A and B, so we should C while reaffirming D" is
+  four gists wearing one full stop. Pick the claim they add up to and stop there.
+- No empty meta-narration: never "the essay opens by", "the essay closes by
+  urging", "this section explores", "the author then turns to", "then", "next",
+  "goes on to". Say what the section CLAIMS; do not narrate that it is claiming.
+- Keep the article's own words for the things it names — those are the reader's
+  handholds — and ordinary words for everything else. Where a shorter, commoner
+  word loses nothing, use it. A gist is read at a glance and has to land first
+  time: plainer than the article, never further from it.
+```
+
+---
+
+## The shipped GISTS block, toc/5
+
+**The same block as it stood before the `toc/6` bump** — the *before* half of the length
+measurement, recovered from `git show <the toc/5 commit>:src/hierarchy.ts`. It is the prompt that
+produced the 1,239 stored gists whose mean ran 28.8 words at the root and 14.9 at depth 3: one
+instruction (*"Exactly ONE sentence"*) at every depth, and no ceiling anywhere.
+
+```
+GISTS (internal nodes)
+
+- Exactly ONE sentence. This is what the reader sees at the zoom level above.
+- It must be a CLAIM or a MOVE, not a topic label.
+- Write a parent's gist from its children, not from the raw text.
+- Keep the article's own words for the things it names — those are the reader's
+  handholds — and ordinary words for everything else. A gist is read at a glance
+  and has to land first time: plainer than the article, never further from it.
+```
