@@ -70,30 +70,27 @@ function relativeImportsOf(css: string): string[] {
 }
 
 /**
- * **The only files allowed to import a sheet.** Everything else is a leaf, and
- * `walk()` throws if it is not — the constraint that makes the walk's output
- * equal the cascade rather than merely resemble it.
+ * **The 37 sheets the split created, which are leaves and must stay leaves.**
  *
- * Each one writes every relative import **above its own rules**, which is what
- * makes emitting an importer after the sheets it names correct. That invariant
- * is the price of admission here: check it before adding a fourth, and prefer
- * not adding one at all.
+ * Each is a contiguous slice of what was one 15,489-line file, and none imports
+ * anything. A relative `@import` appearing in one of them is the hazard `walk()`
+ * describes: a second, invisible load order underneath the one `styles.css`
+ * exists to show, which is the thing that file was split up to prevent
+ * (`tests/styles-entry-is-imports-only.test.ts`).
  *
- * - `src/web/tailwind.css` — one relative import, `./styles.css layer(app)`,
- *   with its own `@layer base` blocks below it.
- * - `src/web/styles.css` — nothing but imports;
- *   `tests/styles-entry-is-imports-only.test.ts` keeps it that way.
- * - `styles/tokens.css` — the brand palette, which pulls in its own
- *   `./colourscales.css` at the top before defining anything. **GPT Sol's
- *   review missed this one** and said the tree had no nested imports at all.
+ * Deliberately **not** a ban on nested imports generally. The repo-root
+ * `styles/tokens.css` imports `./colourscales.css`, that chain predates all of
+ * this, and `allSheets()` must go on resolving it —
+ * design-css-overview.md's load-order table, rows 4 and 5. GPT Sol's review said
+ * the tree had no nested imports at all; it has that one.
  */
-const IMPORTERS = new Set([ENTRY, READER_ROOT, "styles/tokens.css"]);
+const LEAF_DIR = "src/web/styles/";
 
 /**
  * Depth-first from `start`, following relative `@import`s, yielding each sheet
- * in **cascade order** — which this can only do because the graph is two levels
- * deep and has no repeats, and because it now **fails loudly** rather than
- * quietly guessing when either stops being true.
+ * in **cascade order** — which this can only do because the graph has no repeats
+ * and no importer below `styles.css`, and because it now **fails loudly** rather
+ * than quietly guessing when either stops being true.
  *
  * **It used to guess, and it guessed wrong.** It emitted every child before its
  * parent with one global `seen` set, so a sheet came out at the FIRST place
@@ -102,21 +99,28 @@ const IMPORTERS = new Set([ENTRY, READER_ROOT, "styles/tokens.css"]);
  * green while this helper hoisted Spine above Table and threw away the
  * manifest's own later Spine import — and the real build, which inlines
  * positionally, emitted Spine twice. The concatenation every migrated test
- * greps was in an order the browser never sees. The docblock above this file
+ * greps was in an order the browser never sees, and this file's own header
  * claimed cascade order throughout.
  *
- * **So the allowlist rather than the model.** Modelling nested imports properly
+ * **Two constraints rather than a model.** Modelling nested imports properly
  * means emitting source *chunks* at each import position and keeping a separate
  * active-recursion set for cycles — more machinery, for a shape this tree does
- * not have and does not want. A sheet under `src/web/styles/` importing a
- * sibling would put a second, invisible load order underneath the one
- * `styles.css` exists to show, which is the thing that file was split up to
- * prevent (`tests/styles-entry-is-imports-only.test.ts`). Make it an error and
- * the guess never has to be made: `IMPORTERS` above names the three files that
- * may import, and each of them puts its imports above its own rules, so
- * emitting the importer after them is right.
+ * not have and does not want. Instead:
  *
- * Cycles cannot arise: an importer only ever names leaves.
+ *   1. **no relative import inside `src/web/styles/`** (`LEAF_DIR` above), the
+ *      hazard Sol demonstrated and the one place a sheet has no business
+ *      importing anything;
+ *   2. **no file visited twice**, anywhere, because the build would emit it
+ *      twice and this walk can only emit it once.
+ *
+ * What that leaves is a chain of importers — `tailwind.css` →
+ * `src/web/styles.css` → `styles/tokens.css` → `colourscales.css` — and every
+ * one of them writes its imports **above its own rules**, so emitting an
+ * importer after the sheets it names is right. That last part is an invariant
+ * this walk relies on rather than checks; the files are three, and each says so
+ * in its own header.
+ *
+ * Cycles cannot arise while (2) holds: the second visit throws instead.
  */
 function walk(start: string): Sheet[] {
   const out: Sheet[] = [];
@@ -127,8 +131,8 @@ function walk(start: string): Sheet[] {
       throw new Error(
         `${rel} is imported twice (most recently by ${importedBy}). The build inlines each ` +
           "@import where it is written, so a second import emits the whole sheet a second " +
-          "time, later in the cascade — a real duplicate in the bundle, not a no-op. Import " +
-          `each sheet exactly once, from ${READER_ROOT}.`,
+          "time, later in the cascade — a real duplicate in the bundle, not a no-op, and this " +
+          "helper can only put it in one place. Import each sheet exactly once.",
       );
     }
     seen.add(rel);
@@ -141,22 +145,22 @@ function walk(start: string): Sheet[] {
     }
     const css = readFileSync(abs, "utf8");
     const imports = relativeImportsOf(css);
-    if (imports.length > 0 && !IMPORTERS.has(rel)) {
+    if (imports.length > 0 && rel.startsWith(LEAF_DIR)) {
       throw new Error(
-        `${rel} has a relative @import (${imports.join(", ")}), and only ` +
-          `${[...IMPORTERS].join(", ")} may have one. A sheet that imports a sibling ` +
-          "creates a second load order underneath the one styles.css exists to show, and this " +
-          "helper — which every migrated CSS test reads — cannot represent it. Import the " +
-          `sheet from ${READER_ROOT}, at the position it belongs in the cascade.`,
+        `${rel} has a relative @import (${imports.join(", ")}), and a sheet under ${LEAF_DIR} ` +
+          `may not have one. Those 37 files are leaves: ${READER_ROOT} is the single visible ` +
+          "statement of what loads in what order, and an import down here puts a second order " +
+          "underneath it that nobody reading that file can see — the build would inline the " +
+          "sheet at BOTH positions. Import it from " +
+          `${READER_ROOT} instead, at the position it belongs in the cascade. (The nested ` +
+          "import in the repo-root styles/tokens.css is a different thing and is fine.)",
       );
     }
     for (const id of imports) {
       visit(path.posix.normalize(path.posix.join(path.posix.dirname(rel), id)), rel);
     }
-    /* The importer last. Both manifest files carry imports and no cascading
-       rules of their own — bar `tailwind.css`'s `@layer base` blocks, which are
-       ordered by layer rather than by position, so nothing here can put them
-       wrong. */
+    /* The importer last, which is right because every importer in this tree
+       writes its imports above its own rules — see the note above. */
     out.push({ path: rel, css });
   };
 
