@@ -51,6 +51,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `run` | which saved meaning-search is showing, absent for the list of them | **replace** | `?run=spya-p7w2dn` |
 | `order` | how the results list is stacked: `document`, `confidence` or `prioritised` | push | `?order=confidence` |
 | `conf` | the bar the search results' `prioritised` order hides under, 0–100, in the unit the rows print. No default: absent means untouched | replace, debounced | `?conf=65` |
+| `name` | the bar debate mode's group-one rows hide under — **the word, not a number**: `named`, `quoted` or `linked`, the name of the strongest evidence that a page is about this piece. **Absent means nobody has touched it**, which the panel reads as `DEBATE_LEVEL_DEFAULT` ([`debate-levels.ts`](../../src/web/debate-levels.ts)); rows answering what the article *claims* carry no level and are never under it | **replace** | `?name=linked` |
 | `deep` | how far down the tree summary mode goes: `0` the article, `1` the parts, `2` the sections | push | `?deep=2` |
 | `diagram` | which of the five pictures diagram mode is drawing, absent for the default `sketch` — [diagram.md](diagram.md) | push | `?diagram=trail` |
 | `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
@@ -248,6 +249,14 @@ links are unaffected — they all say what they want — and a glossary whose sc
 prioritising falls back to `document` in the panel without touching the URL. See
 [glossary.md § Prioritised, which is now the default](glossary.md#prioritised-which-is-now-the-default).
 
+**`?name=` is the only threshold that carries a word**, and that is a decision rather than a shortcut.
+The other three sit on scores, so a number is the fact itself; debate's sits on the *name of the
+strongest evidence* a page gave that it is about this piece — a link, a quotation, a title — and there
+is a rank inside the panel only because `applyThreshold` needs one. Putting that rank in the URL would
+be our arithmetic dressed as a measurement, which is the composite the feature refused
+([260906b § 2](../plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md)). A word also needs
+none of `snapToStop`'s machinery: it is a stop or it is nothing, and anything else reads as untouched.
+
 **`?gate=`, `?bar=` and `?conf=` are deliberately left without parser defaults**, which is the same
 call `?cols=` makes and for a related reason. Each carries the threshold its mode hides under, and
 the panel — not the parser — resolves an absent one to its own starting constant. Giving them
@@ -258,7 +267,8 @@ asked for and one that simply arrived
 ([glossary.md § The threshold, and whose it is](glossary.md#the-threshold-and-whose-it-is)). All
 three replace rather than push, and are debounced, for the reason `?at=` and `?find=` are: a range
 input writes on every pixel of a drag, and Back should undo the decision that got you here rather
-than the drag.
+than the drag. **`?name=` makes the same call about the default and, alone, is not debounced**: it
+has three stops, so a drag across the whole track writes twice and there is nothing to rate-limit.
 
 `?term=` is in the URL for a reason worth stating: **a selected term underlines every one of its
 occurrences in the prose**, so "the article as I am currently looking at it" is not fully described

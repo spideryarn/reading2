@@ -29,7 +29,9 @@
  * `popstate` for everything else. One query string, one listener.
  */
 import { createParser, debounce } from "nuqs";
+import type { IdentificationLevel } from "../types.js";
 import { isSpideryarnId } from "../ids.js";
+import { isIdentificationLevel } from "./debate-levels.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import type { ScatterAxis, ScatterHue } from "./scatter.js";
 import { DEFAULT_BY } from "./library-columns.js";
@@ -1102,6 +1104,44 @@ export const rememberParam = createParser<RememberView>({
 })
   .withDefault("recall")
   .withOptions({ history: "push" });
+
+/* --------------------------------------------------------------- debate -- */
+
+/**
+ * **How firmly a page has to identify this article to stay on Debate's list** —
+ * `?name=named`, `?name=quoted` or `?name=linked`.
+ *
+ * The fourth threshold in the app and the first categorical one, and that is the
+ * only thing about it that is new. `?gate=`, `?bar=` and `?conf=` all carry a
+ * number because the fact under them is a score; the fact under this one is
+ * **the name of the strongest evidence found** that a page is about this piece —
+ * it links the address, it quotes the article's own words, or it names the title
+ * — so the word is what a link carries. There is a rank inside the panel,
+ * because `applyThreshold` needs one, and it is deliberately not in the URL: a
+ * number here would be our arithmetic dressed as a measurement, which is the
+ * composite this whole feature refused
+ * (docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md § 2).
+ *
+ * **A word needs none of what `?bar=` needs.** `snapToStop` exists because a
+ * hand-written `?bar=0.63` lands between two real scores and the thumb and the
+ * list then disagree about where the bar is (`QuotesPanel.tsx`). A word is a
+ * stop or it is nothing, so an unrecognised `?name=` parses to `null` — which is
+ * the same thing an absent one means, *nobody has touched it*, resolved by the
+ * panel to `DEBATE_LEVEL_DEFAULT`.
+ *
+ * **No parser default, deliberately**, the call `?gate=`, `?bar=` and `?conf=`
+ * all make: the constant stays in one file, and *the reader chose the default*
+ * stays distinguishable from *the reader chose nothing*, which is what the
+ * slider's reset button is drawn from.
+ *
+ * `replace` and **not debounced**: there are three stops, so a drag writes at
+ * most twice and there is nothing to rate-limit — but Back should still undo the
+ * `?mode=debate` that got you here rather than a step of the slider.
+ */
+export const nameParam = createParser<IdentificationLevel>({
+  parse: (v) => (isIdentificationLevel(v) ? v : null),
+  serialize: (v) => v,
+}).withOptions({ history: "replace" });
 
 /**
  * **Which criteria are painting the prose** — `?crits=a,b` and `?crits=none`.

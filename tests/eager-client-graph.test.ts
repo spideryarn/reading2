@@ -431,7 +431,7 @@ const ROUTE_PRIVATE = [
  * `lucide-react` are recorded as external and never enter either closure — this
  * list is about *this repo's* modules, not about node_modules.
  *
- * Sorted, one per line, so a diff reads as a decision. 45 of them on
+ * Sorted, one per line, so a diff reads as a decision. 48 of them on
  * 2026-09-06, against a 264-file eager closure and a 51-file route closure.
  */
 const SHARED_WITH_READER = [
@@ -473,6 +473,21 @@ const SHARED_WITH_READER = [
   "src/web/build-stamp.ts",
   "src/web/components/ui/button.tsx",
   "src/web/components/ui/toggle.tsx",
+  /* Arrived 2026-09-06 with debate's `?name=` bar, by the *first* of the two
+     zero-cost routes this list's header predicts, and it is the same shape as
+     `referee-views.ts` below: a categorical URL parameter needs its vocabulary
+     in one place, so `params.ts` — already here — imports it, and `params.ts` is
+     in both closures. The reader downloaded it already, through
+     `DebatePanel.tsx`; what is new is only that the lazy routes reach it.
+
+     **`threshold.ts` follows it in**, which is this list's second predicted
+     case: a module here gaining an import of its own. It is the one threshold
+     rule Glossary, Quotes and Search already share, so it has been in the
+     reader's eager closure since long before this — three eager panels import
+     it — and nothing about the admin closure reaching it costs a byte. Keeping
+     it out would mean splitting the ordering from the filtering it exists to
+     drive, which is the seam this module was made to close. */
+  "src/web/debate-levels.ts",
   "src/web/diagram.ts",
   "src/web/lib/DataTable.tsx",
   "src/web/lib/api.ts",
@@ -490,6 +505,8 @@ const SHARED_WITH_READER = [
   "src/web/referee-views.ts",
   "src/web/relative-time.ts",
   "src/web/router.ts",
+  /* See `debate-levels.ts` above, which is what brought it here. */
+  "src/web/threshold.ts",
   "src/web/useNow.ts",
 ];
 

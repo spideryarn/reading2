@@ -566,9 +566,68 @@ the URL state. **Default hides `named`-only rows**, and the default is re-measur
 `writes` or Carr loses a verified reply at it, the default moves and that is a product fact worth
 recording here.
 
-**Done:** `?name` round-trips, `hiddenNote` says what is held back, the decoy's six rows are hidden by
-default and reachable by dragging, and the re-measurement is written into this doc whichever way it
-comes out.
+**Done — landed 2026-09-06.** `src/web/debate-levels.ts` (the three stops, the rank, the default and
+the one pass), `nameParam` in params.ts, `NameBar` in the panel, `?name=` in `REMEMBERED`.
+`src/web/threshold.ts` was reused **unchanged** and expressed this without a complaint: the rank
+accessor is the only new thing, and it never leaves the module that defines it.
+
+**The re-measurement, and it did not move the default.** Layer 1 replay over the three journals, with
+`identificationLevel` read off every kept direct row:
+
+| article | direct rows kept | levels | at the default (`quoted`) |
+|---|---|---|---|
+| `writes` | 1 of 2 reported | `quoted`+`named` — hamtyped's rebuttal, 22.3% coverage | **kept** |
+| `cargocult-spya-rz663q` | 0 of 2 reported | — | nothing to hide |
+| `claudes-constitution-spya-cr8bzk` | 1 of 6 reported | `named` — Lawfare, on the 2026 document | **hidden** |
+
+So **no genuine reply loses its row at the default**, and the one row it hides is precisely the false
+positive § "The corpus" identified. The other direction is refuted by the same table: a default of
+`linked` would hide hamtyped's rebuttal, which quotes the essay at length and simply does not link it,
+and that is a verified reply. `named` — hide nothing — leaves the decoy. **`quoted` is the only one of
+the three the corpus permits.** Carr is not in this measurement because that article still needs an
+ingest and has no journal; `writes` and Cargo Cult are the two the brief named as decisive.
+
+**One correction, worth keeping.** The expectation was that *the constitution's six rows are all hidden
+at the default*. Six is what the model **reported**; production's rules cut them to **one kept row**,
+which § "The corpus" above already says (*"the rules cut six to one, so one false positive reached the
+kept set"*). What the bar hides there is one row, not six — the other five never reached the panel.
+
+**Three sentences changed that the stage did not set out to change, each because the bar made an
+existing one false:**
+
+- **`keptNote` says *were kept*, not *are shown*.** It is arithmetic about the run, and the reader now
+  has a control that decides what is shown: *"4 are shown"* over two rows is the
+  count-disagrees-with-the-list failure `threshold.ts` names, arriving through the one sentence on this
+  panel whose job is to be trustworthy about numbers.
+- **`sourcesNote` is handed the rows the bar left**, because it ends *"contribute to the rows shown"*.
+  Leaving it on the whole group would have kept the figure looking right while the words went false.
+- **The head count counts the rows on screen**, so it moves with the bar — which is most of the answer
+  to the *"two numbers both called pages"* finding below.
+
+**The third empty state stays silent, and that is confirmed rather than assumed.** `leadNote` fires on
+the artefact's own row count, so a group emptied by the reader's own threshold says nothing extra and
+`hiddenNote` is the only sentence about it — checked in a browser, and in
+`tests/debate-panel.test.tsx` § *"says nothing extra when the bar has hidden every response"* with the
+genuinely-empty group as its positive control.
+
+**The three counts on one screen — answered rather than deferred.** The panel can now show *pages* in
+the head, *responses hidden* at the bar, and *pages returned* in the lead and foot lines. They stay
+three facts said in three places with **two** nouns rather than three: the head and the searches both
+count pages, correctly, and `sourcesNote` is the bridge between them (*returned evidence from N pages;
+M contribute to the rows shown*) now that it moves with the bar. The bar counts **rows**, not pages, so
+it uses the word the lead sentence already uses for what a direct row is — a page that *responds* to
+this piece — and says *"2 responses are hidden by this threshold"*.
+
+**What the browser showed** (a fixture with four direct rows — one `quoted`, one `linked`, two
+`named`-only — and two claim rows): at the default, four rows, *quotes it · 2 of 4*, and *"2 responses
+are hidden by this threshold"*; one stop left, six rows, *names it · 4 of 4*, *"Nothing is hidden"*, and
+`?name=named` in the address; `?name=linked` opened cold puts the thumb on the third stop with one
+direct row and both claim rows; `?name=sideways` opens at the default. Screenshots in the session's
+scratchpad, `p3-1-default.png`, `p3-2-dragged-left.png`, `p3-3-name-linked.png`.
+
+**Mutations, all caught.** The bar ignored → 12 tests; the rank order inverted → 16, including the two
+that pin the track against the strength order; claim rows let into the bar's count → 4, the ones that
+put a `0 of 1` over a list of three rows.
 
 **Then the obligatory Sol review**, on all three commits together.
 
@@ -780,6 +839,9 @@ article being read here"* — and on the decoy the alternative is six wrong rows
 each, which a first-time reader takes for reception. Hidden rows say so through the existing
 `hiddenNote`, unchanged. **The default is re-measured on the corpus**: if `writes` or Carr lose a
 verified reply at it, the default moves, and that is a product fact worth knowing.
+
+**Measured 2026-09-06, and it stays at `quoted`** — no genuine reply loses its row, `linked` would lose
+one, and the table is in § Stage P above.
 
 ### 1 — combine them, because the empty section was the symptom
 

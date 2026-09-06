@@ -14586,6 +14586,67 @@ td.text.kind-heading .blk-gutter[data-open] {
    two disclaimers beside it give up. */
 .dbt-searched { color: var(--ink-soft); font-weight: 600; }
 
+/* ---- the debate panel's identification bar ----
+   How firmly a page has to identify this article to stay on the list
+   (DebatePanel.tsx § NameBar). Deliberately the same rules as `.gloss-gate`,
+   `.srch-gate` and `.quotes-bar` above — one idea in the reader's hands, one
+   look, whichever band it is in — and grouped by selector rather than merged
+   into one class for the reason recorded there: the four panels' paddings differ
+   and always have.
+
+   The one visual difference is the value, which is **words rather than a
+   number**, so it is not mono: a proportional face is what stops
+   *"quotes it · 2 of 3"* reading as a reading off an instrument. The count after
+   it is short enough to live in the same run of text. */
+.dbt-bar {
+  padding: 0.4rem 0.7rem 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+.dbt-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.dbt-bar-label {
+  color: var(--ink-faint);
+  font-size: 0.83rem;
+  text-transform: lowercase;
+}
+.dbt-bar-value {
+  margin-left: auto;
+  color: var(--ink-soft);
+  font-size: 0.79rem;
+  white-space: nowrap;
+}
+.dbt-bar-reset {
+  display: flex;
+  align-items: center;
+  padding: 0.1rem;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.dbt-bar-reset:hover { color: var(--ink); }
+.dbt-bar-reset:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.dbt-bar-range {
+  display: block;
+  width: 100%;
+  margin: 0.3rem 0 0;
+  accent-color: var(--highlight);
+  cursor: pointer;
+}
+.dbt-bar-range:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+/* Said in words, because a bar that is hiding every response looks exactly like
+   a search that found none — which on this panel is a real and common answer,
+   and the one thing it must never be confused with. */
+.dbt-bar-note {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.81rem;
+  line-height: 1.35;
+}
+
 /* **There are no group headings, and that is the design** (DebatePanel.tsx §
    One list). Two searches run, but which of them a row came from is our
    epistemics rather than the reader's question, and drawn as two headed

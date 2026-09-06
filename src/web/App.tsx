@@ -155,6 +155,7 @@ import {
   REFEREE_VIEWS,
   type RefereeView,
   rememberParam,
+  nameParam,
   barParam,
   eventParam,
   termParam,
@@ -4770,7 +4771,18 @@ const NO_QUOTES: Quote[] = [];
 function DebateBand({ slug, onJump }: { slug: string; onJump(id: BlockId): void }) {
   useRenderCount("DebateBand");
   const debate = useDebate(slug);
-  return <DebatePanel access={{ kind: "owner", owner: debate }} onJump={onJump} />;
+  /* Null is "nobody has touched the bar", which the panel resolves to
+     `DEBATE_LEVEL_DEFAULT` — the same shape as `?bar=` in `QuotesBand`, so the
+     default stays one word in one file. See `nameParam` in params.ts. */
+  const [level, setLevel] = useQueryState("name", nameParam);
+  return (
+    <DebatePanel
+      access={{ kind: "owner", owner: debate }}
+      onJump={onJump}
+      level={level}
+      onLevel={setLevel}
+    />
+  );
 }
 
 /**
