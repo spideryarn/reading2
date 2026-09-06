@@ -52,7 +52,9 @@ Three commitments separate this from the summariser it superficially resembles:
 
 ## What exists today
 
-This is an experiment, not a product: no users, no accounts, one process. One bet on one idea —
+This is an experiment first and a product second — but it is a real one now, with accounts, a beta
+gate, billing, and paying readers since 2026-09-03. The readership is small and knows what it signed
+up for, so we still optimise for how fast we can move. One bet on one idea —
 granularity zoom — plus the reading assistants the same block-id spine makes cheap. Select a
 sentence and the model explains it, researching the web when it needs to
 ([comments.md](docs/project/comments.md)). A glossary of the terms the piece uses in a non-obvious
@@ -78,15 +80,28 @@ where that one is broad.
 
 ## Running it
 
+You need **Node 26**, **Docker running**, and an **OpenRouter API key**. Nothing else — no Supabase
+account, no Google credentials, no keys on anybody's dashboard.
+
 ```bash
 npm install
 cp .env.example .env.local     # add an OPENROUTER_API_KEY
+npm run db:start               # Docker; first run pulls ~2 GB of images
+npm run db:status              # copy its two keys into .env.local — see below
+npm run setup                  # migrations, an account, and a shelf with something on it
+npm run db:admin-password      # the password for dev-admin@spideryarn.local
 npm run dev                    # http://localhost:5273
 ```
 
-That opens the library at `/`, with a committed example article so a fresh clone has something to
-read. Everything else — the per-stage pipeline commands, which model does which job, what each
-secret is for — is in [setup-dev.md](docs/project/setup-dev.md).
+**The database has to be up before `npm run setup`**, because seeding the account needs keys that do
+not exist until the stack has started. `npm run setup` refuses rather than guessing if you skip it.
+
+That opens the library at `/` once you sign in, with a few seeded articles so a fresh clone has
+something to read. **The ordering matters and the reasons are worth two minutes** —
+[setup-dev.md § Quickstart](docs/project/setup-dev.md#quickstart) has these same commands with a
+"did it work?" check after each and a table of what the failures mean. Everything else — the
+per-stage pipeline commands, which model does which job, what each secret is for — is in the rest of
+that file.
 
 ```bash
 npm test          # vitest
@@ -114,6 +129,15 @@ it. Start there. The handful worth naming here:
 per bug worth understanding; `docs/research/` the options weighed behind a decision. None of them
 are indexed — list the folder and read the file names.
 
+**And three tutorials**, self-contained HTML explainers written for somebody who knows the product
+and has never opened the code. Open them in a browser rather than reading the source:
+
+| Tutorial | What it explains |
+|---|---|
+| [architecture.html](docs/tutorials/architecture.html) | **start here** — the whole system: the fifteen pipeline steps, the block id everything hangs off, the revision swap, and the request path |
+| [import-pipeline-and-database.html](docs/tutorials/import-pipeline-and-database.html) | the same pipeline one level deeper, with the job lifecycle and how it fails |
+| [revisions-and-the-schema.html](docs/tutorials/revisions-and-the-schema.html) | what a revision carries, and the four refusals that stop a bad draft publishing |
+
 ## The one contract that matters
 
 Every block of the article gets a **stable id** (`spya-k3m9qt`), and every feature — Hierarchy, summaries,
@@ -122,6 +146,39 @@ or CSS selector. Ids are minted once and preserved on every later run, so they s
 
 The format, the reasoning, and the one way to get range checks silently wrong are in
 [block-ids.md](docs/project/block-ids.md). Read it before touching anything that resolves an id.
+
+## Contributing
+
+Contributions are welcome, and the most useful one is not code.
+
+**The easiest and best way to help is the Feedback button**, top-right of the reading view once you
+are signed in. A really well-described bug report or feature request — what you were doing, what you
+expected, what happened instead, and *why it mattered to your reading* — **feeds directly into the
+product-building pipeline**. Reports are stored, triaged, and worked through in batches, with a note
+kept under [`docs/user-feedback/`](docs/user-feedback/) and the reasoning written down
+([feedback-reports.md](docs/project/feedback-reports.md) is the process;
+[260904b](docs/plans/260904b-address-user-feedback-reports-batch.md) is what one batch looks like).
+Nothing here has produced more change per minute spent than a precisely-described report.
+
+**And if you want to write code, I'd love to work with you.** Get in touch first at
+**hello@spideryarn.com** — say what you want to build and we'll work out whether it fits, which
+saves you building something the vision doc rules out
+([vision.md § Anti-goals](docs/project/vision.md#anti-goals) is worth a read either way).
+[setup-dev.md](docs/project/setup-dev.md) takes an empty checkout to a running app, and
+[docs/tutorials/architecture.html](docs/tutorials/architecture.html) explains how the whole thing
+works to somebody who has never opened the code.
+
+**One unusual condition on pull requests.** If you built it with an AI agent — and most of this repo
+was — include the prompts and the conversation alongside the diff. Greg, 2026-09-06:
+
+> If someone wants to submit a pull request, they have to also include the prompts/conversation with
+> their agents that helped them build it, so I can understand their intent/approach.
+
+Paste them into the PR description, or add them as a file under `docs/plans/`. This is not a
+formality: in a codebase where the code is cheap and the *intent* is the scarce thing, the
+conversation is the part that says what you were trying to do and what you decided not to do — which
+is exactly what a reviewer needs and a diff never shows. It is the same reason every piece of work
+here keeps a plan doc.
 
 ## Working here
 
