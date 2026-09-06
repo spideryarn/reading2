@@ -504,6 +504,35 @@ says, how long it will take — and keeps the blurb. **The table is a comparison
 stands against the rest of the shelf — and gives the blurb up for six columns you can run your eye
 down. Neither is a fallback for the other.
 
+**The toggle is a radio group**, not two toggle buttons, and each half carries a card rather than a
+`title` — both since 2026-09-06
+([260906g](../plans/260906g-the-shelf-table-is-ugly-because-the-reading-view-s-css-leaks-into-it.md)).
+Exactly one view is always chosen, which is what the APG's radio pattern is for and what
+`aria-pressed` cannot say; tabs would be wrong too, because these two paint *one* list rather than
+switching between panels of content. Radix's `RadioGroup` brings the roving tabindex and the arrow
+keys — note that it moves focus in a `setTimeout` and the focus is what selects, so a synchronous
+test of the arrow keys sees nothing and reads exactly like a control that has none.
+
+### The table shows fifty, and then asks
+
+> the table should by default only show the top 50? or so Articles, with a button at the bottom to
+> show all. Eventually we might consider paging, but probably that's overkill for now
+>
+> — Greg, 2026-09-06
+
+So: fifty rows and a **"Show all 213 articles"** button, the count in the label rather than in a
+caption — the page already prints one count when the search or the Unread chip is narrowing, and two
+counts meaning different things is worse than either. The cap lives in
+[`Library.tsx`](../../src/web/Library.tsx), sliced after both `sinkLast` passes, **not** in
+`DataTable` — the cap is caller policy, and `DataTable`'s other consumer is `/admin`'s list of
+accounts, which cannot use a label about articles. `expanded` is component state on the page rather
+than in the table, so switching to cards and back does not quietly reset it. The cards view is
+uncapped.
+
+Not pagination and not infinite scroll: NN/g's framing is that infinite scroll suits homogeneous
+feeds with no particular goal, and hurts anything you need to *find or return to*. A shelf is the
+second kind.
+
 ### The shelf's resting state
 
 **Last opened, most recent first** — since 2026-08-27, on Greg's instruction. It was **Added**,
