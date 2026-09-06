@@ -26,7 +26,7 @@
  * guard by picking a name it does not cover, and it turns the guard into
  * something that has to be re-read every time a route is added. Don't.
  *
- * ## Why an owner's picture arrives as a `blob:` and a visitor's does not
+ * ## Why every picture arrives as a `blob:`, whoever is asking
  *
  * **A plain `<img src="/api/asset/…">` 401s.** Authentication here is an
  * `Authorization: Bearer` header (lib/api.ts § A header rather than a cookie)
@@ -37,9 +37,35 @@
  * the third, as `IllustratedView.tsx` does for a plate.
  *
  * A **visitor** has no token to attach and could not use the authenticated
- * route at all, so their pictures come from `/api/public/asset/…` — a plain URL
- * in the `src`, which is also the cheaper answer, since the browser streams it
- * rather than our holding the whole image in memory.
+ * route at all, so their bytes come from `/api/public/asset/…` through
+ * `publicFetch` (public-api.ts) rather than `apiFetch`. **What they do not get
+ * is that URL in the `src`.** Until 2026-09-06 they did, and it was the cheaper
+ * answer on paper — the browser streams it rather than our holding the image in
+ * memory — but it also meant the visitor's branch never looked at a response.
+ * A 404 after the owner un-shared the piece, a 500 from a dangling blob, or a
+ * dropped connection therefore left an `<img>` with fixed `width`/`height` over
+ * a request that failed: a large blank rectangle with a broken-image glyph in
+ * it, exactly where this file's own contract below promises a caption and
+ * nothing else. An owner never saw it, because their branch inserts only after
+ * a fetch succeeds. GPT Sol, D-1.
+ *
+ * So the two footings now differ in **one expression** — which fetcher, and
+ * which path — and agree on everything after it. Two costs, named rather than
+ * discovered:
+ *
+ *  - **the bytes are held**, up to `MAX_ARTICLE_FIGURE_BYTES`
+ *    (src/collect-pdf-figures.ts) in the pathological case and about 5 MB on the
+ *    worst real paper we hold. That is what an owner has always paid;
+ *  - **a visitor's figures are now fetched before the prose draws**, because
+ *    this is awaited on the load path. If that ever bites, the answer is to stop
+ *    awaiting it — not to put an unverified URL back in the `src`, which is the
+ *    bug above.
+ *
+ * The alternative considered and rejected: keep the streamed URL and preload it
+ * with `new Image()` + `decode()`. It blocks for exactly as long, and it costs
+ * **two** fetches rather than one, because the public route answers `no-store`
+ * (src/public/routes.ts § `sendBytes`) so nothing is cached between the check
+ * and the `<img>`.
  *
  * ## Attributes only, never text
  *
@@ -76,6 +102,7 @@ import { assetPath, publicAssetPath } from "../asset-delivery.js";
 import { RESERVED_ATTRS } from "../reserved.js";
 import type { Article } from "../types.js";
 import { apiFetch } from "./lib/api.js";
+import { publicFetch } from "./public-api.js";
 
 /** A figure whose bytes we really hold — the only kind that gets an `<img>`. */
 type StoredFigure = Extract<PdfFigureEntry, { status: "stored" }>;
@@ -112,15 +139,41 @@ export type RehostFooting = "owned" | "public";
  */
 let minted: string[] = [];
 
+/**
+ * The load this module is currently fetching for, so the one before it can be
+ * dropped.
+ *
+ * A reader who clicks through three articles in four seconds starts three loads
+ * and looks at one. Without this the other two go on downloading figures and go
+ * on minting object URLs — after `releasePrevious` has already run for them, so
+ * nothing will ever revoke those. That is the half of the leak a `releasePrevious`
+ * in the right place does not reach. GPT Sol, D-2.
+ */
+let inFlight: AbortController | null = null;
+
 function mint(blob: Blob): string {
   const url = URL.createObjectURL(blob);
   minted.push(url);
   return url;
 }
 
-function releasePrevious(): void {
+/**
+ * Hand the previous load's blobs back and stop its fetches; return the signal
+ * this load is to be cancelled by in turn.
+ *
+ * **Called before anything can return early**, which is the whole of the fix:
+ * `releasePrevious` used to sit after the `wanted.size === 0` guard, so leaving
+ * an owned PDF for an *ordinary article* — or an old PDF with no manifest, or
+ * one whose figures all failed — kept every previous blob alive for the rest of
+ * the session. The common case, in other words, was the leaking one, and it
+ * leaked precisely because the code path it took did nothing.
+ */
+function beginLoad(): AbortSignal {
+  inFlight?.abort();
   for (const url of minted) URL.revokeObjectURL(url);
   minted = [];
+  inFlight = new AbortController();
+  return inFlight.signal;
 }
 
 /**
@@ -241,13 +294,14 @@ function cssEscape(value: string): string {
  * Returns the **same article object** when there is nothing to do, which is
  * every article that did not come from a PDF and every article ingested before
  * the figures step existed. That is the common case and it costs one property
- * read.
+ * read — **but it is no longer a case that returns before doing anything**, and
+ * that is deliberate: `beginLoad` runs first, because leaving a PDF for an
+ * ordinary article is exactly when the last article's blobs must go.
  *
  * **Awaited on the load path**, so the reader never sees a figure pop in after
- * the prose has settled. For a visitor that costs nothing at all — the `src` is
- * a URL and the browser fetches it whenever it likes — and for an owner it
- * costs one parallel round of fetches, eight of them on the article this was
- * built for.
+ * the prose has settled. One parallel round of fetches, eight of them on the
+ * article this was built for, and since 2026-09-06 for a visitor as well as an
+ * owner — see the header for the bug that bought and what it cost.
  *
  * **A figure whose bytes will not load is left exactly as it was**: an empty
  * `<figure>` with its caption. Not an error state and not a message, because the
@@ -262,11 +316,15 @@ export async function rehostImages(
   slug: string,
   footing: RehostFooting,
 ): Promise<Article> {
+  /* **First line, before any early return.** See `beginLoad`: every path out of
+     this function is a path where the previous article's blobs have to go, and
+     the path that returns soonest is the commonest one. */
+  const signal = beginLoad();
+
   const wanted = figuresToDraw(article);
   if (wanted.size === 0) return article;
 
-  releasePrevious();
-  const srcs = await sourcesFor(slug, footing, wanted);
+  const srcs = await sourcesFor(slug, footing, wanted, signal);
   if (srcs.size === 0) return article;
 
   const srcFor = (ref: string) => srcs.get(ref) ?? null;
@@ -326,40 +384,46 @@ function storedFigures(assets: Assets | undefined): Map<string, StoredFigure> {
 /**
  * Where each figure's bytes can be reached from, given who is asking.
  *
- * A visitor's answer is a URL and costs nothing; an owner's is a fetch, and
- * they go out together rather than one after another — eight sequential round
- * trips is a visible pause before the article draws, and eight parallel ones is
- * not.
+ * The fetches go out together rather than one after another — eight sequential
+ * round trips is a visible pause before the article draws, and eight parallel
+ * ones is not.
  *
  * `Promise.allSettled` and not `all`: one figure that fails to load must not
- * take the other seven off the page with it.
+ * take the other seven off the page with it. **A `ref` absent from the map is
+ * how a failure is spelled**, which is what leaves that figure caption-only —
+ * the promise in this module's header, and until 2026-09-06 a promise only the
+ * owner's branch kept.
  */
 async function sourcesFor(
   slug: string,
   footing: RehostFooting,
   wanted: Map<string, StoredFigure>,
+  signal: AbortSignal,
 ): Promise<Map<string, StoredSrc>> {
   const srcs = new Map<string, StoredSrc>();
 
-  if (footing === "public") {
-    for (const [ref, entry] of wanted) {
-      srcs.set(ref, {
-        src: publicAssetPath(slug, entry.sha256, entry.ext),
-        width: entry.width,
-        height: entry.height,
-      });
-    }
-    return srcs;
-  }
-
   await Promise.allSettled(
     [...wanted].map(async ([ref, entry]) => {
-      const res = await apiFetch(assetPath(slug, entry.sha256, entry.ext));
+      /* The one expression the two footings differ in. A visitor has no token,
+         so `publicFetch` and not `apiFetch` — public-api.ts says why that is a
+         bare `fetch` and not the authenticated one, and the answer is the same
+         reason this branch exists at all. */
+      const res =
+        footing === "public"
+          ? await publicFetch(publicAssetPath(slug, entry.sha256, entry.ext), signal)
+          : await apiFetch(assetPath(slug, entry.sha256, entry.ext), { signal });
       /* `res.ok` before `blob()`: an error body is perfectly good bytes, and
          without this the reader gets a picture of a JSON error message.
          IllustratedView.tsx § `usePlateBytes` learned that one. */
       if (!res.ok) throw new Error(`figure ${entry.sha256} did not load (${res.status})`);
-      srcs.set(ref, { src: mint(await res.blob()), width: entry.width, height: entry.height });
+      const blob = await res.blob();
+      /* **Superseded while the bytes were arriving.** `beginLoad` has already
+         revoked this load's URLs and there will be no second sweep, so minting
+         now would create an object URL nothing can ever revoke — the leak an
+         `AbortController` alone does not close, because a response that had
+         already arrived is not cancelled by aborting the request. */
+      if (signal.aborted) return;
+      srcs.set(ref, { src: mint(blob), width: entry.width, height: entry.height });
     }),
   );
   return srcs;

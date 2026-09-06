@@ -30,7 +30,9 @@ are the first kind to flow through them.
   owner.
 - [`src/web/rehost.ts`](../../src/web/rehost.ts) — the rewrite, in the browser, **after**
   `sanitizeArticle`. It has to be after: `stripOwnApiUrls` deletes any `src` resolving to our own
-  API, deliberately.
+  API, deliberately. **Both footings fetch the bytes and put a `blob:` in the `src`** — an owner
+  because an `<img>` cannot carry a bearer token, a visitor because a `src` nobody checked is a
+  broken rectangle when the answer is a 404. The file's header has the trade that buys and its cost.
 
 **What is switched on is PDF figures and nothing else.** Greg's sequencing, 2026-09-06: build the
 mechanism generic, land it PDF-only, prove it, then flip the article's own images on — which is stage

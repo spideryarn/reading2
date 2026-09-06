@@ -36,7 +36,7 @@ import path from "node:path";
 import { and, eq, like, lt } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import type { Assets, PdfFigureEntry } from "../src/assets.js";
+import type { AssetEntry, Assets, PdfFigureEntry } from "../src/assets.js";
 import type { Verifier } from "../src/auth.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, blockIdentities, revisionBlocks } from "../src/db/schema.js";
@@ -182,6 +182,26 @@ function png(width: number, height: number): Uint8Array {
 }
 
 /**
+ * A real JPEG header — SOI, a JFIF APP0, and an SOF0 carrying the dimensions.
+ *
+ * **A second extension is a fixture requirement, not decoration.** Without one,
+ * the "404s the right hash under the wrong extension" case below cannot tell the
+ * correct rule — hash *and* extension matched on the **same manifest entry** —
+ * from a wrong one that asked whether the hash exists anywhere and the extension
+ * exists anywhere, because with a single `.png` entry both implementations
+ * refuse. GPT Sol, D-5.
+ */
+function jpeg(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array([
+    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
+    0x00, 0x01, 0x00, 0x00,
+    /* SOF0: marker, length 17, 8-bit precision, then height and width. */
+    0xff, 0xc0, 0x00, 0x11, 0x08, height >> 8, height & 0xff, width >> 8, width & 0xff, 0x03,
+  ]);
+  return bytes;
+}
+
+/**
  * A well-formed figure ref, exactly as `pdfFigureMarkerValue` spells one
  * (src/assets.ts): a version tag, thirty-two hex digits, the page and the
  * ordinal.
@@ -190,14 +210,24 @@ function refFor(seed: string, page: number): string {
   return `pf1-${seed.replace(/-/g, "").slice(0, 32)}.${page}.1`;
 }
 
-/** The manifest one article's revision carries. */
-function manifest(entries: PdfFigureEntry[]): Assets {
+/**
+ * The manifest one article's revision carries — **both collections**.
+ *
+ * `entries` used to be `[]` in every fixture here, which meant deleting the
+ * generic web-image half of `storedAssetFor` (src/asset-delivery.ts) would have
+ * left this whole file green: the route claims to be about *an article's
+ * images*, and every test only ever asked it about PDF figures. GPT Sol, D-5.
+ * Article A now carries one of each, so the two halves are exercised
+ * separately, and stage E turning web images on is a change this file has
+ * already tried.
+ */
+function manifest(figures: PdfFigureEntry[], entries: AssetEntry[] = []): Assets {
   return {
     version: "assets/2",
     sourceHash: "not-what-this-file-is-about",
     fetchedAt: new Date().toISOString(),
-    entries: [],
-    pdfFigures: entries,
+    entries,
+    pdfFigures: figures,
   };
 }
 
@@ -232,7 +262,30 @@ const B: Fixture = {
  */
 const FAILED_REF = refFor(randomUUID(), 9);
 
-async function seed(who: Fixture, figures: PdfFigureEntry[]): Promise<void> {
+/**
+ * **Article A's own `<img src>`**, in `Assets.entries` rather than `pdfFigures`,
+ * and stored as a **JPEG** — the second collection and the second extension in
+ * one fixture, because it is asked to isolate two different claims:
+ *
+ *  - the route really does search `entries` as well as `pdfFigures`. Deleting
+ *    that half of `storedAssetFor` used to pass every test in this file;
+ *  - `.jpeg` genuinely exists in A's manifest, so `A.sha256` under `.jpeg` being
+ *    a 404 means *hash and extension on the same entry* rather than merely
+ *    *this article has no JPEGs*.
+ *
+ * GPT Sol, D-5, 2026-09-06.
+ */
+const WEB = {
+  url: "https://example.test/prose/diagram.jpeg",
+  bytes: jpeg(640, 480),
+  sha256: "",
+};
+
+async function seed(
+  who: Fixture,
+  figures: PdfFigureEntry[],
+  entries: AssetEntry[] = [],
+): Promise<void> {
   const db = getDb();
   await db.insert(articles).values({
     id: who.articleId,
@@ -248,7 +301,7 @@ async function seed(who: Fixture, figures: PdfFigureEntry[]): Promise<void> {
     title: "An article made from a PDF",
     finalUrl: `https://example.test/${who.slug}`,
     stampedHtml: `<article><p data-spya-id="${who.blockId}">a paragraph</p></article>`,
-    assets: manifest(figures),
+    assets: manifest(figures, entries),
   });
   await db.update(articles).set({ currentRevisionId: who.revisionId }).where(eq(articles.id, who.articleId));
   await db.insert(blockIdentities).values({ articleId: who.articleId, blockId: who.blockId });
@@ -296,13 +349,19 @@ async function sweepAbandoned(): Promise<void> {
   }
 }
 
-/** Put one figure's bytes in the bucket under the name the manifest will use. */
-async function store(who: Fixture): Promise<PdfFigureEntry> {
+/** Bytes into the bucket under their own hash; the hash back. */
+async function put(bytes: Uint8Array, ext: "png" | "jpeg"): Promise<string> {
   const { createHash } = await import("node:crypto");
   const { blobStore } = await import("../src/store/blobs.js");
   const { canonicalKey } = await import("../src/source.js");
-  who.sha256 = createHash("sha256").update(who.bytes).digest("hex");
-  await blobStore().putIfAbsent(canonicalKey(who.sha256, "png"), who.bytes, "image/png");
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  await blobStore().putIfAbsent(canonicalKey(sha256, ext), bytes, `image/${ext}`);
+  return sha256;
+}
+
+/** Put one figure's bytes in the bucket under the name the manifest will use. */
+async function store(who: Fixture): Promise<PdfFigureEntry> {
+  who.sha256 = await put(who.bytes, "png");
   return {
     ref: who.ref,
     page: 3,
@@ -322,11 +381,32 @@ describe("the article-asset routes", { timeout: 30_000 }, () => {
     await sweepAbandoned();
     const figureA = await store(A);
     const figureB = await store(B);
+    WEB.sha256 = await put(WEB.bytes, "jpeg");
     expect(A.sha256, "the two figures must differ").not.toBe(B.sha256);
-    await seed(A, [
-      figureA,
-      { ref: FAILED_REF, page: 9, status: "failed", reason: "no-raster", at: new Date().toISOString() },
-    ]);
+    expect(WEB.sha256, "the web image must be a third object").not.toBe(A.sha256);
+    await seed(
+      A,
+      [
+        figureA,
+        {
+          ref: FAILED_REF,
+          page: 9,
+          status: "failed",
+          reason: "no-raster",
+          at: new Date().toISOString(),
+        },
+      ],
+      [
+        {
+          url: WEB.url,
+          status: "stored",
+          sha256: WEB.sha256,
+          ext: "jpeg",
+          contentType: "image/jpeg",
+          bytes: WEB.bytes.byteLength,
+        },
+      ],
+    );
     await seed(B, [figureB]);
   });
 
@@ -356,13 +436,39 @@ describe("the article-asset routes", { timeout: 30_000 }, () => {
   });
 
   /**
+   * **The route is about an article's images, not about PDF figures**, and until
+   * 2026-09-06 nothing here said so: every fixture left `Assets.entries` empty,
+   * so deleting the generic half of `storedAssetFor` (src/asset-delivery.ts)
+   * passed the whole file. The claim in that module's header — *"stage E turns
+   * the first on, and when it does, this file needs no edit at all"* — was
+   * unchecked. It is checked now. GPT Sol, D-5.
+   */
+  it("hands the owner an image out of the manifest's other collection", async () => {
+    const sent = await get(`/api/asset/${A.slug}/${WEB.sha256}.jpeg`);
+    expect(sent.status).toBe(200);
+    expect(Buffer.from(WEB.bytes).equals(sent.body)).toBe(true);
+    expect(sent.headers["content-type"]).toBe("image/jpeg");
+  });
+
+  /**
    * **The case this file exists for.** The object is in the bucket, the URL is
    * well-formed, the caller owns *both* articles — and article A's manifest
    * does not name it, so it is a 404.
    *
-   * This is the assertion that would go red if `sendArticleAsset` ever built
-   * its key from the path instead of from the entry it found. Everything else
-   * in this file would stay green.
+   * **What this proves, exactly**, because the commentary here used to claim
+   * more than it earned (GPT Sol, D-5): it proves the route consults *this*
+   * article's manifest before it touches storage — the security property, and
+   * the one that would go red if the lookup were widened to the bucket or to
+   * another article's manifest.
+   *
+   * It does **not** separately pin `canonicalKey(found.sha256, found.ext)`
+   * against `canonicalKey(hash, ext)` in `sendArticleAsset`, and no runtime test
+   * can: past an exact-match lookup those two pairs are equal by construction,
+   * so the substitution is unobservable. What refuses it is the **compiler** —
+   * `hash` and `ext` arrive off a URL as `string`, `canonicalKey` takes a
+   * `StoredKind` (src/source.ts), and only the entry's own `ext` is one. That is
+   * a stronger guarantee than a test would have been, and it is written down
+   * here because it is not visible from the call site.
    */
   it("404s a hash the article's own manifest does not name, even for the owner", async () => {
     const sent = await get(`/api/asset/${A.slug}/${B.sha256}.png`);
@@ -381,10 +487,20 @@ describe("the article-asset routes", { timeout: 30_000 }, () => {
    * **The extension has to match the record**, for `sendPlate`'s reason: the
    * URL is a promise about the bytes exactly as the storage key is, so a
    * `.jpeg` URL must never serve a PNG.
+   *
+   * **And it has to match on the *same entry*.** A's manifest now holds a real
+   * `.jpeg` — the web image above — as well as this `.png`, so a lookup that
+   * asked *is this hash somewhere, and is this extension somewhere* would serve
+   * these bytes under the wrong name. With a single-entry fixture the two
+   * implementations were indistinguishable and this test proved only that A had
+   * no JPEGs. GPT Sol, D-5.
    */
-  it("404s the right hash under the wrong extension", async () => {
+  it("404s the right hash under the wrong extension, even when that extension is in the manifest", async () => {
     const sent = await get(`/api/asset/${A.slug}/${A.sha256}.jpeg`);
     expect(sent.status).toBe(404);
+    /* The premise, asserted rather than assumed: without a stored `.jpeg` in
+       this article the assertion above is vacuous. */
+    expect((await get(`/api/asset/${A.slug}/${WEB.sha256}.jpeg`)).status).toBe(200);
   });
 
   /** A reader who owns nothing gets the same 404 every article route gives. */
@@ -445,6 +561,45 @@ describe("the article-asset routes", { timeout: 30_000 }, () => {
     const sent = await getAnonymously(`/api/public/asset/${B.slug}/${A.sha256}.png`);
     expect(sent.status).toBe(404);
     expect(Buffer.from(A.bytes).equals(sent.body)).toBe(false);
+  });
+
+  /**
+   * **Un-sharing takes effect on the next request, and this is the only test
+   * that can tell.** GPT Sol, D-3, 2026-09-06.
+   *
+   * The implementation is right — `loadAsset` re-issues
+   * `publicCurrentRevisionQuery` on every call, and that query's own SQL carries
+   * `visibility = 'public'` (src/store/public-reader.ts). But the two tests above
+   * seed one **permanently** public article and one **permanently** private one,
+   * so they cannot distinguish *asked afresh* from *asked once and remembered*:
+   * memoising the projection, or caching the entitlement per slug or per
+   * process, would have left this whole file green.
+   *
+   * That distinction is the entire reason this route answers `no-store` rather
+   * than the owner's year-long `immutable`. A shared cache is not the risk —
+   * `no-store` handles that — the risk is us, one refactor from now, deciding
+   * that an article's public projection is worth keeping in a `Map`.
+   *
+   * So: the **same slug**, fetched successfully, un-shared, fetched again. The
+   * restore is in a `finally` because every public assertion in this file is
+   * standing on B being shared, and a failure here must not take them with it.
+   */
+  it("stops serving a picture the moment its article is un-shared", async () => {
+    const url = `/api/public/asset/${B.slug}/${B.sha256}.png`;
+    expect((await getAnonymously(url)).status).toBe(200);
+
+    const db = getDb();
+    await db.update(articles).set({ visibility: "private" }).where(eq(articles.id, B.articleId));
+    try {
+      const after = await getAnonymously(url);
+      expect(after.status).toBe(404);
+      expect(Buffer.from(B.bytes).equals(after.body)).toBe(false);
+    } finally {
+      await db.update(articles).set({ visibility: "public" }).where(eq(articles.id, B.articleId));
+    }
+    /* And back again, which is what makes the 404 above a fact about the
+       visibility column rather than about anything else that request touched. */
+    expect((await getAnonymously(url)).status).toBe(200);
   });
 
   /**

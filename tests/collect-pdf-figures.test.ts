@@ -333,6 +333,47 @@ describe("the step's own deadline", () => {
     await new Promise((resolve) => setTimeout(resolve, 1_000));
     expect(blobs.objects.size).toBe(0);
   }, 30_000);
+
+  /**
+   * **The snapshot was one field short of complete.** GPT Sol, D-4, 2026-09-06.
+   *
+   * `entries` is built synchronously after the race and the counters are copied
+   * by value, so both were already safe. `storageErrors` was handed out **by
+   * reference** — and `storeOne`'s `catch` pushes into it, so a `put` that
+   * rejected after the race had been won reached into an array the caller was
+   * already holding, minutes after the run it describes had returned. Nothing
+   * throws and nothing is logged: a manifest simply grows a complaint about a
+   * figure it had already finalised as `out-of-time`.
+   *
+   * The fixture is deterministic rather than timed: the fake bucket takes the
+   * run away from underneath itself the instant the `put` is reached, so this
+   * cannot flake on a busy box the way a `budgetMs` chosen to land inside an
+   * encode would.
+   */
+  it("hands back a storage-error list that a straggler cannot grow", async () => {
+    const blobs = fakeBlobs();
+    const stop = new AbortController();
+    const put: { reject: ((err: Error) => void) | null } = { reject: null };
+    blobs.putIfAbsent = () =>
+      new Promise<PutResult>((_, reject) => {
+        put.reject = reject;
+        stop.abort();
+      });
+
+    const run = await collectPdfFigures({
+      markers: [marker(3)],
+      pdf: await bytes(HARDER),
+      blobs,
+      signal: stop.signal,
+    });
+    expect(put.reject, "the put has to have been reached, or this proves nothing").not.toBeNull();
+    expect(run.storageErrors).toEqual([]);
+
+    /* The bucket answers at last, long after anybody stopped waiting. */
+    put.reject?.(new Error("Storage put failed (503)"));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(run.storageErrors).toEqual([]);
+  }, 60_000);
 });
 
 /* ------------------------------------------------------------------ *

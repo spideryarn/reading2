@@ -391,7 +391,16 @@ export async function collectPdfFigures(
     failed: book.failed,
     deduped: book.deduped,
     bytes: book.bytes,
-    storageErrors: book.storageErrors,
+    /* **A copy, not `book.storageErrors` itself**, which is the same sentence
+       the entries loop above makes and the one place it was not being said.
+       `storeOne`'s `catch` pushes into this array, and a `put` that rejects
+       *after* the race has been won still reaches that line — so handing the
+       ledger's own array out let a straggler mutate an object the caller was
+       already holding, minutes after the run it describes had returned. The
+       numbers beside it are safe for free, being copied by value; an array is
+       the one field in this object where "returned" and "finished" are not the
+       same thing. GPT Sol, D-4, 2026-09-06. */
+    storageErrors: [...book.storageErrors],
     elapsedMs: Date.now() - startedAt,
   };
 }

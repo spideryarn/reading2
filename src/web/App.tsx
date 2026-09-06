@@ -912,9 +912,11 @@ async function resolveAccess(slug: string, signedIn: boolean): Promise<ArticleAc
      **On both branches**, for `sanitizeArticle`'s own reason: a shared article
      is the same extracted HTML through a different projection, and a visitor
      looking at eight blank figures is the reported bug with the audience we
-     invited. What differs is only how the bytes are reached — a token and a
-     `blob:` for an owner, `/api/public/asset/…` for a visitor — which is the
-     `footing` argument and nothing else. */
+     invited. What differs is only how the bytes are reached — `apiFetch` with a
+     token on `/api/asset/…` for an owner, a bare `publicFetch` on
+     `/api/public/asset/…` for a visitor — which is the `footing` argument and
+     nothing else. Both end in a `blob:`, and rehost.ts § Why every picture
+     arrives as a `blob:` says what changed on 2026-09-06 and why. */
   const article = await rehostImages(
     sanitizeArticle(found.article),
     slug,
