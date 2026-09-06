@@ -14,7 +14,9 @@ untracked (new files — a pathspec cannot name these, read them directly):
 `docs/reusable/claude-cli-as-subagent.md`
 
 `git diff e78bfc0a -- scripts/run-codex.ts docs/reusable/` shows the modified half.
-(Not durable — I will record the resulting commit SHA here once it lands.)
+(Not durable — it named a tree rather than bytes. **It landed as `e8f00815`**, on `dev`; that
+commit also carries the fixes for every finding this review returned, so what this review actually
+saw is those paths before those fixes.)
 
 Start with `scripts/run-claude.ts` and `docs/reusable/claude-cli-as-subagent.md`. That is where to
 begin, not the limit of scope — the manifest above is.

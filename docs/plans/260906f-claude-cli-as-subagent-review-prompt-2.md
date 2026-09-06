@@ -10,6 +10,9 @@ Live pre-commit, same base as round 1: `e78bfc0a388495adacd79fc1334ad474619480a2
 scoped paths: `scripts/run-codex.ts`, `src/spend-declarations.ts`,
 `tests/no-undeclared-spend.test.ts`, `docs/reusable/README.md`,
 `docs/reusable/codex-cli-as-subagent.md`
+**Landed as `e8f00815`**, which carries the fixes for this round's findings too — so the tree this
+review saw is that commit minus its round-2 changes.
+
 untracked (new — read them directly, a pathspec cannot name them):
 `scripts/subagent-cli.ts`, `scripts/run-claude.ts`, `tests/run-claude.test.ts`,
 `docs/reusable/claude-cli-as-subagent.md`,
