@@ -221,3 +221,17 @@ confirmed the root placement holds for every invocation shape, and found three m
 - The box: settings.json probed through a fresh Claude session and the transcript read (not the
   answer believed), which is how the inert mechanism was caught; then the file written and the
   provisioning check run against it by hand.
+- **And the whole thing end to end on the box**, which is the only machine where the middle layer
+  does anything: the pushed config imported there, under the box's own `HOME`, resolving the real
+  `~/.config/spideryarn/vitest-max-workers`.
+
+  ```
+  HOME=/home/greg cores=16
+  machine file: 3
+  MACHINE_WORKERS_FILE = /home/greg/.config/spideryarn/vitest-max-workers
+  vitest would have taken = 15
+  resolves to = 3
+  ```
+
+  Worth doing separately: every other check ran on an 18-core Mac with no machine file, so all of
+  them would have passed just the same if `homedir()` resolved somewhere else on Linux.
