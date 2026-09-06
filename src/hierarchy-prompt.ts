@@ -44,8 +44,20 @@ import type { Block } from "./types.js";
    the article part-way through the stage would come out with questions on some
    parts and none on others, and nothing would say why.
 
-   docs/plans/260905e-feedback-diagram-text-column-and-socratic-summaries.md. */
-export const PROMPT_VERSION = "toc/5";
+   docs/plans/260905e-feedback-diagram-text-column-and-socratic-summaries.md.
+
+   **`toc/6`, 2026-09-06: the gists gained a length gradient and lost their
+   meta-narration.** Measured first, across 1,239 stored gists in 38 articles:
+   the mean ran 28.8 words at the root, 23.1 at depth 1, 20.1 at depth 2 and
+   14.9 at depth 3 — monotonically the *opposite* of what Greg asked for, which
+   is a briefer coarse line and a longer fine one. The cause was one instruction
+   ("Exactly ONE sentence") applied at every depth: a root sentence has a whole
+   article to cover, so it grows clauses, while a depth-3 sentence covers two
+   paragraphs and does not. The rule is now a ceiling per depth. The stamp moves
+   because a tree half-written to the old budget and half to the new is a
+   visible defect rather than a stale artefact.
+   docs/plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md. */
+export const PROMPT_VERSION = "toc/6";
 
 /**
  * How hard the model thinks before it starts writing.
