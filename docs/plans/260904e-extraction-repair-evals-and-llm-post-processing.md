@@ -2096,6 +2096,9 @@ confidence that hurt both prior plans, and it is the sentence to distrust in thi
 
 ## See also
 
+- [260904e-extraction-repair-evals-sol-reviews.md](260904e-extraction-repair-evals-sol-reviews.md)
+  — the nine reviews of stage B, whole. Every one returned FIX FIRST, and § B records what came of
+  each finding but not how it was reproduced, which is the part that cannot be regenerated
 - [260827ab-readability-repair-pass.md](260827ab-readability-repair-pass.md) — what Readability threw
   away, and the eight times its instrument was confidently wrong
 - [260830at-readability-tidy-pass.md](260830at-readability-tidy-pass.md) — what it kept, and the
