@@ -237,7 +237,14 @@ export async function readPdfRasters(input: ReadPdfRastersInput): Promise<PdfRas
     maxImageSize: input.maxImagePixels ?? MAX_FIGURE_PIXELS,
   });
   const giveUp = () => {
-    void loadingTask.destroy();
+    /* **The rejection has to be caught here, not in the `finally`.** That block
+       destroys again and catches *that* promise; this is a different one, and a
+       teardown that fails while aborting would otherwise surface as an unhandled
+       rejection — a process-level event, in a step whose whole contract is that
+       one bad figure never takes anything else down. GPT Sol B-2, 2026-09-06. */
+    void loadingTask.destroy().catch(() => {
+      /* Already giving up; there is nothing this could usefully say. */
+    });
   };
   input.signal?.addEventListener("abort", giveUp, { once: true });
 
@@ -252,6 +259,26 @@ export async function readPdfRasters(input: ReadPdfRastersInput): Promise<PdfRas
       }
       await readOnePage(pdfjs, doc, page, input.objectTimeoutMs ?? FIGURE_OBJECT_TIMEOUT_MS, result);
     }
+    /* **An abort must not be able to leave by this door**, and until 2026-09-06
+       it could. The check at the top of the loop catches a deadline that passed
+       *between* pages; an abort *during* `readOnePage` is a different thing
+       entirely, because `giveUp` destroys the worker and pdf.js then answers the
+       in-flight `getTextContent()` with an empty result rather than an error. An
+       empty text layer is exactly what a photograph of a page looks like, so the
+       page was recorded `"scanned"` and this function **returned successfully
+       with a wrong answer** — no throw, no warning, a figure quietly missing
+       from a document that has one.
+
+       GPT Sol reproduced it five times against evals/pdf/harder page 7, aborting
+       between 0 and 100 ms. It is the shape docs/reusable/silent-success.md is
+       about: a real failure wearing a successful result's clothes, agreed with
+       by a rule that had no way to tell the two apart.
+
+       One check here is enough for correctness — an aborted signal throws from
+       this point forward however many pages are left — and it is placed at the
+       return rather than after each page so that there is exactly one statement
+       of the guarantee. */
+    input.signal?.throwIfAborted();
     return result;
   } catch (err) {
     /* An abort is why this failed, so it is what the caller is told. pdf.js's

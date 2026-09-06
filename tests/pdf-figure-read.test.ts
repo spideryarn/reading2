@@ -24,12 +24,23 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readPdfRasters } from "../src/pdf-figure-read.js";
 import { classifyRaster, encodeFigurePng } from "../src/pdf-figures.js";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 const EASY = "evals/pdf/easy/source.pdf";
 const HARDER = "evals/pdf/harder/source.pdf";
 const SCAN = "evals/pdf/much-harder/source.pdf";
 const KUHN = "evals/pdf/titles/kuhn-landscape-of-consciousness/source.pdf";
+
+/**
+ * sha256 of the decoded RGB bytes of the ball-lightning paper's page-3 figure —
+ * 2067 × 1741 × 3 = 10,795,941 bytes, the largest raster in the corpus.
+ *
+ * Taken from a run against the committed fixture, 2026-09-06. It is the one
+ * assertion here about the *pixels* rather than about their shape; see the test
+ * that uses it.
+ */
+const FIGURE_P3_SHA256 = "c37eaea051ed2eea7904724edee3ad366b89b2c7faddc2bd7ef456e2443a4081";
 
 async function bytes(file: string): Promise<Uint8Array> {
   return new Uint8Array(await readFile(file));
@@ -201,6 +212,58 @@ describe("the decode cap, and what it hides", () => {
   }, 60_000);
 });
 
+describe("an abort that used to look like a scanned page", () => {
+  it("rejects rather than returning a page it never managed to read", async () => {
+    /* **The bug this is written after, and it is worth understanding rather
+       than just pinning.** Aborting mid-page destroys the worker; pdf.js then
+       answers the `getTextContent()` already in flight with an *empty result*
+       instead of an error. An empty text layer is precisely what a photograph
+       of a page looks like, so the scan rule agreed with it, recorded page 7 as
+       `"scanned"`, and `readPdfRasters` **returned successfully** — no throw, no
+       warning, a real figure simply absent from a document that has one.
+
+       GPT Sol found it reviewing stage B and reproduced it five times against
+       this fixture, aborting between 0 and 100 ms:
+
+           {"candidates":[],"skippedPages":[{"page":7,"reason":"scanned"}],"unread":[]}
+
+       Two rules agreeing with each other, neither able to tell a destroyed
+       worker from a blank page — docs/reusable/silent-success.md, and the
+       reason the fix is a check at the return rather than a nicer error inside
+       the page read.
+
+       **Driven by the fake rather than by a timer against a real PDF**, and
+       that is not a shortcut — it is the difference between a test and a
+       coincidence. The first version of this test aborted a real read of page 7
+       after 40 ms and passed *with the fix removed*: loading pdf.js takes
+       1.5–1.8 s on the first document a process sees, so the abort was landing
+       inside `loadPdfjs` and being caught by the check that already existed,
+       and the test never once reached the code it was written for. Timing the
+       abort to land inside the page read means guessing at a decode's duration
+       on a shared box.
+
+       The fake aborts from *inside* `getTextContent` and then answers it with
+       an empty text layer, which is exactly the sequence pdf.js produces when
+       its worker is destroyed under an in-flight call. Deterministic, and it
+       fails without the fix. */
+    const controller = new AbortController();
+    const { fresh } = await withFakePdfjs({ abortDuringText: controller });
+    await expect(
+      fresh({ data: new Uint8Array([1, 2, 3]), pages: [1], signal: controller.signal }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects when the signal is already aborted, without opening anything", async () => {
+    await expect(
+      readPdfRasters({
+        data: await bytes(HARDER),
+        pages: [7],
+        signal: AbortSignal.abort(),
+      }),
+    ).rejects.toThrow();
+  }, 60_000);
+});
+
 describe("the bytes outlive the document", () => {
   it("encodes a PNG from a raster after the pdf.js document has been destroyed", async () => {
     // `RasterCandidate.data` is pdf.js's own buffer rather than a copy, and this
@@ -222,6 +285,28 @@ describe("the bytes outlive the document", () => {
     expect(new DataView(png.buffer, png.byteOffset).getUint32(20)).toBe(119);
     // Kuhn's logo is 69.7% ink. All-zero bytes would mean a buffer we lost.
     expect(verdict.raster.data.some((b) => b !== 0)).toBe(true);
+  });
+
+  it("hands back the very pixels the document holds, not merely a buffer of the right size", async () => {
+    /* **Every other fixture assertion in this file pins metadata.** Page, key,
+       width, height, kind, byte count — and `classifyRaster` on an RGB raster
+       establishes only that the shape is coherent. GPT Sol B-4: arbitrary
+       same-length non-zero bytes would satisfy the lot of them, so nothing here
+       yet says the pixels are *this figure's* pixels rather than some other
+       page's, or a buffer pdf.js reused under us.
+
+       A digest of one substantial real figure closes that, and the ball
+       lightning paper's page 3 is the one to use: 2067 × 1741, the largest in
+       the corpus, and the fixture is committed so the bytes cannot drift. If
+       this ever goes red without the fixture changing, the decode is returning
+       something other than what the file contains — which is worth far more
+       than a dimension check. */
+    const out = await readPdfRasters({ data: await bytes(HARDER), pages: [3] });
+    const first = out.candidates[0];
+    expect(first).toBeDefined();
+    expect([first!.width, first!.height, first!.kind]).toEqual([2067, 1741, 2]);
+    const digest = createHash("sha256").update(first!.data).digest("hex");
+    expect(digest).toBe(FIGURE_P3_SHA256);
   });
 });
 
@@ -249,6 +334,14 @@ async function withFakePdfjs(fake: {
   /** Keys the store registers a callback for and never calls back. */
   neverResolve?: string[];
   throwOnGetPage?: boolean;
+  /** `cleanup()` rejects — the case that decides whether `destroy()` still runs. */
+  failCleanup?: boolean;
+  /**
+   * Abort this the moment `getTextContent()` is called, and then answer it with
+   * an empty text layer — which is what pdf.js really does once its worker has
+   * been destroyed under an in-flight call. See the abort test.
+   */
+  abortDuringText?: AbortController;
 }) {
   const OPS = {
     paintImageXObject: OPS_PAINT,
@@ -271,9 +364,17 @@ async function withFakePdfjs(fake: {
   const page = {
     objs: store,
     commonObjs: store,
-    getTextContent: async () => ({
-      items: (fake.words ?? Array(30).fill("word").join(" ")).split(" ").map((str) => ({ str })),
-    }),
+    getTextContent: async () => {
+      if (fake.abortDuringText) {
+        fake.abortDuringText.abort();
+        /* Empty, exactly as pdf.js answers a call whose worker has just been
+           destroyed — no error, no items. That is the whole bug. */
+        return { items: [] as { str: string }[] };
+      }
+      return {
+        items: (fake.words ?? Array(30).fill("word").join(" ")).split(" ").map((str) => ({ str })),
+      };
+    },
     getOperatorList,
   };
   vi.resetModules();
@@ -291,6 +392,7 @@ async function withFakePdfjs(fake: {
         },
         cleanup: async () => {
           calls.push("cleanup");
+          if (fake.failCleanup) throw new Error("pdf.js could not release the page resources");
         },
       }),
     }),
@@ -321,6 +423,19 @@ describe("teardown", () => {
     });
     const out = await fresh({ data: new Uint8Array([1, 2, 3]), pages: [1] });
     expect(out.candidates.map((c) => c.key)).toEqual(["img_x"]);
+    expect(calls).toEqual(["cleanup", "destroy"]);
+  });
+
+  it("still destroys the worker when cleanup rejects", async () => {
+    /* **The test above would stay green with both guards deleted**, because its
+       fake `cleanup` always resolves — so a rewrite to two plain sequential
+       `await`s would pass it while reintroducing the exact leak the `finally`
+       exists to prevent: a rejecting `cleanup` skipping the `destroy` after it,
+       and a worker left running for every document that hits it. GPT Sol B-3,
+       reviewing stage B. The two calls are guarded separately for this reason,
+       and this is the case that says so. */
+    const { fresh, calls } = await withFakePdfjs({ failCleanup: true });
+    await fresh({ data: new Uint8Array([1, 2, 3]), pages: [1] });
     expect(calls).toEqual(["cleanup", "destroy"]);
   });
 
