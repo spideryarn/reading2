@@ -42,6 +42,10 @@ const glossaryMode = await readFile(
 );
 const quotesMode = await readFile(path.join(ROOT, "src/web/modes/quotes/QuotesMode.tsx"), "utf8");
 const searchMode = await readFile(path.join(ROOT, "src/web/modes/search/SearchMode.tsx"), "utf8");
+/* The three passage rules the quotes and search bands used to hold copies of,
+   and have called through since 2026-09-06 — so the "before the paint" half of
+   the assertions below is now a fact about this file. */
+const lifecycle = await readFile(path.join(ROOT, "src/web/passage-lifecycle.ts"), "utf8");
 const glossaryPanel = await readFile(path.join(ROOT, "src/web/GlossaryPanel.tsx"), "utf8");
 const quotesPanel = await readFile(path.join(ROOT, "src/web/QuotesPanel.tsx"), "utf8");
 const searchPanel = await readFile(path.join(ROOT, "src/web/SearchPanel.tsx"), "utf8");
@@ -170,15 +174,24 @@ describe("the threshold wiring", () => {
        companion that also covers the quotes band. */
     expect(glossaryMode).toMatch(/hiddenSelection[\s\S]{0,400}setTermId\(null\)/);
     expect(quotesMode).toMatch(/hiddenSelection[\s\S]{0,400}setQuoteId\(null\)/);
-    for (const [source, where, band] of [
-      [glossaryMode, "GlossaryMode.tsx", "useGlossaryMode"],
-      [quotesMode, "QuotesMode.tsx", "useQuotesMode"],
-    ] as const) {
-      expect(
-        hookBody(source, where, band),
-        `${band} must hand its selection up in a layout effect`,
-      ).toMatch(/useLayoutEffect\(\(\) => \{\s*on(Selected|Found)\(/);
-    }
+    /* Glossary hands its selection up itself: `termSelections` is a different
+       currency from `Found[]`, with no push-up to `Reader` and no cleanup, so it
+       is deliberately not one of the six producers on the shared hook. */
+    expect(
+      hookBody(glossaryMode, "GlossaryMode.tsx", "useGlossaryMode"),
+      "useGlossaryMode must hand its selection up in a layout effect",
+    ).toMatch(/useLayoutEffect\(\(\) => \{\s*onSelected\(/);
+    /* Quotes hands its up through `usePassageLifecycle`, which is where the
+       layout effect went on 2026-09-06 — so the assertion is in two halves: the
+       band delegates, and the hook it delegates to publishes before the paint. */
+    expect(
+      hookBody(quotesMode, "QuotesMode.tsx", "useQuotesMode"),
+      "useQuotesMode must hand its selection up through the shared lifecycle",
+    ).toMatch(/usePassageLifecycle\(\{/);
+    expect(
+      lifecycle,
+      "passage-lifecycle.ts must publish in a layout effect, not a passive one",
+    ).toMatch(/useLayoutEffect\(\(\) => \{\s*onFound\(found\);/);
   });
 
   it("keeps the order buttons and the slider on screen when everything is hidden", () => {
@@ -267,8 +280,16 @@ describe("the quotes band's marks", () => {
        of another — the ordering argument the ideas and referee bands both make.
        And `Reader` must be holding it, or there is nothing for `hitMarks` to
        compare a key against. */
+    /* Two halves since 2026-09-06, because the effect itself moved into
+       `usePassageLifecycle`: the band must ask for the `derived` shape, and that
+       shape is the one that writes both fields in a single layout effect. A
+       band that asked for `keyed` instead would compile, would publish its
+       marks, and would never ring anything. */
     expect(hookBody(quotesMode, "QuotesMode.tsx", "useQuotesMode")).toMatch(
-      /useLayoutEffect\(\(\) => \{\s*onFound\(found\);\s*onOpenKey\(/,
+      /usePassageLifecycle\(\{ kind: "derived", found, openKey,/,
+    );
+    expect(lifecycle).toMatch(
+      /useLayoutEffect\(\(\) => \{\s*onFound\(found\);\s*if \(kind === "derived"\) onOpenKey\(/,
     );
     /* `Reader` holds the key, and since 2026-09-06 `Reader` is its own file. */
     expect(reader).toMatch(/mode === "quotes"\s*\?\s*quoteOpenKey/);

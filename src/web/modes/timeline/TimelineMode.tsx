@@ -10,12 +10,13 @@
  * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQueryState } from "nuqs";
 import type { Block, BlockId, TimelineEvent } from "../../../types.js";
 import type { PublicTimeline } from "../../../public-types.js";
 import { orderFound, resolveTimelineEvent, type Found } from "../../search-hits.js";
 import { eventParam } from "../../params.js";
+import { usePassageLifecycle } from "../../passage-lifecycle.js";
 import { useRenderCount } from "../../perf.js";
 import { useTimeline } from "../../useTimeline.js";
 import { TimelinePanel } from "../../TimelinePanel.js";
@@ -28,10 +29,17 @@ import { TimelinePanel } from "../../TimelinePanel.js";
  * every reader of every article a request for a chronology almost none of them
  * will open.
  *
- * **Owner-only, so there is one of these and not two.** Timeline is in
- * `owners-only` in src/web/visitor.ts § POLICY, so a visitor meets a boundary instead of a
- * band and there is no `VisitorTimelineBand` waiting on a payload field that
- * does not exist.
+ * **The owner's half, and there are two.** This band owns the fetch and the
+ * job — `ensure`, `regenerate`, the progress the panel draws; the visitor's is
+ * `VisitorTimelineBand` below, which is the payload and nothing else. Timeline
+ * was `owners-only` when this comment was first written and has been
+ * `{ kind: "artefact", key: "timeline" }` in src/web/visitor.ts § POLICY since
+ * 2026-09-04, so a visitor with a shared link meets a band rather than a
+ * boundary. A second *band* rather than a second *panel*, for the reason
+ * `VisitorGlossaryBand` gives at length: a hook cannot be called conditionally,
+ * so "a visitor does not fetch" has to be a component boundary, while what a
+ * reader looks at stays one `TimelinePanel` with its data injected.
+ * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
  *
  * ## The five effects below are a second copy of `useIdeasMode`'s, deliberately
  *
@@ -172,18 +180,12 @@ function useTimelineMode({
     );
   }, [selected, blocks]);
 
-  /* `useLayoutEffect`, not `useEffect` — a passive effect leaves one paintable
-     frame in which the panel shows the new event and the prose still marks the
-     old one. */
-  useLayoutEffect(() => {
-    onFound(found);
-  }, [found, onFound]);
-
-  /* An open occurrence that is no longer in the list cannot stay open: reading
-     the timeline again mints new keys, and a re-extraction can drop one. */
-  useEffect(() => {
-    if (openKey && !found.some((f) => f.key === openKey)) onOpenKey(null);
-  }, [found, openKey, onOpenKey]);
+  /* **The three rules every passage producer follows** — publish before paint,
+     drop an open occurrence the list no longer has, and clear everything on the
+     way out — in src/web/passage-lifecycle.ts rather than here. `keyed`, because
+     `Reader` holds the key and hands it back down. The two effects below are the
+     policy this mode chose and the others did not. */
+  usePassageLifecycle({ kind: "keyed", found, openKey, onFound, onOpenKey });
 
   /* Standing on the first passage is the state a selected event is *in*, and it
      is that state whether the reader pressed the row or opened a URL that
@@ -209,17 +211,6 @@ function useTimelineMode({
     onOpenKey(first.key);
     onJump(first.blockId);
   }, [found, onJump, onOpenKey]);
-
-  /* Unmount only, with no data dependencies: leaving the mode takes the marks
-     out of the prose with it, and folding this into the push above would clear
-     them on every change before setting them again. */
-  useEffect(
-    () => () => {
-      onFound([]);
-      onOpenKey(null);
-    },
-    [onFound, onOpenKey],
-  );
 
   return {
     eventId,

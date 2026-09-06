@@ -1,7 +1,20 @@
 # Separate article access, reader composition and mode controllers
 
-Status: **planned, not built.** Worktree `a1-a3-reader-composition`, branch
-`worktree-a1-a3-reader-composition`, off `0977d6f6` (origin/dev, 2026-09-06).
+Status: **stages 1–3 built and committed; stage 4 in progress.** Worktree
+`a1-a3-reader-composition`, branch `worktree-a1-a3-reader-composition`, off `0977d6f6`
+(origin/dev, 2026-09-06).
+
+`src/web/App.tsx` has gone **5,920 → 407 lines** and exports exactly `App`. It holds route choice,
+the session subscription and the persistent services, and nothing else. Ten mode controllers are
+under `src/web/modes/`, `Reader` and the position hooks under `src/web/reader/`, and the
+article-access unit under `src/web/article/`.
+
+| Stage | Commit | `App.tsx` after |
+|---|---|---:|
+| 1a — Timeline, Quotes, Debate, Glossary | `f103698b` | 5,236 |
+| 1b — Search, Summary, Diagram, Referee | `1360ec84` | 4,150 |
+| 2 — Chat and Remember, as one file | `2d82c0e7` | 3,599 |
+| 3 — `Reader`, the position hooks, then the access unit | *(this commit)* | **407** |
 
 This is items **A1** and **A3** of
 [the main app architecture review](260905e-main-app-architecture-review.md#a1-extract-responsibilities-that-already-have-distinct-lifetimes),
@@ -373,6 +386,9 @@ Done when: `App.tsx` is route choice, session subscription and persistent servic
 Split from 4b because they have different failure modes, and because the Referee fix deserves a green
 stopping point before the much larger Reader harness gets built. Sol F12.
 
+**Built, 2026-09-06**, and it corrected one thing this plan had wrong — see
+[the instance was latent, the class is not](#the-instance-was-latent-the-class-is-not) below.
+
 - `src/web/passage-lifecycle.ts` replaces the publish/invalid-key/unmount rules in `useIdeasMode`,
   `useTimelineMode`, `useQuotesMode`, `useSearchMode`, `CriteriaPanel` and `ClaimsPanel`.
 - The Referee shared slot, **both directions, reproduced red without StrictMode first**.
@@ -385,6 +401,34 @@ stopping point before the much larger Reader harness gets built. Sol F12.
 
 Done when: the six copies are one helper, both Referee directions are fixed with a red-first proof
 that did not rely on StrictMode, and nothing else has changed.
+
+#### The instance was latent, the class is not
+
+**The shipped bands cannot lose marks in the hand-off today, and that was measured rather than
+argued.** Mounting the real `CriteriaBand` and `ClaimsBand` over a stubbed `apiFetch` and swapping
+them in both directions gives the right settled state every time, and no intermediate commit a test
+can see is wrong either. The reason is that both publish an *empty* list on their first commit —
+Criteria's marks come from `useCriteria`'s fetch, Claims' from a tick the referee has not made — so
+the outgoing passive clear overwrote empty with empty. The plan's *"the passage marks are simply
+gone"* is what Sol's probe showed for producers that publish at mount; it is not what these two do.
+
+So the red proof is [`tests/passage-slot-hand-off.test.tsx`](../../tests/passage-slot-hand-off.test.tsx),
+two stand-in producers built on the shipped hook and driven by props, which loses the incoming marks
+in **both** directions against a passive clear and keeps them against a layout one. In that same
+non-StrictMode run its StrictMode case was **green against the broken code**, which is F9 reproduced
+here rather than taken on trust. The real-band sub-mode hand-off is in
+`passage-mode-cleanup.test.tsx` as a settled-state regression guard, labelled as one.
+
+The fix is unchanged and so is its value: a slot-sharing producer with something to say on its first
+commit is not hypothetical — `SearchBand` publishes `findLiteral` marks synchronously from `?find=`.
+[docs/postmortems/260906d-one-publication-slot-two-producers-two-commit-phases.md](../postmortems/260906d-one-publication-slot-two-producers-two-commit-phases.md)
+names both classes, the second of which is the more transferable: **a development-mode double-render
+that hides the defect the test was written to catch**.
+
+One thing was deliberately left alone: `TimelineMode.tsx`'s docblock still describes *"the five
+effects below"* and *"a fix to one of these belongs in all three"*, which the helper has made stale.
+Another session was editing that docblock while this landed (stage 1's F20), so it belongs to that
+edit rather than to a second one racing it.
 
 ### Stage 4b — A3: the selection and the dispatch
 

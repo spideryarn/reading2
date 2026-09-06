@@ -1014,6 +1014,12 @@ fetch only inside its own mode — but because the panel and the marks *must* be
 Computing them twice from the same inputs would work until the day one side gained a filter, and
 then the list and the highlights would quietly disagree. Same shape as the glossary's `onSelected`.
 
+**How** it pushes them up is not search's own any more. Since 2026-09-06 the six producers that
+publish passages — Ideas, Timeline, Search, Quotes, Criteria and Claims — share
+[`passage-lifecycle.ts`](../../src/web/passage-lifecycle.ts): publish before paint, drop an open hit
+the list no longer has, and clear on the way out. Search keeps its own `openHit`/`onOpenHit` names
+and every one of its other triggers for clearing a hit; only the three shared rules moved.
+
 ## A visitor reads the saved searches and asks nothing
 
 Since 2026-09-04 a shared link carries the owner's saved runs, and Greg drew the line at making one:

@@ -2,33 +2,52 @@
 /**
  * **Leaving a passage mode takes both halves of its state with it.**
  *
- * Four bands push a `Found[]` up to `Reader` and hold an `openKey` there beside
- * it: Ideas, Timeline, Referee and Quotes. The two are one piece of state in two
- * fields — `found` is which passages are marked in the prose, `openKey` is which
- * of those marks is *rung*. `TableView` draws the ring from the key alone. So a
- * key that outlives the marks names a passage that is no longer on the page.
+ * Six components resolve passages and push a `Found[]` up to `Reader`, and four
+ * of them hold an `openKey` there beside it: Ideas, Timeline, Search, Quotes,
+ * Criteria and Claims. The two fields are one piece of state — `found` is which
+ * passages are marked in the prose, `openKey` is which of those marks is *rung*.
+ * `TableView` draws the ring from the key alone. So a key that outlives the
+ * marks names a passage that is no longer on the page.
  *
- * `useIdeasMode` and `TimelineBand` (src/web/App.tsx) each clear both on
- * unmount, in an effect with no data dependencies so that it runs on the way out
- * and not on every keystroke. The comment above `TimelineBand`'s five effects
- * says why they are the same five and what follows from that:
+ * **Since 2026-09-06 all six share one hook**, `usePassageLifecycle`
+ * (src/web/passage-lifecycle.ts), which holds the three rules they had six
+ * copies of: publish before paint, drop an open key the list no longer has, and
+ * clear on the way out in a cleanup that depends on nothing but the parent's
+ * setters. The sentence this file was written to make executable —
+ * *"a fix to one of these belongs in all three"*, which said *"in both"* until
+ * Referee became the third and was six by the end — is now a sentence about one
+ * function, and this file is what stops that function being wrong for one of its
+ * three shapes. Every copy of every rule had been got wrong once:
+ * `CriteriaBand` cleared `onFound([])` and left the key set until 2026-09-02
+ * (docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md
+ * § T0.2), and `useIdeasMode` had no drop-an-invalid-key rule at all until
+ * 2026-08-27.
  *
- * > **a fix to one of these belongs in both**, which is written here rather than
- * > left to be discovered.
+ * So the arms below are one per **shape** as well as one per band: `keyed`
+ * (Ideas, Timeline, Search, Criteria), `derived` (Quotes) and `unkeyed`
+ * (Claims). Ideas and Timeline are the controls that always passed.
  *
- * `CriteriaBand` (src/web/CriteriaPanel.tsx) is the third copy and it clears
- * only `onFound([])`. That is
- * docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md § T0.2,
- * and this file is the executable form of that sentence: **the same assertion,
- * over four bands**, with Ideas and Timeline as the controls that pass.
- *
- * **Quotes is the fourth, and it only became one on 2026-09-05.** Before that it
- * marked the selected quote and nothing else, so it had no key to lose — this
- * header said four bands while `BandName` said three, which is the drift a
- * cross-family review caught. It is also the one band here whose marks are *not*
- * a function of the selection, so its test asserts the opposite precondition:
- * two passages marked with nothing selected at all.
+ * **Quotes only became a band with a key on 2026-09-05.** Before that it marked
+ * the selected quote and nothing else, so it had no key to lose. It is also the
+ * one band here whose marks are *not* a function of the selection, so its test
+ * asserts the opposite precondition: two passages marked with nothing selected
+ * at all.
  * docs/plans/260905g-mark-every-visible-quote-and-make-the-quiz-start-easier.md.
+ *
+ * **Claims is the one band with no key at all**, which is why it is the `unkeyed`
+ * shape: nothing rings a claim's passage, so leaving the sub-mode has to take
+ * `found` and must not touch a key it does not own. Its marks are default-off,
+ * so the arm ticks a claim first.
+ *
+ * **Search is here for its prop names as much as its cleanup.** It calls the
+ * same hook through `openHit`/`onOpenHit` rather than `openKey`/`onOpenKey`, and
+ * those names are what six other test files mount its band by, so an arm that
+ * used the other names would prove nothing about the band `Reader` renders.
+ *
+ * **The hand-off between Criteria and Claims is not here**, because they are the
+ * only two producers that share one slot and what that needs asserting about is
+ * an ordering rather than a value left behind:
+ * tests/passage-slot-hand-off.test.tsx.
  *
  * ## Why it is asserted on the parent's state and not on the callback
  *
@@ -65,6 +84,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { Claim, ClaimsRun } from "../src/referee-claims.js";
 import type { SavedCriterion } from "../src/saved-criteria.js";
 import type { Block, BlockId, Ideas, Quotes, Timeline } from "../src/types.js";
 import type { Found } from "../src/web/search-hits.js";
@@ -97,6 +117,8 @@ const { QuotesBand } = await import("../src/web/modes/quotes/QuotesMode.js");
 const { TimelineBand } = await import("../src/web/modes/timeline/TimelineMode.js");
 const { IdeasBand } = await import("../src/web/modes/ideas/IdeasMode.js");
 const { CriteriaBand } = await import("../src/web/CriteriaPanel.js");
+const { ClaimsBand } = await import("../src/web/ClaimsPanel.js");
+const { SearchBand } = await import("../src/web/modes/search/SearchMode.js");
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`, and `?idea=`, `?event=`
    and `?crits=` all validate through it — a made-up id would simply not parse,
@@ -237,6 +259,40 @@ const QUOTES: Quotes = {
   },
 };
 
+/**
+ * **One claim, taken up one paragraph later.** Claims marks the *passages* a
+ * claim is supported by, not the sentence that makes it, so the mark lands on
+ * `TWO` and the claim is anchored in `ONE`.
+ *
+ * Marks are off until the referee asks for them — `showing` is local state that
+ * starts empty — so the arm below ticks the box before it has anything to lose.
+ */
+const CLAIM: Claim = {
+  id: `${ONE}:0`,
+  blockId: ONE,
+  quote: "Thirty-one participants",
+  start: 0,
+  claim: "The trial was too small to separate the effect from noise",
+  passages: [
+    { blockId: TWO, quote: "post-hoc subgroup", start: 22, reasoning: "and again, post hoc" },
+  ],
+  discarded: 0,
+};
+
+const CLAIMS_RUN: ClaimsRun = {
+  status: "done",
+  createdAt: "2026-09-01T09:00:00.000Z",
+  claims: [CLAIM],
+  sourceHash: "h",
+};
+
+/**
+ * **What the literal matcher finds**, which is the one set of marks in this file
+ * that needs no artefact at all: `?match=words&find=` is resolved out of the
+ * blocks on every keystroke, so Search publishes passages on its first commit.
+ */
+const FIND = "post-hoc";
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -269,12 +325,20 @@ const serve = (url: string): Promise<Response> => {
   if (path === `/api/referee/criteria/${SLUG}`) {
     return Promise.resolve(json({ criteria: [CRITERION], sourceHash: "h" }));
   }
+  if (path === `/api/referee/claims/${SLUG}`) {
+    return Promise.resolve(json({ run: CLAIMS_RUN, sourceHash: "h" }));
+  }
+  /* Search's saved runs, and an empty list is the honest answer here: this arm
+     is about the literal matcher, which needs no saved search and no model. */
+  if (path === `/api/search/${SLUG}`) {
+    return Promise.resolve(json({ searches: [], sourceHash: "h" }));
+  }
   return Promise.resolve(json({ error: "not found" }, 404));
 };
 
 /* ------------------------------------------------------------ the harness -- */
 
-type BandName = "ideas" | "timeline" | "referee" | "quotes";
+type BandName = "ideas" | "timeline" | "referee" | "claims" | "search" | "quotes";
 
 /**
  * `Reader`, in miniature: it owns `found` and `openKey`, and the band is
@@ -313,6 +377,33 @@ function Harness({ band }: { band: BandName | null }) {
     band === "timeline" ? createElement(TimelineBand, { key: "b", slug: SLUG, ...shared }) : null,
     band === "referee"
       ? createElement(CriteriaBand, { key: "b", slug: SLUG, comments: [], ...shared })
+      : null,
+    /* **No `openKey` and no `onOpenKey`**, which is this band's shape rather
+       than an omission: nothing rings a claim's passage, so leaving the sub-mode
+       has to take `found` and must not touch a key it does not own. */
+    band === "claims"
+      ? createElement(ClaimsBand, {
+          key: "b",
+          slug: SLUG,
+          blocks: BLOCKS,
+          onJump: () => {},
+          onFound,
+        })
+      : null,
+    /* **`openHit` and `onOpenHit`, not `openKey` and `onOpenKey`.** Search's
+       band-level names are older than the other five and six test files mount it
+       by them, so they are deliberately not unified — mounting it by the other
+       names here would prove nothing about the band `Reader` renders. */
+    band === "search"
+      ? createElement(SearchBand, {
+          key: "b",
+          slug: SLUG,
+          blocks: BLOCKS,
+          onJump: () => {},
+          onFound,
+          openHit: openKey,
+          onOpenHit: onOpenKey,
+        })
       : null,
     /* **No `openKey` prop**, unlike the three above, and that is the band's
        shape rather than an omission: which quote is rung is `?quote=`, so
@@ -444,6 +535,142 @@ describe("leaving a passage mode clears the open key as well as the marks", () =
        `onFound` and leaves the key, so the prose keeps a ring around a passage
        that is no longer marked, and the next mode inherits it. */
     expect(state().openKey).toBe("none");
+  });
+
+  it("Referee — an open key whose mark has gone cannot stay open", async () => {
+    /* **The second of the three rules, and the one the arms above do not
+       reach**: they all take the key away by unmounting the band, which is a
+       different rule with a different mechanism. This one happens with the band
+       still on screen — the referee unticks the criterion they were standing in,
+       so the marks go and the key would otherwise survive, leaving a ring round
+       a passage nothing marks and a stepper reading "– / 2".
+
+       `useIdeasMode` had no such rule at all until 2026-08-27 and
+       `CriteriaBand`'s was written on the same argument, so a helper that lost
+       it would be repeating a bug this repo has already had. Keyed on *absence
+       from `found`*, which is why the assertion below unticks rather than
+       pressing the other row: an ordinary change of selection must leave the key
+       alone, and the second `.crit-jump` press in the arm above is the guard for
+       that half. */
+    history.replaceState(null, "", `/read/${SLUG}?mode=referee&crits=${CRIT}`);
+    show("referee");
+    await flush();
+
+    expect(state().found).toBe(2);
+    const rows = [...host.querySelectorAll<HTMLButtonElement>(".crit-jump")];
+    act(() => rows[0]!.click());
+    await flush();
+    expect(state().openKey).toBe(`${CRIT}:${ONE}:0`);
+
+    const tick = host.querySelector<HTMLInputElement>(".crit-tick input");
+    expect(tick, "the criterion's tick, which is what takes the marks away").not.toBeNull();
+    act(() => tick!.click());
+    await flush();
+
+    expect(state().found, "unticking takes the marks out of the prose").toBe(0);
+    expect(state().openKey, "and the ring cannot outlive the mark it was round").toBe("none");
+  });
+
+  it("Claims — the unkeyed shape, which owns no key to lose", async () => {
+    /* **The one band with no `openKey` at all.** Nothing rings a claim's
+       passage, so the whole of leaving is `onFound([])` — and the assertion that
+       matters as much is the one about the key it does not own: a producer that
+       cleared a key belonging to nobody would look exactly like this one until
+       the sub-mode it shares a slot with had a key open. */
+    history.replaceState(null, "", `/read/${SLUG}?mode=referee&referee=claims`);
+    show("claims");
+    await flush();
+
+    /* Marks are off until the referee asks for them, so the precondition here is
+       a tick rather than a URL — `showing` is local state and starts empty. */
+    expect(state().found, "nothing is marked until the referee ticks a claim").toBe(0);
+    const ticks = [...host.querySelectorAll<HTMLInputElement>(".clm-tick input")];
+    expect(ticks, "one claim to tick").toHaveLength(1);
+    act(() => ticks[0]!.click());
+    await flush();
+    expect(state().found, "the claim's passage is marked").toBe(1);
+
+    show(null);
+    await flush();
+
+    expect(state().found).toBe(0);
+    expect(state().openKey).toBe("none");
+  });
+
+  it("Search — the same rules under the older prop names", async () => {
+    /* **`openHit`/`onOpenHit`, deliberately not renamed**, and this arm exists
+       partly to hold that: six other test files mount `SearchBand` by those
+       names, so the helper takes them through rather than making the band change
+       its interface to use it.
+
+       The literal matcher, because it needs no saved search and no model: it is
+       resolved out of the blocks on every keystroke, which also makes Search the
+       one producer here that publishes passages on its **first** commit. */
+    history.replaceState(null, "", `/read/${SLUG}?mode=search&match=words&find=${FIND}`);
+    show("search");
+    await flush();
+
+    expect(state().found, "the literal matcher found the phrase").toBe(1);
+    expect(state().openKey).toBe("none");
+
+    /* Search opens nothing by itself either; the reader presses a row. */
+    const rows = [...host.querySelectorAll<HTMLButtonElement>(".srch-hit-btn")];
+    expect(rows, "one result row to press").toHaveLength(1);
+    act(() => rows[0]!.click());
+    await flush();
+    expect(state().openKey, "pressing a row rings its mark").not.toBe("none");
+
+    show(null);
+    await flush();
+
+    expect(state().found).toBe(0);
+    expect(state().openKey).toBe("none");
+  });
+
+  it("Referee's two sub-modes hand one slot over, in both directions", async () => {
+    /* **The one place in the app where two producers share a slot.**
+       `CriteriaBand` and `ClaimsBand` are siblings inside `RefereeSubMode`
+       writing `Reader`'s single `refereeFound`, so changing `?referee=` is one
+       commit that deletes one producer and mounts the other.
+
+       What this arm asserts is the settled answer: after the swap the slot holds
+       the **incoming** producer's marks and nothing of the outgoing one's. It
+       passes against the pre-fix code too, and that is worth writing down rather
+       than leaving to be rediscovered — both of these bands publish an *empty*
+       list on their first commit (Criteria's marks come from a fetch, Claims'
+       from a tick nobody has made), so the outgoing passive clear used to
+       overwrite empty with empty and the settled state came out right by luck.
+       The ordering that stops it being luck is proved in
+       tests/passage-slot-hand-off.test.tsx, where the producers have something
+       to say at mount. */
+    history.replaceState(null, "", `/read/${SLUG}?mode=referee&referee=criteria&crits=${CRIT}`);
+    show("referee");
+    await flush();
+    expect(state().found, "criteria marked its two passages").toBe(2);
+    const rows = [...host.querySelectorAll<HTMLButtonElement>(".crit-jump")];
+    act(() => rows[0]!.click());
+    await flush();
+    expect(state().openKey).toBe(`${CRIT}:${ONE}:0`);
+
+    /* criteria → claims. The key goes with the producer that owned it: Claims
+       has none, so a key surviving here would ring a passage nobody marks. */
+    show("claims");
+    await flush();
+    expect(state().openKey, "criteria's ring must not outlive criteria").toBe("none");
+    expect(state().found, "and neither may its marks").toBe(0);
+
+    const ticks = [...host.querySelectorAll<HTMLInputElement>(".clm-tick input")];
+    act(() => ticks[0]!.click());
+    await flush();
+    expect(state().found, "claims now owns the slot").toBe(1);
+
+    /* claims → criteria, the other direction, which the first fix for this
+       proposed to leave alone on the grounds that Claims was the exceptional
+       shape. It is not: the rule is about the phase of the clear, not about
+       which producer is keyed. */
+    show("referee");
+    await flush();
+    expect(state().found, "criteria owns the slot again, with its own marks").toBe(2);
   });
 
   it("Quotes — where the marks are the whole list and the key is only the ring", async () => {

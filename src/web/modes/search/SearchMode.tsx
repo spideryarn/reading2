@@ -10,7 +10,7 @@
  * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md.
  */
 
-import { useEffect, useLayoutEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useQueryState } from "nuqs";
 import type { Article, BlockId } from "../../../types.js";
 import {
@@ -34,6 +34,7 @@ import {
   runsParam,
 } from "../../params.js";
 import { assignSlots } from "../../hit-colours.js";
+import { usePassageLifecycle } from "../../passage-lifecycle.js";
 import { useRenderCount } from "../../perf.js";
 import { useSearch, type SavedSearch } from "../../useSearch.js";
 import { SearchPanel } from "../../SearchPanel.js";
@@ -303,51 +304,34 @@ function useSearchMode({
     [ordered, order, gate],
   );
 
-  /* A result the bar has hidden cannot stay the open one. Its row and its mark
-     both go, so nothing on screen says it is open — but the key survived, and
-     dragging the bar back later silently reopened a selection the reader had
-     made minutes ago and watched disappear. Cleared rather than remembered:
-     "open" is a thing the reader can see, and a hidden one is a claim about the
-     page that the page is not making. GPT Sol's review, 2026-08-26.
+  /* **The three rules every passage producer follows** — publish the results
+     before paint, drop an open hit the list no longer has, and clear both on the
+     way out — in src/web/passage-lifecycle.ts rather than here, because six
+     components held six copies of them.
 
-     Keyed on absence from `results`, so ordinary streaming — where the open row
-     is still in the list — leaves it alone. */
-  useEffect(() => {
-    if (openHit && !results.some((f) => f.key === openHit)) onOpenHit(null);
-  }, [results, openHit, onOpenHit]);
+     The publication has to happen before paint and not after, and the difference
+     is a frame the reader can see: this component renders the new results list
+     immediately, the prose is `Reader`'s and only changes once this setter has
+     run and a second commit has happened. That is the one invariant this feature
+     is built around (search-hits.ts § the panel and the prose agree), so a frame
+     of disagreement is worth a synchronous commit. Raised by a GPT Sol review,
+     2026-08-26, which is also right that the real fix is one owner for the
+     derived state rather than two — this hook is half of that.
 
-  /* Push the results up to `Reader`, which owns the prose. `onFound` is a plain
-     setter and therefore stable, so this cannot loop.
-
-     **`useLayoutEffect`, not `useEffect`, and the difference is a frame the
-     reader can see.** This component renders the new results list immediately;
-     the prose is `Reader`'s, so it only changes once this setter has run and a
-     second commit has happened. `useEffect` runs *after* the browser may have
-     painted, so there is a window — a tick, a stream frame landing, a matcher
-     switch — where the panel shows the new passages and the article still shows
-     the old marks. That is the one invariant this feature is built around
-     (search-hits.ts § the panel and the prose agree), so a frame of it is worth
-     a synchronous commit. `useLayoutEffect` runs before paint, which closes it.
-
-     It is cheap because the expensive half already happened: the memo above has
-     computed `results` either way, and this only adds one render before paint.
-     Raised by a GPT Sol review, 2026-08-26, which is also right that the real
-     fix is one owner for the derived state rather than two — that is a change
-     to how all four bands talk to `Reader`, and it is not this change. */
-  useLayoutEffect(() => onFound(results), [results, onFound]);
-
-  /* Leaving search mode must take the marks out of the prose with it. Its own
-     effect, with no dependency on the results, so it runs on unmount and only
-     on unmount — folding it into the cleanup above would clear the marks on
-     every keystroke and set them again immediately, which is a visible flicker
-     of every highlight on the page. Exactly the trap `GlossaryBand` documents. */
-  useEffect(
-    () => () => {
-      onFound([]);
-      onOpenHit(null);
-    },
-    [onFound, onOpenHit],
-  );
+     Dropping an open hit is what stops the bar hiding a row and leaving the key
+     behind: nothing on screen would say it was open, and dragging the bar back
+     later would silently reopen a selection the reader watched disappear. Keyed
+     on absence from `results`, so ordinary streaming — where the open row is
+     still in the list — leaves it alone. The *other* triggers that clear it —
+     the matcher, `find`, solo and toggle-all — are this band's own gestures and
+     stay below. */
+  usePassageLifecycle({
+    kind: "keyed",
+    found: results,
+    openKey: openHit,
+    onFound,
+    onOpenKey: onOpenHit,
+  });
 
   return {
     /* Spread straight into `SearchPanel` by both bands, so the two cannot drift

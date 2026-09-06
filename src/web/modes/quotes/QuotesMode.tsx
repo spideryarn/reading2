@@ -10,12 +10,13 @@
  * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md.
  */
 
-import { useEffect, useLayoutEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQueryState } from "nuqs";
 import type { Block, BlockId, Quote } from "../../../types.js";
 import type { PublicQuotes } from "../../../public-types.js";
 import { quoteMarkKey, resolveQuotes, type Found } from "../../search-hits.js";
 import { barParam, quoteParam, rankParam } from "../../params.js";
+import { usePassageLifecycle } from "../../passage-lifecycle.js";
 import { useRenderCount } from "../../perf.js";
 import { useQuotes } from "../../useQuotes.js";
 import { effectiveRank, markedQuotes, QuotesPanel } from "../../QuotesPanel.js";
@@ -207,27 +208,18 @@ function useQuotesMode({
     [selected],
   );
 
-  /* **`useLayoutEffect`, not `useEffect`** — a passive effect leaves one
-     paintable frame in which the panel shows the new quote and the prose still
-     marks the old one. Same reasoning, and the same pairing with an
-     unmount-only clear below, as `SearchBand` and `IdeasBand`.
+  /* **The rules every passage producer follows**, in src/web/passage-lifecycle.ts
+     rather than here: publish before paint, and clear on the way out.
 
-     **Both in one effect**, so no paint can ever show the ring on one quote and
-     the washes of another set. */
-  useLayoutEffect(() => {
-    onFound(found);
-    onOpenKey(openKey);
-  }, [found, openKey, onFound, onOpenKey]);
-
-  /* Leaving quotes mode must take the marks out of the prose. On unmount only:
-     clearing on every change would race the layout effect above. */
-  useEffect(
-    () => () => {
-      onFound([]);
-      onOpenKey(null);
-    },
-    [onFound, onOpenKey],
-  );
+     **`derived`, which is a shape of its own and not `keyed` with a flag.** The
+     marks and the ring go up in **one** layout effect, so no paint can ever show
+     the ring on one quote and the washes of another set; and there is no
+     drop-an-invalid-key rule, because this key is recomputed rather than
+     remembered — a quote whose block the article has lost resolves to a key
+     matching no mark, which is the honest answer, and that rule would null it.
+     `?bar=` hiding the selected row is a different trigger and is the effect
+     above. */
+  usePassageLifecycle({ kind: "derived", found, openKey, onFound, onOpenKey });
 
   return { quoteId, onQuote: setQuoteId, rank, onRank: setRank, bar, onBar: setBar };
 }

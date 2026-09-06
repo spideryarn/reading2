@@ -11,13 +11,14 @@
  * docs/plans/260905h-a-mode-failure-should-leave-the-article-readable.md.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQueryState } from "nuqs";
 import type { Block, BlockId, Idea } from "../../../types.js";
 import type { PublicIdeas } from "../../../public-types.js";
 import { assignSlots } from "../../hit-colours.js";
 import { orderFound, resolveIdea, type Found } from "../../search-hits.js";
 import { ideaParam } from "../../params.js";
+import { usePassageLifecycle } from "../../passage-lifecycle.js";
 import { useRenderCount } from "../../perf.js";
 import { useIdeas } from "../../useIdeas.js";
 import { IdeasPanel } from "../../IdeasPanel.js";
@@ -191,24 +192,15 @@ function useIdeasMode({
     );
   }, [selected, blocks, slots]);
 
-  /* **`useLayoutEffect`, not `useEffect`** — a passive effect leaves one
-     paintable frame in which the panel shows the new idea and the prose still
-     marks the old one. Same reasoning, and the same pairing with an
-     unmount-only clear below, as `SearchBand`. */
-  useLayoutEffect(() => {
-    onFound(found);
-  }, [found, onFound]);
+  /* **The three rules every passage producer follows** — publish before paint,
+     drop an open occurrence the list no longer has, and clear everything on the
+     way out — in src/web/passage-lifecycle.ts rather than here, because there
+     were six copies of them and each one had been got wrong once. `keyed`
+     because `Reader` holds the key and hands it back down.
 
-  /* An open occurrence that is no longer in the list cannot stay open.
-     Regenerating mints new keys for every passage, and a re-extraction can drop
-     one — either way the row and its mark both go, while `openKey` survives and
-     the stepper reads "– / 3" over a list the reader has not left. `SearchBand`
-     has the same effect for the same reason, and it was missing here.
-     Keyed on absence from `found`, so ordinary selection changes are left
-     alone. GPT Sol, 2026-08-27. */
-  useEffect(() => {
-    if (openKey && !found.some((f) => f.key === openKey)) onOpenKey(null);
-  }, [found, openKey, onOpenKey]);
+     What stays here is the policy this mode chose and the others did not: the
+     two effects below, and `onIdea`. */
+  usePassageLifecycle({ kind: "keyed", found, openKey, onFound, onOpenKey });
 
   /* Standing on the first passage is the state a selected idea is *in* — and it
      is the state whether the reader got there by pressing the row or by opening
@@ -249,18 +241,6 @@ function useIdeasMode({
     onOpenKey(first.key);
     onJump(first.blockId);
   }, [found, onJump, onOpenKey]);
-
-  /* Unmount only, with no data dependencies: leaving the mode must take the
-     marks out of the prose with it, and folding this into the effect above
-     would clear them on every change before setting them again — one frame of
-     flicker on every keypress-equivalent. */
-  useEffect(
-    () => () => {
-      onFound([]);
-      onOpenKey(null);
-    },
-    [onFound, onOpenKey],
-  );
 
   return {
     ideaId,
