@@ -61,7 +61,7 @@ import {
 import { LoaderCircle } from "lucide-react";
 
 import { Link } from "./Link.js";
-import { recordLog } from "./log-buffer.js";
+import { nameOfThrown, recordLog } from "./log-buffer.js";
 import { captureClientFailure } from "./monitoring.js";
 import { LIBRARY_HREF } from "./router.js";
 
@@ -115,8 +115,11 @@ class ChunkBoundary extends Component<BoundaryProps, { broken: boolean }> {
     /* `source: "boundary"` because that is what this is — a React boundary that
        tore a subtree down — and the vocabulary in log-buffer.ts is closed. The
        Sentry tag above is where "which boundary" is recorded. The name only:
-       `error.message` is not sent, for the reason at ClientErrorLogEntry. */
-    recordLog({ kind: "client-error", source: "boundary", name: error.name });
+       `error.message` is not sent, for the reason at ClientErrorLogEntry. And
+       not `error.name`: the parameter is typed `Error` and the runtime value
+       need not be one, so the read is `nameOfThrown`'s job and not this file's
+       — src/web/log-buffer.ts § nameOfThrown. */
+    recordLog({ kind: "client-error", source: "boundary", name: nameOfThrown(error) });
   }
 
   override render(): ReactNode {

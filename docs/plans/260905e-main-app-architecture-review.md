@@ -572,19 +572,19 @@ old code, nor that bounding the database *open* bounds nothing else, since a tra
 indefinitely behind a locked one in another tab. Both were found by GPT Sol with a real harness, and
 both would apply to any future schema change here.
 
-- [ ] Reproduce A0's two deferred-response sequences against the current cache seam. Check the
+- [x] Reproduce A0's two deferred-response sequences against the current cache seam. Check the
   introducing history and write the required bug-class postmortem before implementing the fix.
-- [ ] Choose and document the ticket scope; implement atomic eligibility and invalidation with a
+- [x] Choose and document the ticket scope; implement atomic eligibility and invalidation with a
   bounded, migration-safe metadata lifecycle. Keep offline copies readable if metadata admission
   fails or times out, while refusing to write an unfenced new response. Compare against the last
   committed successful sequence, not the last issued one; include LRU touches and whole-article
   eviction in the transactional protocol.
-- [ ] Run the cross-tab/account and invalidation acceptance cases from A0. Use old/new bodies with
+- [x] Run the cross-tab/account and invalidation acceptance cases from A0. Use old/new bodies with
   distinct values and wait for background saves; a future timestamp fixture is not the race.
-- [ ] Include actual sign-out teardown: complete `forgetUser(A)` before releasing A's paused
+- [x] Include actual sign-out teardown: complete `forgetUser(A)` before releasing A's paused
   response; it must not recreate any A body or disturb B's rows. Old tickets remain retired after
   A signs back in; newly reserved reads can save normally. Keep direct-switch partitioning policy.
-- [ ] Update the existing offline plan's implemented-state record and current owning doc signposts.
+- [x] Update the existing offline plan's implemented-state record and current owning doc signposts.
   Review and land independently; no reader refactor is needed to fix this seam.
 
 ### Stage: Establish the behavioural baseline and contain one mode failure

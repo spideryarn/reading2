@@ -86,6 +86,7 @@ const { useGlossary } = await import("../src/web/useGlossary.js");
 const { useQuotes } = await import("../src/web/useQuotes.js");
 const { useTimeline } = await import("../src/web/useTimeline.js");
 const { useSketch } = await import("../src/web/useSketch.js");
+const { useQuiz } = await import("../src/web/useQuiz.js");
 
 /** What `Reader` hands the band. Posed rather than run — see refused-writes. */
 const READ: GlossaryRead = {
@@ -106,6 +107,7 @@ let glossary: ReturnType<typeof useGlossary> | null = null;
 let quotes: ReturnType<typeof useQuotes> | null = null;
 let timeline: ReturnType<typeof useTimeline> | null = null;
 let sketch: ReturnType<typeof useSketch> | null = null;
+let quiz: ReturnType<typeof useQuiz> | null = null;
 
 function Surfaces(): ReactElement {
   ideas = useIdeas("constitution");
@@ -113,6 +115,7 @@ function Surfaces(): ReactElement {
   quotes = useQuotes("constitution");
   timeline = useTimeline("constitution");
   sketch = useSketch("constitution", []);
+  quiz = useQuiz("constitution");
   return createElement("div");
 }
 
@@ -190,13 +193,21 @@ describe("ideas", () => {
  * `parseJobRequest` reads the two the same way, but the work key is computed
  * over the request, so they are not the same key.
  */
-describe("what the empty state asks for, on all five", () => {
+describe("what the empty state asks for, on all six", () => {
   it.each([
     ["the glossary", () => glossary?.find(), "glossary"],
     ["the ideas", () => ideas?.ensure(), "ideas"],
     ["the quotes", () => quotes?.ensure(), "quotes"],
     ["the timeline", () => timeline?.ensure(), "timeline"],
     ["the sketch", () => sketch?.ensure(), "sketch"],
+    /* **The sixth, and it was the odd one out until 2026-09-06.** `useQuiz` had
+       one verb and it was always forced, which was right while the only caller
+       was a button beside questions that already existed. When the Quiz chip
+       started running itself, that made the empty state's button a *different
+       request* from the automatic run — `work_key` includes `force` — so a press
+       landing beside an automatic run was charged twice. GPT Sol found it in the
+       plan; this row is what stops it coming back. */
+    ["the quiz", () => quiz?.ensure(), "quiz"],
   ])("is an unforced run of its own step — %s", async (_name, press, step) => {
     await act(async () => {
       await press();
@@ -212,6 +223,10 @@ describe("what the empty state asks for, on all five", () => {
     ["the quotes", () => quotes?.regenerate(), "quotes"],
     ["the timeline", () => timeline?.regenerate(), "timeline"],
     ["the sketch", () => sketch?.regenerate(), "sketch"],
+    /* `write` rather than `regenerate`, which is the quiz's own name for the
+       forced verb — it replaces the batch rather than appending, and mints a new
+       `batchId` on purpose. */
+    ["the quiz", () => quiz?.write(), "quiz"],
   ])("and the again button forces the same step — %s", async (_name, press, step) => {
     await act(async () => {
       await press();

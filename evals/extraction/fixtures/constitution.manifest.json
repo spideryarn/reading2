@@ -1,0 +1,44 @@
+{
+  "fixture": "constitution",
+  "file": "constitution.html",
+  "note": "A quarter of the article lives inside three closed accordions with aria-hidden='true' on the containers. This manifest is the regression guard for unhideCollapsedSections: the three passages below are exactly what comes back, and an arm that stops un-hiding loses them. HEADING FLOORS, CHECKED HEADING BY HEADING 2026-09-05: the source's 33 <h3> are the 24 article subsections plus nine footer-nav column headings (Products, Models, Solutions, Claude Platform, Resources, Programs, Help and security, Company, Terms and policies), so 24 really is source truth for the article and the existing floor stands. All 8 <h4> are article subsections, declared 'exactly' because there are no others on the page. THE H2 FLOOR WAS RAISED FROM 7 TO 8 AND NOW FAILS, WHICH IS THE FINDING: the source's 9 <h2> are the seven article sections, one chrome CTA ('Read a summary of the constitution'), and 'Acknowledgements' — a real article section, class post-section like the rest — and the shipped extraction drops the Acknowledgements section entirely. Verified by text, not by count: 'Amanda Askell leads Anthropic's Character work and is the primary author of this document' is in the fixture's bytes and is not in the output. minArticleChars was 80000, which is under half the article and could not fail a truncation that kept the first two sections; it is 170000 now. The source body holds 191,875 gistable characters including site nav and footer, the shipped extraction returns 180,791, and the Acknowledgements section is missing from that, so a correct extraction is around 182,000. ARTICLE REGION AND THE FLOOR ON IT, MEASURED 2026-09-05: The two <article> elements hold 155,097 characters against 162,008 for the source body. The shipped extraction returns 152,489, and the 2,608 it misses ARE THE ACKNOWLEDGEMENTS SECTION — eleven paragraphs and its <h2>, listed element by element. Nothing in the region is legitimately droppable (the only other absentees are two eight-character 'Read more' affordances), so the floor is 154,000 and FAILS TODAY, which is the third instrument to say the same thing after the h2 floor and the Amanda Askell needle.",
+  "mustContain": [
+    {
+      "text": "Claude is trained by Anthropic, and our mission",
+      "why": "the opening, which every arm keeps"
+    },
+    {
+      "text": "A constitution in this sense is less like a cage and more like a trellis",
+      "why": "near the end, so a tail truncation shows"
+    },
+    {
+      "text": "A final word",
+      "why": "the last heading"
+    }
+  ],
+  "mustNotContain": [
+    {
+      "text": "Careers",
+      "why": "a site nav item outside the article"
+    }
+  ],
+  "structure": {
+    "h2": {
+      "atLeast": 8
+    },
+    "h3": {
+      "atLeast": 24
+    },
+    "h4": {
+      "exactly": 8
+    }
+  },
+  "maxBlockChars": 4000,
+  "articleRegion": {
+    "within": [
+      "article"
+    ],
+    "why": "Two <article> elements and they are the two halves of the document: the constitution itself and the Acknowledgements section the shipped extraction drops. Everything else under main#main-content is site chrome and the footer nav."
+  },
+  "minArticleChars": 154000
+}

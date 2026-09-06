@@ -2865,6 +2865,32 @@ export const SHARING_MARK_PUBLIC = `${SHARING_ON} Change who can read it.`;
 export const SHARING_MARK_PRIVATE = `${SHARING_OFF} Share it with anyone.`;
 
 /**
+ * **The second paragraph of the mark's card, which is the one worth hovering
+ * for** — added 2026-09-06, when the mark's tooltip became a `ControlTip`
+ * rather than a bare sentence (src/web/Masthead.tsx § `SharingMark`).
+ *
+ * `ControlTip`'s rule is that the second paragraph says the thing a reader
+ * cannot work out by pressing the control, and for this one that is the same
+ * fact from either side: **sharing is not symmetrical**. Turning it on can be
+ * turned off, and turning it off does not reach what has already been read —
+ * `SHARING_CANNOT_UNRING` is the long version, said at the point of no return.
+ * An owner deciding whether to press this deserves the short version here,
+ * before they get to the confirmation.
+ *
+ * The private twin says the smaller thing, and says it because the absence of a
+ * warning is not itself reassuring: an owner who has just read what publishing
+ * costs should be told plainly that none of it has happened.
+ */
+export const SHARING_MARK_HOW_PUBLIC =
+  "Taking it down again refuses the next request, and no more than that — whatever somebody has " +
+  "already read or copied stays with them.";
+
+/** @see SHARING_MARK_HOW_PUBLIC */
+export const SHARING_MARK_HOW_PRIVATE =
+  "Nothing has left your account: the article, your notes and your comments are yours alone until " +
+  "you say otherwise.";
+
+/**
  * **The mark's *name*, which is not its tooltip** — and the two have to differ.
  *
  * Floating UI gives the tooltip to the link as `aria-describedby`, so an
@@ -3813,6 +3839,39 @@ export const REFEREE_TEXT_ALREADY_SENT_SHORT =
  */
 export const REFEREE_DECLARE_IT =
   "Venues that permit AI assistance nearly always require you to say that you used it.";
+
+/**
+ * **The third fact, and the only one in the future tense.**
+ *
+ * Everything else in this notice is about something that has already happened —
+ * the article's text reached a model provider when it was added. This is about
+ * something that has *not*, and that the referee is one press away from causing:
+ * Candidates is the only control in the mode that reaches a **search engine**,
+ * which is a different third party from the model provider, at a different time.
+ *
+ * **It is here, above the chips, rather than on the chip's tooltip**, and that
+ * placement is the whole point. Candidates used to sit behind a labelled button
+ * whose *visible words* named both parties before either was reached; on
+ * 2026-09-06 the chip itself started the run, which moved the disclosure on that
+ * button to after the fact. A `ControlTip` is not a replacement —
+ * docs/project/referee-mode.md § Four labels changed says it outright, *"a
+ * tooltip is not read by anybody in a hurry"*, which is what a referee is. So
+ * the sentence moved to the one place that is on screen before any chip has been
+ * pressed.
+ *
+ * **Never behind the collapse, and drawn above it.** The two sentences it sits
+ * over fold away into `REFEREE_TEXT_ALREADY_SENT_SHORT`; this one does not,
+ * because folding a warning about something that has not happened yet is
+ * dismissing it. It is *above* them rather than below because the box is a
+ * 40%-height scroller, and underneath them an expanded notice pushes this out of
+ * sight while the Candidates chip stays on screen.
+ *
+ * If Candidates ever goes back behind a button, this line goes with it.
+ * docs/plans/260906b-opening-a-mode-starts-it-generating.md § Stage 4.
+ */
+export const REFEREE_CANDIDATES_REACHES_SEARCH =
+  "Opening Candidates may send terms drawn from this paper to a search engine, which is a " +
+  "different third party from the model provider.";
 
 /* ------------------------------------------------------------- feedback -- */
 

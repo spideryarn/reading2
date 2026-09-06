@@ -59,6 +59,7 @@ import { useTimeline } from "./useTimeline.js";
 import { DebatePanel } from "./DebatePanel.js";
 import { useDebate } from "./useDebate.js";
 import { QuizPanel, RememberSubModeToggle } from "./QuizPanel.js";
+import { armActivationForRefereeView } from "./activation.js";
 import { useQuiz } from "./useQuiz.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
@@ -242,6 +243,7 @@ import { rowsForBlockIds } from "./rows.js";
 import {
   REFEREE_DECLARE_IT,
   REFEREE_TEXT_ALREADY_SENT,
+  REFEREE_CANDIDATES_REACHES_SEARCH,
   REFEREE_TEXT_ALREADY_SENT_SHORT,
 } from "../messages.js";
 import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "./feedback-context.js";
@@ -3992,6 +3994,7 @@ export function RememberBand({
   const toggle = (
     <RememberSubModeToggle
       value={remember}
+      slug={slug}
       onChange={(next) =>
         /* Rule 1. Both keys in one call, so this is one history entry — and
            `thread: null` on the way to Quiz rather than only on arrival, so
@@ -5633,6 +5636,24 @@ function RefereeBand({
               <ChevronRight size={12} aria-hidden="true" />
             )}
           </button>
+          {/* **Outside the collapse, and above it.**
+
+              *Outside*, because the sentences below fold away into the label on
+              the toggle and this one is about something that has **not**
+              happened yet — that the next chip press would cause — and folding a
+              warning about that is dismissing it.
+
+              *Above*, because `.ref-brief` is a 40%-height scroller
+              (styles.css § referee mode): put this after the two paragraphs and
+              a referee who **expands** the notice pushes it below the fold while
+              the Candidates chip stays in view, which is the one arrangement it
+              must never be in. Measured in Chrome at 1400px and at 390px,
+              2026-09-06. GPT Sol raised the scroller; the browser pass found the
+              fold.
+
+              src/messages.ts § `REFEREE_CANDIDATES_REACHES_SEARCH` carries the
+              rest, including why it is not on the Candidates chip's tooltip. */}
+          <p className="ref-notice-ahead">{REFEREE_CANDIDATES_REACHES_SEARCH}</p>
           {noticeOpen && (
             <>
               <p>{REFEREE_TEXT_ALREADY_SENT}</p>
@@ -5650,7 +5671,7 @@ function RefereeBand({
         <SourceScanNotice state={scan} />
       </div>
 
-      <RefereeViews view={view} onView={(next) => void setView(next)} />
+      <RefereeViews slug={slug} view={view} onView={(next) => void setView(next)} />
 
       <div className="ref-panel">
         {/* **Inside the scroller, under the chips, and above the sub-mode** —
@@ -5696,9 +5717,21 @@ function RefereeBand({
  * every other mode in this file makes.
  */
 export function RefereeViews({
+  slug,
   view,
   onView,
 }: {
+  /**
+   * **Only so that a press can be recorded**, and read nowhere else in here.
+   *
+   * This component was a pure function of two props until 2026-09-06, when the
+   * chips started running what they open (`onView` below). Arming at the click
+   * rather than one level up is the call `Dock` and `DiagramPanel` already made,
+   * and it is the one that keeps the seam testable: the button and the token are
+   * in the same file, so a test that clicks the real chip is a test of the real
+   * rule.
+   */
+  slug: string;
   view: RefereeView;
   onView(next: RefereeView): void;
 }) {
@@ -5742,7 +5775,21 @@ export function RefereeViews({
                  of them unreachable by keyboard altogether. */
               tabIndex={0}
               className={`ref-view-btn${v === view ? " on" : ""}`}
-              onClick={() => onView(v)}
+              onClick={() => {
+                /* **The gesture seam for Claims and Candidates.** Pressing
+                   either chip with nothing there starts it — Greg's rule about
+                   opening a mode, one level down. Criteria and Mirror arm
+                   nothing, and the table that says so is
+                   src/web/activation.ts § REFEREE_TARGET, which is also where
+                   the note about Candidates and the search engine lives.
+
+                   Here, in the `onClick`, and deliberately **not** in `onView`'s
+                   `setView` one level up: `?referee=` is query state, so Back and
+                   Forward move it too, and retracing your steps through the four
+                   chips must not buy a claims run or a web search. */
+                armActivationForRefereeView(slug, v);
+                onView(v);
+              }}
             >
               {REFEREE_VIEW_LABEL[v]}
             </button>

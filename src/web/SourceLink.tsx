@@ -75,7 +75,7 @@ import { apiFetch } from "./lib/api.js";
  * credential — so for a visitor a `null` here is *either* an upload *or* an
  * address we would not publish, and nothing on this side can tell them apart.
  * Whoever turns a `null` into the sentence "this was uploaded" has to establish
- * the reader owns the article first; `OriginMark` in Masthead.tsx is the one
+ * the reader owns the article first; `OriginLine` in Masthead.tsx is the one
  * place that does.
  */
 export function webSource(meta: Meta): string | null {

@@ -10,7 +10,7 @@
  * Nothing here talks to the server. `sharing` is a literal, and the only
  * request the component can make needs a button press.
  *
- *   npm run dev  →  http://localhost:<vite's port>/preview-sharing.html
+ *   npm run dev  →  http://localhost:<vite's port>/preview/preview-sharing.html
  *
  * `localhost`, not `127.0.0.1`: vite binds IPv6, so the numeric form refuses
  * the connection on a perfectly healthy server.

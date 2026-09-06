@@ -1,0 +1,50 @@
+{
+  "fixture": "shakespeare-hamlet",
+  "file": "shakespeare_hamlet.html",
+  "note": "The control page: 52 blocks, every one correct. Its value here is the stage direction 'and Lords.' — ten characters of genuine article content — and the fact that fixtures/README.md already records this page as NOT defeating a crude short-block rule. It does now: 'and Lords.' is a mustContain. STRUCTURE, CHECKED 2026-09-05: the only structural tag on this page that is the article is <li>. The source's 45 <li class='playtext'> are the 45 speeches of the scene and there are no other list items anywhere in the document, so 'exactly 45' is source truth in both directions — it fails an arm that drops a speech and an arm that glues a list of site links on. Nothing else is assertable: all 5 <table> are Open Source Shakespeare's layout and navigation (the search bar, two 'Previous scene / Play menu / Next scene' rails, the scene's own layout wrapper and its heading), all 17 <img src> are site chrome (dingbats, arrows, a print icon, the GMU English logo), and the single <h2> is the play title, which Readability hoists into `title`. minArticleChars WAS 12000 AND WAS IMPOSSIBLE: the entire source body holds 9,392 gistable characters, navigation included, so no extraction of this page could ever have satisfied it — the manifest's own fault, not the pipeline's. It is 8000 now: the shipped extraction returns 8,833 characters of scene, and 8,000 is under that and far above anything a truncation arm leaves. ARTICLE REGION AND THE FLOOR ON IT, MEASURED 2026-09-05: The scene — its title, its stage directions and its 45 speeches — is 7,299 characters against 7,701 for the whole page, because Open Source Shakespeare's furniture is markup rather than words. The shipped extraction returns 7,260; it misses the scene title and the location line. The floor is 7,000.",
+  "mustContain": [
+    {
+      "text": "and Lords.",
+      "why": "a stage direction of ten characters; real content, and short",
+      "negativeControl": "short-dialogue"
+    },
+    {
+      "text": "Enter King, Queen, Polonius, Ophelia, Rosencrantz, Guildenstern,",
+      "why": "the opening stage direction the scene starts on"
+    },
+    {
+      "text": "To be, or not to be",
+      "why": "the soliloquy — if this is missing the page is not the scene"
+    },
+    {
+      "text": "Madness in great ones must not unwatch'd go",
+      "why": "the closing line, so a tail truncation is visible"
+    },
+    {
+      "text": "1690",
+      "why": "A VERSE LINE NUMBER, four characters, in its own <span> inside the speech at line 1690 — 'But with a crafty madness keeps aloof'. Line numbers are how a play text is cited and every one of them on this page is a leaf of six characters or fewer, so 260830at's rule takes all thirteen of them while every speech survives and every other assertion on this page still holds. Added 2026-09-05 after the arm was found to lose NOTHING here: it occurs once in the source and once in the shipped output, so it is neither a date nor a coincidence.",
+      "negativeControl": "numeric-cell"
+    }
+  ],
+  "mustNotContain": [
+    {
+      "text": "Open Source Shakespeare",
+      "why": "the site's own name, which is not in the play"
+    }
+  ],
+  "structure": {
+    "li": {
+      "exactly": 45
+    }
+  },
+  "maxBlockChars": 4000,
+  "articleRegion": {
+    "within": [
+      "p.scenetitle",
+      "p.stagedir",
+      "li.playtext"
+    ],
+    "why": "There is no article container on an Open Source Shakespeare page — the scene lives in an unclassed <td> of a layout table. So the region is named element by element: the scene title, the stage directions (which is where 'and Lords.' lives) and the 45 li.playtext speeches. Everything else on the page is the search bar, two 'Previous scene / Play menu / Next scene' rails and the GMU footer."
+  },
+  "minArticleChars": 7000
+}

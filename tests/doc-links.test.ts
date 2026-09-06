@@ -42,7 +42,22 @@ import { describe, expect, it } from "vitest";
 // exactly how it came to carry a link to a `#mcp-servers` heading that did not
 // exist. A dead anchor there costs more than one in docs/: it is read while
 // building a machine, by someone who cannot yet ask the repo anything.
-const DOC_FILES = ["AGENTS.md", "infra/hetzner/README.md", ...globSync("docs/**/*.md")];
+// README.md and CONTRIBUTING.md are named for the same reason and were added on
+// 2026-09-06, the day the repo was being readied to go public. They are the two
+// files a stranger reads first and the two most likely to be read by somebody
+// who cannot yet ask the repo anything — and they were outside this gate, so a
+// dead link in either failed silently while the identical link inside docs/ went
+// red. That is not hypothetical: the same morning, a signpost to
+// docs/tutorials/architecture.html was committed before the tutorial itself, and
+// the copy in docs/project/architecture.md reddened this suite within minutes
+// while the copy in README.md said nothing at all.
+const DOC_FILES = [
+  "AGENTS.md",
+  "README.md",
+  "CONTRIBUTING.md",
+  "infra/hetzner/README.md",
+  ...globSync("docs/**/*.md"),
+];
 
 /** Everything that carries prose about the docs in a comment. */
 const SOURCE_FILES = [
@@ -437,6 +452,11 @@ describe("docs have exactly one owner", () => {
  */
 const EVERGREEN = [
   "AGENTS.md",
+  /* The front door, for the same reason AGENTS.md is here: it is rewritten
+     rather than superseded, so a line number in it rots in place with nothing
+     dating it. Neither carried one when they joined on 2026-09-06. */
+  "README.md",
+  "CONTRIBUTING.md",
   "infra/hetzner/README.md",
   ...globSync("docs/project/**/*.md"),
   ...globSync("docs/reusable/*.md"),
