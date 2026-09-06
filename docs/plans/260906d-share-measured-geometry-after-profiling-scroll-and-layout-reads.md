@@ -1,6 +1,6 @@
 # Share measured geometry — after profiling the scroll and layout reads
 
-Status: **planning.** Nothing built yet.
+Status: **Stage 1 done — the verdict is optimise.** Stage 2 and 3 to come.
 Source baseline `cc749e0f1061583f1a8877dc3db5b6c1b2c162e3` (branch `worktree-a8-shared-geometry`).
 
 This is item **A8** of
@@ -79,8 +79,10 @@ snapshot and do not need it:
   for `viewportH`.
 
 Neither is the subject of A8, both are inside its file set, and the review's own licence for cleanups
-the work exposes covers them. They are Stage 2, a small commit whose value does not depend
-on the profile's verdict — but they are still *measured* before and after, not asserted.
+the work exposes covers them. They are **Stage 2**, a small commit — but, per Sol F3, one that is
+reached **only if Stage 1 optimises**, and they are *measured* before and after rather than asserted.
+Stage 1 did optimise, and it confirmed both directly: `stickyOffset` runs **2 calls per frame** and
+`safeAreaInsets` **70 calls per 30-frame gesture**, so the duplication is real and is now countable.
 
 ### The read/write interleave that matters is not the one the review names
 
@@ -470,6 +472,32 @@ From the review, and none of them is in scope:
    counts during the scroll** as a third column, since a per-frame cost that never lands in a long
    task is a different finding from one that does.
 
+   **Built 2026-09-06 as [`geometry-cost.ts`](../../src/web/geometry-cost.ts)**, and its accounting
+   convention has to be stated here because it is easy to get backwards and every later number depends
+   on it:
+
+   > **`reads` are exclusive; `ms` is inclusive.** A parent counts only the reads it performs itself,
+   > and a nested leaf owns its own — so the `reads` column *sums* across all ten sites to the frame's
+   > real total with nothing double-counted, while **the ten `ms` numbers must never be summed**
+   > (Sol F1's "inclusive parent and leaf buckets are never summed", made structural rather than
+   > documented).
+
+   Two consequences worth knowing before reading any output. `diagramReaderRow` correctly reports
+   **zero reads**, because everything it causes happens inside `measureRow` — that zero is the
+   accounting working, not a dead counter. And `readingPosition` reports `1 + resolved rows`, falling
+   to `1 + 0` during a glide, which is the existing rect-skip showing up in the data.
+
+   A `writes` field was added to the tally beyond the contract, because
+   `ContextPanel.place`, `Spine`'s `apply` and `watchBarVisibility` are the three sites that write,
+   and F8 turns on whether their writes actually land between other consumers' reads.
+
+   **What the suite cannot see**, stated because it decides how much weight the browser run carries:
+   `tests/geometry-cost.test.ts` drives the real functions in jsdom for seven sites, but
+   `readingPosition`, `diagramReaderRow` and `contextPanelPlace` are module-local to large components
+   and are **not** covered — a dropped `noteGeometry` at those three would not go red. The browser run
+   is their only check, so their population counts must be confirmed nonzero there before any of their
+   numbers are believed.
+
    **Leaf clocks are off during the decision run**, for A7's reason: the per-section rect loop is the
    interval being measured, so two clock reads per section against a 4ms threshold would perturb the
    very number the rule is applied to. `"full"` is a separate diagnostic whose absolute numbers are
@@ -493,6 +521,92 @@ performance.md, and the job is done. That is a legitimate finish and not a failu
 **Done when:** the numbers exist with their run-to-run range, the population counts are recorded
 beside them, the commands are recorded so they can be re-taken, and the decision rule has been applied
 in writing.
+
+### Stage 1 result, 2026-09-06 — **optimise**, on clause 1, on both heavy shapes, in every session
+
+Production build, `vite preview` on port 5310, Playwright against system Chrome on the Hetzner box.
+Three sessions per configuration, `--repeats 6 --warmup 1`, pinned scroll of 30 × 100px = 3,000px at a
+requested 16ms cadence with a 500ms settle, run from the top **and** from the middle. Re-runnable:
+[`scripts/measure-geometry.ts`](../../scripts/measure-geometry.ts).
+
+**Population confirmed in the loaded page before any timing**, and the corpus survey checks out
+against the instrument, which is the cross-check that matters: `readingPosition` reports **1,238**
+reads per call on `m1-kuhn` (1,237 sections + one `scrollY`) and **52** on `replication-crisis`
+(51 + 1). Those are the survey's exact numbers, arrived at by a counter that knows nothing about
+`<td>` elements. The measured refresh cadence with nothing happening was p50 16.7ms — that is the
+noise floor, and it is why the frame numbers below are not the box being idle-slow.
+
+#### The pilot verdict — `readingPosition` + `columnContext` only, per Sol F4
+
+Per **scroll frame**, p50 (and p95), across three sessions × two start positions:
+
+| article | sections | p50 range | p95 range | clause 1 (p50 ≥ 4 or p95 ≥ 8) |
+|---|---:|---|---|---|
+| `m1-kuhn` (wide, shallow) | 1,237 | **9.20 – 11.90 ms** | 10.61 – 14.12 | **fires, every run** |
+| `evaldeepen` (deeper shape) | 1,166 | **7.32 – 15.81 ms** | 8.34 – 18.09 | **fires, every run** |
+| `replication-crisis` (control) | 51 | 1.33 – 1.89 ms | 1.59 – 2.19 | does not fire |
+
+**Both heavy shapes convict, so this is not workload-specific** — the condition F7 set for a full
+verdict rather than a hedged one. The ordinary-size control sits comfortably under, which is what
+tells us the cost is the section loop and not a fixed overhead.
+
+**Clause 3 fires too**: a granularity column toggle spends **12.50 ms** in the pilot at the median
+against an 8ms budget, and a mode switch has a pilot p95 of **421.60 ms**.
+
+**Clause 2 never fires, and that is the honest half.** Duty cycle peaked at 6.1% against a 10%
+threshold. The reason is not that the pilot is cheap but that the frames are enormous — frame
+intervals on `m1-kuhn` ran p50 83–133ms with ~62 dropped frames per repetition. So **the pilot is
+about 2–6% of wall time and is not why this page is slow**, exactly as A7 found annotation was 10–14%
+of its gesture. Both halves go in the write-up, because a report that implied A8 fixes the sluggishness
+would send the next person to the wrong room. What justifies the work is the mechanism, not the share:
+**74,430 layout reads per 3,000px scroll**, from two hooks whose combined output is one URL string and
+one integer.
+
+#### Where the time actually goes, and it is not the flush
+
+| | `m1-kuhn` per gesture |
+|---|---:|
+| `TaskDuration` (main thread busy) | 13,882 ms |
+| `LayoutDuration` | 284 ms |
+| `LayoutCount` | 56 flushes |
+| pilot inclusive ms | 339 ms |
+| total layout reads, all ten sites | 74,726 |
+
+Layout is ~2% of the main thread. **The pilot's cost is the reads themselves, not forced layout** —
+which is what the pre-plan spike predicted and what makes sharing the scan a real saving rather than a
+relabelling. `LayoutCount` (56) tracks the write count (`spineApply` 30 + `contextPanelPlace` 16 = 46)
+rather than the read count, so the flushes belong to the writers.
+
+**F1's warning stays live, and Stage 4 must discharge it.** Some part of the pilot's 339 ms is the
+flush that `spineApply`'s and `contextPanelPlace`'s writes made necessary, and sharing the scan will
+not remove that. What it should remove is the *second* consumer's 37,290 clean reads. The A/B in
+Stage 4 is the counterfactual F1 requires, and it is what decides whether this was real.
+
+#### `contextPanelPlace` is bigger than the pilot, and F8 is now established
+
+| gesture, `m1-kuhn` | calls | inclusive ms | per-call p95/max |
+|---|---:|---:|---|
+| scroll from the middle | 32 | **743.4** | 60.5 / 73.6 ms |
+| scroll from the top | 16 | 308.8 | 63.6 / 108.7 ms |
+| granularity column toggle | 3 | 130.5 | 173.4 / 173.4 ms |
+
+F8 asked that the read/write interleave be established rather than asserted. **It is now**, and it is
+the single most expensive geometry site in the reading view — 743 ms in one gesture, more than double
+both pilot buckets combined, from **32 calls doing 272 reads**. The cost per read is four orders of
+magnitude worse than the pilot's, which is the signature of a flush per call rather than per frame.
+
+**Per F4 this cannot authorise the A8 pilot and does not change its verdict.** It is recorded here as a
+separately scoped follow-up with its numbers attached, so the next person does not have to rediscover
+it. It is plausibly worth more than everything else in this plan.
+
+#### Two things the phone run says that the desktop run cannot
+
+`section cells on screen=0` on a 390px viewport: **there are no gist columns on a phone**, so
+`columnContext` never runs and there is no duplication to share. Yet the pilot still measures
+**4.81–5.67 ms** per scroll frame, from `readingPosition` alone, still paying 1,238 reads a frame.
+So on a phone the sharing half of Stage 3 buys nothing and only the *caching* half would — worth
+knowing before assuming one fix serves both. And `watchBarVisibility` is confirmed attached there
+(30 calls, one write) and confirmed cheap (1.2–2.8 ms per gesture), which closes it as a suspect.
 
 ### ~~Stage 1b — generate a heavy workload~~ — **struck before the job started**
 

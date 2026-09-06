@@ -18,6 +18,7 @@
  * had already left.
  */
 import { useEffect, useState } from "react";
+import { NO_GEOMETRY_CLOCK, noteGeometry, parentGeometryClock } from "./geometry-cost.js";
 import { activeSectionIndex, type Section } from "./position.js";
 import { rowsForBlockIds } from "./rows.js";
 
@@ -125,8 +126,32 @@ export function useColumnContext({
     let last: LiveContext = EMPTY;
     let frame = 0;
 
+    /**
+     * What one `measure` reads, if anybody is counting — geometry-cost.ts.
+     *
+     * Computed once here rather than tallied inside the loop, because the
+     * element lists are fixed for the life of this effect and a running count
+     * would be an `O(sections)` addition *inside* the interval being timed,
+     * against a 4ms budget. **The resolved rows, not `rows.length`**: a hole
+     * (`rowsForBlockIds` returns `null` for a block with no row) is skipped
+     * without a read, and counting it would report a busy sampler on an article
+     * whose tree never resolved — the exact inversion
+     * docs/reusable/silent-success.md is about.
+     *
+     * Three fixed reads: `innerHeight` twice (the focus line and `viewportH` —
+     * the duplication Stage 2 hoists) and the `svh` probe's `clientHeight`.
+     * Then one rect per resolved row, one per gist header found, and one for
+     * the pinned column if it is there.
+     */
+    const readsPerMeasure =
+      3 +
+      rows.reduce((n, el) => (el ? n + 1 : n), 0) +
+      [...heads.values()].reduce((n, th) => (th ? n + 1 : n), 0) +
+      (pin ? 1 : 0);
+
     const measure = () => {
       frame = 0;
+      const t0 = parentGeometryClock();
       const focusLine = window.innerHeight * FOCUS_LINE;
       const tops = rows.map((el) =>
         el ? el.getBoundingClientRect().top : Number.POSITIVE_INFINITY,
@@ -153,9 +178,17 @@ export function useColumnContext({
           const o = last.rects.get(d);
           return o && o.left === r.left && o.width === r.width && o.top === r.top;
         });
-      if (same) return;
+      /* Both exits are charged. The reads have all happened by here whichever
+         way it goes, so a frame that changed nothing cost exactly as much
+         layout work as one that did — and only counting the frames that
+         published would report a sampler doing a fraction of its real work. */
+      if (same) {
+        if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("columnContext", t0, readsPerMeasure);
+        return;
+      }
       last = { focusRow, rects, viewportH, stableH, clipLeft };
       setLive(last);
+      if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("columnContext", t0, readsPerMeasure);
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(measure);

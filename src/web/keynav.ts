@@ -53,6 +53,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { Block } from "../types.js";
+import { geometryCostOn, leafGeometryClock, noteGeometry } from "./geometry-cost.js";
 import { activeSectionIndex } from "./position.js";
 import { SCROLL_MS, scrollToBlock, stickyOffset } from "./scroll.js";
 import { navigableItems, type Cell, type Geometry } from "./tree.js";
@@ -213,11 +214,22 @@ export function nextAim(
  *
  * Exported for swipe.ts, which steps from the same place by the same rule — a
  * finger and a key must not disagree about which item the reader is in.
+ *
+ * **Counted as a geometry leaf** (geometry-cost.ts), and it is the heaviest of
+ * the three: one rect per row over **every** block, not per section. On a key
+ * press or a swipe that is a gesture-rate cost; `DiagramPanel`'s `useReaderRow`
+ * calls it on every scroll frame while a scatter mode is on, which is why its
+ * `calls` matters as much as its `ms`. The `stickyOffset` inside it is charged
+ * to its own leaf, so the reads here are exactly the row count.
  */
 export function measureRow(): number {
+  const counting = geometryCostOn();
+  const t0 = leafGeometryClock();
   const rows = document.querySelectorAll<HTMLElement>("tbody tr[data-block]");
   const tops = Array.from(rows, (r) => r.getBoundingClientRect().top);
-  return activeSectionIndex(tops, stickyOffset() + 1);
+  const row = activeSectionIndex(tops, stickyOffset() + 1);
+  if (counting) noteGeometry("measureRow", t0, rows.length);
+  return row;
 }
 
 /** Typing somewhere? Then the arrows are the caret's, not ours. */

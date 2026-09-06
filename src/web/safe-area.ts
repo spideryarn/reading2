@@ -44,6 +44,8 @@
  * earlier version of this comment down from "a probe cannot be wrong".
  */
 
+import { geometryCostOn, leafGeometryClock, noteGeometry } from "./geometry-cost.js";
+
 /** Pixels of screen edge that are spoken for, on each side. */
 export interface SafeAreaInsets {
   top: number;
@@ -127,8 +129,28 @@ function px(value: string): number {
  *
  * Returns zeroes in any environment without a DOM to probe, which is every
  * test that has not built one.
+ *
+ * **Counted as a geometry leaf** (geometry-cost.ts), because the question above
+ * — is this worth caching — is now a measurement rather than an argument, and
+ * this is the site the answer is read off. One read per call: the four padding
+ * values come off a single `getComputedStyle`, so one flush serves all four,
+ * exactly as one `getBoundingClientRect` serves `top` and `bottom`. The early
+ * return reads nothing and is counted as a call with zero reads, which is the
+ * honest shape of a test environment with no body.
  */
 export function safeAreaInsets(): SafeAreaInsets {
+  const counting = geometryCostOn();
+  const t0 = leafGeometryClock();
+  const insets = measureInsets();
+  if (counting) noteGeometry("safeAreaInsets", t0, insets === NO_INSETS ? 0 : 1);
+  return insets;
+}
+
+/** The work, split out so a `return` added later cannot escape the measurement
+ *  above — annotation-cost.ts makes the same move for the same reason, and it
+ *  is a silent-success guard: an undercounting probe reports a small number,
+ *  and a small number is the answer this job would most like to hear. */
+function measureInsets(): SafeAreaInsets {
   if (typeof document === "undefined" || !document.body) return NO_INSETS;
   const style = window.getComputedStyle(ensureProbe());
   return {

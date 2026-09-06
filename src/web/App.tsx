@@ -238,6 +238,7 @@ import {
 import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
 import { SmallScreenHint } from "./SmallScreenHint.js";
 import { useRenderCount } from "./perf.js";
+import { NO_GEOMETRY_CLOCK, noteGeometry, parentGeometryClock } from "./geometry-cost.js";
 import { rowsForBlockIds } from "./rows.js";
 import {
   REFEREE_DECLARE_IT,
@@ -1531,9 +1532,15 @@ function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: str
        article, and the largest single reason a mode switch there cost 4.7
        seconds (Sentry SPIDERYARN-READING2-1M). */
     const rows = rowsForBlockIds(sections.map((s) => s.blockId));
+    /* How many rects a frame reads, for geometry-cost.ts — the resolved rows,
+       not `rows.length`, since a `null` hole is skipped without a read and
+       counting it would report a busy sampler on an article whose tree never
+       resolved. Once per effect, outside the timed frame. */
+    const resolved = rows.reduce((n, el) => (el ? n + 1 : n), 0);
     let frame = 0;
     const measure = () => {
       frame = 0;
+      const t0 = parentGeometryClock();
       /* Every rule this makes is in position.ts, and it is pure so that the one
          that matters can be watched failing — an untested guard against a race
          is the shape silent-success.md is about.
@@ -1557,6 +1564,13 @@ function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: str
         atTop: window.scrollY <= stickyOffset(),
         held: synced.current,
       });
+      /* Before the early return, so a frame that decides to write nothing still
+         reports the layout it read to decide that. `window.scrollY` plus one
+         rect per resolved row — and **zero rects during a glide**, which is the
+         skip above working and is itself worth seeing in the data. The two
+         `stickyOffset()` calls are charged to their own leaf. */
+      if (t0 !== NO_GEOMETRY_CLOCK)
+        noteGeometry("readingPosition", t0, 1 + (jumpInFlight ? 0 : resolved));
       if (next === null) return;
       synced.current = next.at;
       void setAt(next.at);

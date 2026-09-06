@@ -35,6 +35,7 @@ import type { BlockId, NodeId } from "../types.js";
 import { landmarkLines, type ContextEntry, type ContextItem } from "./context.js";
 import { ContextList } from "./ContextList.js";
 import { TooltipGroup } from "./Tooltip.js";
+import { NO_GEOMETRY_CLOCK, noteGeometry, parentGeometryClock } from "./geometry-cost.js";
 import { FOCUS_LINE, type ColumnRect } from "./useColumnContext.js";
 import { NAV_DEPTH_ATTR } from "./keynav.js";
 import { SWIPE_ATTR } from "./swipe.js";
@@ -145,15 +146,37 @@ export function ContextPanel({
   // panel are a constant inside `landmarkLines`.
   const lines = landmarkLines(entries, stableH);
 
-  // Scroll the list so the current item's middle sits on the focus line.
-  // Measured, not computed from entry counts: tiers have different heights and
-  // the gist wraps.
+  /**
+   * Scroll the list so the current item's middle sits on the focus line.
+   * Measured, not computed from entry counts: tiers have different heights and
+   * the gist wraps.
+   *
+   * **The read → write interleave, and the one worth measuring most**
+   * (geometry-cost.ts). This runs from a layout effect keyed on `rect.top` —
+   * `useColumnContext`'s sticky-header bottom, which TableView.tsx says plainly
+   * settles over most frames near the masthead — once per mounted gist panel,
+   * and it ends by writing `scrollTop`. A browser spike for
+   * docs/plans/260906d-share-measured-geometry-after-profiling-scroll-and-layout-reads.md
+   * measured the interleaved shape at 378–400ms per frame against 4–5ms for the
+   * clean one, so whether this really interleaves *here* dwarfs everything else
+   * in that plan if it does, and should stop being mentioned if it does not.
+   *
+   * Nine reads on the ordinary path — `innerHeight`, the panel's rect,
+   * `offsetTop` three times, `offsetHeight` twice, the heading's `offsetHeight`,
+   * and the panel's `clientHeight` — and one write. The no-current path is one
+   * write and no reads at all, which is a real and different shape.
+   */
   const place = useCallback(() => {
+    const t0 = parentGeometryClock();
     const p = panel.current;
-    if (!p) return;
+    if (!p) {
+      if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("contextPanelPlace", t0, 0);
+      return;
+    }
     const cur = list.current?.querySelector<HTMLElement>("li.tier-cur");
     if (!cur) {
       p.scrollTop = 0;
+      if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("contextPanelPlace", t0, 0, 1);
       return;
     }
     const focusY = window.innerHeight * FOCUS_LINE - p.getBoundingClientRect().top;
@@ -181,6 +204,9 @@ export function ContextPanel({
     const top = cur.offsetTop - (head?.offsetHeight ?? 0);
     const bottom = cur.offsetTop + cur.offsetHeight - (p.clientHeight - FADE_PX);
     p.scrollTop = Math.max(0, Math.min(top, Math.max(bottom, wanted)));
+    /* Eight when there is no group heading — the parts, whose parent is the
+       root, correctly measure nothing there. */
+    if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("contextPanelPlace", t0, head ? 9 : 8, 1);
   }, []);
 
   // `entries`, the column width and the viewport height are re-run triggers,

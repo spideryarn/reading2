@@ -11,6 +11,13 @@
  * Everything addresses the block by its stable id — never by offset or selector
  * path. See docs/project/block-ids.md.
  */
+import {
+  geometryCostOn,
+  leafGeometryClock,
+  NO_GEOMETRY_CLOCK,
+  noteGeometry,
+  parentGeometryClock,
+} from "./geometry-cost.js";
 import { safeAreaInsets } from "./safe-area.js";
 
 /**
@@ -86,8 +93,20 @@ export function dockOffset(): number {
  *    `tests/mobile-chrome.test.ts` poses such a head as a decoy.
  *
  * One rect per call. Everything asking already reads layout in the same batch.
+ *
+ * **Counted as a geometry leaf** (geometry-cost.ts): one rect of its own, plus
+ * the `getComputedStyle` inside `safeAreaInsets`, which is charged to its own
+ * leaf rather than to this one. `readingPosition` calls this twice per scroll
+ * frame and `keynav` and `DiagramPanel` call it again on their own cadences, so
+ * `calls` is the number Stage 2's hoist has to move.
+ *
+ * **Both returns are instrumented.** A third one added below and left out would
+ * undercount, and a small number is the answer this job would most like to hear
+ * — docs/reusable/silent-success.md.
  */
 export function stickyOffset(): number {
+  const counting = geometryCostOn();
+  const t0 = leafGeometryClock();
   const safeTop = safeAreaInsets().top;
   const bar = document.querySelector<HTMLElement>(".controls");
   /* **`safeTop`, not `0`, when there is no bar.** There is a fixed opaque
@@ -98,7 +117,12 @@ export function stickyOffset(): number {
      stage 4 of docs/plans/260905d-declutter-the-reading-view-top-bars.md takes
      the bar away in most modes, which turns this from a boot-time transient
      into the resting state. GPT Sol, reviewing the plan, 2026-09-05. */
-  if (!bar) return safeTop;
+  if (!bar) {
+    // No bar, no rect: a call with zero reads of its own, which is the honest
+    // shape of a page whose controls have not mounted.
+    if (counting) noteGeometry("stickyOffset", t0, 0);
+    return safeTop;
+  }
   const rect = bar.getBoundingClientRect();
   /**
    * **How much of the bar a row arriving at the top will have to clear** — not
@@ -157,7 +181,11 @@ export function stickyOffset(): number {
    * always was, which is why `tests/mobile-chrome.test.ts` poses an inset
    * rather than trusting the machine it runs on.
    */
-  return Math.max(safeTop, Math.min(rect.height + safeTop, rect.bottom));
+  const offset = Math.max(safeTop, Math.min(rect.height + safeTop, rect.bottom));
+  // One rect. `height` and `bottom` come off the DOMRect it already returned,
+  // which is a snapshot and costs nothing to read twice.
+  if (counting) noteGeometry("stickyOffset", t0, 1);
+  return offset;
 }
 
 /**
@@ -297,21 +325,37 @@ export function watchBarVisibility(): () => void {
     delete document.documentElement.dataset.bars;
   };
 
+  /**
+   * **A geometry parent** (geometry-cost.ts), and the cheapest one: exactly one
+   * read, `window.scrollY`, on either path. What it is in the profile for is
+   * its `writes` — it is the one place in this file set where a style write
+   * lands in the middle of the frame's rect reads, and a write between two
+   * reads is what turns cheap lookups into forced layouts. It writes only on a
+   * transition, so a run showing many calls and one or two writes is the
+   * expected shape rather than a broken counter, and it only attaches at all
+   * while the small-device query matches — so a laptop reports nothing here.
+   */
   const apply = () => {
     pending = 0;
+    const t0 = parentGeometryClock();
     // A jump we started is not the reader scrolling, and chrome that answers to
     // it would move the ground under a destination already calculated. See
     // `markOurScroll`.
     if (performance.now() < quietUntil) {
       from = window.scrollY;
+      if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("barVisibility", t0, 1);
       return;
     }
     const next = stepBar(hidden, window.scrollY, from);
     from = next.from;
-    if (next.hidden === hidden) return;
+    if (next.hidden === hidden) {
+      if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("barVisibility", t0, 1);
+      return;
+    }
     hidden = next.hidden;
     if (hidden) document.documentElement.dataset.bars = "hidden";
     else delete document.documentElement.dataset.bars;
+    if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("barVisibility", t0, 1, 1);
   };
 
   const onScroll = () => {
