@@ -95,9 +95,26 @@ was Greg's is marked as his.
   mechanism. The glyph never goes.
 
   **My first answer was "no new rung", and Fable was right that it was the wrong economy** — see
-  below. Rung 0 goes from ~1416px to roughly 1600, and shedding fourteen mode words to keep two
-  app-level ones is backwards. So a new rung goes in above the old rung 1, dropping only the app
-  cluster's words, and the rungs renumber.
+  below. So a new rung goes in above the old rung 1, dropping only the app cluster's words, and the
+  rungs renumber.
+
+  **Measured before anything was built**, 2026-09-06, by binary search on the viewport width at
+  which each rung stops fitting — `scrollWidth` at a wide viewport cannot answer this, because it is
+  clamped to `clientWidth` and a rung that fits reports only "fits" (`dock-fit.ts` § the one
+  measurement). Signed in, on the reading view, above the 731px breakpoint:
+
+  | modes drawn | rung 0 needs | rung 1 needs | rung 2 needs |
+  |---|---|---|---|
+  | 9 — the default reader | 1206px | 815px | ≤ 740px |
+  | 14 — experimental features on | 1647px | 992px | ≤ 740px |
+
+  **This corrects Fable's premise while confirming its conclusion**, and the difference is worth
+  writing down. Fable argued that a 1440 laptop would shed fourteen mode words to keep two app-level
+  ones. It would not: with fourteen modes the bar is *already* past rung 0 at 1440 today, because
+  rung 0 wants 1647. Where the new rung actually earns its place is the **default** reader, whose
+  rung 0 need is 1206 and would go to roughly 1420 with both words added — so 1280 and 1366, two of
+  the commonest laptop widths, would drop a rung they hold today. That is the band the new rung
+  protects, and it is a better argument than the one that was offered.
 
 - **The way home is not a mode**, and the markup says so three ways: it is outside the
   `role="radiogroup"` that `DockModes` draws, it is a `Link` rather than an `aria-checked` button,
@@ -120,8 +137,9 @@ was Greg's is marked as his.
 
 ## The one thing this makes worse, stated
 
-**The Feedback button stops being always-visible on a phone.** At rung 2 on a 390px screen the row
-already overflows and scrolls (measured 2026-09-05: `scrollWidth` 617 against `clientWidth` 390);
+**The Feedback button stops being always-visible on a phone.** At the last rung on a 390px screen the
+row already overflows and scrolls (measured 2026-09-06 with fourteen modes: `scrollWidth` 647
+against `clientWidth` 390 — it was 617 with thirteen);
 Feedback sits at the right-hand end of it, so a reader has to drag the bar to reach it, where today
 it is fixed in the corner. The wordmark does not have this problem — it is at the left-hand end,
 which is where the scroll starts.
@@ -311,9 +329,25 @@ drop the `3.5rem + var(--safe-top)` of top padding they hold for a wordmark that
 them: `Metadata.tsx`, `Tweets.tsx`, and the three in `PublicPages.tsx` (G4). `--logo-w` and `--feedback-w` stay, with their comments rewritten to say they now
 size two controls and reserve space on the pages that still have them.
 
-Done when: the article's title starts at the ordinary 1.5rem gutter at every width, and nothing on
-the three Dock pages reserves space for a corner control; screenshots at 1440, 1024, 800 and 390
-show the title using the room.
+**The baseline, measured 2026-09-06** so the change has something to be compared against. The
+masthead holds `padding-left: 148px` and `padding-right: 144px` at every width above 731px, and the
+article's title lands to the right of the prose it is the title of:
+
+| width | title's left edge | prose's left edge | out by |
+|---|---|---|---|
+| 1440 | 368 | 322 | 46px |
+| 1200 | 248 | 202 | 46px |
+| 1024 | 160 | 114 | 46px |
+| 800 | 160 | 12 | **148px** |
+
+The 46px is the reservation minus what the centred-column rule gives back; the 148px is what happens
+below the width at which that rule's term clamps to zero, which is the band the abandoned stage 4
+called "worse than before". At 1440 in Plain the whole misalignment is invisible unless you measure
+it, which is why nobody had.
+
+Done when: the article's title starts at the ordinary gutter and lines up with its own prose at
+every width; nothing on the five Dock pages reserves space for a corner control; screenshots at
+1440, 1024, 800 and 390 show the title using the room.
 
 **Stage 3 — the top bar stops being drawn when it has nothing in it.** This is stage 4 of
 [260905d](260905d-declutter-the-reading-view-top-bars.md), which was abandoned because the bar was
@@ -335,7 +369,10 @@ last argument against stage 4, rather than a tidy-up — and it costs the row ab
 
 Done when: Plain mode above 1080px has no chrome above the prose but the masthead; a comment
 transport failure moves nothing; and the phone bug in the postmortem is gone because there is
-nothing left fixed in that corner.
+nothing left fixed in that corner. **That bug was re-confirmed live on 2026-09-06** before any of
+this was built — at 390×844, scrolled until `data-bars="hidden"`, `elementFromPoint(6, 10)` returns
+`a.logo logo-home` while the spine's top edge is at y=40. The 44px of rail under the wordmark is
+still unreachable.
 
 ## The simpler options passed over
 
