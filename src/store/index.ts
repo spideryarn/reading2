@@ -9,9 +9,10 @@
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
  * § F). Every seam below is now the Postgres adapter, unconditionally, and the
  * three refusals that used to stand in for a filesystem side — admin, sharing,
- * feedback — are gone with the side they were refusing for. What is left of the
- * flag is a tombstone in [live.ts](live.ts): unset and `postgres` pass, anything
- * else throws, until Greg takes the variable out of Vercel.
+ * feedback — are gone with the side they were refusing for. A tombstone in
+ * `src/store/live.ts` validated the variable until Greg took it out of Vercel on
+ * 2026-09-06; nothing reads the name now, and `tests/one-store-only.test.ts`
+ * says so.
  *
  * `src/routes.ts` imports the article reads from here instead of from
  * `src/api.ts`. That is a one-line change in a file several agents are editing,
@@ -28,11 +29,12 @@
  * is nothing to fall back **to**, which is the strongest form of that rule and
  * the point of having got here.
  *
- * The corollary was the `notMigrated` helper in [live.ts](live.ts): a write with
+ * The corollary was a `notMigrated` helper in `src/store/live.ts`: a write with
  * no Postgres implementation had to fail loudly rather than quietly write a file
  * the reader would never read back. **Nothing in this file refuses any more** —
  * `deleteGlossary` was the last one holding out and was built on 2026-09-03
- * (docs/plans/260903e-glossary-delete-in-postgres.md).
+ * (docs/plans/260903e-glossary-delete-in-postgres.md), so the helper had no
+ * callers left and went with its file on 2026-09-06.
  *
  * ## The other thing this file is the boundary for
  *
@@ -44,16 +46,22 @@
  * a store that can publish the article in a 500.
  */
 
-/* **The `SPIDERYARN_STORE` tombstone is not imported here, and that is the
-   correction.** It was, for about a day: this file is the reader wiring hub and
-   the obvious place. It is also only one door — `src/jobs.ts`,
-   `src/upload-records.ts` and `src/store/ai-calls.ts` all reach Postgres without
-   coming through here, so the refusal was in the program on one path of several
-   and the fix looked complete because the reported symptom went away. It lives
-   at [`src/db/client.ts`](../db/client.ts) now, which is the boundary every one
-   of them crosses, and that file says why at length.
+/* **The `SPIDERYARN_STORE` tombstone was never imported here, and the reason it
+   was not is the part worth keeping.** It was, for about a day in September
+   2026: this file is the reader wiring hub and the obvious place. It is also
+   only one door — `src/jobs.ts`, `src/upload-records.ts` and
+   `src/store/ai-calls.ts` all reach Postgres without coming through here, so the
+   refusal was in the program on one path of several and the fix looked complete
+   because the reported symptom went away. It moved to
+   [`src/db/client.ts`](../db/client.ts), the boundary every one of them crosses,
+   and was deleted from there on 2026-09-06 when Greg took the variable out of
+   Vercel (stage I).
 
-   Every seam below reaches `getDb`, so importing one of them loads it. */
+   **The rule outlived it**: a side-effecting import belongs at the narrowest
+   boundary everything must cross, not at the most obvious front door. A front
+   door is whichever door you happened to walk through. Every seam below reaches
+   `getDb`, so `src/db/client.ts` is still that boundary if anything ever needs
+   to sit at it again. */
 
 import { log } from "../log.js";
 import { makeAskAboutTerm, makeLookUpTerm } from "../term-lookup.js";
@@ -374,12 +382,12 @@ export const commentStore: CommentStore = guarded("comments", pgCommentStore);
 /**
  * The shelf's write side, and the library-wide search box.
  *
- * Both follow the same flag as the article reads, and both have to. An archived
+ * Both go to the same store as the article reads, and both have to. An archived
  * flag written to a file while the shelf is being listed out of Postgres would
  * archive nothing at all — the card would come straight back on the next load,
- * having reported success. That is the exact failure `notMigrated` exists to
- * prevent above, and it is why these are wired here rather than imported
- * directly by routes.ts.
+ * having reported success. That is the exact failure the old `notMigrated`
+ * refusal existed to prevent, and it is why these are wired here rather than
+ * imported directly by routes.ts.
  */
 export const shelfStore: ShelfStore = guarded("shelf", pgShelfStore);
 
@@ -388,10 +396,10 @@ export const librarySearch: LibrarySearch = guarded("library", pgLibrarySearch);
 /**
  * The reader's global profile — "about you", not scoped to any article.
  *
- * Follows the same flag as everything above, for the same reason: a profile
- * written to `data/reader.json` while `postgres` mode serves reads out of
- * `reader_profiles` is a write nothing will ever read back — the exact
- * failure `notMigrated` exists to prevent. docs/plans/260826t-reader-profile.md.
+ * Goes to the same store as everything above, for the same reason: a profile
+ * written to `data/reader.json` while reads are served out of `reader_profiles`
+ * is a write nothing will ever read back — the exact failure the old
+ * `notMigrated` refusal existed to prevent. docs/plans/260826t-reader-profile.md.
  */
 export const readerStore: ReaderStore = guarded("reader-profile", pgReaderStore);
 
@@ -407,10 +415,10 @@ export const readerStore: ReaderStore = guarded("reader-profile", pgReaderStore)
  * before that file was deleted 2026-09-05.
  * docs/plans/260831b-finish-the-database-move.md, stage 1.
  *
- * `guarded(...)` like the reads above it, because there really are two
+ * `guarded(...)` like the reads above it, because there really were two
  * implementations: `data/<slug>/` beside the manifest naming the file, and a
- * reference to a content-addressed object in the bucket. Not `notMigrated`, not
- * a refusal — both stores can answer.
+ * reference to a content-addressed object in the bucket. Not a refusal — both
+ * stores could answer.
  */
 export const sourceStore: SourceStore = guarded("source", pgSourceStore);
 

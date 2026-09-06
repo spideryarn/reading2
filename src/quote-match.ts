@@ -261,22 +261,65 @@ export function findQuote(
    */
   passes: "forgiving" | "spaced" = "forgiving",
 ): Span | null {
-  if (quote.trim() === "" || text === "") return null;
-  // Pass one keeps whitespace as single spaces; pass two drops it. Two passes
-  // rather than one forgiving one, because the second is genuinely more likely
-  // to find a false positive — "in the end" would match "inthe end" — and it
-  // should only ever run when the careful pass has already failed.
-  for (const keepSpaces of passes === "spaced" ? [true] : [true, false]) {
-    const hay = reduce(text, keepSpaces);
-    const needle = reduce(quote, keepSpaces);
-    if (needle.value === "") continue;
-    const at = nearestIndex(hay.value, needle.value, near, hay.starts);
-    if (at === -1) continue;
-    const start = hay.starts[at];
-    if (start === undefined) continue;
-    return { start, end: endOf(hay, at + needle.value.length - 1) };
-  }
-  return null;
+  return quoteFinder(text, passes)(quote, near);
+}
+
+/**
+ * **The same search with the haystack prepared once** — for a caller asking one
+ * string many questions.
+ *
+ * `findQuote` reduces the whole text on every call, which is exactly right for
+ * one question and quadratic for thousands. `shingleOverlap` (src/shingles.ts)
+ * asks a page's extract whether it contains each of an article's 2,455
+ * eight-word windows, and re-reducing an 8,000-character extract 2,455 times
+ * cost **8 seconds a row**, on a step a reader is waiting for. Nothing about the
+ * matching changed; the reduction moved out of the loop.
+ *
+ * **`findQuote` is this function with one question**, rather than a second
+ * implementation beside it, for the reason this whole file exists: two
+ * definitions of "is that quote in this text" drift, and the drift is invisible
+ * because both sides keep working.
+ *
+ * The reduction is still **lazy**, so a `"forgiving"` finder that answers on
+ * pass one never pays for pass two's — which is what the single-question caller
+ * had before and must keep.
+ */
+export function quoteFinder(
+  text: string,
+  /** As `findQuote`'s, and the same safety switch. */
+  passes: "forgiving" | "spaced" = "forgiving",
+): (quote: string, near?: number) => Span | null {
+  /* Two slots rather than a Map: `findQuote` allocates one of these per call,
+     and this is the whole of what it allocates. */
+  let spaced: Reduced | null = null;
+  let squashed: Reduced | null = null;
+  const hayFor = (keepSpaces: boolean): Reduced => {
+    if (keepSpaces) {
+      if (spaced === null) spaced = reduce(text, true);
+      return spaced;
+    }
+    if (squashed === null) squashed = reduce(text, false);
+    return squashed;
+  };
+
+  return (quote, near) => {
+    if (quote.trim() === "" || text === "") return null;
+    // Pass one keeps whitespace as single spaces; pass two drops it. Two passes
+    // rather than one forgiving one, because the second is genuinely more likely
+    // to find a false positive — "in the end" would match "inthe end" — and it
+    // should only ever run when the careful pass has already failed.
+    for (const keepSpaces of passes === "spaced" ? [true] : [true, false]) {
+      const hay = hayFor(keepSpaces);
+      const needle = reduce(quote, keepSpaces);
+      if (needle.value === "") continue;
+      const at = nearestIndex(hay.value, needle.value, near, hay.starts);
+      if (at === -1) continue;
+      const start = hay.starts[at];
+      if (start === undefined) continue;
+      return { start, end: endOf(hay, at + needle.value.length - 1) };
+    }
+    return null;
+  };
 }
 
 /**

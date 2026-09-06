@@ -141,6 +141,10 @@ That is twelve of the fourteen; `plain` and `hierarchy` are the two that open no
 - **[public-shelf.md](public-shelf.md)** — the *other* shelf: `/read/public`, every article anybody
   has shared, listed for strangers. Why it is not the owner's shelf narrowed, and what listing it
   changed about what sharing promises.
+- **[public-readable-sharing.md](public-readable-sharing.md)** — the page at
+  `/features/public-readable-sharing`, written to the author of a republished article: what we do
+  with it, which two of five briefed claims turned out to be false, and the three awkward facts we
+  name on purpose.
 - **[page-titles.md](page-titles.md)** — what the browser tab says. One rule — *what is different
   about this tab goes first* — and why assigning `document.title` announces nothing.
 - **[reader-profile.md](reader-profile.md)** — two boxes and one string telling the model who is

@@ -173,7 +173,16 @@ export interface TreeNode {
    * apply to a line the model is free not to write.
    */
   question?: string;
-  /** Leaves only. Navigation chrome for the ToC and spine; never reading content. */
+  /**
+   * Leaves only. Navigation chrome for the ToC and spine; never reading content.
+   *
+   * **Absence here means "deliberately unlabelled" and nothing else** — a
+   * pull-quote, a caption, a rule, anything `isStructural` is false for
+   * (src/hierarchy.ts). *Not yet written* is a different fact and does not live
+   * on the node: it is `NavLabelStatus` below, one value for the whole
+   * revision. Reading a missing field as either one is the overloading
+   * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md § 5 names.
+   */
   navLabel?: string;
   summary?: string;
   sourceHeading?: string;
@@ -234,6 +243,65 @@ export interface Tree {
    */
   provisional?: "headings";
 }
+
+/**
+ * **Where a revision's paragraph nav labels are in their life** — one value for
+ * the whole revision, never per node.
+ *
+ * `TreeNode.navLabel` above already has a legal absence, and it means
+ * *deliberately unlabelled*: a caption, a pull-quote, a rule. This is the other
+ * question, the one absence cannot answer —
+ * [hierarchy.ts](hierarchy.ts) put it in as many words long before there was a
+ * field for it: deferring the labels *"needs a state that says 'still arriving'
+ * rather than an absence that says nothing."*
+ *
+ * - `pending` — a run is expected and has not landed. **The whole paragraph
+ *   label layer is withheld** rather than drawn empty (src/web/nav-labels.ts),
+ *   because a column of blank cells reports accidental absence as article
+ *   structure.
+ * - `ready` — the labels are as good as they are going to get. Individual
+ *   leaves may still carry none, and that is the deliberate kind of absence.
+ * - `failed` — the run happened and did not produce them. Same withholding as
+ *   `pending`; what differs is only what the reader is told, and **the enum is
+ *   the whole of what crosses** — no provider message, on either DTO
+ *   (docs/project/copy.md § Never repeat what the provider said).
+ *
+ * **Revision-scoped and stored as a column**, not on the `Tree`, because a
+ * failure has to outlive the draft that failed: a labels job that dies must
+ * mark the revision the reader is actually looking at, and a candidate tree is
+ * discarded. GPT Sol's F6,
+ * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
+ *
+ * Everything writes `ready` today. Stage 2 of that plan is what starts writing
+ * the other two.
+ */
+export type NavLabelStatus = (typeof NAV_LABEL_STATUSES)[number];
+
+/**
+ * The three, as a runtime list — **and it is the source, not a copy of one.**
+ * `NavLabelStatus` above is derived from it with `(typeof …)[number]`, which is
+ * the whole point: the two used to be independent declarations, and
+ * `readonly NavLabelStatus[]` proves only that every value listed *belongs to*
+ * the union — never that the list *exhausts* it. A fourth member added to the
+ * union and forgotten here would have compiled, and then the drift test built
+ * on this list would have checked the migration against an incomplete set and
+ * passed. One declaration cannot disagree with itself. GPT Sol's F1 on stage 1,
+ * 2026-09-06.
+ *
+ * It exists at runtime for one job: the CHECK expression is a hand-kept literal
+ * in **two** places that no compiler reads — the migration under `drizzle/` and
+ * the copy in [`src/db/schema.ts`](db/schema.ts) — so something has to be able
+ * to enumerate the union and compare against both.
+ * `tests/nav-label-status.test.ts` is that something.
+ *
+ * **No `isNavLabelStatus` beside it**, and that is a decision rather than an
+ * omission: a runtime parse would have no caller. The database's CHECK is what
+ * keeps a fourth value out, and the one place a stray value could still do harm
+ * — the client deciding whether to draw the paragraph layer — is written
+ * `=== "ready"` precisely so that anything it does not recognise withholds
+ * (src/web/nav-labels.ts). A guard nobody calls is a guard nobody maintains.
+ */
+export const NAV_LABEL_STATUSES = ["pending", "ready", "failed"] as const;
 
 /**
  * One article-level sentence per part: where the argument stands there.
@@ -1390,6 +1458,23 @@ export interface Article {
    * hot-link exactly as before rather than read it as "every image failed".
    */
   assets: Assets | undefined;
+
+  /**
+   * **Where the paragraph nav labels are** — `NavLabelStatus` above, off
+   * `article_revisions.nav_label_status`.
+   *
+   * **A required key, like `assets` and unlike `visibility`**, and for the same
+   * reason `assets` is: there is exactly one thing the client does with this,
+   * and it is decide whether to draw the paragraph label layer at all. Optional,
+   * a projection that forgot it would typecheck perfectly and the reader would
+   * go on getting a run of blank leaf cells — the feature reporting success by
+   * doing nothing (docs/reusable/silent-success.md, and src/web/tree.ts § "a run
+   * of forty blank leaf cells").
+   *
+   * There is no *we cannot say* answer to make it `| undefined`: the column is
+   * `not null` with a default, and there is one store.
+   */
+  navLabelStatus: NavLabelStatus;
 
   /**
    * **May a stranger read this** — the owner's copy of `articles.visibility`,
@@ -3434,6 +3519,98 @@ export interface DirectDebateRow extends DebateRowBase {
    * unproved claim there is worse than a short list.
    */
   articleReferenceQuote: string;
+  /**
+   * **Every piece of evidence found that this page is about *this* article** —
+   * the names of the facts, in no particular order, with the strongest of them
+   * available from `identificationLevel`.
+   *
+   * **Non-empty by construction, and the type does not say so.** A row that
+   * earns no signal at all cannot be in this group: it has already failed
+   * `namesArticle` and been counted as `directnessUnverified`. The type is a
+   * plain array because this is also read off stored JSONB, where an artefact
+   * written before 2026-09-06 has no key here at all — `identifiesOf` is the one
+   * place that fact is handled, and it is what every reader should call.
+   *
+   * **Not a score.** Nothing here is summed or weighted:
+   * `link = 0.5, byline = 0.2, quote = 0.3` was proposed, measured and refused,
+   * because the weights would be ours and a `0.7` is nothing a reader can check.
+   * docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md § "2 —
+   * a level that *is* one of the facts, not a score over them".
+   */
+  identifies: IdentificationSignal[];
+}
+
+/**
+ * **One way a page showed it was about this article**, named rather than scored.
+ *
+ * The order of the arms is the **strength order** and `identificationLevel`
+ * reads it: a link to the address is the strongest thing a page can do, words
+ * out of the article itself come next, and the title — which a successor
+ * published three years later shares — is the weakest.
+ *
+ * `coverage` and `density` ride on the `quoted` arm so the panel's tooltip can
+ * print them without a second pass over the article
+ * ([`shingleOverlap`](./shingles.ts)).
+ */
+export type IdentificationSignal =
+  | { kind: "linked"; url: string }
+  | { kind: "quoted"; quote: string; blockId: BlockId; coverage: number; density: number }
+  | { kind: "named"; by: "title" | "title-and-byline"; witness: string };
+
+/** The strongest signal a row carries — the name of a fact, never a number. */
+export type IdentificationLevel = IdentificationSignal["kind"];
+
+/**
+ * **What this row proved, whenever it was written.**
+ *
+ * The one place the pre-`identifies` artefact is handled, rather than a check at
+ * each call site. Every row stored before 2026-09-06 was kept by the
+ * title-or-link rule and carries the witness that did it, so it reads as `named`
+ * on that witness — which is what the field would have said. **No migration, and
+ * nothing to re-run.**
+ *
+ * A non-empty tuple, so the caller below can take the first element without the
+ * compiler asking whether the list was empty.
+ */
+export function identifiesOf(
+  row: DirectDebateRow,
+): readonly [IdentificationSignal, ...IdentificationSignal[]] {
+  const found = row.identifies;
+  if (Array.isArray(found) && found.length > 0 && found[0]) return [found[0], ...found.slice(1)];
+  return [{ kind: "named", by: "title", witness: row.articleReferenceQuote }];
+}
+
+/**
+ * **The strongest evidence this row carries**, by a lookup over a fixed order.
+ *
+ * No arithmetic: the level *is* one of the facts on the row, and the tooltip
+ * lists every one of them beside it. A composite would be our weights dressed as
+ * the model's judgment, which is the refusal
+ * [quotes.md](../docs/project/quotes.md) already makes about a prioritised row.
+ */
+export function identificationLevel(row: DirectDebateRow): IdentificationLevel {
+  const signals = identifiesOf(row);
+  let best = signals[0];
+  for (const signal of signals) if (strengthOf(signal) < strengthOf(best)) best = signal;
+  return best.kind;
+}
+
+/** Lower is stronger. A new arm of the union is a compile error here. */
+function strengthOf(signal: IdentificationSignal): number {
+  switch (signal.kind) {
+    case "linked":
+      return 0;
+    case "quoted":
+      return 1;
+    case "named":
+      return 2;
+    default: {
+      /* Not a `return 3`: a fourth kind of evidence must be *placed* in the
+         order by whoever adds it, rather than silently ranked weakest. */
+      const unreachable: never = signal;
+      return unreachable;
+    }
+  }
 }
 
 /**
@@ -3483,6 +3660,18 @@ export interface DebateLosses {
   unverifiedSource: number;
   /** Group one only: no `articleReferenceQuote` we could locate in the extract. */
   directnessUnverified: number;
+  /**
+   * **Group one only: the page is a *copy* of the article, not a response to
+   * it** — half or more of its own extract is the article's words, over at
+   * least five windows ([`isCopy`](./shingles.ts)).
+   *
+   * `selfSource` wearing a new hat, and `sameTarget` cannot catch it because an
+   * archive and a `www.` host are different addresses. It is counted rather than
+   * filtered because a mirror is the *most* convincing row on the screen — it
+   * links the piece, it quotes it exactly, and every other counter reads clean.
+   * docs/reusable/silent-success.md.
+   */
+  sourceIsCopy: number;
   /** Group two only: `claimQuote` absent, or not in the named block. */
   claimNotInBlock: number;
   /** Group two only: a block id this article does not have. */
@@ -3558,19 +3747,45 @@ export interface DebateGroup<Row> {
  * CLI and two model calls in it. The stage re-exports it, so it still has one
  * name on the server side.
  *
- * **A sum of every field rather than `Object.values`**, so a *fourth* group-two
- * loss reason added to `DebateLosses` is a compile error at this line rather
- * than a number silently folded into a sentence nobody re-read.
+ * **A sum of every field rather than `Object.values`**, so a new loss reason
+ * added to `DebateLosses` is a compile error at this line rather than a number
+ * silently folded into a sentence nobody re-read.
+ *
+ * **The `rest` line is what makes that true, and it was added on 2026-09-06
+ * because it was not.** The sentence above is older than this line and was a
+ * claim rather than a mechanism: `sourceIsCopy` was added to `DebateLosses` that
+ * day, every field below was still summed by hand, and nothing failed to
+ * compile — the new counter would have been dropped from the reader's foot line
+ * in silence, which is the one thing this function exists to prevent. A
+ * docblock that states a rule the code does not make is the shape of this file's
+ * worst bug (Sol's F24, `readDirectGroup`), so the rule is now under it: `rest`
+ * must be empty, and an unlisted field makes it not.
  */
 export function anyLost(lost: DebateLosses): boolean {
+  const {
+    uncited,
+    selfSource,
+    unverifiedSource,
+    directnessUnverified,
+    sourceIsCopy,
+    claimNotInBlock,
+    unknownBlockId,
+    malformed,
+    ...rest
+  } = lost;
+  /* Every field is named above, so there is nothing left. Add one to
+     `DebateLosses` without adding it here and this assignment stops compiling. */
+  const exhaustive: Record<string, never> = rest;
+  void exhaustive;
   return (
-    lost.uncited +
-      lost.selfSource +
-      lost.unverifiedSource +
-      lost.directnessUnverified +
-      lost.claimNotInBlock +
-      lost.unknownBlockId +
-      lost.malformed >
+    uncited +
+      selfSource +
+      unverifiedSource +
+      directnessUnverified +
+      sourceIsCopy +
+      claimNotInBlock +
+      unknownBlockId +
+      malformed >
     0
   );
 }

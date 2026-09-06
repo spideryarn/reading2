@@ -1,7 +1,7 @@
 /**
  * **A store seam must not be able to arrive without a Postgres implementation.**
  *
- * `notMigrated` is a deliberate, loud, *runtime* refusal, and a refusal nothing
+ * `notMigrated` was a deliberate, loud, *runtime* refusal, and a refusal nothing
  * ever calls is silent. A seam with no Postgres implementation is a 501 for
  * every reader, and it looks exactly like a seam that works. That is how Claims
  * shipped on 2026-08-31 and answered 501 in production for four hours with the
@@ -54,12 +54,18 @@
  * regex and it is what would notice somebody reintroducing a filesystem adapter
  * under the old naming, rather than that arriving unremarked.
  *
- * ## `notMigrated` is still sometimes right, and still has to be visible
+ * ## A refusal wearing a store's name, and what that check is worth now
  *
  * A `pgFooStore` whose every method refuses is the same 501 by a longer route,
  * so it is flagged below. A refusal belongs beside the selector in
  * `src/store/index.ts`, where a reader looking for the implementation finds the
  * refusal instead of a store's name on an empty box.
+ *
+ * **`notMigrated` was deleted with `src/store/live.ts` on 2026-09-06**, so that
+ * check is a name check for a name nothing defines: a tripwire on a revival
+ * that keeps the old spelling, not a live guard on today's source. Kept because
+ * it costs nothing and a revival would copy the old shape. The load-bearing
+ * case is the structural one above it.
  *
  * **No database, no network, no imports of the stores themselves** — this reads
  * the source. So it runs everywhere, always.
@@ -128,7 +134,8 @@ async function contractInterfaces(): Promise<string[]> {
   return names;
 }
 
-/** Does this subtree call `notMigrated`? */
+/** Does this subtree call `notMigrated`? Nothing defines that name since
+ *  2026-09-06 — see the header for what this is still worth. */
 function callsNotMigrated(node: unknown): boolean {
   let found = false;
   walkAst(node, (n) => {
@@ -397,7 +404,9 @@ describe("every store seam has a Postgres implementation", () => {
        method is `notMigrated(…)`, which is the same 501 with a longer route to
        it. A refusal belongs in index.ts beside the selector, where it is
        visible as a refusal — and with one store there is nowhere left to
-       declare it away, which is the point of the check above. */
+       declare it away, which is the point of the check above. Nothing defines
+       `notMigrated` since 2026-09-06, so a green tick here asserts nothing
+       about today's source — see the header. */
     const pretenders: string[] = [];
     for (const impls of SEAMS.values()) {
       for (const impl of impls) {

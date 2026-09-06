@@ -103,6 +103,7 @@ function propsFor(loaded: Loaded, over: Record<string, unknown> = {}) {
     blocks: loaded.blocks,
     tree: loaded.tree,
     assets: undefined,
+    navLabelStatus: "ready",
   };
   const geometry = buildGeometry(article.tree, article.blocks);
   const gistDepths = geometry.columnDepths.filter((d) => d < geometry.leafDepth);

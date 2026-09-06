@@ -33,6 +33,7 @@ import { ContactPage } from "./ContactPage.js";
 import { FeaturesPage } from "./FeaturesPage.js";
 import { PublicLibraryPage } from "./PublicLibraryPage.js";
 import { PricingPage } from "./PricingPage.js";
+import { PublicReadableSharingPage } from "./PublicReadableSharingPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
@@ -134,6 +135,7 @@ import {
   columnHint,
   columnLabel,
 } from "./tree.js";
+import { paragraphLabelNotice, paragraphLabelsReady, paragraphPill } from "./nav-labels.js";
 import {
   atParam,
   colsParam,
@@ -417,6 +419,13 @@ export function App() {
        landing page's "everything it does" link has to land somewhere a
        stranger can read. */
     if (route.kind === "features") return <FeaturesPage signedIn={false} />;
+    /* **The one page here whose reader may want nothing from us at all** — an
+       author who found their own writing on `/read/public`. Every other page in
+       this branch is reachable signed out because a stranger is deciding
+       whether to sign up; this one is reachable signed out because that reader
+       will never sign up, and a page they cannot open is a page that does not
+       exist. router.ts § `public-sharing`. */
+    if (route.kind === "public-sharing") return <PublicReadableSharingPage signedIn={false} />;
     /* The fifth, and the least arguable of them: a price somebody has to sign
        up to read is the thing people complain about, and this is the page one
        person sends another. */
@@ -604,6 +613,17 @@ function SignedIn({
             docs/plans/260904b-pricing-page-and-public-showcase.md, finding 1 —
             this half of it predates that stage. SiteBits.tsx § `signedIn`. */}
         <FeaturesPage signedIn />
+      </>
+    );
+  /* Mounted signed in as well, for the owner half of its two readers: somebody
+     weighing up the sharing switch is by definition signed in, and reaches this
+     from `/privacy` or from the shelf. `signedIn` for the reason the line above
+     it carries. */
+  if (route.kind === "public-sharing")
+    return (
+      <>
+        <HomeLogo />
+        <PublicReadableSharingPage signedIn />
       </>
     );
   if (route.kind === "contact")
@@ -2849,6 +2869,16 @@ function Reader({
   /** Whether the paragraph-level nav labels are riding beside the prose. */
   const leafOn = showText && fit.columns.includes(geometry.leafDepth);
 
+  /**
+   * What stands where the `Paragraphs` pill would be when there is nothing for
+   * it to open, or `null` in the ordinary case — nav-labels.ts owns the rule.
+   *
+   * Read once here and used twice: the bar below, and `OutlinePanel`, whose
+   * rung 5 draws the same labels and must make the same decision. `TableView`
+   * asks for itself, off the same `article`.
+   */
+  const paragraphNotice = paragraphLabelNotice(article.navLabelStatus);
+
   /** The gist columns actually on screen — the leaf column isn't one of them. */
   const shownGists = useMemo(
     () => fit.columns.filter((d) => d !== geometry.leafDepth),
@@ -2879,9 +2909,10 @@ function Reader({
       /* `band-covers` is the same idea and exists for a sharper reason: it is
          the *stylesheet's* only way to know that the mode band has no room
          beside the prose and is lying over it instead. That crossover is
-         `MODE_MIN + PROSE_MIN` against the window **minus the rail**, so it
+         `MODE_MIN + MODE_PROSE_FLOOR` against the window **minus the rail**, so it
          moves with `?spine=0` — and a media query cannot see a query
-         parameter. It was one for six days (`@media (max-width: 843px)`), and
+         parameter. (It was `MODE_MIN + PROSE_MIN` until 2026-09-06, which is
+         the pair the widths below are in.) It was one for six days (`@media (max-width: 843px)`), and
          from 832 to 843 with the rail off the two disagreed: layout.ts
          squeezed the table to make room for a band the stylesheet had already
          thrown over the article.
@@ -3017,17 +3048,43 @@ function Reader({
             ))}
             {/* The paragraph outline, beside the prose rather than instead of
                 it. Only offered in reading mode: in outline mode this column is
-                the view, and turning it off would leave nothing. */}
-            {showText && (
-              <Toggle
-                className={PILL}
-                pressed={leafOn}
-                onPressedChange={() => toggle(geometry.leafDepth)}
-                title={columnHint(geometry.leafDepth, geometry.leafDepth)}
-              >
-                {columnLabel(geometry.leafDepth, geometry.leafDepth)}
-              </Toggle>
-            )}
+                the view, and turning it off would leave nothing.
+
+                **And only while there are labels to draw.** Where there are
+                not, the control is replaced by the sentence saying why rather
+                than disabled with the sentence in its tooltip — a touch reader
+                cannot open a tooltip, which is the argument that took the pills
+                from `L3` to `Paragraphs` in the first place (tree.ts §
+                `columnLabel`). A pill that opened a column of blank cells is
+                the failure nav-labels.ts exists to prevent; a pill that opened
+                a column of one repeated notice would be worse still.
+
+                **`|| leafOn` is the door back out, and it is not a hedge.**
+                `toggle` is the only caller of `setCols` in this file, so
+                replacing the control replaces the only way to *close* the
+                column as well as the only way to open it. The leaf depth can
+                already be on without this pill — `?cols=` naming it, shared or
+                bookmarked — and such a reader was left with a wide column of
+                one repeated sentence and nothing to shut it with: for ever, if
+                the status is `failed`. So the notice stands in for the pill
+                only while the column is shut, which is the case it was written
+                for; once the column is open the pill comes back, because the
+                column itself is already carrying the sentence
+                (TableView § `withheldLeafCell`) and what the reader needs from
+                the bar is the way out. GPT Sol's F2 on stage 1, 2026-09-06. */}
+            {showText &&
+              (paragraphPill(article.navLabelStatus, leafOn) === "toggle" ? (
+                <Toggle
+                  className={PILL}
+                  pressed={leafOn}
+                  onPressedChange={() => toggle(geometry.leafDepth)}
+                  title={columnHint(geometry.leafDepth, geometry.leafDepth)}
+                >
+                  {columnLabel(geometry.leafDepth, geometry.leafDepth)}
+                </Toggle>
+              ) : (
+                <span className="pill-note">{paragraphNotice}</span>
+              ))}
           </>
         )}
         {/* Failures of the comment transport belong here rather than in the
@@ -3433,10 +3490,22 @@ function Reader({
           arcByRow={arcCells}
           focusRow={outlineLive.focusRow}
           /* `modeW` is 0 exactly when the band covers the prose instead of
-             sitting beside it (layout.ts), which is iPad portrait. That is the
-             condition paragraph rows are not permissible under, so it is read
-             from the layout rather than from a width guessed here. */
+             sitting beside it (layout.ts) — a phone, since 2026-09-06; it was
+             iPad portrait and below until the crossover fell to 700. That is
+             the condition paragraph rows are not permissible under, and reading
+             it from the layout rather than from a width guessed here is why
+             that move cost this line nothing but its example. */
           proseBeside={fit.modeW > 0}
+          /* **Rung 5 is the same layer the `Paragraphs` column draws**, so it
+             makes the same decision. Withheld rather than announced: nobody
+             asked for rung 5 — the panel climbs the ladder as far as the band
+             has room — so a sentence in place of it would be an answer to a
+             question the reader never put. The rungs below still draw, which is
+             what "withhold the layer" means here.
+             Sent as a boolean rather than the status, because that is exactly
+             what this panel needs and `allowParagraphs` beside it is already
+             one. src/web/nav-labels.ts. */
+          paragraphLabels={paragraphLabelsReady(article.navLabelStatus)}
           onJump={jumpTo}
         />
       )}

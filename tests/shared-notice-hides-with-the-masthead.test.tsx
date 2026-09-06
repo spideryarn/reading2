@@ -1,7 +1,7 @@
 /**
  * **The visitor's notice must go wherever the masthead goes.**
  *
- * At iPad-portrait and below the mode band is full width, so `styles.css` hides
+ * On a narrow window the mode band is full width, so `styles.css` hides
  * the article's masthead while one is open — the reasoning is written out at
  * that rule, and it ends *"the controls bar sticks at zero immediately and the
  * band sits exactly underneath it"*. The controls bar was the next thing in the
