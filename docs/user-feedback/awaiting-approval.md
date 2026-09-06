@@ -41,17 +41,10 @@ options put to Greg. Two of them dissolved a trade-off an agent had accepted as 
 mark by using a channel nobody had thought to use, and the quiz by removing the control rather than
 tuning it. That is the argument for this file existing rather than for agents deciding faster.
 
-## One item that is nobody's report, and is still Greg's call
+## Nothing is waiting on Greg
 
-**Do we re-run the structure stage across the library to pick up `toc/6`?**
-
-The gist length changes (2026-09-06 — coarse lines shorter, fine lines longer, plainer words) reach
-**new articles only**. Verified rather than assumed: [`src/pipeline.ts`](../../src/pipeline.ts)
-imports only `generateHierarchy` from [`src/hierarchy.ts`](../../src/hierarchy.ts) and no version
-constant; the tree has no `outdated` mechanism of the kind glossary, quotes and ideas each have; and
-the tree-version chip came off the reading view on 2026-09-05. So an existing article keeps its
-`toc/5` gists silently and indefinitely, and the only route is *re-run a stage* on the metadata page.
-
-That is the right default — nothing is broken, nothing is charged, and nobody is shown a warning
-about a summary that reads perfectly well. But it does mean **the change Greg asked for is not
-visible on anything he has already read** until somebody decides to spend the calls.
+Everything this file listed on 2026-09-06 has been answered. The `toc/6` question that stood here —
+whether to re-run the structure stage across the library so existing articles picked up the new gist
+lengths — was answered *"leave it, new articles only"*, and is now recorded where it belongs, in
+[hierarchy.md § A new prompt reaches new articles only](../project/hierarchy.md#prompt-versions),
+together with the re-run control that came out of the same answer.
