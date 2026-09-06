@@ -175,6 +175,11 @@ export type TitleSpec =
   | { kind: "privacy" }
   /** What the thing does, with pictures — FeaturesPage.tsx. */
   | { kind: "features" }
+  /**
+   * What we do with an article somebody has made public —
+   * PublicReadableSharingPage.tsx.
+   */
+  | { kind: "public-sharing" }
   /** What it costs — PricingPage.tsx. */
   | { kind: "pricing" }
   /** How to reach us — ContactPage.tsx. */
@@ -277,6 +282,15 @@ function segments(spec: TitleSpec): string[] {
 
     case "features":
       return ["Features", APP_NAME];
+
+    /* **Not the page's own heading**, which is the rule the four cases around
+       this one follow, and the exception is worth a line. The heading is
+       "Public-readable sharing"; a tab reading that tells somebody scanning
+       twenty tabs nothing they could not have guessed from the site name. The
+       reader this page most needs to reach came looking for what we did with
+       their article, so the tab answers that. */
+    case "public-sharing":
+      return ["Sharing an article publicly", APP_NAME];
 
     case "pricing":
       return ["Pricing", APP_NAME];

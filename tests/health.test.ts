@@ -373,12 +373,6 @@ describe("the environment a deployment needs", () => {
        EXPECTED entry. A deployment with neither is fine; one with only a
        secret key cannot verify a single delivery. */
     vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_fixture");
-    /* Not in `EXPECTED` and never will be: it is *retired*, and the default a
-       complete environment has is **absent**. Stubbed for the same reason as
-       `VERCEL` above — .env.local is in `process.env` while these run, so a
-       machine that still carries the leftover would otherwise put a `retired`
-       field into every reply in this block. */
-    vi.stubEnv("SPIDERYARN_STORE", "");
   }
 
   /** Only the warnings, since ssl and store have their own tests above. */
@@ -721,98 +715,6 @@ describe("the environment a deployment needs", () => {
     expect(answer.status).toBe(503);
     expect((answer.body.env as Record<string, boolean>).SUPABASE_ANON_KEY).toBe(false);
   });
-
-  /**
-   * **The sensor that says stage I can start.**
-   *
-   * `SPIDERYARN_STORE` decides nothing since 2026-09-05; the tombstone in
-   * src/store/live.ts exists only because Vercel Preview and Production still
-   * carry the variable, and deleting it needs a credential that is not on the
-   * box the agents work from. Stage I of
-   * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
-   * removes the tombstone and is gated on the variable having gone — so
-   * something has to notice when it does, or that stage waits on somebody
-   * remembering to run `vercel env ls production`.
-   *
-   * Two properties, and the second is the one worth testing: it must **report**
-   * without **warning** (a leftover no-op must not 503 the endpoint or fail
-   * `npm run deploy`, or the gate becomes one people force past), and it must
-   * be **silent when absent** (a nag that outlives the thing it nags about is a
-   * nag nobody can satisfy, and its own disappearance is the signal).
-   */
-  describe("a variable that should no longer be set", () => {
-    function retiredFrom(answer: Reply): { name: string; why: string }[] {
-      return (answer.body.retired as { name: string; why: string }[]) ?? [];
-    }
-
-    it("names the leftover, and says what removing it unblocks", async () => {
-      completeEnv();
-      vi.stubEnv("SPIDERYARN_STORE", "postgres");
-
-      const answer = await call("GET");
-
-      const said = retiredFrom(answer);
-      expect(said.map((r) => r.name)).toEqual(["SPIDERYARN_STORE"]);
-      /* The instruction and the destination, not merely the name: an operator
-         reading this on a deploy has to be able to act without opening the
-         plan, and the plan reference is what makes the action worth doing. */
-      expect(said[0]?.why).toContain("vercel env rm SPIDERYARN_STORE production");
-      expect(said[0]?.why).toContain("260903f-delete-the-spideryarn-store-flag");
-    });
-
-    /* The half that stops this becoming permanent furniture. Report the field
-       unconditionally — `{ retired }` instead of the spread — and this reddens
-       while every other test in the file stays green. */
-    it("says nothing at all once it is gone, rather than reporting an empty list", async () => {
-      completeEnv();
-
-      const answer = await call("GET");
-
-      expect("retired" in (answer.body as object)).toBe(false);
-    });
-
-    it("treats a variable set to a stray space as gone", async () => {
-      completeEnv();
-      vi.stubEnv("SPIDERYARN_STORE", " ");
-
-      const answer = await call("GET");
-
-      expect("retired" in (answer.body as object)).toBe(false);
-    });
-
-    /**
-     * **The reason it is not a warning**, pinned so nobody tidies it into one.
-     *
-     * `warnings` fails the endpoint (503) and scripts/deploy-checks.ts turns
-     * every entry into a deploy-blocking problem — so the tidy-looking version
-     * of this feature would have made production unhealthy and blocked every
-     * deploy over a variable that decides nothing.
-     */
-    it("does not make a healthy deployment unhealthy", async () => {
-      completeEnv();
-      vi.stubEnv("SPIDERYARN_STORE", "postgres");
-
-      const answer = await call("GET");
-
-      expect(retiredFrom(answer)).toHaveLength(1);
-      expect(warningsFrom(answer)).toEqual([]);
-      expect(answer.body.ok).toBe(true);
-      expect(answer.status).toBe(200);
-    });
-
-    /* Anti-vacuous: the three cases above would all pass against a handler
-       that reported `retired` for a name nobody ever sets. */
-    it("is not reporting some other variable by accident", async () => {
-      completeEnv();
-      vi.stubEnv("SPIDERYARN_STORE", "postgres");
-      vi.stubEnv("LOG_LEVEL", "debug");
-
-      const answer = await call("GET");
-
-      expect(retiredFrom(answer).map((r) => r.name)).not.toContain("LOG_LEVEL");
-    });
-  });
-
 });
 
 /**

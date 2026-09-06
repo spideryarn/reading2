@@ -79,6 +79,26 @@ npm test                        # expect a handful red, about what the primary h
 npm run dev                     # walks up from 5273; warns if the port is not allow-listed
 ```
 
+### Two things about `EnterWorktree` that have each cost an agent an hour
+
+**A named worktree that already exists is *resumed*, not recreated.** `EnterWorktree({name})` and
+`claude --worktree <name>` both drop you into whatever is on disk under that name, including a dead
+session's uncommitted work. So a task briefed as unstarted may be most of the way done, and the
+branch may already be several commits along. **Look before you begin**: `git log --oneline
+origin/dev..HEAD` and `git status` in the tree, not `git log origin/dev`, which is where somebody
+checks, sees nothing, and starts again from scratch on top of a half-finished job.
+
+**A subagent spawned before `EnterWorktree` loses its shell.** Bash inside a worktree-isolated
+session refuses any command it cannot statically prove stays inside the tree — a pipeline whose
+arguments are computed, a `sed` whose value could begin with `-` — and refuses it *by name*, which
+an agent reads as "that command is not allowed" rather than "split it up". An agent that inherited
+a pinned working directory from before the switch therefore quietly downgrades to reading files and
+reports what it could see rather than what it could run. **Spawn delegates after you are in the
+tree**, and keep their commands plain — separate calls, no computed options, no `$(...)` where a
+flag could stand. It bears directly on
+[engineering-manager.md § Delegate](../reusable/engineering-manager.md#delegate): a brief that
+assumes a working shell is not one the agent can necessarily carry out.
+
 ### The dev server used to be blind in here — fixed 2026-09-02
 
 Worth knowing even though it is fixed, because for four days a worktree's `npm run dev` **could not

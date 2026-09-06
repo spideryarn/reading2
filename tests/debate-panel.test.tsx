@@ -71,6 +71,7 @@ function losses(over: Partial<DebateLosses> = {}): DebateLosses {
     selfSource: 0,
     unverifiedSource: 0,
     directnessUnverified: 0,
+    sourceIsCopy: 0,
     claimNotInBlock: 0,
     unknownBlockId: 0,
     malformed: 0,
@@ -100,6 +101,11 @@ function direct(over: Partial<DirectDebateRow> = {}): DirectDebateRow {
     relation: "disputes",
     valence: "negative",
     applies: "It says the piece's third section contradicts its second.",
+    /* The evidence that this page is about this piece. A row that earned none
+       could not be in this group at all. */
+    identifies: [
+      { kind: "named", by: "title", witness: "Notes on my sourdough starter, week 3" },
+    ],
     ...over,
   };
 }

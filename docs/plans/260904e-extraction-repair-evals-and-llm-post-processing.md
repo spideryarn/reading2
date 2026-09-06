@@ -1886,24 +1886,95 @@ than trusting either side's account of them.
   arrived by accident rather than by sampling. § *The gates are tested by shapes nobody sampled for*
   below is dented by that and not closed.
 
-  **One mutation of this branch is not caught by anything.** Dropping the placement floor from 8 to 1
-  — which turns the cover into a bare character subsequence — leaves all 66 cases green, while the
-  six other mutations tried were each caught. Nothing anybody has written distinguishes the two, and
-  `placeInSpan`'s docstring says so at the line. Finding a shape that pins it is C0's second half.
+  **One mutation of this branch was not caught by anything — CLOSED 2026-09-06, as C0.2.** Dropping
+  the placement floor from 8 to 1 — which turns the cover into a bare character subsequence — left
+  all 66 cases green, while the six other mutations tried were each caught.
 
-  **A neighbouring hole, found while fixing this and deliberately left.** `owners` is populated only
-  from text nodes, so an ancestor with *no own text* — `<div s1><p s2>…</p></div>` — has no
-  `Ownership` at all, takes `placeRun`'s ownerless branch, and a generated node under it may be
-  placed anywhere on the page. Verified by probe: a generated node under a text-free `s1` saying what
-  a *different* container said passes both gates. Pre-existing, same branch, same family. Tightening
-  it to the subtree is a few lines but is a behaviour change with false-red risk of exactly the kind
-  this bullet is about, so it is reported rather than slipped in, and it is a case for the shape
-  corpus.
+  **The shape that distinguishes them is a generated node borrowing another container's phrase,
+  where the ancestor's own subtree happens to spell that phrase letter by letter.** Attribution
+  cannot see it, because the words are genuinely on the page, so the subtree boundary is the only
+  thing between the output and a green. At floor 8 the subtree cannot cover the phrase in runs of
+  eight and the order gate reddens; at floor 1 the cover is a bare character subsequence, and 342
+  characters of ordinary prose about lanterns and ledgers do spell `theclerkandhismargins` in order
+  — so the boundary evaporates and the same borrowing passes. **The floor is what makes the subtree
+  a boundary rather than an alphabet**, and that sentence was not previously written down anywhere.
 
-- **The gates are tested by shapes nobody sampled for.** See *The follow-on this stage most needs*
-  above: the fifteen fixtures cannot exercise most of what the gates do, every blocker from the fourth
-  review on needed a hand-built page, and the hand-built pages were written by whoever was fixing the
-  bug. This is the honest limit on how far a green card should be trusted, and it is not closed.
+  It is `borrowed-phrase-spelled-out-by-the-subtree` in
+  [shapes.mts](../../evals/extraction/shapes.mts), asserted on both sides through a
+  `withPlacementFloor` mutation seam, with a further assertion that the two cards actually differ —
+  a mutation that changes nothing has pinned nothing.
+
+  **Where the boundary actually is, swept rather than guessed.** Run at every floor from 1 to 12
+  on 2026-09-06: green at 1 and 2, red at 3 and above. So the case rejects a floor of **1 or 2**,
+  and the genuinely unpinned interval is **3 through 8** — GPT Sol's third finding, against a first
+  draft that claimed only "not 1". All three of those floors are pinned by the case, so the sweep
+  cannot go stale.
+
+  **What would pin the exact value, and is not built.** Sol's suggestion: a borrowed phrase
+  coverable in separated seven-character runs but not eight-character ones — red at 8, green at 7 —
+  paired with a legitimate flattening whose retained runs are exactly eight characters, green at 8
+  and red at 9. That is both sides of the boundary rather than one. The natural-prose case above is
+  kept either way, because it is the one a reader can believe.
+
+  **A neighbouring hole, found while fixing this and deliberately left — CONFIRMED INDEPENDENTLY
+  2026-09-06, still open, and now pinned.** `owners` is populated only from text nodes, so an
+  ancestor with *no own text* — `<div s1><p s2>…</p></div>` — has no `Ownership` at all, takes
+  `placeRun`'s ownerless branch, and a generated node under it may be placed anywhere on the page.
+
+  Re-measured by a second agent that did not write the fix, on a page built for it. Two pages that
+  differ **by two words of own text on one wrapper and nothing else**, given the same borrowing:
+
+  | the wrapper | attribution | sourceOrder |
+  |---|---|---|
+  | `<div s1>Preamble preamble<p s2>…</p></div>` | ok (2) | **FAIL** (2) — *"the subtree of source element s1"* |
+  | `<div s1><p s2>…</p></div>` | ok (2) | ok (2) |
+
+  The second card is **identical to the card for a correct extraction of the same page** — same
+  verdicts, same exposure counts — which is the shape of every defect in this stage. The mechanism
+  is confirmed as described: the run takes `placeRun`'s ownerless, page-wide branch and the subtree
+  narrowing that follows can only *narrow* a placement, never reject one, so a page-wide match found
+  before the subtree survives it.
+
+  Both are permanent cases now — `borrowing-under-a-text-bearing-wrapper` (red) and
+  `borrowing-under-a-text-free-wrapper` (green, marked `hole`) — and `ProvenanceTally.ownerlessStamped`
+  counts the branch across any run, so the number moving is visible rather than inferred.
+
+  **And the branch is NOT hypothetical on real pages, which nobody had measured.** Counted
+  2026-09-06 over the shipped extraction of all fifteen fixtures — the line
+  [score.mts](../../evals/extraction/score.mts) now prints — **9 runs on 5 of the 15** take it:
+  `medium-about` 4, `quanta-year-physics` 2, `wiki-gdp-table` 1, `plos-biology` 1, `pmc-article` 1.
+  Independently reproduced by GPT Sol to the same five fixtures and the same nine runs, who also
+  makes the precision worth keeping: it is a count of **runs**, not of nodes or wrappers, and
+  *"the gate says nothing about them"* overstates it — their **global monotone order is still
+  checked**; what is absent is any claim about which container they belong in. On the shipped
+  extractions they happen to belong where they landed, and *happen to* is the problem. The earlier
+  framing of this as a hand-built shape's problem is retracted.
+
+  **What the fix would cost, measured before anyone decides.** Sol's smallest change is to give
+  every stamped visible element an empty `Ownership` when `sourceOwnership` first visits it; an
+  ownerless ancestor then behaves like an owner that cannot supply the run, and only its subtree
+  fallback is left. He ran it in memory against all five exposed fixtures: **all five stay
+  `ok/ok`, and the nine runs move from `page` to `subtreeOnly`.** It would turn
+  `borrowing-under-a-text-free-wrapper` red on purpose and take the declared holes from three to
+  two. The residual risk is a future Readability restructuring that puts genuinely acceptable text
+  under a preserved wrapper whose original subtree did not contain it — a false red, of exactly the
+  family this bullet is about. **None of the current nine is that.**
+  **Whether to close it is Greg's call, not the corpus's.** Tightening the ownerless branch to the
+  subtree is a few lines and a behaviour change with false-red risk of exactly the kind this bullet
+  is about; closing it will turn `borrowing-under-a-text-free-wrapper` red, which is deliberate —
+  the case exists so the fix is a decision somebody took rather than a behaviour that drifted.
+
+- **The gates are tested by shapes nobody sampled for. NARROWED 2026-09-06 by C0.2, and not closed.**
+  See *The follow-on this stage most needs* above: the fifteen fixtures cannot exercise most of what
+  the gates do, every blocker from the fourth review on needed a hand-built page, and the hand-built
+  pages were written by whoever was fixing the bug.
+
+  What changed: the shapes are a named, reported matrix now
+  ([shapes.mts](../../evals/extraction/shapes.mts)), each pinning its resolution path and exposure
+  counts, written by an agent that did not write the fix they test. What has **not** changed is the
+  sampling: fifteen shapes chosen by two reviewers and one adversary are still fifteen shapes chosen
+  by three parties, not a sample of what browsers and Readability actually produce. The honest limit
+  stands, one notch narrower.
 - **Table-row semantics, and structural relationships generally.** GPT Sol moved the last cell of one
   row to the start of the next: global leaf order unchanged, every leaf still resolving to its own
   source element, row widths `3, 5, 4, 4, 4` instead of the intended shape, and the datum now
@@ -2009,6 +2080,64 @@ ruler's five recorded preconditions, which are conditions on **how stage C may u
   agent than the one writing the recogniser.** This is the actual fix for the problem the shape
   corpus was invented to solve, and it costs nothing.
 
+  ##### What landed, 2026-09-06 — **C0.2 is done, and it was built under the adversary rule**
+
+  Written by an agent that did not write C0.1, briefed to try to break the instrument rather than
+  confirm it. [`evals/extraction/shapes.mts`](../../evals/extraction/shapes.mts) holds **16 named
+  source shapes and 39 named candidates**; `tests/extraction-shapes.test.ts` is the gate,
+  `npx tsx evals/extraction/shapes.mts` is the report, and
+  [score.mts](../../evals/extraction/score.mts) prints a summary section beside the fifteen
+  fixtures. Every case is named for **the shape** — `partial-flattening-with-one-child-dropped`,
+  not "the ninth review".
+
+  **The part that is not pass/fail.** Every card now carries a `ProvenanceTally`: which form
+  answered, every text-carrying output node by how its stamp resolved
+  (`direct`/`ancestor`/`descendant`/`none`), and **every text run by the branch that placed it** —
+  `owner`, `subtreeEarlier`, `subtreeOnly`, `page`, `behind`, `behindSubtree`, `unplaceable`. A case
+  pins all of them, omitted meaning zero, and `provenanceForm` throws if the census and the gate's
+  own exposure count disagree. So a green reached by the gate quietly judging nothing is not
+  available: doing nothing is a number the case would have missed. The corpus reaches **all seven
+  placement branches and all four resolutions**; the fifteen shipped extractions reach **two** —
+  `owner` 14,066 runs and `page` 64, and nothing else, measured 2026-09-06 and printed by the run.
+
+  **The `ancestor`-cannot-supply branch fires.** `subtreeOnly` is zero across all fifteen shipped
+  extractions and fires twice here — `partial-flattening-with-one-child-dropped` and
+  `wholly-flattened-subtree`, which is the pair a fix that worked only for whole subtrees would
+  split.
+
+  **The placement floor is pinned, by one shape.** See the retraction list's floor bullet above:
+  `borrowed-phrase-spelled-out-by-the-subtree` is red at the shipped floor of 8 and **green at 1**,
+  and the case asserts both cards through a `withPlacementFloor` mutation seam plus a check that the
+  two differ at all. Swept at every floor from 1 to 12: green at 1 and 2, red at 3 and above, so the
+  case rejects **1 and 2** and the genuinely unpinned interval is **3 through 8** — nothing anybody
+  has written separates those. The three floors either side of the boundary are pinned by the case,
+  so the sweep cannot go stale.
+
+  **Three cases pin a hole rather than a check**, asserting what the instrument does rather than
+  what it should, so closing any one turns the corpus red on purpose:
+  `borrowing-under-a-text-free-wrapper` (the ownerless ancestor, confirmed independently — see the
+  retraction list), and `a-cell-moved-across-a-row-boundary` plus
+  `a-stamped-inline-moved-across-a-list-item-boundary` — the containment blind spot C2 exists for,
+  written twice on purpose, because an oracle built for `<tr>`/`<td>` would leave the list exactly
+  where it is.
+
+  **Migration, not addition.** The synthetic pages in `tests/extraction-scorer.test.ts` are defined
+  once in the corpus now and referenced by name; that file keeps all 66 cases and all 237
+  assertions, 38 lines shorter.
+
+  **What it costs, measured rather than asserted.** The whole 39-case matrix takes **2.0–3.0 s** in
+  an already-warm process (three runs, 2026-09-06), and it runs once at the end of a corpus run.
+  Wall clock on the run itself is **not** a usable comparison on this box — the before run took
+  3m 54s at low load and the after run 6m 22s at load average 24, with a review and a test gate
+  alongside — so the in-process figure is the honest one. Nothing here stores subtree text: the
+  pages are five elements each, and `sourceOwnership` still keeps bounds and cuts strings on demand.
+
+  **One number worth knowing, unrelated to this stage.** Peak resident memory on a full corpus run
+  is **3.6 GB**, against the 4 GB heap failure this plan records from the version that stored
+  subtree text. The shape section runs last, after that peak, and standalone it peaks at 450 MB — so
+  the 3.6 GB is the fifteen fixtures', not the corpus's. The headroom is thinner than the fix
+  narrative implies.
+
 - **C1 — the bot wall.** The biggest reader-visible win per hour, and Fable found the reason it
   outranks everything else: **a published wall consumes a paying reader's slot**, where a failed
   ingest is free ([billing.md](../project/billing.md)). So the silent success costs the reader money
@@ -2030,8 +2159,64 @@ ruler's five recorded preconditions, which are conditions on **how stage C may u
   (`challenge_document | provider_error_document`) must map into **both** the production failure state
   **and** `Candidate.refused`, or the harness's `notAnArticle` support is silently bypassed.
 
-  **Never on shortness, visible "404" text, missing metadata, `noindex`, character class, or a
-  reCAPTCHA script alone** — every WordPress comment form loads `recaptcha/api.js`.
+  **Never on visible "404" text, missing metadata, `noindex`, character class, or a
+  reCAPTCHA script alone** — every WordPress comment form loads `recaptcha/api.js`. (Shortness *is*
+  now a signal, but a separate one, and not part of this registry: see C1a below.)
+
+  **The registry's first entry, measured 2026-09-06 rather than imagined.** `pmc_article.html`
+  declares `<base href="https://www.google.com/recaptcha/challengepage/">` and
+  `<link rel="canonical" href="https://www.google.com/recaptcha/challengepage">` — the page's own
+  declared identity is Google's interstitial, not the host it was fetched from. Across all 20 fixtures
+  carrying a canonical, **nineteen point at their own host and only the challenge page points
+  elsewhere**, and it is the only fixture with a `<base>` at all. So the corpus supplies this
+  recogniser's negative control for free. **Key on the challenge endpoint, not on the host mismatch**:
+  a cross-host canonical is legitimate and common — a syndicated repost canonicalising to the original
+  is exactly that shape — so "canonical host ≠ fetch host" is a shape rule wearing markup clothing,
+  while "the page says it is `google.com/recaptcha/challengepage`" is the page telling us what it is.
+
+- **C1a — the capability floor, and it ships before the registry.** *Decided by Fable 2026-09-06,
+  with the question delegated to it by Greg; it overrides both GPT Sol's "never refuse on shortness"
+  and my own settlement in Sol's favour.* The reasoning is worth keeping because it dissolves the
+  objection rather than trading against it:
+
+  > **The rule guards classifiers.** "Rule on markup, model on meaning" exists because every failed
+  > shape rule *decided what a piece of text was* — junk, marker, nav — and a wrong decision silently
+  > removed content from a real article. This rule decides nothing about the content. It says: *the
+  > whole page has too little text for this product to build anything from*, and that sentence is true
+  > of a genuine 300-character page too. So the negative fixture the plan demands is not impossible —
+  > it is the wrong test.
+  >
+  > — Fable, 2026-09-06
+
+  And **the number is Readability's, not ours**: below `DEFAULT_CHAR_THRESHOLD` (500) Readability has
+  already concluded the parse *failed*, and returns something only because `_attempts` hands back the
+  longest failure. Today we take that failure and publish it as an article titled "Medium". The floor
+  is us **stopping overriding the library's own verdict**.
+
+  **Measured across all 36 fixtures** (Readability's own `textContent`, whitespace-collapsed;
+  independently re-run and confirmed to the character): the two walls are **130** (`pmc_article`) and
+  **185** (`medium_about`); the shortest genuine page is `arxiv_abs` at **1,798**, then `mkdocs_tabs`
+  at 3,901. **Nothing lies between 185 and 1,798.** A floor at 500 has 2.7× headroom above the tallest
+  wall and 3.6× below the shortest real page. Do not tune it to the corpus — it is the library's
+  number, and the corpus only shows it is safe.
+
+  Its own error type beside `ReadabilityRefused` in [`src/extract.ts`](../../src/extract.ts), its own
+  `kind: "blocked"` message, **and the character count in the sentence**, which says *usually* and
+  never asserts the page is an error page — the rule does not know that. Tests replace the impossible
+  negative with a floor pinned from **above**: a synthetic ~700-character real page must pass through
+  untouched, so nobody later "tightens" this to 1,000.
+
+  **The slot is genuinely free, verified in the code rather than assumed** — this is the premise the
+  whole priority rests on. [`src/store/pg-session.ts`](../../src/store/pg-session.ts) § the settlement
+  in the ending transaction: `ending.status === "done"` charges, **every other ending releases**. A
+  refusal thrown from stage 2 ends the job `error`, so it releases, and no billing code needs to
+  change. What costs the reader a slot is the *current* behaviour of publishing the wall.
+
+  **Where it must live, or the eval proves nothing.** The detector goes inside `readArticle` **and**
+  `readArticleWithProvenance` — a function both call — because the harness's `shippedOf` calls
+  `readArticleWithProvenance` directly and never goes through `runExtract`. Put it in `runExtract`'s
+  catch or in `pipeline.ts` and production passes while `Candidate.refused` stays permanently false and
+  `notAnArticle` silently proves nothing. This is Sol P1-C03's warning arriving as a concrete seam.
 
 - **C2 — the containment oracle.** Sol's precondition five says the ruler is text and order and
   cannot see a datum moved into the wrong row, so this must exist **before** C3, not alongside it:
@@ -2051,16 +2236,109 @@ ruler's five recorded preconditions, which are conditions on **how stage C may u
   and layout ones is only the start; reinsertion must preserve sanitisation, source order and block
   ids, and must not leave both Readability's fragment and the rescued original.
 
-- **C4 — publisher furniture: recognise and record, do not delete.** Sol P1-C04 and Fable agree, and
-  it needs no product decision to proceed: [the reframe](#the-reframe-nothing-is-deleted) promises
-  leaked chrome is *stored and inspectable*, and `Block` has no representation for classified hidden
-  furniture yet. So C4 marks; **nothing disappears until stage D's visibility exists.**
+- **C4 — publisher furniture: recognise and record, do not delete. Settled by Greg, 2026-09-06**, so
+  this is no longer an interim position waiting on stage D. Both reviewers proposed a two-tier split —
+  fold the author's apparatus, *delete* the publisher's chrome and show a count — and it was put to
+  Greg against the alternative of keeping everything. He kept everything:
 
-  Publisher-authored wrappers only — MediaWiki `.mw-editsection`, `.ambox`, `.navbox`,
-  `.mw-empty-elt`; Sphinx `a.headerlink`; PLOS `ul.reflinks`. **Visible labels such as "View Article"
-  are not sufficient selectors.** For a markup rule the adversary is *the same markup where it is
-  content*: a `<footer>` inside a blockquote quoting a webpage, a navbox-classed real table, a misused
-  `role="doc-endnotes"`.
+  > I care mostly about what the reader sees. And a bit of junk in the structure that's getting
+  > ignored seems a low price to pay for making things inspectable and undoable.
+  >
+  > — Greg, 2026-09-06
+
+  **The load-bearing words are "getting ignored", and they are a requirement rather than an
+  assumption.** Storing a block is not the same as every feature ignoring it, and today the 75 PLOS
+  reference buttons are `gistable: true` — which is the opposite of ignored. So C4's deliverable is
+  *classification that everything downstream actually honours*: out of summaries, out of the outline
+  and the arc, out of the automatic AI stages — and, per `isBodyEvidence`, still reachable by chat and
+  search, because *"who funded this?"* is a question about the apparatus. The cost Greg accepted is
+  the residue in the structure, not a licence for the junk to keep being read.
+
+  **The bar this sets for stage D**: inspectable and *undoable*. A reclassification the reader can
+  reverse, stored rather than transient — which is [the reframe](#the-reframe-nothing-is-deleted)'s
+  existing commitment, now confirmed rather than traded away.
+
+  **A licence to delete — offered, argued against, and then spent for one narrow class.** *Greg
+  delegated the call to Fable, which overrode me. What follows is the reasoning as it moved, because
+  the correction is the useful part; the decision is at the end.* Greg added, the same day:
+
+  > But if the agent is very very sure it's junk, maybe it's fine to delete it altogether.
+  >
+  > — Greg, 2026-09-06
+
+  There *is* a class where that certainty is real, and it is exactly the class this plan already
+  trusts: **markup the publisher authored to label its own furniture.** `.mw-editsection` is
+  definitionally the edit link MediaWiki generates; `a.headerlink` is Sphinx's own anchor. Reading
+  that is not a judgement about whether text looks like junk, it is reading the publisher's label —
+  *rule on markup, model on meaning*, precisely. Deletion there is defensible.
+
+  **It is still not what C4 does, for three reasons worth the paragraph:**
+
+  1. **It buys almost nothing.** If a block is marked and genuinely ignored, the reader sees the same
+     page either way. The only difference between marking and deleting is whether it can be undone —
+     which is the thing Greg said he was buying.
+  2. **The errors are asymmetric.** A wrong mark is visible and reversible; a wrong delete is
+     invisible and needs a re-extraction to recover. And this project has been confidently wrong about
+     "obviously junk" before: 260830at's ≤6-character marker rule deletes `1–0`, a bare date and a
+     numeric table cell, which is why it is not in this plan.
+  3. **Mark-then-delete is a one-way door taken in the easy direction.** Going from marked to deleted
+     later is a policy change over data we already have. Going from deleted to restored is not.
+
+  **Reason 1 was wrong, and Fable said why.** "Marking and deleting look identical to the reader"
+  assumed marking is *available*, and for this class it is not: **the mark model is block-granular.**
+  `[edit]` is an inline `<span>` inside an `<h2>`; Sphinx's `¶` is an `<a>` inside a heading. There is
+  nothing to mark — the heading is either *"History[edit]"* or *"History"*. And PLOS's `ul.reflinks`
+  is 26 lists interleaved one per reference, so marking them puts 26 fold placeholders *between the
+  citations*, which is a worse reading view than leaving them alone. **For this class the honest
+  options were always delete or leave; "mark" was never on the menu**, so reason 1 argued from a third
+  option that does not exist.
+
+  Reasons 2 and 3 survive, and are why the class stays narrow — but they are weaker than I put them:
+  stage 1 keeps the fetched bytes as their own artefact precisely so extraction can be re-run without
+  re-fetching, and ids survive re-extraction by contract. So "a wrong delete needs a re-extraction" is
+  **the designed undo path, not a catastrophe**. What would be a catastrophe is a delete that takes an
+  author's sentence with it, and that is what the guard below makes structurally impossible.
+
+  **THE CLASS THAT MAY BE DELETED**, in `prepareDocument`, before Readability and before ids are
+  minted:
+
+  > **Platform-generated controls beside content, recognised by the platform's own selector, that
+  > contain no block-level descendants.**
+
+  MediaWiki `.mw-editsection` and `.mw-empty-elt`; Sphinx `a.headerlink`; PLOS `ul.reflinks`;
+  caption toggles and skip-links where the platform names them. **The guard is markup, not shape**:
+  the matched element must contain no `p, ul, ol, table, blockquote, h1–h6, pre, figure` — and for
+  `ul.reflinks`, every `li` must hold exactly one `<a>` and nothing else. **If the guard fails the
+  recogniser declines and falls through to marking.** It can never delete something with a paragraph
+  in it.
+
+  **What stays marked: anything that says something.** `.ambox` — the Arabic Wikipedia maintenance
+  banner — is a publisher's *statement about the piece* and a reader may want it; likewise `.navbox`,
+  sidebars, related-links. The adversary this plan already names, a navbox-classed real table, is
+  exactly why `.navbox` is not in the class.
+
+  **Inspectability at zero downstream cost**: record what was removed as counts per selector in the
+  extraction's `meta` — `removed: { ".mw-editsection": 14, "ul.reflinks": 26 }` — which is the audit
+  line stage D shows. This is the point Fable made that decides the shape: **marking's real cost is
+  not storage, it is that every consumer must learn the new class** the way they all had to learn
+  `supplement` — block policy, tree invariants, search, export, the client. Deleting `[edit]` costs
+  nobody anything.
+
+  Everything else in C4 still only marks: [the reframe](#the-reframe-nothing-is-deleted) promises
+  leaked chrome is *stored and inspectable*, `Block` has no representation for classified hidden
+  furniture yet, and **nothing else disappears until stage D's visibility exists.**
+
+  **Publisher-authored wrappers only. Visible labels such as "View Article" are not sufficient
+  selectors.** For a markup rule the adversary is *the same markup where it is content*: a
+  `.mw-editsection`-classed `<div>` wrapping a paragraph, a `ul.reflinks` whose `li` holds citation
+  text as well as a link, a `<footer>` inside a blockquote quoting a webpage, a misused
+  `role="doc-endnotes"` — **and per C0's adversary rule a different agent writes them.**
+
+  Two tests that are easy to leave out and are the ones that matter: `plos-biology` must keep at least
+  two full citation strings, proving the references themselves survived while their controls went; and
+  **the removals must be declared to the order and provenance gates as allowed exclusions**, or C0's
+  instrument goes red for the correct reason and somebody spends a day on it — Sol P1-C02 arriving as
+  a practical consequence.
 
 - **C5 — the admonition join**, ArchWiki adapter first, per correction 2 above.
 
@@ -2077,23 +2355,20 @@ ruler's five recorded preconditions, which are conditions on **how stage C may u
 - **Paul Graham's footnotes**, per correction 3.
 - **Furniture deletion**, to stage D, per C4.
 
-#### One product call for Greg, not blocking
+#### The one place the reviewers disagreed — decided, not left open
 
-**Tier-2 wall detection — the only place the two reviewers actually disagree, and it is worth
-knowing about.** Readability's `DEFAULT_CHAR_THRESHOLD` is 500; below it, Readability considers the
-parse *failed* and returns something only because `_attempts` hands back the longest failure. Medium's
-404 (281 characters) and beehiiv's shell are exactly this and carry **no wall markup at all** — there
-is nothing in the Medium fixture that says 404 except the words.
+**Superseded 2026-09-06. This section recorded the disagreement as settled in Sol's favour and left
+it as a product call for Greg; Greg delegated the call to Fable, and Fable reversed it.** The decision
+and its reasoning are in **C1a** above, and the short version is that both Sol and I had mis-classed
+the rule: a *capability floor* decides nothing about any piece of content, so the negative fixture the
+plan demands is not impossible but irrelevant. The claim recorded here — that Medium's 404 page must
+reach the shelf and spend a slot — is no longer the accepted cost of anything, because C1a refuses it.
 
-Fable recommends refusing these too, quoting the number to the reader, and **owns that this is a
-length rule — a content-shape rule, which fails this plan's own test**, since no fixture can exist
-where a 300-character real page makes it decline. Sol says never refuse on shortness.
-
-**Settled for now in Sol's favour, because the plan's rule says a shape rule may not exist without a
-negative fixture and Fable agrees that fixture cannot be built.** The accepted cost, stated plainly:
-**Medium's 404 page still reaches the shelf and still spends a slot.** Greg may prefer to buy that
-back with a length rule; it is his call, not one to inherit. Stage B's "genuinely short article"
-negative control stays, documented as the cost rather than quietly turned into a pass.
+Kept rather than deleted, because **the mistake is the useful part**: the plan's own rule was applied
+to something it was not written about, and the argument that unblocked it was to ask what the rule was
+*for*. The next reader meeting an apparently-forbidden rule should ask that before accepting the
+prohibition. Also kept because the numbers here were wrong and are worth correcting: the Medium
+fixture's visible text is **185** characters, not 281, and the PMC wall's is **130**.
 
 #### How every recogniser is proved — Sol P2-C08, adopted
 
@@ -2251,6 +2526,54 @@ So the follow-on plan starts from these preconditions, not from a prompt:
 The design work already done — where the pass would run, the operation vocabulary, and why free
 placement and text rewriting are refused at any price — is kept in the scratch notes for that plan
 rather than deleted, because the reasoning survives even though the schema does not.
+
+### Greg's two-tier proposal, 2026-09-06 — recorded for that plan, with what would have to be true
+
+> Perhaps we allow the first-pass post-processing agent to make any suggestions it likes (perhaps
+> with a confidence threshold), and then if needed call a smarter second-pass agent to double-check
+> and approve anything destructive/risky. e.g. GPT Luna for the first pass, and Anthropic Sonnet for
+> double-checking the subset of risky bits.
+>
+> — Greg, 2026-09-06
+
+**The shape is right, and one part of it is better than it looks.** Routing by *risk* rather than
+reviewing everything uniformly matches the asymmetry this whole plan is built on — an additive mark is
+cheap and reversible, a deletion is not — and it puts the expensive model only where the cost of being
+wrong is high. And **cross-family is the load-bearing detail**: Luna and Sonnet are different families,
+so the check is worth something. Sonnet checking Sonnet would be near-worthless, for the reason
+[engineering-manager.md](../reusable/engineering-manager.md) already states — *agents reasoning from
+the same source reach the same wrong answer confidently*. Nine cross-family reviews built stage B, and
+every one found something; that is the same mechanism, applied per-article instead of per-stage.
+
+**It is a strong answer to precondition 4, which had none.** A page can carry instructions that elicit
+perfectly schema-valid destructive operations, and provenance guards against invented characters, not
+against malicious classification. A second model **shown the proposed destructive diff and not the
+page's prose** cannot read the injected instruction that produced it. That is a real defence and
+nothing else on the list supplies one.
+
+**What it does not address, and this is why it does not unblock the pass.** The blocker is
+precondition 1: there is no coherent execution model — two graphs with no defined mapping, and
+operations that invalidate each other's handles. A second reviewing agent reviews operations that may
+already be incoherent, and approves them one at a time while the *interaction* between them is what
+commits the damage. Ten mutually reinforcing valid-but-wrong operations still pass a per-operation
+review. So this is an architecture for the pass, not a way to skip the substrate work.
+
+**Three conditions on building it:**
+
+1. **"Risky" must be decided structurally, never by a model.** Deletion, `split`, `merge` and `retag`
+   are risky by their type; adding metadata is not. If the router is itself a model call, the problem
+   has moved rather than gone. This is the same guard C4 uses — *contains no block-level descendants*
+   is mechanical and testable, and a confidence score is not.
+2. **A confidence threshold is not evidence until it is calibrated**, and calibrating it is a
+   measurement nobody has made. A model's self-reported 0.9 means nothing until we know the empirical
+   error rate at 0.9 — and this project's history is precisely of numbers that felt like evidence and
+   were not. Ship it with the threshold at *accept nothing destructive without review* and let the
+   measurement earn any loosening.
+3. **Measure whether tier two is load-bearing, because it is cheap to find out and we now have the
+   ruler.** A two-tier arm is just another arm. If the second pass approves 99% of what the first
+   proposes, it is theatre with a bill attached; if it rejects a fifth, it is the most valuable
+   component in the design. **Nobody has measured this, and it is an afternoon.** That measurement
+   should come before the architecture is committed to, not after.
 
 ## The biggest risk, and the check
 
