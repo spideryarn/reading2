@@ -364,7 +364,6 @@ function fakeGlossary(slug: string, blocks: Block[], log: StepLog): PipelineStep
   return {
     name: "glossary",
     label: STEPS.glossary.label,
-    outputs: (ctx) => [path.join(ctx.dir, "glossary.json")],
     produces: ["glossary"],
     async run() {
       log.calls += 1;

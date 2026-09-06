@@ -22,8 +22,11 @@ wiring.
 
 | Box | Scope | Stored | Edited at |
 |---|---|---|---|
-| **About you** | you, always | `data/reader.json` / `reader_profiles.profile` | `/profile` |
-| **Why you're reading this one** | one article | `shelf.json` → `ShelfState.purpose` / `articles.purpose` | `/read/<slug>/metadata` |
+| **About you** | you, always | `reader_profiles.profile` | `/profile` |
+| **Why you're reading this one** | one article | `articles.purpose` | `/read/<slug>/metadata` |
+
+Both were files until 2026-09-05 — `data/reader.json` and `data/<slug>/shelf.json` — deleted along
+with the rest of the filesystem store.
 
 Both are **reader state**: they survive re-extraction and the pipeline cannot undo them. That is the
 argument [`src/shelf.ts`](../../src/shelf.ts) already makes for the renamed title, and it holds here
@@ -614,10 +617,11 @@ The measurements, both reviews and the two bugs the tests found after the review
 
 | | |
 |---|---|
-| [`src/profile.ts`](../../src/profile.ts) | render, normalise, hash, the staleness rule, `PROFILE_RULES`, `profileSection`, and the filesystem half of the global store |
-| [`src/shelf.ts`](../../src/shelf.ts) | `ShelfState.purpose` — the per-article half |
+| [`src/profile.ts`](../../src/profile.ts) | render, normalise, hash, the staleness rule, `PROFILE_RULES`, `profileSection` — the filesystem store was deleted 2026-09-05 |
+| [`src/shelf.ts`](../../src/shelf.ts) | `MAX_TITLE_CHARS`, and `loadShelf` for fixtures — `purpose` writes moved to Postgres |
 | [`src/store/contracts.ts`](../../src/store/contracts.ts) | `ReaderStore`, and `ShelfStore.patch`'s third key |
-| [`src/store/pg-reader.ts`](../../src/store/pg-reader.ts) | the Postgres half; `reader_profiles`, one row per owner |
+| [`src/store/pg-reader.ts`](../../src/store/pg-reader.ts) | `reader_profiles`, one row per owner |
+| [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) | `articles.purpose` — the per-article half |
 | [`src/routes.ts`](../../src/routes.ts) | `GET`/`PATCH /api/reader`, `resolveProfile`, `withProfileChanged` |
 | [`src/web/SettingsSection.tsx`](../../src/web/SettingsSection.tsx) | the Settings card on the same page — [experimental-features.md](experimental-features.md), which is about what the app shows rather than what the model is told |
 | [`tests/profile.test.ts`](../../tests/profile.test.ts) | the pure rules, including the staleness table exhaustively |

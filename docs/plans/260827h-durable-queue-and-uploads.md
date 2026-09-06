@@ -548,7 +548,7 @@ one; read the banner above for the five places the code has since moved past it.
 
 1. **Delete the persistence machinery.** `JOBS_DIR`, `jobFile`, `writeOnce`, `persist`, `writes`,
    `forgotten`, `writeCounter`, `loadFromDisk`, `ready`, `sweepStopped` and the `jobs` Map itself all
-   moved to [`jobs-fs.ts`](../../src/store/jobs-fs.ts) unchanged. Removing them from `src/jobs.ts` is
+   moved to `jobs-fs.ts` unchanged. Removing them from `src/jobs.ts` is
    deletion, not rewriting.
 2. **Add the work key.** `sameWork` compares five things — the ordered step names, each step's
    `force`, the upload id, `guidance` and `profile`. The key is a hash over exactly those, computed

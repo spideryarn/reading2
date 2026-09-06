@@ -8,7 +8,7 @@ trust.
 
 We are replacing `db:import` with a live Postgres write path. The seam is `ArtifactStore` in
 [`src/store/artifacts.ts`](../../src/store/artifacts.ts), with one adapter built already —
-[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts). I am about to write the Postgres
+`src/store/artifacts-fs.ts`. I am about to write the Postgres
 adapter, `src/store/artifacts-pg.ts`.
 
 The plan is [`docs/plans/260827aa-delete-the-importer.md`](260827aa-delete-the-importer.md); the relevant sections are

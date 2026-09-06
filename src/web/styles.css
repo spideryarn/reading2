@@ -3795,14 +3795,20 @@ td.text.has-hit[data-hues="8"] {
   line-height: 1.45;
   color: var(--ink-soft);
 }
-/* What that project learned the hard way — the part worth carrying. Set apart
-   so it doesn't read as more of the description.
+/* Two footers, one treatment, because they sit in the same place and mean the
+   same kind of thing — an aside under the description rather than more of it.
+
+   `learned` is what that project learned the hard way; `tap` is "tap again to
+   do it", which a card opened by a finger has to say and no other card does
+   (Tooltip.tsx § `ControlTip.tap`, docs/project/touch.md). One rule rather than
+   two identical ones: if they ever need to differ, split it then.
 
    Selector written as `.tip-soon p.tip-soon-learned` rather than the class on
    its own so it outranks `.tip-soon p` above without an `!important`. Same
    result, and the next person to add a rule here inherits a specificity ladder
    they can reason about rather than one they have to escalate past. */
-.tip-soon p.tip-soon-learned {
+.tip-soon p.tip-soon-learned,
+.tip-soon p.tip-soon-tap {
   padding-top: 0.35rem;
   border-top: 1px solid var(--rule);
   color: var(--ink-faint);
@@ -5460,13 +5466,53 @@ td.text.has-hit[data-hues="8"] {
   letter-spacing: 0.03em;
 }
 
-/* The two sections somebody else filled in. Both are indented behind a rule for
+/* The three sections somebody else filled in. All are indented behind a rule for
    the reason the glossary's are: the card is now several claims from several
    sources, and a reader who cannot see where one ends and the next begins has
    lost the thing the labels exist to give them. `.prose-card-part` supplies the
-   spacing; these two supply the mark. */
+   spacing; these three supply the mark.
+
+   The rule gets fainter as the source gets further away, which is the ranking
+   the card already applies when it decides which of the three to draw
+   (ProseHoverCard.tsx § ExternalBody): solid for a piece on the reader's own
+   shelf, dotted for Wikipedia, dashed for a page we fetched once and know
+   nothing else about. */
 .prose-card-part-shelf { border-left: 2px solid var(--rule-strong); padding-left: 0.5rem; }
 .prose-card-part-wiki { border-left: 2px dotted var(--rule-strong); padding-left: 0.5rem; }
+.prose-card-part-page { border-left: 2px dashed var(--rule-strong); padding-left: 0.5rem; }
+/* **And the fourth, which is the one nobody else filled in.** Same indent, and
+   deliberately NOT another weight of the same rule: the three above are a
+   ranking of how far away the source is, and this one is not on that scale at
+   all — it is ours. So it takes the accent the rest of the app uses for a model's
+   own words, which is the same distinction `Sparkles` is making one line up in
+   the label. */
+.prose-card-part-relation { border-left: 2px solid var(--highlight); padding-left: 0.5rem; }
+/* The cursor, while the paragraph is still arriving. A block that blinks where
+   the next word will be — so a reader can tell a summary that stopped from a
+   summary that finished, which is the one thing streamed text cannot say for
+   itself.
+
+   `--highlight` and NOT `--accent`: in this palette `--accent` is a raised dark
+   SURFACE rather than the brand orange, so a caret painted with it is dark grey
+   on a near-black card — not an error, not visibly broken, just gone. The same
+   warning is on `.dock-btn.on` and in tokens.css. */
+.prose-card-caret {
+  display: inline-block;
+  width: 0.4em;
+  height: 0.85em;
+  margin-left: 0.1em;
+  translate: 0 0.08em;
+  background: var(--highlight);
+  animation: prose-card-caret-blink 1.1s steps(2, start) infinite;
+}
+@keyframes prose-card-caret-blink {
+  to { visibility: hidden; }
+}
+/* Somebody who has asked not to be moved gets a steady mark rather than none:
+   the caret still says "more is coming", it simply stops flashing. */
+@media (prefers-reduced-motion: reduce) {
+  .prose-card-caret { animation: none; opacity: 0.6; }
+}
 /* A real title — the article's own name, not a guess read off a path. It gets
    the weight the host has, because once there is one it IS the answer. */
 .prose-card-title {
@@ -6939,6 +6985,16 @@ td.text.note-open {
 /* The disclosure line is for a different reader — somebody whose agreement
    permits this — so it is separated rather than run on. */
 .ref-notice .ref-notice-also { margin-top: 0.45rem; color: var(--ink-faint); }
+/* **Outside the collapse**, so it is on screen whether the notice is open or
+   shut — it is the one sentence here in the future tense, about something the
+   next chip press would cause rather than something already done. Not
+   `--ink-faint` like the line above it: that one is a footnote for a reader who
+   has decided the notice does not apply to them, and this one is a warning
+   nobody has read yet. src/messages.ts § `REFEREE_CANDIDATES_REACHES_SEARCH`. */
+.ref-notice .ref-notice-ahead { margin-top: 0.45rem; margin-bottom: 0; }
+/* Only when the notice is open: the paragraphs now sit *under* the ahead line
+   (App.tsx says why), so the gap belongs between them rather than above it. */
+.ref-notice-toggle[aria-expanded="true"] ~ .ref-notice-ahead { margin-bottom: 0.45rem; }
 
 /* **The source scan.** src/web/SourceScanNotice.tsx, and it sits between the
    confidentiality notice and the sub-mode chips because it belongs to the mode
@@ -8051,19 +8107,29 @@ td.text.note-open {
 
    It follows `.summ-text`'s indent so the two line up under the title, and it
    takes the same un-indenting on the root, where there is no title row. */
+/* **The question is the row's summary now, not a note under it** — it replaced
+   the gist rather than joining it on 2026-09-05 (SPIDERYARN-READING2-24), so it
+   takes `.summ-text`'s weight exactly: the same size, the same ink, the same
+   reading face. It was 0.87rem italic `--ink-faint` while it was the second
+   line, and leaving it there would have made every row's only sentence look
+   like a footnote to a claim that is no longer above it.
+
+   **The italic went with the demotion.** It marked the question as a different
+   kind of thing from the sentence above; there is no sentence above, and a
+   panel set entirely in italic is a panel that is harder to read for a
+   distinction nobody can see any more. The question mark does that job. */
 .summ-question {
-  margin: 0.2rem 0 0 1.25rem;
+  margin: 0.25rem 0 0 1.25rem;
   font-family: var(--font-reading);
-  font-size: 0.87rem;
-  line-height: 1.45;
-  font-style: italic;
-  color: var(--ink-faint);
+  font-size: 0.93rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
 }
 .summ-list > .summ-entry > .summ-body > .summ-question { margin-left: 0; }
-/* The current row lifts its claim to full ink (§ `.summ-entry.now`); the
-   question lifts with it, or it would read as the one dead line on the row the
-   reader is actually standing in. */
-.summ-entry.now > .summ-body > .summ-question { color: var(--ink-soft); }
+/* Lifts on the current row exactly as the gist does (§ `.summ-entry.now`), and
+   to the same `--ink` rather than the `--ink-soft` it lifted to as a second
+   line — it is the claim on that row now. */
+.summ-entry.now > .summ-body > .summ-question { color: var(--ink); }
 
 /* The citation chips inside a summary. Smaller than chat's, because a summary
    is denser than an answer and the chips are punctuation in it rather than
@@ -14687,7 +14753,9 @@ td.text.kind-heading .blk-gutter[data-open] {
   line-height: 1.5;
   color: var(--ink-soft);
 }
-.fb-email { color: var(--ink); font-family: var(--font-mono); font-size: 0.75rem; }
+/* `.fb-email` was here. It set the reader's own address in mono inside the
+   sentence above, and the sentence went on 2026-09-05 — FeedbackDialog.tsx
+   § Props. */
 
 .fb-field { display: flex; flex-direction: column; gap: 0.3rem; }
 .fb-label { font-size: 0.78rem; font-weight: 600; }

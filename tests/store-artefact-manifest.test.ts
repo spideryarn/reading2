@@ -42,24 +42,29 @@
  *
  * ## Which directory each test below judges against
  *
- * There are five tests. Two read the developer's gitignored `data/`, one reads
- * the **committed corpus** at tests/fixtures/data-root/data/, and two read only
- * the lists in this file. That split is deliberate and it is the fix this file
- * needed:
+ * There are five tests. **Three read the committed corpus** at
+ * tests/fixtures/data-root/data/, and two read only the lists in this file.
  *
- * - "is there a filename nobody wrote down?" wants the most generous evidence
- *   available, and a laptop's `data/` is where a brand-new artefact shows up
- *   first. Those two are **discovery canaries**: they can go red — deliberately,
- *   and they have twice — but a green in them is not evidence of anything, and
- *   nothing they see can clear an exemption or excuse a manifest entry.
- * - "does the manifest still describe things that exist?" is a **gate verdict**,
- *   so its evidence must live in the commit. Until 2026-09-02 it read `data/`
- *   and `example/` instead, and the verdict was therefore a property of one
- *   machine at one moment: a real quiz generated into one laptop's `data/`
- *   cleared `quiz.json`'s exemption, the tracked corpus never gained one, that
- *   laptop file later vanished, and the gate went red for everybody with no
- *   commit in between.
- *   docs/postmortems/260902c-a-test-whose-evidence-was-one-laptop.md.
+ * **That used to be a split, and the split is what went on 2026-09-05.** Two of
+ * the three read the developer's gitignored `data/` instead, on the argument
+ * that "is there a filename nobody wrote down?" wants the most generous
+ * evidence available and a laptop's `data/` is where a brand-new artefact shows
+ * up first — they were **discovery canaries**, and they caught two real things
+ * that way (`assets.json`, `quotes.json`). Stage G of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * ended that: nothing writes an article into `data/` any more, so the generous
+ * evidence does not exist and a scan of it would pass or fail on whether
+ * somebody had run `npm run worktree:setup`. `scanData` below has the argument
+ * in full.
+ *
+ * What has not changed is why the third one always read the commit. "Does the
+ * manifest still describe things that exist?" is a **gate verdict**, so its
+ * evidence must live in the commit. Until 2026-09-02 it read `data/` and
+ * `example/`, and the verdict was therefore a property of one machine at one
+ * moment: a real quiz generated into one laptop's `data/` cleared `quiz.json`'s
+ * exemption, the tracked corpus never gained one, that laptop file later
+ * vanished, and the gate went red for everybody with no commit in between.
+ * docs/postmortems/260902c-a-test-whose-evidence-was-one-laptop.md.
  */
 
 import { execFileSync } from "node:child_process";
@@ -596,9 +601,39 @@ function evidenceProblems(citations: Citation[]): string[] {
   return problems;
 }
 
-/** The scan the first two tests run: every filename beside an article in `data/`. */
+/**
+ * The scan the first two tests run: every filename beside an article in the
+ * **committed corpus**.
+ *
+ * **It read the gitignored `data/` until 2026-09-05**, and the reason it could
+ * is the reason it no longer should. `data/` was where a laptop's own runs put
+ * their artefacts, so it was the most generous evidence available and the first
+ * place a brand-new artefact filename ever appeared — which is exactly what a
+ * discovery canary wants, and both of this scan's real catches (`assets.json`,
+ * `quotes.json`) worked that way.
+ *
+ * Stage G of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * finished deleting the filesystem store, so **nothing writes an article into
+ * `data/` any more**: a new step's artefact is a column or a table. What is left
+ * there is whatever `npm run worktree:setup` last copied out of the corpus, so
+ * a scan of it is a scan of the corpus with an extra way to be absent — the
+ * verdict would pass or fail on whether somebody had run the setup script,
+ * which is a property of a machine and not of a commit. That is the same defect
+ * docs/postmortems/260902c-a-test-whose-evidence-was-one-laptop.md is about,
+ * arriving from the other direction: there the evidence was one laptop's file,
+ * here it would be one laptop's *absence*.
+ *
+ * **What that costs, said plainly.** The canary and the staleness verdict now
+ * read the same directory, so they are two directions of one comparison —
+ * `HOMES` covers everything the corpus carries, and the corpus (or a written
+ * exemption) covers everything in `HOMES`. A brand-new artefact is therefore
+ * noticed when somebody commits an example of it, which is one step later than
+ * before. The header already tells whoever adds an artefact to commit that
+ * example, and there is no earlier moment left to notice it in.
+ */
 async function scanData(): Promise<{ articles: string[]; seen: Set<string> }> {
-  const data = path.join(ROOT, "data");
+  const data = path.join(FIXTURE_ROOT, "data");
   const articles = articleDirs(await corpusRoot(data));
   const seen = new Set<string>();
   for (const slug of articles) {
@@ -655,17 +690,15 @@ describe("the artefact manifest", () => {
 
     expect(
       articles.length,
-      `no article directories under ${path.join(ROOT, "data")} — only \`_\`-prefixed and ` +
-        `\`test-\` ones, which are the queue's and other suites' fixtures`,
+      `no article directories under ${path.join(FIXTURE_ROOT, "data")} — only ` +
+        `\`_\`-prefixed and \`test-\` ones, which are the queue's and other suites' fixtures`,
     ).toBeGreaterThan(0);
 
     expect(
       articles,
       `${FLOOR_SLUG} is the sentinel slug GATE_FIXTURES in scripts/deploy-checks.ts and ` +
         `tests/artefact-copy.test.ts both name, and the richest article in the corpus. ` +
-        `Without it this scan can be green over a corpus too thin to catch anything. ` +
-        `(The gate names the tracked copy under tests/fixtures/data-root/; this scan reads ` +
-        `data/ — see FLOOR_SLUG above.)`,
+        `Without it this scan can be green over a corpus too thin to catch anything.`,
     ).toContain(FLOOR_SLUG);
 
     const missing = FLOOR_FILES.filter((file) => !seen.has(file));
@@ -680,17 +713,18 @@ describe("the artefact manifest", () => {
     ).toEqual([]);
   });
 
-  it("covers every file present in data/", async () => {
-    /* **This one reads `data/` on purpose, and its green means nothing.** It is
-       the discovery canary — a brand-new artefact filename appears on the
-       machine that ran the new step, days before anything commits an example of
-       it, so the most generous evidence available is the right evidence here.
-       Its two real catches (`assets.json`, `quotes.json`) both worked that way.
+  it("covers every file the committed corpus carries", async () => {
+    /* **This read `data/` until 2026-09-05, and `scanData` above says why it
+       stopped.** In short: nothing writes an article into `data/` any more, so
+       the generous evidence that made it a discovery canary no longer exists,
+       and reading it would make the verdict depend on whether somebody had run
+       `npm run worktree:setup`.
 
-       That is the opposite of the staleness test below, whose verdict is a gate
-       verdict and therefore reads only what is in the commit. Both were reading
-       `data/` until 2026-09-02, and conflating them is what let a file on one
-       laptop stand in for evidence everybody could see. */
+       It is the opposite direction from the staleness test below — that one
+       asks whether `HOMES` still describes things that exist, this one whether
+       anything exists that `HOMES` has never heard of — and both now read the
+       commit. Until 2026-09-02 both read `data/`, and conflating them is what
+       let a file on one laptop stand in for evidence everybody could see. */
     const { seen } = await scanData();
 
     /* `KNOWN_NAMES` is the union of the three *kinds*, not of all six lists: a
@@ -703,7 +737,7 @@ describe("the artefact manifest", () => {
     expect(
       unaccounted,
       unaccounted.length
-        ? `These files sit beside an article and have no home in Postgres:\n` +
+        ? `These files sit beside a corpus article and have no home in Postgres:\n` +
             `  ${unaccounted.join("\n  ")}\n` +
             `Read the header of this file — it says what to do.`
         : "",

@@ -116,10 +116,10 @@ own `README.md` says so.
 across every table, and reusing it was the first plan. That was wrong, and why is the most useful
 thing on this page.
 
-`exportArticle` is **the rollback**. It projects an article into the filesystem store's
-`data/<slug>/` layout, and `tests/store-roundtrip.test.ts` pins that output *byte for byte* against
-what the filesystem store writes. So its losses cannot be fixed in place — fixing one turns that
-test red:
+`exportArticle` is **the rollback**. It projects an article into the old filesystem store's
+`data/<slug>/` layout (retired 2026-09-05), and `tests/store-roundtrip.test.ts` pins that output
+*byte for byte* against the committed fixture corpus in that same shape. So its losses cannot be
+fixed in place — fixing one turns that test red:
 
 - a `candidates` chat thread is written as `chat` (emitting the real kind was tried, and reverted);
 - `passages` and `interrupted` are dropped from every message;

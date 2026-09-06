@@ -77,7 +77,6 @@ import {
 } from "./store/jobs.js";
 import { failureKindOf, jobWorthRetrying, readerFailureOf } from "./job-failure.js";
 import { slugWithShortId, urlKey } from "./ingest.js";
-import { runInJob } from "./job-scope.js";
 import { errorFields, log, type Log, since } from "./log.js";
 import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
@@ -87,7 +86,6 @@ import type { JobSettlement, JobTransition, StoreSession } from "./store/session
 import { openPgStoreSession } from "./store/pg-session.js";
 import {
   articleExists,
-  contextPaths,
   DEFAULT_INGEST_STEPS,
   FORCE_ONLY_WHEN_NAMED,
   type PipelineStep,
@@ -422,7 +420,8 @@ export const CONCURRENCY_ENV = "SPIDERYARN_JOB_CONCURRENCY";
  *
  * Read at call time rather than frozen at import, so a test can move it and a
  * deployment can set it without a rebuild — the rule src/store/data-root.ts
- * states for the same reason. A value that is not a positive whole number is
+ * stated for the same reason, before it was deleted 2026-09-05. A value that
+ * is not a positive whole number is
  * **ignored rather than obeyed**: `SPIDERYARN_JOB_CONCURRENCY=0` would stop
  * every ingest in the account and read exactly like the queue being wedged.
  */
@@ -592,8 +591,16 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
   glossary: 120_000,
   /* GUESS, in `glossary`'s family: one call over the whole article, at the same
      effort, with a shorter answer than the glossary's because a quote is copied
-     rather than composed. Never measured on its own. */
-  quotes: 120_000,
+     rather than composed. Never measured on its own.
+
+     **Raised from 120s on 2026-09-05, when `suggestedQuotes` doubled.** The one
+     measurement there has ever been is 11.9s for five quotes
+     (docs/project/quotes.md § The first real run), and the answer is what got
+     longer — so the old number is not wrong, it is a headroom claim about a
+     call half this size. Raising it costs sixty seconds before a genuinely hung
+     call is declared dead; not raising it risks killing a good one the reader
+     has already paid for. */
+  quotes: 180_000,
   /* GUESS, in `glossary`'s family and never measured on its own. */
   ideas: 120_000,
   /* **MEASURED** 2026-08-31, four runs of the stage on the test article, read
@@ -878,14 +885,15 @@ async function runStep(
      where the whole argument for its existence lives. `undefined` in production. */
   onStepSpend: AdvanceParts["onStepSpend"],
 ): Promise<{ outcome: StepOutcome; settlement?: JobSettlement }> {
-  const { dir, htmlFile } = contextPaths(job.slug);
-
+  /* **A `contextPaths(job.slug)` stood here until 2026-09-05**, filling
+     `dir` and `htmlFile` on every step of every job under either store, and
+     nothing downstream read either one. Both went with the filesystem store;
+     a step is told where its artefacts go by the `ArtifactStore` it is handed
+     and by nothing else. */
   const ctx: StepContext = {
     slug: job.slug,
     ...(job.url ? { url: job.url } : {}),
     ...(job.upload ? { upload: job.upload } : {}),
-    dir,
-    htmlFile,
     // In memory only. Persisting at this rate would be two writes a second
     // per running job, to record something nobody reads afterwards.
     report: (detail: string) => {
@@ -2079,25 +2087,22 @@ export async function advanceJobWith(
       return { job: outcome.job, ran: null, busy: true, done: false };
   }
 
-  /**
-   * **Everything the claim covers happens in here, and that is not a wrapper.**
+  /*
+   * **A `runInJob(outcome.job.id, …)` wrapped this call until 2026-09-05.**
+   * It put the job's id in an `AsyncLocalStorage` for the whole of the claimed
+   * body — the session, every step, and the settlement — and the one reader was
+   * the filesystem store's data root, which picked `/tmp/spideryarn/<owner>/<job>/`
+   * on a deployed instance so that a failed job's warm `/tmp` could not be
+   * served as the next job's article. There is no scratch directory now and no
+   * reader of the scope, so `src/job-scope.ts` went with it.
    *
-   * `runInJob` puts this job's id in scope for the whole of the claimed body —
-   * the session, every step, and the settlement — and `dataRoot()` reads it to
-   * pick `/tmp/spideryarn/<owner>/<job>/` on a deployed instance
-   * (src/store/data-root.ts). It was written on 2026-08-30 and **nothing called
-   * it**: the bundle had `currentJobId()` and an `AsyncLocalStorage` and no way
-   * to fill it, so a deployed step reached `dataRoot()` with no scope and threw
-   * before it started. Every import on production failed at step one, in 16ms.
+   * Worth keeping the accident it was written for, because it is this repo's
+   * dominant shape: the wrapper existed for a day and **nothing called it** —
+   * the bundle had `currentJobId()` and an `AsyncLocalStorage` and no way to
+   * fill it, so every deployed import failed at step one, in 16ms.
    * GPT Sol, docs/plans/260830k-v1-stages01-review-sol.md critical 1.
-   *
-   * Here rather than in the route, deliberately: the route is not where the job
-   * is known to be *ours*, and a scope opened around a claim that was refused
-   * would name a job somebody else is inside.
    */
-  return await runInJob(outcome.job.id, () =>
-    walkClaim(outcome.job, attempt, owner, parts, claimedMs),
-  );
+  return await walkClaim(outcome.job, attempt, owner, parts, claimedMs);
 }
 
 /**

@@ -96,11 +96,31 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * Exported so tests assert against the current value rather than pinning a
  * literal that has to be edited on every bump — a fixture that hardcodes the
  * version tests the fixture.
+ *
+ * **`quotes/3`, 2026-09-05: `suggestedQuotes` doubled.** The prompt's words did
+ * not move; the number in `Choose up to ${count} quotes` did, and how many lines
+ * a piece offers is exactly *what a quote is* — half the length of the list is
+ * the editorial claim. So every existing list now says *"These were chosen by
+ * an earlier version of the prompt"*, which is `outdated` and its own quiet
+ * sentence, and deliberately not the `stale` banner next to it: nothing about
+ * the article moved, so none of those lines has stopped being in it.
  */
-export const PROMPT_VERSION = "quotes/2";
+export const PROMPT_VERSION = "quotes/3";
 
-/** The most quotes one call may return. A piece does not have forty good lines. */
-export const MAX_QUOTES = 16;
+/**
+ * The most quotes one call may return.
+ *
+ * **Doubled from 16 on 2026-09-05**, when the prose started marking every
+ * visible quote rather than only the selected one. Greg asked for "many more"
+ * in the same breath as the highlighter — the list stopped being a list you
+ * read and became the marks you skim the article by, and sixteen marks in an
+ * eight-thousand-word piece is not a highlighted article.
+ *
+ * Thirty-two and not a hundred, because the ceiling is still an editorial claim
+ * and not a budget: every row says *this line is worth carrying out of here*,
+ * and the `?bar=` slider can hide a padded quote but cannot make it good.
+ */
+export const MAX_QUOTES = 32;
 
 /**
  * Shorter than this is a phrase, not a quotation.
@@ -123,16 +143,25 @@ export const MIN_QUOTE_CHARS = 30;
 export const MAX_QUOTE_CHARS = 400;
 
 /**
- * How many quotes to ask for — one per ~600 words, clamped to 4–16.
+ * How many quotes to ask for — one per ~300 words, clamped to 8–32.
  *
- * Between the glossary's density (one per 400, clamped 6–20: a term is a word
- * the piece happens to use) and the ideas' (one per 800, clamped 3–10: an idea
- * is something the whole argument leans on). A padded quote list is not a weak
- * entry a reader can skip — it is a forgettable line presented as memorable,
- * which discredits the ones around it.
+ * **It was one per 600, clamped 4–16, until 2026-09-05**, which put it between
+ * the glossary's density (one per 400, clamped 6–20: a term is a word the piece
+ * happens to use) and the ideas' (one per 800, clamped 3–10: an idea is
+ * something the whole argument leans on). Both of those are lists you read.
+ * This one is now the marks on the article as well, so the right comparison is
+ * a person with a highlighter: denser than the glossary, and the floor matters
+ * more than the ceiling, because four marks in a short piece read as an
+ * accident rather than as a pass through it.
+ *
+ * The warning it replaces is still true and still the reason there is a ceiling
+ * at all: a padded quote list is not a weak entry a reader can skip — it is a
+ * forgettable line presented as memorable, which discredits the ones around it.
+ * The `?bar=` slider now hides the tail of a long list, which is what makes the
+ * higher number affordable; it is not what makes a bad line good.
  */
 export function suggestedQuotes(words: number): number {
-  return Math.min(MAX_QUOTES, Math.max(4, Math.round(words / 600)));
+  return Math.min(MAX_QUOTES, Math.max(8, Math.round(words / 300)));
 }
 
 /**

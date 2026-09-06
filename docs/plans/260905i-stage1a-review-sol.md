@@ -1,0 +1,33 @@
+I found no established P0 or P1. The optimise decision is supported, but several narrower conclusions and the test evidence are overstated.
+
+- **F10 — P2 — The instrument still cannot report the worst attributable cost of one streaming delta.** `maxMs` is maintained independently for `marksByBlock` and `proseHtml` ([annotation-cost.ts](/home/greg/code/spideryarn2/.claude/worktrees/a7-annotation-measure/src/web/annotation-cost.ts:113)). Summing those maxima may combine different renders; taking either maximum omits the other memo. Concurrent/abandoned renders make the correspondence weaker still. Therefore the `{n, ms, maxMs}` design does not fully settle the earlier F10 requirement for “worst single delta ≥16ms.” A render/update identifier or combined outer interval is needed if that rule is used later.
+
+- **F14 — P2 — The `"full"` split is systematically biased toward `addZoomHandles`.** Each leaf sample includes two clock calls, so the diagnostic adds roughly 1,102 reads around 551 `addZoomHandles` calls but only 192 around 96 `annotateHtml` calls ([annotation-cost.ts](/home/greg/code/spideryarn2/.claude/worktrees/a7-annotation-measure/src/web/annotation-cost.ts:193)). Stable repetitions do not remove this systematic difference. The magnitude is not established, so “~40%” and the 55/40 ratio should be labelled perturbed estimates, not a trustworthy split. The call-count conclusion—551 avoidable calls—is unaffected and is sufficient to justify per-block reuse.
+
+- **F15 — P2 — Five anchors do not establish that the shared rendered-text cache is generally unwarranted.** The plan correctly says comment streaming—the suspected high-frequency case—was unmeasured, then dismisses the cache from five parses on one article ([plan](/home/greg/code/spideryarn2/.claude/worktrees/a7-annotation-measure/docs/plans/260905i-measure-annotation-computation-before-optimising-it.md:277)). Stable anchor resolution should eliminate repeat work for body-only deltas, but it does not cover initial rendering or genuine anchor changes on a 100-comment article. Cutting the cache may still be the right simpler-first decision; the evidence supports “defer unless a denser workload demonstrates it,” not “not worth its file.”
+
+- **F16 — P2 — The 10–14% arithmetic is reasonable, but the residual is misattributed.** The reported median ratios are 10.49%, 13.10%, and 11.80%, so “roughly 10–14%” is supported, subject to being a ratio of separate medians rather than paired per-run shares. But the instrument establishes only that the remaining time is outside these two memos. It does not establish that the other ~86% is specifically commit, layout, and geometry—or therefore all A8’s ground ([plan](/home/greg/code/spideryarn2/.claude/worktrees/a7-annotation-measure/docs/plans/260905i-measure-annotation-computation-before-optimising-it.md:245)). The plan itself lists other excluded work, and earlier acknowledges dialog and panel work. Say “outside A7’s measured computation; likely includes…” rather than assigning the residual.
+
+- **F17 — P2 — The test can stay green with the decisive timers broken.** I established this by mutation-testing an archive of `6a33c2d8`:
+
+  - Replacing both memo start times with `NO_CLOCK` left all four tests green.
+  - Adding a real `performance.now()` read in `"counts"` mode, then discarding it, left all tests green.
+  - Replacing `maxMs` with the accumulated total left all tests green.
+
+  The suite checks recorded values, not clock invocation, and permits memo `ms === 0` ([annotation-cost.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/a7-annotation-measure/tests/annotation-cost.test.ts:159)). Its inequalities also cannot distinguish a true maximum from the total ([annotation-cost.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/a7-annotation-measure/tests/annotation-cost.test.ts:108)). Spy on `performance.now`, require each enabled memo to record positive time under a controlled clock, and feed unequal deterministic durations to test `maxMs`.
+
+- **F18 — P2 — Snapshot `mode` does not necessarily describe the accumulated samples.** Stopping retains counters while changing the snapshot mode to `"off"`; changing directly from `"counts"` to `"full"` blends both kinds of samples under a final `"full"` label ([annotation-cost.ts](/home/greg/code/spideryarn2/.claude/worktrees/a7-annotation-measure/src/web/annotation-cost.ts:226)). That contradicts the assurance that `mode` disambiguates the numbers. I confirmed the retained-nonzero/`mode: "off"` case by running a probe. Either reset on every mode transition, record a fixed sample mode with the counters, or mark mixed/stopped snapshots explicitly.
+
+- **F19 — P2 — The committed measurement record does not satisfy its own repetition/evidence contract.** The decision rule requires at least five warmed repetitions after discarding the first, while the result says five repeats with the first discarded—four warmed observations ([plan](/home/greg/code/spideryarn2/.claude/worktrees/a7-annotation-measure/docs/plans/260905i-measure-annotation-computation-before-optimising-it.md:124)). The commit also retains only medians, not the individual samples or executable measurement harness, so “stable across samples,” maxima, reset boundaries, and paired end-to-end/attributable ratios cannot be audited. The 3–4× threshold margin makes reversal unlikely, but the durable evidence should include the raw vectors and exact browser expressions.
+
+Within the two timed memo regions, I found no normal-return undercount: the leaf workers enclose their early returns, each React memo invocation enters its timer, and synchronous execution prevents ordinary re-entrancy from losing `t0`. Exceptions are not charged, but they abort rendering rather than quietly producing a flattering successful gesture. `"counts"` currently performs no leaf clock read by source inspection, and `NO_CLOCK = -1` cannot collide with the non-negative elapsed value returned by `performance.now()`.
+
+Checks run against an isolated archive of `6a33c2d8`:
+
+- `npx vitest run tests/annotation-cost.test.ts` — 4/4 passed.
+- Three adverse mutations above — suite still passed, establishing F17.
+- Mode-retention probe — established F18.
+- `git diff --check 6a33c2d8^..6a33c2d8` — passed.
+- `npm run typecheck` could not start because the sandbox denied `tsx`’s IPC socket (`EPERM`), not because of a candidate diagnostic.
+
+**Verdict: APPROVE WITH P2 FINDINGS — no established P0/P1. The optimise verdict stands; the diagnostic ratio, residual attribution, cache dismissal, and durable evidence should be narrowed or repaired.**

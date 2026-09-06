@@ -63,7 +63,7 @@ const BLOCKS: Block[] = [
 
 describe("hoisting the structure prompt's three values", () => {
   it("moved the stamp and the effort without moving either value", () => {
-    expect(PROMPT_VERSION).toBe("toc/5");
+    expect(PROMPT_VERSION).toBe("toc/6");
     expect(PRODUCTION_EFFORT).toBe("low");
   });
 
@@ -99,9 +99,9 @@ describe("hoisting the structure prompt's three values", () => {
    * *without meaning to*. Change the number only alongside a deliberate change
    * to SYSTEM, `renderBlocks` or `EFFORT`, and say which in the message.
    */
-  it("mints one stable key for the toc/5 structure request", () => {
+  it("mints one stable key for the toc/6 structure request", () => {
     expect(checkpointKey(canonicalStructureRequest(structureRequest(BLOCKS).params))).toBe(
-      "18e7504c732c5722",
+      "9022c4cb6b7395b1",
     );
   });
 });

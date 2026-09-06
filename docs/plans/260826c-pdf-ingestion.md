@@ -1000,7 +1000,7 @@ it is tested in the first hour, not the last, and against the alternative.
    `raw.json` in [`src/fetch.ts`](../../src/fetch.ts), written by the fetch step and read by extract,
    which is what stops a stale `raw.html` being authoritative beside a fresh `raw.pdf`. It is also
    the step's `outputs`, because it is the only file whose name does not depend on what arrived. The
-   store's `raw` artefact now points at it ([`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts)),
+   store's `raw` artefact now points at it (`src/store/artifacts-fs.ts`),
    which is closer to the Postgres row it becomes, not further from it. `Meta` gains `source`,
    `method`, `pages`, `rawSha256`, `unverified`, `recall` and `pagesChecked`.
 6. ~~Integrate URL PDFs through `STEPS`. Make the easy eval PDF pass tier 1.~~ **Done, and measured.**

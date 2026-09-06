@@ -545,7 +545,7 @@ side stays free.
 **3 — the filesystem adapter could return an internally contradictory outcome** (CONFIRMED; Sol ran
 `pauseForDeadline` and `requestCancel` concurrently and got `{"pauseKind":"requeued",
 "pauseStatus":"cancelled","current":"cancelled"}`). Every mutating method in
-[`jobs-fs.ts`](../../src/store/jobs-fs.ts) worked on the record every caller shares and ended
+`jobs-fs.ts` worked on the record every caller shares and ended
 `await persist(job); return structuredClone(job)` — so the clone was on the far side of a yield and
 described whatever the *next* transition had left behind. The discriminated union was false at
 runtime and `src/jobs.ts` answered `done: false` about a terminal job.

@@ -60,9 +60,9 @@ columns  (?at=        (↑↓ keys)  (column      (hover,
 
 | Where | What happens |
 |---|---|
-| `loadArticle`, [`src/api.ts:157`](../../src/api.ts) | `continue`s to the next candidate dir — **and falls through to `example/`**, serving the fixture |
-| `describeDir`, [`src/api.ts:962`](../../src/api.ts) | `{ skipped: slug }` — the article never appears on the shelf |
-| `articleDir`, [`src/api.ts:620`](../../src/api.ts) | **also falls through to `example/`** — the metadata page describes the fixture rather than 404ing [corrected: Sol] |
+| `loadArticle`, `src/api.ts:157` | `continue`s to the next candidate dir — **and falls through to `example/`**, serving the fixture |
+| `describeDir`, `src/api.ts:962` | `{ skipped: slug }` — the article never appears on the shelf |
+| `articleDir`, `src/api.ts:620` | **also falls through to `example/`** — the metadata page describes the fixture rather than 404ing [corrected: Sol] |
 | pg `loadArticle`, [`src/store/pg.ts:1246`](../../src/store/pg.ts) | `throw notFound(slug)` |
 | pg library, [`src/store/pg.ts:1285`](../../src/store/pg.ts) | `if (!row.revision.hasTree) continue` |
 

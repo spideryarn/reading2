@@ -57,7 +57,7 @@ Two halves of every late step ask two different places the same question.
 
 `dataRoot()` on a deployed instance is `/tmp/spideryarn/<owner>/<job>/`, scoped to **one job**
 deliberately, so a failed job's half-built artefacts can never be served as the next job's
-([`src/store/data-root.ts`](../../src/store/data-root.ts) § *Why the deployed root is scoped by
+(`src/store/data-root.ts` § *Why the deployed root is scoped by
 job*). A job created as `POST /api/jobs { slug, steps: ["tweets"] }` contains exactly one step, so
 `fetch`, `extract`, `blocks` and `toc` never run and never write. That directory is empty and
 always will be. The article's blocks are in Postgres, where the ingest that made them published

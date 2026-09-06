@@ -20,7 +20,15 @@
  * only `onFound([])`. That is
  * docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md § T0.2,
  * and this file is the executable form of that sentence: **the same assertion,
- * over three bands**, with Ideas and Timeline as the controls that pass.
+ * over four bands**, with Ideas and Timeline as the controls that pass.
+ *
+ * **Quotes is the fourth, and it only became one on 2026-09-05.** Before that it
+ * marked the selected quote and nothing else, so it had no key to lose — this
+ * header said four bands while `BandName` said three, which is the drift a
+ * cross-family review caught. It is also the one band here whose marks are *not*
+ * a function of the selection, so its test asserts the opposite precondition:
+ * two passages marked with nothing selected at all.
+ * docs/plans/260905g-mark-every-visible-quote-and-make-the-quiz-start-easier.md.
  *
  * ## Why it is asserted on the parent's state and not on the callback
  *
@@ -58,7 +66,7 @@ import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SavedCriterion } from "../src/saved-criteria.js";
-import type { Block, BlockId, Ideas, Timeline } from "../src/types.js";
+import type { Block, BlockId, Ideas, Quotes, Timeline } from "../src/types.js";
 import type { Found } from "../src/web/search-hits.js";
 
 /** One reply, decided by the URL. */
@@ -85,7 +93,8 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
-const { IdeasBand, TimelineBand } = await import("../src/web/App.js");
+const { QuotesBand, TimelineBand } = await import("../src/web/App.js");
+const { IdeasBand } = await import("../src/web/modes/ideas/IdeasMode.js");
 const { CriteriaBand } = await import("../src/web/CriteriaPanel.js");
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`, and `?idea=`, `?event=`
@@ -97,6 +106,8 @@ const TWO = "spya-m4p7rs" as BlockId;
 const IDEA = "spya-dea2aa";
 const EVENT = "spya-evt2aa";
 const CRIT = "spya-crt2aa";
+const QUOTE_A = "spya-qte2aa";
+const QUOTE_B = "spya-qte2bb";
 
 const QUOTE_ONE = "Thirty-one participants in each arm";
 const QUOTE_TWO = "The effect held in a post-hoc subgroup";
@@ -194,6 +205,37 @@ const CRITERION: SavedCriterion = {
   ],
 };
 
+/**
+ * Two quotes, one per block, and **neither of them selected** — which is the
+ * whole point of this fixture. Until 2026-09-05 quotes mode marked only the
+ * selected quote, so a band with nothing selected drew nothing at all; the
+ * precondition below is that `found` is 2 before anybody has pressed a row.
+ *
+ * Both scored the same, so `canPrioritise` is false and the rank falls back to
+ * document order however the URL arrives. The bar has its own tests in
+ * tests/quotes-panel.test.ts; this file is about the two halves of the state.
+ */
+const QUOTES: Quotes = {
+  version: "quotes/3",
+  generator: "test",
+  slug: SLUG,
+  sourceHash: "h",
+  generatedAt: "2026-09-05T10:00:00.000Z",
+  elapsedMs: 1,
+  quotes: [
+    { id: QUOTE_A, blockId: ONE, text: QUOTE_ONE, importance: 0.9 },
+    { id: QUOTE_B, blockId: TWO, text: QUOTE_TWO, importance: 0.9 },
+  ],
+  discarded: {
+    unfound: 0,
+    otherVoice: 0,
+    wrongLength: 0,
+    overlapping: 0,
+    overCap: 0,
+    malformed: 0,
+  },
+};
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -218,6 +260,11 @@ const serve = (url: string): Promise<Response> => {
   if (path === `/api/timeline/${SLUG}`) {
     return Promise.resolve(json({ timeline: TIMELINE, stale: false, outdated: false }));
   }
+  if (path === `/api/quotes/${SLUG}`) {
+    return Promise.resolve(
+      json({ quotes: QUOTES, stale: false, outdated: false, profileChanged: false }),
+    );
+  }
   if (path === `/api/referee/criteria/${SLUG}`) {
     return Promise.resolve(json({ criteria: [CRITERION], sourceHash: "h" }));
   }
@@ -226,7 +273,7 @@ const serve = (url: string): Promise<Response> => {
 
 /* ------------------------------------------------------------ the harness -- */
 
-type BandName = "ideas" | "timeline" | "referee";
+type BandName = "ideas" | "timeline" | "referee" | "quotes";
 
 /**
  * `Reader`, in miniature: it owns `found` and `openKey`, and the band is
@@ -265,6 +312,20 @@ function Harness({ band }: { band: BandName | null }) {
     band === "timeline" ? createElement(TimelineBand, { key: "b", slug: SLUG, ...shared }) : null,
     band === "referee"
       ? createElement(CriteriaBand, { key: "b", slug: SLUG, comments: [], ...shared })
+      : null,
+    /* **No `openKey` prop**, unlike the three above, and that is the band's
+       shape rather than an omission: which quote is rung is `?quote=`, so
+       `useQuotesMode` derives the key and pushes it up. It still has to arrive
+       in `Reader`'s state, which is what the harness prints. */
+    band === "quotes"
+      ? createElement(QuotesBand, {
+          key: "b",
+          slug: SLUG,
+          blocks: BLOCKS,
+          onJump: () => {},
+          onFound,
+          onOpenKey,
+        })
       : null,
   );
 }
@@ -381,6 +442,42 @@ describe("leaving a passage mode clears the open key as well as the marks", () =
     /* The half that is missing: `CriteriaBand`'s unmount effect clears
        `onFound` and leaves the key, so the prose keeps a ring around a passage
        that is no longer marked, and the next mode inherits it. */
+    expect(state().openKey).toBe("none");
+  });
+
+  it("Quotes — where the marks are the whole list and the key is only the ring", async () => {
+    /* **The fourth band, added 2026-09-05 with the change that gave it a key at
+       all.** Until then quotes mode marked the selected quote and nothing else,
+       so it had no `openKey` to lose and this file's header — which has always
+       said four bands — was one band ahead of the code. GPT Sol's third
+       finding.
+
+       Quotes is the one band here whose marks are NOT a function of the
+       selection, so the precondition is the opposite shape: two passages marked
+       with nothing selected at all. A test that opened `?quote=` first would
+       pass against the bug it is about. */
+    history.replaceState(null, "", `/read/${SLUG}?mode=quotes`);
+    show("quotes");
+    await flush();
+
+    expect(state().found, "both quotes marked before anybody presses a row").toBe(2);
+    expect(state().openKey).toBe("none");
+
+    /* And the ring arrives from `?quote=` rather than from a press, because
+       that is the state a selected quote is *in* whether the reader got there
+       by pressing a row or by opening a shared link. `quoteMarkKey`'s shape:
+       id, block, and `0` for the index. */
+    history.replaceState(null, "", `/read/${SLUG}?mode=quotes&quote=${QUOTE_B}`);
+    show("quotes");
+    await flush();
+
+    expect(state().found, "selecting one does not unmark the others").toBe(2);
+    expect(state().openKey).toBe(`${QUOTE_B}:${TWO}:0`);
+
+    show(null);
+    await flush();
+
+    expect(state().found).toBe(0);
     expect(state().openKey).toBe("none");
   });
 });

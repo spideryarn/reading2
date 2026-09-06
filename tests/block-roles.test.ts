@@ -43,9 +43,10 @@
  * ## The five roles, none of which the corpus produces
  *
  * v1 assigns only `"footnote"`. The other four exist in the union, in the CHECK
- * constraint and here — so the tests below drive all five through the
- * filesystem artefact store and the public DTO by hand, because the corpus
- * cannot.
+ * constraint and here — so a synthetic article below drives all five through
+ * the public DTO by hand, because the corpus cannot. It drove them through the
+ * **filesystem artefact store** as well until 2026-09-05; the note where that
+ * case stood says what it asserted and where the claim went.
  *
  * ## The import validator's cases were here, and went on 2026-09-01
  *
@@ -73,16 +74,14 @@
  * fixture we wrote is not somebody else's JSON.
  */
 
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { blocksArtefact, splitIntoBlocks } from "../src/blocks.js";
+import { splitIntoBlocks } from "../src/blocks.js";
 import { runExtract } from "../src/extract.js";
 import { NOTE_ID_PATTERN } from "../src/notes.js";
 import { publicArticle } from "../src/public/dto.js";
-import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import type { Block, Tree } from "../src/types.js";
 
 const FIXTURES = path.join(import.meta.dirname, "..", "evals", "extraction", "fixtures");
@@ -380,41 +379,34 @@ const SYNTHETIC: Block[] = [
 ];
 
 describe("all five roles", () => {
-  it("survives the filesystem artefact store, field for field", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "block-roles-fs-"));
-    try {
-      const at = {
-        dir: path.join(root, "data", "roles"),
-        htmlFile: path.join(root, "output", "roles.html"),
-      };
-      const { mkdir } = await import("node:fs/promises");
-      await mkdir(at.dir, { recursive: true });
-      await mkdir(path.dirname(at.htmlFile), { recursive: true });
-
-      const store = createFsArtifactStore(() => at);
-      const artefact = blocksArtefact(SYNTHETIC);
-      await store.write("roles", "hierarchy", { blocks: artefact }, {});
-
-      const read = await store.read("roles", "hierarchy", "blocks");
-      expect(read).toEqual(artefact);
-      // Named rather than left to `toEqual`, because a store that dropped all
-      // three would still match an expectation built from the same objects if
-      // the round trip were ever short-circuited.
-      const back = (read as { blocks: Block[] }).blocks;
-      expect(back.map((b) => b.role)).toEqual([undefined, ...ROLES]);
-      expect(back.map((b) => b.treatment)).toEqual([
-        undefined,
-        "supplement",
-        "supplement",
-        "supplement",
-        "supplement",
-        undefined,
-      ]);
-      expect(back.filter((b) => b.noteId !== undefined).length).toBe(ROLES.length);
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  });
+  /**
+   * ***survives the filesystem artefact store, field for field* stood here
+   * until 2026-09-05.**
+   *
+   * It built a `createFsArtifactStore` over a `mkdtemp`, wrote
+   * `blocksArtefact(SYNTHETIC)` as `(hierarchy, blocks)`, read it back, and
+   * asserted the whole artefact equal plus the three fields by name: `role` on
+   * five of the six blocks, `treatment: "supplement"` on four (the appendix
+   * deliberately has a role and no treatment), and a `noteId` on all five
+   * role-bearing ones.
+   *
+   * **It was a serialisation round trip, so it dies with the thing that
+   * serialised.** That is not a judgment made here in a hurry — the
+   * store-migration registry's entry for this file, written on 2026-09-05
+   * before the deletion, says it in advance and says why converting it would be
+   * worse than losing it: handing this case an in-memory fake makes it
+   * `toEqual` against the object it just put in, a case that cannot fail, and a
+   * case that cannot fail is worse than no case. (The fake's `JSON` round trip
+   * is total over these fields, so it would agree with any store that kept
+   * them and with any that could not lose them.)
+   *
+   * **The claim is not lost, and it is in the better place.**
+   * `tests/store-block-roles-pg.test.ts` is the same round trip through the
+   * store production writes to — the one whose `writeBlocks` could be changed
+   * to write `treatment: null` unconditionally and stay green across 293 tests,
+   * which is the mutation this pair exists for. What stays here is the other
+   * consumer of `SYNTHETIC`: the public DTO, below.
+   */
 
   it("reaches a visitor through the public DTO", () => {
     const tree: Tree = {

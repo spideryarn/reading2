@@ -337,9 +337,14 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
           ? "none"
           : "ready";
 
-  /* **Armed by the Illustrated chip, not by opening Diagram.** Opening the mode
-     costs nothing; picking this picture is the gesture that spends, and it
-     spends more than any other press in the app. src/web/DiagramPanel.tsx. */
+  /* **Armed by the Illustrated chip — and by the bar's Diagram button, but only
+     when this is already the picture `?diagram=` names.** The bar arms the
+     picture the press will land on rather than a fixed one
+     (src/web/activation.ts § `armActivationForDiagram`), so a reader who last
+     chose Illustrated gets it, and a reader who has never been here gets the
+     Sketch. Either way the gate above still refuses to spend without a Sketch to
+     paint, which is what stops the dearest press in the app from being reachable
+     by a bar button on an article that has nothing drawn. */
   const auto = useAutoRun(slug, "illustrated", gate, ensure, reload);
 
   return {

@@ -57,7 +57,7 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  act(() => root.render(<FeedbackButton readerEmail="reader@example.com" />));
+  act(() => root.render(<FeedbackButton />));
 });
 
 afterEach(() => {

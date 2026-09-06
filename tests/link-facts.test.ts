@@ -1,14 +1,20 @@
 /**
  * The two places outside data reaches a link card — src/web/link-facts.ts.
  *
- * The hook itself is not tested, and **the reason is not the one I first gave**.
- * I wrote that it would be a test of a mock; a GPT Sol review pointed out that
- * `useLinkFacts` is driven entirely by a prop and two deferred promises, which
- * is about as testable as a hook gets. The real reason is that this repo has no
- * React test harness at all — no `@testing-library/react`, nothing that renders
- * a component — and adding one is a dependency decision bigger than this
- * feature, taken deliberately rather than smuggled in behind it. The three
- * tests worth writing the day it exists are named at the foot of this file.
+ * The hook itself is not tested here, and **the reason given for that has now
+ * been wrong twice.** The first version said a test of it would be a test of a
+ * mock; a GPT Sol review pointed out that `useLinkFacts` is driven entirely by a
+ * prop and two deferred promises, which is about as testable as a hook gets. The
+ * second version said this repo has no React test harness at all — true when it
+ * was written on 2026-08-27 and false since, and it was still saying so on
+ * 2026-09-05 while `tests/a-failed-shelf-read-is-not-an-empty-shelf.test.tsx`
+ * sat two directories away *mounting this very hook*. A doc that says "this
+ * cannot be done here" outlives the reason it was true
+ * (docs/research/260903b-facts-that-were-wrong.md).
+ *
+ * So: the hook **is** tested, in the `.tsx` suites that mount the card, and what
+ * is left here is the part that needs no harness at all. The three tests named
+ * at the foot of this file are simply unwritten rather than impossible.
  *
  * What *is* tested is the pair of pure functions either side of the wire,
  * because those are where somebody else's bytes turn into something a React

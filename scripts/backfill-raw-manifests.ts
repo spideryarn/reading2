@@ -142,7 +142,8 @@ async function objectStillGood(manifest: RawManifest, bytes: Buffer): Promise<st
  *
  * `writeFile` in place was the first version, and a crash or a full disk part
  * way through it destroys the only copy of a manifest whose provenance cannot
- * be recovered. Same recipe as `writeAtomic` in src/store/artifacts-fs.ts: the
+ * be recovered. Same recipe as `writeAtomic`, which lived in
+ * src/store/artifacts-fs.ts until that file was deleted 2026-09-05: the
  * rename is atomic within a directory, so a reader sees the old file or the
  * whole new one. GPT Sol, 2026-08-28.
  */

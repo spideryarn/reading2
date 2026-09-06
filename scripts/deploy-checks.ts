@@ -659,11 +659,11 @@ export const GATE_FIXTURE_ROOT = "tests/fixtures/data-root";
  * or moved committed files**. That is a real regression and worth stopping for;
  * "you have not run the pipeline yet" was not.
  *
- * `data/` and `output/` are two halves of one filesystem artefact store
- * (`src/store/artifacts-fs.ts`), and for a long time the deploy copied only the
- * first. The result was not a clear error but thirteen `ENOENT`s and two hundred
- * cascade-skips, which read like a broken commit and were nothing of the kind.
- * Both halves are named below for that reason.
+ * `data/` and `output/` were two halves of one filesystem artefact store
+ * (`src/store/artifacts-fs.ts`, deleted 2026-09-05), and for a long time the
+ * deploy copied only the first. The result was not a clear error but thirteen
+ * `ENOENT`s and two hundred cascade-skips, which read like a broken commit and
+ * were nothing of the kind. Both halves are named below for that reason.
  *
  * **Named sentinel files, not bare directories.** A bare `"data"` cannot fail:
  * the article-artefact migration (docs/plans/260827aa-delete-the-importer.md) deletes

@@ -18,6 +18,10 @@ Why the feature exists and what a gist may and may not be:
 |---|---|
 | [`index.html`](../../index.html) + [`src/web/main.tsx`](../../src/web/main.tsx) | Vite entry. `main.tsx` imports **`./tailwind.css`**, not `styles.css` — see below, it matters. It also calls **`enableHistorySync()`**, without which nuqs cannot see our own navigations and router.ts's whole argument is false |
 | [`src/web/App.tsx`](../../src/web/App.tsx) | picks the page from the path, then fetches `/api/article/<slug>` **once for all three of an article's views** — masthead, the granularity controls |
+| [`src/web/AppBoundary.tsx`](../../src/web/AppBoundary.tsx) | the last thing between a throw during render and a blank white page: `main.tsx` wraps the whole app in it. Hand-written rather than Sentry's, because reporting is optional and the fallback is not; it reports through `captureClientFailure` and `recordLog` and shows the reader `[render]` and no `error.message` — [260826p-error-boundary.md](../plans/260826p-error-boundary.md) |
+| [`src/web/FeatureBoundary.tsx`](../../src/web/FeatureBoundary.tsx) | **the smaller one**, around one mode's controller and panel, so a broken mode leaves the article readable — [§ A mode that breaks does not take the article with it](#a-mode-that-breaks-does-not-take-the-article-with-it) |
+| [`src/web/modes/`](../../src/web/modes/) | a mode's controller and its band, out of `App.tsx` — `modes/ideas/IdeasMode.tsx` is the first, and more follow under [260905e](../plans/260905e-main-app-architecture-review.md). The extraction is what lets a boundary enclose the mode's own computation, since a boundary cannot catch a throw from the component that renders it |
+| [`src/web/LazyPage.tsx`](../../src/web/LazyPage.tsx) | **the two routes whose code is not in the reader's first download** — `/admin` and `/design`, fetched when somebody asks for the address. Takes a loader and a route key rather than children, because a rejected `React.lazy` re-throws its rejection forever, so *Try again* has to build a **fresh** lazy type, and because both routes sit in the same position in `SignedIn`'s tree, so without the key one route's failure — or its loaded component — follows the reader to the other. Reader, shelf and mode code stays **eager** on purpose: cached JSON cannot make an unloaded chunk execute, and in-tab offline navigation depends on that. [`tests/eager-client-graph.test.ts`](../../tests/eager-client-graph.test.ts) is what stops the boundary quietly rotting, and [260905i](../plans/260905i-lazy-load-admin-and-design-routes.md) has the numbers |
 | [`src/web/router.ts`](../../src/web/router.ts) + [`Link.tsx`](../../src/web/Link.tsx) | `/`, `/read/<slug>`, and its `/metadata` and `/tweets` pages — [library.md](library.md) |
 | [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) | `/read/<slug>/metadata`: what the article is, what shape it is, and which pipeline stages have run — [260825e-metadata-page.md](../plans/260825e-metadata-page.md) |
 | [`src/web/Tweets.tsx`](../../src/web/Tweets.tsx) | `/read/<slug>/tweets`: the article as a numbered thread, with the button that writes one and the line that says the thread is out of date — [260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md) |
@@ -52,12 +56,17 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) — and, since 2026-08-25, how wide the **mode band** is when the middle is something other than the columns, and since 2026-09-03 how wide the reading column goes when it is the only column there is (`PROSE_ALONE_MAX_REM`, `Fit.alone`, and the centring in styles.css § plain, centred) |
 | [`src/web/scroll.ts`](../../src/web/scroll.ts) | `scrollToBlock`, shared so a restore and a jump land identically; the flat-duration glide, and `stickyOffset()` |
 | [`src/web/keynav.ts`](../../src/web/keynav.ts) | ↑ / ↓ nav, aimed by the pointer — [keyboard.md](keyboard.md) |
-| [`src/api.ts`](../../src/api.ts) | server side: `loadArticle(slug)`, `listArticles()` and `articleMetadata(slug)`, mounted as dev middleware in [`vite.config.ts`](../../vite.config.ts) |
+| `src/store/index.ts` | server side: `loadArticle(slug)`, `listArticles()` and `articleMetadata(slug)`, bound to the Postgres reader and reached through [`src/routes.ts`](../../src/routes.ts). These lived in `src/api.ts` — the filesystem reader — until it went with the store on 2026-09-05 |
 
 Running it: [setup-dev.md](setup-dev.md). `npm run dev` opens the **library** at `/`
-([library.md](library.md)); an article is `/read/<slug>`, and a fresh clone that has never run the
-pipeline still has the committed `example/` fixture to open ([`src/api.ts`](../../src/api.ts)). Old
-`/?slug=<slug>` links are rewritten on the way in and keep working.
+([library.md](library.md)) and an article is `/read/<slug>`. Old `/?slug=<slug>` links are rewritten
+on the way in and keep working.
+
+**A fresh clone needs `npm run setup` before it has anything to open.** It used to serve the
+committed `example/` fixture straight off the disk when no article had been ingested, because
+`src/api.ts` read articles from directories and fell back to that one. There is no filesystem reader
+since 2026-09-05, so the fixture reaches you the same way every other article does — `npm run setup`
+runs `db:seed-owner` and then `db:seed-dev`, which loads the committed corpus into Postgres.
 
 Deep links are `/read/<slug>?at=spya-k6fpme`. Every other bit of view state is in the query string
 too — see [url-state.md](url-state.md) for the full set, for the rule that divides the path from the
@@ -112,6 +121,28 @@ value in `MODES`, a component, and a width; it is deliberately not a new negotia
 
 The checklist lives in **[new-mode.md](new-mode.md)** since 2026-09-03 — both halves, the client
 and the artefact, in one place at Greg's request. This heading stays so links to it keep working.
+
+## A mode that breaks does not take the article with it
+
+There was one boundary until 2026-09-05, and its fallback **replaces its children** — so a throw
+inside one panel took the prose, the spine, the dock and every route with it. Nothing was known to
+throw; the problem was the blast radius, and every mode added since inherited it.
+
+So a mode's controller and its panel go inside a
+[`FeatureBoundary`](../../src/web/FeatureBoundary.tsx) at the point `Reader` composes them. Its
+fallback is band-shaped, names the mode, offers a retry and a way back to the article, keeps `?at=`,
+reports through the same sanitised path as `AppBoundary`, and shows no exception text and no article
+prose. The boundary goes around the **controller**, not the panel: the mode's own memos and layout
+effects — where a throw is actually likely — run one level up, which is why the controller moves out
+of `App.tsx` into `src/web/modes/` first.
+
+The failed controller is unmounted, so its existing cleanup runs and the prose is left with no stale
+marks. And a mode press that fails has its activation token retired at the point of failure
+([`activation.ts`](../../src/web/activation.ts) § `retireActivation`), so a later Back cannot spend
+a press that never started anything. Ideas is the first mode wired this way;
+[260905h](../plans/260905h-a-mode-failure-should-leave-the-article-readable.md) is the reasoning,
+and [`tests/a-broken-mode-leaves-the-article-readable.test.tsx`](../../tests/a-broken-mode-leaves-the-article-readable.test.tsx)
+is what holds it.
 
 ## Tailwind and shadcn components
 

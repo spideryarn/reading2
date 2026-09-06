@@ -32,7 +32,7 @@ Reads are fine. The shelf renders articles out of Postgres and the reading view 
 
 ### Layer 1 — a path that is correct in the source tree and wrong in the bundle
 
-[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts):
+`src/store/artifacts-fs.ts`:
 
 ```js
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
@@ -173,7 +173,7 @@ work and accelerate the smallest end-to-end slice"* — and says that a blob bri
 
 ### The one piece worth keeping
 
-`ROOT` in [`src/store/artifacts-fs.ts:55`](../../src/store/artifacts-fs.ts) is a real bug on the only
+`ROOT` in `src/store/artifacts-fs.ts:55` is a real bug on the only
 path that exists today, in a file the D-series owner has explicitly ceded. The fix in § Stage 1 above
 was **also wrong**: one `".."` gives `/var/task/data`, which is still read-only. Sol's shape:
 

@@ -9,8 +9,11 @@
  * administrator gets the page.
  *
  * **None of this is a gate, and these tests are not pretending otherwise.**
- * Every component involved is in the bundle every signed-in reader downloads,
- * and the SPA rewrite serves these addresses with a 200 whoever asks. What is
+ * Every component involved is served to anybody who asks for it — since
+ * 2026-09-05 on demand rather than in the reader's first download
+ * (src/web/LazyPage.tsx), which changed the startup cost and nothing about who
+ * may have the code — and the SPA rewrite serves these addresses with a 200
+ * whoever asks. What is
  * pinned here is that the courtesy is consulted in one place and covers the
  * whole list — the mutation it exists to catch is somebody adding an
  * administrator's page and forgetting the `if`, which is what happened to
@@ -70,11 +73,34 @@ Object.defineProperty(window, "scrollTo", { writable: true, value: () => {} });
    are enough: this file is about which page mounts, not what it draws. */
 globalThis.fetch = (async (input: RequestInfo | URL) => {
   const url = String(typeof input === "string" ? input : input instanceof URL ? input : input.url);
-  const body = url.startsWith("/api/library") ? "[]" : "{}";
+  /* An empty list is an answer these pages can draw. `{}` is not: both read a
+     named array straight off the body, so an unshaped reply throws inside the
+     page and the boundary below it catches — which reads as "the page did not
+     render" and means nothing of the kind. Naming the two shapes here was
+     needed once the administrator's own pages started being mounted in this
+     file (2026-09-05); before that only the shelf was ever drawn. */
+  const body = url.startsWith("/api/library")
+    ? "[]"
+    : url.startsWith("/api/admin/users")
+      ? '{"users":[]}'
+      : url.startsWith("/api/admin/feedback")
+        ? '{"reports":[],"hasMore":false}'
+        : "{}";
   return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
 }) as typeof fetch;
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/* **Warm the two on-demand routes.** They are behind `React.lazy` since
+   2026-09-05, and under vitest a first dynamic `import()` means reading and
+   transforming the module and everything under it — seconds on a loaded box,
+   which is a flake waiting to happen inside a bounded wait. Importing them here
+   puts them in the module registry, so the loaders in App.tsx resolve promptly
+   and what the tests below wait for is React, not a compiler. The loaders
+   themselves still run: `React.lazy` reads `module.default`, which neither page
+   has, so a badly written loader still fails here. */
+await import("../src/web/AdminPage.js");
+await import("../src/web/DesignPage.js");
 
 const { App } = await import("../src/web/App.js");
 
@@ -89,6 +115,22 @@ async function show(path: string) {
   await act(async () => {
     root.render(createElement(NuqsAdapter, null, createElement(App, null)));
   });
+  /* **Wait for the page, because `/admin` and `/design` are not in the bundle
+     any more.** Since 2026-09-05 both go through `LazyPage`, so the first
+     commit draws a Suspense fallback and the page itself arrives once the
+     dynamic `import()` resolves — which under vitest is real disk I/O, so
+     several turns of the event loop rather than a microtask (LazyPage.tsx, and
+     docs/plans/260905i-lazy-load-admin-and-design-routes.md). Nothing the tests
+     below assert has changed; only how long it takes to be true.
+
+     Bounded, and it gives up **loudly** — the assertion that follows is the one
+     that fails, naming the page it did not get. A wait that returned quietly on
+     a timeout would turn every one of these into a test of the spinner. */
+  for (let i = 0; i < 50 && !host.querySelector("h1"); i++) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    });
+  }
 }
 
 /** The page's own name for itself — the shelf, the design reference, or Admin. */
@@ -138,6 +180,37 @@ describe("/admin still refuses exactly as it did", () => {
     await show("/admin/users");
     expect(heading()).toBe("Spideryarn");
   });
+});
+
+/**
+ * **All four lazy variants arrive, through the real loaders.**
+ *
+ * Since 2026-09-05 `/admin`, its two sub-pages and `/design` are behind
+ * `React.lazy` in App.tsx, and `React.lazy` reads `module.default` — which
+ * neither `AdminPage.tsx` nor `DesignPage.tsx` has. A loader written the
+ * obvious way (`lazy(() => import("./AdminPage.js"))`) therefore compiles,
+ * type-checks and sends **every** visit to the failure surface. GPT Sol's F1 on
+ * docs/plans/260905i-lazy-load-admin-and-design-routes.md.
+ *
+ * So this asks each address for the page's own name, and asks that nobody got
+ * the escape hatch instead. The failure surface is tested on its own in
+ * tests/lazy-page.test.tsx; here it is only ever the wrong answer.
+ */
+describe("the four pages that load on demand", () => {
+  const variants: [string, string][] = [
+    ["/admin", "Admin"],
+    ["/admin/users", "Users"],
+    ["/admin/feedback", "Feedback"],
+    ["/design", "Design reference"],
+  ];
+  for (const [path, name] of variants) {
+    it(`renders the real page at ${path}`, async () => {
+      session.user = ADMIN;
+      await show(path);
+      expect(heading(), path).toBe(name);
+      expect(host.textContent ?? "", path).not.toContain("[chunk]");
+    });
+  }
 });
 
 describe("the list itself", () => {

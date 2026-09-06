@@ -43,6 +43,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Job, Quiz, QuizQuestionId, QuizResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
+import { useAutoRun } from "./useAutoRun.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
@@ -181,10 +182,23 @@ export interface UseQuiz {
   /** Which questions have been marked to a `done` this session. Never persisted. */
   answered: ReadonlySet<QuizQuestionId>;
   /**
-   * Write the questions — the only verb on the artefact. `force` is passed
-   * always, for the reason `useIdeas.find` gives: the button is offered beside
-   * a list that is current, so an unforced run would skip and the reader would
-   * watch a job start and finish having changed nothing.
+   * **Write the questions if there are none.** The unforced verb — what the
+   * automatic run takes, and what the button under the empty state takes, which
+   * has to be the same one.
+   *
+   * Two verbs where there was one, since 2026-09-06, and the difference is the
+   * *identity of the request* rather than a convenience: `work_key` is computed
+   * from the request including `force`, so an unforced automatic run and a
+   * forced press during the same second are two requests, `enqueueOrGet` does
+   * not collapse them, and the reader pays twice. Exactly `useIdeas`'
+   * `ensure` / `regenerate` split, named the same way.
+   */
+  ensure(): Promise<void>;
+  /**
+   * Write them **again**. `force` is passed always, for the reason
+   * `useIdeas.regenerate` gives: this is the button offered beside questions
+   * that are current, so an unforced run would skip and the reader would watch
+   * a job start and finish having changed nothing.
    */
   write(): Promise<void>;
   cancel(id: string): void;
@@ -260,12 +274,19 @@ export function useQuiz(slug: string): UseQuiz {
      the summaries, the ideas and the timeline. */
   const queue = useStepJob(slug, "quiz", refresh);
 
+  /* **The unforced one.** Two callers, and they must be the same request: the
+     automatic run below, and the button under the empty state (`QuizPanel` §
+     `run`). See `ensure` on the interface for why that matters. */
+  const ensure = useCallback(async () => {
+    await queue.start();
+  }, [queue]);
+
   const write = useCallback(async () => {
     await queue.start({
-      /* **Always forced**, for `useIdeas.find`'s reason: the button is offered
-         beside questions that are current, so an unforced run would skip and
-         the reader would watch a job start and finish having changed nothing.
-         Forcing is safe because this step replaces rather than appends.
+      /* **Always forced**, for `useIdeas.regenerate`'s reason: the button is
+         offered beside questions that are current, so an unforced run would skip
+         and the reader would watch a job start and finish having changed
+         nothing. Forcing is safe because this step replaces rather than appends.
 
          It also mints a new `batchId`, which is deliberate and is why the mark
          route answers 409 rather than falling forward: the reference answers
@@ -273,6 +294,17 @@ export function useQuiz(slug: string): UseQuiz {
       force: true,
     });
   }, [queue]);
+
+  /* **The reader pressed Quiz and there is nothing there — write the questions.**
+     `ensure` and not `write`, for the double-charge reason on the interface; and
+     `reload` and not `ensure` for the last argument, because a read that failed
+     is answered by reading again rather than by spending. useAutoRun.ts § A
+     failed read is not an answer.
+
+     The press is minted by Remember's own sub-mode toggle (App.tsx §
+     `RememberBand`), not by the `?remember=` setter beside it — Back and Forward
+     move that, and retracing your steps must not buy a model call. */
+  useAutoRun(slug, "quiz", status, ensure, reload);
 
   /**
    * **The one live request, so a second submission cannot start a second.**
@@ -387,6 +419,7 @@ export function useQuiz(slug: string): UseQuiz {
     stalled: queue.stalled,
     attempt,
     answered,
+    ensure,
     write,
     cancel: queue.cancel,
     mark,

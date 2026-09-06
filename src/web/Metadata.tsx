@@ -193,6 +193,7 @@ import type {
 import { MAX_PURPOSE_CHARS } from "../types.js";
 import { WPM } from "../reading-time.js";
 import { isWebUrl } from "../urls.js";
+import { forgetSummaries } from "./link-facts.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam } from "./params.js";
@@ -429,6 +430,13 @@ export function Metadata({
         const stored = body.purpose ?? "";
         setPurposeSaved(stored);
         setPurposeDraft(stored);
+        /* **The link cards' summaries were written from this sentence.** They
+           are cached per tab in front of a server that would have noticed
+           (src/web/link-facts.ts § `forgetSummaries`), so without this the
+           reader edits their purpose, goes back to the article, hovers a link
+           they hovered before, and reads the answer written for the sentence
+           they just replaced. */
+        forgetSummaries();
       })
       .catch((e: Error) => setPurposeError(e.message));
   }

@@ -109,9 +109,10 @@
  * *about* the filesystem adapter, they are claims about the commit expressed in
  * the store the file happened to be running on.
  *
- * `contextPaths` stays, for `StepContext.dir` and `htmlFile`, which `stepIsDone`
- * takes and the Postgres reads ignore. That is the `step-context-paths`
- * mechanism the registry names, and it goes when those two fields do.
+ * `contextPaths` stayed for `StepContext.dir` and `htmlFile`, which `stepIsDone`
+ * took and the Postgres reads ignored — the `step-context-paths` mechanism the
+ * registry names. All three went on 2026-09-05 with the filesystem store, so
+ * the context below is the slug and nothing about storage.
  *
  * ## The mutation, watched red on 2026-09-04 — and what it does *not* cover
  *
@@ -221,7 +222,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { advanceJob } from "../src/jobs.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
-import { contextPaths, STEPS, stepIsDone, type StepContext } from "../src/pipeline.js";
+import { STEPS, stepIsDone, type StepContext } from "../src/pipeline.js";
 import {
   readOnlyPgArtifacts,
   readsPgArtifacts,
@@ -379,7 +380,6 @@ describe("a step run for real, through the commit", () => {
        HTML, or finished the step without either, is caught here as well as
        above. */
     const ctx: StepContext = {
-      ...contextPaths(SLUG),
       slug: SLUG,
       report: () => undefined,
       signal: new AbortController().signal,

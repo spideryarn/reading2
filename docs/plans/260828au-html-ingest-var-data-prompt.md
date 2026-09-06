@@ -37,7 +37,7 @@ attempts, verbatim:
 A second attempt on the `constitution` slug failed identically at step `ideas` rather than `fetch`,
 because that article already had earlier artefacts.
 
-**2. Where `/var/data` comes from.** [`src/store/artifacts-fs.ts:48`](../../src/store/artifacts-fs.ts):
+**2. Where `/var/data` comes from.** `src/store/artifacts-fs.ts:48`:
 
     const ROOT = path.resolve(import.meta.dirname, "..", "..");
 

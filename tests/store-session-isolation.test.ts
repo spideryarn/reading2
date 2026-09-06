@@ -90,7 +90,7 @@ import { loadEnvLocal } from "../src/env.js";
 import type { RawManifest } from "../src/fetch.js";
 import { mintId } from "../src/ids.js";
 import { environmentOwnerId } from "../src/owner.js";
-import { STEPS, contextPaths } from "../src/pipeline.js";
+import { STEPS } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
 import type { JobDraftRef } from "../src/store/artifacts-pg.js";
 import { mintAttempt } from "../src/store/jobs.js";
@@ -234,11 +234,8 @@ function manifestFor(storedSha256: string, storedBytes = 4096): RawManifest {
 
 /** The context `runStep` would have built. */
 function contextFor(slug: string): StepContext {
-  const { dir, htmlFile } = contextPaths(slug);
   return {
     slug,
-    dir,
-    htmlFile,
     report: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,

@@ -74,8 +74,8 @@ const LONG_SNIPPET = 400;
  */
 export interface Found {
   /** Unique within one result set — `blockId` alone is not, blocks repeat. */
-  key: string;
-  blockId: BlockId;
+  readonly key: string;
+  readonly blockId: BlockId;
   /**
    * The saved search this came from, or `null` for a literal match.
    *
@@ -85,7 +85,7 @@ export interface Found {
    * is a pile of passages with no provenance, which is precisely the failure
    * the colour exists to prevent.
    */
-  runId: string | null;
+  readonly runId: string | null;
   /**
    * Which palette slot that search wears — `null` for a literal match.
    *
@@ -94,15 +94,15 @@ export interface Found {
    * between. A literal match has no slot because it belongs to no saved search:
    * it wears the one fixed search hue, the way it always did.
    */
-  slot: number | null;
+  readonly slot: number | null;
   /** The block's position in the article. What `document` order sorts on. */
-  index: number;
+  readonly index: number;
   /** Inclusive, in the block's rendered-text offset space. */
-  start: number;
+  readonly start: number;
   /** Exclusive. */
-  end: number;
+  readonly end: number;
   /** 0–100 for a meaning hit; `null` for a literal one. */
-  confidence: number | null;
+  readonly confidence: number | null;
   /**
    * **Which way this passage cuts**, −100…+100 — a referee's for/against
    * criterion and nothing else. `null` everywhere else, which is every other
@@ -122,13 +122,13 @@ export interface Found {
    * because a wash scaled by |valence| would look informative and mean
    * something else entirely.
    */
-  valence: number | null;
+  readonly valence: number | null;
   /** The model's one line on why this matches; `null` for a literal match. */
-  reasoning: string | null;
+  readonly reasoning: string | null;
   /** What the list shows. */
-  short: string;
+  readonly short: string;
   /** What the hover card shows. */
-  long: string;
+  readonly long: string;
   /**
    * How far through the article this match falls, 0 at the first word and 1 at
    * the last.
@@ -145,7 +145,7 @@ export interface Found {
    * height. The offset *within* the block is folded in too, so two hits in one
    * long paragraph are not drawn in the same place.
    */
-  at: number;
+  readonly at: number;
   /**
    * True when the model's quote could not be found in the rendered prose and
    * the whole block is marked instead.
@@ -157,7 +157,7 @@ export interface Found {
    * The panel says so, so a reader can see which kind of mark they are looking
    * at rather than wondering why one result is a slab.
    */
-  whole: boolean;
+  readonly whole: boolean;
 }
 
 /**
@@ -190,7 +190,7 @@ interface Ruler {
   total: number;
 }
 
-function ruler(texts: string[]): Ruler {
+function ruler(texts: readonly string[]): Ruler {
   const lengths = texts.map((t) => t.length);
   const starts: number[] = [];
   let running = 0;
@@ -396,9 +396,9 @@ export interface ActiveRun {
  * each result's *place* against a scale reconstructed from the same numbers.
  */
 interface Page {
-  index: Map<BlockId, number>;
-  texts: string[];
-  scale: Ruler;
+  readonly index: ReadonlyMap<BlockId, number>;
+  readonly texts: readonly string[];
+  readonly scale: Ruler;
 }
 
 /**
@@ -424,8 +424,8 @@ interface Page {
  * components ask this question, and they should share one answer rather than
  * hold five.
  *
- * The `Page` handed back is **shared, and must not be mutated.** Everything
- * that takes one only reads it.
+ * The `Page` handed back is **shared**, and its fields are `readonly` so that
+ * stays true — everything that takes one only reads it.
  */
 const pages = new WeakMap<Block[], Page>();
 
@@ -592,7 +592,8 @@ export function resolveIdea(
 }
 
 /**
- * One quote, resolved into the same `Found` every search hit and idea becomes.
+ * **All the quotes the panel is showing**, resolved into the same `Found` every
+ * search hit and idea becomes.
  *
  * A quote is a `{blockId, text, start}`, which is what `resolveOne` already
  * takes — so this is a shape change and nothing else, and that is deliberate: a
@@ -600,7 +601,14 @@ export function resolveIdea(
  * the first. The prose gets the same wash, the rail gets the same lane, and the
  * panel steps through it with the same component.
  *
- * Three fields worth a word:
+ * **Plural since 2026-09-05**, and that is the whole of one feedback report.
+ * It took one quote — the selected one — so quotes mode drew nothing at all
+ * until a row was pressed, and the `?bar=` slider changed the list without
+ * changing the page. Greg asked to be able to *"skim through it just reading
+ * the stuff that is marked"*, which is what search already does through this
+ * same pipe: one call, every passage, marked at once.
+ *
+ * Four fields worth a word:
  *
  * - **`confidence: null`.** A search hit's confidence answers *is this what you
  *   asked for*, and nobody asked the article a question. The value a literal
@@ -609,10 +617,18 @@ export function resolveIdea(
  * - **`reasoning` is the model's `reason`**, which the panel shows in a tooltip
  *   rather than as body text. It reaches the prose hover card too, which is the
  *   right place for it: it is a caption on the passage either way.
- * - **A real `slot`, and `runId` is the quote's own id.** One lane per quote,
- *   and a slot so the paragraph bar has a hue — `blockHues` drops `null` slots,
- *   so a quote without one would paint the rail and leave the bar blank, which
- *   looks like a rendering bug and is not one.
+ * - **A real `slot`**, so the paragraph bar has a hue — `blockHues` drops `null`
+ *   slots, so a quote without one would paint the rail and leave the bar blank,
+ *   which looks like a rendering bug and is not one. Slot `0` for every quote:
+ *   the categorical palette says *which search found this*, and there is only
+ *   one thing here that found anything.
+ * - **`runId` is `QUOTES_RUN` and not the quote's own id**, which is the one
+ *   thing the plural version had to change. The rail packs one lane per run id
+ *   (spine-marks.ts § `laneOrder`) and the gutter is ten pixels, so an id per
+ *   quote gives a sixteen-lane rail of 1.5px marks laid over each other and
+ *   ordered sideways by an arbitrary string. **The quotes are one source**, the
+ *   way the literal matcher is one source; the identity of the individual quote
+ *   stays in `key`, which is what the mark, the ring and the hover card read.
  *
  * **The `text` here is the article's own characters**, not the model's typing —
  * src/quotes.ts § `place` slices the block. So this re-find is looking for the
@@ -625,8 +641,13 @@ export function resolveIdea(
  * drift by every character `extractText` collapsed or inserted, so the hint
  * would pick a repeat rather than disambiguate between them. See the parameter
  * below.
+ *
+ * A quote naming a block the article no longer has is dropped and the rest are
+ * kept, which is `resolveOne`'s rule and matters more here than anywhere else:
+ * the quotes stamp does not cover the article's text, so a stale artefact is
+ * the ordinary case rather than the exceptional one.
  */
-export function resolveQuote(
+export function resolveQuotes(
   blocks: Block[],
   /**
    * **No `start`, deliberately** — see the note in the docstring above.
@@ -645,25 +666,55 @@ export function resolveQuote(
    * block — which is why the general fix is an occurrence ordinal and is not
    * built.
    */
-  quote: { id: string; slot: number; blockId: BlockId; text: string; reason?: string },
+  quotes: readonly { id: string; blockId: BlockId; text: string; reason?: string }[],
 ): Found[] {
-  const one = resolveOne(page(blocks), {
-    /* The same three-part key shape as a hit and an occurrence, with `0` for
-       the index: a quote is exactly one passage, so there is no second one to
-       tell apart — and keeping the shape means nothing downstream has to know
-       which of the three sources it is looking at. */
-    key: `${quote.id}:${quote.blockId}:0`,
-    blockId: quote.blockId,
-    runId: quote.id,
-    slot: quote.slot,
-    quote: quote.text,
-    confidence: null,
-    /* A quote is a line worth keeping. Which is a judgement of a sort, and not
-       one with two ends. */
-    valence: null,
-    reasoning: quote.reason ?? "",
-  });
-  return one ? [one] : [];
+  const at = page(blocks);
+  const out: Found[] = [];
+  for (const quote of quotes) {
+    const one = resolveOne(at, {
+      key: quoteMarkKey(quote.id, quote.blockId),
+      blockId: quote.blockId,
+      runId: QUOTES_RUN,
+      slot: 0,
+      quote: quote.text,
+      confidence: null,
+      /* A quote is a line worth keeping. Which is a judgement of a sort, and not
+         one with two ends. */
+      valence: null,
+      reasoning: quote.reason ?? "",
+    });
+    if (one) out.push(one);
+  }
+  /* Document order, so the marks are in the order the reader meets them
+     whatever `?rank=` the panel is listing them in. Nothing downstream sorts a
+     `Found[]`, and `blockMatches` counts in whatever order it is handed. */
+  return orderFound(out, "document");
+}
+
+/**
+ * The one identity every quote's marks share, and therefore its single lane in
+ * the rail — see `resolveQuotes` above for why it is not the quote's own id.
+ *
+ * A literal string rather than `null`, which is the literal matcher's and means
+ * *no colour of its own*; quotes do have one, `slot: 0`.
+ */
+export const QUOTES_RUN = "quotes";
+
+/**
+ * A quote's key among the marks — **one place, because two places drift.**
+ *
+ * The same three-part shape as a hit and an occurrence, with `0` for the index:
+ * a quote is exactly one passage, so there is no second one to tell apart, and
+ * keeping the shape means nothing downstream has to know which of the sources
+ * it is looking at.
+ *
+ * Exported because the band needs it to say *which quote the reader pressed*
+ * (`mark.hit[data-hit-open]`) without walking the resolved list — and computing
+ * that string in two files is how the ring comes to be about a quote that is
+ * not the selected one.
+ */
+export function quoteMarkKey(id: string, blockId: BlockId): string {
+  return `${id}:${blockId}:0`;
 }
 
 /**
@@ -1080,12 +1131,68 @@ const MIN_STRENGTH = 0.35;
  * thread `?refscale=` through look exactly like passing `rg` deliberately, and
  * the whole point of one scale for the whole mode is that the two ramps put red
  * at opposite ends of the truth.
+ *
+ * **The pressed result is applied on top of a cached, `openKey`-free set of
+ * marks** — see `unpressed` below, which is where that matters and why.
  */
 export function hitMarks(
-  found: Found[],
+  found: readonly Found[],
   openKey: string | null,
   scale: DivergingScale,
-): Map<BlockId, Mark[]> {
+): ReadonlyMap<BlockId, readonly Mark[]> {
+  const base = baseMarks(found, scale);
+  /* A copy of the map, so the per-block arrays below can differ from the cached
+     ones without the cache ever seeing it. */
+  const byBlock = new Map(base);
+  if (openKey === null) return byBlock;
+  for (const [blockId, marks] of base) {
+    if (!marks.some((m) => m.id === openKey)) continue;
+    byBlock.set(
+      blockId,
+      marks.map((m) => (m.id === openKey ? { ...m, open: true } : m)),
+    );
+  }
+  return byBlock;
+}
+
+/**
+ * The same marks **before anybody pressed one of them**, cached on the result
+ * array's identity — the same key, and the same argument for it, as `pages`
+ * above: nothing on the client mutates a `Found[]` in place (`orderFound` and
+ * `keepAbove` both copy), so a surviving identity guarantees the results behind
+ * it survived too.
+ *
+ * **Why the pressed key is applied on top rather than folded in.** `hitMarks`
+ * used to bake `open` into every mark it built, so pressing one result in the
+ * panel handed `TableView` a fresh array for *every* block with a hit in it —
+ * and `proseHtml` decides a block can reuse its html by comparing those arrays
+ * by identity, so the press re-annotated the whole article to move one ring.
+ * This is the split `openTerm` has had from `termMarksByBlock` since
+ * 2026-08-26; `TermSelection.open` in annotate.ts gives the argument, and
+ * docs/plans/260905i-… § Stage 2 has the measurement.
+ *
+ * The arrays and the map handed back are **shared**, and the types say so —
+ * `ReadonlyMap` and `readonly Mark[]`, over a `readonly Found[]` key whose
+ * fields are readonly too. That is not decoration: a caller that pushed into a
+ * returned array would poison every later result for that search, and one that
+ * edited a `Found` in place would keep the offsets it had when the cache was
+ * filled. Both were demonstrated by probe, on an implementation no caller was
+ * actually abusing — docs/plans/260905i-stage2-review-sol.md § F22, pinned by
+ * tests/search-hits.test.ts § "refuses at compile time".
+ */
+const unpressed = new WeakMap<
+  readonly Found[],
+  Map<DivergingScale, ReadonlyMap<BlockId, readonly Mark[]>>
+>();
+
+function baseMarks(
+  found: readonly Found[],
+  scale: DivergingScale,
+): ReadonlyMap<BlockId, readonly Mark[]> {
+  const byScale =
+    unpressed.get(found) ?? new Map<DivergingScale, ReadonlyMap<BlockId, readonly Mark[]>>();
+  const had = byScale.get(scale);
+  if (had) return had;
   const byBlock = new Map<BlockId, Mark[]>();
   for (const f of found) {
     if (f.end <= f.start) continue;
@@ -1108,10 +1215,11 @@ export function hitMarks(
         f.confidence === null
           ? 1
           : MIN_STRENGTH + (1 - MIN_STRENGTH) * (Math.min(100, Math.max(0, f.confidence)) / 100),
-      ...(f.key === openKey ? { open: true } : {}),
     });
     byBlock.set(f.blockId, list);
   }
+  byScale.set(scale, byBlock);
+  unpressed.set(found, byScale);
   return byBlock;
 }
 

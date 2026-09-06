@@ -15,7 +15,8 @@ that match get marked in the article beside it. Greg's ask:
 > — Greg, 2026-08-26
 
 Code: [`src/search.ts`](../../src/search.ts) (the model call),
-[`src/searches.ts`](../../src/searches.ts) (storage),
+[`src/searches.ts`](../../src/searches.ts) (the rules — the cap, the palette, mint-or-retry) and
+[`src/store/pg-searches.ts`](../../src/store/pg-searches.ts) (storage),
 [`src/quote-match.ts`](../../src/quote-match.ts) (finding a quote in a block — the shared rule),
 [`src/routes.ts`](../../src/routes.ts) § search,
 [`src/web/SearchPanel.tsx`](../../src/web/SearchPanel.tsx),
@@ -451,10 +452,12 @@ show. See [260826r-sse-stall-recovery.md](../plans/260826r-sse-stall-recovery.md
 
 ## Saving, and the toy it stops this being
 
-Meaning-searches are stored in `data/<slug>/searches.json`, the third file with exactly the shape of
-[`comments.ts`](../../src/comments.ts) and [`chat.ts`](../../src/chat.ts) — atomic write, serialised
-read-modify-write queue, reader state beside the article rather than in it. Greg chose this over
-keeping nothing.
+Meaning-searches are stored in Postgres (`search_runs`, via
+[`src/store/pg-searches.ts`](../../src/store/pg-searches.ts)) — reader state beside the article
+rather than in it, the same shape as [`comments.ts`](../../src/comments.ts) and
+[`chat.ts`](../../src/chat.ts). Until 2026-09-05 it was a file, `data/<slug>/searches.json`, written
+atomically behind a serialised read-modify-write queue; that filesystem half was deleted along with
+the rest of the store. Greg chose to save these over keeping nothing.
 
 The reason is the criticism the previous version earned in its own docs:
 
@@ -462,7 +465,7 @@ The reason is the criticism the previous version earned in its own docs:
 > be returned to.
 
 A search costs a model call and half a minute. Re-opening one from the list repaints the whole
-article with **no model call and no wait**, because the answer is on disk.
+article with **no model call and no wait**, because the answer is saved.
 
 Words-mode searches are **not** stored, and that is not an omission: a substring match is instant and
 free, and `?find=` in the URL describes it completely. Storing it would be caching a computation
@@ -993,8 +996,8 @@ list, an unknown `order` is document order. Same rule as everything else in
         │                       │                                             ┌────────┴────────┐
         │                       ▼                                             ▼                 ▼
         │              search-hits.ts                                   searches.ts        search.ts
-        │            findLiteral / resolveHits                         data/<slug>/       OpenRouter,
-        │            → Found[] → hitMarks()                            searches.json      no web search
+        │            findLiteral / resolveHits                      pg-searches.ts        OpenRouter,
+        │            → Found[] → hitMarks()                          search_runs        no web search
         ▼                       │                                                              │
   the results list              ▼                                                        validateHits()
                         App holds Found[] ──► TableView ──► annotateHtml ──► mark.hit     ▲
@@ -1076,8 +1079,8 @@ and it is worth naming all three together because they are easy to confuse:
 
 The third one **keeps this document's shape on purpose**: one box, two matchers, the free one the
 default. There the two are "filter the cards" (in the browser, over the four fields a card shows) and
-"find the passages" (on the server, `websearch_to_tsquery` under Postgres and a folded substring scan
-under the filesystem store).
+"find the passages" (on the server, `websearch_to_tsquery` under Postgres — until 2026-09-05 there was
+a second implementation, a folded substring scan under the filesystem store, now deleted).
 
 Two things travel between the two features, and they are what make the handoff work:
 
@@ -1088,10 +1091,11 @@ Two things travel between the two features, and they are what make the handoff w
   the same words up through the machinery already described in [§ The URL](#the-url). Reusing `?find=`
   rather than inventing a third parameter is the whole reason that works.
 
-What they do **not** share is the ranking. `ts_rank_cd` weighs term density and proximity; the
-filesystem scan counts and damps by length; and the model-driven `confidence` in this document is a
-third thing again, which is why `LibraryHit` deliberately has no `confidence` and no `reasoning`
-field. There is nothing for a text index to be uncertain about and nobody to explain anything.
+What they do **not** share is the ranking. `ts_rank_cd` weighs term density and proximity for the
+shelf's box; the model-driven `confidence` in this document is a third thing again, which is why
+`LibraryHit` deliberately has no `confidence` and no `reasoning` field. (Until 2026-09-05 the shelf's
+box had a second ranking too, a filesystem scan that counted matches and damped by length; that
+implementation is gone.) There is nothing for a text index to be uncertain about and nobody to explain anything.
 
 Meaning-based search across the library — embeddings, pgvector, a blended list — is **deferred**, by
 Greg on 2026-08-26. The research is in [260826e-postgres-search.md](../research/260826e-postgres-search.md); the
@@ -1163,8 +1167,8 @@ a hope.
   `sourceHash`, [`src/search-stale.ts`](../../src/search-stale.ts) judges it, and
   [`src/web/SearchPanel.tsx`](../../src/web/SearchPanel.tsx) has the banners — but **the searches
   GET never sends the article's current fingerprint** (`sweepSearches` in
-  [`src/routes.ts`](../../src/routes.ts) answers `{ runs }` only; `readSearches`, the function that
-  reads both halves together, has no caller). So `useSearch` learns the fingerprint only from a
+  [`src/routes.ts`](../../src/routes.ts) answers `{ runs }` only; nothing calls `SearchStore`'s
+  `currentSourceHash` alongside `load` to attach one). So `useSearch` learns the fingerprint only from a
   `begin` frame, and a reader who opens an article and looks at yesterday's searches is told
   nothing. Referee mode's two panels do send it and do say it. Re-running from the banner is a
   separate thing nobody has built; the tweet thread page is the model

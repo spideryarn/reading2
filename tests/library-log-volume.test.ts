@@ -1,91 +1,161 @@
 /**
- * How many lines one homepage load can put in the log — `listArticles` in
- * src/api.ts.
+ * How many lines one homepage load can put in the log — `listArticles`, wired in
+ * [`src/store/index.ts`](../src/store/index.ts) and implemented in
+ * [`src/store/pg.ts`](../src/store/pg.ts).
  *
  * **The rule this defends is about shape, not volume:** if the number of lines a
  * piece of code emits grows with the data, the caller says it once instead
  * (docs/project/logging.md § Vercel). Vercel keeps **256 lines per request** and
- * drops the rest, so a walk that logs per directory does not merely make noise —
+ * drops the rest, so a walk that logs per article does not merely make noise —
  * it deletes the end of that request's logs, including whatever else the request
  * wanted to say. The line you needed is the one that got dropped.
  *
- * `describeDir` already aggregates the *incomplete*-directory case. This is the
- * other half: `readJson` warns once per unreadable file, and the shelf calls it
- * three times per directory inside a `Promise.all`.
- *
- * Measured at 300 directories because that is past Vercel's cap, and because the
+ * Measured at 300 articles because that is past Vercel's cap, and because the
  * failure is invisible below it — at ten articles a line each looks fine.
  *
- * ## Why a whole copy of the repository
+ * ## What this measured until 2026-09-05, and why the property outlived it
  *
- * `listArticles` walks `path.join(ROOT, "data")` where `ROOT` is derived from
- * `src/api.ts`'s own location, so there is no seam to point it somewhere else.
- * Writing corrupt articles into the real `data/` would work — and would fail
- * `tests/library.test.ts` in a different worker, because that suite calls
- * `listArticles` too and `data/` is shared by every suite at once. A flaky
- * failure attributed to the wrong file is worse than the bug this is about.
+ * It drove `listArticles` in `src/api.ts` over 300 corrupt **directories**: that
+ * shelf called `readJson` three times per directory inside a `Promise.all`, and
+ * `readJson` warned once per unreadable file. `src/api.ts` was the filesystem
+ * article reader and was deleted with the filesystem store
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
+ * § G), so there are no directories to walk and that particular hazard is gone.
  *
- * So the child gets its own `ROOT`: a temporary directory holding a copy of
- * `src/`, the real `package.json`, and a symlink to the real `node_modules`.
- * A few dozen small files, and complete isolation.
+ * **The property is not.** `scalarsForShelf` in `src/store/pg.ts` is the one
+ * place the surviving shelf can speak per row: the five library scalars are
+ * nullable columns, and a published revision with none of them sends the shelf
+ * back to its blocks. That started life as *"two queries and a `warn` each"* —
+ * `2 + 2M` statements and `M` log lines — and was aggregated into one query and
+ * one `{ count, slugs, of }` line for exactly the reason above. It is also the
+ * **only** `log(…)` call in the whole of `src/store/pg.ts`, checked rather than
+ * assumed, so this file is measuring the one surviving hazard rather than a
+ * sample of several.
+ *
+ * So the fixture changed shape and the three questions did not: 300 rows that
+ * can each provoke a warning must produce a bounded number of lines, the lines
+ * must still name what is wrong, and the names must not move between loads.
+ *
+ * ## Why a database, and why a child process
+ *
+ * The database because the shelf is Postgres now — this file is in the
+ * `private-postgres` lane (`TEST_LANES` in tests/store-migration-registry.ts),
+ * so the rows below go into a database minted for this run alone and no peer's
+ * suite can see them.
+ *
+ * The child because [`src/log.ts`](../src/log.ts) builds its logger at import
+ * time, is `silent` when `NODE_ENV=test`, and writes to file descriptor 1 with
+ * `fs.writeSync` rather than through `process.stdout.write`. Stubbing
+ * `process.stdout` in-process would capture nothing and prove nothing, and a
+ * silent logger would make a wall of 300 lines and a clean single line
+ * indistinguishable — both zero.
+ *
+ * **The child reaches this run's private database and not the developer's**,
+ * and the mechanism is worth knowing before somebody "simplifies" it: it
+ * inherits `process.env`, which the lane's setup has already pointed at the
+ * minted database, and it inherits `SPIDERYARN_ENV_PINNED` too, which is what
+ * stops `.env.local` handing the shared one straight back inside the child
+ * ([`src/env.ts`](../src/env.ts) § `PINNED`). `tests/request-spend.test.ts` is
+ * the same arrangement for the same reasons.
+ *
+ * This file **appends `SPIDERYARN_OWNER_ID` to that pin**, and it is not
+ * decoration: `.env.local` names that variable too, so without the pin the child
+ * lists the developer's shelf instead of the 300 rows below. Watched on
+ * 2026-09-05 — dropping the append turns the two assertions about the warning
+ * from red-on-a-wrong-number into *no warning line at all*, which is the shape of
+ * a test that has quietly stopped measuring anything.
  *
  * ## One child, two loads
  *
- * That child is spawned **once for the whole file**, in `beforeAll`, and runs
+ * The child is spawned **once for the whole file**, in `beforeAll`, and runs
  * `listArticles()` twice. Every test here asks a question about the log of a
- * homepage load, and two loads answer all three. The reason it matters is in
- * SETUP_MS: what this file costs is compiling `src/api.ts`'s import graph with
- * `tsx`, about 1.08s, and the shelf walk it exists to measure is 19ms of that.
- * A child per test paid the compile four times over to buy ~40ms of the thing
- * under test, and that ratio gets worse every time `src/api.ts` gains an
- * import.
+ * homepage load, and two loads answer all three. The cost is the cold `tsx`
+ * start and the import of `src/store/index.ts`'s graph — about a second, and
+ * paid per process rather than per article — so a child per test would pay it
+ * four times over to buy a few milliseconds of the thing under test.
  */
 import { spawnSync } from "node:child_process";
-import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { sql } from "drizzle-orm";
+
+import { closeDb, getDb } from "../src/db/client.js";
+import { loadEnvLocal, PINNED, pinnedNames } from "../src/env.js";
+import { pgReady } from "./helpers/pg-ready.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
+
+loadEnvLocal();
+
+/**
+ * The four scalar columns are what the branch under test reads, so they are
+ * named rather than left to a bare table check: a database migrated to before
+ * docs/plans/260828c-library-read-latency.md would fail inside the store with a
+ * bare `42703`. tests/helpers/pg-ready.ts § what to name.
+ */
+await pgReady({
+  suite: "tests/library-log-volume.test.ts",
+  tables: ["spideryarn.articles", "spideryarn.article_revisions", "auth.users"],
+  columns: [
+    { table: "spideryarn.article_revisions", column: "word_count" },
+    { table: "spideryarn.article_revisions", column: "block_count" },
+    { table: "spideryarn.article_revisions", column: "part_count" },
+    { table: "spideryarn.article_revisions", column: "section_count" },
+  ],
+});
 
 const TSX = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 /** Past Vercel's 256-line ceiling, which is the whole point of the number. */
-const DIRS = 300;
+const ARTICLES = 300;
+
+/** This file's rows and nobody else's — a prefix nothing in the fixtures uses. */
+const SLUG_PREFIX = "logvol-";
 
 /**
- * What the shared setup below is allowed to take — copying `src/`, writing 300
- * directories, and running the one child.
+ * **An owner of this file's own, and that is the difference between an exact
+ * assertion and a flaky one.**
  *
- * **Almost none of that is the shelf**, which is the point of writing the
- * numbers down: the obvious reading of a slow run here, that walking 300
- * directories is slow, is wrong. One child, timed from inside itself, in ms:
+ * The lane gives the run its own database, but not a database per file: the
+ * suites before this one in the serialised lane share it, and a shelf listing is
+ * the whole of *one owner's* library. Under the ambient owner, a fixture article
+ * a peer left behind would land in `of`, could land in `count`, and — being
+ * newer than these rows by `fetched_at` — could take one of the five slots the
+ * capped list reports. All three assertions below would then be about the run
+ * rather than about the code.
  *
- * ```
- * DIRS    boot   import   1st load   2nd load
- *    0   154.9    942.2        6.5        0.3
- *  100   153.4    922.1       10.5        3.4
- *  300   154.2    922.5       19.3        9.9
- * ```
+ * So this file seeds its own `auth.users` row (`articles.owner_id` needs one)
+ * and tells the child to be that person. `OWNER_AUDIT` in
+ * tests/store-migration-registry.ts carries the verdict.
+ */
+const OWNER = "00000000-0000-4000-8000-00000000106f";
+
+/**
+ * A tree with a root and nothing else.
  *
- * ~0.15s to boot node and tsx and ~0.92s to transpile and import
- * `src/api.ts`'s dependency graph — about 1.08s of fixed cost before a single
- * directory is read — against 19ms for the whole walk at the size this file
- * uses, growing 3.19x from 100 directories to 300 where linear is 3x. **The
- * cost is per process, not per article**, which is why there is now one
- * process rather than one per test.
+ * `hasTree` is a presence check in the shelf's projection and a revision with
+ * no tree is dropped before `scalarsForShelf` is reached, so the column has to
+ * hold *something*. Nothing here reads its shape: the recompute derives zero
+ * parts and zero sections from it, which is the correct answer for a tree with
+ * one node.
+ */
+const TREE = JSON.stringify({ rootId: "r", nodes: { r: { id: "r", depth: 0 } } });
+
+/**
+ * What the shared setup below is allowed to take — three statements, and the
+ * one child.
  *
- * So this number is not a performance guard and must not be read as one. At
- * ~0.05ms per directory a real per-directory regression would have to be
- * enormous before it showed up here. The guard against per-directory work is
+ * Not a performance guard, and it must not be read as one. The cost here is a
+ * cold `tsx` start plus the import of `src/store/index.ts`'s graph, which is
+ * per process rather than per article; the guard against per-article work is
  * the assertion in the first test, that the line count does not grow with the
- * shelf — and `DIRS` stays at 300 for the same reason, since shrinking it
- * would save ~13ms and cost that test its meaning.
+ * shelf.
  *
  * The size of the number is for a busy machine, and only that. This suite runs
- * beside others competing for the same cores; at a load average of 331 on 18
- * cores the same child took 13x its idle cost. That is a fact about the
- * machine, not about `src/`.
+ * on a box where ten worktrees compete for the same cores, and the
+ * `private-postgres` lane is serialised besides.
  */
 const SETUP_MS = 180_000;
 
@@ -95,29 +165,20 @@ const SETUP_MS = 180_000;
  */
 const BOUNDARY = "---spideryarn-load-boundary---";
 
-let repo = "";
-
 /**
  * Run `listArticles()` `loads` times **in one child**, and give back the lines
  * it put on fd 1 for each.
  *
- * One child rather than one per load, because the fixed cost above is paid per
- * process: two cold `tsx` starts to prove a property about two shelf walks is
- * ~1.08s of TypeScript compilation to buy ~10ms of the thing under test. Two
- * loads in the same process prove the same property — the names must not move
- * between loads — for half the wall time, and the cost stops growing with
- * `src/api.ts`'s import graph.
+ * `src/store/index.ts` rather than `src/store/pg.js` directly: that file is
+ * what `src/routes.ts` imports, so this is the seam a homepage load actually
+ * crosses — guard and all — rather than the adapter underneath it.
  */
 function runLoads(loads: number): string[][] {
   const body = `void (async () => {
     const { writeSync } = await import("node:fs");
-    const { listArticles } = await import(${JSON.stringify(path.join(repo, "src", "api.ts"))});
+    const { listArticles } = await import(${JSON.stringify(path.join(ROOT, "src", "store", "index.ts"))});
     for (let i = 0; i < ${loads}; i++) {
-      // It rejects — every directory is corrupt. The rejection is not what this
-      // measures, so it is swallowed here rather than allowed to kill the child
-      // before the logger has flushed. Swallowed per load, so one rejection
-      // does not cost us the loads after it.
-      try { await listArticles(); } catch {}
+      await listArticles();
       /* fs.writeSync to fd 1, and NOT console.log: the logger is a pino
          destination with sync: true, which writes straight to the descriptor,
          while process.stdout is asynchronous over a pipe. Two mechanisms means
@@ -126,6 +187,10 @@ function runLoads(loads: number): string[][] {
          the first. Same call, same ordering. */
       writeSync(1, ${JSON.stringify(`${BOUNDARY}\n`)});
     }
+    /* The pool holds the event loop open, and a child that never exits is a
+       spawnSync that sits there until SETUP_MS. */
+    const { closeDb } = await import(${JSON.stringify(path.join(ROOT, "src", "db", "client.ts"))});
+    await closeDb();
   })();`;
 
   const env: NodeJS.ProcessEnv = { ...process.env };
@@ -134,13 +199,28 @@ function runLoads(loads: number): string[][] {
   // lines and a clean single line indistinguishable — both zero.
   delete env.LOG_LEVEL;
   env.NODE_ENV = "development";
+  /* Nobody is signed in out here, so `currentOwnerId()` answers
+     `environmentOwnerId()` — which is this, and so the shelf the child lists is
+     exactly the 300 rows seeded below. src/owner.ts. */
+  env.SPIDERYARN_OWNER_ID = OWNER;
+  /* **And the assignment above does not survive the spawn on its own.**
+     `.env.local` names `SPIDERYARN_OWNER_ID`, and `src/env.ts` lets the file beat
+     the shell for everything the process did not set *for itself* — a test which
+     cannot be told apart from a shell export once it has crossed a `spawn`, since
+     the child's own snapshot already contains it. Unpinned, the child would list
+     the developer's shelf instead of this one's and every assertion below would
+     be about somebody else's articles. `PINNED` is the documented answer, and it
+     is appended to rather than replaced: the lane's setup has already pinned
+     `DATABASE_URL` there, which is what keeps the child on the run's private
+     database. src/env.ts § `PINNED`. */
+  env[PINNED] = [...pinnedNames(env), "SPIDERYARN_OWNER_ID"].join(",");
 
   /* The timeout goes here, not only on `beforeAll`. `spawnSync` blocks the
      worker's event loop, so vitest's own timeout cannot fire while it waits —
      a wedged child would hang past SETUP_MS and past anything else, and the
      run would sit there looking busy. Found by GPT Sol, 2026-08-28. */
   const child = spawnSync(TSX, ["-e", body], {
-    cwd: repo,
+    cwd: ROOT,
     env,
     encoding: "utf8",
     timeout: SETUP_MS,
@@ -176,8 +256,7 @@ function runLoads(loads: number): string[][] {
  *
  * Every test here asks a question about the log of a homepage load, and two
  * loads answer all three of them: the first two tests are about what one load
- * says, and the last is about the two agreeing. So the file pays for one cold
- * `tsx` start rather than four.
+ * says, and the last is about the two agreeing.
  */
 let loads: string[][] = [];
 
@@ -188,84 +267,106 @@ function load(i: number): string[] {
   return lines;
 }
 
+/**
+ * Anything an earlier run left, so what the child sees is this run's.
+ *
+ * By owner rather than by slug prefix: the owner is this file's alone, so this
+ * cannot reach a peer's article, and it does catch a row left under a slug an
+ * older version of this file used. `article_revisions` goes with it —
+ * `article_id` is `on delete cascade`.
+ */
+async function forgetArticles(): Promise<void> {
+  await getDb().execute(sql`delete from spideryarn.articles where owner_id = ${OWNER}::uuid`);
+}
+
 beforeAll(async () => {
-  repo = await mkdtemp(path.join(tmpdir(), "spideryarn-shelf-"));
-  await cp(path.join(ROOT, "src"), path.join(repo, "src"), { recursive: true });
-  await cp(path.join(ROOT, "package.json"), path.join(repo, "package.json"));
-  await symlink(path.join(ROOT, "node_modules"), path.join(repo, "node_modules"));
+  await forgetArticles();
+  await seedAuthUser(getDb(), {
+    id: OWNER,
+    email: "library-log-volume@spideryarn.test",
+    onConflictDoNothing: true,
+  });
 
-  /* Malformed from the first byte, which is what a truncated write and a
-     half-finished ingest both look like — and the shape that makes `readJson`
-     throw rather than return null. Named with a fixed width so that sorting
-     them is the same as ordering them by number, which is what the determinism
-     assertion below relies on being able to state. */
-  await Promise.all(
-    Array.from({ length: DIRS }, async (_unused, i) => {
-      const name = `art-${String(i).padStart(4, "0")}`;
-      await mkdir(path.join(repo, "data", name), { recursive: true });
-      await writeFile(
-        path.join(repo, "data", name, "blocks.json"),
-        "not json, and the rest of this line stands in for the article",
-        "utf8",
-      );
-    }),
-  );
+  /* Three statements rather than one with CTEs, and that is not a style
+     preference: a data-modifying CTE is invisible to the statement's own
+     snapshot, so an `update spideryarn.articles ... from <inserted rows>` in
+     the same statement matches nothing at all and reports success. */
+  await getDb().execute(sql`
+    insert into spideryarn.articles (owner_id, slug)
+    select ${OWNER}::uuid, ${SLUG_PREFIX} || lpad(g::text, 4, '0')
+      from generate_series(0, ${ARTICLES - 1}) g`);
 
-  /* The one child, for the whole file. It is here rather than in each test
-     because the cost is the cold `tsx` start and not the shelf walk (see
-     SETUP_MS), so paying it once is the difference between this file costing
-     one compile of `src/` and costing four. Two loads, which is what the last
-     test needs; the other two read the first of them. */
+  /* **Published, with a tree, and with all five scalar columns left null** —
+     which is the state `scalarsForShelf` warns about. Fixed-width slugs and one
+     second of `fetched_at` between neighbours, so the shelf's `order by
+     coalesce(fetched_at, created_at) desc` is a total order rather than 300 ties
+     resolved however Postgres feels: the "same names every load" assertion below
+     is a claim about the code, and it needs the ordering to be decidable before
+     it can be one. */
+  await getDb().execute(sql`
+    insert into spideryarn.article_revisions (article_id, status, tree, fetched_at)
+    select a.id, 'published', ${TREE}::jsonb,
+           now() - (split_part(a.slug, '-', 2)::int || ' seconds')::interval
+      from spideryarn.articles a
+     where a.owner_id = ${OWNER}::uuid`);
+
+  await getDb().execute(sql`
+    update spideryarn.articles a
+       set current_revision_id = r.id
+      from spideryarn.article_revisions r
+     where r.article_id = a.id
+       and a.owner_id = ${OWNER}::uuid`);
+
   loads = runLoads(2);
 }, SETUP_MS);
 
-afterAll(() => rm(repo, { recursive: true, force: true }));
+afterAll(async () => {
+  await forgetArticles();
+  await closeDb();
+});
 
-describe("one homepage load over a shelf of corrupt articles", () => {
-  it("says it once, rather than once per directory", () => {
+describe("one homepage load over a shelf of revisions with no library scalars", () => {
+  it("says it once, rather than once per article", () => {
     const lines = load(0);
     /* The ceiling is deliberately loose. Pinning an exact count would make this
        a test of today's line-by-line wording, which is not the property — the
-       property is that the number does not grow with the shelf. 300 directories
+       property is that the number does not grow with the shelf. 300 articles
        producing single figures proves that; 300 producing 300 is the bug. */
-    expect(lines.length).toBeLessThanOrEqual(5);
+    expect(lines.length, lines.join("\n")).toBeLessThanOrEqual(5);
   });
 
-  it("still names the corrupt files, rather than going quiet", () => {
+  it("still names the articles it had to recompute, rather than going quiet", () => {
     // Bounding the count by dropping the warning would pass the test above and
-    // be strictly worse than the bug: a corrupt artefact is a real problem and
-    // this line is what makes it findable.
-    const line = load(0).find((l) => l.includes("could not be read or parsed"));
-    expect(line, "no line mentioned the unreadable artefacts at all").toBeDefined();
+    // be strictly worse than the bug: a published revision with no scalars is a
+    // real problem and this line is what makes it findable.
+    const line = load(0).find((l) => l.includes("no library scalars"));
+    expect(line, "no line mentioned the recomputed revisions at all").toBeDefined();
 
-    const obj = JSON.parse(line ?? "{}") as { count?: number; files?: string[]; of?: number };
-    expect(obj.count).toBe(DIRS);
+    const obj = JSON.parse(line ?? "{}") as { count?: number; slugs?: string[]; of?: number };
+    expect(obj.count).toBe(ARTICLES);
+    expect(obj.of).toBe(ARTICLES);
     // A capped list, not the whole shelf: the names are what make it actionable,
     // but all of them would be a line that grows with the library, and a long
     // line is the one most likely to be truncated by whatever collects it.
-    expect(obj.files?.length).toBeLessThanOrEqual(5);
-    expect(obj.files?.length).toBeGreaterThan(0);
+    expect(obj.slugs?.length).toBeLessThanOrEqual(5);
+    expect(obj.slugs?.length).toBeGreaterThan(0);
+    /* Slugs, and nothing else. The rows this line is about are somebody's
+       articles; a title or a blurb here would be article prose in a log.
+       src/store/pg.ts § `scalarsForShelf`. */
+    for (const slug of obj.slugs ?? []) expect(slug.startsWith(SLUG_PREFIX)).toBe(true);
   });
 
-  it("names the same files on every load", () => {
+  it("names the same articles on every load", () => {
     /* The names used to be whichever async reads happened to resolve first, so
-       the same broken shelf accused different directories on different loads —
-       and a name that moves is one you cannot search for twice. Two real loads
-       rather than one, because a single call cannot disagree with itself.
-
-       Both loads come from one child. What has to be the same across the two
-       calls is the sorted list of names, and sorting does not care which
-       process it happens in — so a second cold `tsx` start bought nothing here
-       and cost a hundred times the shelf walk it was there to repeat. Verified
-       rather than assumed: with the `sort` in `listArticles` removed, two loads
-       in one process still disagree, and this test still goes red. */
-    const warning = (lines: string[]) =>
-      lines.find((l) => l.includes("could not be read or parsed"));
-    const files = (l?: string) => (JSON.parse(l ?? "{}") as { files?: string[] }).files;
+       the same broken shelf accused different articles on different loads — and
+       a name that moves is one you cannot search for twice. Two real loads
+       rather than one, because a single call cannot disagree with itself. */
+    const warning = (lines: string[]) => lines.find((l) => l.includes("no library scalars"));
+    const slugs = (l?: string) => (JSON.parse(l ?? "{}") as { slugs?: string[] }).slugs;
     // Asserted before the comparison, because two absent lists are equal and
     // that would make this pass on code that logs nothing at all.
-    expect(files(warning(load(0)))).toBeDefined();
-    expect(files(warning(load(1)))).toBeDefined();
-    expect(files(warning(load(0)))).toEqual(files(warning(load(1))));
+    expect(slugs(warning(load(0)))).toBeDefined();
+    expect(slugs(warning(load(1)))).toBeDefined();
+    expect(slugs(warning(load(0)))).toEqual(slugs(warning(load(1))));
   });
 });

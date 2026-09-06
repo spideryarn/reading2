@@ -169,13 +169,14 @@ So: state the render counts as the result, quote CPU as directional, and never c
 "improvement" that one re-run would erase. If you need a CPU number to hold still, take three runs
 and say so.
 
-## The three instruments, and which one answers which question
+## The instruments, and which one answers which question
 
 | | Answers | Reach for it when |
 |---|---|---|
 | [`src/web/perf.ts`](../../src/web/perf.ts) — in the page, `?perf=1` | **why**: which timer, which component, how many fetches, visible vs hidden | you have a live page and want to know what it is doing |
 | [`scripts/measure-cpu.ts`](../../scripts/measure-cpu.ts) — its own Chrome, over CDP | **how much**: real CPU for the whole renderer *and* the main thread alone, the script / layout / style split, per frame, plus render counts | you want a number you can put in a commit message |
 | [`scripts/chrome-cpu.ts`](../../scripts/chrome-cpu.ts) — `ps` against a running Chrome | **how much**, whole process, nothing else | you must measure a browser you cannot relaunch |
+| [`scripts/measure-annotation.ts`](../../scripts/measure-annotation.ts) — Playwright, driving gestures | **whose fault**: end-to-end beside the share the annotation pipeline owns, per gesture, every repetition printed | a gesture in the reading view is slow and you need to know how much of it is the marks. Its in-page half is [`src/web/annotation-cost.ts`](../../src/web/annotation-cost.ts) |
 | `measure-cpu.ts --cpu-profile <out>` — a sampling profile of the window | **which function**: self time, ours separated from `node_modules` | the split says *layout* or *script* and you need a name to go and open |
 | a **DOM mutation census** in the page — a `MutationObserver` during a scroll, grouped and counted | **what is being written**, which is often not what the profiler blames | style or layout is high and you do not know what is dirtying the DOM |
 
@@ -1038,6 +1039,102 @@ And a smaller one worth knowing: **the first click of a `--modes` run is a click
 page loaded in**, which costs 20-30ms and looks like the fastest switch in the table. The report
 prints `first` and `later mean` separately for exactly that reason.
 
+## Startup, 2026-09-05 — and everything above this line is about a page already running
+
+The first measurement here of what the browser downloads **before** anything on this page applies.
+[`scripts/measure-startup.ts`](../../scripts/measure-startup.ts) is the harness: it drives Chrome
+over CDP against a production build served by `npx vite preview`, clears and disables the cache per
+run, and takes bytes from `Network.loadingFinished.encodedDataLength` — **wire bytes, not `ls`**.
+
+```bash
+npx tsx scripts/measure-startup.ts --base http://localhost:4291 \
+  --sign-in-via http://localhost:4292 --local-sign-in --email dev-admin@spideryarn.local \
+  --paths "/,/read/scaling-hypothesis,/design,/admin" --runs 3 --json out.json
+```
+
+**Time-to-readable-prose** is defined in that script's header and printed with every result: the
+first *frame* on which a prose block has non-empty text, with a `MutationObserver` lower bound
+reported beside it and a hard failure if the probe saw no frames or no prose. Routes with no prose
+get a separately labelled TTFT, which is a different measurement and must not be compared with it.
+
+### The two numbers that decide how a startup change may be reported
+
+**Bytes here have a noise floor of exactly zero.** 24 runs, five entry points, two auth states, two
+batches hours apart, one unchanged build: `454,911 B` every single time. That makes initial requested
+JS a structural assertion wearing a number, and the only startup figure on this page worth gating on.
+
+**Times here cannot see a few percent, and it is not close.** A second batch on the *same* build,
+with the box's load average at 115, moved the reader route's median TTRP from **2,735 ms to
+10,784 ms**. On loopback the whole 445 kB transfers in 137–242 ms, so a 2.5% change in it is four to
+six milliseconds — three orders of magnitude under that. The box also produced only 5–15 frames a
+second, so a frame-based timestamp is quantised at 70–200 ms before any of the above. **Quote the
+2,505–10,984 ms spread whenever you report a startup timing**, so nobody mistakes silence for a null
+result.
+
+Two traps this turned up:
+
+- **`vite preview` gzips on GET but not on HEAD.** `curl -I` reports `Content-Length: 1490905` and
+  no `Content-Encoding`; the GET delivers 445,506 bytes. Trusting the HEAD reports emitted size as
+  wire size and inflates every saving by about 3×. The script records `content-encoding` per
+  response and prints it.
+- **A 200 on an old chunk hash does not mean the server is stale.** `curl` for a *previous* build's
+  `main-*.js` answers **200** — because the SPA fallback serves `index.html` for anything it does not
+  recognise, `Content-Type: text/html`. A freshness check by status code passes on a genuinely stale
+  server too. Check the entry hash in the served HTML, and the content type.
+- **`/read/constitution` is not readable on this box** — signed in as the seeded
+  `dev-admin@spideryarn.local` it answers *"This document isn't shared"*. Startup runs use
+  `/read/scaling-hypothesis` (public, 12,646 words, 186 rows). Two runs on different slugs are not
+  comparable.
+
+### What lazy-loading /admin and /design was actually worth
+
+[260905i](../plans/260905i-lazy-load-admin-and-design-routes.md), A4 of the architecture review.
+Initial requested JS, gzip, from the build:
+
+**Wire bytes**, three runs each, cache disabled, byte-identical in every run:
+
+| Route | before | after | Δ |
+|---|---:|---:|---:|
+| `/` signed out | 2 reqs, 454,911 B | 4 reqs, 448,770 B | **−6,141 B (−1.35%)** |
+| `/` signed in (shelf) | 2 reqs, 454,911 B | 4 reqs, 448,770 B | **−6,141 B (−1.35%)** |
+| `/read/scaling-hypothesis` | 2 reqs, 454,911 B | 4 reqs, 448,770 B | **−6,141 B (−1.35%)** |
+| `/design` | 2 reqs, 454,911 B | 5 reqs, 455,470 B | **+559 B** |
+| `/admin` | 2 reqs, 454,911 B | 5 reqs, 455,246 B | **+335 B** |
+
+**6,141 wire bytes, 1.35%** — and three things in that table matter more than the headline.
+
+**Do not read it as "main shrank from 1,490 kB to 1,101 kB".** The split gave rolldown new splitting
+points, so what `main` now shares with the two lazy chunks was hoisted into two **new shared
+chunks** — `supabase-*` and `useNow-*` — that `main` then imports *statically*. The trace shows all
+three issued within a millisecond of each other. They are startup requests, and quoting `main` alone
+would claim a 26% win that does not exist.
+
+**Raw bytes fell 33,231 and only 6,141 of that survived gzip.** Four chunks compress against four
+dictionaries. That is the whole reason the realised saving came in at 1.35% against the 2.5% an
+emitted-size *deletion* spike had predicted — a deletion never pays the split's compression cost. If
+anyone later "corrects" 1.35% upward from the raw figure, this paragraph is why they should not.
+
+**The two lazy routes now cost slightly more**, +559 B and +335 B, because they fetch a fifth chunk.
+That is the right trade and it belongs in the record beside the win.
+
+**This was not landed as a speed improvement and should not be cited as one.** It was landed as a
+boundary: [`tests/eager-client-graph.test.ts`](../../tests/eager-client-graph.test.ts) walks the
+static import closure from `boot.tsx`/`main.tsx` and fails if admin or design code is in it, **or if
+the two sides start sharing a module nobody has signed off** — so the next thing added to the
+administrator's table cannot arrive in every reader's startup unnoticed. That second clause is the
+one that makes the sentence true: a fixed list of six file names would have passed a *new* admin
+module imported eagerly, which is exactly how the guard was attacked and exactly how it would have
+failed in six months' time.
+Two incidental results worth knowing: the `[INEFFECTIVE_DYNAMIC_IMPORT] src/web/lib/supabase.ts`
+line is gone from the build, and the Supabase SDK is now a separately cacheable chunk.
+
+**And the ceiling for the rest of it, measured so nobody has to guess.** Stubbing *every* secondary
+route — Landing, Features, Pricing, Contact, Privacy, Public shelf, Not-found, Add, Profile, Admin,
+Design — to `() => null` and rebuilding gives 420.76 kB gzip against the 457.53 kB baseline. So the
+whole secondary-route surface is worth **8%**, and the other 92% is the reader, the shelf and the
+modes, which A4 requires to stay eager. Anyone hoping route splitting will halve this bundle should
+start from that number.
+
 ## What we still do not know
 
 Said plainly, because the fixes above are all real and none of them has been shown to be *the* 5.5%:
@@ -1128,6 +1225,107 @@ Said plainly, because the fixes above are all real and none of them has been sho
   and parsing tokens for a panel that is gone. Conditional on having started work rather than a
   cost at rest, which is why it is here and not above. `useComments` needs care: its delete race
   deliberately requires reading through to `done` ([comments.md](comments.md)).
+
+## The annotation pipeline, 2026-09-06 — measured, cut, and it did not fix the click
+
+The A7 stage of the architecture review
+([260905e](../plans/260905e-main-app-architecture-review.md#a7-reduce-annotation-computation-before-changing-the-document-renderer))
+asked whether the marks are worth optimising. Full working, every command, every review:
+[260905i](../plans/260905i-measure-annotation-computation-before-optimising-it.md).
+
+**The instrument is new**: [`src/web/annotation-cost.ts`](../../src/web/annotation-cost.ts) counts
+and times six sites — `renderedText`, `resolveMark`, `annotateHtml`, `addZoomHandles`, and the
+`marksByBlock` and `proseHtml` memos that contain them — and
+[`scripts/measure-annotation.ts`](../../scripts/measure-annotation.ts) drives the gestures. It has
+**three modes**, and the middle one exists because of a measurement error worth knowing: leaf timers
+add over a thousand `performance.now()` reads *inside* `proseHtml`'s own interval on a 551-block
+article, against an 8ms threshold, and they inflate in exactly the direction that argues for
+optimising. So `"counts"` runs the two memo timers and counts the leaves **without reading a clock**;
+`"full"` is a separate diagnostic whose absolute numbers are explicitly not the decision. **The six
+numbers overlap — the memos contain the leaves — and summing them means nothing.**
+
+### What it cost, and what share that was
+
+Production build, `vite preview`, bundle hash checked, Playwright against system Chrome,
+`replication-crisis-spya-hrjamq` at 551 blocks with 20 glossary terms. Median of warmed repetitions.
+
+| gesture | end-to-end | attributable to annotation |
+|---|---:|---:|
+| press a glossary term | 285 ms | 29.9 ms |
+| open a comment | 232 ms | 30.4 ms |
+| close a comment | 211 ms | 24.9 ms |
+| one keystroke in the find box | 33 ms | 0.00 ms |
+| hover two rows | 67 ms | 0.00 ms |
+
+**Annotation was 10–14% of the gesture.** Over its 8ms budget by 3–4×, so worth fixing — and not
+remotely the whole story. The instrument establishes only that the other ~86% falls *outside* those
+two memos; it likely includes React commit, the live DOM's own parse, style, layout, paint and the
+geometry reads, but this page has not proved that and neither had an earlier draft that asserted it.
+
+### The waste, and what removed it
+
+A glossary press called `addZoomHandles` **551 times** — including on the ~455 blocks carrying no
+mark at all, whose html cannot have changed — and `annotateHtml` **96 times**, to move one
+underline. The `{ __html }` identity cache from
+[2026-09-03](#scrolling-rebuilt-the-whole-article-2026-09-03) already stopped React *rewriting* that
+DOM; it never stopped us *computing* it first. That distinction was the whole of A7.
+
+Two changes, in [`TableView.tsx`](../../src/web/TableView.tsx):
+
+- **Anchor resolution is keyed on the anchors**, not on the comment object or the array.
+  [`useComments.ts`](../../src/web/useComments.ts) § the `delta` branch replaces both on **every
+  streamed token** while `blockId`, `quote` and `start` are untouched, so identity is the wrong key.
+  `open` then goes on in a second pass that returns the previous per-block array **by identity** for
+  every uninvolved block. Its value is not the parses it saves — five comments cost five — it is
+  that per-block array identity survives a selection change, which is what lets the next memo reuse.
+- **`proseHtml` keeps each block's inputs beside its output** and skips a block whose inputs all
+  match, calling neither `annotateHtml` nor `addZoomHandles`. `hitMarks()` in
+  [`search-hits.ts`](../../src/web/search-hits.ts) had to be split first, because it baked `open`
+  into fresh arrays for every hit-bearing block whenever the pressed result changed.
+
+### The result, A/B in one session
+
+Two builds, two ports, hashes checked distinct, same workload, six repetitions. **The call counts are
+deterministic — identical on every repetition — which is why they, not the milliseconds, are the
+evidence on a box a dozen agents share.**
+
+| comment close | before | after |
+|---|---:|---:|
+| `addZoomHandles` | 551 | **1** |
+| `annotateHtml` | 97 | **1** |
+| `renderedText` / `resolveMark` | 18 / 18 | **0 / 0** |
+| attributable | 34.6 ms | **0.80 ms** |
+
+A glossary press now costs in proportion to the blocks that term is actually in (3–46 across six
+terms) rather than a flat 97/551 whichever term was pressed.
+
+**And end-to-end barely moved** — 211.7ms → 198.6ms on a comment close. That is the honest headline
+and it follows from the 10–14% above. **If you came here because clicking feels sluggish, this is not
+your fix**; see [Still open](#still-open-ranked-with-citations) item 4 and
+[§ What is left](#what-is-left-and-it-is-a-design-decision-rather-than-a-patch), where three passes
+still measure the whole article on every mode switch.
+
+### Two traps this round, both of which produced a confident wrong number
+
+- **A leaf timer distorts the split it explains.** The `"full"` diagnostic puts two clock reads
+  around each call, so 551 `addZoomHandles` calls carry 1,102 reads against 96 `annotateHtml` calls'
+  192. Repetition does not remove a systematic bias. The *call counts* are unperturbed and carry the
+  argument on their own; the ms split does not.
+- **A dispatch at a detached node is a successful call that does nothing.** The harness grabbed a
+  `mark[data-comment]` before clicking close — which rewrites that block's html and detaches it — so
+  alternate repetitions measured a gesture that never happened and recorded `0`. The vector was
+  `[25.6, 0, 22.4, 0, 35.3, 0]` **on both builds of the A/B**, which is how it nearly passed for a
+  property of the code. Re-query at dispatch, and make each gesture declare an observable effect so a
+  no-op cannot be reported as a fast one.
+  [silent-success.md](../reusable/silent-success.md), again.
+- **And then the same bug again, in the controls, found while fixing the first.** `input.value += "x"`
+  updates React's own value tracker, so `onChange` very likely never fired — meaning the find-box
+  keystroke's `0.00ms` above may be the cost of a keystroke that never reached the app. Hover was
+  dispatched without `pointerType: "mouse"`, which is the only kind `useHoverCard` acts on. Both are
+  now driven properly, and **the two control figures in the table above should be treated as
+  unverified**. The conviction does not rest on them — it rests on gestures whose counters moved by
+  hundreds — but "the flat controls prove the page was live" was a weaker statement than it looked,
+  because a gesture that never reaches the app is also flat.
 
 ## Where the pieces are
 

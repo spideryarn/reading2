@@ -240,7 +240,7 @@ Historical SQL, snapshots and reconciliation entries keep `"toc"` for ever. Only
 
 **4. Filesystem interruption markers go invisible, and the consequence is a silent skip.** The marker
 path embeds the step name — `steps/<step>.running`
-([`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts):431), read at :637. **There are two
+(`src/store/artifacts-fs.ts`:431), read at :637. **There are two
 `toc.running` markers locally**, both on articles that have all three outputs. After the rename
 `interrupted("hierarchy")` sees no marker, `stepIsDone` sees every output, and — because this step
 deliberately has no freshness stamp — **returns true for work explicitly marked interrupted**.
@@ -298,7 +298,7 @@ under-billed it. The database agent's framing is better and is adopted here:
 > complete, with nothing saying so.**
 
 The mechanism, verified: the marker's path embeds the step name
-([`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts):431), and
+(`src/store/artifacts-fs.ts`:431), and
 `store.interrupted(...)` is the **opening line** of `stepIsDone`
 ([`src/pipeline.ts`](../../src/pipeline.ts):840) — before `has`, before the stamp. Rename the step and
 that first guard stops finding anything. It does not fail; it returns "not interrupted" and falls
@@ -350,7 +350,7 @@ careful `sed`.** Every row verified here.
 | `ai_calls.purpose` | the `Task` union member | :1588, from [`hierarchy.ts`](../../src/hierarchy.ts):1461 via [`ai-spend.ts`](../../src/ai-spend.ts):750 |
 | `checkpoints.namespace` | `'toc-labels'`, + the `checkpoints_namespace` CHECK | :2219, twin at [`checkpoints.ts`](../../src/store/checkpoints.ts):137 |
 | `jobs.steps` | `JobStep[]` — `{"name":"toc"}` | :1133. **And `jobs.work_key`, which hashes it** |
-| filesystem markers | `steps/toc.running` | [`artifacts-fs.ts`](../../src/store/artifacts-fs.ts):431. **2 exist locally** |
+| filesystem markers | `steps/toc.running` | `artifacts-fs.ts`:431. **2 exist locally** |
 | filesystem ledger | `data/_ai-calls.jsonl` | both fields, `src/store/ai-calls-fs.ts:70` (deleted 2026-09-05) |
 | artefact metadata | `PROMPT_VERSION = "toc/2"` | [`hierarchy.ts`](../../src/hierarchy.ts):57 → `tree.json`, and `labels.structureVersion` |
 | thrown + reader-facing text | `"run the toc step first"`, `"re-run toc"` | correct **today**; flips with the value, not before |
