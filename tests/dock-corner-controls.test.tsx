@@ -191,6 +191,7 @@ const OWNED: Article = {
   tree: TREE,
   assets: undefined,
   meta: { slug: SLUG, title: "A piece", byline: "Somebody" },
+  navLabelStatus: "ready",
 };
 
 const SHARED: PublicArticle = {
@@ -198,6 +199,7 @@ const SHARED: PublicArticle = {
   blocks: BLOCKS,
   tree: TREE,
   assets: undefined,
+  navLabelStatus: "ready",
   comments: [],
   searches: [],
 };
