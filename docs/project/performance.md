@@ -1226,6 +1226,107 @@ Said plainly, because the fixes above are all real and none of them has been sho
   cost at rest, which is why it is here and not above. `useComments` needs care: its delete race
   deliberately requires reading through to `done` ([comments.md](comments.md)).
 
+## The annotation pipeline, 2026-09-06 — measured, cut, and it did not fix the click
+
+The A7 stage of the architecture review
+([260905e](../plans/260905e-main-app-architecture-review.md#a7-reduce-annotation-computation-before-changing-the-document-renderer))
+asked whether the marks are worth optimising. Full working, every command, every review:
+[260905i](../plans/260905i-measure-annotation-computation-before-optimising-it.md).
+
+**The instrument is new**: [`src/web/annotation-cost.ts`](../../src/web/annotation-cost.ts) counts
+and times six sites — `renderedText`, `resolveMark`, `annotateHtml`, `addZoomHandles`, and the
+`marksByBlock` and `proseHtml` memos that contain them — and
+[`scripts/measure-annotation.ts`](../../scripts/measure-annotation.ts) drives the gestures. It has
+**three modes**, and the middle one exists because of a measurement error worth knowing: leaf timers
+add over a thousand `performance.now()` reads *inside* `proseHtml`'s own interval on a 551-block
+article, against an 8ms threshold, and they inflate in exactly the direction that argues for
+optimising. So `"counts"` runs the two memo timers and counts the leaves **without reading a clock**;
+`"full"` is a separate diagnostic whose absolute numbers are explicitly not the decision. **The six
+numbers overlap — the memos contain the leaves — and summing them means nothing.**
+
+### What it cost, and what share that was
+
+Production build, `vite preview`, bundle hash checked, Playwright against system Chrome,
+`replication-crisis-spya-hrjamq` at 551 blocks with 20 glossary terms. Median of warmed repetitions.
+
+| gesture | end-to-end | attributable to annotation |
+|---|---:|---:|
+| press a glossary term | 285 ms | 29.9 ms |
+| open a comment | 232 ms | 30.4 ms |
+| close a comment | 211 ms | 24.9 ms |
+| one keystroke in the find box | 33 ms | 0.00 ms |
+| hover two rows | 67 ms | 0.00 ms |
+
+**Annotation was 10–14% of the gesture.** Over its 8ms budget by 3–4×, so worth fixing — and not
+remotely the whole story. The instrument establishes only that the other ~86% falls *outside* those
+two memos; it likely includes React commit, the live DOM's own parse, style, layout, paint and the
+geometry reads, but this page has not proved that and neither had an earlier draft that asserted it.
+
+### The waste, and what removed it
+
+A glossary press called `addZoomHandles` **551 times** — including on the ~455 blocks carrying no
+mark at all, whose html cannot have changed — and `annotateHtml` **96 times**, to move one
+underline. The `{ __html }` identity cache from
+[2026-09-03](#scrolling-rebuilt-the-whole-article-2026-09-03) already stopped React *rewriting* that
+DOM; it never stopped us *computing* it first. That distinction was the whole of A7.
+
+Two changes, in [`TableView.tsx`](../../src/web/TableView.tsx):
+
+- **Anchor resolution is keyed on the anchors**, not on the comment object or the array.
+  [`useComments.ts`](../../src/web/useComments.ts) § the `delta` branch replaces both on **every
+  streamed token** while `blockId`, `quote` and `start` are untouched, so identity is the wrong key.
+  `open` then goes on in a second pass that returns the previous per-block array **by identity** for
+  every uninvolved block. Its value is not the parses it saves — five comments cost five — it is
+  that per-block array identity survives a selection change, which is what lets the next memo reuse.
+- **`proseHtml` keeps each block's inputs beside its output** and skips a block whose inputs all
+  match, calling neither `annotateHtml` nor `addZoomHandles`. `hitMarks()` in
+  [`search-hits.ts`](../../src/web/search-hits.ts) had to be split first, because it baked `open`
+  into fresh arrays for every hit-bearing block whenever the pressed result changed.
+
+### The result, A/B in one session
+
+Two builds, two ports, hashes checked distinct, same workload, six repetitions. **The call counts are
+deterministic — identical on every repetition — which is why they, not the milliseconds, are the
+evidence on a box a dozen agents share.**
+
+| comment close | before | after |
+|---|---:|---:|
+| `addZoomHandles` | 551 | **1** |
+| `annotateHtml` | 97 | **1** |
+| `renderedText` / `resolveMark` | 18 / 18 | **0 / 0** |
+| attributable | 34.6 ms | **0.80 ms** |
+
+A glossary press now costs in proportion to the blocks that term is actually in (3–46 across six
+terms) rather than a flat 97/551 whichever term was pressed.
+
+**And end-to-end barely moved** — 211.7ms → 198.6ms on a comment close. That is the honest headline
+and it follows from the 10–14% above. **If you came here because clicking feels sluggish, this is not
+your fix**; see [Still open](#still-open-ranked-with-citations) item 4 and
+[§ What is left](#what-is-left-and-it-is-a-design-decision-rather-than-a-patch), where three passes
+still measure the whole article on every mode switch.
+
+### Two traps this round, both of which produced a confident wrong number
+
+- **A leaf timer distorts the split it explains.** The `"full"` diagnostic puts two clock reads
+  around each call, so 551 `addZoomHandles` calls carry 1,102 reads against 96 `annotateHtml` calls'
+  192. Repetition does not remove a systematic bias. The *call counts* are unperturbed and carry the
+  argument on their own; the ms split does not.
+- **A dispatch at a detached node is a successful call that does nothing.** The harness grabbed a
+  `mark[data-comment]` before clicking close — which rewrites that block's html and detaches it — so
+  alternate repetitions measured a gesture that never happened and recorded `0`. The vector was
+  `[25.6, 0, 22.4, 0, 35.3, 0]` **on both builds of the A/B**, which is how it nearly passed for a
+  property of the code. Re-query at dispatch, and make each gesture declare an observable effect so a
+  no-op cannot be reported as a fast one.
+  [silent-success.md](../reusable/silent-success.md), again.
+- **And then the same bug again, in the controls, found while fixing the first.** `input.value += "x"`
+  updates React's own value tracker, so `onChange` very likely never fired — meaning the find-box
+  keystroke's `0.00ms` above may be the cost of a keystroke that never reached the app. Hover was
+  dispatched without `pointerType: "mouse"`, which is the only kind `useHoverCard` acts on. Both are
+  now driven properly, and **the two control figures in the table above should be treated as
+  unverified**. The conviction does not rest on them — it rests on gestures whose counters moved by
+  hundreds — but "the flat controls prove the page was live" was a weaker statement than it looked,
+  because a gesture that never reaches the app is also flat.
+
 ## Where the pieces are
 
 **The instruments**
