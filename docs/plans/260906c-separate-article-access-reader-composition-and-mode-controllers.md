@@ -289,16 +289,53 @@ behind one mode, owning `?remember=` and `?thread=` in one `useQueryStates`), `Q
 `ConversationKind`, `isConversationThread` — all into `modes/conversation/ConversationModes.tsx`,
 one file, because `RememberBand` renders `ConversationBand`.
 
-Deliberately last, and the point is what it has to preserve that a list-shaped mode does not: the
-draft, the send-new URL update, anchored conversations, detached operation handling and the
-live-conversation lifecycle. **Neither publishes passages**, so nothing in stage 4 touches them — that
-is the evidence the design does not assume every mode is a list, and it gets written down here rather
-than asserted.
+Deliberately last, because it is the test of whether the design assumed something false. **Built,
+2026-09-06**, and here is what it found.
 
-`tests/remember-url-rules.test.tsx` and `tests/conversation-band-send-new.test.tsx` are repointed in
-the same stage.
+Every one of the eight already moved is the same machine: fetch an artefact, resolve it against
+blocks, publish `Found[]` up, read and clear a key. This one holds *conversation* state, and none of
+it is that shape:
 
-Done when: `App.tsx` holds no feature controller at all.
+- **A draft that outlives a render.** `focusNonce` is a counter rather than a boolean, because
+  *start another new one* has to be distinguishable from the last one; `picked` and `stance` are
+  component state kept deliberately out of the URL. A list-shaped mode has no state that changes
+  nothing on screen.
+- **The send-new URL update.** `onSendNew` mints an id locally, writes it into `?thread=` *before the
+  request lands*, and corrects it if the server disagrees. Nothing in the eight writes a parameter
+  from a value it invented.
+- **`?thread=` is owned inside the band**, not in `Reader` — the opposite of a list mode, where
+  `Reader` holds the key (`openOccurrence`, `quoteOpenKey`, `openTimelineKey`) and passes it down.
+- **Detached operations**: retry, edit, stop, recovering, error, with identities that survive a
+  remount. No list mode has an in-flight write to recover.
+- **A resource with a lifetime.** `useLiveConversation` is owned *above* the keyed `ChatPanel`, with
+  a `hangUp` effect ending the session when `?thread=` moves away. This is the only mode whose
+  component boundary exists because something — a peer connection, an open microphone — has to be
+  let go of.
+- **Two colliding parameters in one navigation.** `RememberBand` is the only place in the client that
+  batches `?remember=` and `?thread=` into one `useQueryStates`, and it exists *because* they collide.
+- **Two `key=`s that are correctness, not tidiness**: `key={mode}` on `ConversationBand` in `Reader`,
+  and `key="remember-recall"` inside `RememberBand`. Per-visit state must not survive chat → remember
+  or Quiz → Recall, and React would reuse the instance across both positions. **Stage 4b's `band()`
+  switch must preserve the outer one.**
+
+**Nothing resisted the move**, and it needed *no* `export` edits at all — both bands were already
+exported — so it is the only batch whose moved text is byte-identical without exception. The one-file
+decision paid immediately: `modes/remember/` → `modes/chat/` would have been exactly the edge stage
+3's rule 2 fails on, so Sol's F2 is confirmed by construction rather than by reading.
+
+**Neither publishes passages**, verified rather than assumed: `onFound`, `onOpenKey`, `onOpenHit` and
+`Found` appear nowhere in the new file, and `chat` and `remember` are not named in the `passages`
+ternary at all — they are two of the nine modes that inherit Search's results by falling through.
+So stage 4 touches the selection expression in `Reader` and this file not at all. That is the
+evidence the design does not assume every mode is a list.
+
+`tests/remember-url-rules.test.tsx` and `tests/conversation-band-send-new.test.tsx` were repointed and
+both proved by mutation. `tests/last-view.test.ts` needed no repoint — it discovers `src/web`
+**recursively**, so it did not have the hole `referee-copy-is-about-the-model` had — but its comment
+said "in App.tsx", and that clause was corrected.
+
+Done when: `App.tsx` holds no feature controller at all. **It now exports exactly `App`**, and is
+3,599 lines, down from 5,920.
 
 ### Stage 3 — `Reader` and the position hooks, then the access unit
 

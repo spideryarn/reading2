@@ -64,7 +64,9 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
-const { ConversationBand } = await import("../src/web/App.js");
+const { ConversationBand } = await import(
+  "../src/web/modes/conversation/ConversationModes.js"
+);
 
 const SLUG = "a-piece";
 
