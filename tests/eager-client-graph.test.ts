@@ -45,7 +45,7 @@
  * guard, and it would drop the edge that matters on exactly the day somebody
  * introduces it.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -481,6 +481,68 @@ const SHARED_WITH_READER = [
   "src/web/router.ts",
   "src/web/useNow.ts",
 ];
+
+/**
+ * **The mode controllers, discovered rather than listed — and they are the
+ * other side of this file's boundary.**
+ *
+ * `/admin` and `/design` must stay *out* of the reader's first download; the
+ * reading view's own code must stay *in* it, and until 2026-09-06 nothing said
+ * so. The positive controls above name generic modules — `main.tsx`,
+ * `Library.tsx`, `supabase.ts` — so making `DebateMode.tsx` a `React.lazy`
+ * boundary left every assertion in this file green while breaking the
+ * documented contract: *cached JSON cannot make an unloaded chunk execute, and
+ * in-tab offline navigation depends on that* (docs/project/web-client.md
+ * § `LazyPage.tsx`, and 260905i's A4). GPT Sol, 2026-09-06, F19.
+ *
+ * **Every `.tsx` under `src/web/modes/`, not `*Mode.tsx`.** A naming convention
+ * is a second list beside the data and this one already has a hole in it:
+ * `ConversationModes.tsx` is plural and would not have matched. The directory
+ * is the fact; what a file inside it is called is not.
+ */
+const MODES = path.join(WEB, "modes");
+
+const MODE_CONTROLLERS = readdirSync(MODES, { recursive: true, encoding: "utf8" })
+  .filter((f) => f.endsWith(".tsx"))
+  .map((f) => path.join(MODES, f))
+  .sort();
+
+describe("the reading view's modes are code a reader already has", () => {
+  it("found the mode controllers at all", () => {
+    /* The walk that finds nothing satisfies both assertions below.
+       docs/reusable/silent-success.md. */
+    expect(MODE_CONTROLLERS.map(rel), "no mode controllers under src/web/modes/").not.toEqual([]);
+    expect(MODE_CONTROLLERS.map(rel)).toContain("src/web/modes/debate/DebateMode.tsx");
+  });
+
+  it("has every one of them in the reader's first download", () => {
+    const missing = MODE_CONTROLLERS.filter((f) => !closure.files.has(f)).map(rel);
+    expect(
+      missing,
+      `${missing.length} mode controller(s) are not in the reader's eager closure: ` +
+        `${missing.join(", ")}. A mode behind a lazy boundary is a mode an offline reader ` +
+        `cannot open, because cached JSON cannot make an unloaded chunk execute — ` +
+        `docs/project/web-client.md § LazyPage.tsx. If a mode is genuinely meant to be ` +
+        `lazy, that is a decision to take with Greg and to write into that doc first.`,
+    ).toEqual([]);
+  });
+
+  it("is reached by no dynamic import at all", () => {
+    /* The half the assertion above cannot see. A mode made lazy while some
+       other eager module still imports it stays in the closure and passes —
+       and then ships in both the eager bundle and a chunk. Any `import()`
+       naming a file under `src/web/modes/` is wrong whichever way the closure
+       reads. */
+    const dynamic = [...closure.dynamic]
+      .filter((d) => d.startsWith(`${MODES}${path.sep}`))
+      .map(rel)
+      .sort();
+    expect(
+      dynamic,
+      `a dynamic import() reaches ${dynamic.join(", ")}. Mode code is eager on purpose.`,
+    ).toEqual([]);
+  });
+});
 
 describe("the eager client graph", () => {
   it("parsed every file it walked", () => {

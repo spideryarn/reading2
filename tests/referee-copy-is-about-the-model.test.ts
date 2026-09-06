@@ -149,6 +149,23 @@ function clientComponents(dir: string): string[] {
   return out;
 }
 
+/**
+ * Every name this module **declares**, as opposed to imports.
+ *
+ * A `const` in the file and an `import` of the same name read identically at
+ * every use site, and only one of the two is text this scan can see — which is
+ * the hole `the band's own copy stays in the band's own file` below closes.
+ */
+function declaredNames(ast: AstNode): Set<string> {
+  const names = new Set<string>();
+  walkAst(ast, (node) => {
+    if (node.type !== "VariableDeclarator") return;
+    const name = (node.id as { name?: string } | undefined)?.name;
+    if (typeof name === "string") names.add(name);
+  });
+  return names;
+}
+
 /** `localName` → specifier, for every `import` in one module. */
 function importedNames(ast: AstNode): Map<string, string> {
   const found = new Map<string, string>();
@@ -257,6 +274,66 @@ describe("the list of surfaces is derived, and the derivation found something", 
        nested, so a walk that stopped at the top level goes red here instead of
        going quiet. */
     expect(REFEREE_SURFACES.filter((p) => p.split("/").length > 3).length).toBeGreaterThan(0);
+  });
+
+  it("the walker itself reaches the controller, and not merely something that renders it", () => {
+    /* **The assertion above is not mutation-sensitive on its own** — GPT Sol,
+       2026-09-06, F17. `REFEREE_SURFACES` already carries the seeded controller,
+       so swapping `clientComponents` back for the old flat `readdirSync` left
+       every structural floor here green: the nested path it counts was put
+       there by the seed, not found by the walk. This asks the walker the
+       question directly, with the seed out of the way. */
+    expect(clientComponents(WEB).map((full) => relative(ROOT, full))).toContain(
+      "src/web/modes/referee/RefereeMode.tsx",
+    );
+  });
+
+  it("resolves a specifier against the file that wrote it, not against src/web", () => {
+    /* The other half of the same finding, and it needs a specifier the old
+       resolver **cannot** answer. Every panel the band renders still sits at the
+       top of `src/web` under a unique basename, so basename-and-look-in-`src/web`
+       agreed with `localTarget` on all of them and swapping it back changed
+       nothing. `./RefereeMode.js` written from the controller is the case that
+       separates them: there is no `src/web/RefereeMode.tsx` for a basename to
+       find, as the second assertion says out loud — so the old resolver returns
+       null here and this one returns the controller. */
+    expect(localTarget(CONTROLLER, "./RefereeMode.js")).toBe(
+      "src/web/modes/referee/RefereeMode.tsx",
+    );
+    expect(
+      existsSync(join(WEB, "RefereeMode.tsx")),
+      "the calibration above is only a calibration while this file does not exist",
+    ).toBe(false);
+  });
+
+  /**
+   * **The band's own copy stays in the band's own file**, so that moving it out
+   * fails loudly rather than quietly.
+   *
+   * GPT Sol, 2026-09-06, F18. Both rules above discover `.tsx` and follow JSX
+   * components; neither follows an imported *value*. So `REFEREE_VIEW_TIP`
+   * moved into a `modes/referee/RefereeCopy.ts` and imported back would take
+   * four sentences a referee reads on hover out of the scan below with every
+   * count in this describe still green — a scan reporting clean about text it
+   * no longer reads (docs/reusable/silent-success.md).
+   *
+   * The cheap half of the fix, deliberately: pinning the two reader-visible
+   * `Record`s to the scanned file, rather than teaching the walk to follow
+   * local `.ts` copy modules. If a third one is ever wanted, it goes here — and
+   * if somebody genuinely wants the copy in a module of its own, that is a
+   * decision to make with the scan extended in the same commit.
+   */
+  it("keeps the band's reader-visible copy declared in the file that is scanned", () => {
+    const declared = declaredNames(BAND);
+    for (const record of ["REFEREE_VIEW_TIP", "REFEREE_VIEW_LABEL"]) {
+      expect(
+        declared.has(record),
+        `${record} is no longer declared in src/web/modes/referee/RefereeMode.tsx. It is ` +
+          `reader-visible copy, and importing it from a .ts module takes it out of the ` +
+          `null-result scan below without turning anything red. Keep it here, or extend the ` +
+          `scan to follow the module it moved to.`,
+      ).toBe(true);
+    }
   });
 
   it("finds files that exist and have something in them after the comments come off", () => {

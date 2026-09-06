@@ -145,6 +145,47 @@ describe("the site footer", () => {
 });
 
 /**
+ * **Every `.ts` and `.tsx` the browser loads, at any depth — one walk, shared by
+ * both source scans in this file.**
+ *
+ * There were two walks and they had drifted apart. The mount scan below became
+ * recursive on 2026-09-06, when the reading view moved into `src/web/reader/`
+ * and `src/web/article/`; the `ADMIN_EMAIL` scan at the foot of the file was
+ * left flat — and on that same day ten mode controllers left `App.tsx` for
+ * `src/web/modes/<feature>/`. Every one of them walked out of that guard, which
+ * went on reporting a clean tree because it was no longer pointed at the files
+ * (GPT Sol, 2026-09-06, F16; docs/reusable/silent-success.md). One collector is
+ * what stops the two answers diverging again: a directory either is in the
+ * browser's source tree or it is not, and neither scan gets its own opinion.
+ *
+ * `readdirSync(…, { recursive: true })` yields paths relative to `WEB`, so an
+ * entry reads `modes/referee/RefereeMode.tsx` and `sourceOf` joins it back on.
+ */
+const WEB = path.join(import.meta.dirname, "..", "src", "web");
+
+const CLIENT_FILES = readdirSync(WEB, { recursive: true, encoding: "utf8" }).filter(
+  (f) => f.endsWith(".ts") || f.endsWith(".tsx"),
+);
+
+const sourceOf = (file: string) => readFileSync(path.join(WEB, file), "utf8");
+
+describe("the walk both source scans are built on", () => {
+  it("reaches a mode controller two directories down", () => {
+    /* **The witness, named, because an empty walk answers every question below
+       correctly.** A count would not do: `length > 50` was true of the flat
+       walk as well, so it could never have caught the hole this collector
+       exists to close. `RefereeMode.tsx` is the file both guards were shown to
+       be blind to. */
+    expect(CLIENT_FILES).toContain(path.join("modes", "referee", "RefereeMode.tsx"));
+  });
+
+  it("found a client tree at all, rather than an empty directory", () => {
+    // docs/reusable/silent-success.md.
+    expect(CLIENT_FILES.length).toBeGreaterThan(50);
+  });
+});
+
+/**
  * **Which pages mount it, how many times, and which of them declare `here` —
  * as a source scan, and the reason it is one and what it is not.**
  *
@@ -169,21 +210,11 @@ describe("the site footer", () => {
  * is the one that has actually happened.
  */
 describe("the pages that mount it", () => {
-  const WEB = path.join(import.meta.dirname, "..", "src", "web");
-
-  const sourceOf = (file: string) => readFileSync(path.join(WEB, file), "utf8");
-
   /**
    * `<SiteFooter …>` occurrences per `src/web/**\/*.tsx`, files with none omitted.
-   *
-   * **Recursive since 2026-09-06**, when the reading view moved into
-   * `src/web/reader/` and `src/web/article/`. A flat `readdirSync` would have
-   * gone on passing the `/read/` exclusion below by simply not looking at the
-   * files it is about — the same hole `referee-copy-is-about-the-model` had.
    */
   const mounts = new Map(
-    readdirSync(WEB, { recursive: true, encoding: "utf8" })
-      .filter((f) => f.endsWith(".tsx"))
+    CLIENT_FILES.filter((f) => f.endsWith(".tsx"))
       .map((f) => [f, sourceOf(f).match(/<SiteFooter[\s/>]/g)?.length ?? 0] as const)
       .filter(([, n]) => n > 0)
       .sort(),
@@ -267,22 +298,14 @@ describe("the pages that mount it", () => {
  * request (`AdminPage.tsx` has one) is not a failure.
  */
 describe("the one address a reader is shown", () => {
-  const WEB = path.join(import.meta.dirname, "..", "src", "web");
-
-  const browserFiles = readdirSync(WEB).filter((f) => f.endsWith(".ts") || f.endsWith(".tsx"));
-
   it("is never the administrator's, anywhere the browser loads", () => {
-    const reaching = browserFiles.filter((f) =>
-      /import\s*\{[^}]*\bADMIN_EMAIL\b[^}]*\}\s*from\s*["'][^"']*admin\.js["']/.test(
-        readFileSync(path.join(WEB, f), "utf8"),
-      ),
+    /* `CLIENT_FILES` rather than a walk of its own — see its header. This scan
+       was flat until 2026-09-06, so a mode controller under `modes/` could
+       import `ADMIN_EMAIL` and never be looked at. The walk is checked up
+       there, once, instead of each scan restating that it read some files. */
+    const reaching = CLIENT_FILES.filter((f) =>
+      /import\s*\{[^}]*\bADMIN_EMAIL\b[^}]*\}\s*from\s*["'][^"']*admin\.js["']/.test(sourceOf(f)),
     );
     expect(reaching).toEqual([]);
-  });
-
-  it("found files to look at, rather than matching nothing", () => {
-    /* The filter above is the kind that passes by reading zero files.
-       docs/reusable/silent-success.md. */
-    expect(browserFiles.length).toBeGreaterThan(50);
   });
 });
