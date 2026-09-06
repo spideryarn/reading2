@@ -716,6 +716,17 @@ const REVISION_READ_POLICY: Record<
   extractedHtml: {},
   stampedHtml: {},
   labels: {},
+  /* **The reading view, and only the reading view.** It is not an artefact and
+     nothing about it is a freshness question, so `metadata` has no use for it —
+     `isCurrent` asks "would we write this again today" of a *step*, and this
+     column answers a different question about the same labels. The library shows
+     four ticks and this is not a fifth.
+
+     The `article` grant is not optional: without it every reader gets a run of
+     blank leaf cells the moment stage 2 starts writing `pending`, which is the
+     regression this whole stage exists to prevent (src/web/nav-labels.ts). It is
+     one short text value on a read that already pulls every block. */
+  navLabelStatus: { article: "value" },
   requestedUrl: {},
   /* **Not on any read**, and deliberately not on `rawSource`. It is the
      *origin's* Content-Type header, and the response's is decided from
@@ -860,6 +871,10 @@ export const REVISION_PROJECTIONS = {
     tree: articleRevisions.tree,
     arc: articleRevisions.arc,
     assets: articleRevisions.assets,
+    /* Not an artefact — where the paragraph nav labels are in their life, so
+       the client can withhold that layer rather than draw it empty. See the
+       policy entry above, and src/db/schema.ts § `navLabelStatus`. */
+    navLabelStatus: articleRevisions.navLabelStatus,
   },
   /**
    * The shelf. **Five cached scalars and five booleans, and not one document.**
@@ -2265,6 +2280,17 @@ const rawPgArticleReader: ArticleReader = {
       tree: tree as Tree,
       ...(arc ? { arc: arc as Arc } : {}),
       assets,
+      /* **Named, and never spread in from the row**, for the same reason
+         `assets` above is: the key is required on `Article` precisely so that
+         leaving this line out is a type error rather than a reader who gets a
+         column of blank cells (src/types.ts § `navLabelStatus`).
+
+         No cast and no `??`: the column is `not null` with a CHECK and drizzle
+         carries the `$type`, so this is already the union. The runtime guard for
+         a value the CHECK somehow let past lives at the one boundary that can
+         act on it — `paragraphLabelsReady` in src/web/nav-labels.ts treats
+         anything but `ready` as *withhold*, which fails in the safe direction. */
+      navLabelStatus: found.revision.navLabelStatus,
       /* **Free, off the row `shelfFrom` is already reading**, and the reason
          the masthead's sharing mark costs no request: `currentRevision`
          selects `articles` whole.

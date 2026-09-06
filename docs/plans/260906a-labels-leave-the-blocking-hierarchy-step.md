@@ -1,6 +1,6 @@
 # The labels leave the blocking step
 
-**Status: reviewed, stages agreed, stage 1 in progress.** Written 2026-09-06, out of
+**Status: reviewed, stages agreed, stage 1 built (see [§ What stage 1 landed](#stage1)).** Written 2026-09-06, out of
 [260904d](260904d-deepen-fat-sections.md) § *Question 5*, where a measured run found that the thing
 blowing the ingest deadline was not the feature that plan was building.
 
@@ -117,10 +117,19 @@ ideas, notes or diagrams. Surveyed 2026-09-06, it reaches a reader through exact
 | spine hover card ([`Spine.tsx`](../../src/web/Spine.tsx):912) | **yes**, but hover-only | ≤ 5 (`MAX_CHILDREN`) | falls to `title`, then `""`; empty rows are filtered out, so the row **disappears** |
 | outline mode rung 5 ([`outline.ts`](../../src/web/outline.ts):118) | opt-in mode, current section only | ≤ 8 (`PARAGRAPH_CAP`) | `rowText` returns `null`, **row not drawn** |
 | `Paragraphs` column ([`TableView.tsx`](../../src/web/TableView.tsx):985) | opt-in, never auto-fit | whole article in the DOM | `{navLabel ?? title}` → **a visible blank cell** |
-| outline mode's leaf column | it *is* the view | whole article | as above |
+| outline mode's leaf column | ~~it *is* the view~~ **unreachable** | — | — |
 
 Default mode is `plain` ([`src/modes.ts`](../../src/modes.ts):179) and draws none of it. Across the
 eight articles in `data/`, 853 of 888 depth-3 nodes carry a label (~96%).
+
+**The fourth row of that table was wrong and is struck through above.** The table's own outline mode
+— `showText` false, the leaf column as the whole view — cannot be reached: nothing sets that flag any
+more, and `?text=0` is rewritten at boot to `?mode=outline`, which is the *band*
+([`OutlinePanel.tsx`](../../src/web/OutlinePanel.tsx)) and a different feature.
+[browser-testing.md](../project/browser-testing.md) already said so; this survey did not check it, and
+stage 1 built a whole arm of the client against a state no reader can be in before a browser found
+out. So the `Paragraphs` column reaches a reader by exactly two routes — the pill, and a `?cols=`
+naming the leaf depth — and both are opt-in.
 
 **The one visible regression risk is the blank cell**, and [`tree.ts`](../../src/web/tree.ts):161
 already documents the hazard — "a run of forty blank leaf cells".
@@ -348,6 +357,45 @@ Checkpoint rows survive the split unchanged — `batchFingerprint` contains no s
 **provided the checkpoint namespace stays `hierarchy-labels`.** Renaming it would invalidate every
 stored row and buy the next run nothing. My own guess said the same; the difference is that this one
 names the condition under which it stops being true.
+
+## What stage 1 landed <a id="stage1"></a>
+
+Built 2026-09-06. **No behaviour change**: everything writes `ready`, which is what every existing
+revision already is.
+
+- **The column.** `article_revisions.nav_label_status`, `text not null default 'ready'` with a CHECK,
+  in [`drizzle/20260906070017_nav_label_status.sql`](../../drizzle/20260906070017_nav_label_status.sql).
+  Applied to the local database; **222 existing rows all read `ready`**, which is true of them — the
+  `hierarchy` step could not finish without producing the labels. Nothing was backfilled and no null
+  exists to be read as a fourth state. `revision_step_runs_step` is untouched: this adds no step.
+- **The type.** `NavLabelStatus` in [`src/types.ts`](../../src/types.ts), beside a note on
+  `TreeNode.navLabel` saying what an absence there does and does not mean.
+- **The write, and it is the seam stage 2 edits rather than invents.** `writeArtefacts`
+  ([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts)) sets the status in the same `UPDATE` as the
+  artefacts whenever a step writes `labels` — keyed on the **artefact**, not on the step's name,
+  which is the half stage 2 changes. Atomic with the artefact, so a revision cannot publish saying
+  `ready` over labels that did not land.
+- **`carry` in `REVISION_CARRY_POLICY`**, beside `tree` and `labels`.
+- **Both DTOs**, each with the enum and nothing else — no reason, no provider message.
+- **The client**, in [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts): one rule, `=== "ready"`
+  so an unrecognised value withholds rather than draws. The `Paragraphs` pill is *replaced by* the
+  sentence rather than disabled with it in a tooltip (a touch reader cannot open one); Outline's rung
+  5 is simply not climbed, because nobody asked for it.
+
+### The bug a browser found, and the jsdom test that did not
+
+The withheld leaf cell was drawn whenever the status was not `ready`, with no test that the leaf
+column was one of the table's columns — and by default it is not. `<colgroup>` allocates one `<col>`
+per column plus one for the prose, so the extra `<td>` took the **prose** column's width: `td.text`
+came out 0px wide and off the right edge of the window, and **every article's body was invisible** in
+the default reading view. Nothing threw, nothing logged, and the jsdom suite was green — it asserted
+what the cell contained and never that the row still fitted the table.
+
+Fixed by a `columns.includes(leafDepth)` guard in `withheldLeafCell`, with a case that counts `<td>`s
+against `<col>`s ([`tests/paragraph-labels-withheld.test.tsx`](../../tests/paragraph-labels-withheld.test.tsx)),
+watched red on the unguarded code. The lesson for stage 2 is the one in
+[silent-success.md](../reusable/silent-success.md): a renderer test that only inspects the element it
+added cannot see the element it displaced.
 
 ## What this deliberately does not fix
 

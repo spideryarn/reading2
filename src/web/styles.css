@@ -695,6 +695,27 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   margin-left: 0.5rem;
 }
 
+/* **A sentence standing where a pill would be**, when the control has nothing
+   to open — today that is the `Paragraphs` pill while the labels are still
+   arriving or a run failed to produce them (src/web/nav-labels.ts).
+
+   Not a disabled `Toggle`: a disabled control still reads as a control, and its
+   explanation would have to live in a tooltip that a touch reader cannot open —
+   which is the argument that named these pills `Paragraphs` rather than `L3` in
+   the first place (src/web/tree.ts § `columnLabel`). So the control is replaced
+   by the reason, in the bar's own voice: italic and faint, like `.mode` beside
+   it, and no border, because a bordered thing in this row is something you can
+   press. It wraps to the pills' own metrics rather than growing the bar. */
+.pill-note {
+  font-size: 0.72rem;
+  line-height: 1.55;
+  font-style: italic;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* `.provenance` was here — the dashed monospace chip in the controls holding the
    tree's version, `margin-left: auto` so it sat hard right. Gone on 2026-09-05
    with the glossary's and the quotes' provenance lines; App.tsx says why, at the
@@ -1591,6 +1612,25 @@ td.text.kind-caption .prose {
   font-size: 0.78rem;
   line-height: 1.45;
   color: var(--ink-soft);
+}
+
+/* **The sentence the leaf column shows instead of drawing itself**, while the
+   paragraph labels are still arriving or after a run failed to produce them —
+   src/web/nav-labels.ts, and TableView § the withheld column.
+
+   One cell spanning the whole table, so it reads as a note about the column
+   rather than as a row about a paragraph: italic and faint, which is the one
+   pair of signals in this stylesheet that already says "this is us talking,
+   not the article". The cell keeps `td.gist.leaf`'s background so the column
+   is still visibly a column; it deliberately loses the pointer, because there
+   is nothing to jump to. */
+td.gist.leaf.labels-withheld { cursor: default; }
+td.gist.leaf.labels-withheld:hover { background: var(--page); }
+.reading td.gist.leaf.labels-withheld:hover { background: var(--panel); }
+.nav-label-absent {
+  font-style: italic;
+  color: var(--ink-faint);
+  text-wrap: balance;
 }
 
 td.gist.leaf { cursor: pointer; background: var(--page); }

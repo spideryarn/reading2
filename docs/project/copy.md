@@ -171,7 +171,17 @@ running for a while"* would invite a bug report about a step that is working. Th
 import can have already have codes, and they come from `src/messages.ts` through
 `failureKind` as they always did.
 
-**The three error boundaries are the third exception.** `[render]` is the whole
+**The paragraph-label sentences are the third exception**, and they follow the import-state family
+exactly: *"Paragraph labels are still arriving."* / *"Paragraph labels aren't available."*, in
+[`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) beside the rule that decides which one applies,
+and **no bracketed code**. Not in `src/messages.ts` because that file is about failures a model call
+can return, and a label pass that has not finished yet is not one; no code because neither sentence
+is a problem the reader could report or act on. The `failed` one is where rule 4 bites hardest — a
+labels run fails for whatever reason a provider gives, and none of that reaches the reader or the
+DTO: the enum is the whole of what crosses.
+[granularity-zoom.md § the paragraph outline](granularity-zoom.md#both-at-once-the-paragraph-outline-beside-the-prose).
+
+**The three error boundaries are the fourth exception.** `[render]` is the whole
 app failing to draw, `[chunk]` is a lazy route failing to arrive, and
 `[mode-render]` is one mode failing while the article stays readable. In that order:
 [`AppBoundary.tsx`](../../src/web/AppBoundary.tsx) (2026-08-27),

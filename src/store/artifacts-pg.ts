@@ -69,7 +69,7 @@ import {
 import { CONTENT_TYPE } from "./blobs.js";
 import type { DocumentKind, RawManifest } from "../fetch.js";
 import { log } from "../log.js";
-import type { Block, Meta, StepName } from "../types.js";
+import type { Block, Meta, NavLabelStatus, StepName } from "../types.js";
 import {
   StepRunNotHeld,
   beginStepRun,
@@ -1322,6 +1322,30 @@ export async function writeArtefacts(
       columns = { ...columns, ...(await writeRawSource(tx, slug, value as RawManifest)) };
     }
   }
+
+  /* **Writing the labels sets where the labels are** — the one column in this
+     statement that is not an artefact, and the seam
+     docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md stage 2 will
+     edit rather than invent.
+     Here rather than in the step, because it has to be *atomic with the
+     artefact*: a revision that publishes saying `ready` over labels that did not
+     land is exactly the half-written state this one `UPDATE` exists to make
+     impossible, and a second write from the caller would have its own window.
+     Today `labels` is written by one step, `hierarchy`, which cannot finish
+     without producing a full set — `assertEveryBlockLabelled` and
+     `assertInsideCoverageFloor` are inside `generateLabels` — so `ready` is
+     simply true, and this changes nothing anybody can see. When the labels get
+     their own step, this is where the rule gains its second arm: the
+     `hierarchy` step writes a stamped-but-empty manifest and `pending`, and the
+     `labels` step writes the real one and `ready`.
+     `parts.labels` rather than `step === "hierarchy"`, so the rule follows the
+     artefact rather than the name of whoever wrote it — which is the whole
+     change stage 2 makes. `copyArtefacts` goes through here too, and a copied
+     labels file is a real one. */
+  if (parts.labels !== undefined) {
+    columns = { ...columns, navLabelStatus: "ready" satisfies NavLabelStatus };
+  }
+
   if (Object.keys(columns).length) {
     await tx
       .update(articleRevisions)

@@ -291,6 +291,7 @@ const ARTICLE: PublicArticle = {
      reader hot-links exactly as it always did. The third state, and it is
      what the publisher-host assertions below are measured against. */
   assets: undefined,
+  navLabelStatus: "ready",
   blocks: [
     {
       id: "spya-aaaaaa",
@@ -433,6 +434,7 @@ const OWNED: Article = {
   blocks: ARTICLE.blocks,
   tree: ARTICLE.tree,
   assets: undefined,
+  navLabelStatus: "ready",
   meta: {
     ...ARTICLE.meta,
     ...PDF_META,
