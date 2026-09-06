@@ -95,6 +95,8 @@ Code: [`src/glossary.ts`](../../src/glossary.ts) (stage 5d — the model call, t
 occurrence pass), [`src/term-match.ts`](../../src/term-match.ts) (the matching rule, shared),
 [`src/store/pg.ts`](../../src/store/pg.ts) § `loadGlossary`, [`src/routes.ts`](../../src/routes.ts),
 [`src/web/GlossaryPanel.tsx`](../../src/web/GlossaryPanel.tsx),
+[`src/web/modes/glossary/GlossaryMode.tsx`](../../src/web/modes/glossary/GlossaryMode.tsx)
+(`GlossaryBand`, `VisitorGlossaryBand`, `useGlossaryMode`),
 [`src/web/useGlossary.ts`](../../src/web/useGlossary.ts),
 [`src/web/annotate.ts`](../../src/web/annotate.ts) § `termMarks`, and `§ glossary mode` at the end of
 [`src/web/styles.css`](../../src/web/styles.css). Tests:

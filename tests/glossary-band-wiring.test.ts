@@ -1,5 +1,11 @@
 /**
- * **That `App.tsx` is wired the way the hooks assume.**
+ * **That the reading view is wired the way the hooks assume.**
+ *
+ * The subjects live in several files since 2026-09-06 — `Reader` is still in
+ * `App.tsx`, the mode controllers are under `src/web/modes/` — so each
+ * assertion reads the file that owns it. **They are read separately and never
+ * concatenated**: one synthetic "App" source would make `indexOf` anchors
+ * ambiguous again, which is the whole reason `hookBody` exists.
  *
  * `tests/glossary-one-fetch.test.tsx` proves the hooks share one read. It
  * cannot prove that the reading view *uses* them that way, because it stands in
@@ -24,6 +30,11 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const app = await readFile(path.join(ROOT, "src/web/App.tsx"), "utf8");
+const glossaryMode = await readFile(
+  path.join(ROOT, "src/web/modes/glossary/GlossaryMode.tsx"),
+  "utf8",
+);
+const quotesMode = await readFile(path.join(ROOT, "src/web/modes/quotes/QuotesMode.tsx"), "utf8");
 const glossaryPanel = await readFile(path.join(ROOT, "src/web/GlossaryPanel.tsx"), "utf8");
 const quotesPanel = await readFile(path.join(ROOT, "src/web/QuotesPanel.tsx"), "utf8");
 const searchPanel = await readFile(path.join(ROOT, "src/web/SearchPanel.tsx"), "utf8");
@@ -38,7 +49,7 @@ describe("the reading view's glossary wiring", () => {
     /* `useGlossary` takes the read as its second argument. A call with one
        argument is the old shape, which fetched again. */
     expect(app).toMatch(/read=\{glossaryRead\}/);
-    expect(app).not.toMatch(/useGlossary\(slug\)/);
+    expect(glossaryMode).not.toMatch(/useGlossary\(slug\)/);
   });
 
   it("draws the prose's underlines from that same read", () => {
@@ -53,8 +64,10 @@ describe("the reading view's glossary wiring", () => {
        is the regression it is about. docs/plans/260827ai-public-read-only-access.md. */
     expect(app).toMatch(/glossaryRead\??\.glossary\?\.entries/);
     /* The prop or the call, not the word — the comment in `GlossaryBand`
-       explaining why the prop is gone would otherwise fail this. */
+       explaining why the prop is gone would otherwise fail this. Both files,
+       because the prop would have to come back at both ends of the seam. */
     expect(app).not.toMatch(/onEntries\s*[=(]/);
+    expect(glossaryMode).not.toMatch(/onEntries\s*[=(]/);
   });
 });
 
@@ -72,20 +85,24 @@ describe("the reading view's glossary wiring", () => {
  * docs/plans/260903c-threshold-sliders-hide-below-threshold-items.md § Stage 2.
  */
 /**
- * One top-level function out of `App.tsx`, from its `function` line to whatever
- * comes next at the top level.
+ * One top-level function out of the file that owns it, from its `function` line
+ * to whatever comes next at the top level.
  *
  * Not `indexOf("\n}")`: a destructured props object closes on its own line, so
  * that boundary cuts a hook off at its own signature and the assertion under it
  * passes or fails on nothing.
+ *
+ * **The source is a parameter, and `where` names it**, because a subject that
+ * has moved to another file must fail loudly rather than slice from the end of
+ * the wrong one and assert about an empty string — docs/reusable/silent-success.md.
  */
-function hookBody(name: string): string {
-  const start = app.indexOf(`function ${name}`);
-  expect(start, `${name} must exist in App.tsx to be checked`).toBeGreaterThan(-1);
+function hookBody(source: string, where: string, name: string): string {
+  const start = source.indexOf(`function ${name}`);
+  expect(start, `${name} must exist in ${where} to be checked`).toBeGreaterThan(-1);
   const ends = ["\n/**", "\nfunction ", "\nexport function "]
-    .map((mark) => app.indexOf(mark, start + 1))
+    .map((mark) => source.indexOf(mark, start + 1))
     .filter((at) => at > -1);
-  return app.slice(start, ends.length > 0 ? Math.min(...ends) : app.length);
+  return source.slice(start, ends.length > 0 ? Math.min(...ends) : source.length);
 }
 
 describe("the threshold wiring", () => {
@@ -127,11 +144,14 @@ describe("the threshold wiring", () => {
        paint the panel without the row. tests/glossary-band-selection.test.tsx
        mounts the band and asserts that ordering for real; this is the cheap
        companion that also covers the quotes band. */
-    expect(app).toMatch(/hiddenSelection[\s\S]{0,400}setTermId\(null\)/);
-    expect(app).toMatch(/hiddenSelection[\s\S]{0,400}setQuoteId\(null\)/);
-    for (const band of ["useGlossaryMode", "useQuotesMode"]) {
+    expect(glossaryMode).toMatch(/hiddenSelection[\s\S]{0,400}setTermId\(null\)/);
+    expect(quotesMode).toMatch(/hiddenSelection[\s\S]{0,400}setQuoteId\(null\)/);
+    for (const [source, where, band] of [
+      [glossaryMode, "GlossaryMode.tsx", "useGlossaryMode"],
+      [quotesMode, "QuotesMode.tsx", "useQuotesMode"],
+    ] as const) {
       expect(
-        hookBody(band),
+        hookBody(source, where, band),
         `${band} must hand its selection up in a layout effect`,
       ).toMatch(/useLayoutEffect\(\(\) => \{\s*on(Selected|Found)\(/);
     }
@@ -205,7 +225,7 @@ describe("the threshold wiring", () => {
  */
 describe("the quotes band's marks", () => {
   it("resolves the list the panel is showing, not the selected row", () => {
-    const body = hookBody("useQuotesMode");
+    const body = hookBody(quotesMode, "QuotesMode.tsx", "useQuotesMode");
     /* One function answers "what is the panel showing", and the hook and the
        panel both call it. Two expressions computing it is how a row comes to be
        hidden with its wash still on the paragraph. */
@@ -223,9 +243,10 @@ describe("the quotes band's marks", () => {
        of another — the ordering argument the ideas and referee bands both make.
        And `Reader` must be holding it, or there is nothing for `hitMarks` to
        compare a key against. */
-    expect(hookBody("useQuotesMode")).toMatch(
+    expect(hookBody(quotesMode, "QuotesMode.tsx", "useQuotesMode")).toMatch(
       /useLayoutEffect\(\(\) => \{\s*onFound\(found\);\s*onOpenKey\(/,
     );
+    /* `Reader` has not moved, so this half is still `App.tsx`'s. */
     expect(app).toMatch(/mode === "quotes"\s*\?\s*quoteOpenKey/);
   });
 });

@@ -187,3 +187,12 @@ export type ReaderCapability =
 export const NO_COMMENTS: ClientComment[] = [];
 export const NO_THREADS: ThreadSummary[] = [];
 export const NO_TERMS: Glossary["entries"] = [];
+
+/**
+ * The same module constant for the same reason, and it is never rendered: only
+ * `VisitorSearchBand` reads `searches`, and it is mounted only for a visitor.
+ * It exists so that the line resolving the capability has an honest value for
+ * *the question does not arise* rather than an `as` or a `null` every reader
+ * downstream would have to test.
+ */
+export const NO_SEARCHES: SavedSearch[] = [];

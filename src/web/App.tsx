@@ -15,10 +15,8 @@ import type {
   ChatThread,
   Comment,
   GlossaryEntry,
-  Quote,
   RememberStance,
   ThreadKind,
-  TimelineEvent,
   Visibility,
 } from "../types.js";
 import { Library } from "./Library.js";
@@ -53,11 +51,11 @@ import type { User } from "@supabase/supabase-js";
 import { FeedbackButton } from "./FeedbackButton.js";
 import { Metadata } from "./Metadata.js";
 import { IdeasBand, VisitorIdeasBand } from "./modes/ideas/IdeasMode.js";
+import { TimelineBand, VisitorTimelineBand } from "./modes/timeline/TimelineMode.js";
+import { QuotesBand, VisitorQuotesBand } from "./modes/quotes/QuotesMode.js";
+import { DebateBand } from "./modes/debate/DebateMode.js";
+import { GlossaryBand, VisitorGlossaryBand } from "./modes/glossary/GlossaryMode.js";
 import { FeatureBoundary } from "./FeatureBoundary.js";
-import { TimelinePanel } from "./TimelinePanel.js";
-import { useTimeline } from "./useTimeline.js";
-import { DebatePanel } from "./DebatePanel.js";
-import { useDebate } from "./useDebate.js";
 import { QuizPanel, RememberSubModeToggle } from "./QuizPanel.js";
 import { armActivationForRefereeView } from "./activation.js";
 import { useQuiz } from "./useQuiz.js";
@@ -76,19 +74,11 @@ import { useSlow } from "./useSlow.js";
 import { Dock } from "./Dock.js";
 import { ChatPanel } from "./ChatPanel.js";
 import { useLiveConversation } from "./live/useLiveConversation.js";
-import {
-  effectiveSort,
-  gateToReveal,
-  GlossaryPanel,
-  PRIORITY_GATE,
-  visibleEntries,
-} from "./GlossaryPanel.js";
-import { effectiveRank, markedQuotes, QuotesPanel } from "./QuotesPanel.js";
-import { useQuotes } from "./useQuotes.js";
+import { gateToReveal, PRIORITY_GATE } from "./GlossaryPanel.js";
 import { ProseHoverCard } from "./ProseHoverCard.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "./notes-view.js";
 import { useArc } from "./useArc.js";
-import { useGlossary, useGlossaryRead, type GlossaryRead } from "./useGlossary.js";
+import { useGlossaryRead } from "./useGlossary.js";
 import { SummaryPanel } from "./SummaryPanel.js";
 import { DiagramPanel, type DiagramAccess } from "./DiagramPanel.js";
 import { ClaimsBand } from "./ClaimsPanel.js";
@@ -113,9 +103,6 @@ import {
   findLiteral,
   hitMarks as buildHitMarks,
   orderFound,
-  quoteMarkKey,
-  resolveQuotes,
-  resolveTimelineEvent,
   keepAbove,
   PRIORITY_CONF,
   resolveHits,
@@ -145,15 +132,11 @@ import {
   panelParam,
   sortParam,
   gateParam,
-  quoteParam,
-  rankParam,
   refereeParam,
   refScaleParam,
   REFEREE_VIEWS,
   type RefereeView,
   rememberParam,
-  barParam,
-  eventParam,
   termParam,
   findParam,
   matchParam,
@@ -170,7 +153,6 @@ import {
   textParam,
   threadParam,
   type Mode,
-  type TermSort,
 } from "./params.js";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import {
@@ -216,9 +198,6 @@ import type {
   PublicArtefactSet,
   PublicArtefacts,
   PublicArticle,
-  PublicGlossary,
-  PublicQuotes,
-  PublicTimeline,
 } from "../public-types.js";
 import {
   artefactsIn,
@@ -226,7 +205,12 @@ import {
   visitorComments,
   visitorSearches,
 } from "./public-artefacts.js";
-import { NO_TERMS, NO_THREADS, type ReaderCapability } from "./reader-capability.js";
+import {
+  NO_SEARCHES,
+  NO_TERMS,
+  NO_THREADS,
+  type ReaderCapability,
+} from "./reader-capability.js";
 import { markedModes, visitorGap } from "./visitor.js";
 import {
   NotSharedPage,
@@ -3666,235 +3650,6 @@ function Reader({
 }
 
 /**
- * The timeline, and the fetch that belongs to it.
- *
- * A component of its own for the reason `IdeasBand` and `GlossaryBand` are:
- * `useTimeline` fetches on mount, so calling it up in `Reader` would charge
- * every reader of every article a request for a chronology almost none of them
- * will open.
- *
- * **Owner-only, so there is one of these and not two.** Timeline is in
- * `owners-only` in src/web/visitor.ts § POLICY, so a visitor meets a boundary instead of a
- * band and there is no `VisitorTimelineBand` waiting on a payload field that
- * does not exist.
- *
- * ## The five effects below are a second copy of `useIdeasMode`'s, deliberately
- *
- * They are the same five rules — push the resolved passages up before paint,
- * drop an `openKey` that is no longer in the list, stand on the first passage,
- * spend the press's intention to jump once the list exists, and clear
- * everything on the way out — and every one of them was got wrong once in the
- * ideas panel before it was got right. Two copies of a rule is exactly what
- * this repo does not want.
- *
- * They were not merged today because the merge is an edit through the middle of
- * `useIdeasMode`, and App.tsx is being rewritten by another session while this
- * lands; a shared hook over `{ found, openKey, onFound, onOpenKey, onJump }` is
- * the right shape and is a follow-up worth doing on a quiet file. Until then
- * **a fix to one of these belongs in all three** — `CriteriaPanel`'s cleanup
- * became a third partial copy on 2026-08-31 and was half of this one until
- * 2026-09-02 — which is written here rather than left to be discovered.
- *
- * The one real difference is that there are no colour slots. Timeline paints no
- * lane down the rail — deferred with the marks — so `resolveTimelineEvent`
- * hands every occurrence slot 0 and the prose gets the ordinary wash.
- *
- * **Exported for tests/passage-mode-cleanup.test.tsx**, which is the executable
- * form of the "a fix to one of these belongs in all three" sentence above.
- */
-export function TimelineBand({
-  slug,
-  blocks,
-  onJump,
-  onFound,
-  openKey,
-  onOpenKey,
-}: {
-  slug: string;
-  blocks: Block[];
-  onJump(id: BlockId): void;
-  onFound(found: Found[]): void;
-  openKey: string | null;
-  onOpenKey(key: string | null): void;
-}) {
-  useRenderCount("TimelineBand");
-  const timeline = useTimeline(slug);
-  const band = useTimelineMode({
-    events: timeline.timeline?.events ?? NO_EVENTS,
-    blocks,
-    onJump,
-    onFound,
-    openKey,
-    onOpenKey,
-  });
-  return <TimelinePanel access={{ kind: "owner", owner: timeline }} {...band} />;
-}
-
-/**
- * A module constant rather than a fresh `[]`, for the reason `NO_QUOTES` and
- * `NO_TERMS` are: the memo below keys on it by identity, and a new empty array
- * each render would re-resolve every occurrence while the read is still in
- * flight.
- */
-const NO_EVENTS: TimelineEvent[] = [];
-
-/**
- * The same module constant for the same reason, and it is never rendered: only
- * `VisitorSearchBand` reads `searches`, and it is mounted only for a visitor.
- * It exists so that the line resolving the capability has an honest value for
- * *the question does not arise* rather than an `as` or a `null` every reader
- * downstream would have to test.
- */
-const NO_SEARCHES: SavedSearch[] = [];
-
-/**
- * **The same panel, for somebody who does not own the article.**
- *
- * No `useTimeline` and therefore no job, no `ensure`, no `regenerate`: the
- * events came in the page's own payload. See `VisitorGlossaryBand` for why this
- * is a second band rather than a second panel — a hook cannot be called
- * conditionally, so the owner/visitor seam has to be a component boundary.
- * src/web/reader-capability.ts.
- */
-function VisitorTimelineBand({
-  timeline,
-  blocks,
-  onJump,
-  onFound,
-  openKey,
-  onOpenKey,
-}: {
-  timeline: PublicTimeline;
-  blocks: Block[];
-  onJump(id: BlockId): void;
-  onFound(found: Found[]): void;
-  openKey: string | null;
-  onOpenKey(key: string | null): void;
-}) {
-  useRenderCount("VisitorTimelineBand");
-  const band = useTimelineMode({
-    events: timeline.events,
-    blocks,
-    onJump,
-    onFound,
-    openKey,
-    onOpenKey,
-  });
-  return <TimelinePanel access={{ kind: "visitor", timeline }} {...band} />;
-}
-
-/**
- * **Everything the timeline band does that is not a fetch** — `?event=`, the
- * resolved occurrences it pushes up, and the four passage-mode rules the
- * comment above lists.
- *
- * Extracted on 2026-09-04 so that the owner's band and the visitor's are one
- * behaviour rather than two, which is the same split `useQuotesMode` and
- * `useIdeasMode` already have. The comment above still applies to it: a fix to
- * one of the three passage modes belongs in all three.
- */
-function useTimelineMode({
-  events,
-  blocks,
-  onJump,
-  onFound,
-  openKey,
-  onOpenKey,
-}: {
-  events: TimelineEvent[];
-  blocks: Block[];
-  onJump(id: BlockId): void;
-  onFound(found: Found[]): void;
-  openKey: string | null;
-  onOpenKey(key: string | null): void;
-}) {
-  const [eventId, setEventId] = useQueryState("event", eventParam);
-
-  const selected = useMemo(
-    () => events.find((e) => e.id === eventId) ?? null,
-    [events, eventId],
-  );
-
-  /* Document order, so the stepper's "2 of 3" counts the way the reader moves
-     through the article rather than the order the model happened to list the
-     occurrences in. */
-  const found = useMemo(() => {
-    if (!selected) return [];
-    return orderFound(
-      resolveTimelineEvent(blocks, { id: selected.id, occurrences: selected.occurrences }),
-      "document",
-    );
-  }, [selected, blocks]);
-
-  /* `useLayoutEffect`, not `useEffect` — a passive effect leaves one paintable
-     frame in which the panel shows the new event and the prose still marks the
-     old one. */
-  useLayoutEffect(() => {
-    onFound(found);
-  }, [found, onFound]);
-
-  /* An open occurrence that is no longer in the list cannot stay open: reading
-     the timeline again mints new keys, and a re-extraction can drop one. */
-  useEffect(() => {
-    if (openKey && !found.some((f) => f.key === openKey)) onOpenKey(null);
-  }, [found, openKey, onOpenKey]);
-
-  /* Standing on the first passage is the state a selected event is *in*, and it
-     is that state whether the reader pressed the row or opened a URL that
-     already had `?event=` in it — without this, a shared link washes the
-     passages, emphasises none of them and puts "– / 2" in the stepper. It opens
-     without moving anybody: a shared URL carries `?at=` too, and the reader's
-     own position beats ours. */
-  useEffect(() => {
-    if (openKey === null && found.length > 0) onOpenKey(found[0]!.key);
-  }, [found, openKey, onOpenKey]);
-
-  /* Pressing a row arrives at its first passage, and it has to be the first one
-     that RESOLVED — which the panel cannot decide, because until the selection
-     changes nothing has resolved that event's occurrences at all. So the press
-     records an intention and this spends it once the list exists. A ref rather
-     than state, so spending it causes no render, and cleared before the jump so
-     a later change to `found` cannot fling the reader back to the top. */
-  const wantsJump = useRef(false);
-  useEffect(() => {
-    if (!wantsJump.current || found.length === 0) return;
-    wantsJump.current = false;
-    const first = found[0]!;
-    onOpenKey(first.key);
-    onJump(first.blockId);
-  }, [found, onJump, onOpenKey]);
-
-  /* Unmount only, with no data dependencies: leaving the mode takes the marks
-     out of the prose with it, and folding this into the push above would clear
-     them on every change before setting them again. */
-  useEffect(
-    () => () => {
-      onFound([]);
-      onOpenKey(null);
-    },
-    [onFound, onOpenKey],
-  );
-
-  return {
-    eventId,
-    onEvent(next: string | null) {
-      void setEventId(next);
-      /* A new event means the old occurrence is meaningless — its key names
-         an event nobody is looking at, so the stepper would read "0 / 2". */
-      onOpenKey(null);
-      /* Only on selecting, never on clearing: pressing the open event again
-         takes the marks away, and throwing the reader down the article as it
-         does would be the opposite of what that gesture means. */
-      wantsJump.current = next !== null;
-    },
-    found,
-    openKey,
-    onOpenKey,
-    onJump,
-  };
-}
-
-/**
  * **Remember's two sub-modes, and the one place their URL rules live.**
  *
  * Remember is `recall` — the reader says what they took from the article and the
@@ -4434,445 +4189,6 @@ export function ConversationBand({
       subMode={subMode}
     />
   );
-}
-
-/**
- * The glossary's jobs and verbs. The read itself belongs to `Reader`.
- *
- * A component of its own for the reason `ConversationBand` above is — but **no longer
- * the same reason it used to be**, and the old one is worth deleting rather
- * than leaving to mislead. It used to say: `useGlossary` fetches on mount, so
- * calling it up in `Reader` would charge every reader of every article for a
- * list almost none of them will open. That stopped being true on 2026-08-26,
- * when the dotted underlines became a standing property of the article and the
- * list had to be fetched for everyone anyway.
- *
- * What survives is the other half: **a mounted `useJobs` holds the job engine
- * on its idle cadence**, and that is a request every eight seconds for the life
- * of the panel. A reader who never opens the band should not pay for it. Hooks
- * cannot be called conditionally, so the condition has to be a component
- * boundary — this one.
- * The band's own mount revalidation rides on the same boundary.
- *
- * `?term=` and `?sort=` live here too, for the same reason: both are
- * meaningless outside glossary mode, and reading them in `Reader` would put two
- * parameter subscriptions on every render of the reading view for values only
- * this component uses.
- *
- * `onSelected` is the one thing that goes back out, and it is the seam
- * described on `term` in `Reader`: the panel knows which entry is selected, the
- * prose is where its underlines are drawn, and those are two different
- * components.
- */
-function GlossaryBand({
-  slug,
-  read,
-  onJump,
-  onSelected,
-  onMode,
-}: {
-  slug: string;
-  /**
-   * The read, owned by `Reader`.
-   *
-   * There is no `onEntries` any more, and its absence is the change: the list
-   * used to be fetched twice and pushed back up from here, which needed a
-   * `pushed` ref to stop the slower copy overwriting the fresher one. One
-   * owner, one list, nothing to push.
-   */
-  read: GlossaryRead;
-  onJump(id: BlockId): void;
-  onSelected(selection: TermSelection | null): void;
-  /**
-   * Switch mode, for the one thing the glossary cannot answer.
-   *
-   * The *Look up a term* box explains what the piece says and nothing else, so
-   * a word the piece never uses has no answer in this band at any price. Chat
-   * is the surface that may go outside the article, and the panel offers it
-   * rather than leaving the reader at a dead end. Same prop and same reason as
-   * `ConversationBand`'s, one band along. See `AskATerm` in GlossaryPanel.tsx.
-   */
-  onMode(next: Mode): void;
-}) {
-  useRenderCount("GlossaryBand");
-  const glossary = useGlossary(slug, read);
-  const band = useGlossaryMode(glossary.glossary?.entries ?? NO_TERMS, onSelected);
-
-  /* Memoised so the panel's `onAskChat` keeps its identity between renders,
-     which is the same reason every other callback crossing this boundary is. */
-  const askChat = useCallback(() => onMode("chat"), [onMode]);
-
-  return (
-    <GlossaryPanel
-      access={{ kind: "owner", owner: glossary, glossary: glossary.glossary }}
-      {...band}
-      onJump={onJump}
-      onAskChat={askChat}
-    />
-  );
-}
-
-/**
- * Quotes, and the fetch that belongs to it.
- *
- * A component of its own for the reason `GlossaryBand` and `IdeasBand` are:
- * `useQuotes` fetches on mount, and calling it up in `Reader` would charge every
- * reader of every article a request for a list almost none of them will open.
- *
- * What it pushes up is the **resolved** passages, not the stored quotes. The
- * panel and the prose have to be choosing from the same list, and the only way
- * to guarantee that is for one function to decide it — `markedQuotes`, called
- * by both — which is the rule `SearchBand` and `IdeasBand` both follow.
- *
- * **Resolution can still drop one**, when the article no longer has the block a
- * quote names, and that is the one place the list and the marks legitimately
- * differ: the row stays in the panel with no wash beside it. Kept rather than
- * hidden, because a list quietly shorter than the artefact is the failure
- * docs/reusable/silent-success.md keeps catching, and the `stale` banner above
- * it is already saying the article moved. GPT Sol's first finding, 2026-09-05.
- */
-export function QuotesBand({
-  slug,
-  blocks,
-  onJump,
-  onFound,
-  onOpenKey,
-}: {
-  slug: string;
-  blocks: Block[];
-  onJump(id: BlockId): void;
-  onFound(found: Found[]): void;
-  onOpenKey(key: string | null): void;
-}) {
-  useRenderCount("QuotesBand");
-  const quotes = useQuotes(slug);
-  const band = useQuotesMode({ quotes: quotes.quotes, blocks, onFound, onOpenKey });
-  return (
-    <QuotesPanel
-      access={{ kind: "owner", owner: quotes, quotes: quotes.quotes }}
-      {...band}
-      onJump={onJump}
-    />
-  );
-}
-
-/**
- * A module constant rather than a fresh `[]`, for the reason `NO_TERMS` is one:
- * the memos in `useQuotesMode` key on it by identity.
- */
-const NO_QUOTES: Quote[] = [];
-
-/**
- * The debate, and the fetch that belongs to it.
- *
- * A component of its own for the reason `TimelineBand` and `IdeasBand` are:
- * `useDebate` fetches on mount, so calling it up in `Reader` would charge every
- * reader of every article a request for a web search almost none of them will
- * open.
- *
- * **The shortest band in this file, and that is the design rather than a stub.**
- * The five passage-mode effects its neighbours carry are about marks in the
- * prose, and Debate has none: a row is a page on the web, not a passage in the
- * article, so there is no `Found` to resolve, no `openKey` to keep in step and
- * no colour slot to assign. What it does hand down is `onJump`, because a
- * group-two row names the block whose claim it answers and has to offer the way
- * there. Marks are the first thing to add — the plan's § Deliberately not in v1
- * — and adding them is what would bring the five effects with it.
- *
- * **Owner-only, so there is one of these and not two**, until Stage 4 builds
- * the public contract. See the branch above.
- */
-function DebateBand({ slug, onJump }: { slug: string; onJump(id: BlockId): void }) {
-  useRenderCount("DebateBand");
-  const debate = useDebate(slug);
-  return <DebatePanel access={{ kind: "owner", owner: debate }} onJump={onJump} />;
-}
-
-/**
- * **The same panel, for somebody who does not own the article.**
- *
- * No `useQuotes` and therefore no `useJobs`: the list came in the page's own
- * payload. See `VisitorGlossaryBand` for why this is a second band and not a
- * second panel.
- */
-function VisitorQuotesBand({
-  quotes,
-  blocks,
-  onJump,
-  onFound,
-  onOpenKey,
-}: {
-  quotes: PublicQuotes;
-  blocks: Block[];
-  onJump(id: BlockId): void;
-  onFound(found: Found[]): void;
-  onOpenKey(key: string | null): void;
-}) {
-  useRenderCount("VisitorQuotesBand");
-  const band = useQuotesMode({ quotes, blocks, onFound, onOpenKey });
-  return <QuotesPanel access={{ kind: "visitor", quotes }} {...band} onJump={onJump} />;
-}
-
-/**
- * Everything the quotes band does that is not a fetch: `?quote=`, `?rank=`,
- * `?bar=`, and the resolved passage it pushes up.
- *
- * **Every quote the panel is showing is marked, not only the selected one** —
- * since 2026-09-05, and it is the whole of one feedback report. The memo below
- * returned `[]` unless a row was selected, so quotes mode drew nothing at all on
- * the page until you pressed something and the `?bar=` slider changed the list
- * without changing the article. Greg asked to be able to *"skim through it just
- * reading the stuff that is marked"*, and search has always done exactly this
- * through the identical pipe.
- *
- * **What is marked is `markedQuotes`, which is what the panel lists.** One
- * function, called by both, so the rows and the washes cannot come apart — and
- * so the bar doubles as the highlight-density control, which is what makes it
- * the thing Greg described rather than a filter on a list. The one exception is
- * a quote whose block the article has lost: `resolveQuotes` drops it and the
- * row stays — see `QuotesBand` above.
- *
- * **No colour slot to assign**, which is the one thing this hook does not share
- * with `useIdeasMode`. Ideas paint every idea its own lane so a colour does not
- * depend on which one is open; the quotes are **one source** — the categorical
- * palette answers *which search found this*, and there is one thing here that
- * found anything — so they share a slot and a run id, and `resolveQuotes` owns
- * both. It is still a *real* slot rather than `null`, because `blockHues` drops
- * `null` slots and a quote without one would paint the rail and leave the
- * paragraph bar blank, which looks like a rendering bug and is not one.
- */
-function useQuotesMode({
-  quotes,
-  blocks,
-  onFound,
-  onOpenKey,
-}: {
-  quotes: { quotes: Quote[] } | null;
-  blocks: Block[];
-  onFound(found: Found[]): void;
-  /**
-   * Which mark wears the ring — `mark.hit[data-hit-open]`, the thing search
-   * uses to say *this washed phrase is the row you pressed*.
-   *
-   * Quotes did without one until the whole list was marked, and the old comment
-   * in `Reader` said why: a quote is exactly one passage, so there was nothing
-   * to step between and nothing to leave open. With sixteen marks on the page
-   * the ring is the only thing that distinguishes the reader's own selection
-   * from the fifteen the mode drew for them.
-   */
-  onOpenKey(key: string | null): void;
-}) {
-  const [quoteId, setQuoteId] = useQueryState("quote", quoteParam);
-  const [rank, setRank] = useQueryState("rank", rankParam);
-  /* Null is "nobody has touched the bar", which the panel resolves to
-     `QUOTE_BAR_DEFAULT`. Kept as null rather than defaulted here so the default stays
-     one number in one file — see `barParam` in params.ts. */
-  const [bar, setBar] = useQueryState("bar", barParam);
-
-  /**
-   * **A quote the bar has hidden cannot stay selected**, which since 2026-09-03
-   * is a state the reader can reach: the prioritised rank hides what is below
-   * the bar rather than grouping it, and `?quote=` resolves against the whole
-   * artefact independently of what the panel is drawing. Without this a raised
-   * bar took the row away and left the line marked in the prose and in the
-   * rail, and lowering the bar later silently reopened a selection the reader
-   * had watched disappear. The same rule search holds at `SearchBand`.
-   *
-   * Scoped to `prioritised`, because that is the only rank with a bar. Two
-   * reasons, and the second is why the guard survived the rewrite below: a
-   * `?bar=` sitting in a URL must not clear a selection in a list nobody is
-   * looking at a threshold for — and while the artefact is still being fetched
-   * `listed` is empty, so an unguarded "is my quote in the visible list" would
-   * strip a shared `?quote=` link out of the URL before its own data arrived.
-   */
-  const all = quotes?.quotes ?? NO_QUOTES;
-  /**
-   * **The list the panel is drawing** — the rows, and now the marks.
-   *
-   * `markedQuotes` is the panel's own three lines (`snapToStop`,
-   * `effectiveRank`, `rankQuotes`), called here rather than repeated here. They
-   * *were* repeated, in `hiddenSelection` below, which was safe while all they
-   * decided was whether to clear a selection; it is not safe now that they
-   * decide what the article is wearing.
-   */
-  const listed = useMemo(() => markedQuotes(all, rank, bar), [all, rank, bar]);
-  const hiddenSelection = useMemo(() => {
-    if (quoteId === null) return false;
-    if (effectiveRank([...all], rank) !== "prioritised") return false;
-    return !listed.some((q) => q.id === quoteId);
-  }, [all, rank, listed, quoteId]);
-  useEffect(() => {
-    if (hiddenSelection) void setQuoteId(null);
-  }, [hiddenSelection, setQuoteId]);
-
-  const selected = useMemo(
-    () => (hiddenSelection ? null : (all.find((q) => q.id === quoteId) ?? null)),
-    [all, quoteId, hiddenSelection],
-  );
-
-  /* **`start` is not passed on**, and `resolveQuotes` does not take it — the
-     stored offset is measured in `block.text` and this resolution happens in
-     the rendered text. It is still on the artefact, because it is what
-     `inDocumentOrder` sorts two quotes from one paragraph by. */
-  const found = useMemo(() => resolveQuotes(blocks, listed), [listed, blocks]);
-
-  /* The ring, computed from the selection rather than looked up in `found`: a
-     quote whose block the article has lost resolves to nothing, and the honest
-     answer then is a key that matches no mark rather than the *previous*
-     quote's. `quoteMarkKey` so the shape lives in one file. */
-  const openKey = useMemo(
-    () => (selected ? quoteMarkKey(selected.id, selected.blockId) : null),
-    [selected],
-  );
-
-  /* **`useLayoutEffect`, not `useEffect`** — a passive effect leaves one
-     paintable frame in which the panel shows the new quote and the prose still
-     marks the old one. Same reasoning, and the same pairing with an
-     unmount-only clear below, as `SearchBand` and `IdeasBand`.
-
-     **Both in one effect**, so no paint can ever show the ring on one quote and
-     the washes of another set. */
-  useLayoutEffect(() => {
-    onFound(found);
-    onOpenKey(openKey);
-  }, [found, openKey, onFound, onOpenKey]);
-
-  /* Leaving quotes mode must take the marks out of the prose. On unmount only:
-     clearing on every change would race the layout effect above. */
-  useEffect(
-    () => () => {
-      onFound([]);
-      onOpenKey(null);
-    },
-    [onFound, onOpenKey],
-  );
-
-  return { quoteId, onQuote: setQuoteId, rank, onRank: setRank, bar, onBar: setBar };
-}
-
-/**
- * **The same panel, for somebody who does not own the article.**
- *
- * No `useGlossary`, no `useJobs`, no fetch of any kind: the list came in the
- * page's own payload (src/public-types.ts § PublicArtefactSet), so this
- * component is the query parameters and nothing else.
- *
- * A second *band* rather than a second *panel*, and the difference is the whole
- * design. `GlossaryBand` above exists because hooks cannot be called
- * conditionally, so "a visitor does not poll the job list" has to be a component
- * boundary — but everything a reader looks at is drawn by one `GlossaryPanel`
- * with its data injected. Two panels for one list is how the owner's glossary
- * and the visitor's glossary drift into two designs for one thing, which a
- * browser pass caught once already in a drawer heading.
- */
-export function VisitorGlossaryBand({
-  glossary,
-  onJump,
-  onSelected,
-}: {
-  glossary: PublicGlossary;
-  onJump(id: BlockId): void;
-  onSelected(selection: TermSelection | null): void;
-}) {
-  useRenderCount("VisitorGlossaryBand");
-  const band = useGlossaryMode(glossary.entries, onSelected);
-  return <GlossaryPanel access={{ kind: "visitor", glossary }} {...band} onJump={onJump} />;
-}
-
-/**
- * Everything the glossary band does that is not a fetch — the three parameters
- * and the selection it pushes back up.
- *
- * A hook rather than a base component, because two bands need all of it and
- * only one of them may call `useGlossary`. `?term=`, `?sort=` and `?gate=` live
- * here for the reason they used to live in the band: all three are meaningless
- * outside glossary mode, and reading them in `Reader` would put three parameter
- * subscriptions on every render of the reading view for values only this mode
- * uses.
- */
-function useGlossaryMode(
-  entries: readonly GlossaryEntry[],
-  onSelected: (selection: TermSelection | null) => void,
-) {
-  const [termId, setTermId] = useQueryState("term", termParam);
-  const [sort, setSort] = useQueryState("sort", sortParam);
-  /* Null is "nobody has touched the threshold", which the panel resolves to
-     `PRIORITY_GATE`. Kept as null rather than defaulted here so the default
-     stays one number in one file — see `gateParam` in params.ts. */
-  const [gate, setGate] = useQueryState("gate", gateParam);
-
-  /**
-   * **A term the bar has hidden cannot stay selected.**
-   *
-   * The rule search already held at `SearchBand` below, and it arrived here
-   * with the 2026-09-03 change: the panel resolves `?term=` against the whole
-   * glossary, independently of what it is drawing, so a raised gate used to
-   * take the row away while the term stayed emphasised in the prose — and
-   * lowering the gate later silently reopened a selection the reader had
-   * watched disappear. "Open" is a thing the reader can see, and a hidden one
-   * is a claim about the page that the page is not making.
-   *
-   * **Only the selected emphasis goes.** The dotted underline under every
-   * glossary term is drawn from the full list in every mode (`termSelections`
-   * in `Reader`) and is not the selection. It stays.
-   *
-   * Scoped to prioritised order, because that is the only order with a gate:
-   * `?gate=` sitting in a URL must not clear a selection in a list nobody is
-   * looking at a threshold for.
-   */
-  const order = effectiveSort(entries, sort);
-  const hiddenSelection =
-    termId !== null &&
-    order === "prioritised" &&
-    !visibleEntries(entries, gate ?? PRIORITY_GATE).visible.some((e) => e.id === termId);
-  useEffect(() => {
-    if (hiddenSelection) void setTermId(null);
-  }, [hiddenSelection, setTermId]);
-
-  /* `find` returns the entry object out of the list, so its identity is stable
-     across renders until the list itself is replaced — which is what keeps the
-     effect below from firing on every render. Null in the render itself the
-     moment the bar hides it, rather than a tick later when `?term=` clears:
-     waiting for the parameter would leave a frame with the prose emphasising a
-     term the panel is not showing. */
-  const selected = hiddenSelection ? null : (entries.find((e) => e.id === termId) ?? null);
-
-  /* **`useLayoutEffect`, not `useEffect`**, and nulling `selected` above is not
-     enough on its own — which is what the comment there used to claim. The
-     value the prose actually draws from is `Reader`'s own state, and it only
-     gets there through this call: a passive effect runs *after* the browser has
-     had the chance to paint, so the panel could commit without the row while
-     `TableView` still emphasised the term. One frame, and it is the frame in
-     which the page says two different things about what is open.
-
-     The same pairing, for the same reason, as `QuotesBand` above and
-     `SearchBand` below: a layout effect on every change, and an unmount-only
-     clear underneath. GPT Sol's second finding on the built code, 2026-09-03. */
-  useLayoutEffect(() => {
-    onSelected(
-      selected ? { id: selected.id, forms: formsOf(selected), blocks: selected.blocks } : null,
-    );
-  }, [selected, onSelected]);
-
-  /* Leaving glossary mode must take the *highlight* off the pressed term. Not
-     the underlines, which since 2026-08-26 are a standing property of the
-     article and outlive the band — this comment said otherwise until a GPT Sol
-     review noticed it was describing the old behaviour.
-
-     Its own effect, with no dependency on `selected`, so it runs on unmount and
-     only on unmount — folding it into the cleanup of the effect above would
-     clear the selection on every change and set it again immediately, which is
-     a visible flicker. */
-  useEffect(() => () => onSelected(null), [onSelected]);
-
-  return {
-    termId,
-    onTerm: (id: string | null) => void setTermId(id),
-    sort,
-    onSort: (next: TermSort) => void setSort(next),
-    gate,
-    onGate: (next: number | null) => void setGate(next),
-  };
 }
 
 /**

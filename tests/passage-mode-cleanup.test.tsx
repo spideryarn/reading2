@@ -93,7 +93,8 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
-const { QuotesBand, TimelineBand } = await import("../src/web/App.js");
+const { QuotesBand } = await import("../src/web/modes/quotes/QuotesMode.js");
+const { TimelineBand } = await import("../src/web/modes/timeline/TimelineMode.js");
 const { IdeasBand } = await import("../src/web/modes/ideas/IdeasMode.js");
 const { CriteriaBand } = await import("../src/web/CriteriaPanel.js");
 
