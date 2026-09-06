@@ -1,6 +1,6 @@
 # The labels leave the blocking step
 
-**Status: draft, under cross-family review.** Written 2026-09-06, out of
+**Status: reviewed, stages agreed, stage 1 in progress.** Written 2026-09-06, out of
 [260904d](260904d-deepen-fat-sections.md) § *Question 5*, where a measured run found that the thing
 blowing the ingest deadline was not the feature that plan was building.
 
@@ -198,7 +198,11 @@ Three candidates, and the review is asked to pick one:
 - **(B) True on-demand** — nothing until a reader opens outline mode or the `Paragraphs` column.
 - **(C) Hybrid** — automatic for the opening batches, on demand beyond.
 
-**(A) is the working assumption.** GPT Sol, on the prior round, was explicit: *"Do not start with
+**(A) was the working assumption, and the review corrected it to A′** — a successor *job*, because a
+step cannot publish before its job ends ([§ What the review changed](#review)). The reasoning below
+is what ruled out (B) and (C), and it survives that correction intact.
+
+GPT Sol, on the prior round, was explicit: *"Do not start with
 per-group UI-triggered lazy generation"*, because (B) buys duplicate-demand suppression, per-reader
 billing policy, retries, partial storage and ~30 s of first-use latency for a saving that only
 materialises if most readers never open those surfaces — which nobody has measured. Sol also
@@ -206,23 +210,144 @@ established the mechanical objection: `planBatches` packs several sibling sets p
 "one sibling group per demand" turns ~30 calls into hundreds, and the honest version of (B) is
 "demand selects a preplanned batch", which is most of (A)'s machinery plus a state machine.
 
+## What the review changed <a id="review"></a>
+
+[GPT Sol](../reusable/codex-cli-as-subagent.md), 2026-09-06, at `high`, on the shape rather than on a
+diff. Thirteen findings, no unavoidable P0 in the recommended design. **The verdict changed the
+shape**, and the two load-bearing findings were checked against the code before being written down
+here; both hold.
+
+### It cannot be a later step of the same job — F1
+
+A revision is published on **terminal job success**, not when a step returns.
+[`pg-session.ts`](../../src/store/pg-session.ts) says so in its own words: *"**Terminal success.**
+Write, validate, finish the step, **publish**, finish the job."* So `labels` as a sixth step in the
+ingest job would go on blocking publication exactly as it does today, and candidate (A) as written
+does not work.
+
+**The shape is A′: a successor job.** The ingest job finishes and publishes normally, and that same
+completion transaction enqueues a free, slug-scoped `{steps: ["labels"]}` job.
+
+### "Automatic background" is the owner's browser — F2
+
+**There is no server worker in production.**
+[`jobEngine.ts`](../../src/web/jobEngine.ts): *"On Vercel there is no worker: `pump` in
+[`src/jobs.ts`](../../src/jobs.ts) opens with `if (process.env.VERCEL) return`, and the browser is
+what calls `POST /api/jobs/:id/advance` once per step."* Recurring polls also stop while the tab is
+hidden.
+
+So a successor job runs only while an owner has a tab open. **This is a new failure mode, and it is
+worth stating plainly rather than discovering later:** today, if the ingest finishes, the labels are
+there. After this change the article publishes a minute earlier, so an owner can close the tab
+believing the job is done — and the labels then wait until their next visit.
+
+It is not a reason to stop. The engine already polls every second *"while any job is active, wherever
+the reader is"*, so an owner who stays on the site gets them; a missing label is already a legal
+state; and the alternative is the deadline overrun we have. But the reader-facing state has to say
+*pending* rather than render blanks — which is F8, and is why stage 1 exists.
+
+### The rest, in one line each
+
+| ID | | |
+|---|---|---|
+| F3 | P1 | Moving the stamp to `tree` without a backfill makes existing revisions unstamped or falsely stale. **Satisfied by not moving it** — see below. |
+| F4 | P1 | Existing articles have no `labels` step receipt, so the new scheduler would think every one of them unfinished and **regenerate labels at real cost**. |
+| F5 | P1 | A carried labels receipt can suppress the new run against a freshly generated bare tree. Freshness must cover source hash, structure hash, label config **and** that the tree actually holds the map. |
+| F6 | P1 | `failed` cannot live on the candidate tree or in job history — failed drafts are not published and terminal jobs are not permanent. It needs durable revision-scoped storage. |
+| F7 | P1 | Acceptance stays all-or-nothing. Weakening the three gates could publish a 40%-complete set or destroy existing labels through the replacement merge. |
+| F8 | P1 | The client change is bigger than the blank cell: while pending, the **whole paragraph-label layer** must be withheld, or Outline and Paragraphs report accidental absence as article structure. |
+| **F9** | **P0** | **The successor must not reserve or consume a second ingestion slot.** A free slug-scoped rerun with no `ingest_event_id`. This is the hard guard. |
+| F10 | P1 | Enqueue must be atomic with publication, or a crash leaves a revision saying `pending` with no job to make it ready. |
+| F11–13 | P2 | (B)/(C) need a partial-result protocol; a `useArc`-style refresh is unnecessary for a reload-only v1; concurrency, extractive labels and model choice stay out of this piece of work. |
+
+And of [260831ah](260831ah-toc-on-request-and-the-tree-that-costs-nothing.md)'s thirteen findings,
+**eight do not bite** the narrower change — including every one about a provisional or absent tree.
+The three that do: **3** (a carried receipt suppressing the real run) strongly, **2/11** (the new
+step must declare both products, and `ready` must never be trusted ahead of validation), and **9** as
+an operational lesson — labels needs its own claim and its own resumable deadline, and enlarging the
+original lease is not the fix.
+
+### Where we did not take Sol's route, and the measurement that decided it <a id="stamp-route"></a>
+
+Sol's Q3 answer was to add `sourceHash` to the stored `Tree`, flip
+`STAMP_SOURCE.hierarchy` to `"tree"`, and backfill. **Measured against the dev database on
+2026-09-06, that flip is far more expensive than it looks, and we are not doing it.**
+
+`stampForStep` ([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts):838) **throws `StampDisagrees`
+rather than returning `null`** where the run row and the artefact both record a field and disagree —
+deliberately, *"because every caller reads a null stamp as re-run this step, which quietly resolves
+the clash in favour of the artefact"* (GPT Sol's own ruling, 2026-08-28). And the two disagree today:
+the `hierarchy` run row carries `prompt_version` from the **labels** file while the tree carries
+`toc/N`.
+
+```
+  row prompt_version   tree.version   revisions   of which current
+  labels/1             toc/2               32            13
+  labels/1             toc/4                3             1
+  (null)               toc/2..5            60            24
+```
+
+**14 of 38 live articles** would raise a 409 rather than merely re-run. A backfill of
+`labels->>'sourceHash'` into the tree cannot fix that column — it is a second, separate repair over
+32 published revisions — and 2 of the 95 tree-bearing revisions have no `sourceHash` to copy at all.
+
+**So the stamp does not move.** `hierarchy` instead writes a fully-stamped `LabelsFile` whose
+`labels` map is empty, and `STAMP_SOURCE.hierarchy = "labels"` goes on working untouched — **zero
+rows migrated, and no change to `stampFor`, `assertStampAgrees`, `has`, the publish guard, the
+carry-forward policy or `articleMetadata`.** Three things make it legal rather than a fudge:
+
+- `SHAPE.labels` is `{ field: "labels", ok: isObject }` ([`artifacts.ts`](../../src/store/artifacts.ts):292),
+  and `isObject({})` is true — the check exists to reject `[]`, not `{}`.
+- `LabelsFile` **already has a vocabulary for this**: `batches: null` means *"no evidence a run
+  happened"*, as against `batches: []` for *"generated by zero calls"* — argued out at
+  [`labels.ts`](../../src/labels.ts):455. So the artefact reads, in its own established terms, as a
+  manifest whose payload has not arrived. Not a lie; a manifest without its labels.
+- Nothing reads the labels *content* outside stage 4. [`pg.ts`](../../src/store/pg.ts):706 files the
+  labels column under *"Read by nobody through here"*; the only other readers serialise it for export.
+
+What it concedes is one comment: `STAMP_SOURCE`'s docstring calls `labels.json` *"the only output of
+stage 4 that can answer is this still about the current article"*, which stays true of a file that no
+longer carries labels — but the sentence should say *manifest*.
+
+**And it introduces one hazard, guarded rather than hoped away.** Two steps would now write the
+`labels` column, so a deferred run writing a *different* `sourceHash` would make
+`STAMP_SOURCE.hierarchy` answer about the labels run rather than the hierarchy run — hierarchy
+reporting itself fresh against blocks it never saw. The labels step therefore refuses to write unless
+`hashBlocks(current blocks)` equals the hierarchy run's own `input_hash`, and asks for a re-ingest
+instead. Under Sol's route this hazard would not exist, and that is its one genuine advantage; it is
+not worth 14 live 409s.
+
 ## Stages
 
-*To be finalised against the review. Sketch:*
+Sol's Q7 answer, with its stamp pre-stage deleted for the reason above.
 
-- **Stage 1 — the stamp.** Move `STAMP_SOURCE.hierarchy` off `labels.json` onto the tree or a
-  hierarchy manifest, with the migration for existing articles. Nothing about labels changes. This is
-  the piece most likely to be underestimated and it is independently shippable.
-- **Stage 2 — the "still arriving" state.** A representation that distinguishes *deliberately
-  unlabelled*, *not written yet* and *tried and failed*; the DTO field; the client rendering for
-  each, including the blank-cell fix at `TableView.tsx:985`.
-- **Stage 3 — the step split.** `labels` becomes its own step with its own budget; the three gates
-  move; `mergeLabels`' contract is restated for a two-write world; the checkpoint rows are shown to
-  survive.
-- **Stage 4 — out of the default list, and the hook.** `labels` leaves `DEFAULT_INGEST_STEPS`;
-  a `useLabels` on the `useArc` pattern.
-- **Stage 5 — measure it.** The same book, ingested both ways, and the `hierarchy` step back under
-  its deadline with margin.
+- **Stage 1 — the "still arriving" state.** One revision-scoped enum,
+  `NavLabelStatus = "pending" | "ready" | "failed"`, in durable revision-scoped storage rather than on
+  the tree — F6: a failure has to outlive the failed draft. `navLabel?: string` on nodes is
+  unchanged; what changes is how absence is *read*. The DTO carries the enum only, never a provider
+  error. Outline and the `Paragraphs` column become status-aware, so the layer is withheld while
+  pending rather than drawn blank (F8). Everything still writes `ready`, so **no behaviour change and
+  it ships alone**.
+- **Stage 2 — the split.** `labels` becomes its own step with its own `STEP_BUDGET_MS`, its own
+  claim and its own resumable deadline. `generateHierarchy` stops calling `generateLabels` and writes
+  the stamped-but-empty manifest, keeping the author's free heading labels
+  ([`heading-tree.ts`](../../src/heading-tree.ts):157). `checkCoverage` moves out of
+  `generateHierarchy` into the new runner, after the candidate merged tree and before any `ready`
+  write; `assertEveryBlockLabelled` and `assertInsideCoverageFloor` stay inside `generateLabels` and
+  defer for free with it. Publication atomically enqueues the free successor job (F10), with **no
+  `ingest_event_id` and no second slot** (F9). Legacy articles get `labels` receipts so the scheduler
+  does not re-buy every one of them (F4). **`mergeLabels` keeps replacement semantics** — it
+  correctly removes stale labels after a structure change, and A′ never legitimately hands it a
+  partial map (F7).
+- **Stage 3 — measure it.** A deterministic test that the ingest job publishes while a deliberately
+  delayed label executor is still running, and that partial output never replaces the tree. Step
+  timings showing `hierarchy` no longer carries the label wall time. Then, if Greg approves the
+  spend, one paid book rerun.
+
+Checkpoint rows survive the split unchanged — `batchFingerprint` contains no step or job identity —
+**provided the checkpoint namespace stays `hierarchy-labels`.** Renaming it would invalidate every
+stored row and buy the next run nothing. My own guess said the same; the difference is that this one
+names the condition under which it stops being true.
 
 ## What this deliberately does not fix
 
