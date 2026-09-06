@@ -479,3 +479,50 @@ per-stage reviews carry on.
 Sol also confirmed three things it was asked to attack and could not: the React layout-cleanup
 ordering claim holds for distinct sibling component types; Criteria and Claims are the **only** pair
 that can hand one slot over within a mounted `Reader`; and stage 3's first commit is cycle-free.
+
+### Stage 1 review — [260906c-stage1-review-sol.md](260906c-stage1-review-sol.md)
+
+Refused, on two P1s. **One accepted, one overruled.** Sol confirmed the things that mattered most:
+every moved unit is byte-identical to the pre-change `App.tsx` with only the declared band export
+prefixes removed, each of 1b's four bodies matching exactly once with order and adjacency preserved;
+no dead runtime import; every new relative specifier resolves to exactly one file; the anchors still
+in `App.tsx` all resolve; the Search ASCII diagram is still aligned; and keeping the 531-line Referee
+controller intact was right for a relocation stage.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F14 | `NO_SEARCHES` becoming an export of `reader-capability.ts` is an unlicensed interface change; leave it private until stage 3 | **Overruled** — see below |
+| F15 | `diagram.md` and `summaries.md` still name only their panels; F5 partly unclosed | **Accepted** |
+| F16 | `site-footer.test.tsx` scans only flat `src/web/*.tsx`, so **all eight moved controllers left both its guards** — a `<SiteFooter/>` or `ADMIN_EMAIL` added to `RefereeMode.tsx` now passes, and the same mutation in `App.tsx` was caught before | **Accepted.** The same class as F4, created by this stage |
+| F17 | Of the three referee-copy repairs only the seed is mutation-sensitive; the recursion and the resolver are correct but untested | **Accepted** — assert `clientComponents(WEB)` contains the controller, and calibrate `localTarget` on a path the old basename resolver cannot answer |
+| F18 | Reader-visible copy could leave the scan through a `.ts` module, since the recursive rule takes only `.tsx` | **Accepted**, the cheap half: assert the reader-visible `Record`s stay declared in the scanned controller |
+| F19 | Nothing enforces that mode code is eager — converting `DebateMode` to `React.lazy` breaks A4's offline contract with every assertion still green | **Accepted** — require every `modes/**/*Mode.tsx` in the eager closure and reject dynamic edges into it |
+| F20 | `TimelineMode.tsx`'s moved docblock is substantively false: it says Timeline is owners-only, that no `VisitorTimelineBand` exists, and that `POLICY.timeline` is `owners-only`; the same file defines that band and the policy is now `artefact` | **Accepted.** Byte-identical was right for the move; the sentence is wrong and gets fixed now |
+
+**F14, overruled — and the defect was in the review prompt, not the code.** Sol grades
+`NO_SEARCHES` moving to `reader-capability.ts` a P1 unlicensed interface change. Per
+[engineering-manager.md](../reusable/engineering-manager.md) an overruled P1 goes to Fable first; it
+did, and Fable upheld the overrule while improving the argument.
+
+The move is authorised: the plan's *Where each thing lands* table has carried it since before any
+code was written, and Sol reviewed that plan twice without objecting. What Sol was actually holding
+the commits to was **a sentence in my own stage-1 review prompt** — *"the only licensed edit to moved
+text is `function X` → `export function X`"* — which was narrower than what the commits did and said
+they did. A brief that under-describes its own diff is a P3 on the brief, not a P1 on the code.
+
+Fable also found the argument I had missed, and it is the decisive one. `NO_SEARCHES` sat *physically
+inside the timeline region*, between `NO_EVENTS` and `VisitorTimelineBand`. Stage 1a proves its moves
+byte-identical and 1b proves them a contiguous unique substring — so leaving the constant behind would
+have meant a hole in the moved region, an unrelated constant riding along into `TimelineMode.tsx`, or
+a reorder within `App.tsx`. **Every one of those is itself an impure edit.** The move was forced by
+the very contiguity check Sol was asked to trust; its remedy is not "do less" but "do a different
+impure edit, twice".
+
+Two smaller corrections from the same arbitration: identity stability is unaffected (one module-level
+array either way, ESM gives one instance), and `App.tsx`'s own export set — the thing the brief made
+claims about — never contained `NO_SEARCHES` at all.
+
+**The lesson, which is worth more than the finding.** From stage 3 onward, a review prompt must
+enumerate *every* non-byte-identical edit — `const` → `export const`, moved constants, changed import
+lines — not just the one class I happened to think of. A reviewer grading against an incomplete list
+will find the omission and call it a violation, and it will be right to.

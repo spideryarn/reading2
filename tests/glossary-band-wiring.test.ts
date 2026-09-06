@@ -1,11 +1,12 @@
 /**
  * **That the reading view is wired the way the hooks assume.**
  *
- * The subjects live in several files since 2026-09-06 — `Reader` is still in
- * `App.tsx`, the mode controllers are under `src/web/modes/` — so each
- * assertion reads the file that owns it. **They are read separately and never
- * concatenated**: one synthetic "App" source would make `indexOf` anchors
- * ambiguous again, which is the whole reason `hookBody` exists.
+ * The subjects live in several files since 2026-09-06 — `OwnedReader` is in
+ * `src/web/article/`, `Reader` is in `src/web/reader/`, the mode controllers are
+ * under `src/web/modes/` — so each assertion reads the file that owns it. **They are
+ * read separately and never concatenated**: one synthetic "App" source would
+ * make `indexOf` anchors ambiguous again, which is the whole reason `hookBody`
+ * exists.
  *
  * `tests/glossary-one-fetch.test.tsx` proves the hooks share one read. It
  * cannot prove that the reading view *uses* them that way, because it stands in
@@ -29,7 +30,12 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const app = await readFile(path.join(ROOT, "src/web/App.tsx"), "utf8");
+/* Both halves of the reading view left `App.tsx` on 2026-09-06: `OwnedReader`,
+   which mounts the owner-only hooks, into `article/`, and `Reader` itself into
+   `reader/`. Named separately, and the reads are the guard — a subject that
+   moves again fails here rather than in an assertion against the wrong file. */
+const articlePage = await readFile(path.join(ROOT, "src/web/article/ArticlePage.tsx"), "utf8");
+const reader = await readFile(path.join(ROOT, "src/web/reader/Reader.tsx"), "utf8");
 const glossaryMode = await readFile(
   path.join(ROOT, "src/web/modes/glossary/GlossaryMode.tsx"),
   "utf8",
@@ -42,14 +48,19 @@ const searchPanel = await readFile(path.join(ROOT, "src/web/SearchPanel.tsx"), "
 
 describe("the reading view's glossary wiring", () => {
   it("reads the glossary exactly once", () => {
-    const calls = app.match(/useGlossaryRead\(/g) ?? [];
+    /* `OwnedReader` is the one caller. Counted across the composition as well,
+       because "exactly one" is only a fact about the reading view if both of
+       the files it is now spread over are asked — a second read added in
+       `Reader` would otherwise be invisible. */
+    const calls = articlePage.match(/useGlossaryRead\(/g) ?? [];
     expect(calls).toHaveLength(1);
+    expect(reader.match(/useGlossaryRead\(/g) ?? []).toHaveLength(0);
   });
 
   it("hands that read to the band rather than letting it fetch its own", () => {
     /* `useGlossary` takes the read as its second argument. A call with one
        argument is the old shape, which fetched again. */
-    expect(app).toMatch(/read=\{glossaryRead\}/);
+    expect(reader).toMatch(/read=\{glossaryRead\}/);
     expect(glossaryMode).not.toMatch(/useGlossary\(slug\)/);
   });
 
@@ -63,11 +74,11 @@ describe("the reading view's glossary wiring", () => {
        no glossary and no endpoint to ask for one. Optional in the pattern, not
        required, so this still fails if the local disappears altogether — which
        is the regression it is about. docs/plans/260827ai-public-read-only-access.md. */
-    expect(app).toMatch(/glossaryRead\??\.glossary\?\.entries/);
+    expect(reader).toMatch(/glossaryRead\??\.glossary\?\.entries/);
     /* The prop or the call, not the word — the comment in `GlossaryBand`
        explaining why the prop is gone would otherwise fail this. Both files,
        because the prop would have to come back at both ends of the seam. */
-    expect(app).not.toMatch(/onEntries\s*[=(]/);
+    expect(reader).not.toMatch(/onEntries\s*[=(]/);
     expect(glossaryMode).not.toMatch(/onEntries\s*[=(]/);
   });
 });
@@ -117,8 +128,9 @@ describe("the threshold wiring", () => {
     /* And nowhere else in the reading view either — the count above is only
        "exactly one" within the file that owns it, so the reader composition has
        to be asked separately. `SearchMode.tsx` moved out of `App.tsx` on
-       2026-09-06 and this assertion moved with it. */
-    expect(app).not.toMatch(/keepAbove\(/);
+       2026-09-06 and this assertion moved with it; `Reader` followed the same
+       day, so the composition to ask is src/web/reader/Reader.tsx. */
+    expect(reader).not.toMatch(/keepAbove\(/);
   });
 
   it("lowers the gate before opening a term the bar is hiding, and only then", () => {
@@ -132,7 +144,13 @@ describe("the threshold wiring", () => {
        it would set a threshold the reader never saw), and it can only do that
        if the caller hands it the sort. What the function then decides is
        covered properly in tests/glossary.test.ts § the threshold slider. */
-    const open = app.slice(app.indexOf("const openTermInGlossary"));
+    const at = reader.indexOf("const openTermInGlossary");
+    /* **The guard, not a convenience.** `indexOf` returns -1 when the subject
+       has moved to another file, `slice(-1)` hands back the last character, and
+       the two assertions below then pass against nothing at all —
+       docs/reusable/silent-success.md. */
+    expect(at, "openTermInGlossary must exist in Reader.tsx to be checked").toBeGreaterThan(-1);
+    const open = reader.slice(at);
     const body = open.slice(0, open.indexOf("\n  );"));
     expect(body).toMatch(/gateToReveal\(terms, id, sort,/);
     expect(body).toMatch(/setGate\(/);
@@ -252,7 +270,7 @@ describe("the quotes band's marks", () => {
     expect(hookBody(quotesMode, "QuotesMode.tsx", "useQuotesMode")).toMatch(
       /useLayoutEffect\(\(\) => \{\s*onFound\(found\);\s*onOpenKey\(/,
     );
-    /* `Reader` has not moved, so this half is still `App.tsx`'s. */
-    expect(app).toMatch(/mode === "quotes"\s*\?\s*quoteOpenKey/);
+    /* `Reader` holds the key, and since 2026-09-06 `Reader` is its own file. */
+    expect(reader).toMatch(/mode === "quotes"\s*\?\s*quoteOpenKey/);
   });
 });

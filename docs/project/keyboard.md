@@ -274,7 +274,8 @@ too, which is the point of them all going through one function.
 
 ### A keypress writes no URL of its own
 
-It scrolls, and the reading-position listener in [`App.tsx`](../../src/web/App.tsx) notices and
+It scrolls, and the reading-position listener in
+[`reader/useReadingPosition.ts`](../../src/web/reader/useReadingPosition.ts) notices and
 updates `?at=` exactly as it would for a wheel. So there is no second answer to "does this push a
 history entry?" — a stride you take twenty times must not cost twenty presses of Back, which is
 [the rule position already follows](url-state.md#position-replaces-history-deliberate-acts-push).

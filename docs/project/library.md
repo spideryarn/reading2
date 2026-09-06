@@ -36,7 +36,8 @@ rename an article called "search".
 **This said "the two routes" until 2026-08-25.** The last two arrived together, and they are one
 route with three views rather than three routes: same article, same fetch, same bottom bar, so
 `Route` carries a `view` and `ArticlePage` branches on it
-([`App.tsx`](../../src/web/App.tsx)). The article payload is fetched above that branch, so stepping
+([`article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx)). The article payload is fetched
+above that branch, so stepping
 out to the metadata page and back costs nothing.
 
 Everything *else* stays in the query string. The division is worth stating as a rule, because it is
@@ -334,7 +335,8 @@ Two things are worth knowing about the two new sites:
   the reader's own.
 
 The new title is layered over the fetched payload in `ArticlePage`
-([`src/web/App.tsx`](../../src/web/App.tsx)) rather than written into it, which is the shape the
+([`src/web/article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx)) rather than written
+into it, which is the shape the
 server already uses — `titleFor` picks at the moment of answering rather than editing `meta.json`.
 It also keeps `setLoaded` under the rule that everything reaching it has been sanitised
 ([`tests/sanitize-client.test.ts`](../../tests/sanitize-client.test.ts)); a rename introduces no HTML

@@ -214,7 +214,7 @@ and in the export.
 do the same for Quotes (and any other modes as needed)"*: the quotes panel's foot
 ([`src/web/QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx) § `Foot`) and the dashed chip in the
 reading view's controls that held the tree's version
-([`src/web/App.tsx`](../../src/web/App.tsx)). Those were the only three. Two survivors, both
+([`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx)). Those were the only three. Two survivors, both
 deliberate: [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) § `StageRow`, which is where an
 owner is *meant* to look, and the thread page's *"Written by …"*
 ([`src/web/Tweets.tsx`](../../src/web/Tweets.tsx)), which sits on a page of its own, carries when and

@@ -17,7 +17,7 @@
  *
  * ## Why at ingress, and not at the render sink
  *
- * This runs once when the article arrives (src/web/App.tsx), before anything
+ * This runs once when the article arrives (src/web/article/access.ts), before anything
  * else looks at the HTML. Putting it next to `dangerouslySetInnerHTML` instead
  * would be too late, because React is not the first browser parser to touch the
  * string — there are two ahead of it in src/web/annotate.ts:

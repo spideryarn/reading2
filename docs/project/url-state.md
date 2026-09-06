@@ -168,7 +168,7 @@ The **server predicts the same rewrite** — `readMode` in [read-address.ts](../
 [last-view.ts](../../src/web/last-view.ts): a restore runs after the rewrite, so a stored `text=0`
 would walk straight past it.
 
-Deleting the parameters outright would save little — `fitView` still needs a three-state answer, and App.tsx puts
+Deleting the parameters outright would save little — `fitView` still needs a three-state answer, and `Reader` puts
 `?spine=` back to *absent* when Search or Ideas opens for a reader who had hidden the rail — and it
 is a URL-contract change, which is a different kind of change from taking a button off a bar. So
 this is now a parameter with no writer, which is a fair description of a **link format**.
@@ -348,7 +348,7 @@ merely tedious).
 
 The one exception is **clicking a gist to jump**, which pushes. That is a scroll, but it is a
 deliberate act — you flung yourself across the article and may well want that undone. The override is
-per-call in `App.tsx`, not in the parser.
+per-call in `Reader`, not in the parser.
 
 ### Debounced, not throttled
 
@@ -429,7 +429,7 @@ piece was something to keep a copy of it and put it back. So: **the query string
 `localStorage` under the slug as the reader moves, and put back when they open that article at an
 address that says nothing.** [`src/web/last-view.ts`](../../src/web/last-view.ts), pinned in
 [`tests/last-view.test.ts`](../../tests/last-view.test.ts), wired into `ArticlePage`
-([`App.tsx`](../../src/web/App.tsx)). Per-device, no server, no schema — which is what he said was
+([`src/web/article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx)). Per-device, no server, no schema — which is what he said was
 fine.
 
 **This does not make `localStorage` a second source of truth**, which is what the rule at the top of
@@ -566,7 +566,7 @@ Two things about *when*, both worth knowing before you touch it:
 
 The rule itself is `arrivalTarget` in [`scroll.ts`](../../src/web/scroll.ts) — pure, and pinned in
 [`tests/scroll.test.ts`](../../tests/scroll.test.ts). The wiring is one effect in
-[`App.tsx`](../../src/web/App.tsx), beside `goToComment`.
+[`reader/Reader.tsx`](../../src/web/reader/Reader.tsx), beside `goToComment`.
 
 We do **not** rewrite `?at=` to match. The scroll moves the page, the position tracker notices, and
 the URL catches up 300ms later exactly as it does for a wheel — which is the same arrangement

@@ -196,3 +196,23 @@ export const NO_TERMS: Glossary["entries"] = [];
  * downstream would have to test.
  */
 export const NO_SEARCHES: SavedSearch[] = [];
+
+/**
+ * The artefact flags an owner is handed, and nothing reads them.
+ *
+ * `visitorGap` and `markedModes` take a non-optional `PublicArtefacts` since
+ * slice 1b — there is no second request to have failed, so there is no `null`
+ * to mean *we could not check*. The owner's path never asks either function
+ * anything: every gate in `Reader` tests `owner` first. This is what the
+ * compiler is given so that the absence of a question does not need an absent
+ * answer. src/web/visitor.ts.
+ */
+export const OWNER_HAS_EVERYTHING: PublicArtefacts = {
+  arc: true,
+  tweets: true,
+  glossary: true,
+  ideas: true,
+  quotes: true,
+  timeline: true,
+  sketch: true,
+};

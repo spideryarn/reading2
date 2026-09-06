@@ -1111,7 +1111,8 @@ Honest list. None is a reason to delay the fix above; all are worth knowing.
   them: the per-page check compares against the page's own text layer, which the injection is
   printed on.
 - **The ingress call is guarded by reading source, not by mounting the app.** Deleting
-  `sanitizeArticle(...)` from [`App.tsx`](../../src/web/App.tsx) would otherwise leave every
+  `sanitizeArticle(...)` from [`article/access.ts`](../../src/web/article/access.ts) would
+  otherwise leave every
   sanitiser test green while reopening the original hole, so `tests/sanitize-client.test.ts` asserts
   that every `setArticle` argument is either `null` or wrapped — and that no client file imports the
   jsdom-bound module. Both were mutation-tested. A mount test driving the real fetch → state →

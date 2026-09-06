@@ -17,7 +17,9 @@ Why the feature exists and what a gist may and may not be:
 | File | What it does |
 |---|---|
 | [`index.html`](../../index.html) + [`src/web/main.tsx`](../../src/web/main.tsx) | Vite entry. `main.tsx` imports **`./tailwind.css`**, not `styles.css` — see below, it matters. It also calls **`enableHistorySync()`**, without which nuqs cannot see our own navigations and router.ts's whole argument is false |
-| [`src/web/App.tsx`](../../src/web/App.tsx) | picks the page from the path, then fetches `/api/article/<slug>` **once for all three of an article's views** — masthead, the granularity controls |
+| [`src/web/App.tsx`](../../src/web/App.tsx) | picks the page from the path, and nothing else: route choice, the session, and the services that must outlive whichever page is mounted (`useJobSession`, above every early return). 5,920 lines until 2026-09-06 — [260906c](../plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md) took the modes, the reading view and the article out of it, and [`tests/reader-import-direction.test.ts`](../../tests/reader-import-direction.test.ts) is what stops them coming back |
+| [`src/web/article/`](../../src/web/article/) | **who may read this article, and on what footing.** `access.ts` is the two-step — the owned route, then the public one — and the one doorway `sanitizeArticle` stands in; `ArticlePage.tsx` fetches `/api/article/<slug>` **once for all three of an article's views** and then branches into `OwnedArticle`/`OwnedReader` or `VisitorArticle`. Those boundaries are the capability seam and not a tidy-up: a hook cannot be skipped conditionally, so *a visitor does not do this* has to be a component that does not exist — [`reader-capability.ts`](../../src/web/reader-capability.ts) |
+| [`src/web/reader/`](../../src/web/reader/) | **the reading view.** `Reader.tsx` composes the prose, the spine, the granularity zoom, the dock and the band the modes take turns in — one component for the owner and for a visitor, differing by the `capability` prop. Beside it, `useReadingPosition.ts` (`?at=` both ways) and `measure.ts` (the window's usable width and the root font size, both state because both move while the page is open) |
 | [`src/web/AppBoundary.tsx`](../../src/web/AppBoundary.tsx) | the last thing between a throw during render and a blank white page: `main.tsx` wraps the whole app in it. Hand-written rather than Sentry's, because reporting is optional and the fallback is not; it reports through `captureClientFailure` and `recordLog` and shows the reader `[render]` and no `error.message` — [260826p-error-boundary.md](../plans/260826p-error-boundary.md) |
 | [`src/web/FeatureBoundary.tsx`](../../src/web/FeatureBoundary.tsx) | **the smaller one**, around one mode's controller and panel, so a broken mode leaves the article readable — [§ A mode that breaks does not take the article with it](#a-mode-that-breaks-does-not-take-the-article-with-it) |
 | [`src/web/modes/`](../../src/web/modes/) | a mode's controller and its band, out of `App.tsx` — `modes/ideas/IdeasMode.tsx` was the first, joined on 2026-09-06 by Timeline, Quotes, Debate and Glossary, then by Search, Summary, Diagram and Referee, and last by Chat and Remember, which share one `modes/conversation/ConversationModes.tsx` because `RememberBand` renders `ConversationBand`; more follow under [260905e](../plans/260905e-main-app-architecture-review.md). The extraction is what lets a boundary enclose the mode's own computation, since a boundary cannot catch a throw from the component that renders it |
@@ -40,7 +42,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | the bird's-eye rail down the far left — [granularity-zoom.md](granularity-zoom.md#the-spine-a-birds-eye-rail) |
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | hover tooltips over Floating UI — [tooltips.md](tooltips.md) |
 | [`src/web/BlockRef.tsx`](../../src/web/BlockRef.tsx) | one block id, drawn small and faint and linked to itself — [block-ids.md § Showing an id](block-ids.md#showing-an-id) |
-| [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the narrow column beside every paragraph: mark, permalink, chat, "?", and a "…" for whatever the row has no room to draw — [prose-gutter-icons.md](../plans/prose-gutter-icons.md), [260905c-icons](../plans/260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md). **The chat chip opens what it is counting**: on a paragraph that already has a conversation a press reopens one rather than starting another, whole-block ahead of a newer selection ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts) § `threadFor`, [`App.tsx`](../../src/web/App.tsx) § `chatAboutBlock`) — so the door to a *second* conversation is "New conversation" in the panel it opens. [260905c-chip](../plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md) |
+| [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the narrow column beside every paragraph: mark, permalink, chat, "?", and a "…" for whatever the row has no room to draw — [prose-gutter-icons.md](../plans/prose-gutter-icons.md), [260905c-icons](../plans/260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md). **The chat chip opens what it is counting**: on a paragraph that already has a conversation a press reopens one rather than starting another, whole-block ahead of a newer selection ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts) § `threadFor`, [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `chatAboutBlock`) — so the door to a *second* conversation is "New conversation" in the panel it opens. [260905c-chip](../plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md) |
 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the CSS entry point.** Four guards, the token bridge, and the `@import` that puts `styles.css` in a layer — [§ Tailwind and shadcn](#tailwind-and-shadcn-components) |
 | [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version/overview.md). Both now load *inside* `@layer app`, via `tailwind.css` — the map of all four stylesheets is [design-css-overview.md](design-css-overview.md) |
 | [`src/web/components/ui/`](../../src/web/components/ui/) | shadcn components, generated then owned by us — `button`, `toggle` |
@@ -98,7 +100,8 @@ no band is open.
 columns beside the prose, and `plain` — the default since 2026-08-31 — is the prose on its own, with
 the columns gone as well ([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)).
 So *a mode is open* and *a band is open* are two questions now, named `inMode` and `bandOpen` in
-[`App.tsx`](../../src/web/App.tsx). Reading either one as the other is the mistake `proseVisible`
+[`reader/Reader.tsx`](../../src/web/reader/Reader.tsx). Reading either one as the other is the
+mistake `proseVisible`
 below already exists because of.
 
 "Permanent" means *no mode takes it away*, which is the claim Greg's framing is making, and it is
@@ -154,7 +157,8 @@ Read that as **adopting shadcn components**, not switching the reading view to s
 the full accounting are [260825a-shadcn-migration.md](../plans/260825a-shadcn-migration.md); this section is
 what actually landed and what a future reader would otherwise have to reverse-engineer.
 
-**What shadcn now stands behind:** the granularity pills in [`App.tsx`](../../src/web/App.tsx), a
+**What shadcn now stands behind:** the granularity pills in
+[`reader/Reader.tsx`](../../src/web/reader/Reader.tsx), a
 `Button` waiting for the comment dialog, and — since 2026-08-26 — **every "run this job" button in
 the app**, via [`JobProgress.tsx`](../../src/web/JobProgress.tsx).
 
@@ -255,7 +259,7 @@ declared something no utility mentioned, it was still the thing painting. Two ca
 second is the one that mattered:
 
 - `.controls button` supplied `font-family` (via `font: inherit`) and `cursor: pointer` to the new
-  pills. `PILL` in [`App.tsx`](../../src/web/App.tsx) states both now, so the deletion could not
+  pills. `PILL` in [`pill.ts`](../../src/web/pill.ts) states both now, so the deletion could not
   change them — but that had to happen first.
 - `.controls button.linky` — the `auto` control, the one thing in that bar that never became a
   `Toggle` — only ever overrode border-colour, underline and inline padding, and leaned on the base

@@ -493,7 +493,8 @@ Four decisions worth keeping:
 
   One consequence worth knowing before you touch it: the rail's width is taken out of the prose
   column's, so hiding it **rewraps every paragraph in the article**. Every row changes height, which
-  is why `fit.spine` is part of `layoutKey` in [`App.tsx`](../../src/web/App.tsx) — the rail's own
+  is why `fit.spine` is part of `layoutKey` in
+  [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) — the rail's own
   measurements and the `?at=` tracker's both have to be redone.
 
 - **Search results paint into it**, added 2026-08-26 at Greg's request — one lane per switched-on
@@ -616,7 +617,7 @@ the reading column come to 70rem — 1120px — so a 1000px window is 120px shor
 anything. Scrolling to a column you can never see all of is not really an answer.
 
 So the view now **chooses which columns to show, and how wide**, in
-[`src/web/App.tsx` § fitting](../../src/web/App.tsx):
+[`src/web/reader/Reader.tsx` § fitting](../../src/web/reader/Reader.tsx):
 
 - **Shrink first, drop second.** Gist columns squeeze from a comfortable 15rem down to 11rem before a
   level is given up. At 1035px two columns at 15rem don't fit, but the same two squeezed to ~14.9rem

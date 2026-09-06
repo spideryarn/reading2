@@ -2438,7 +2438,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      here.
 
      The real client sends exactly what these allow: `helpAboutBlock` in
-     src/web/App.tsx mints a draft with `{ blockId }`, no kind, and `help: true`
+     src/web/reader/Reader.tsx mints a draft with `{ blockId }`, no kind, and `help: true`
      on the send that creates the thread — pinned by *still lets through the
      thing the real client sends* in tests/chat-help-route.test.ts, so tightening
      this any further goes red rather than quiet.
@@ -3563,7 +3563,7 @@ function summarise(thread: ChatThread): ThreadSummary {
        `ChatDialog` in every mode but the two conversation modes, and that
        dialog is chat's UI asking with chat's prompt; a pasted
        `?mode=hierarchy&thread=<a Remember thread>` would continue it as a chat. The
-       overlay is gated on this. src/web/App.tsx § overlay. */
+       overlay is gated on this. src/web/reader/Reader.tsx § overlay. */
     kind: thread.kind,
     turns: thread.messages.filter((m) => m.role === "user").length,
     ...(last ? { lastLine: last } : {}),

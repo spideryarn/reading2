@@ -2814,7 +2814,7 @@ export interface ThreadSummary {
    * prompt. A pasted `?mode=toc&thread=<a Remember thread>` would therefore
    * continue a Remember conversation as a chat. The overlay is gated on this
    * instead. See
-   * src/web/App.tsx § overlay, and GPT Sol's review of
+   * src/web/reader/Reader.tsx § overlay, and GPT Sol's review of
    * docs/plans/260827ah-review-mode.md, finding 7.
    */
   kind: ThreadKind;

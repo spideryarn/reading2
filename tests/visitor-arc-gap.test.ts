@@ -101,7 +101,9 @@ describe("what a visitor gets, and does not", () => {
        against the source rather than by rendering, because the failure mode is a
        hook moving up one component, which no render of the visitor page would
        reveal unless it happened to assert on POSTs. */
-    const app = readFileSync("src/web/App.tsx", "utf-8");
+    /* Both components left `App.tsx` for src/web/article/ArticlePage.tsx on
+       2026-09-06, with the rest of the access unit. */
+    const app = readFileSync("src/web/article/ArticlePage.tsx", "utf-8");
     const ownedAt = app.indexOf("function OwnedReader(");
     const visitorAt = app.indexOf("function VisitorArticle(");
     /* Both must exist and be in this order, or the slices below would silently
@@ -116,5 +118,13 @@ describe("what a visitor gets, and does not", () => {
     expect(ownedBody).toContain("useArc(");
     // The visitor component, and everything after it, must never call it.
     expect(visitorArticle).not.toContain("useArc(");
+
+    /* **And the reading view below both of them.** Until 2026-09-06 `Reader`
+       sat after `VisitorArticle` in this same file, so the slice above covered
+       it; it is src/web/reader/Reader.tsx now, and without this line the hook
+       could move down one component into the page a visitor is served and
+       nothing here would notice. */
+    const reader = readFileSync("src/web/reader/Reader.tsx", "utf-8");
+    expect(reader).not.toContain("useArc(");
   });
 });

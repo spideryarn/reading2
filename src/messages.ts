@@ -2280,7 +2280,7 @@ export const SESSION_UNCONFIRMED_CHIP = "sign-in unconfirmed";
  * The action beside `SESSION_UNCONFIRMED`, and the label is the honest one.
  *
  * Signed out at `/read/:slug` the app does not show sign-in — it goes straight
- * back through `ArticlePage` with no reader (src/web/App.tsx), so on a shared
+ * back through `ArticlePage` with no reader (src/web/article/ArticlePage.tsx), so on a shared
  * article this reload returns the reader to this same page as an ordinary
  * visitor. Calling it *"sign in again"* would be a button that does not do what
  * it says; GPT Sol caught exactly that in the first draft of this fix.

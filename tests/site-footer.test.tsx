@@ -173,9 +173,16 @@ describe("the pages that mount it", () => {
 
   const sourceOf = (file: string) => readFileSync(path.join(WEB, file), "utf8");
 
-  /** `<SiteFooter …>` occurrences per `src/web/*.tsx`, files with none omitted. */
+  /**
+   * `<SiteFooter …>` occurrences per `src/web/**\/*.tsx`, files with none omitted.
+   *
+   * **Recursive since 2026-09-06**, when the reading view moved into
+   * `src/web/reader/` and `src/web/article/`. A flat `readdirSync` would have
+   * gone on passing the `/read/` exclusion below by simply not looking at the
+   * files it is about — the same hole `referee-copy-is-about-the-model` had.
+   */
   const mounts = new Map(
-    readdirSync(WEB)
+    readdirSync(WEB, { recursive: true, encoding: "utf8" })
       .filter((f) => f.endsWith(".tsx"))
       .map((f) => [f, sourceOf(f).match(/<SiteFooter[\s/>]/g)?.length ?? 0] as const)
       .filter(([, n]) => n > 0)
@@ -202,15 +209,18 @@ describe("the pages that mount it", () => {
   it("is nothing under /read/ — not the reading view, not the two dead ends", () => {
     /* Greg's one explicit exclusion, and it gets an assertion of its own rather
        than resting on the list above, because the two files are kept out for
-       reasons of different strength. `App.tsx` holds `ArticlePage` *and* six
-       routes that do get a footer, so the interesting fact about it is the
-       absence rather than its position in a sorted list. `PublicChrome.tsx`
+       reasons of different strength. `App.tsx` holds six routes that do get a
+       footer, so the interesting fact about it is the absence rather than its
+       position in a sorted list; `ArticlePage` and `Reader` left it on
+       2026-09-06 and are named here too. `PublicChrome.tsx`
        holds two dead-end pages that would take a footer perfectly well and are
        kept out only because they sit at a `/read/` address — SiteFooter.tsx
        § Where it goes. **If Greg says the exclusion was about the reading view
        rather than the path, this is the line to edit**, along with the two
        comments in PublicChrome.tsx. */
     expect([...mounts.keys()]).not.toContain("App.tsx");
+    expect([...mounts.keys()]).not.toContain("reader/Reader.tsx");
+    expect([...mounts.keys()]).not.toContain("article/ArticlePage.tsx");
     expect([...mounts.keys()]).not.toContain("PublicChrome.tsx");
   });
 

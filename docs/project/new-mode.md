@@ -40,7 +40,8 @@ rest.** A fifteenth word there is red until it has a row in each of these totals
 Then the residue, which is why this page exists:
 
 - **The band branch**: the `mode === "…"` if-chain near the bottom of `Reader` in
-  [`App.tsx`](../../src/web/App.tsx), whose own header comment records why it is still a chain and
+  [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx), whose own header comment records why it
+  is still a chain and
   not a table. *Nothing; this list.*
 - **The mode's URL params**, [`params.ts`](../../src/web/params.ts) — [url-state.md](url-state.md).
   *Nothing.*
