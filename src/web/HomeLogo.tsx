@@ -15,54 +15,49 @@
  * every site on the web has kept both for twenty years, so it costs the reader
  * nothing to learn.
  *
- * ## Why the corner is free, which is not an accident
+ * ## Why the corner is free, and what holds it free now
  *
- * On the reading view the rectangle from (0,0) to (`--spine-w`, `--bar-h`) is
- * genuinely empty at every scroll position, and it is empty for a structural
- * reason rather than a lucky one: the spine is `position: fixed` starting at
- * `top: var(--bar-h)`, and the masthead and controls bar are both inset by
- * `left: calc(var(--spine-w) + var(--mode-w))`. Nothing is ever painted there.
- * See styles.css § shell.
+ * The corner was chosen because on the reading view the rectangle from (0,0) to
+ * (`--spine-w`, `--bar-h`) is genuinely empty at every scroll position, for a
+ * structural reason rather than a lucky one: the spine is `position: fixed`
+ * starting at `top: var(--bar-h)`, and the masthead and controls bar are both
+ * inset by `left: calc(var(--spine-w) + var(--mode-w))`. Nothing is ever
+ * painted there. styles.css § shell.
  *
- * **But `--spine-w` is not a constant.** layout.ts drops the spine entirely in
- * outline mode, and whenever the reader hides it (`fitView`), and at that point
- * the corner belongs to the masthead and the controls bar again. So both of
- * those reserve the space instead, with one expression written twice:
+ * **That argument no longer applies to this component, and the mechanism it
+ * described is gone.** Both of those bars are on the reading view, and the
+ * reading view stopped drawing this component on 2026-09-06 (see below). What
+ * holds the corner clear on the pages that *do* still draw it is much simpler:
+ * they have no sticky bars at all, so there is nothing for a fixed corner to
+ * land on top of.
+ *
+ * **Their top spacing is each page's own business and there is no shared
+ * number**, which is worth saying because an earlier draft of this paragraph
+ * claimed one. `ProfilePage`, `PrivacyPage` and `ContactPage` happen to start
+ * their `<main>` at `calc(3.5rem + var(--safe-top))`; the shelf, the landing
+ * pages, the 404 and the four `ArticlePage` branches that draw no `Dock` each
+ * lay themselves out differently. The 3.5rem is also not `2.5rem + --bar-h` —
+ * `--bar-h` is 2.75rem, and the extra over the ordinary 2.5 is 1rem. It is a
+ * page's chosen clearance, not a derived quantity. GPT Sol, T3.
+ *
+ * The history is worth keeping, because it is why this is a corner rather than
+ * a row. `--spine-w` is not a constant: layout.ts drops the spine in outline
+ * mode and whenever the reader hides the prose (`?text=0`, at any width), and
+ * `?spine=0` is the reader's own hand on the rail (docs/project/url-state.md).
+ * At `--spine-w: 0` the corner belonged to the two bars again, so both of them
+ * reserved it, with one expression written twice:
  *
  *     padding-left: max(1.5rem, calc(var(--logo-w) + 1.5rem - var(--spine-w) - var(--mode-w)))
  *
- * Both bars are positioned at `left: calc(--spine-w + --mode-w)`, so
- * `--logo-w` minus that offset is exactly how far the logo reaches into them,
- * and the `+ 1.5rem` keeps the gutter those bars have everywhere else rather
- * than letting the title start flush against the wordmark. With a mode band
- * open the whole term goes negative and the ordinary 1.5rem wins — which is
- * what makes that case cost nothing rather than needing a second rule.
- * Change `--logo-w` and both bars follow; change the logo's size without
- * changing the token and they will not, and the failure is a wordmark sitting
- * on top of the article's title.
- *
- * **`--spine-w: 0` is not a narrow-window curiosity**, which is the part that
- * is easy to get wrong. `fitView` turns the spine off whenever the reader hides
- * the prose (`!showText`), at any width at all, so `?text=0` on a full-size
- * screen reaches it in one keystroke. This rule has to be right rather than
- * being an edge case nobody meets — measured: logo 0→136, title starts at 160.
- *
- * `--spine-w: 0` is reached two ways, and **the second one arrived on
- * 2026-08-26**: `?spine=0`, the reader's own hand on the rail
- * (docs/project/url-state.md). Unlike `!showText` it is honoured inside a mode
- * band too, so the claim this comment used to make — that `fitMode` never
- * returns `"off"`, and the two smallest terms therefore cannot co-occur — is no
- * longer true. Both terms can now be at their floor at once.
- *
- * The `--mode-w` term is **still dead arithmetic, and still worth keeping.**
- * The reason is now the band rather than the rail: with a band open it is at
- * least `MODE_MIN` (288px) whatever the spine is doing, so even a hidden rail
- * leaves 288px against a 160px reach and the expression floors at 1.5rem. It is
- * in there because the bars are *positioned* by `--spine-w + --mode-w` and an
- * offset expression that does not mirror its own positioning is a trap for
- * whoever changes one of them. Drop `MODE_MIN` below ~112px and it starts to
- * bind — which is now the only thing that would make it bind, the spine having
- * stopped being able to hold the floor up on its own.
+ * — the logo's reach into a bar positioned at `--spine-w + --mode-w`, plus the
+ * ordinary gutter, floored so that a mode band's own width made the case cost
+ * nothing. It worked, and it cost 148px of left gutter and 144px of right on
+ * every reading view whether or not the reader had hidden anything. Both terms
+ * came out with this component, stage 2 of
+ * docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md,
+ * and **`--logo-w` is now the width of this button and nothing else**
+ * (styles.css § tokens). If a corner control is ever put back on a page with a
+ * sticky bar, this is the mechanism to put back with it.
  *
  * ## Where it is not rendered
  *
@@ -80,13 +75,13 @@
  * shelf to the bottom-left of an article.
  * docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md.
  *
- * **Everything above is still true, and is true of the pages that keep this
- * component**: the shelf-adjacent pages (`/add`, `/profile`, `/features`,
- * `/pricing`, `/contact`, `/privacy`, `/read/public`, the 404 and the admin
- * pages), and the four branches of `ArticlePage` that draw no `Dock` — loading,
- * error, not-shared and reauth-required. The corner is free on those for the
- * same structural reason, and both bars still reserve `--logo-w` for it.
- * `ArticlePage`'s final branch is where it stopped being drawn.
+ * **The pages that keep this component** are the shelf-adjacent ones (`/add`,
+ * `/profile`, `/features`, `/pricing`, `/contact`, `/privacy`, `/read/public`,
+ * the 404 and the admin pages) and the four branches of `ArticlePage` that draw
+ * no `Dock` — loading, error, not-shared and reauth-required. None of them has
+ * a masthead or a controls bar; that is why the paragraph above had to be
+ * rewritten rather than merely narrowed. `ArticlePage`'s final branch is where
+ * it stopped being drawn.
  *
  * The class names are the original app's, so its fifteen CSS-only logo
  * animations can be dropped in later as one file — see

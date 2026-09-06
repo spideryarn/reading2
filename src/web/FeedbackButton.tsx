@@ -51,47 +51,38 @@
  * one: that this does not render for an anonymous reader, and that
  * `POST /api/feedback` still refuses them. GPT Sol asked for both.
  *
- * ## The bars have to reserve the space
+ * ## The bars used to reserve the space, and stopped on 2026-09-06
  *
  * The reading view's masthead and controls bar are `100vw`-wide sticky bars that
  * run to the right edge, and the article's own title reaches that edge on any
  * window narrow enough. A fixed button in the corner with nothing reserved for
- * it lands **on top of the title** — the same failure HomeLogo.tsx describes on
- * the left, in the same two bars, and the fix is the same shape:
- * `padding-right` that makes room for `--feedback-w`.
+ * it lands **on top of the title**, so both bars held `--feedback-w + 1.5rem` of
+ * right-hand padding open — the mirror of what they held on the left for the
+ * wordmark (HomeLogo.tsx).
  *
- * It is simpler than the left-hand expression, and the reason is worth stating
- * so nobody adds the missing terms back. The left one subtracts `--spine-w` and
- * `--mode-w` because those bars are *positioned* at
- * `left: calc(--spine-w + --mode-w)`, so the wordmark only reaches into them by
- * whatever is left over. Nothing is positioned against the right edge but
- * `--safe-right`, which both the bar and this button already sit inside, so the
- * button reaches exactly `--feedback-w` in and there is nothing to subtract.
+ * **Both reservations are gone**, because the trigger they were for is in the
+ * Dock on the one page those bars are drawn on. What it cost while it stood is
+ * worth keeping at its real size rather than a flattering one: 7.5rem above the
+ * narrow breakpoint, about **120 CSS pixels** of right-hand gutter, held open on
+ * every reading view including ones with no button in them at all — an anonymous
+ * reader on a shared article, who has never been offered this dialog. GPT Sol
+ * priced it on 2026-09-01 and was right to insist; stage 2 of the plan above is
+ * where it came out, together with the 148px on the other side.
  *
- * **The space is reserved whether or not the button is rendered**, and that is a
- * decision rather than an oversight. The alternative — a class on `<html>` that
- * the button sets in an effect — is a component reaching up out of itself to
- * change the page's layout.
+ * The trade was still the right one while the button was in the corner, and the
+ * reasoning is kept because it is what to reach for if a corner control ever
+ * goes back on a page with a sticky bar: an unreserved corner puts a control on
+ * top of the article's own title, which is the thing the page exists for, and
+ * the alternative to reserving in CSS — a class on `<html>` that the button sets
+ * in an effect — is a component reaching up out of itself to change the page's
+ * layout.
  *
- * **The cost is larger than an earlier draft of this comment admitted**, and it
- * is worth stating at its real size rather than at a flattering one: above the
- * narrow breakpoint that is `--feedback-w` = 7.5rem, about **120 CSS pixels** of
- * right-hand gutter held open on a page that has no button in it — an anonymous
- * reader on a shared article. Not "a few millimetres", and not reliably just one
- * earlier word wrap. GPT Sol, 2026-09-01, and it was right to insist.
- *
- * It is still the trade to take, because the failure it buys off is worse than a
- * wide gutter: an unreserved corner puts a control on top of the article's own
- * title, which is the thing the page exists for. If shared articles ever become
- * a common way in rather than an occasional link, that is the moment to revisit
- * it — and the fix then is a rule scoped to the signed-out shell, not an effect.
- *
- * **And on the pages that mount a `Dock` the trigger has left the corner while
- * the reservation has not yet followed it.** That is the intended intermediate
- * state of stage 1 rather than an oversight: those pages currently hold
- * ~120px of right-hand gutter open for a button that is now in the bar at the
- * bottom. Stage 2 of the plan above is where the reservation comes out, and it
- * is the visible half of the work.
+ * **`.fb-button` still draws in the corner on every page without a `Dock`**, and
+ * nothing reserves anything for it there, which is safe for the reason
+ * HomeLogo.tsx now gives on its own side: those pages have no sticky bars, so
+ * there is nothing for a fixed corner to land on top of. Their top spacing is
+ * each page's own and there is no shared number — see that file, which carries
+ * the whole note.
  */
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 /* Type only, so that the two `placement` strings in `FEEDBACK_SHAPE` below are
@@ -184,8 +175,11 @@ export function FeedbackHost({ children }: { children: ReactNode }) {
  * Which of the two shapes a trigger wears.
  *
  * **`corner`** is the original: `position: fixed` in the top-right of the
- * window, `--feedback-w` wide, with the bars holding that width open for it.
- * Every page that does not mount a `Dock` draws this one.
+ * window, `--feedback-w` wide. Every page that does not mount a `Dock` draws
+ * this one. **The bars no longer hold that width open for it** — they did until
+ * stage 2 of the plan above, and the two pages the bars belong to are the two
+ * this variant is not drawn on any more, so the reservation had nothing left to
+ * reserve for.
  *
  * **`dock`** is a button in the bottom bar, on the pages that do. It is
  * not the corner button rendered somewhere else — a control that carries its
@@ -212,10 +206,11 @@ export type FeedbackVariant = "corner" | "dock";
  * (tests/feedback-button-tooltip.test.tsx), which is the difference between a
  * decision that is recorded and one that is only implied by an argument list.
  *
- * `--feedback-w` appears in neither row, deliberately. It is the corner's
- * reservation and it comes from `.fb-button`; the bar's copy is content-sized,
- * because a 7.5rem labelled exception in the row could make a last-rung bar
- * scroll where it would otherwise have fitted. GPT Sol, G7.
+ * `--feedback-w` appears in neither row, deliberately. It is the corner
+ * button's own width, set on `.fb-button`, and nothing else reads it now; the
+ * bar's copy is content-sized, because a 7.5rem fixed-width exception in the
+ * row could make a last-rung bar scroll where it would otherwise have fitted.
+ * GPT Sol, G7 and T2.
  */
 export const FEEDBACK_SHAPE = {
   corner: {
@@ -293,10 +288,10 @@ export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
         /* **`dock-feedback` styles nothing on its own**, the way
            `dock-experimental` next to it does not: it is how § the bar's fit
            ladder finds this button, and how a test finds one button among
-           twenty that are all `dock-btn`. No `--feedback-w` here — that width
-           is the corner's reservation, and a 7.5rem labelled exception in the
-           row would make a last-rung bar scroll where it would otherwise have
-           fitted. GPT Sol, G7. */
+           twenty that are all `dock-btn`. No `--feedback-w` here — that is the
+           corner button's own width and nothing else reads it, and a 7.5rem
+           fixed-width exception in the row would make a last-rung bar scroll
+           where it would otherwise have fitted. GPT Sol, G7 and T2. */
         className={shape.button}
         onClick={api.open}
         /* **The accessible name, now that `title` is not supplying one.**

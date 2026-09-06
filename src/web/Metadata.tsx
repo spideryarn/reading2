@@ -542,17 +542,26 @@ export function Metadata({
 
   return (
     <>
-      {/* 3.5rem rather than 2.5: the corner wordmark is fixed (HomeLogo.tsx),
-          so on a window narrow enough that this centred column reaches the left
-          edge it would otherwise sit on the back-link.
+      {/* **2.5rem, and it was 3.5 until 2026-09-06.** The extra rem was room for
+          the corner wordmark, which is fixed (HomeLogo.tsx) and would otherwise
+          have sat on the back-link on any window narrow enough that this centred
+          column reached the left edge. This page mounts a `Dock` and the
+          wordmark is in it, so there is nothing above this element to clear and
+          the strip it was holding open was empty.
+          docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md
+          § Stage 2. The four other `main`s that copied this — Tweets.tsx and the
+          three in PublicPages.tsx — moved with it; ProfilePage, ContactPage and
+          PrivacyPage keep 3.5rem, because they keep the wordmark.
 
-          **`+ var(--safe-top)` because the wordmark moved.** `.logo-home` rests
-          at `top: var(--safe-top)` since `viewport-fit=cover` arrived, so in the
-          installed app it occupies y=47..91 while a flat 56px of padding put the
-          back link at y=56 — 35px of overlap, on every page that is not the
-          reader. The reader shell got a top-inset audit and these pages did not.
-          GPT Sol, second pass, 2026-08-28.
-          docs/plans/260828av-mobile-screen-real-estate.md § 2. */}
+          **`+ var(--safe-top)` stays, and its reason has changed.** It was here
+          because `.logo-home` rests at `top: var(--safe-top)`, so in the
+          installed app the wordmark occupied y=47..91 while a flat 56px of
+          padding put the back link at y=56 — 35px of overlap on every page that
+          is not the reader (GPT Sol, second pass, 2026-08-28,
+          docs/plans/260828av-mobile-screen-real-estate.md § 2). The wordmark has
+          gone and the clock has not: this page has no sticky bar of its own, so
+          y=0 here is under the status bar and the term is what keeps the back
+          link out from under it. */}
       {/* The contents list in the left margin. It reads its entries off the
           `[data-section]` elements inside `main`, so there is no second list of
           section names to keep in step — PageContents.tsx says why that matters
@@ -569,7 +578,7 @@ export function Metadata({
           somehow?"* */}
       <main
         ref={body}
-        className={`metadata-page tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}
+        className={`metadata-page tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}
       >
         <Link
           href={backHref}

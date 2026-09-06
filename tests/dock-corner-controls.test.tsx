@@ -55,6 +55,8 @@
  * borrowed. This one borrows it again, cut down to the smallest article that
  * still renders every one of the six branches.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
@@ -596,5 +598,77 @@ describe("the fit signature", () => {
 
   it("is the same string for the same bar", () => {
     expect(sig(true)).toBe(sig(true));
+  });
+});
+
+/**
+ * **And nothing is left holding the space open — stage 2 of the same plan.**
+ *
+ * The controls were only half of it. The two sticky bars on the reading view
+ * reserved the corners in `padding`, and five `<main>` elements on the pages
+ * that mount a `Dock` reserved the wordmark's height in top padding, and none
+ * of that moved when the controls did. Stage 1 left it standing on purpose and
+ * said so in `FeedbackButton.tsx`; this is what took it out.
+ *
+ * **Source text rather than a rendered box**, for the reason the file above
+ * gives: jsdom has no layout, so a padding is a string here whatever else it
+ * is. What it can do is what a reader cannot — check every declaration in a
+ * 15,000-line stylesheet at once, which is how the third, fourth and fifth
+ * copies of the reservation came to be missed by two rounds of review (GPT
+ * Sol's G4).
+ *
+ * Comments are stripped first. `styles.css` quotes its own declarations in
+ * prose constantly — this change *added* four such quotations, of the very
+ * expressions being asserted absent — so a check that read it raw would be
+ * satisfied by a sentence about the code, which is
+ * docs/reusable/silent-success.md's exact shape.
+ */
+describe("nothing reserves the corners they left", () => {
+  const stylesheet = readFileSync(
+    path.join(import.meta.dirname, "../src/web/styles.css"),
+    "utf8",
+  ).replace(/\/\*[\s\S]*?\*\//g, "");
+
+  /** Every `padding…` declaration whose value names `token`. */
+  const paddingsNaming = (token: string): string[] =>
+    [...stylesheet.matchAll(/([a-z-]*padding[a-z-]*)\s*:\s*([^;{}]*)/g)]
+      .filter((m) => (m[2] ?? "").includes(token))
+      .map((m) => `${m[1]}: ${(m[2] ?? "").trim()}`);
+
+  it("no padding anywhere holds room for the wordmark or the button", () => {
+    /* The scanner first, or an assertion that finds nothing proves nothing: the
+       masthead's own vertical padding carries `--safe-top`, so this is a term
+       that is genuinely in a padding and has to be found. */
+    expect(paddingsNaming("--safe-top").length).toBeGreaterThan(0);
+
+    expect(paddingsNaming("--logo-w")).toEqual([]);
+    expect(paddingsNaming("--feedback-w")).toEqual([]);
+  });
+
+  /**
+   * `3.5rem` is `2.5rem` of ordinary space plus **one rem** of clearance for the
+   * corner pair — not `--bar-h`, which is 2.75rem and which an earlier draft of
+   * this comment claimed (GPT Sol, T3). It is a number each page chose, not a
+   * quantity derived from the control's height, and the three that keep it keep
+   * it because they still draw the pair.
+   *
+   * Both halves are asserted: the pages that gave the corner pair to their
+   * `Dock` no longer hold the room, and the pages that still draw the pair
+   * still do — the second is what stops this passing on a tree where somebody
+   * simply deleted the number everywhere.
+   */
+  it("and no page with a Dock still holds the wordmark's height above it", () => {
+    const src = (file: string) =>
+      readFileSync(path.join(import.meta.dirname, "../src/web", file), "utf8");
+
+    for (const file of ["Metadata.tsx", "Tweets.tsx", "PublicPages.tsx"]) {
+      expect(src(file), `${file} still reserves the corner`).not.toContain("pt-[calc(3.5rem");
+      expect(src(file), `${file} lost its top padding`).toContain("pt-[calc(2.5rem");
+    }
+    for (const file of ["ProfilePage.tsx", "ContactPage.tsx", "PrivacyPage.tsx"]) {
+      expect(src(file), `${file} draws the corner pair and needs the room`).toContain(
+        "pt-[calc(3.5rem",
+      );
+    }
   });
 });

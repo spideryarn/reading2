@@ -1,6 +1,6 @@
 # Move the wordmark and the Feedback button into the Dock
 
-**Status: stage 1 built 2026-09-06; stages 2 and 3 not started.** Written 2026-09-05 as the successor to stage 4 of
+**Status: stages 1 and 2 built 2026-09-06; stage 3 not started.** Written 2026-09-05 as the successor to stage 4 of
 [260905d](260905d-declutter-the-reading-view-top-bars.md), which was abandoned once measuring showed
 it could not deliver what it promised.
 
@@ -415,6 +415,86 @@ it, which is why nobody had.
 Done when: the article's title starts at the ordinary gutter and lines up with its own prose at
 every width; nothing on the five Dock pages reserves space for a corner control; screenshots at
 1440, 1024, 800 and 390 show the title using the room.
+
+### What stage 2 actually cost, measured
+
+The title against **the first line of its own prose**, measured from a text node's client rect
+rather than from the reading cell's edge — which is the measurement the plan's own before-table got
+wrong, and the reason the numbers below do not look like the ones above:
+
+| width | plain, before | plain, after | summary, before | summary, after |
+|---|---|---|---|---|
+| 1440 | +108 (at 800) … see below | +3 | — | +3 |
+| 1200 | | +3 | | 0 |
+| 1024 | | +3 | | 0 |
+| 800 | **+108** | −6 | masthead not drawn | — |
+| 390 | +3 | 0 | masthead not drawn | — |
+
+The one that matters is 800px: the title started at x=160 against a first line of prose at x=52,
+because that is where the centred-title rule's term clamps to zero and the reservation was all that
+was left placing it. The `+3` at wide widths and the `−6` at 800 are the `.text-alone` rule's own
+documented slippage from the variable font's weight axis, untouched here.
+
+`main`'s computed `padding-top` on the metadata and tweets pages is 40px, down from 56px, at 1440
+and 390 and in both an owner's and a visitor's shape. `/profile` and `/privacy` still draw both
+corner controls with their headings unmoved at y=99.
+
+### The regression this stage caused, and how it was caught
+
+**Taking the reservation away took an alignment with it that nobody knew it was providing.** On a
+phone the masthead's left padding had been `max(1rem, calc(--logo-w + 0.5rem - --spine-w - --mode-w))`
+— room held for the corner wordmark — which came to 37.6px against a prose inset of 35.2px. The two
+left edges lined up to within about two pixels *by accident*. Replaced with an ordinary 1rem, the
+title landed 19px left of the article's own heading: two competing left margins on a 390px screen.
+
+GPT Sol found it (T1) by refusing the stage's own done-condition — *"lines up with its own prose at
+every width"* — against the numbers I had supplied to prove it. The screenshots settled it.
+
+The fix is in two halves because the defect is:
+
+- **In a band mode on a laptop**, § the title over the column is the rule in play and its centring
+  term had clamped to zero. Its floor is now the prose's own inset,
+  `max(0px, calc(var(--text-pad-l) - var(--masthead-pad-l)))`, rather than `0px`.
+- **On a phone**, `.text-alone` is set, that rule never runs, and the title simply starts at the
+  bar's content edge — so § a narrow window gives that edge the prose's own inset,
+  `--masthead-pad-l: var(--text-pad-l)`.
+
+**And that reversed a simplification made earlier in the same stage**, which is the part worth
+keeping. With the two gutters equal, the centred-title expression's `+ --masthead-pad-l +
+--masthead-pad-r … − --masthead-pad-l` cancels exactly, so it was dropped. The arithmetic was right
+and the move was wrong: it turned an identity into a **precondition** — the rule silently required
+the pair to stay equal — and the very next fix needed them unequal. The long form is one term wider
+and true for any pair. *Simplifying an expression by assuming a fact declared somewhere else is how a
+rule acquires a precondition nobody knows it has.*
+
+Three mutations proved the new assertions can fail: the floor replaced by `0px`, the phone's gutter
+put back to `1rem`, and the two padding terms dropped from the long form. All three red, restored
+green.
+
+### The shape stage 2 kept meeting, named
+
+Three times, and the third one only because the second was caught:
+
+1. **The reservation was holding the phone's title on the prose's left edge**, and nothing said so.
+   The number was there for a wordmark; the alignment was a side effect. Removing the wordmark's
+   room removed the alignment.
+2. **The equal gutters were holding the centred-title expression up**, and nothing said so either —
+   until the expression was simplified to depend on them, at which point the dependency was created
+   by the very act of not writing it down.
+3. **The masthead's gutter was holding the granularity pills in line with the title**, which *was*
+   written down, in a comment two hundred lines from the rule that broke it. Fixing (1) would have
+   moved the step one line down the screen rather than removing it. GPT Sol caught it; a browser
+   pass looking at the top of the page in Plain mode would not have, because Plain has no pills.
+
+**The class: a number that is quietly holding two things in agreement.** It is the same class as
+`--bar-bottom` in the postmortem this plan came from — a token named after one of its consumers —
+seen from the other side: there the name hid a consumer, here the value hid a dependant. What both
+cost is the same, and it is not the bug, it is that *the check you would run does not fail*. Every
+one of these three had green tests over it.
+
+What actually found them: measuring the thing the reader sees (the title against the first line of
+prose, the pill against the title) rather than the thing the rule sets. That is now three assertions
+in `tests/prose-centred-in-its-cell.test.ts`, each with a mutation on record showing it can fail.
 
 **Stage 3 — the top bar stops being drawn when it has nothing in it.** This is stage 4 of
 [260905d](260905d-declutter-the-reading-view-top-bars.md), which was abandoned because the bar was
