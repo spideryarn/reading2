@@ -159,11 +159,7 @@ import {
    record. See `ModeUi` below. */
 import { MODE_LABEL } from "../title-text.js";
 import type { Comment } from "../types.js";
-import {
-  armActivationForDiagram,
-  armActivationForMode,
-  armActivationForTweets,
-} from "./activation.js";
+import { armActivationForMode, armActivationForTweets } from "./activation.js";
 import { useDockFit } from "./dock-fit.js";
 /* Type only: the bar is *handed* the switch, it does not subscribe to the store
    — see the `experimental` prop. A type import cannot become a subscription. */
@@ -1609,13 +1605,13 @@ function DockModes({
                    nobody has paid for yet, and this is what tells that panel
                    the difference between a press and a pasted link.
                    src/web/activation.ts. */
-                /* **The picture, not the mode**, for Diagram — see `diagram`
-                   on the props above, which is where the reasoning is. */
-                if (m.mode === "diagram") {
-                  armActivationForDiagram(slug, diagram);
-                } else {
-                  armActivationForMode(slug, m.mode);
-                }
+                /* **One call for all fourteen.** Diagram had an `if` of its own
+                   here until 2026-09-06; the table it needed the branch for is
+                   now total and executes its own row, so what the bar hands over
+                   is what it knows — the picture a Diagram press would land on.
+                   activation.ts § `MODE_TARGET`, and see `diagram` on the props
+                   above. */
+                armActivationForMode(slug, m.mode, { diagram });
                 onMode(m.mode);
                 // A real click leaves the keyboard to the article; Enter and
                 // Space (detail 0) leave focus where the reader put it. See the
