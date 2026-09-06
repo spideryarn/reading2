@@ -46,6 +46,7 @@
  */
 
 import { isAdmin, type AdminUser } from "../admin.js";
+import type { Assets } from "../assets.js";
 import type { DocumentKind } from "../fetch.js";
 import type { SpokenTurn } from "../chat.js";
 import type { AiCallRow } from "../ai-spend.js";
@@ -301,6 +302,30 @@ export interface ArticleReader {
    * the blocks, the tree **and** the metadata (src/arc.ts § `inputFingerprint`).
    */
   loadArc(slug: string): Promise<ArcFound>;
+
+  /**
+   * **This article's image manifest, and nothing else** —
+   * docs/project/article-images.md.
+   *
+   * A read of its own rather than `loadArticle(slug).assets`, for the reason
+   * `loadArc` above is one: the route behind it (`sendArticleAsset`,
+   * src/routes.ts) runs **once per picture**, so a PDF with eight figures runs
+   * it eight times on one page load, and `loadArticle` re-reads every block and
+   * the whole tree — the cost
+   * docs/plans/260827am-glossary-read-latency.md was written about.
+   *
+   * **`undefined` is not a fault, and is not the same as a 404.** No manifest
+   * means the assets step has never run on this article — every article
+   * ingested before it existed — and the caller's answer is *this article holds
+   * no such object*, not *there is no such article*. A slug that is not this
+   * reader's, or has no current revision, still throws.
+   *
+   * There is deliberately no staleness here, unlike every artefact read above
+   * it: a manifest written against paragraphs that have since changed still
+   * describes objects that really are in the bucket, and taking a figure off
+   * the page over that would be a refusal the reader cannot act on.
+   */
+  loadAssets(slug: string): Promise<Assets | undefined>;
 }
 
 /**

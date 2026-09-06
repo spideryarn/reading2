@@ -1,0 +1,56 @@
+{
+  "fixture": "aaronson",
+  "file": "aaronson.html",
+  "note": "THE DATED UPDATE, and it is the case the plan's stage D puts on the never-fold list by name: 5,560 words of post under 52,776 words of comment thread, and two author's updates at the very top. An arm that folds or drops front matter takes the corrections with it. STRUCTURE FLOORS ARE THE POST'S OWN, not the page's: the DOM was walked on 2026-09-05 and every element placed relative to div#post-7784 div.entry (the post) and ol.commentlist (the thread). Of 19 <blockquote> in the source, 2 are the post's and 17 are commenters quoting each other; all 5 <figure> and 5 of the 6 <img src> are the post's (the sixth is a share-button icon); the source's single <h2> is the post title, which Readability hoists into `title` by design, and both <h3> are 'Comments' and 'Leave a Reply', so no heading floor is honest here. minArticleChars 30000: the post is 5,560 words and the shipped extraction returns 32,820 gistable characters of it; the source body's 343,374 is the post plus the comment thread, and a floor anywhere near that would assert the thread has to be kept. 30,000 fails any truncation or needle-collage arm — GPT Sol's collage of three copied strings from this page was 182 characters — while leaving room for correctly dropping the trackback and comment-policy furniture the extraction still keeps at the foot. FURNITURE, 2026-09-05: two mustNotContain needles were added for the WordPress trackback line and the standing comment policy, both of which the shipped extraction carries at the foot of the article. That flips this fixture from PASS to FAIL, deliberately — it was passing because nobody had written down what it keeps, which is the exposure problem in manifest form. ARTICLE REGION AND THE FLOOR ON IT, MEASURED 2026-09-05: The post's own text is 26,437 characters (whitespace removed) against 285,732 for the whole source body — 9.3%, and the other 90.7% is the comment thread. It was 26,648 over 186 elements until p.postmetadata, WordPress's trackback line, was taken out of the region on 2026-09-05 for crediting what this manifest forbids; it is 180 elements now. The shipped extraction returns 26,431 of the region, 99.98%; the one region element it drops is a six-character 'Follow' link. Nothing in the post is legitimately droppable, so the floor is 25,000 — the region less 6%, which is our own whitespace handling and a little slack. THE OLD FLOOR WAS 30,000 COUNTED ON OUTPUT, and that is the number GPT Sol's padding arm cleared with 30,052 characters of which 178 were the post.",
+  "mustContain": [
+    {
+      "text": "Update (Feb. 29): A YouTube video of this talk is now available",
+      "why": "the author correcting his own post, dated, and at the top",
+      "negativeControl": "dated-update"
+    },
+    {
+      "text": "Another Update (March 8): YouTube video of a shorter",
+      "why": "a second dated update, so removing one is not enough"
+    },
+    {
+      "text": "Here, as promised in my last post, is a written version of the talk",
+      "why": "where the post itself begins"
+    }
+  ],
+  "mustNotContain": [
+    {
+      "text": "Leave a Reply",
+      "why": "the comment form; the 52,776-word thread starts here"
+    },
+    {
+      "text": "This entry was posted on",
+      "why": "WordPress's trackback line, at the very foot of the shipped output — 'This entry was posted on Monday, February 12th, 2024 … You can follow any responses through the RSS 2.0 feed.' It is the blog software talking about the post, not the post. KEPT TODAY, found 2026-09-05 while checking why nothing on this page was declared about the furniture it admits."
+    },
+    {
+      "text": "Anyone who feels unjustly censored is welcome to the rest of the Internet.",
+      "why": "the last sentence of Shtetl-Optimized's 2024 comment policy, which the shipped extraction carries into the article after the trackback line. The policy is a standing notice on every post on the blog; a reader asking for THIS post should not get it. KEPT TODAY."
+    }
+  ],
+  "structure": {
+    "blockquote": {
+      "atLeast": 2
+    },
+    "figure": {
+      "atLeast": 5
+    },
+    "img": {
+      "atLeast": 5
+    }
+  },
+  "maxBlockChars": 4000,
+  "articleRegion": {
+    "within": [
+      "div#post-7784 div.entry"
+    ],
+    "why": "The post is div#post-7784 div.entry; ol.commentlist beneath it is 52,776 words of comment thread and is NOT the piece. Walked element by element on 2026-09-05, and it is the division GPT Sol's padding arm exploited: an arm made entirely of genuine stamped comment paragraphs cleared a 30,000-character output floor while returning 178 characters of the post. EXCEPT p.postmetadata — WordPress's trackback line, which sits INSIDE div.entry and which this manifest's own mustNotContain forbids. 211 squeezed characters. Found by GPT Sol, 2026-09-05: a region that credits what the manifest forbids makes removing known junk lower articleRecall while raising exclusionPrecision.",
+    "except": [
+      "p.postmetadata"
+    ]
+  },
+  "minArticleChars": 25000
+}

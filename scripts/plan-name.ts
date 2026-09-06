@@ -86,26 +86,35 @@ export function nextPlanFilename(
   filenames: string[],
   date: string,
   description: string,
+  ext = ".md",
 ): string {
   const used = usedLetters(filenames, date);
   let i = 0;
   while (used.has(letterAt(i))) i += 1;
-  return `${date}${letterAt(i)}-${toSlug(description)}.md`;
+  return `${date}${letterAt(i)}-${toSlug(description)}${ext}`;
 }
 
-/** The directories this convention covers. `--dir=research` picks one. */
-export const DIRS: Record<string, string> = {
-  plans: "docs/plans",
-  research: "docs/research",
-  postmortems: "docs/postmortems",
+/**
+ * The directories this convention covers, and what a file in each is called.
+ * `--dir=research` picks one.
+ *
+ * The convention is the **prefix**, not the file type: `docs/tutorials/` holds
+ * self-contained HTML (docs/reusable/write-tutorial.md), and it sorts by day
+ * for the same reason the others do.
+ */
+export const DIRS: Record<string, { dir: string; ext: string }> = {
+  plans: { dir: "docs/plans", ext: ".md" },
+  research: { dir: "docs/research", ext: ".md" },
+  postmortems: { dir: "docs/postmortems", ext: ".md" },
+  tutorials: { dir: "docs/tutorials", ext: ".html" },
 };
 
 function main(): void {
   const args = process.argv.slice(2);
   const dirArg = args.find((a) => a.startsWith("--dir="))?.slice("--dir=".length) ?? "plans";
-  const dir = DIRS[dirArg];
+  const target = DIRS[dirArg];
   const description = args.filter((a) => !a.startsWith("--")).join(" ").trim();
-  if (!dir || !description) {
+  if (!target || !description) {
     console.log(
       `usage: npx tsx scripts/plan-name.ts [--dir=${Object.keys(DIRS).join("|")}] <description of the work>`,
     );
@@ -114,8 +123,13 @@ function main(): void {
   }
   /* Every file, not just `*.md`: an `.activity.log` sitting beside a review
      answer holds a letter too, and a letter this misses is a letter reused. */
-  const existing = globSync(path.join(ROOT, dir, "*"));
-  console.log(path.join(dir, nextPlanFilename(existing, datePrefix(new Date()), description)));
+  const existing = globSync(path.join(ROOT, target.dir, "*"));
+  console.log(
+    path.join(
+      target.dir,
+      nextPlanFilename(existing, datePrefix(new Date()), description, target.ext),
+    ),
+  );
 }
 
 if (isMain(import.meta.url)) main();

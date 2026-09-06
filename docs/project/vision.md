@@ -211,7 +211,7 @@ Two of Greg's, 2026-09-05, recorded so they aren't lost — neither is on the ne
 ## Under this doc
 
 `vision.md` is one of the seven entry points listed in [AGENTS.md](../../AGENTS.md). Three things sit
-under it:
+under it, and then the four folders that hold the project's memory.
 
 - **[positioning.md](positioning.md)** — what the website says, who it says it to first, and what
   the product is called; the decisions, in Greg's words, and the interview that turns them into copy.
@@ -222,6 +222,18 @@ under it:
   a folder with one doc per feature: what it already solved, what it got wrong, and
   [what to rebuild first](original-version/borrow-list.md). A library to consult, not a backlog to
   import.
+
+The record of how the intent above became decisions is kept in four directories, each with a short
+doc of its own saying what goes in it and what to call the file:
+
+- **[plans.md](plans.md)** — `docs/plans/`, one file per piece of work, written before it lands and
+  kept afterwards, naming the simpler option it passed over.
+- **[research.md](research.md)** — `docs/research/`, the working behind a decision: the options
+  weighed, the sources, the dead ends.
+- **[postmortems.md](postmortems.md)** — `docs/postmortems/`, one file per bug worth understanding,
+  and the class of mistake it belongs to.
+- **[tutorials.md](tutorials.md)** — `docs/tutorials/`, self-contained HTML explainers for somebody
+  who has never opened the repository.
 
 ---
 

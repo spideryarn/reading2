@@ -108,11 +108,20 @@
  * extract — docs/project/logging.md, and the reason `collectSearchEvidence`'s
  * `onDropped` deliberately takes no argument.
  */
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 import { articleWithIds } from "./article-prompt.js";
 import { isBodyEvidence } from "./block-policy.js";
-import { openRouterJson } from "./ai-call.js";
+import { type JsonCall, openRouterJson, ProviderRefused } from "./ai-call.js";
+import {
+  type DebateAttemptStarted,
+  type DebateFailureClass,
+  type DebateJournal,
+  type DebatePassKind,
+  sha256Of,
+  wasAborted,
+} from "./debate-journal.js";
 import { mintId } from "./ids.js";
 import {
   ANSWER_OVERFLOWED_FIXED_ASK,
@@ -200,6 +209,17 @@ export const MAX_CLAIM_ROWS = 12;
  * which is the thing that costs money (Stage 0b).
  */
 const MAX_RESULTS_PER_SEARCH = 5;
+
+/**
+ * The search engine, named once.
+ *
+ * It was a literal inside the request body, and the capture journal now records
+ * the search configuration an attempt ran under — so a constant rather than two
+ * spellings of `"exa"` that could come apart, and a journal that says the engine
+ * was one thing while the wire carried another is worse than one that says
+ * nothing. The reasoning for the choice itself is at the call site.
+ */
+const SEARCH_ENGINE = "exa";
 
 /**
  * The answer budget for one pass.
@@ -464,9 +484,10 @@ export function isSubstantiveQuote(quote: string): boolean {
  *  - **a shorter title together with the byline**, which is what turns a common
  *    phrase back into a reference to one piece.
  *
- * Both text comparisons are case-insensitive with runs of whitespace collapsed,
- * because the witness is a slice of a search extract and its spacing is
- * whatever the extractor left behind.
+ * Both text comparisons go through `appearsIn` below, so they are
+ * case-insensitive, collapse runs of whitespace, **and fold the curly quotes and
+ * the dashes** — because the witness is a slice of a search extract and both its
+ * spacing and its punctuation are whatever the extractor left behind.
  */
 export function namesArticle(witness: string, article: ArticleIdentity): boolean {
   if (article.url) {
@@ -478,13 +499,48 @@ export function namesArticle(witness: string, article: ArticleIdentity): boolean
     }
   }
 
-  const hay = collapse(witness).toLowerCase();
-  const title = collapse(article.title ?? "").toLowerCase();
-  if (title === "" || !hay.includes(title)) return false;
+  const title = collapse(article.title ?? "");
+  if (title === "" || !appearsIn(witness, title)) return false;
   if (title.length >= MIN_TITLE_EVIDENCE_CHARS) return true;
 
-  const byline = collapse(article.byline ?? "").toLowerCase();
-  return byline !== "" && hay.includes(byline);
+  const byline = collapse(article.byline ?? "");
+  return byline !== "" && appearsIn(witness, byline);
+}
+
+/**
+ * **Does this name appear in these words** — the same matcher every other
+ * comparison in this mode uses, asked the same way.
+ *
+ * It was `collapse(witness).toLowerCase().includes(...)` until 2026-09-06, which
+ * folded whitespace and case **and nothing else**, while `findQuote`'s `FOLD`
+ * table (src/quote-match.ts) also maps curly quotes, the three dashes and the
+ * non-breaking space. Titles carry curly punctuation constantly — `Claude’s
+ * Constitution` is one on the shelf — and a search extract's apostrophe is
+ * whatever the page's CMS emitted, so the rule failed in **both** directions on
+ * one character: a source spelling the title straight lost an honest row as
+ * `directnessUnverified`, which is precisely the failure this rule exists to
+ * prevent, and which way a page fell was decided by whose editor smart-quoted
+ * what.
+ *
+ * **`findQuote` rather than `locate`**, and the difference matters here:
+ * `locate` additionally applies `isSubstantiveQuote`, whose three-word floor
+ * would refuse most bylines and any short title — which is exactly the case the
+ * byline branch above exists to rescue. `"spaced"` because that is the mode
+ * every server-side check in this repo uses; the forgiving pass deletes
+ * whitespace altogether and accepts *"fall a part"* for *"fall apart"*, which is
+ * a licence for a reader's own highlight and not for a rule that decides whether
+ * a stranger's page is about this article.
+ *
+ * **This is a strictly wider match than the `includes` it replaced**, and
+ * nothing narrows. In particular a short title still matches inside a longer
+ * word — *"On rye"* is found in *"…bacon ryegrass…"* under both modes, checked
+ * rather than assumed — which is why `MIN_TITLE_EVIDENCE_CHARS` and the byline
+ * branch exist and why neither moved.
+ *
+ * Found while building 260906b's corpus, not by a reader.
+ */
+function appearsIn(witness: string, name: string): boolean {
+  return findQuote(witness, name, undefined, "spaced") !== null;
 }
 
 /**
@@ -984,8 +1040,20 @@ claim and the outside page's own words answering it.`;
 
 /** One pass, as it came back. */
 interface PassAnswer {
-  /** The assistant's text, from which `lastClosedFence` takes the JSON. */
-  text: string;
+  /**
+   * The list inside the answer's fence — `parsePass` has already run.
+   *
+   * **It used to be the assistant's `text`, with `generateDebate` calling
+   * `parsePass` on it afterwards.** Moved inside `runPass` on 2026-09-06 so that
+   * one *attempted pass* is one thing: dispatch, the provider's own verdict, and
+   * reading the fence. The capture journal writes a terminal outcome for each
+   * attempt, and with the parse outside it a pass whose fence was broken would
+   * have been journalled `ok` and then failed the step — a record that says the
+   * opposite of what happened. The order of operations is unchanged: the parse
+   * still happens before pass B is dispatched, which is what makes a failed pass
+   * A cost one call rather than two.
+   */
+  rows: unknown[];
   /**
    * Every page the search returned that a row may name — after `isWebUrl` (which
    * `collectSearchEvidence` applies) and after the `selfSource` refusal.
@@ -1000,25 +1068,36 @@ interface PassAnswer {
   webSearches: number;
 }
 
+/**
+ * One `url_citation`, as much of it as this file hands on.
+ *
+ * **Spelled out rather than left `unknown`**, so `collectSearchEvidence` takes
+ * it structurally and there is no cast at the call.
+ *
+ * The rules about this shape are that function's and stay there — `type` is the
+ * discriminator, the URL is optional on the wire, the same page cited five times
+ * arrives five times. What is declared here is only enough to hand it over: a
+ * cast would have made a wrong field name in this interface compile, and a wrong
+ * field name means every annotation is silently discarded and every row is
+ * dropped as `uncited`, which is indistinguishable from a search that found
+ * nothing.
+ *
+ * **A named type since 2026-09-06**, because `admissibleSources` and the Layer 1
+ * replay in `evals/debate/` both take one and an inline shape written twice is a
+ * shape that drifts.
+ */
+export interface ChatAnnotation {
+  type: string;
+  url_citation?: { url?: string; title?: string; content?: string };
+}
+
 /** The shape `openRouterJson` hands back for a chat completion, as much as we read. */
 interface ChatAnswer {
   choices?: {
     finish_reason?: string;
     message?: {
       content?: string;
-      /**
-       * **Spelled out rather than left `unknown`**, so `collectSearchEvidence`
-       * takes it structurally and there is no cast at the call.
-       *
-       * The rules about this shape are that function's and stay there —
-       * `type` is the discriminator, the URL is optional on the wire, the same
-       * page cited five times arrives five times. What is declared here is only
-       * enough to hand it over: a cast would have made a wrong field name in
-       * this interface compile, and a wrong field name means every annotation
-       * is silently discarded and every row is dropped as `uncited`, which is
-       * indistinguishable from a search that found nothing.
-       */
-      annotations?: { type: string; url_citation?: { url?: string; title?: string; content?: string } }[];
+      annotations?: ChatAnnotation[];
     };
   }[];
   usage?: Usage;
@@ -1030,6 +1109,26 @@ interface ChatAnswer {
  * Every throw here is a `stageFailure`, which fails the *step* — there is no
  * partial success in this mode, and the panel gets the ordinary job-failure
  * state with a retry rather than an empty sentence over a failure.
+ *
+ * ## The capture journal, and why the hook is here rather than at the gateway
+ *
+ * `opts.journal` is optional and **production passes none**, so this function
+ * behaves exactly as it did without one. When an eval passes a sink, three lines
+ * are written per attempt: metadata before dispatch, whatever came back before
+ * any judgement here is made, and a terminal outcome in the `finally`.
+ *
+ * The obvious place for it was a hook parameter on `openRouterJson`, and that is
+ * refused. What holds `src/ai-call.ts` together is that there is exactly one key,
+ * one `Meter` and one `finally`, and no caller has a way into any of them — a
+ * capture hook there would be a second thing every future call site has to reason
+ * about, on the one path where a mistake costs money silently. The cost of
+ * keeping it out is the sequence below: catch `ProviderRefused` here, write what
+ * it carries, and rethrow **only** what was caught.
+ *
+ * Two gaps in what can be captured, both the gateway's deliberate design rather
+ * than an oversight, both written up in `src/debate-journal.ts`'s header: a 2xx
+ * body that will not parse arrives as `json: null` with the bytes gone, and a
+ * non-2xx arrives as a status with the body gone.
  */
 async function runPass(opts: {
   system: string;
@@ -1038,8 +1137,147 @@ async function runPass(opts: {
   articleUrl: string | null;
   model: string;
   signal?: AbortSignal;
+  /** Present only under an eval. See the section above. */
+  journal?: DebateJournal;
+  /** What the journal's `attempt-started` line says about this attempt. */
+  attempt?: { pass: DebatePassKind; article: DebateAttemptStarted["article"] };
 }): Promise<PassAnswer> {
-  const call = await openRouterJson(
+  const attemptId = randomUUID();
+  const startedAt = Date.now();
+  /* **Named at the throw site, not recovered from a message afterwards.** The
+     reader-facing sentences below are deliberately vague — `PROVIDER_UNREADABLE`
+     covers five different things — so a classifier reading them back would be
+     guessing, and would go quietly wrong the day one is reworded. */
+  let failure: DebateFailureClass | null = null;
+  const refuse = (kind: DebateFailureClass, err: Error): never => {
+    failure = kind;
+    throw err;
+  };
+  let outcome: "ok" | "aborted" | "error" = "ok";
+
+  if (opts.journal && opts.attempt) {
+    await opts.journal.write({
+      event: "attempt-started",
+      attemptId,
+      at: new Date().toISOString(),
+      pass: opts.attempt.pass,
+      model: opts.model,
+      search: {
+        engine: SEARCH_ENGINE,
+        maxTotalResults: opts.maxTotalResults,
+        maxResults: MAX_RESULTS_PER_SEARCH,
+      },
+      prompt: {
+        systemSha256: sha256Of(opts.system),
+        systemChars: opts.system.length,
+        userSha256: sha256Of(opts.user),
+        userChars: opts.user.length,
+      },
+      article: opts.attempt.article,
+    });
+  }
+
+  try {
+    return await sendPass(opts, attemptId, refuse);
+  } catch (err) {
+    outcome = wasAborted(err, opts.signal) ? "aborted" : "error";
+    /* An abort is not a failure class: it is the caller's decision, and giving
+       it one would put a cancellation in the same column as a provider that
+       broke. Anything else that reached here without naming itself is `other`
+       rather than a guess. */
+    if (outcome === "error" && failure === null) failure = "other";
+    if (outcome === "aborted") failure = null;
+    throw err;
+  } finally {
+    await opts.journal?.write({
+      event: "attempt-finished",
+      attemptId,
+      at: new Date().toISOString(),
+      elapsedMs: Date.now() - startedAt,
+      outcome,
+      failure,
+    });
+  }
+}
+
+/**
+ * The body of one pass — split out only so that `runPass` above is the journal's
+ * lifecycle and nothing else, and this is the wire and the rules.
+ *
+ * `refuse` names the failure class as it throws; see `runPass`.
+ */
+async function sendPass(
+  opts: {
+    system: string;
+    user: string;
+    maxTotalResults: number;
+    articleUrl: string | null;
+    model: string;
+    signal?: AbortSignal;
+    journal?: DebateJournal;
+  },
+  attemptId: string,
+  refuse: (kind: DebateFailureClass, err: Error) => never,
+): Promise<PassAnswer> {
+  let call: JsonCall;
+  try {
+    call = await sendToProvider(opts);
+  } catch (err) {
+    /* **Only what was caught is rethrown**, and only a `ProviderRefused` is
+       described. Anything else — an abort, a socket, a bug in here — goes back
+       up untouched and gets its class from `runPass`'s `catch`. */
+    if (err instanceof ProviderRefused) {
+      await opts.journal?.write({
+        event: "provider-response",
+        attemptId,
+        at: new Date().toISOString(),
+        response: {
+          kind: "refused",
+          status: err.status,
+          refusalKind: err.kind,
+          retryAfterMs: err.retryAfterMs,
+          /* The provider's words are not available here and that is the
+             gateway's design, not a gap in this call — src/ai-call.ts §
+             `ProviderRefused`. Said as a sentence rather than a null so no
+             report can print it as "the response was empty". */
+          bodyUnavailable:
+            "ProviderRefused carries the status and never the body — src/ai-call.ts",
+        },
+      });
+      refuse("provider-refused", err);
+    }
+    throw err;
+  }
+
+  /* **Before the `finish_reason` allowlist, before the search count, before
+     `collectSearchEvidence`.** F40: capture that sits downstream of the
+     failures it exists to preserve preserves nothing. `call.json` goes down
+     verbatim — the raw assistant text, the raw annotations with their extracts,
+     the raw usage — which is what makes a replay with no network possible. */
+  await opts.journal?.write({
+    event: "provider-response",
+    attemptId,
+    at: new Date().toISOString(),
+    response: {
+      kind: "body",
+      json: call.json,
+      answeredBy: call.answeredBy,
+      generationId: call.generationId,
+    },
+  });
+
+  return readPass(call, opts, refuse);
+}
+
+/** The request itself, in one place so the journal and the wire cannot diverge. */
+function sendToProvider(opts: {
+  system: string;
+  user: string;
+  maxTotalResults: number;
+  model: string;
+  signal?: AbortSignal;
+}): Promise<JsonCall> {
+  return openRouterJson(
     "debate",
     {
       model: opts.model,
@@ -1061,7 +1299,7 @@ async function runPass(opts: {
         {
           type: "openrouter:web_search",
           parameters: {
-            engine: "exa",
+            engine: SEARCH_ENGINE,
             max_total_results: opts.maxTotalResults,
             max_results: MAX_RESULTS_PER_SEARCH,
           },
@@ -1070,26 +1308,59 @@ async function runPass(opts: {
     },
     ...(opts.signal ? [{ signal: opts.signal }] : []),
   );
+}
 
+/**
+ * **Judge one answer and refuse it whole if anything is wrong** — every rule in
+ * the order it has to be applied in.
+ *
+ * Nothing in here touches the network, so it is also what a Layer 1 replay
+ * re-runs over a journalled `provider-response`.
+ */
+function readPass(
+  call: JsonCall,
+  opts: { articleUrl: string | null },
+  refuse: (kind: DebateFailureClass, err: Error) => never,
+): PassAnswer {
   const json = call.json as ChatAnswer | null;
-  if (!json) throw stageFailure(PROVIDER_UNREADABLE, { authored: "the answer was not JSON" });
+  if (!json) {
+    /* **The bytes are gone by the time we are here**, and deliberately —
+       `openRouterJson` leaves a 2xx it could not parse as `json: null` rather
+       than handing back a `SyntaxError` carrying a prefix of what we sent. So
+       the journal records this as a null body with a class on it, and a replay
+       of this attempt has nothing to read. src/debate-journal.ts § the
+       documented gap. */
+    refuse(
+      "body-not-json",
+      stageFailure(PROVIDER_UNREADABLE, { authored: "the answer was not JSON" }),
+    );
+  }
 
   const choice = json.choices?.[0];
   if (!choice) {
-    throw stageFailure(PROVIDER_UNREADABLE, { authored: "the answer carried no choices" });
+    refuse(
+      "no-choices",
+      stageFailure(PROVIDER_UNREADABLE, { authored: "the answer carried no choices" }),
+    );
   }
   /* `"length"` fails rather than truncating: a list cut off mid-row that is
      stored as though it were complete is the silent-success failure this whole
      mode is organised against. */
   if (choice.finish_reason === "length") {
-    throw stageFailure(ANSWER_OVERFLOWED_FIXED_ASK, {
-      authored: `the debate answer hit the ${ANSWER_TOKENS}-token ceiling`,
-    });
+    refuse(
+      "answer-overflowed",
+      stageFailure(ANSWER_OVERFLOWED_FIXED_ASK, {
+        authored: `the debate answer hit the ${ANSWER_TOKENS}-token ceiling`,
+      }),
+    );
   }
   if (choice.finish_reason === "content_filter") {
     /* Nothing about *what* was filtered is thrown or logged — it is the
        provider's own words about a request that carried the article. */
-    throw stageFailure(MODEL_REFUSED, { authored: "the provider stopped its own answer" });
+    refuse(
+      "content-filtered",
+      stageFailure(MODEL_REFUSED, { authored: "the provider stopped its own answer" }),
+    );
   }
   /* **Everything else is a failed or unreadable pass** — an allowlist, and the
      two cases above are only here to give the reader a better sentence than
@@ -1106,7 +1377,10 @@ async function runPass(opts: {
      in the message: it is unauthored text on a request that carried the
      article. */
   if (choice.finish_reason !== "stop") {
-    throw stageFailure(PROVIDER_UNREADABLE, { authored: "the answer did not finish cleanly" });
+    refuse(
+      "unclean-finish",
+      stageFailure(PROVIDER_UNREADABLE, { authored: "the answer did not finish cleanly" }),
+    );
   }
 
   /* **The search count, and a zero here is a failure rather than a result.** A
@@ -1117,31 +1391,50 @@ async function runPass(opts: {
      from a model that chose not to search and is refused for the same reason. */
   const { searches } = whereSearchCountCameFrom(json.usage);
   if (searches === null || searches <= 0) {
-    throw stageFailure(DEBATE_SEARCH_DID_NOT_RUN, {
-      authored: `the web search reported ${searches === null ? "no count" : "zero searches"}`,
-    });
-  }
-
-  const cited = new Map<string, SearchEvidence>();
-  collectSearchEvidence(choice.message?.annotations, cited);
-
-  /* **`selfSource` is applied to the annotations as well as to the rows.** A row
-     naming the article is counted as a loss below; here the same refusal keeps
-     the article out of `returnedSources`, which is *"the search returned
-     evidence from N pages"* and would otherwise count the piece the reader is
-     already holding. Stage 0 saw exactly that: the article came back among its
-     own annotations, with a 9,858-character extract of itself. */
-  const admissible = new Map<string, SearchEvidence>();
-  for (const [url, evidence] of cited) {
-    if (opts.articleUrl && sameTarget(url, opts.articleUrl)) continue;
-    admissible.set(url, evidence);
+    refuse(
+      "search-did-not-run",
+      stageFailure(DEBATE_SEARCH_DID_NOT_RUN, {
+        authored: `the web search reported ${searches === null ? "no count" : "zero searches"}`,
+      }),
+    );
   }
 
   return {
-    text: choice.message?.content ?? "",
-    admissible,
+    rows: parsePass(choice.message?.content ?? "", refuse),
+    admissible: admissibleSources(choice.message?.annotations, opts.articleUrl),
     webSearches: searches,
   };
+}
+
+/**
+ * **Every page this pass's search returned that a row may name** — after
+ * `isWebUrl` (which `collectSearchEvidence` applies) and after the `selfSource`
+ * refusal.
+ *
+ * Its own function since 2026-09-06 because a Layer 1 replay has to rebuild this
+ * map from a journalled response and must rebuild *this* one: a replay that
+ * counted the article's own annotation would report a `returnedSources` the run
+ * never had.
+ *
+ * **`selfSource` is applied to the annotations as well as to the rows.** A row
+ * naming the article is counted as a loss below; here the same refusal keeps the
+ * article out of `returnedSources`, which is *"the search returned evidence from
+ * N pages"* and would otherwise count the piece the reader is already holding.
+ * Stage 0 saw exactly that: the article came back among its own annotations,
+ * with a 9,858-character extract of itself.
+ */
+export function admissibleSources(
+  annotations: ChatAnnotation[] | undefined,
+  articleUrl: string | null,
+): Map<string, SearchEvidence> {
+  const cited = new Map<string, SearchEvidence>();
+  collectSearchEvidence(annotations, cited);
+  const admissible = new Map<string, SearchEvidence>();
+  for (const [url, evidence] of cited) {
+    if (articleUrl && sameTarget(url, articleUrl)) continue;
+    admissible.set(url, evidence);
+  }
+  return admissible;
 }
 
 /**
@@ -1152,11 +1445,23 @@ async function runPass(opts: {
  * treat a broken fence as "one malformed row" because it has a previous turn's
  * list to keep showing; this has nothing behind it, and storing an empty group
  * would be indistinguishable from an honest *"the search found nothing"*.
+ *
+ * **Exported since 2026-09-06** for the Layer 1 replay in `evals/debate/`, which
+ * re-reads a journalled answer with no network. `refuse` defaults to a plain
+ * throw, so a caller outside a journalled attempt spells nothing extra.
  */
-function parsePass(text: string): unknown[] {
+export function parsePass(
+  text: string,
+  refuse: (kind: DebateFailureClass, err: Error) => never = (_kind, err) => {
+    throw err;
+  },
+): unknown[] {
   const body = lastClosedFence(text);
   if (body === null) {
-    throw stageFailure(PROVIDER_UNREADABLE, { authored: "the answer carried no closed fence" });
+    refuse(
+      "answer-not-parseable",
+      stageFailure(PROVIDER_UNREADABLE, { authored: "the answer carried no closed fence" }),
+    );
   }
   let raw: unknown;
   try {
@@ -1165,10 +1470,16 @@ function parsePass(text: string): unknown[] {
     /* The parse error is never rethrown: V8 puts a prefix of the offending
        input into the `SyntaxError`, and on this wire that input is a stranger's
        web page and the article. Same rule as `openRouterJson`. */
-    throw stageFailure(PROVIDER_UNREADABLE, { authored: "the fenced answer was not JSON" });
+    refuse(
+      "answer-not-parseable",
+      stageFailure(PROVIDER_UNREADABLE, { authored: "the fenced answer was not JSON" }),
+    );
   }
   if (!Array.isArray(raw)) {
-    throw stageFailure(PROVIDER_UNREADABLE, { authored: "the fenced answer was not a list" });
+    refuse(
+      "answer-not-parseable",
+      stageFailure(PROVIDER_UNREADABLE, { authored: "the fenced answer was not a list" }),
+    );
   }
   return raw;
 }
@@ -1199,6 +1510,15 @@ export async function generateDebate(opts: {
   article: Article;
   onProgress?: (detail: string) => void;
   signal?: AbortSignal;
+  /**
+   * **The capture journal, and production passes none.**
+   *
+   * With no sink this function behaves exactly as it did before the journal
+   * existed, and nothing about what is stored on the article changes either way
+   * — a reader's artefact is not a debugging record. `evals/debate/run.ts` is
+   * the one caller that passes one. src/debate-journal.ts.
+   */
+  journal?: DebateJournal;
 }): Promise<DebateRun> {
   const { blocks, tree, meta: articleMeta } = opts.article;
 
@@ -1228,6 +1548,17 @@ export async function generateDebate(opts: {
   const evidence = blocks.filter(isBodyEvidence);
 
   opts.onProgress?.("Looking for responses to this piece");
+  /* One value, built once, so the two attempts cannot disagree about which
+     article they were about — and so the fingerprint in the journal is the same
+     one the artefact is stamped with. */
+  const journalled: DebateAttemptStarted["article"] = {
+    slug: opts.article.slug,
+    url: identity.url,
+    title: identity.title,
+    byline: identity.byline,
+    inputFingerprint: sourceHash,
+  };
+
   const direct = await runPass({
     system: DIRECT_SYSTEM,
     user: directPrompt(articleMeta, tree),
@@ -1235,9 +1566,10 @@ export async function generateDebate(opts: {
     articleUrl,
     model,
     ...(opts.signal ? { signal: opts.signal } : {}),
+    ...(opts.journal ? { journal: opts.journal, attempt: { pass: "direct" as const, article: journalled } } : {}),
   });
   const directRows = readDirectGroup(
-    parsePass(direct.text),
+    direct.rows,
     { admissible: direct.admissible, article: identity },
     direct.webSearches,
   );
@@ -1252,9 +1584,10 @@ export async function generateDebate(opts: {
     articleUrl,
     model,
     ...(opts.signal ? { signal: opts.signal } : {}),
+    ...(opts.journal ? { journal: opts.journal, attempt: { pass: "claims" as const, article: journalled } } : {}),
   });
   const claimRows = readClaimGroup(
-    parsePass(claims.text),
+    claims.rows,
     {
       admissible: claims.admissible,
       article: identity,

@@ -1,5 +1,13 @@
 # The real request trace of Plain, Ideas and Chat, before and after the extraction
 
+**Later feature change, 2026-09-06:** [the realtime repair](260906f-repair-realtime-chat.md)
+adds the composer to a loaded empty Chat list so Live can start the first conversation. Its
+profile checkbox calls `useHasProfile`, adding two `GET /api/reader?slug=a-piece` requests
+under StrictMode, immediately before the final bare `GET /api/reader`. The Chat trace is now
+18 requests; Plain and Ideas are unchanged. The exact expected list in
+`tests/the-ideas-extraction-changed-no-requests.test.tsx` was updated after observing the two
+extra reads fail that assertion. The historical extraction comparison below remains 16.
+
 [260905e-main-app-architecture-review.md](260905e-main-app-architecture-review.md)'s checklist asks
 for the real request trace of Plain, Ideas and Chat on one fixture article before anything is lifted
 out of `App.tsx`; finding **F9** in

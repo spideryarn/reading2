@@ -1749,6 +1749,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`src/vocabulary-sources.ts`, which imports the store hinge this file has already " +
       "replaced. Re-run witness 2 to confirm.",
   },
+  "tests/nav-label-status-pg.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran. A pure Postgres suite for the nav-label lifecycle column " +
+      "(docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md, stage 1) — the write " +
+      "beside the artefacts, both DTOs, the carry-forward and the CHECK. It seeds through " +
+      "`scratchArticleInPg`, which loads a corpus article into Postgres and reads no `data/` " +
+      "directory of its own. Re-run witness 2 to confirm.",
+  },
   "tests/store-glossary-delete-pg.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
@@ -2193,6 +2204,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/acquire-extract-blocks-end-to-end.test.ts": "private-postgres",
   "tests/admin-feedback-store.test.ts": "private-postgres",
   "tests/ai-calls-spend-pg.test.ts": "private-postgres",
+  /* The two asset routes, 2026-09-06. Postgres for the two seeded articles and
+     their manifests; the bucket is a temp directory, mocked at the `blobStore()`
+     selector exactly as `illustrated-route` mocks it, so nothing here touches
+     Storage. */
+  "tests/asset-route.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. Its header used to say **"no database at
      all, deliberately"**; it now seeds one article and drives a real
      `claimSession` claim over it, so it writes an article, a revision, its
@@ -2420,6 +2436,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/load-article-serialisation.test.ts": "private-postgres",
   "tests/lock-lifecycle.test.ts": "private-postgres",
   "tests/migration-reconciliations.test.ts": "private-postgres",
+  /* New on 2026-09-06. Nothing it asserts is about state the shared stack has:
+     it seeds its own throwaway article per run and reads back one column. */
+  "tests/nav-label-status-pg.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. The lane follows from what arbitrates:
      the refusal this file's repair handles is `jobs_active_source`, a partial
      unique index over *every* active reserving job for a URL — global on the
@@ -2896,6 +2915,15 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
         "`OUTSIDER` reaches Postgres only through `setRequestOwner`, to show `ownedSlug` filters " +
         "on the owner and not on the slug. Every insert in the file belongs to " +
         "`currentOwnerId()`, which the private lane provides.",
+    },
+  },
+  "tests/asset-route.test.ts": {
+    "0e5c0001-0000-4000-8000-0000000000a5": {
+      kind: "no-row-needed",
+      why:
+        "`OUTSIDER` is a request `sub` and nothing else — the asset route must not serve another " +
+        "reader's picture. The same shape as `illustrated-route`'s below, for the same reason: a " +
+        "`where` clause needs no row.",
     },
   },
   "tests/illustrated-route.test.ts": {

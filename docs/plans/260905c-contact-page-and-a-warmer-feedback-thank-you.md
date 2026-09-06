@@ -49,6 +49,9 @@ Three decisions inside that:
   address is the one thing in the row a stuck reader can act on in one press, it is pinned by
   `tests/site-footer.test.tsx`, and its comment says why it is there. Replacing it with the page
   would be a product change nobody asked for. Named here so Greg can overrule it in one line.
+
+  **He did, the next day** — see the Log. Naming the call is what made it a one-line answer instead
+  of an argument, which is the case for naming the next one too.
 - **Not added to `SiteNav`.** The top bar on `/`, `/features` and `/pricing` already carries four
   links and was measured tight at the 320px reflow width (`SiteBits.tsx`, cross-family review,
   finding 4). Contact is a footer link, like Privacy is in the footer of the app's own pages.
@@ -182,3 +185,11 @@ default measure. Fixed the same way as the others: the sentence now names the th
 - 2026-09-05 — written; both stages implemented; browser pass (a `MutationObserver` on the
   `<dialog>` showed the `open` attribute going before the panel content swaps, which is the
   reader-visible claim); GPT Sol review taken and four findings applied.
+- 2026-09-06 — **the `mailto:` came out of the footer**, overruling the first decision under Stage 1
+  above. Greg: *"Remove the hello@spideryarn.com from the footer — just keep the Contact page, which
+  already points to that — that's sufficient."* One press more, through a page that also tells the
+  reader the Feedback button is better, was the trade he wanted; Sol had called keeping both
+  "defensible", which it was, and that is not the same as right. Two things went with it: the row's
+  separator, a trailing `·` on every link that was correct only while the address was drawn last,
+  now renders between links; and the test that pinned the address on all six addresses is now its
+  inverse — no link in the row is a `mailto:`. Commit `f1e964ed`.

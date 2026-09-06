@@ -77,6 +77,7 @@ const ARTICLE: Article = {
   blocks: BLOCKS,
   tree,
   assets: undefined,
+  navLabelStatus: "ready",
 };
 
 /** The prose column on its own, at one width, with no gist columns beside it. */
@@ -93,6 +94,10 @@ function Frame({ width, label }: { width: number; label: string }) {
           /* A preview page, not the reader: the address is the design page itself
              and there is no view state to carry. */
           linkBase="/design"
+          /* A fixture, not an article on the shelf. Nothing here carries a PDF
+             figure marker, so the *view the original* control never renders and
+             this slug is never put in a URL. */
+          slug="design-preview"
           geometry={geometry}
           columns={[]}
           layout={{ widths: [width - 12], tableW: width, overflowing: false }}

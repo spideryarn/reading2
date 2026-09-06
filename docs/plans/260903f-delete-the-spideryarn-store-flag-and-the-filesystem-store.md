@@ -1,9 +1,30 @@
 # Delete `SPIDERYARN_STORE` and the filesystem store
 
-**Status, 2026-09-04. Fourth draft; seven of thirteen stages are done, and stage B is started.** GPT Sol returned *not
-ready* on the first draft and *ready with changes* on the second; those changes are in. The three
-pre-build spikes the second review asked for have all run, and each of them moved the plan — the
-sections below carry what they found.
+**Status, 2026-09-06. Everything through stage G has landed and is on `dev`. The flag and the
+filesystem store are gone.** What is left is two stages, and neither is ordinary work in progress:
+
+- **H is optional and currently declined** — tightening contracts the filesystem store had been
+  weakening. It is the only stage of the nine with no failure behind it; every other one had a bug,
+  an outage or a flag that lied. Greg has said he was "not sure about H and I".
+- **I is unblocked as of 2026-09-06 16:35.** Greg ran `vercel env rm SPIDERYARN_STORE production`
+  and `… preview`; both returned *Removed Environment Variable*. It had been blocked on that and on
+  nothing else, because deleting the tombstone while a deployment still asks for `files` would
+  silently ignore what the operator asked.
+
+  **The sensor will keep firing until the next production deploy, and that is not a fault.** A
+  deployment's environment is baked at build time, so `/api/health` on the deployment built at
+  09:49 today still reports `retired: [SPIDERYARN_STORE]` — it is reporting what *it* was built
+  with, accurately. The confirmation stage I actually needs is the first production deploy after
+  the removal coming back with no `retired` field at all. Read it that way round rather than
+  concluding the removal did not take.
+
+**Do not re-derive a stage count from this file.** An earlier version of this header said "seven of
+thirteen stages are done, and stage B is started" and was two days and five stages out of date —
+the failure § *Counts are perishable here* is about, in the header warning about it.
+
+GPT Sol returned *not ready* on the first draft and *ready with changes* on the second; those
+changes are in. The three pre-build spikes the second review asked for have all run, and each of
+them moved the plan — the sections below carry what they found.
 
 **This plan absorbed [260903e](260903e-a-private-test-database-so-the-suite-stops-racing-dev-servers.md)
 on Greg's decision** — see stage T. That is the largest change to its shape since it was written.
@@ -14,7 +35,8 @@ three later stages consume it**:
 ```
 A (store inventory) ✅ → B0 ✅ (already done) → T-B (factory) ✅ → T-C (lanes) ✅
   → T-D (activation) ✅ → T-E (pollution) ✅
-  → B ✅ → B2 ✅ → B3 ✅ → C → D → E → F (hinge) → G → H → I
+  → B ✅ → B2 ✅ → B3 ✅ → C ✅ → D ✅ → D′ ✅ → E ✅ → F ✅ (hinge) → G ✅
+  → H (optional, declined) → I (unblocked 2026-09-06, not yet built)
 ```
 
 **`C → B` became `B → C` on 2026-09-04**, and this line is the only place the order lives, so
@@ -5770,6 +5792,33 @@ and Preview himself; a hinge that threw on *any* value would break the next depl
 
 Stage I retires it. A permanent validated no-op preserves the false impression that store selection
 still means something.
+
+## Tripped over here, and where each one went
+
+Not part of deleting the store. Found while running this job's gates over and over, which is the
+only reason they were seen at all — an intermittent needs a lot of runs before it is more than a
+rumour. **Recorded here because chat is not memory**: both of these were flagged in conversation
+first, and a grep of this file for either would have come back empty, which is the same failure
+stage G's review called F2.
+
+### The gate that fails with no failing test — `nuqs` after jsdom teardown
+
+Seen three times during this job: the `unit` project reports every test passing and the process
+still exits non-zero, on an unhandled `ReferenceError: location is not defined` attributed to
+`tests/conversation-band-send-new.test.tsx`. **Zero failing tests and a red gate is the worst
+diagnostic shape there is** — there is nothing to open.
+
+The file arrived whole in `748f1161` (2026-08-28), so the defect had been in the tree nine days.
+Reproduced, root-caused and fixed on 2026-09-06 — **and it was two files, not one**: measuring what
+was still queued when each jsdom file ended found a second, `tests/glossary-band-selection.test.tsx`,
+that had never been seen to fail. Everything is in
+[260906c-a-url-write-outlived-the-page-that-asked-for-it.md](../postmortems/260906c-a-url-write-outlived-the-page-that-asked-for-it.md),
+and the rule it produced is in [testing.md](../project/testing.md).
+
+The other item flagged in the same breath — `tests/a-claim-that-lost-its-draft.test.ts` claiming
+*"no step here writes to a disk, and this proves it"* over a `mkdtemp` nothing read back — **was
+already fixed in stage G** and recorded in place at the top of that file. It was listed as
+outstanding here in error.
 
 ## What "done" looks like
 

@@ -763,7 +763,7 @@ describe("an article whose blocks have all gone", () => {
   afterAll(cleanUp);
 
   it("has no blocks artefact, rather than an artefact of no blocks", async () => {
-    /* The difference matters downstream: `inputHashFor` in src/pipeline.ts does
+    /* The difference matters downstream: every stamp in src/pipeline.ts does
        `if (!file?.blocks) return null`, which `{ blocks: [] }` sails past — and
        every late step would then be compared against `hashBlocks([])`, a
        real-looking fingerprint of nothing. */

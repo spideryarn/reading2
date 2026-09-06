@@ -68,15 +68,22 @@
    `imageUrlsIn` below stays synchronous. */
 import { jsdom } from "./jsdom-lazy.js";
 
+import { createHash } from "node:crypto";
+
 import {
   type AssetEntry,
   type AssetFailure,
   type Assets,
   imageSourcesIn,
+  type PdfFigureMarker,
+  /* Aliased because this module exports the *blocks* walk under that name and
+     the two would collide. Same distinction as `imageSourcesIn` (a root) and
+     `imageUrlsIn` (an article) above it. */
+  pdfFigureMarkersIn as pdfFigureMarkersInRoot,
   sniffImage,
 } from "./assets.js";
 import { type AssetFetch, fetchAsset, FetchFailure, type FetchFailureCode } from "./fetch.js";
-import { hashBlocks } from "./source-hash.js";
+import { RESERVED_ATTRS } from "./reserved.js";
 import { type RawSourceStore, storeRawSource } from "./store/blobs.js";
 import type { Block } from "./types.js";
 
@@ -100,8 +107,15 @@ import type { Block } from "./types.js";
  * would re-fetch every image of every article to reach the same answer, and on
  * a slow article it could reach a *worse* one, replacing `stored` entries with
  * `out-of-time`. 2026-08-30.
+ *
+ * **Bumped to `assets/2` on 2026-09-06**, and this one does qualify twice over:
+ * the step now recovers a PDF's own figures as well as fetching web images, and
+ * `sourceHash` stopped meaning `hashBlocks` and started meaning
+ * `assetsInputHash`. An unbumped manifest would compare a new-style hash
+ * against an old-style one and answer *stale* for every article in the library
+ * anyway — bumping is what makes that honest rather than accidental.
  */
-export const ASSETS_VERSION = "assets/1" as const;
+export const ASSETS_VERSION = "assets/2" as const;
 
 /* ------------------------------------------------------------------ *
  * Limits — policy, not measurement
@@ -292,6 +306,100 @@ export function imageUrlsIn(blocks: readonly Block[]): string[] {
     }
   }
   return found;
+}
+
+/**
+ * Every PDF figure marker in the article, in document order, each once.
+ *
+ * The twin of `imageUrlsIn` above, sharing its one-jsdom-and-an-inert-template
+ * shape and its case-insensitive shortcut past the parse — which is a shortcut
+ * and not a rule, so being wrong about it silently drops every figure in the
+ * block.
+ *
+ * Two things this deliberately does not do. It does not read the caption, which
+ * is `pdfFigureRef`'s input and not this step's business — the ref already
+ * carries a digest of it. And it does not check that the markers come from
+ * *this* revision's PDF: they cannot not, because a ref folds in the raw PDF's
+ * sha256, so a marker minted against a different document is a lookup that
+ * misses rather than a mismatch anybody has to detect.
+ *
+ * **A ref repeated across two blocks refuses both**, which is the rule
+ * `pdfFigureMarkersInRoot` states at length for two `<figure>`s inside one — and
+ * the cross-block case is the one that can actually happen, because the reading
+ * view rehosts a block at a time and would put the same picture under both
+ * captions. Counting first and filtering after is what makes the two agree; the
+ * `seen`-and-skip this replaced kept the first and dropped the rest, which is
+ * the shape that hid it. GPT Sol, C-5.
+ */
+export function pdfFigureMarkersIn(blocks: readonly Block[]): PdfFigureMarker[] {
+  const { JSDOM } = jsdom();
+  const dom = new JSDOM("<!doctype html><template></template>");
+  const template = dom.window.document.querySelector("template");
+  if (!template) return [];
+  const parsed: PdfFigureMarker[] = [];
+  const times = new Map<string, number>();
+  for (const block of blocks) {
+    if (!block.html || !MARKER_IN_HTML.test(block.html)) continue;
+    template.innerHTML = block.html;
+    for (const marker of pdfFigureMarkersInRoot(template.content)) {
+      parsed.push(marker);
+      times.set(marker.ref, (times.get(marker.ref) ?? 0) + 1);
+    }
+  }
+  return parsed.filter((marker) => times.get(marker.ref) === 1);
+}
+
+/**
+ * The cheap look before the parse — built once, from the registered name rather
+ * than from a copy of it (src/reserved.ts is the only file allowed to spell one,
+ * and tests/reserved.test.ts scans this one to be sure).
+ *
+ * Case-insensitive for the reason `imageUrlsIn` gives about `<IMG SRC=…>`, and
+ * with the same standing: a shortcut past the parse, not a rule. It is safe to
+ * be *loose* here — a block that has no marker costs one wasted parse — and it
+ * is not safe to be tight, because a marker this misses is a figure nobody ever
+ * looks for.
+ */
+const MARKER_IN_HTML = new RegExp(RESERVED_ATTRS.pdfFigure, "i");
+
+/**
+ * **What this step's inputs hash to** — the image URLs and the figure markers
+ * in the blocks, and nothing else.
+ *
+ * This replaced `hashBlocks(blocks)` on 2026-09-06, and the bug it fixes is a
+ * named family rather than an oversight. `hashBlocks` canonicalises `id`,
+ * `text`, `role` and `treatment` (src/source-hash.ts) and **not** `block.html`,
+ * so adding a figure marker to a captioned figure changed nothing it hashed: a
+ * carried-forward empty manifest would have gone on reporting itself current
+ * and this step would never have run against a PDF's figures at all. That is
+ * exactly what src/pipeline.ts § `articleInputHash` records three stages doing,
+ * for the same reason — stamping a hash whose inputs are not the step's inputs.
+ * GPT Sol, D1-4; docs/reusable/silent-success.md.
+ *
+ * **Both halves are read through a DOM**, because both are looked up through
+ * one later: `blocks.json` stores `…&amp;s=3a2bee…` and `getAttribute("src")`
+ * returns `…&s=3a2bee…`, and a fingerprint built from the other spelling would
+ * be a second way of reading the same fact. src/assets.ts § 1.
+ *
+ * **The raw PDF's hash is in here, transitively and exactly once**: every ref
+ * folds it in, so a re-ingest of a *different* PDF changes every marker and
+ * therefore this hash. Sol's D1-4 asks for `storedSha256` as a third input;
+ * adding it would also make every *web* article's hash depend on a field it has
+ * no images from, which is the kind of over-triggering that costs a refetch of
+ * the whole corpus to buy nothing.
+ *
+ * `spya-assets/1` is a framing prefix and a version of the *canonical form*,
+ * not of the step: it is what stops a document with one image URL and no
+ * markers from ever hashing the same as one with no images and a marker
+ * spelling that URL. Bump it if the shape below changes; `ASSETS_VERSION` is
+ * the separate question of whether the step would decide differently.
+ */
+export function assetsInputHash(blocks: readonly Block[]): string {
+  const canonical = `spya-assets/1\n${JSON.stringify([
+    imageUrlsIn(blocks),
+    pdfFigureMarkersIn(blocks).map((m) => m.ref),
+  ])}`;
+  return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
 }
 
 /* ------------------------------------------------------------------ *
@@ -871,7 +979,7 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
   return {
     assets: {
       version: ASSETS_VERSION,
-      sourceHash: hashBlocks([...blocks]),
+      sourceHash: assetsInputHash(blocks),
       fetchedAt: now().toISOString(),
       entries: ordered,
     },

@@ -35,7 +35,15 @@ import {
   runBlocks,
   splitIntoBlocks,
 } from "./blocks.js";
-import { ASSETS_VERSION, collectAssets } from "./collect-assets.js";
+import type { Assets, PdfFigureEntry, PdfFigureFailure } from "./assets.js";
+import {
+  ASSETS_VERSION,
+  assetsInputHash,
+  collectAssets,
+  describeStorageFailure,
+  pdfFigureMarkersIn,
+} from "./collect-assets.js";
+import { collectPdfFigures, type PdfFiguresRun } from "./collect-pdf-figures.js";
 import { ReadabilityRefused, runExtract } from "./extract.js";
 import {
   fetchDocument,
@@ -106,7 +114,7 @@ import {
   STAGE_EFFORT,
 } from "./models.js";
 import { STEP_ORDER } from "./step-order.js";
-import { articleFingerprint, hashBlocks } from "./source-hash.js";
+import { articleFingerprint } from "./source-hash.js";
 import { hashProfile, profileIsStale } from "./profile.js";
 import {
   ARTICLE_HAD_NO_TEXT,
@@ -970,28 +978,19 @@ export async function stepIsDone(
   return step.isDone ? await step.isDone(ctx, store) : true;
 }
 
-/**
- * The fingerprint of the blocks a late stage would be written against today.
+/*
+ * **`inputHashFor` used to live here** — the blocks hash a stamped stage would
+ * be written against today, `hashBlocks` over stage 4's `blocks.json` — and it
+ * is gone as of 2026-09-06 because its last caller stopped wanting it.
  *
- * `data/<slug>/blocks.json` — stage 4's copy, not stage 3's — because that is
- * the one the late stages read and the one their `sourceHash` was computed
- * from. Reading the other would make every artefact look stale the moment
- * stage 3 ran without stage 4.
- *
- * `null` when the blocks cannot be read at all, which is *"we cannot tell"* and
- * must not be confused with a hash that fails to match. Both answer
- * not-current; only one of them is a stale artefact.
- *
- * **One caller left: `assets`**, which really does read the blocks and nothing
- * else — `collectAssets` takes a block list, fetches the images in it, and has
- * no prompt and no head. Every stage that sends the article to a model reads the
- * tree and the metadata too and uses `articleInputHash` below.
+ * That caller was `assets`, and the reason it stopped is worth keeping: a
+ * blocks hash covers `id`, `text`, `role` and `treatment` and **not**
+ * `block.html` (src/source-hash.ts), so it could not see a PDF figure marker
+ * arrive. The step now stamps `assetsInputHash` (src/collect-assets.ts), which
+ * hashes what it actually consumes. Everything else stamped through this
+ * function had already moved to `articleInputHash` below on 2026-08-31, for a
+ * version of the same complaint.
  */
-async function inputHashFor(ctx: StepContext, store: ArtifactReads): Promise<string | null> {
-  const file = await store.read(ctx.slug, "hierarchy", "blocks");
-  if (!file?.blocks) return null;
-  return hashBlocks(file.blocks);
-}
 
 /**
  * The fingerprint an **article-reading** stage would be written against today:
@@ -1556,6 +1555,132 @@ const ILLUSTRATE_REFUSAL: Record<IllustrateRefusal, ReaderFacingFailure> = {
  */
 function refuseToIllustrate(reason: IllustrateRefusal): never {
   throw stageFailure(ILLUSTRATE_REFUSAL[reason]);
+}
+
+/**
+ * **The PDF half of the `assets` step** — or `undefined`, which means this
+ * article never had a PDF to look in.
+ *
+ * **The markers are looked for first, and that order is the whole of one bug.**
+ * This asked `manifest?.kind !== "pdf"` and returned *before* it had discovered
+ * a marker, so an inconsistent revision — valid markers in the blocks, a raw
+ * manifest that is missing or says HTML — produced no `pdfFigures` at all,
+ * which is indistinguishable from *there was nothing here to look at*. That is
+ * the one distinction this manifest exists to keep. GPT Sol, C-2.
+ *
+ * It costs nothing to reorder, which is why there was no trade to make: the
+ * walk is a regex over each block's html before any parse
+ * (src/collect-assets.ts § `MARKER_IN_HTML`), and `assetsInputHash` runs it on
+ * every article in the same step anyway. What the ordinary case still never
+ * reaches is `getDocument` — three of the seven eval PDFs contain no raster
+ * image anywhere and every web article contains no PDF at all.
+ *
+ * **`undefined` is not an empty run**, and the difference reaches the reader:
+ * an absent `pdfFigures` means *there was nothing here to look at*, and a
+ * present one with failed entries means *we looked and could not*. Collapsing
+ * them is how a feature that has not shipped yet gets reported as one that
+ * failed. src/assets.ts § `Assets`. So `undefined` is now reached by exactly one
+ * road — no markers — and every other road records what it found.
+ *
+ * **The bytes come through `readRawBytes`**, which is what stage 2 already uses
+ * and which verifies the object against the hash the manifest names — so this
+ * cannot read a *different* document than the one whose sha256 every marker's
+ * ref folds in. A raw document that has gone missing is recorded against the
+ * figures and does not fail the step, because the article's web images are the
+ * other half of it and are unaffected.
+ *
+ * @param deps the reader, injected. The default is the real `readRawBytes`; a
+ *   test replaces it to reach the two arms below, which otherwise need a
+ *   Storage outage and a corrupt canonical object to reproduce. Exported with
+ *   this function for tests/collect-pdf-figures.test.ts.
+ */
+export async function recoverPdfFigures(
+  ctx: StepContext,
+  store: ArtifactReads,
+  blocks: Block[],
+  deps: { readBytes?: typeof readRawBytes } = {},
+): Promise<PdfFiguresRun | undefined> {
+  const markers = pdfFigureMarkersIn(blocks);
+  if (markers.length === 0) return undefined;
+
+  /**
+   * Every marker, with one reason. The step carries on and stores the web
+   * images, of which a PDF has none — so the manifest is empty either way and
+   * the article is still readable.
+   */
+  const allFailed = (reason: PdfFigureFailure): PdfFiguresRun => {
+    const at = new Date().toISOString();
+    const entries: PdfFigureEntry[] = markers.map((marker) => ({
+      ref: marker.ref,
+      page: marker.page,
+      status: "failed",
+      reason,
+      at,
+    }));
+    return {
+      entries,
+      stored: 0,
+      failed: entries.length,
+      deduped: 0,
+      bytes: 0,
+      storageErrors: [],
+      elapsedMs: 0,
+    };
+  };
+
+  const manifest = await store.read(ctx.slug, "fetch", "raw");
+  if (manifest?.kind !== "pdf") {
+    /* Markers minted against a PDF, and a stage-1 manifest that has no PDF in
+       it. Nothing here is retryable and nothing is a fault of ours; the article
+       has to be re-fetched. */
+    plog.warn(
+      { slug: ctx.slug, step: "assets", figures: markers.length, kind: manifest?.kind ?? null },
+      `assets ${ctx.slug}: ${markers.length} PDF figure markers and no PDF to look in`,
+    );
+    return allFailed("no-source");
+  }
+
+  let pdf: Uint8Array;
+  try {
+    pdf = await (deps.readBytes ?? readRawBytes)(manifest, { slug: ctx.slug });
+  } catch (err) {
+    /**
+     * **Two failures, two reasons, and one of them was erasing the other.**
+     *
+     * Every throw here was recorded `out-of-time` with nothing logged, so a
+     * missing object, an object that does not hash to its own name and a
+     * Storage outage all reported that our clock had run out — which is the one
+     * thing that had not happened, since `readRawBytes` verifies the bytes
+     * against the hash and that verification establishes something real. GPT
+     * Sol, C-4.
+     *
+     * `RawDocumentUnavailable` is the discriminator and it is asked by type
+     * rather than by message, the rule src/fetch.ts § `overlongObject` already
+     * states: its three reasons (`no-object`, `missing`, `corrupt`) all mean the
+     * document has to be re-fetched or cleared by hand, and anything else means
+     * the bucket is unwell, which is `AssetFailure`'s own reason for keeping
+     * `storage` apart from everything transient — the two need different people.
+     *
+     * **Logged here rather than handed back**, which is the opposite of what
+     * src/collect-assets.ts does and for its stated reason: that module is not
+     * in src/log.ts's component list, and this one is the caller that owns a
+     * `pipeline` logger. Redacted through `describeStorageFailure` all the same,
+     * because a message is somebody else's and may hold a URL or a grant.
+     */
+    const ours = err instanceof RawDocumentUnavailable;
+    plog.warn(
+      {
+        slug: ctx.slug,
+        step: "assets",
+        figures: markers.length,
+        reason: ours ? err.reason : "storage",
+        why: describeStorageFailure(err),
+      },
+      `assets ${ctx.slug}: the PDF behind ${markers.length} figure markers could not be read`,
+    );
+    return allFailed(ours ? "no-source" : "storage");
+  }
+  return collectPdfFigures({ markers, pdf, signal: ctx.signal });
 }
 
 /**
@@ -2273,22 +2398,37 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
 
      It reads stage 4's `blocks.json` rather than the extracted HTML, so it
      fetches exactly the URLs the reader will ask for — and so its freshness is
-     the `inputHashFor` hash the other stamped steps already use. */
+     a hash of those URLs and of the PDF figure markers beside them. */
   assets: {
     name: "assets",
     label: "Fetching the images",
     produces: ["assets"],
-    /* Two values, not three: the blocks it would be built from, and this step's
+    /* Two values, not three: what this step's inputs hash to, and this step's
        own version. **No model**, so no `generator` on the artefact and no
        `model` here — `sameStamp` compares only the fields the expected stamp
        declares, so naming one nothing writes would make every manifest look
        stale for ever. `ASSETS_VERSION` is the string the artefact carries; it
        is imported rather than spelled again here, because two copies of one
-       version string that drift show up as an artefact that never regenerates. */
+       version string that drift show up as an artefact that never regenerates.
+
+       **Not `inputHashFor`, since 2026-09-06**, and that was a live instance of
+       the family the comment on `articleInputHash` above records: `inputHashFor`
+       is `hashBlocks`, which canonicalises `id`, `text`, `role` and `treatment`
+       and **not** `block.html` (src/source-hash.ts). Adding a PDF figure marker
+       to a captioned figure changes the html and nothing else, so a
+       carried-forward empty manifest would have gone on reporting itself
+       current and this step would never have run against a PDF's figures.
+       `assetsInputHash` hashes what the step actually consumes — the image URLs
+       in the blocks and the figure refs in the blocks — which is the rule
+       `articleFingerprint` states and the three stages named above broke.
+       GPT Sol, D1-4. */
     stamp: async (ctx, store) => {
-      const inputHash = await inputHashFor(ctx, store);
-      if (!inputHash) return null;
-      return { inputHash, promptVersion: ASSETS_VERSION };
+      const file = await store.read(ctx.slug, "hierarchy", "blocks");
+      /* `null` is *"we cannot tell"* and answers not-current, exactly as
+         `inputHashFor` does — and must not be confused with a hash that fails to
+         match. Both answer not-current; only one is a stale artefact. */
+      if (!file?.blocks) return null;
+      return { inputHash: assetsInputHash(file.blocks), promptVersion: ASSETS_VERSION };
     },
     async run(ctx, store) {
       const file = await store.read(ctx.slug, "hierarchy", "blocks");
@@ -2304,6 +2444,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         signal: ctx.signal,
         onProgress: (done, total) => ctx.report(`${done}/${total} images`),
       });
+      const figures = await recoverPdfFigures(ctx, store, file.blocks);
       /* No URLs and no hostnames. A log of the images in somebody's article is
          a reading history one step removed, and the counts are what an operator
          wants: `deduped` going from sometimes to never is how you find out the
@@ -2330,11 +2471,41 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              message no longer collapses the way a name did.
              src/collect-assets.ts § `describeStorageFailure`. */
           ...(run.storageErrors.length ? { storageErrors: run.storageErrors } : {}),
+          /* Only for a PDF, and only counts — a log of which figures of which
+             paper a reader has is a reading history one step removed, exactly
+             as the image counts above are deliberately not URLs. */
+          ...(figures
+            ? {
+                figures: figures.entries.length,
+                figuresStored: figures.stored,
+                figuresMs: figures.elapsedMs,
+                ...(figures.storageErrors.length
+                  ? { figureStorageErrors: figures.storageErrors }
+                  : {}),
+              }
+            : {}),
         },
         `assets ${ctx.slug}: ${run.stored} stored, ${run.failed} failed`,
       );
       const failed = run.failed ? `, ${run.failed} left hot-linked` : "";
-      return { parts: { assets: run.assets }, detail: `${run.stored} images stored${failed}` };
+      /* **Spread onto the manifest rather than written by `collectAssets`**, so
+         that the two halves of this step stay two functions: one is a network
+         and a byte budget for URLs, the other is a PDF and a bucket, and
+         neither needs to know the other ran. `pdfFigures` is *absent* rather
+         than empty when there is nothing — for a web article, for a PDF whose
+         transcription found no figures, and for an article ingested before this
+         existed — because all three mean the same thing to the reading view and
+         only the presence of a marker makes the field worth reading at all.
+         src/assets.ts § `Assets`. */
+      const assets: Assets = {
+        ...run.assets,
+        ...(figures && figures.entries.length ? { pdfFigures: figures.entries } : {}),
+      };
+      const drawn = figures?.stored ? `, ${figures.stored} figures recovered` : "";
+      return {
+        parts: { assets },
+        detail: `${run.stored} images stored${failed}${drawn}`,
+      };
     },
   },
 
@@ -2432,8 +2603,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        D0 (docs/plans/260827aa-delete-the-importer.md). The comparison belongs in one
        place (`sameStamp`); only the three values belong to the stage. */
     stamp: async (ctx, store) => {
-      /* `articleInputHash`, not `inputHashFor`: this prompt reads the tree and
-         the metadata as well as the blocks. See that function. */
+      /* `articleInputHash`, not a blocks-only hash: this prompt reads the tree
+         and the metadata as well as the blocks. See that function. */
       const inputHash = await articleInputHash(ctx, store);
       if (!inputHash) return null;
       return { inputHash, promptVersion: TWEETS_PROMPT_VERSION, model: CAPABLE_MODEL };
@@ -2500,7 +2671,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        glossary that goes first purely because glossary is the one of the three
        that already exports its `PROMPT_VERSION` — see the note on `isDone`. */
     stamp: async (ctx, store) => {
-      /* `articleInputHash`, not `inputHashFor`: the skeleton comes from the
+      /* `articleInputHash`, not a blocks-only hash: the skeleton comes from the
          tree and the head from the metadata. See that function. */
       const inputHash = await articleInputHash(ctx, store);
       if (!inputHash) return null;

@@ -54,7 +54,7 @@ import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Assets } from "../src/assets.js";
-import { ASSETS_VERSION } from "../src/collect-assets.js";
+import { ASSETS_VERSION, assetsInputHash } from "../src/collect-assets.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import {
   articleRevisions,
@@ -102,17 +102,33 @@ await pgReady({
 
 /* ------------------------------------------------------------ the article -- */
 
-function block(id: string, text: string): Block {
+function block(id: string, text: string, picture?: string): Block {
   return {
     id,
     tag: "p",
     kind: "text",
     text,
     words: text.trim().split(/\s+/).filter(Boolean).length,
-    html: `<p id="${id}">${text}</p>`,
+    html: `<p id="${id}">${text}${picture ? `<img src="${picture}" alt="">` : ""}</p>`,
     gistable: true,
   };
 }
+
+/**
+ * **The article has a picture, and the re-extraction finds a different one.**
+ *
+ * Not decoration. `assets` stamps `assetsInputHash` — the image URLs and the
+ * PDF figure refs in the blocks, and nothing else (src/collect-assets.ts) — so
+ * an article of pure prose has *the same* assets input before and after a
+ * re-extraction, and its manifest is genuinely current. That is the correct
+ * answer and it would leave the staleness assertion at the bottom of this file
+ * with no subject: it would pass whether or not `case "assets"` existed in
+ * src/store/pg.ts, which is precisely what it is there to catch.
+ *
+ * So the fixture gives the step something it actually reads, and moves it.
+ */
+const PICTURE1 = "https://cdn.example.com/figure.png";
+const PICTURE2 = "https://cdn.example.com/figure-redrawn.png";
 
 /**
  * Minted rather than written out, because this fixture already drifted once.
@@ -136,7 +152,7 @@ const DROPPED = mintUniqueId(MINTED);
 /** The first extraction. */
 const B1: Block[] = [
   block(OPENING, "The opening paragraph, which both extractions agree about."),
-  block(KEPT, "The middle paragraph, as the page first said it."),
+  block(KEPT, "The middle paragraph, as the page first said it.", PICTURE1),
   block(DROPPED, "The closing paragraph, which the second extraction does not find."),
 ];
 
@@ -148,11 +164,13 @@ const B1: Block[] = [
  */
 const B2: Block[] = [
   B1[0] as Block,
-  block(KEPT, "The middle paragraph, rewritten by the time we fetched it again."),
+  block(KEPT, "The middle paragraph, rewritten by the time we fetched it again.", PICTURE2),
 ];
 
 const HASH1 = hashBlocks(B1);
 const HASH2 = hashBlocks(B2);
+/** What `assets` stamps for the first extraction — src/collect-assets.ts. */
+const ASSETS_HASH1 = assetsInputHash(B1);
 
 /**
  * The **article** fingerprint of each publication — blocks, tree and metadata
@@ -162,8 +180,8 @@ const HASH2 = hashBlocks(B2);
  * Separate from `HASH1`/`HASH2` above rather than replacing them, because the
  * two answer different questions and two steps still ask the narrow one:
  * `hierarchy.input_hash` is compared against the stored blocks by
- * `reasonsNotToPublish`, and `assets` really is built from the blocks alone.
- * Declared below `treeFor` — see the note there.
+ * `reasonsNotToPublish`, and `assets` asks a narrower question still — see
+ * `ASSETS_HASH1`. Declared below `treeFor` — see the note there.
  */
 let FINGERPRINT1 = "";
 
@@ -215,12 +233,12 @@ function treeFor(blocks: Block[]): Tree {
 FINGERPRINT1 = articleFingerprint(B1, treeFor(B1), { title: "A fixture article" });
 
 const assetsFor = (sourceHash: string): Assets => ({
-  version: "assets/1",
+  version: "assets/2",
   sourceHash,
   fetchedAt: "2026-08-29T00:00:00.000Z",
   entries: [
     {
-      url: "https://cdn.example.com/figure.png",
+      url: PICTURE1,
       status: "stored",
       sha256: "a".repeat(64),
       ext: "png",
@@ -383,7 +401,7 @@ async function writeTheFiles(): Promise<void> {
   await writeFileJson("arc.json", arcFor(B2));
   /* Stamped against B1, like the three below it: the blocks moved and this
      manifest did not, so both stores have to say the images want re-fetching. */
-  await writeFileJson("assets.json", assetsFor(HASH1));
+  await writeFileJson("assets.json", assetsFor(ASSETS_HASH1));
   await writeFileJson("glossary.json", glossaryFor(FINGERPRINT1));
   await writeFileJson("tweets.json", tweetsFor(FINGERPRINT1));
   await writeFileJson("meta.json", {
@@ -430,7 +448,7 @@ describe("a re-extraction, through beginRevision and publishRevision", () => {
         stampedHtml: B1.map((b) => b.html).join("\n"),
         tree: treeFor(B1),
         arc: arcFor(B1),
-        assets: assetsFor(HASH1),
+        assets: assetsFor(ASSETS_HASH1),
         tweets: tweetsFor(FINGERPRINT1),
         glossary: glossaryFor(FINGERPRINT1),
       })

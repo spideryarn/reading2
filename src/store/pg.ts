@@ -32,7 +32,7 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { Assets } from "../assets.js";
-import { ASSETS_VERSION } from "../collect-assets.js";
+import { ASSETS_VERSION, assetsInputHash } from "../collect-assets.js";
 import { getDb } from "../db/client.js";
 import {
   articleRevisions,
@@ -417,6 +417,17 @@ type RevisionReader =
   | "debate"
   | "arc"
   /**
+   * **The image manifest on its own**, for the route that serves one asset's
+   * bytes — src/routes.ts § `sendArticleAsset`.
+   *
+   * Its own projection rather than reusing `article`, and the reason is the
+   * same one `rawSource` gives below: this read runs once per *picture*, so a
+   * PDF with eight figures runs it eight times on one page load, and the
+   * `article` projection carries the whole tree — 37 KB on one article — plus
+   * every metadata column, to answer a question that needs one `jsonb`.
+   */
+  | "assets"
+  /**
    * **The raw document, and it is the only read that goes looking for it.**
    *
    * Its own projection rather than columns added to `article`, which every page
@@ -449,7 +460,7 @@ const REVISION_READ_POLICY: Record<
     article: "value", library: "value", metadata: "value", publish: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
-    illustrated: "value", debate: "value",
+    illustrated: "value", debate: "value", assets: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -638,8 +649,13 @@ const REVISION_READ_POLICY: Record<
      says the opposite about the same article.
 
      Not on the library: a card says nothing about images, and a presence flag
-     nobody draws is a column in a query for no reason. */
-  assets: { article: "value", metadata: "value" },
+     nobody draws is a column in a query for no reason.
+
+     **And on `assets`, which is the read that exists for exactly this column**
+     — `sendArticleAsset` (src/routes.ts) looks a hash up in this manifest and
+     rebuilds the storage key from what it finds, so the manifest *is* the
+     authorisation for handing over the bytes. GPT Sol, I-5. */
+  assets: { article: "value", metadata: "value", assets: "value" },
 
   /* Each artefact goes to the one read that returns it, and to the metadata
      page, which asks of every artefact "would we write this again today".
@@ -716,6 +732,17 @@ const REVISION_READ_POLICY: Record<
   extractedHtml: {},
   stampedHtml: {},
   labels: {},
+  /* **The reading view, and only the reading view.** It is not an artefact and
+     nothing about it is a freshness question, so `metadata` has no use for it —
+     `isCurrent` asks "would we write this again today" of a *step*, and this
+     column answers a different question about the same labels. The library shows
+     four ticks and this is not a fifth.
+
+     The `article` grant is not optional: without it every reader gets a run of
+     blank leaf cells the moment stage 2 starts writing `pending`, which is the
+     regression this whole stage exists to prevent (src/web/nav-labels.ts). It is
+     one short text value on a read that already pulls every block. */
+  navLabelStatus: { article: "value" },
   requestedUrl: {},
   /* **Not on any read**, and deliberately not on `rawSource`. It is the
      *origin's* Content-Type header, and the response's is decided from
@@ -860,6 +887,10 @@ export const REVISION_PROJECTIONS = {
     tree: articleRevisions.tree,
     arc: articleRevisions.arc,
     assets: articleRevisions.assets,
+    /* Not an artefact — where the paragraph nav labels are in their life, so
+       the client can withhold that layer rather than draw it empty. See the
+       policy entry above, and src/db/schema.ts § `navLabelStatus`. */
+    navLabelStatus: articleRevisions.navLabelStatus,
   },
   /**
    * The shelf. **Five cached scalars and five booleans, and not one document.**
@@ -1013,6 +1044,21 @@ export const REVISION_PROJECTIONS = {
     ...CITED_FINGERPRINT_COLUMNS,
   },
   arc: { id: articleRevisions.id, arc: articleRevisions.arc, ...FINGERPRINT_COLUMNS },
+  /**
+   * **One column, and no fingerprint** — the narrowest read in this map.
+   *
+   * `loadAssets` answers *does this article hold an object under this hash*,
+   * which is a question about the manifest and about nothing else. There is no
+   * staleness to report: a manifest that is out of date still describes objects
+   * that really are in the bucket, and refusing to serve a picture because the
+   * paragraph beside it has been re-extracted would take a figure off the page
+   * for a reason the reader cannot act on.
+   *
+   * A projection of its own rather than `article`, for `rawSource`'s reason
+   * one entry down: the route that uses it runs once per picture — eight times
+   * on the PDF this was built for — and `article` carries the whole tree.
+   */
+  assets: { id: articleRevisions.id, assets: articleRevisions.assets },
   /**
    * **The reference `readRawDocument` follows, and `rawFilename` for the name to
    * download it under.** src/store/raw-document.ts owns what those columns mean;
@@ -2265,6 +2311,17 @@ const rawPgArticleReader: ArticleReader = {
       tree: tree as Tree,
       ...(arc ? { arc: arc as Arc } : {}),
       assets,
+      /* **Named, and never spread in from the row**, for the same reason
+         `assets` above is: the key is required on `Article` precisely so that
+         leaving this line out is a type error rather than a reader who gets a
+         column of blank cells (src/types.ts § `navLabelStatus`).
+
+         No cast and no `??`: the column is `not null` with a CHECK and drizzle
+         carries the `$type`, so this is already the union. The runtime guard for
+         a value the CHECK somehow let past lives at the one boundary that can
+         act on it — `paragraphLabelsReady` in src/web/nav-labels.ts treats
+         anything but `ready` as *withhold*, which fails in the safe direction. */
+      navLabelStatus: found.revision.navLabelStatus,
       /* **Free, off the row `shelfFrom` is already reading**, and the reason
          the masthead's sharing mark costs no request: `currentRevision`
          selects `articles` whole.
@@ -2477,12 +2534,20 @@ const rawPgArticleReader: ArticleReader = {
            divergence `glossary` above lives with. What must not happen is this
            step falling through to `default: true`, which would have the two
            stores disagree about the same article. */
+        /* **`assetsInputHash`, not `blocksHash`, since 2026-09-06** — and this
+           arm is exactly why the divergence above is worth minding. The step
+           stopped stamping `hashBlocks` when it gained PDF figures, because
+           `hashBlocks` does not cover `block.html` and so could not see a
+           figure marker arrive (src/collect-assets.ts § `assetsInputHash`).
+           Left comparing the blocks hash, this page would have answered *not
+           current* for every article in the library for ever, since the two
+           hashes are of different things and can never be equal. */
         case "assets": {
           const assets = revision.assets as Assets | null;
-          if (!assets || !blocksHash) return false;
+          if (!assets || !blocks.length) return false;
           return sameStamp(
             { inputHash: assets.sourceHash, promptVersion: assets.version },
-            { inputHash: blocksHash, promptVersion: ASSETS_VERSION },
+            { inputHash: assetsInputHash(blocks), promptVersion: ASSETS_VERSION },
           );
         }
         case "tweets": {
@@ -3136,6 +3201,23 @@ const rawPgArticleReader: ArticleReader = {
       stale: !tree || arcIsStale(arc, blocks, tree, metaFingerprintOf(found.revision)),
       outdated: arc.version !== ARC_PROMPT_VERSION,
     };
+  },
+
+  /**
+   * The image manifest of this reader's own article — see the contract.
+   *
+   * **A missing article throws `notFound`; a missing manifest is `undefined`.**
+   * The two are different answers and the caller has to be able to tell them
+   * apart: *not yours, or not there* is a 404 about the article, and *the
+   * assets step has never run here* is a 404 about one picture. Collapsing them
+   * would tell an owner their article does not exist because a step they have
+   * not run yet has not run yet.
+   */
+  async loadAssets(slug: string): Promise<Assets | undefined> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "assets");
+    if (!found) throw notFound(slug);
+    return (found.revision.assets as Assets | null) ?? undefined;
   },
 };
 

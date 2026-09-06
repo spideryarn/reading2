@@ -16,7 +16,7 @@ the several traps here that simply stop existing there. What the client *is*:
 [web-client.md](web-client.md). Why the feature exists:
 [granularity-zoom.md](granularity-zoom.md). If the extension isn't connected at all —
 `list_connected_browsers` comes back `[]` — that's a different problem and it lives in
-[claude-in-chrome.md](claude-in-chrome.md).
+[claude-in-chrome.md](../reusable/claude-in-chrome.md).
 
 ## Before anything, check the server is actually up
 
@@ -415,7 +415,7 @@ explicitly. A pass run against a bare `/` looks fine and exercises none of it.
 | `/?mode=hierarchy&at=spya-k6fpme` | deep link, opens scrolled to that section — [block-ids.md](block-ids.md), [url-state.md](url-state.md) |
 | `/#spya-k6fpme` | the old spelling. Should *rewrite itself* to `?at=` before the page paints; if you ever see the hash survive in the address bar, the migration in `main.tsx` broke |
 | `/?mode=hierarchy&cols=1,2` | an explicit column choice, which pins the columns and takes them off auto-fit. There is no way back to automatic from the UI — the `auto` control went on 2026-09-05 |
-| `/?mode=hierarchy&spine=0` | the rail hidden by hand. Check the article **reflows into the reclaimed 12px** rather than leaving a gutter, and that the corner wordmark clears the controls bar — that padding compensation is the one thing `--spine-w: 0` is load-bearing for ([HomeLogo.tsx](../../src/web/HomeLogo.tsx)) |
+| `/?mode=hierarchy&spine=0` | the rail hidden by hand. Check the article **reflows into the reclaimed 12px** rather than leaving a gutter. The second half of this row used to be *"and the corner wordmark clears the controls bar"*, and **there is no corner wordmark on this page since 2026-09-06** — it is `.dock-home` in the bottom bar ([260905g](../plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md)). The padding compensation `--spine-w: 0` was load-bearing for is still in the stylesheet, now holding a gutter open for nothing; stage 2 of that plan takes it out, and this row gets a number to check against then. The compensation itself still matters on every page that keeps the corner ([HomeLogo.tsx](../../src/web/HomeLogo.tsx)) |
 | `/?mode=outline&spine=0` | since 2026-09-05 the rail is **on** in outline mode, where it used to be off by default, so this is the combination that proves `?spine=` still bites |
 | `/?mode=chat&spine=0` | the rail hidden with a mode band open, which is the only way `fitMode` returns `off`. Both smallest terms of the sticky bars' `left` at once |
 | `/?slug=<slug>` | a different article; defaults to `example` |

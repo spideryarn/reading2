@@ -49,12 +49,13 @@
  * `dated-meta` copy exists to give that field a value. See `MetaState` and the
  * last test in this file for what a green suite was hiding without it.
  *
- * `assets` is here too. It takes a **blocks-only** hash on purpose — it is the
- * one stamped stage with no prompt, so there is no head and no tree in its
- * question (`inputHashFor` in src/pipeline.ts) — and its two rows therefore
- * agree with each other across the metadata split rather than differing. That is
- * correct rather than an omission, and this file asserts it as a property so
- * that nobody "fixes" it into `articleFingerprint`.
+ * `assets` is here too, and its hash is **narrower than every other one on
+ * purpose**: the image URLs and the PDF figure refs in the blocks, and nothing
+ * else (`assetsInputHash`, src/collect-assets.ts). It is the one stamped stage
+ * with no prompt, so there is no head and no tree in its question, and its two
+ * rows therefore agree with each other across the metadata split rather than
+ * differing. That is correct rather than an omission, and this file asserts it
+ * as a property so that nobody "fixes" it into `articleFingerprint`.
  *
  * ## The store here is a fake, and the header above already said so
  *
@@ -476,8 +477,9 @@ describe("the hash a stage writes is the hash its stamp expects", () => {
    * hash, so the fingerprints really do read it.
    *
    * `assets` is the exception and it is named rather than skipped: its question
-   * is the blocks and nothing else, so its two hashes are equal across the split
-   * by design (`inputHashFor` in src/pipeline.ts). Asserting that keeps somebody
+   * is the images and figures in the blocks and nothing else, so its two hashes
+   * are equal across the split by design (`assetsInputHash` in
+   * src/collect-assets.ts). Asserting that keeps somebody
    * from "completing" it against `articleFingerprint` and marking every manifest
    * on every shelf stale for a head no image fetcher ever read.
    */
