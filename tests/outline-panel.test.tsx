@@ -181,6 +181,9 @@ function render(
   proseBeside = true,
   padding = 0,
   bandRight = 300,
+  /* The labels are there unless a case says otherwise, which is what every
+     revision says today — src/web/nav-labels.ts. */
+  paragraphLabels = true,
 ) {
   stubHeights(bandHeight, 10, padding, bandRight);
   act(() => {
@@ -191,6 +194,7 @@ function render(
         arcByRow={null}
         focusRow={focusRow}
         proseBeside={proseBeside}
+        paragraphLabels={paragraphLabels}
         onJump={() => {}}
       />,
     );
@@ -345,6 +349,7 @@ describe("what the list says", () => {
           arcByRow={null}
           focusRow={2}
           proseBeside
+          paragraphLabels
           onJump={() => {}}
         />,
       );
@@ -387,6 +392,7 @@ describe("what the list says", () => {
           arcByRow={null}
           focusRow={0}
           proseBeside={false}
+          paragraphLabels
           onJump={() => {}}
         />,
       );
@@ -404,6 +410,7 @@ describe("what the list says", () => {
           arcByRow={null}
           focusRow={0}
           proseBeside
+          paragraphLabels
           onJump={() => {}}
         />,
       );

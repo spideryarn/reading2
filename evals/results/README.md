@@ -152,3 +152,21 @@ These runs also found two real bugs that no unit test could have:
 
 Both are fixed and pinned by tests. See
 [docs/project/prompt-caching.md](../../docs/project/prompt-caching.md).
+
+## `summaries/` — the Socratic question wording, 2026-09-05
+
+[`summaries/2026-09-05T18-04-46-socratic-questions.md`](summaries/2026-09-05T18-04-46-socratic-questions.md)
+is the promoted `results.md` of the seven-arm run behind
+[docs/plans/260905f-…](../../docs/plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md#the-result-the-gate-held-and-it-is-anchor-2-that-tripped-it):
+854 of 854 calls, $2.5853, and **no ranking**, because the calibration gate
+(`MAX_ANCHOR_INVERSIONS = 0`) took fifteen inversions and anchor 2 tripped it. The declared outcome,
+not a failed run — and the reason report 24 is still
+[awaiting Greg](../../docs/user-feedback/awaiting-approval.md).
+
+The run itself lived under gitignored `output/summaries-runs/`, which is deliberate — judging
+materials are real article prose and must not be committed — so **only `results.md` is promoted, by
+hand**, and it was promoted here on 2026-09-06 when its worktree was removed. The shape table and
+the inversion list are all that survive of it.
+
+[`summaries/trailing-comma/`](summaries/trailing-comma/) is three raw model answers from the same
+eval, kept for a different reason — its own README says which.

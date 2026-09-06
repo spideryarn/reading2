@@ -138,6 +138,7 @@ describe("the article title as a link", () => {
     meta: m,
     blocks: [],
     assets: undefined,
+    navLabelStatus: "ready",
     tree: {
       version: "t",
       generator: "t",

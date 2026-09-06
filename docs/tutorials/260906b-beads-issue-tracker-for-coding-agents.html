@@ -1,0 +1,1415 @@
+<!doctype html>
+<html lang="en">
+<!--
+    TUTORIAL REQUEST
+
+    User prompt: "Read https://github.com/gastownhall/beads and https://beads.gascity.com/
+    and related docs, and then run @docs/reusable/write-tutorial.md" — Greg, 2026-09-06.
+    Followed mid-turn by: "And consider what a stripped-down 80-20 (less complexity, most
+    of the benefits) approach might look like." and "With input from Fable and GPT Astra".
+
+    Generated: 2026-09-06
+    Audience:  someone who supervises AI coding agents and has never installed beads
+    Subject:   beads (`bd`) v1.1/1.2 — an EXTERNAL tool, not Spideryarn code. Nothing in
+               this repo uses it today; this is an evaluation, not documentation of
+               something we run.
+
+    Sources read (all 2026-09-06, all public):
+      https://github.com/gastownhall/beads                     README
+      https://beads.gascity.com/                               landing page, v1.1.0
+      https://beads.gascity.com/llms.txt                       the full page index (~200 pages)
+      /core-concepts/index          the data model, edges, ready, formulas/molecules/gates
+      /core-concepts/hash-ids       hash derivation, adaptive length, collisions
+      /getting-started/quickstart   the command walkthrough and the daily loop
+      /architecture/dolt            embedded vs server, cell-level merge, the 2.2.0 pin
+      /reference/faq                why Dolt, why hashes, scale limits, known problems
+      /reference/git-integration    the five hooks, what is tracked, refs/dolt/data
+      /workflows/gates              human / timer / gh:run / gh:pr
+      /workflows/molecules          formulas, bd cook, bd mol pour
+      /integrations/claude-code     the SessionStart hook, bd prime, the plugin
+      /cli-reference/prime          token cost of the injected context
+
+    Not verified by running it. `bd` was NOT installed and no command in this page was
+    executed. Every number and behaviour here is quoted from the project's own docs, and
+    the claims are labelled as such. That is a real limitation and § "What this page did
+    not check" says so.
+
+    The 80/20 section (§7) carries input from two other models, both given the same
+    brief (kept alongside this session's scratchpad): GPT-6-Astra via codex at high
+    effort, and Fable as a subagent. Where they disagreed with each other, the page names
+    which one said what rather than averaging them into a false consensus. Their three
+    substantive disagreements — how much hardening the small version needs, serial IDs vs
+    UUIDs, and which database it should live in — are in the callout in §7.
+
+    Diagrams: four hand-authored inline SVGs. viewBox width 900 against a ~931px column,
+    so text scales slightly UP rather than down — the previous tutorial (260906a) measured
+    a 980-wide viewBox shrinking its smallest class to ~12.4px effective, and this avoids
+    that class of fault by construction.
+
+    Two faults were fixed from the markup before the browser pass, and both were the kind
+    that is invisible in the source: diagram 3's `bd dolt push` / `bd dolt pull` arrows had
+    endpoints that landed outside the boxes they were meant to join (one carried a stray
+    `transform="translate(0,-30)"` putting its head above the target box entirely), and
+    diagram 4 drew no dependency edges at all while claiming to show a dependency graph —
+    plus one `stroke-opacity=".0"` line that rendered nothing.
+
+    REVIEWED by GPT-5.6-Sol (codex, high effort) 2026-09-06, given the page, the brief, and
+    both other models' raw answers. Twelve findings; every one checked before applying, and
+    all twelve applied. The five worth knowing, because each would have misled a reader:
+
+      - The `ready` SQL in §7 was wrong in a way the page half-knew: it treated a blocker as
+        satisfied unless still `open`/`doing`, so DROPPING a blocker silently released
+        everything behind it. Now `<> 'done'`, with the reasoning as a callout.
+      - The claim statement only checked `status='open'`, so it would happily claim an item
+        that was open but BLOCKED — `ready` having been a separate query a moment earlier.
+        The readiness predicate is now inside the UPDATE.
+      - §7 originally used a `blocked_by integer[]` column (Fable's design). Sol named four
+        costs — no foreign key on elements, no uniqueness, lost updates on concurrent
+        read-modify-write, and no reverse index — and the page now shows a two-column edge
+        table instead, with the array named as the trap.
+      - THREE claims overstated what the other two models agreed on: that "both" wanted a
+        handoff field (only Astra), that "both" wanted `discovered-from` (only Fable —
+        Astra explicitly wanted one edge type), and that atomic claiming is "the only
+        genuine concurrency problem" (Astra names three more). All three now attribute.
+      - Dolt was described as "Postgres-shaped". It is MySQL-compatible.
+
+    Also corrected: hash IDs promised no collisions in the main text while the accurate
+    version ("detected and disambiguated") sat inside a collapsed <details>; the worked
+    example changed its own IDs halfway through, in a tutorial about stable IDs; "the open
+    list grows monotonically" (open items close); "observable thresholds" where Astra had
+    explicitly said these were review triggers, not measured limits; stale-claim recovery
+    described as unsolvable when only timeout-based death DETECTION is; and an unsupported
+    claim that the JSONL export loses edge fidelity, which the sources do not say either way.
+
+    DIAGRAM CHECK — and this is the part that did NOT go to plan, so read it before
+    trusting the pictures. write-tutorial.md says to look at every diagram in a real
+    browser, because an SVG that is correct in the markup is routinely wrong on screen.
+    A Sonnet subagent was dispatched to do that with the Claude-in-Chrome extension. It
+    ran for over half an hour, did not answer a direct request for partial findings, and
+    was stopped without reporting. So NO SCREENSHOT OF THIS PAGE HAS BEEN LOOKED AT.
+
+    What was done instead, and what it can and cannot tell you: a script
+    (kept in this session's scratchpad, not the repo) parses each <svg>, estimates every
+    <text> element's advance width from its class and character count, and fails if a
+    label leaves its viewBox, overflows the <rect> it sits inside, or collides with
+    another label on the same baseline. It also does the arithmetic the previous tutorial
+    had to discover the hard way: a 900-unit viewBox in a ~931px column scales text UP by
+    1.03, so the smallest class renders at 13.4px at a 1280px window and 13.0px at 900px,
+    both clear of the ~12px floor.
+
+    It found four faults that were invisible in the markup and all four are fixed:
+      - diagram 1, the agent box caption "a Claude / Codex / Cursor" ran past its right
+        border. The box is now 210 units instead of 180 and the text is re-cut.
+      - diagram 1, "edit code, run tests" did not fit its 128-unit step box.
+      - diagram 1, three more step captions sat within a couple of units of their borders;
+        they now use a 13px class (13.0px effective at the narrowest tested width).
+      - diagram 2, "Soft association. Never blocks. Costs nothing, means little." ran
+        clean off the right-hand edge of the viewBox — about 80 units past it. Split
+        over two lines.
+
+    What the script CANNOT see, and what a browser pass would still be for: real glyph
+    metrics rather than estimates, anything wrong in dark mode, whether an arrowhead
+    visibly meets the box it points at, and whether the body scrolls horizontally at a
+    narrow window. Those remain unverified. If you are about to rely on these diagrams,
+    open the page and look.
+-->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Beads is an issue tracker built for AI coding agents: a dependency graph in a version-controlled SQL database, whose one important query is 'what can be started right now'. How it works, and what an 80/20 version of it would be.">
+<title>A work graph for agents</title>
+<style>
+  :root {
+    --bg: #fbfaf8;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --ink-soft: #5b6470;
+    --rule: #e2e0dc;
+    --accent: #db8a45;
+    --link: #1a5fb4;
+
+    --c-agent: #6d28d9;  --c-agent-fill: #eee9fd;
+    --c-open:  #0f766e;  --c-open-fill:  #dcf5f1;
+    --c-db:    #1d4ed8;  --c-db-fill:    #e2ebfe;
+    --c-ext:   #b45309;  --c-ext-fill:   #fdf1dc;
+    --c-ok:    #15803d;  --c-ok-fill:    #ddf5e3;
+    --c-warn:  #b3261e;  --c-warn-fill:  #fdeaea;
+    --c-dead:  #8b929c;  --c-dead-fill:  #ececec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --panel: #1e2128; --ink: #e6e6e3; --ink-soft: #a3adba;
+      --rule: #333842; --link: #7fb4ff;
+      --c-agent: #b79cf5; --c-agent-fill: #271e3d;
+      --c-open:  #63d3c1; --c-open-fill:  #10302c;
+      --c-db:    #8fb6ff; --c-db-fill:    #1b2740;
+      --c-ext:   #f0b167; --c-ext-fill:   #3a2c17;
+      --c-ok:    #7fd396; --c-ok-fill:    #142b1c;
+      --c-warn:  #f38b84; --c-warn-fill:  #351a19;
+      --c-dead:  #7b828c; --c-dead-fill:  #2a2e35;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2.5rem 1.25rem 6rem;
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 62rem; margin-inline: auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 2.1rem; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 .4rem; }
+  h2 {
+    font-size: 1.42rem; line-height: 1.25; letter-spacing: -0.01em;
+    margin: 3.2rem 0 .8rem; padding-bottom: .35rem; border-bottom: 2px solid var(--rule);
+  }
+  h3 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+  h4 { font-size: .96rem; margin: 1.4rem 0 .4rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+  p, li { max-width: 46rem; }
+  a { color: var(--link); text-decoration-color: color-mix(in srgb, var(--link) 40%, transparent); text-underline-offset: 2px; }
+  a:hover { text-decoration-color: currentColor; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .875em;
+         background: color-mix(in srgb, var(--ink) 7%, transparent); padding: .1em .35em; border-radius: 3px; }
+  pre { background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--rule);
+        border-radius: 6px; padding: .85rem 1rem; overflow-x: auto; font-size: .84rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; font-size: 1em; }
+  .lede { font-size: 1.06rem; color: var(--ink-soft); max-width: 44rem; }
+  .meta { font-size: .84rem; color: var(--ink-soft); margin: .6rem 0 2rem; }
+  .meta strong { color: var(--ink); font-weight: 600; }
+
+  .callout { border: 1px solid var(--rule); border-left: 4px solid var(--accent);
+             background: var(--panel); border-radius: 5px; padding: .9rem 1.1rem; margin: 1.2rem 0; }
+  .callout p { margin: .4rem 0 0; }
+  .callout .title { font-weight: 650; margin: 0; }
+  .callout.warn { border-left-color: var(--c-warn); background: var(--c-warn-fill); }
+  .callout.key  { border-left-color: var(--c-open); background: var(--c-open-fill); }
+  .callout.model { border-left-color: var(--c-agent); background: var(--c-agent-fill); }
+
+  .toc { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 1rem 1.4rem; margin: 1.6rem 0; }
+  .toc ol { margin: .4rem 0; padding-left: 1.3rem; }
+  .toc li { margin: .18rem 0; }
+  .paths { margin-top: 1rem; padding-top: .9rem; border-top: 1px dashed var(--rule); font-size: .93rem; }
+  .paths p { margin: .35rem 0; }
+
+  figure { margin: 1.6rem 0; }
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px;
+            background: var(--panel); padding: .6rem; }
+  svg { display: block; width: 100%; min-width: 660px; height: auto; }
+  figcaption { font-size: .85rem; color: var(--ink-soft); margin-top: .5rem; max-width: 46rem; }
+
+  .s-agent { fill: var(--c-agent-fill); stroke: var(--c-agent); }
+  .s-open  { fill: var(--c-open-fill);  stroke: var(--c-open);  }
+  .s-db    { fill: var(--c-db-fill);    stroke: var(--c-db);    }
+  .s-ext   { fill: var(--c-ext-fill);   stroke: var(--c-ext);   }
+  .s-ok    { fill: var(--c-ok-fill);    stroke: var(--c-ok);    }
+  .s-warn  { fill: var(--c-warn-fill);  stroke: var(--c-warn);  }
+  .s-dead  { fill: var(--c-dead-fill);  stroke: var(--c-dead);  }
+  .s-panel { fill: var(--panel);        stroke: var(--rule);    }
+  .box { stroke-width: 1.5; rx: 6; }
+  .t   { fill: var(--ink); font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .t-s { fill: var(--ink-soft); font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .t-b { fill: var(--ink); font: 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 650; }
+  .t-m { fill: var(--ink); font: 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .t-ms { fill: var(--ink-soft); font: 13.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .t-xs { fill: var(--ink-soft); font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .t-hd { fill: var(--ink-soft); font: 13.5px -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700; letter-spacing: .1em; }
+  .ln { stroke: var(--ink-soft); stroke-width: 1.5; fill: none; }
+  .ln-block { stroke: var(--c-warn); stroke-width: 2; fill: none; }
+  .ln-dash { stroke: var(--ink-soft); stroke-width: 1.3; fill: none; stroke-dasharray: 5 4; }
+
+  .key { display: flex; flex-wrap: wrap; gap: .35rem 1.1rem; font-size: .84rem; color: var(--ink-soft); margin: .6rem 0 0; }
+  .key span { display: inline-flex; align-items: center; gap: .4rem; }
+  .key i { width: .8rem; height: .8rem; border-radius: 3px; border: 1.5px solid; display: inline-block; }
+  .k-agent { background: var(--c-agent-fill); border-color: var(--c-agent); }
+  .k-open  { background: var(--c-open-fill);  border-color: var(--c-open); }
+  .k-db    { background: var(--c-db-fill);    border-color: var(--c-db); }
+  .k-ext   { background: var(--c-ext-fill);   border-color: var(--c-ext); }
+  .k-dead  { background: var(--c-dead-fill);  border-color: var(--c-dead); }
+  .k-ok    { background: var(--c-ok-fill);    border-color: var(--c-ok); }
+
+  table { border-collapse: collapse; width: 100%; max-width: 54rem; margin: 1.1rem 0; font-size: .92rem; }
+  th, td { text-align: left; vertical-align: top; padding: .5rem .7rem; border-bottom: 1px solid var(--rule); }
+  th { font-weight: 650; font-size: .82rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); }
+
+  details { border: 1px solid var(--rule); border-radius: 6px; background: var(--panel);
+            padding: .35rem .9rem; margin: 1rem 0; }
+  details[open] { padding-bottom: .9rem; }
+  summary { cursor: pointer; font-weight: 600; padding: .5rem 0; }
+  summary::marker { color: var(--accent); }
+  details > *:not(summary) { max-width: 46rem; }
+
+  .pass { display: inline-block; font-size: .74rem; letter-spacing: .08em; text-transform: uppercase;
+          color: var(--accent); font-weight: 700; border: 1px solid currentColor;
+          border-radius: 3px; padding: .1em .5em; vertical-align: .25em; margin-right: .5rem; }
+  .who { font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; font-weight: 700;
+         color: var(--c-agent); }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; }
+</style>
+</head>
+<body>
+
+<h1>A work graph for agents</h1>
+<p class="lede">Beads is an issue tracker written for AI coding agents rather than for people. It is
+worth understanding even if you never install it, because the idea underneath it — that the plan
+should be a queryable graph rather than a document — is the part that transfers.</p>
+<p class="meta"><strong>7 minutes</strong> to skim · <strong>~30</strong> to read everything ·
+written 2026-09-06 from the project's own public docs at version 1.1/1.2 ·
+<strong>nothing here was run</strong>, see <a href="#unchecked">what this page did not check</a></p>
+
+<h2 id="tldr">TL;DR</h2>
+
+<p>An agent finishes a session and forgets everything. The next one starts from whatever you wrote
+down. Beads makes that written-down thing a <strong>dependency graph in a database</strong> instead
+of a markdown file, and gives it one important query: <code>bd ready</code> — <em>which items have
+no unfinished blockers, and so could be started right now</em>. An agent asks that question, takes
+one item, does it, closes it, and the closing automatically makes the next items available. Nobody
+re-plans.</p>
+
+<p>The database is <a href="https://github.com/dolthub/dolt">Dolt</a>, a MySQL-compatible SQL
+database that is version-controlled like git: it branches, diffs and merges, and it merges <em>per cell</em>, so two
+agents editing two fields of the same issue do not conflict. It rides in your existing git remote
+under a side reference called <code>refs/dolt/data</code>, so the issue history travels with the
+repo without ever appearing on a branch.</p>
+
+<p>Around that core sits a great deal more: about 120 subcommands, a template language for
+repeatable workflows, agent-to-agent messaging, bidirectional sync with GitHub/Jira/Linear, and
+cross-repo federation. The core is roughly a weekend of work and carries most of the value; the rest
+is the part to think hard about before adopting. <a href="#eighty">§7</a> is what a stripped-down
+version looks like, with two other models' opinions on it.</p>
+
+<h2 id="models">Four ways to picture it</h2>
+
+<div class="callout model">
+  <p class="title">1 · Amnesiac shift workers, and a handover book</p>
+  <p>Every agent session is a new worker who has read nothing, remembers nothing from last time, and
+  will be gone in an hour. What survives is the book on the desk. A markdown plan is a book written
+  in prose that the next worker must read end to end and interpret. Beads makes it a book with an
+  index and a rule: <em>turn to the page marked</em> READY <em>and take the top item</em>.</p>
+</div>
+
+<div class="callout model">
+  <p class="title">2 · A departure board, not a timetable</p>
+  <p>A timetable lists everything that is planned. A departure board shows only what is boarding
+  now. <code>bd ready</code> is the departure board: of two hundred open items it might show four,
+  because the other 196 are waiting on something. The agent never reads the timetable, which is the
+  whole point — a plan the agent has to hold in its head is a plan that costs tokens and gets
+  mis-remembered.</p>
+</div>
+
+<div class="callout model">
+  <p class="title">3 · Git, but for the issues</p>
+  <p>Your issues get commits, branches, diffs and merges, in the same repository as the code and
+  pushed to the same remote. Two consequences follow immediately: you can work on issues offline on
+  a plane, and a feature branch can carry its own issue changes and merge them back. The cost is
+  that you are now running a database engine inside a CLI binary, and databases have opinions.</p>
+</div>
+
+<div class="callout model">
+  <p class="title">4 · Cloakroom tickets, not queue numbers</p>
+  <p>Issues are identified by a short hash — <code>bd-a1b2</code> — rather than <code>#1</code>,
+  <code>#2</code>, <code>#3</code>. Sequential numbers require a single authority handing them out.
+  Two agents on two branches both take "#7", and merging is then a mess. A hash needs no authority
+  and no coordination: everyone mints their own. Collisions become unlikely rather than impossible,
+  and beads detects them on import and appends a disambiguator rather than losing an issue.</p>
+</div>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#pass1">The loop, in one page</a></li>
+    <li><a href="#pieces">The pieces: a bead, four kinds of edge, one query</a></li>
+    <li><a href="#storage">Where the bytes live, and how they travel</a></li>
+    <li><a href="#worked">One feature, followed all the way through</a></li>
+    <li><a href="#agents">The part that is specifically about agents</a></li>
+    <li><a href="#hard">The genuinely hard parts</a></li>
+    <li><a href="#eighty">An 80/20 version, and two second opinions</a></li>
+    <li><a href="#judgment">Trade-offs, risks and open questions</a></li>
+    <li><a href="#faq">FAQ</a></li>
+    <li><a href="#appendix">Appendix: commands, glossary, sources</a></li>
+  </ol>
+  <div class="paths">
+    <p><strong>If you only want the idea</strong> — <a href="#models">the four models above</a>,
+      then <a href="#pass1">§1</a>. Two minutes, and you can stop.</p>
+    <p><strong>If you are deciding whether to adopt it</strong> — <a href="#eighty">§7</a> and
+      <a href="#judgment">§8</a>, then <a href="#hard">§6</a> for what you would be signing up to.</p>
+    <p><strong>If you want to build a smaller one yourself</strong> — <a href="#eighty">§7</a> is a
+      concrete design; <a href="#pieces">§2</a> is the data model to copy.</p>
+    <p><strong>If you care most about multiple agents not colliding</strong> —
+      <a href="#worked">§4</a>, then the claiming and merge parts of <a href="#hard">§6</a>.</p>
+  </div>
+</div>
+
+<h2 id="pass1"><span class="pass">Pass 1</span> The loop, in one page</h2>
+
+<p>There is one loop and it has five steps. Everything else in the product is in service of it.</p>
+
+<figure>
+  <div class="scroll">
+  <svg viewBox="0 0 900 430" role="img" aria-label="The agent loop: ask for ready work, claim an item atomically, do the work, close it, and closing unblocks downstream items which re-enter the ready set.">
+    <defs>
+      <marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0,0.5 L8.5,4.5 L0,8.5 z" fill="var(--ink-soft)"/>
+      </marker>
+      <marker id="arok" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0,0.5 L8.5,4.5 L0,8.5 z" fill="var(--c-ok)"/>
+      </marker>
+    </defs>
+
+    <rect class="box s-agent" x="20" y="40" width="210" height="150"/>
+    <text class="t-b" x="38" y="68">The agent</text>
+    <text class="t-s" x="38" y="90">a coding-agent session.</text>
+    <text class="t-s" x="38" y="110">Knows nothing at the</text>
+    <text class="t-s" x="38" y="130">start, forgets it all</text>
+    <text class="t-s" x="38" y="150">at the end.</text>
+    <text class="t-ms" x="38" y="176">shells out to `bd`</text>
+
+    <rect class="box s-db" x="660" y="40" width="220" height="150"/>
+    <text class="t-b" x="678" y="68">The graph</text>
+    <text class="t-s" x="678" y="90">every item, its status,</text>
+    <text class="t-s" x="678" y="110">and the edges between</text>
+    <text class="t-s" x="678" y="130">them. Lives in a local</text>
+    <text class="t-s" x="678" y="150">database in the repo.</text>
+    <text class="t-ms" x="678" y="176">.beads/</text>
+
+    <!-- the five steps -->
+    <rect class="box s-open" x="245" y="235" width="128" height="62"/>
+    <text class="t-m" x="309" y="262" text-anchor="middle">bd ready</text>
+    <text class="t-xs" x="309" y="283" text-anchor="middle">what can start?</text>
+
+    <rect class="box s-open" x="400" y="235" width="128" height="62"/>
+    <text class="t-m" x="464" y="262" text-anchor="middle">--claim</text>
+    <text class="t-xs" x="464" y="283" text-anchor="middle">mine, atomically</text>
+
+    <rect class="box s-agent" x="555" y="235" width="128" height="62"/>
+    <text class="t-b" x="619" y="262" text-anchor="middle">do the work</text>
+    <text class="t-xs" x="619" y="283" text-anchor="middle">code and tests</text>
+
+    <rect class="box s-ok" x="710" y="235" width="128" height="62"/>
+    <text class="t-m" x="774" y="262" text-anchor="middle">bd close</text>
+    <text class="t-xs" x="774" y="283" text-anchor="middle">done, with a reason</text>
+
+    <line class="ln" x1="376" y1="266" x2="395" y2="266" marker-end="url(#ar)"/>
+    <line class="ln" x1="531" y1="266" x2="550" y2="266" marker-end="url(#ar)"/>
+    <line class="ln" x1="686" y1="266" x2="705" y2="266" marker-end="url(#ar)"/>
+
+    <!-- feedback -->
+    <path class="ln" d="M774,300 L774,355 L309,355 L309,302" stroke="var(--c-ok)" marker-end="url(#arok)"/>
+    <text class="t-s" x="541" y="378" text-anchor="middle" fill="var(--c-ok)">closing an item unblocks whatever was waiting on it — the ready set changes itself</text>
+
+    <!-- agent to db -->
+    <path class="ln-dash" d="M235,115 L640,115" marker-end="url(#ar)"/>
+    <text class="t-ms" x="437" y="106" text-anchor="middle">every command is one CLI call, --json for the agent</text>
+
+    <line class="ln-dash" x1="110" y1="195" x2="110" y2="260" />
+    <line class="ln-dash" x1="110" y1="260" x2="240" y2="260" marker-end="url(#ar)"/>
+    <text class="t-s" x="110" y="220" text-anchor="middle">runs</text>
+
+    <text class="t-hd" x="20" y="415">NO STEP REQUIRES ANYONE TO RE-READ OR RE-WRITE A PLAN</text>
+  </svg>
+  </div>
+  <figcaption>The whole product, minus the extras. The green arrow is the interesting one: nothing
+  and nobody decides what becomes available next — it falls out of the edges that were already
+  there.</figcaption>
+  <div class="key">
+    <span><i class="k-agent"></i> the agent</span>
+    <span><i class="k-open"></i> query and claim</span>
+    <span><i class="k-ok"></i> completion</span>
+    <span><i class="k-db"></i> stored state</span>
+  </div>
+</figure>
+
+<p>In commands, a whole session looks like this:</p>
+
+<pre><code>$ bd ready
+Ready work (2 issues with no active blockers):
+  1. [P1] bd-7f2a.1: Signed upload URL + storage bucket
+  2. [P2] bd-4d80:   Add the /changelog page
+
+$ bd update bd-7f2a.1 --claim        # sets assignee AND in_progress, in one atomic step
+$ ... does the work ...
+$ bd close bd-7f2a.1 --reason "Bucket + signed URL endpoint landed in 4f2a10"
+
+$ bd ready
+Ready work (3 issues with no active blockers):     # two new ones appeared by themselves
+</code></pre>
+
+<div class="callout key">
+  <p class="title">Why the atomic claim matters more than it looks</p>
+  <p>Two agents running <code>bd ready</code> a second apart get the same answer. If claiming were
+  "read, then write", both would take <code>bd-7f2a.1</code> and one would waste a session. The
+  <code>--claim</code> flag is a compare-and-set: it succeeds only if the item is still unclaimed,
+  and the loser is simply told to pick another. This is the single mechanism that makes running
+  several agents at once sane, and it is why <em>a shared markdown TODO list does not work</em> —
+  a file has no way to say "I got there first".</p>
+</div>
+
+<h2 id="pieces"><span class="pass">Pass 2</span> The pieces: a bead, four kinds of edge, one query</h2>
+
+<h3>A bead</h3>
+
+<p>A "bead" and an "issue" are the same thing; the docs use both. It is one unit of work with the
+fields you would expect and two you might not.</p>
+
+<table>
+  <tr><th>Field</th><th>What it holds</th><th>Worth knowing</th></tr>
+  <tr><td><code>id</code></td><td><code>bd-a1b2</code></td>
+      <td>a hash of the title, the creation timestamp and a random salt. Grows from 3 to 8
+          characters as the database grows, so short IDs stay short in small projects.</td></tr>
+  <tr><td><code>title</code>, <code>description</code></td><td>the work</td>
+      <td>free text; the description is where an agent puts its plan.</td></tr>
+  <tr><td><code>type</code></td><td>task · bug · feature · epic · chore</td>
+      <td>plus <code>gate</code>, which is a wait rather than a job — see <a href="#gates">below</a>.</td></tr>
+  <tr><td><code>priority</code></td><td>0–4, 0 is critical</td>
+      <td>orders the ready list; does not affect what <em>is</em> ready.</td></tr>
+  <tr><td><code>status</code></td><td>open → in_progress → closed</td>
+      <td>plus deferred and blocked, which are derived rather than typed by hand.</td></tr>
+  <tr><td><code>assignee</code></td><td>who claimed it</td>
+      <td>usually an agent identity, not a person.</td></tr>
+  <tr><td><code>labels</code>, <code>comments</code>, <code>notes</code></td><td>the usual</td>
+      <td>comments are threaded, and agents use them as a work log.</td></tr>
+</table>
+
+<p>Beads also have <strong>hierarchical child IDs</strong>: an epic <code>bd-a3f8</code> has children
+<code>bd-a3f8.1</code>, <code>bd-a3f8.2</code>, and those can have <code>.1.1</code>, up to three
+levels. Those are readable structure sitting on top of the unreadable hash, which is a nice trick:
+the parent's identity is coordination-free, and the children are numbered locally, where there is
+already an authority.</p>
+
+<h3 id="edges">Four kinds of edge — and only two of them block</h3>
+
+<p>This is the part most worth copying. The graph has four ordinary edge types, and the difference
+between them is not decoration. (<a href="#gates">Gates</a>, later, add two more —
+<code>waits-for</code> and <code>conditional-blocks</code> — which also hold work back; the four
+here are the ones you wire by hand.)</p>
+
+<figure>
+  <div class="scroll">
+  <svg viewBox="0 0 900 380" role="img" aria-label="A small dependency graph showing the four edge types: blocks and parent-child prevent work from being ready, while discovered-from and related are informational only.">
+    <defs>
+      <marker id="ab" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0,0.5 L8.5,4.5 L0,8.5 z" fill="var(--c-warn)"/>
+      </marker>
+      <marker id="ai" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0,0.5 L8.5,4.5 L0,8.5 z" fill="var(--ink-soft)"/>
+      </marker>
+    </defs>
+
+    <text class="t-hd" x="20" y="28">THESE TWO DECIDE WHAT IS READY</text>
+    <text class="t-hd" x="530" y="28">THESE TWO ARE JUST MEMORY</text>
+    <line class="ln-dash" x1="505" y1="12" x2="505" y2="350" stroke-opacity=".5"/>
+
+    <!-- blocks -->
+    <rect class="box s-ok" x="30" y="55" width="150" height="52"/>
+    <text class="t-m" x="105" y="78" text-anchor="middle">bd-7f2a.1</text>
+    <text class="t-s" x="105" y="97" text-anchor="middle">open · ready</text>
+
+    <rect class="box s-dead" x="245" y="55" width="150" height="52"/>
+    <text class="t-m" x="320" y="78" text-anchor="middle">bd-7f2a.2</text>
+    <text class="t-s" x="320" y="97" text-anchor="middle">open · BLOCKED</text>
+
+    <line class="ln-block" x1="185" y1="81" x2="240" y2="81" marker-end="url(#ab)"/>
+    <text class="t-ms" x="212" y="68" text-anchor="middle" fill="var(--c-warn)">blocks</text>
+    <text class="t-s" x="30" y="132">Hard ordering. <tspan class="t-m">bd-7f2a.2</tspan> cannot start until</text>
+    <text class="t-s" x="30" y="151"><tspan class="t-m">bd-7f2a.1</tspan> is closed. The one edge that</text>
+    <text class="t-s" x="30" y="170">actually gates the queue.</text>
+
+    <!-- parent-child -->
+    <rect class="box s-open" x="30" y="205" width="150" height="52"/>
+    <text class="t-m" x="105" y="228" text-anchor="middle">bd-7f2a</text>
+    <text class="t-s" x="105" y="247" text-anchor="middle">epic</text>
+
+    <rect class="box s-open" x="245" y="205" width="150" height="52"/>
+    <text class="t-m" x="320" y="228" text-anchor="middle">bd-7f2a.1</text>
+    <text class="t-s" x="320" y="247" text-anchor="middle">a step of it</text>
+
+    <line class="ln" x1="185" y1="231" x2="240" y2="231" marker-end="url(#ai)"/>
+    <text class="t-ms" x="212" y="218" text-anchor="middle">parent-child</text>
+    <text class="t-s" x="30" y="282">Structure. Blocks only indirectly: a</text>
+    <text class="t-s" x="30" y="301">blocked parent holds its children back.</text>
+
+    <!-- discovered-from -->
+    <rect class="box s-open" x="545" y="55" width="150" height="52"/>
+    <text class="t-m" x="620" y="78" text-anchor="middle">bd-9e11</text>
+    <text class="t-s" x="620" y="97" text-anchor="middle">"connection leak"</text>
+
+    <rect class="box s-dead" x="730" y="55" width="145" height="52"/>
+    <text class="t-m" x="802" y="78" text-anchor="middle">bd-7f2a.1</text>
+    <text class="t-s" x="802" y="97" text-anchor="middle">closed</text>
+
+    <line class="ln-dash" x1="700" y1="81" x2="725" y2="81" marker-end="url(#ai)"/>
+    <text class="t-ms" x="620" y="128">discovered-from</text>
+    <text class="t-s" x="545" y="151">Provenance: "I found this while doing that."</text>
+    <text class="t-s" x="545" y="170">Never blocks. This is the one an agent</text>
+    <text class="t-s" x="545" y="189">reaches for constantly, and it is why the</text>
+    <text class="t-s" x="545" y="208">graph accumulates context instead of noise.</text>
+
+    <!-- related -->
+    <rect class="box s-open" x="545" y="240" width="150" height="52"/>
+    <text class="t-m" x="620" y="263" text-anchor="middle">bd-4d80</text>
+    <rect class="box s-open" x="730" y="240" width="145" height="52"/>
+    <text class="t-m" x="802" y="263" text-anchor="middle">bd-b022</text>
+    <line class="ln-dash" x1="700" y1="266" x2="725" y2="266"/>
+    <text class="t-ms" x="620" y="313">related</text>
+    <text class="t-s" x="545" y="336">Soft association. Never blocks.</text>
+    <text class="t-s" x="545" y="355">Costs nothing, means little.</text>
+  </svg>
+  </div>
+  <figcaption>The split down the middle is the design decision. Two edges are <em>scheduling</em>;
+  two are <em>memory</em>. Trackers that only have "blocks" push provenance into free text, where
+  nothing can query it; trackers that make every link block end up with a graph nobody dares add to.</figcaption>
+  <div class="key">
+    <span><i class="k-ok"></i> ready</span>
+    <span><i class="k-open"></i> open</span>
+    <span><i class="k-dead"></i> blocked or closed</span>
+  </div>
+</figure>
+
+<div class="callout">
+  <p class="title"><code>discovered-from</code> is the one to steal</p>
+  <p>An agent fixing a bug finds three more. In a markdown plan those become a bullet list at the
+  bottom that nobody reads, or they are lost. As an edge, they are first-class items that show up in
+  <code>bd ready</code> later, and they still carry the answer to "why is this here?" six weeks on.
+  The docs call it provenance; in practice it is the mechanism that stops "while I was in there…"
+  from being either scope creep or amnesia.</p>
+</div>
+
+<h3>The one query</h3>
+
+<p>The definition, in the project's own words, is: <em>open beads with no open blockers, excluding
+anything in progress, blocked, deferred, or held by a gate.</em> That is the whole scheduler. There
+is no priority queue, no sprint, no assignment algorithm — priority only sorts the result.</p>
+
+<p>Two commands matter around it. <code>bd ready --json</code> is what an agent calls, and
+<code>bd ready --explain</code> is what a person calls when the list is empty and they want to know
+which blocker is holding everything up.</p>
+
+<h2 id="storage"><span class="pass">Pass 2</span> Where the bytes live, and how they travel</h2>
+
+<p>This is the part with the most machinery and the least product in it, so here it is in one
+picture and three paragraphs.</p>
+
+<figure>
+  <div class="scroll">
+  <svg viewBox="0 0 900 400" role="img" aria-label="Storage layout: the bd binary embeds a Dolt database engine writing to .beads/embeddeddolt which is gitignored; a JSONL export is a read-only view; and the database history syncs to the git remote under refs/dolt/data alongside but separate from the code branches.">
+    <defs>
+      <marker id="as" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0,0.5 L8.5,4.5 L0,8.5 z" fill="var(--ink-soft)"/>
+      </marker>
+    </defs>
+
+    <text class="t-hd" x="20" y="26">ON YOUR DISK</text>
+    <text class="t-hd" x="580" y="26">ON THE GIT REMOTE</text>
+
+    <!-- local -->
+    <rect class="box s-panel" x="20" y="42" width="450" height="300"/>
+
+    <rect class="box s-agent" x="42" y="66" width="180" height="60"/>
+    <text class="t-b" x="132" y="90" text-anchor="middle">bd</text>
+    <text class="t-s" x="132" y="110" text-anchor="middle">one static binary</text>
+
+    <rect class="box s-db" x="42" y="158" width="180" height="80"/>
+    <text class="t-b" x="132" y="182" text-anchor="middle">Dolt engine</text>
+    <text class="t-s" x="132" y="202" text-anchor="middle">SQL, versioned,</text>
+    <text class="t-s" x="132" y="220" text-anchor="middle">running in-process</text>
+
+    <line class="ln" x1="132" y1="130" x2="132" y2="153" marker-end="url(#as)"/>
+    <text class="t-ms" x="146" y="147">embeds</text>
+
+    <rect class="box s-db" x="270" y="158" width="180" height="80"/>
+    <text class="t-m" x="360" y="182" text-anchor="middle">.beads/</text>
+    <text class="t-m" x="360" y="202" text-anchor="middle">embeddeddolt/</text>
+    <text class="t-s" x="360" y="222" text-anchor="middle">gitignored. One writer.</text>
+
+    <line class="ln" x1="227" y1="198" x2="265" y2="198" marker-end="url(#as)"/>
+
+    <rect class="box s-dead" x="270" y="262" width="180" height="60"/>
+    <text class="t-m" x="360" y="286" text-anchor="middle">issues.jsonl</text>
+    <text class="t-s" x="360" y="306" text-anchor="middle">an export, not a backup</text>
+    <line class="ln-dash" x1="360" y1="243" x2="360" y2="257" marker-end="url(#as)"/>
+
+    <rect class="box s-ok" x="42" y="262" width="180" height="60"/>
+    <text class="t-m" x="132" y="286" text-anchor="middle">.beads/config.yaml</text>
+    <text class="t-s" x="132" y="306" text-anchor="middle">this one IS committed</text>
+
+    <!-- remote -->
+    <rect class="box s-panel" x="580" y="42" width="300" height="300"/>
+
+    <rect class="box s-ext" x="602" y="66" width="256" height="110"/>
+    <text class="t-b" x="730" y="90" text-anchor="middle">your repo on GitHub</text>
+    <text class="t-m" x="620" y="118">refs/heads/main</text>
+    <text class="t-m" x="620" y="140">refs/heads/dev</text>
+    <text class="t-s" x="620" y="162">the code. Untouched by any of this.</text>
+
+    <rect class="box s-db" x="602" y="200" width="256" height="110"/>
+    <text class="t-m" x="620" y="226">refs/dolt/data</text>
+    <text class="t-s" x="620" y="250">the whole issue database and its</text>
+    <text class="t-s" x="620" y="270">history, as a side reference. Not a</text>
+    <text class="t-s" x="620" y="290">branch, so branch protection never</text>
+    <text class="t-s" x="620" y="310">sees it and never blocks it.</text>
+
+    <path class="ln" d="M455,208 L597,208" marker-end="url(#as)"/>
+    <text class="t-ms" x="526" y="199" text-anchor="middle">bd dolt push</text>
+    <path class="ln" d="M597,230 L455,230" marker-end="url(#as)"/>
+    <text class="t-ms" x="526" y="252" text-anchor="middle">bd dolt pull</text>
+
+    <text class="t-s" x="20" y="372">Cloning the repo gets you the code and no issues, until <tspan class="t-m">bd bootstrap</tspan> notices the side ref and pulls the database down.</text>
+  </svg>
+  </div>
+  <figcaption>The database is never in git; its <em>history</em> is, on a reference git will carry
+  but will not show you. The JSONL file is the one thing here that is not authoritative, and the
+  docs are emphatic about it.</figcaption>
+  <div class="key">
+    <span><i class="k-agent"></i> the tool</span>
+    <span><i class="k-db"></i> the database and its history</span>
+    <span><i class="k-ext"></i> your code</span>
+    <span><i class="k-dead"></i> derived, not a source of truth</span>
+  </div>
+</figure>
+
+<p><strong>The engine is embedded.</strong> <code>bd</code> is a single static binary with the Dolt
+database compiled into it — no server to install, no daemon, nothing to start. The cost is that
+exactly one process may write at a time, enforced by a file lock. If you want several processes
+writing concurrently you switch to <em>server mode</em>, which means running a real
+<code>dolt sql-server</code> and taking on a process to supervise.</p>
+
+<p><strong>Merging happens per cell.</strong> This is Dolt's actual selling point. If one agent
+changes an issue's status while another changes its description, a file-based tracker sees two edits
+to the same line and hands you a conflict; Dolt sees two different cells and merges them. In a
+world where four agents on four branches all touch the tracker, that is the difference between
+"merges usually just work" and "somebody resolves conflicts every afternoon".</p>
+
+<p><strong>Sync piggybacks on git without being git.</strong> <code>bd dolt push</code> writes the
+database history to your existing remote under <code>refs/dolt/data</code>. There is no server to
+run, no account, no second remote. It is also not automatic: pushing your code does not push your
+issues, and the docs' recommended habit is <code>bd dolt push</code> at the end of a session.</p>
+
+<div class="callout warn">
+  <p class="title">The JSONL file is a trap if you assume it is a backup</p>
+  <p>The README says it directly: <em>"<code>.beads/issues.jsonl</code> is an export for viewers and
+  interchange, not the source of truth or a backup."</em> It is easy to see a plain-text file in a
+  git repo and conclude that worst case you can recover from it. You cannot: a snapshot cannot
+  restore the database's history, and anything since the last export is simply absent. Whether all
+  current edge data round-trips through it, the docs do not say. The real backup story is
+  "push the Dolt history somewhere", and it is a thing you have to remember to do.</p>
+</div>
+
+<h2 id="worked"><span class="pass">Pass 3</span> One feature, followed all the way through</h2>
+
+<p>Take a real-shaped piece of work: <em>let a reader upload a PDF and read it like an article.</em>
+Two agents are working, in separate git worktrees, on the same repo.</p>
+
+<h4>Monday, planning</h4>
+
+<pre><code>$ bd create "Reader can upload a PDF" -t epic -p 1
+bd-7f2a
+
+$ bd create "Signed upload URL + storage bucket"  -p 1 --parent bd-7f2a   # -> bd-7f2a.1
+$ bd create "Extraction path for PDFs"            -p 1 --parent bd-7f2a   # -> bd-7f2a.2
+$ bd create "Upload control in the reading view"  -p 2 --parent bd-7f2a   # -> bd-7f2a.3
+$ bd create "Ship it"                             -p 2 --parent bd-7f2a   # -> bd-7f2a.4
+
+$ bd dep add bd-7f2a.2 bd-7f2a.1      # extraction needs the bucket
+$ bd dep add bd-7f2a.3 bd-7f2a.1      # so does the upload control
+$ bd dep add bd-7f2a.4 bd-7f2a.2
+$ bd dep add bd-7f2a.4 bd-7f2a.3</code></pre>
+
+<p>Four steps and four edges. Nobody has decided an order; the edges have.</p>
+
+<figure>
+  <div class="scroll">
+  <svg viewBox="0 0 900 340" role="img" aria-label="The PDF upload epic as a graph over three days: on Monday only step 1 is ready; on Tuesday closing step 1 makes steps 2 and 3 ready simultaneously and a discovered bug is added; on Wednesday step 4 is still held by a CI gate.">
+    <defs>
+      <marker id="aw" markerWidth="8" markerHeight="8" refX="7.5" refY="4" orient="auto">
+        <path d="M0,0.5 L7.5,4 L0,7.5 z" fill="var(--c-warn)"/>
+      </marker>
+    </defs>
+
+    <!-- Monday -->
+    <text class="t-hd" x="20" y="26">MONDAY</text>
+    <rect class="box s-ok" x="20" y="42" width="118" height="46"/>
+    <text class="t-m" x="79" y="62" text-anchor="middle">.1 bucket</text>
+    <text class="t-s" x="79" y="80" text-anchor="middle">READY</text>
+
+    <rect class="box s-dead" x="20" y="108" width="118" height="40"/>
+    <text class="t-m" x="79" y="133" text-anchor="middle">.2 extract</text>
+    <rect class="box s-dead" x="20" y="163" width="118" height="40"/>
+    <text class="t-m" x="79" y="188" text-anchor="middle">.3 upload UI</text>
+    <rect class="box s-dead" x="20" y="218" width="118" height="40"/>
+    <text class="t-m" x="79" y="243" text-anchor="middle">.4 ship</text>
+    <text class="t-s" x="79" y="282" text-anchor="middle">1 ready, 3 blocked</text>
+
+    <!-- the four blocking edges, drawn once; the other two panels have the same edges -->
+    <path class="ln-block" d="M138,65 C 178,65 178,128 148,128" marker-end="url(#aw)"/>
+    <path class="ln-block" d="M138,65 C 215,65 215,183 148,183" marker-end="url(#aw)"/>
+    <path class="ln-block" d="M138,128 C 178,128 178,238 148,238" marker-end="url(#aw)"/>
+    <path class="ln-block" d="M138,183 C 215,183 215,238 148,238" marker-end="url(#aw)"/>
+    <text class="t-ms" x="232" y="152" fill="var(--c-warn)">blocks</text>
+
+    <!-- Tuesday -->
+    <text class="t-hd" x="300" y="26">TUESDAY — .1 CLOSES</text>
+    <rect class="box s-dead" x="300" y="42" width="118" height="46"/>
+    <text class="t-m" x="359" y="62" text-anchor="middle">.1 bucket</text>
+    <text class="t-s" x="359" y="80" text-anchor="middle">closed</text>
+
+    <rect class="box s-ok" x="300" y="108" width="118" height="40"/>
+    <text class="t-m" x="359" y="133" text-anchor="middle">.2 extract</text>
+    <rect class="box s-ok" x="300" y="163" width="118" height="40"/>
+    <text class="t-m" x="359" y="188" text-anchor="middle">.3 upload UI</text>
+    <rect class="box s-dead" x="300" y="218" width="118" height="40"/>
+    <text class="t-m" x="359" y="243" text-anchor="middle">.4 ship</text>
+
+    <rect class="box s-open" x="440" y="42" width="140" height="46"/>
+    <text class="t-m" x="510" y="62" text-anchor="middle">bd-9e11</text>
+    <text class="t-s" x="510" y="80" text-anchor="middle">connection leak</text>
+    <line class="ln-dash" x1="424" y1="65" x2="435" y2="65"/>
+    <text class="t-ms" x="510" y="106" text-anchor="middle">discovered-from</text>
+
+    <text class="t-s" x="359" y="282" text-anchor="middle">2 ready at once — two agents</text>
+    <text class="t-s" x="359" y="300" text-anchor="middle">can now work in parallel</text>
+
+    <!-- Wednesday -->
+    <text class="t-hd" x="640" y="26">WEDNESDAY</text>
+    <rect class="box s-dead" x="640" y="108" width="118" height="40"/>
+    <text class="t-m" x="699" y="133" text-anchor="middle">.2 closed</text>
+    <rect class="box s-dead" x="640" y="163" width="118" height="40"/>
+    <text class="t-m" x="699" y="188" text-anchor="middle">.3 closed</text>
+
+    <rect class="box s-warn" x="640" y="42" width="230" height="46"/>
+    <text class="t-m" x="755" y="62" text-anchor="middle">gate: gh:run CI</text>
+    <text class="t-s" x="755" y="80" text-anchor="middle">open — nobody can proceed</text>
+
+    <rect class="box s-dead" x="640" y="218" width="118" height="40"/>
+    <text class="t-m" x="699" y="243" text-anchor="middle">.4 ship</text>
+    <line class="ln-block" x1="755" y1="92" x2="740" y2="213" marker-end="url(#aw)"/>
+    <text class="t-s" x="699" y="282" text-anchor="middle">0 ready. The graph is</text>
+    <text class="t-s" x="699" y="300" text-anchor="middle">waiting on the world.</text>
+  </svg>
+  </div>
+  <figcaption>The same four items on three days. The four blocking edges are drawn only in the
+  Monday panel — they are identical in all three, and that is the point: nobody edited a plan
+  between the panels. The only writes were two <code>bd close</code> calls and one
+  <code>bd create --discovered-from</code>.</figcaption>
+  <div class="key">
+    <span><i class="k-ok"></i> ready to start</span>
+    <span><i class="k-dead"></i> blocked or closed</span>
+    <span><i class="k-open"></i> open, not blocking</span>
+  </div>
+</figure>
+
+<h4>Tuesday, two agents</h4>
+
+<p>Agent A starts. <code>bd ready</code> returns one item, it claims it, and while wiring the
+bucket it notices the storage client never closes its connections. That is not this job, and it
+must not be forgotten:</p>
+
+<pre><code>$ bd create "Storage client leaks connections" -t bug -p 1 --discovered-from bd-7f2a.1
+bd-9e11
+$ bd close bd-7f2a.1 --reason "Bucket + signed URL endpoint, commit 4f2a10"</code></pre>
+
+<p>The moment that close lands, <code>bd-7f2a.2</code> and <code>bd-7f2a.3</code> both become ready
+— and so does <code>bd-9e11</code>, which was never blocked by anything. Agent B, in its own
+worktree, runs <code>bd ready</code>, sees three items, and claims one. The two agents never spoke
+and never collided, because the claim is atomic and the list is derived.</p>
+
+<h4>Wednesday, waiting on the world</h4>
+
+<p id="gates">Both middle steps close. <code>bd-7f2a.4</code> — "ship it" — should now be ready, but
+you want CI green first. That is a <strong>gate</strong>: a bead whose job is to be open until
+something outside the repo happens.</p>
+
+<table>
+  <tr><th>Gate type</th><th>Closes when</th><th>Who closes it</th></tr>
+  <tr><td>human</td><td>a person approves</td><td><code>bd gate resolve</code>, by hand — the docs
+      say these should never auto-close</td></tr>
+  <tr><td>timer</td><td>a duration elapses (<code>30m</code>, <code>24h</code>)</td>
+      <td><code>bd gate check</code>, next time anyone runs it</td></tr>
+  <tr><td><code>gh:run</code></td><td>a GitHub Actions run finishes</td>
+      <td><code>bd gate check</code>, which shells out to <code>gh run view</code></td></tr>
+  <tr><td><code>gh:pr</code></td><td>a pull request reaches a state</td>
+      <td>same, via <code>gh pr view</code></td></tr>
+</table>
+
+<div class="callout warn">
+  <p class="title">Gates do not fire; somebody has to ask</p>
+  <p>A timer gate does not go off. A CI gate does not get told. They close when
+  <code>bd gate check</code> runs and evaluates them. So "async coordination" here means <em>polling
+  that has been given a nice place to live</em>, and if nothing on your machine ever runs
+  <code>bd gate check</code>, a gated workflow simply stops. That is not a criticism of the design —
+  a CLI with no daemon has no other option — but it is the thing to notice before you build a
+  release process on it.</p>
+</div>
+
+<details>
+  <summary>Formulas and molecules — the same graph, stamped out repeatedly</summary>
+  <p>If you do the four-steps-and-four-edges dance every release, you can write it once as a
+  <strong>formula</strong>: a TOML file describing a DAG with <code>{{variable}}</code> holes.</p>
+<pre><code>title = "Release Process v{{version}}"
+
+[[steps]]
+id = "qa"
+title = "QA Testing"
+
+[[steps]]
+id = "docs"
+title = "Update Documentation"
+
+[[steps]]
+id = "tag"
+title = "Create Git Tag"
+needs = ["qa", "docs"]        # both must close first
+
+[[steps]]
+id = "announce"
+title = "Public Announcement"
+needs = ["tag"]</code></pre>
+  <p><code>bd cook release.formula.toml</code> compiles and validates it into a <em>proto</em>;
+  <code>bd mol pour release --var version=1.0.0</code> stamps out a <strong>molecule</strong> — real
+  beads with real IDs, dependency-wired, flowing through <code>bd ready</code> like anything else.
+  A <strong>wisp</strong> is the throwaway version, purged at the next <code>bd purge</code>.</p>
+  <p>The vocabulary is heavier than the idea. It is a template engine for subgraphs. Worth having if
+  you run the same multi-step process weekly; pure overhead if you do not.</p>
+</details>
+
+<h2 id="agents"><span class="pass">Pass 2</span> The part that is specifically about agents</h2>
+
+<p>Everything so far would make sense in a tracker for people. Three things here would not.</p>
+
+<h3>The startup injection</h3>
+
+<p><code>bd setup claude</code> writes a <strong>SessionStart hook</strong> into
+<code>.claude/settings.json</code> that runs <code>bd prime</code> whenever a session begins
+<em>and after every context compaction</em>. That prints roughly 1–2k tokens of "here is how to use
+this tool, and here is what you were doing" straight into the agent's context. The equivalent
+integrations exist for Codex, Cursor, Aider, Gemini CLI, Windsurf, Copilot and a dozen more, plus an
+MCP server for hosts with no shell.</p>
+
+<p>The re-injection after compaction is the clever bit. An agent that has been compacted has
+forgotten the workflow it was told about at the start; without something to re-establish it, a long
+session drifts back to writing markdown TODOs. This is a real failure mode and it is nice to see it
+addressed at the plumbing level rather than by asking the model to be more careful.</p>
+
+<h3>Memory, and letting it decay</h3>
+
+<p><code>bd remember "the extraction step assumes UTF-8, and PDFs are not"</code> stores a project
+memory; <code>bd recall</code> retrieves; <code>bd compact</code> semantically summarises old closed
+work so that a two-year-old project does not carry two years of detail into every prompt. The
+premise — that the memory has to shrink or it eats the thing it was meant to help — is right, and
+it is one of the few tools that treats it as a first-class problem rather than an afterthought.</p>
+
+<h3>Agents talking to each other</h3>
+
+<p><code>bd mail</code> and <code>bd ping</code> give agents threaded messages, with a
+<code>replies-to</code> edge type; <code>bd swarm</code> and <code>bd merge-slot</code> coordinate
+several of them; federation shares graphs across repositories with encryption and peer discovery.
+This is the far end of the product, and whether it is visionary or premature depends entirely on
+whether you are running three agents or thirty.</p>
+
+<h2 id="hard"><span class="pass">Pass 4</span> The genuinely hard parts</h2>
+
+<p>Nothing above is hard. These are, and they are hard in a way that does not go away if you write
+your own — see <a href="#eighty">§7</a>, where the same list reappears.</p>
+
+<h3>One writer, until you run a server</h3>
+
+<p>Embedded mode holds a file lock, so one process writes at a time. For a human that is invisible.
+For four agents in four worktrees firing <code>bd</code> calls, contention is real, and the answer
+is to run <code>dolt sql-server</code> — which is a process to start, supervise, and debug when it
+does not come up. The docs have a troubleshooting entry for exactly that
+(<code>bd doctor</code>, <code>.beads/dolt-server.log</code>, <code>bd dolt stop &amp;&amp; bd dolt
+start</code>), which tells you it happens.</p>
+
+<h3>A pinned database engine, because of a bug in the newer one</h3>
+
+<p>Beads pins Dolt to 2.2.0. Dolt 2.3.x regressed <code>DOLT_RESET('--hard')</code> in "approximately
+3–5% of freshly created databases", which breaks <code>bd flatten</code>, <code>bd admin
+compact</code> and merge rollbacks. This is the tax on embedding somebody else's database engine:
+their release schedule is now partly your problem, and a 3–5% failure rate is precisely the kind
+that looks like flakiness rather than a bug.</p>
+
+<h3>Version skew between binaries</h3>
+
+<p>An older <code>bd</code> refuses to query a database migrated by a newer one, with
+<code>BD_IGNORE_SCHEMA_SKEW=1</code> as the escape hatch. This is the right call — the alternative
+is cryptic SQL errors — but it means upgrading is a team event, not a personal one, and a
+colleague or a CI runner on last month's binary is simply locked out until they upgrade.</p>
+
+<h3>Two things that both mean "done"</h3>
+
+<p>An item is closed in the tracker and the code is pushed. Those are two separate writes to two
+separate systems, and no transaction spans them. Close-then-crash leaves the graph claiming work
+that never landed; push-then-crash leaves work done and the graph saying otherwise. Every tracker
+that sits beside a version control system has this problem, beads included, and the only real
+mitigations are ordering (push first, record second) and a habit of putting the item's ID in the
+commit message so the two can be reconciled afterwards.</p>
+
+<h3>An agent that dies holding a claim</h3>
+
+<p>A claim has no lease. If an agent is killed mid-task, its item stays <code>in_progress</code>
+forever and no other agent will take it. Beads gives you <code>bd stale</code> to find them and
+leaves the decision to a person, which is the honest choice — an agent that has been quiet for two
+hours may be dead or may be thinking — but it does mean somebody has to look.</p>
+
+<details>
+  <summary>Three smaller ones worth knowing before you commit</summary>
+  <p><strong>Hash collisions are handled, not prevented.</strong> IDs start at 3–4 characters and
+  grow to 8. Collisions are called "rare"; on import, a disambiguator is appended and both issues
+  are kept. You can count them with
+  <code>bd info --schema --json | jq '.collision_count'</code>. A four-character hash is 16 bits or
+  so of space — fine for a few hundred issues, and the adaptive length exists because it is not fine
+  for a hundred thousand.</p>
+  <p><strong>Never let the database directory into git.</strong> The generated
+  <code>.gitignore</code> covers it, but the recovery docs describe cleaning it out with
+  <code>git rm --cached</code> and history rewriting, which means people do it. Git LFS is called
+  out as also wrong.</p>
+  <p><strong>Shared server mode needs unique prefixes.</strong> Several projects pointing at one
+  Dolt server without distinct database prefixes causes, in the docs' words, silent data
+  corruption. "Silent" is doing a lot of work in that sentence.</p>
+</details>
+
+<h2 id="eighty">An 80/20 version, and two second opinions</h2>
+
+<p>Beads is about 120 subcommands. Suppose you wanted most of the benefit for a fraction of the
+surface — what would you build? I put that question to two other models alongside my own reading,
+with the same brief. They converged on five mechanisms, each added one thing the other left out,
+and they disagreed on three things worth knowing about. Below, "both" means both of them said it;
+where only one did, it says which.</p>
+
+<h3>The five mechanisms all three of us kept</h3>
+
+<table>
+  <tr><th>Keep</th><th>Why it is load-bearing rather than nice</th></tr>
+  <tr><td><strong>Durable items with stable IDs</strong></td>
+      <td>Something an agent can name in a commit message and a later session can look up. A title
+          alone preserves almost none of what you need to resume.</td></tr>
+  <tr><td><strong>One edge type: <code>blocks</code></strong></td>
+      <td>"B requires A" as executable information rather than prose. Everything the scheduler
+          needs. Parent-child, related and the rest are convenience.</td></tr>
+  <tr><td><strong><code>ready</code> as a computed query, never a stored state</strong></td>
+      <td>This is the trick. Because readiness is derived, closing an item updates the world for
+          free, and there is no second list to keep in step with the first.</td></tr>
+  <tr><td><strong>An atomic claim</strong></td>
+      <td>The concurrency problem that appears the moment there are two agents, and the one a
+          shared file cannot solve at all. Not the only one — Astra also names lost updates,
+          concurrent cycle creation, and a stale owner writing after being replaced.</td></tr>
+  <tr><td><strong>Something that injects the list at session start</strong></td>
+      <td>A tracker nobody queries is a markdown TODO with extra steps. Beads ships hooks for
+          fourteen agent hosts; you need one.</td></tr>
+</table>
+
+<p>Then one each, and they are worth having both:</p>
+
+<ul>
+  <li><strong>Astra added an explicit handoff</strong> — the owner's session, the worktree it is in,
+  the last checkpoint and the next action. Without it, as it put it, the next agent "knows something
+  was happening but must rediscover everything". A plain issue tracker has no such field.</li>
+  <li><strong>Fable kept <code>discovered-from</code></strong> as one nullable column, against
+  Astra's advice to keep exactly one edge type. Fable's framing: <em>"'I noticed this while doing
+  that' is the provenance markdown loses first, and it costs one integer."</em> On this one I think
+  Fable is right and it is the cheapest thing in the schema.</li>
+</ul>
+
+<h3>What goes, and what it costs you</h3>
+
+<table>
+  <tr><th>Cut</th><th>What you actually lose</th></tr>
+  <tr><td>Dolt, <code>refs/dolt/data</code>, bootstrap, the five git hooks, schema-skew guards,
+          the pinned engine version</td>
+      <td>Offline mutation, independently writable replicas, branchable issue history. All of it
+          exists to let concurrent writers on different clones merge — <strong>it is zero lines if
+          there is one database</strong>.</td></tr>
+  <tr><td>Formulas, protos, molecules, wisps</td>
+      <td>Reusable multi-step workflows. If you already write a plan document per piece of work,
+          that <em>is</em> your template, in a form a human can read.</td></tr>
+  <tr><td>Automated gates</td>
+      <td>Unattended waiting on CI and timers. A human approval gate degrades gracefully to an
+          ordinary blocking item titled "Greg approves X".</td></tr>
+  <tr><td>Hash IDs, hierarchical IDs, adaptive length</td>
+      <td>Nothing, while one database is the only thing issuing IDs — a sequence cannot collide,
+          however many writers there are. Everything, the day a second one issues them too.</td></tr>
+  <tr><td>Memory decay, recall, mail, swarm, federation, Jira/Linear/GitHub sync, ~110 subcommands</td>
+      <td>Semantic retrieval over old work, agent-to-agent messaging, external tracker mirroring.
+          Your existing docs remain the knowledge system.</td></tr>
+  <tr><td>Automatic claim expiry</td>
+      <td>Nothing — beads does not have it either. A failed agent strands its item until somebody
+          looks. See below: recovery is solvable, but deciding <em>by timeout alone</em> whether an
+          agent is dead is not.</td></tr>
+</table>
+
+<h3>The shape of the minimal thing</h3>
+
+<p>One table, one view's worth of query, seven commands. Concretely:</p>
+
+<pre><code>items
+  id           serial primary key          -- printed as w-142
+  title        text
+  body         text                        -- outcome + acceptance criteria
+  status       open | doing | done | dropped
+  priority     smallint  0..4
+  owner        text                        -- agent/session identity, while doing
+  claimed_at   timestamptz
+  found_while  integer references items(id)      -- "I noticed this while doing that"
+  plan         text                              -- the doc this belongs to
+  handoff      text                              -- where the last agent got to, and what is next
+  created_at, closed_at
+
+deps
+  item_id      integer references items(id)      -- cannot start until...
+  blocker_id   integer references items(id)      -- ...this one is done
+  primary key (item_id, blocker_id)
+  check (item_id &lt;&gt; blocker_id)</code></pre>
+
+<div class="callout">
+  <p class="title">Two tables, not one — a <code>blocked_by integer[]</code> column is the tempting
+  shortcut, and it is a trap</p>
+  <p>An array of blocker IDs on the item row keeps it to one table and reads nicely. It also gives
+  up the foreign key, so an array can name an item that no longer exists and the query silently
+  treats that dangling ID as satisfied. It gives up the uniqueness constraint, so duplicates and
+  self-edges need hand-written checks. Two agents adding a blocker to the same item at the same
+  time read-modify-write the array and one edit vanishes. And the reverse question — "what does
+  this block?" — stops being an index lookup. A two-column table costs one more <code>create
+  table</code> and removes all four problems, which is what "prefer simple over easy" means in
+  practice.</p>
+</div>
+
+<p><strong>Ready</strong> is one query — "open, and every blocker of mine is done":</p>
+
+<pre><code>select w.* from items w
+where w.status = 'open'
+  and not exists (
+    select 1 from deps d join items b on b.id = d.blocker_id
+    where d.item_id = w.id and b.status &lt;&gt; 'done')
+order by w.priority, w.id;</code></pre>
+
+<div class="callout warn">
+  <p class="title">Note the predicate: <code>&lt;&gt; 'done'</code>, not "still open or doing"</p>
+  <p>The obvious version says a blocker stops mattering once it is no longer open — which means
+  <em>dropping</em> a blocker silently releases everything behind it. That is the wrong default, and
+  it is Astra's point: cancellation is not completion. A dropped blocker should keep its dependents
+  blocked, and <code>show</code> should name it, so that somebody removes or replaces the edge
+  deliberately. Two characters of SQL decide whether abandoning a piece of work quietly unleashes
+  the work that depended on it.</p>
+</div>
+
+<p><strong>Claim</strong> is one statement, and it is the interesting one:</p>
+
+<pre><code>update items set status='doing', owner=$1, claimed_at=now()
+where id=$2 and status='open'
+  and not exists (                          -- still ready, checked at the moment of writing
+    select 1 from deps d join items b on b.id = d.blocker_id
+    where d.item_id = items.id and b.status &lt;&gt; 'done')
+returning id;                               -- no row back means you did not get it</code></pre>
+
+<p>Two agents claiming the same row serialise on it, and exactly one sees a row come back. Two
+things about that are easy to get wrong. First, say "you did not get it" rather than "somebody else
+got there first": no row also means the item does not exist, was already finished, was dropped, or
+has acquired a blocker since you last looked — and an agent that reports the wrong one of those
+wastes somebody's afternoon. Second, the readiness check has to be <em>in the statement</em>. The
+shorter version, with only <code>status='open'</code> in the <code>WHERE</code>, happily claims an
+item that is open but blocked, because <code>ready</code> was a separate query a moment
+earlier.</p>
+
+<p>Then: <code>add</code>, <code>ready</code>, <code>show</code>, <code>claim</code>,
+<code>release</code> (write a handoff, put it back), <code>done</code>, and a <code>prime</code>
+that prints the top dozen ready items plus anything stuck in <code>doing</code> for hours, wired
+into whatever session-start hook your agent host offers.</p>
+
+<div class="callout key">
+  <p class="title">Where the two reviewers disagreed — the disagreements are the interesting part</p>
+  <p><strong>How big is it?</strong> Fable said ~200 lines and a morning. Astra said 700–1,000
+  lines plus 300–500 of tests. The gap is not really about the feature list; it is about how much
+  you harden. Fable's version trusts one <code>UPDATE</code> statement; Astra's adds revision
+  numbers on every mutation, claim tokens, and serialises <em>every</em> mutation — claims included
+  — through one transaction-scoped advisory lock. <em>Both are right about different things.</em>
+  A claim on its own needs no lock: a conditional <code>UPDATE</code> is atomic, and two claimers
+  serialise on the row. But adding a dependency edge means reading the graph, checking for a cycle,
+  and writing, and two concurrent writers can each pass that check and jointly create a cycle
+  neither could see — so everything that can invalidate the invariant has to take part in one
+  shared serialisation. An advisory lock is one way; <code>SERIALIZABLE</code> with retry is
+  another. Astra's blanket lock is the cautious version, and it costs milliseconds, which makes it
+  a defensible default rather than an overreaction.</p>
+  <p><strong>Serial IDs or UUIDs?</strong> Fable: serials, because with one database they cannot
+  collide. Astra: UUIDs displayed as an eight-character prefix, resolved by prefix when unique. The
+  serial is nicer to type and the UUID is the one that still works the day somebody creates an item
+  offline. Note that this is exactly the argument beads settled with hashes — so choosing a serial
+  is choosing "there will only ever be one database issuing IDs", explicitly. Many writers against
+  that one database are fine.</p>
+  <p><strong>Which database?</strong> This is the one to think hardest about. Both reviewers
+  observed the same trap: a local database shared between git worktrees does <em>not</em> make two
+  machines share anything, so a work queue on localhost silently becomes two work queues. Fable
+  would put it in a separate schema on the existing remote database and accept the coupling; Astra
+  would stand up a separate tooling database with its own credentials and a lifecycle excluded from
+  application resets. Astra's is more correct and is more work, and both agreed on the operational
+  consequence either way: <em>if that endpoint is down, no agent can safely claim anything.</em></p>
+</div>
+
+<h3>The parts you cannot cheat</h3>
+
+<p>Four of beads' complications are essential. You will meet them too, just later:</p>
+
+<ul>
+  <li><strong>One arbiter for claims.</strong> Beads pays for it with an embedded database and a
+  file lock; a Postgres version pays for it with a connection string. What you cannot do is keep the
+  tracker in a per-branch file, because then a claim is invisible to other worktrees until it is
+  pushed and merged — which is the exact window you were trying to close.</li>
+  <li><strong>Stale claims.</strong> Agents die. <code>claimed_at</code>, and a
+  <code>prime</code> that shouts about anything old, is the cheap version. Recovery itself is
+  solvable — a coordinator can force-release a claim, and a claim token makes the old owner's later
+  writes bounce. What is not solvable is deciding <em>by timeout alone</em> that an agent is dead,
+  because a slow one looks identical; and no token stops a still-running agent editing files.</li>
+  <li><strong>The context budget.</strong> Whatever gets injected at session start has to be capped
+  and ranked from day one. Open items do close, so the ready list rises and falls — but the corpus
+  behind it only grows, and an uncapped list is a slow leak into every prompt. Beads' memory-decay machinery is the expensive
+  descendant of exactly this problem.</li>
+  <li><strong>Drift between the tracker and reality.</strong> An item done in code but open in the
+  table is worse than no item at all, because it is confidently wrong. The mitigation is habit —
+  the item's ID in the commit message, and a sweep that reconciles the two — not machinery.</li>
+</ul>
+
+<p>And one thing no tracker fixes: a claim says who owns an <em>item</em>, not who owns a
+<em>file</em>. Two agents on two unrelated items can still collide in the same module, or in the
+same database.</p>
+
+<h3>When the small version stops being enough</h3>
+
+<p>These are review triggers rather than measured limits — symptoms you can notice, which is the
+useful kind:</p>
+
+<ul>
+  <li><strong>A writer that cannot reach the database</strong> — an offline laptop, a CI runner, an
+  outside contributor. At that point you need files-in-git, and beads' entire sync story becomes
+  yours to write.</li>
+  <li><strong>A second repository sharing one backlog.</strong> This is where federation begins.</li>
+  <li><strong>Roughly ten concurrent agents, or abandoned claims appearing weekly.</strong> The
+  problem has moved from storage to supervision.</li>
+  <li><strong>A few hundred open items</strong>, with useful work routinely buried. You now need
+  grouping, labels and hierarchy, and the flat list stops being readable.</li>
+  <li><strong>A human who wants to browse the backlog on a phone.</strong> The answer there is
+  GitHub Issues with a thin sync, not a richer CLI.</li>
+  <li><strong>Repeated manual approvals or CI polling dominating the day.</strong> That is what
+  formulas and gates are for — and the point at which adopting beads properly starts to look like
+  the cheaper option.</li>
+</ul>
+
+<div class="callout">
+  <p class="title">What both reviewers said when asked about this repo specifically</p>
+  <p>Neither recommended adopting beads, and neither recommended adopting a subset of it — the
+  reasoning being that a subset still brings the storage engine, the sync machinery and the upgrade
+  procedure, which is where nearly all the complexity is. Both recommended building the small
+  version, and Fable added the test that matters: <em>wire it into the session-start hook, and if
+  agents act on it for a month, keep it; if it is ignored, drop the table and you have lost a
+  morning.</em></p>
+  <p>Astra's caution is the counterweight: <em>"A 30-line script can list structured TODOs. It
+  cannot credibly deliver concurrent ownership, graph integrity, and recovery."</em> The small
+  version is small because it drops sync, not because the remaining problems are easy.</p>
+</div>
+
+<h2 id="judgment">Trade-offs, risks and open questions</h2>
+
+<h3>Trade-offs, where reasonable people would choose differently</h3>
+
+<table>
+  <tr><th>The choice</th><th>What it buys</th><th>What it costs</th></tr>
+  <tr><td><strong>A database, not files</strong></td>
+      <td>Atomic claims, a real query, no parse step — and, because the database is Dolt
+          specifically, merges resolved per cell rather than per line.</td>
+      <td>You cannot read your issues with <code>cat</code>, diff them in a pull request, or edit
+          them in your editor. For a tool whose users are agents that is a fair trade; for a tool a
+          person also uses daily it is a real loss.</td></tr>
+  <tr><td><strong>Dolt, not SQLite</strong></td>
+      <td>Branching, diffing, merging and sync for free — the things that make a per-clone tracker
+          work at all.</td>
+      <td>A pin to Dolt 2.2.0 — because 2.3.x reportedly regressed <code>DOLT_RESET('--hard')</code>
+          in 3–5% of fresh databases — plus a schema-skew guard, a recovery chapter and a much
+          larger binary. SQLite would have been boring, and boring is usually right.</td></tr>
+  <tr><td><strong>Sync on a git side-ref</strong></td>
+      <td>No server, no account, no second remote; issue history travels with the repo and branch
+          protection never sees it.</td>
+      <td>It is invisible. <code>git push</code> does not push it, <code>git log</code> does not
+          show it, a fresh clone does not have it until <code>bd bootstrap</code> runs. Clever
+          plumbing that people will not expect.</td></tr>
+  <tr><td><strong>Agents first, humans second</strong></td>
+      <td>JSON everywhere, no markdown to parse, commands shaped like the loop an agent runs.</td>
+      <td>No web UI, no phone, no glance-at-the-board. The docs say beads is "a good CLI issue
+          tracker for humans too", which is true and is not the same as a good tracker for a
+          team.</td></tr>
+  <tr><td><strong>120 subcommands</strong></td>
+      <td>Whatever you need is probably in there.</td>
+      <td>The surface an agent must learn, and the surface you must trust. Most of the value is in
+          about six of them.</td></tr>
+</table>
+
+<h3>Risks and fragilities</h3>
+
+<ul>
+  <li><strong>The failure mode is quiet.</strong> If nobody runs <code>bd dolt push</code>, work
+  simply stays local and everything looks fine. If nobody runs <code>bd gate check</code>, gated
+  work stops with no error. If the tracker drifts from the code, it reports confident nonsense.
+  None of these produce a message.</li>
+  <li><strong>Two systems of record for the same thing.</strong> Adopting a graph tracker beside
+  existing planning documents invites keeping the same checklist in both, which reliably rots. The
+  rule both reviewers reached independently: the documents own <em>intent and reasoning</em>, the
+  graph owns <em>current status and ownership</em>, and neither duplicates the other.</li>
+  <li><strong>Embedding somebody else's database engine.</strong> Their bugs and their release
+  schedule are now partly yours, and the pinned-version note in the docs is evidence that this
+  already happened once.</li>
+  <li><strong>Project maturity.</strong> The docs describe it as "a 1.x product used in production
+  for AI-assisted development", and the recovery section covers database corruption, sync failures,
+  circular dependencies, history bloat and an accidental release. That section existing is a good
+  sign about the authors and a fair warning about the terrain.</li>
+</ul>
+
+<h3 id="unchecked">What this page did not check</h3>
+
+<div class="callout warn">
+  <p class="title">Nothing here was run</p>
+  <p><code>bd</code> was not installed and no command on this page was executed. Every number,
+  behaviour and quote comes from the project's own public documentation as of 2026-09-06, which
+  means this page inherits any place where those docs are aspirational or stale. Specifically
+  unverified: the token cost of <code>bd prime</code>, the claim's atomicity under real contention,
+  whether cell-level merges are as painless in practice as claimed, and how <code>bd ready</code>
+  performs on a large graph. If you are making a decision on this, install it and try the loop in
+  <a href="#pass1">§1</a> — it is about ten minutes.</p>
+</div>
+
+<h3>Open questions</h3>
+
+<ul>
+  <li><strong>Does an agent actually use it?</strong> The whole design assumes the agent reaches for
+  <code>bd ready</code> instead of writing a TODO list. The startup hook plus re-injection after
+  compaction is a serious attempt at making that stick, and whether it holds over a long session is
+  an empirical question nobody can answer from the documentation.</li>
+  <li><strong>Is a work graph the right shape for exploratory work?</strong> A dependency DAG is a
+  good model for a release process and a poor one for "figure out why this is slow". Beads' answer
+  is <code>discovered-from</code>, which lets the graph grow sideways as you learn. Whether that is
+  enough is the interesting product question here.</li>
+  <li><strong>Where does the plan document go?</strong> If the graph holds the work, something still
+  has to hold the reasoning, the option that was rejected, and the evidence. Beads has
+  descriptions, comments and memories; none of them is a document. The likeliest good answer is
+  both, with a link between them and a strict rule about which owns what.</li>
+</ul>
+
+<h2 id="faq">FAQ</h2>
+
+<h3>Why not just GitHub Issues?</h3>
+<p>No dependency edges that mean anything, no local database to query offline, no atomic claim, and
+every read is a network round trip. The project's own answer is that GitHub Issues and Jira "excel
+for human teams" and beads targets agents. Note that beads will sync to them
+(<code>bd github</code>, <code>bd jira</code>, <code>bd linear</code>) if you want the board for the
+humans and the graph for the agents.</p>
+
+<h3>Why not just a markdown TODO file?</h3>
+<p>Three specific things it cannot do: say "I got here first" (no atomic claim), answer "what can
+start now" without a human reading it, and survive two branches editing it. The first is the one
+that bites immediately with more than one agent.</p>
+
+<h3>Does it need the network?</h3>
+<p>No. Everything runs against the local database; only <code>bd dolt push</code> and
+<code>pull</code> talk to anything. Offline-first is one of the design's genuine strengths, and it
+is also the thing the simplified Postgres version in <a href="#eighty">§7</a> gives up.</p>
+
+<h3>Can several agents really work at once?</h3>
+<p>Yes, with a caveat. Hash IDs mean concurrent creation needs no coordination — collisions are
+unlikely, and detected and disambiguated on import rather than prevented — and
+<code>--claim</code> means concurrent claiming has one winner. But embedded mode is single-writer
+via a file lock, so heavy concurrent use is where you move to server mode and take on a process to
+supervise.</p>
+
+<h3>How big can it get?</h3>
+<p>The docs say Dolt "comfortably handles far more issues than a typical project accumulates", and
+suggest splitting into multiple databases past 100k issues. <code>bd gc</code> deletes old closed
+issues, squashes history and reclaims disk. The practical limit is not the database, it is the
+context window: whatever gets injected at session start has to stay small.</p>
+
+<h3>What happens to a fresh clone?</h3>
+<p>It gets the code and no issues, because the database directory is gitignored.
+<code>bd bootstrap</code> notices the data on <code>refs/dolt/data</code>, clones it, and wires up
+the remote. Worth knowing, because "I cloned the repo and there are no issues" is going to be
+somebody's first support question.</p>
+
+<h3>Is it worth adopting for a small project?</h3>
+<p>Probably not as-is, and the reasoning is in <a href="#eighty">§7</a>: most of the machinery
+exists to let independent clones merge issue changes, and a project with one database and a handful
+of agents does not have that problem. The ideas — a computed ready set, an atomic claim,
+<code>discovered-from</code>, an injected list at session start — are worth taking regardless of
+whether the tool is.</p>
+
+<h2 id="appendix">Appendix</h2>
+
+<h3>The commands that matter, out of about 120</h3>
+
+<table>
+  <tr><th>Command</th><th>What it does</th></tr>
+  <tr><td><code>bd init</code></td><td>Creates <code>.beads/</code>, the embedded database and five
+      git hooks. <code>--quiet</code> for agents, <code>--contributor</code> if you are working in
+      somebody else's fork.</td></tr>
+  <tr><td><code>bd create "…" -p 1 -t task</code></td><td>New item; prints the hash ID.
+      <code>--parent</code>, <code>--discovered-from</code>.</td></tr>
+  <tr><td><code>bd dep add &lt;blocked&gt; &lt;blocker&gt;</code></td><td>Adds a blocking edge.
+      <code>bd dep tree</code> shows the chain.</td></tr>
+  <tr><td><code>bd ready</code></td><td><strong>The one that matters.</strong> <code>--json</code>
+      for agents, <code>--explain</code> when the list is empty and you want to know why.</td></tr>
+  <tr><td><code>bd update &lt;id&gt; --claim</code></td><td>Atomic claim: assignee and
+      in_progress together, or nothing.</td></tr>
+  <tr><td><code>bd close &lt;id&gt; --reason "…"</code></td><td>Done. Cascades readiness to
+      whatever was blocked on it.</td></tr>
+  <tr><td><code>bd show &lt;id&gt;</code></td><td>The item, its edges and its history.</td></tr>
+  <tr><td><code>bd prime</code></td><td>Prints the workflow context an agent needs. Wired into
+      session start by <code>bd setup &lt;agent&gt;</code>.</td></tr>
+  <tr><td><code>bd remember "…"</code> / <code>bd recall</code></td><td>Project memory, and
+      retrieval.</td></tr>
+  <tr><td><code>bd dolt push</code> / <code>pull</code></td><td>Sync the database history to and
+      from the git remote.</td></tr>
+  <tr><td><code>bd doctor --fix</code></td><td>The thing to run when something is wrong.</td></tr>
+  <tr><td><code>bd stale</code></td><td>Items claimed and then abandoned.</td></tr>
+</table>
+
+<h3>Glossary</h3>
+
+<table>
+  <tr><th>Word</th><th>Plain meaning</th></tr>
+  <tr><td><strong>bead</strong></td><td>One issue. The words are interchangeable.</td></tr>
+  <tr><td><strong>ready</strong></td><td>Open, not claimed, and every blocker closed. A computed
+      property, never stored.</td></tr>
+  <tr><td><strong>claim</strong></td><td>Taking an item, atomically, so no other agent can take
+      it.</td></tr>
+  <tr><td><strong>gate</strong></td><td>An item whose only job is to stay open until something
+      outside happens — a person approves, a timer runs out, CI finishes.</td></tr>
+  <tr><td><strong>formula</strong></td><td>A TOML template describing a subgraph of work, with
+      variables.</td></tr>
+  <tr><td><strong>proto</strong></td><td>A compiled formula. Not yet real items.</td></tr>
+  <tr><td><strong>molecule</strong></td><td>Real items stamped out from a proto, dependency-wired
+      and flowing through <code>bd ready</code>.</td></tr>
+  <tr><td><strong>wisp</strong></td><td>A throwaway molecule, deleted at the next
+      <code>bd purge</code>.</td></tr>
+  <tr><td><strong>Dolt</strong></td><td>A SQL database with git's operations — commit, branch,
+      diff, merge — built in, merging per cell rather than per line.</td></tr>
+  <tr><td><strong><code>refs/dolt/data</code></strong></td><td>A reference in your git repo that
+      holds the issue database's history. Not a branch, so nothing that operates on branches ever
+      touches it.</td></tr>
+  <tr><td><strong>embedded mode</strong></td><td>The database engine running inside the
+      <code>bd</code> binary. No server, one writer.</td></tr>
+  <tr><td><strong>prime</strong></td><td>Printing the workflow context into an agent's window at
+      session start, and again after the context is compacted.</td></tr>
+</table>
+
+<h3>Sources</h3>
+
+<p>All read 2026-09-06, all public, none verified by execution:
+<a href="https://github.com/gastownhall/beads">the repository README</a>;
+<a href="https://beads.gascity.com/">the documentation site</a> and its
+<a href="https://beads.gascity.com/llms.txt">index</a>; and within it the pages on
+<a href="https://beads.gascity.com/core-concepts/">core concepts</a>,
+<a href="https://beads.gascity.com/core-concepts/hash-ids.md">hash IDs</a>,
+<a href="https://beads.gascity.com/getting-started/quickstart/">the quickstart</a>,
+<a href="https://beads.gascity.com/architecture/dolt.md">the Dolt backend</a>,
+<a href="https://beads.gascity.com/reference/git-integration.md">git integration</a>,
+<a href="https://beads.gascity.com/workflows/gates.md">gates</a>,
+<a href="https://beads.gascity.com/workflows/molecules.md">molecules</a>,
+<a href="https://beads.gascity.com/integrations/claude-code.md">the Claude Code integration</a>,
+<a href="https://beads.gascity.com/cli-reference/prime.md">bd prime</a> and
+<a href="https://beads.gascity.com/reference/faq.md">the FAQ</a>.
+The 80/20 section carries written input from GPT-6-Astra and from Fable, both given the same brief
+and both quoted where they said it better.</p>
+
+</body>
+</html>

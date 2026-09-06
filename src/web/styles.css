@@ -787,6 +787,27 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   margin-left: 0.5rem;
 }
 
+/* **A sentence standing where a pill would be**, when the control has nothing
+   to open — today that is the `Paragraphs` pill while the labels are still
+   arriving or a run failed to produce them (src/web/nav-labels.ts).
+
+   Not a disabled `Toggle`: a disabled control still reads as a control, and its
+   explanation would have to live in a tooltip that a touch reader cannot open —
+   which is the argument that named these pills `Paragraphs` rather than `L3` in
+   the first place (src/web/tree.ts § `columnLabel`). So the control is replaced
+   by the reason, in the bar's own voice: italic and faint, like `.mode` beside
+   it, and no border, because a bordered thing in this row is something you can
+   press. It wraps to the pills' own metrics rather than growing the bar. */
+.pill-note {
+  font-size: 0.72rem;
+  line-height: 1.55;
+  font-style: italic;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* `.provenance` was here — the dashed monospace chip in the controls holding the
    tree's version, `margin-left: auto` so it sat hard right. Gone on 2026-09-05
    with the glossary's and the quotes' provenance lines; App.tsx says why, at the
@@ -828,7 +849,35 @@ table.zoom {
    § the header over the article's column — 40 lines that moved `Text verbatim`
    onto the prose's left edge, added 2026-09-04 and inert the moment the word
    stopped being drawn. */
-thead th {
+/* **Scoped to the zoom table, and the spelling is load-bearing twice over.**
+
+   Both of these were bare element selectors until 2026-09-06 — `thead th` and
+   `td` — so they reached EVERY table in the app. On the shelf that put the
+   header cells 44px down the page, overlapping the first article's title by
+   their whole height (measured: th at 495.3–527.8, first row at 484.3–536.8),
+   and drew a vertical column grid `lib/DataTable.tsx` never asked for. It had
+   been worked around three times and fixed none: `.design-table td` writes
+   `border-right: 0` with a comment naming this rule, and `.prose th, .prose td`
+   restate `border` in full for the same reason.
+   docs/plans/260906g-the-shelf-table-is-ugly-because-the-reading-view-s-css-leaks-into-it.md.
+
+   **Direct children, not descendants.** `table.zoom td` would not have fixed
+   it: an article's own <table> renders inside `td.text`, which is inside
+   `table.zoom`, so a descendant selector goes on reaching every `.prose` cell
+   exactly as the bare one did.
+
+   **`:where()`, so the specificity does not move.** The obvious
+   `table.zoom > thead > tr > th` is (0,1,4) and would beat `thead th.pin-left`
+   (0,1,2) below — the base `z-index: 25` overriding the pinned header's 35, and
+   the base `border-right` overriding `td.pin-right`'s `none`. That breaks the
+   pinned end columns in the one view these rules exist for. `:where()`
+   contributes zero, so these stay (0,0,2) and (0,0,1) — exactly what the bare
+   selectors were. GPT Sol, 2026-09-06.
+
+   Safe against the markup: TableView.tsx always sets `className="zoom …"`, and
+   the <thead>, <tr> and <tbody> are written explicitly rather than left to the
+   parser. */
+:where(table.zoom > thead) > tr > th {
   position: sticky;
   top: var(--bar-bottom);
   z-index: 25;
@@ -837,7 +886,7 @@ thead th {
   overflow: hidden;
 }
 
-td {
+:where(table.zoom > tbody > tr) > td {
   vertical-align: top;
   border-bottom: 1px solid var(--rule);
   border-right: 1px solid var(--rule-strong);
@@ -1685,6 +1734,13 @@ td.text.kind-callout .prose::before {
   border-collapse: collapse;
   font-size: 0.9em;
 }
+/* **`border` in full, and it used to be defensive.** The bare `td` rule gave
+   every cell in the app a right border in --rule-strong, so naming only the
+   sides this wanted would have let the zoom table's column grid through into an
+   article's own table. That rule is scoped since 2026-09-06 (§ the head with no
+   row), so the shorthand is now just a shorthand — kept because a full border
+   is what an article's table wants anyway, not because anything is being
+   fought off. */
 .prose th, .prose td {
   padding: 0.3em 0.7em;
   border: 1px solid var(--rule);
@@ -1749,6 +1805,25 @@ td.text.kind-caption .prose {
   font-size: 0.78rem;
   line-height: 1.45;
   color: var(--ink-soft);
+}
+
+/* **The sentence the leaf column shows instead of drawing itself**, while the
+   paragraph labels are still arriving or after a run failed to produce them —
+   src/web/nav-labels.ts, and TableView § the withheld column.
+
+   One cell spanning the whole table, so it reads as a note about the column
+   rather than as a row about a paragraph: italic and faint, which is the one
+   pair of signals in this stylesheet that already says "this is us talking,
+   not the article". The cell keeps `td.gist.leaf`'s background so the column
+   is still visibly a column; it deliberately loses the pointer, because there
+   is nothing to jump to. */
+td.gist.leaf.labels-withheld { cursor: default; }
+td.gist.leaf.labels-withheld:hover { background: var(--page); }
+.reading td.gist.leaf.labels-withheld:hover { background: var(--panel); }
+.nav-label-absent {
+  font-style: italic;
+  color: var(--ink-faint);
+  text-wrap: balance;
 }
 
 td.gist.leaf { cursor: pointer; background: var(--page); }
@@ -1838,7 +1913,12 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
   right: 0;
   overflow: hidden;
   border-top: 1px solid var(--rule);
-  transition: background 0.15s;
+  /* No `transition: background` here any more. It animated the
+     `--highlight-wash` that `.active` used to set, and that background went on
+     2026-09-06 — leaving a transition on a property nothing changes, which
+     reads like an intended animation and is dead. The tint that *does* change
+     lives on `::before`'s opacity; if the band should ever fade rather than
+     cut, animate that instead. GPT Sol, 2026-09-06. */
 }
 
 /* The part's tint bar, the full width and height of its band — the rail reads
@@ -1852,10 +1932,26 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
   opacity: 0.3;
 }
 
-.spine-part.active {
-  background: var(--highlight-wash);
-}
-.spine-part.active::before { opacity: 0.75; }
+/* **Quieter than it was, and that is the fix rather than a side-effect of it.**
+   This was `background: var(--highlight-wash)` behind a 0.75 tint, and on an
+   article whose one part holds 95% of the rows that made the whole rail orange
+   while saying nothing — Greg, 2026-09-06. Three of the thirteen trees in
+   `data/` have a part over half the document, so it is a shape, not a Nagel
+   quirk.
+
+   The wash is gone and the tint drops to 0.45, so that `.spine-here` below can
+   be the brightest *fill* on the rail and the part reads as the field it sits
+   in. Turning it down uniformly rather than suppressing it above some size: a
+   threshold would give the rail two behaviours a reader has to learn — *why is
+   the part not lit on this article?* — and a number to argue about, where this
+   degrades smoothly and still reads on a nine-part piece.
+
+   What the brand orange bought here it now buys nowhere on the rail except
+   hover and focus: `--highlight` means *where you are looking*, which is the
+   viewport band's edges. The **nested fills** mean *which part* and *which
+   section within it* — two strengths of one tint, which is why neither of them
+   is the brand colour any more. */
+.spine-part.active::before { opacity: 0.45; }
 
 /* The apparatus: **dimmed, at its true proportional height.** The band is the
    same size it would be as a part — the rail must not lie about pixels — and
@@ -1865,6 +1961,43 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
    docs/plans/260828o-footnotes.md § What the reader sees. */
 .spine-part.supplement::before { opacity: 0.1; }
 .spine-part.supplement.active::before { opacity: 0.4; }
+
+/* **The section you are in.** The concentric inner ring: the part is a quiet
+   field, this is the bright fill inside it, and the viewport band's edges are
+   the exact pixels. Three layers, three channels, none mistakable for another.
+
+   **Opacity of one token rather than a step down the `--depth-N` ladder**,
+   which would have been the obvious move and is a trap on this page: that ramp
+   runs `oklch(0.82 …)` to `oklch(0.44 …)`, so it gets *darker* with depth, and
+   a "deeper" ring painted from it would recede into a near-black page instead
+   of advancing out of it. Same class of mistake as colour-scales.md § *The page
+   is near-black, so every published scale is upside down*.
+
+   `left: 2px` is the L2 tick's own inset, so the ring reads as nested inside
+   the part rather than as a second band stacked on it.
+
+   The `min-height` is the same admission the hit (4px), the mark (3px) and the
+   viewport band (2px) all make: everything in this track is a percentage of the
+   document's height, and a short section in a long article rounds to nothing.
+   Two pixels of lie about geometry, against a *you are here* that disappears
+   exactly when the reader most needs it.
+
+   **The floor needs the clamp above it to be worth anything at the end.** It
+   grows the box downward from `top`, and the article's last section starts at
+   nearly 100%, so without `min()` those two pixels grow out of the rail's
+   `overflow: hidden` and the ring vanishes on exactly the articles that have a
+   one-line colophon or acknowledgement to end on. `--here-top` is set inline;
+   Spine.tsx says why it is a custom property rather than a `calc()` there. */
+.spine-here {
+  position: absolute;
+  top: min(var(--here-top), 100% - 2px);
+  left: 2px;
+  right: 0;
+  min-height: 2px;
+  pointer-events: none;
+  background: var(--depth-1);
+  opacity: 0.8;
+}
 
 /* L2 as hairlines: the subdivision of the article stays visible even where
    there is no room for a word of it. */
@@ -4171,14 +4304,12 @@ td.text.has-hit[data-hues="8"] {
 }
 
 .design-table { border-collapse: collapse; width: 100%; }
-/* `border-right: 0` is not redundant. The bare `td` rule far above gives EVERY
-   cell in the app a right border in --rule-strong, for the zoom table's column
-   grid; it reaches here, and reaches into an article's own <table> inside
-   .prose as well (which is why .prose th/td restate `border` in full rather
-   than only the parts they want). */
+/* This carried `border-right: 0` until 2026-09-06, with a comment explaining
+   that the bare `td` rule far above gave EVERY cell in the app a right border.
+   That rule is scoped to the zoom table now (§ the head with no row), so there
+   is nothing left to undo and the declaration has gone. */
 .design-table td {
   padding: 0.55rem 0.9rem 0.55rem 0;
-  border-right: 0;
   border-bottom: 1px solid var(--rule);
   vertical-align: middle;
 }
@@ -12645,9 +12776,13 @@ td.text.kind-heading .blk-gutter[data-open] {
    screen.**
 
    **It is the one width-shaped behaviour in this file that is not written as a
-   width, and it cannot be.** The crossover is `MODE_MIN + PROSE_MIN` against the window
-   **minus the rail** — 844 with the rail on, 832 with `?spine=0` — and a media
-   query cannot see a query parameter. It was `@media (max-width: 843px)` from
+   width, and it cannot be.** The crossover is `MODE_MIN + MODE_PROSE_FLOOR` against the
+   window **minus the rail** — 700 with the rail on, 688 with `?spine=0` — and a
+   media query cannot see a query parameter. (It was `MODE_MIN + PROSE_MIN`, 844
+   and 832, until 2026-09-06; layout.ts § `MODE_PROSE_FLOOR` is why the prose now has
+   two numbers, and why no iPhone in landscape ever cleared the old one.) The
+   numbers below are the old pair, and they are the widths the measurements were
+   taken at rather than claims about today. It was `@media (max-width: 843px)` from
    2026-08-27 to 2026-09-03, and across **832–843 with the rail off** the two
    halves disagreed: `fitMode` handed the band 288–299px and squeezed the table
    to make room for it, while this query widened that same band to the whole
@@ -12691,7 +12826,8 @@ td.text.kind-heading .blk-gutter[data-open] {
 
    layout.ts § fitMode has what was tried first, and why a fixed element cannot
    be one of two panes you scroll between. `tests/chat.test.ts` still pins the
-   844/843 crossover on the TypeScript side. */
+   crossover on the TypeScript side — 700/699 since 2026-09-06, and 844/843
+   before it. */
 /* **The window minus the rail — not the whole window.** `left: 0` was tried
    first and the panel came out with its left-hand rail-width missing: every
    term name lost its first letter, the slider ran off the edge, and the
@@ -12807,8 +12943,13 @@ td.text.kind-heading .blk-gutter[data-open] {
   }
   /* Each consumer animates its own ordinary property. `top` is animatable on a
      sticky or fixed element, and there are only ever four of these on screen at
-     once, so the layout cost of the 180ms is not worth avoiding. */
-  thead th,
+     once, so the layout cost of the 180ms is not worth avoiding.
+
+     Scoped like the rule that makes these sticky in the first place (§ the head
+     with no row) — bare, this handed the shelf's and an article's own header
+     cells a `transition: top` written for chrome that slides under a bar they
+     do not have. */
+  :where(table.zoom > thead) > tr > th,
   td.gist .sticky,
   .spine,
   .mode-band,
@@ -13103,7 +13244,9 @@ td.text.kind-heading .blk-gutter[data-open] {
   .controls,
   .dock,
   .install-hint,
-  thead th,
+  /* Scoped for the reason § the head with no row gives — this is the reduced-motion
+     half of the transition it turns off, so the two selectors have to match. */
+  :where(table.zoom > thead) > tr > th,
   td.gist .sticky,
   .spine,
   .mode-band {
@@ -13364,8 +13507,9 @@ td.text.kind-heading .blk-gutter[data-open] {
    below the width at which the bar has less room than the measure the term goes
    negative, and the title stays at the gutter while the prose slides towards
    it. That width is much lower than it was, the reservations having been the
-   thing that raised it. Below 844px the question does not arise anyway — a mode
-   band with no room hides this bar outright (§ a band with no room). */
+   thing that raised it. Below the mode crossover (700px since 2026-09-06, 844
+   before it) the question does not arise anyway — a mode band with no room
+   hides this bar outright (§ a band with no room). */
 .reader:has(table.only-prose):not(.text-alone) .masthead-inner {
   /* `65ch` measured in the article's face rather than the chrome's — the same
      line, and the same reason, as `font-size` on `.blk-gutter` (§ the gutter).
