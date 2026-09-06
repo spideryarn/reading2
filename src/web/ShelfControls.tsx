@@ -144,13 +144,23 @@ function Chip({
  */
 function ViewSwitch({ view, onView }: { view: ShelfView; onView: (v: ShelfView) => void }) {
   return (
-    /* **32px, not 28.** The old box was `h-7` around `size-6` children — 28px,
-       matched to a chip by arithmetic this comment used to carry. That was
-       *smaller than any shadcn default* (`sm` is `h-8`) and below Material's
-       40dp segmented-button spec, which is most of why Greg could not find it.
-       The chips beside it are still `h-7`; a control that is doing something
-       different is allowed to be the taller thing in the row, and at 32 against
-       28 it reads as deliberate rather than as a mismatch.
+    /* **A 32px track holding 28px targets**, and the two numbers are worth
+       stating separately because an earlier version of this comment said "32px,
+       not 28" and meant the track — which overstates what actually got bigger.
+       GPT Sol, 2026-09-06.
+
+       The track is `h-8`; each radio is `h-7`, and the 2px between them (1px
+       border + 1px padding) is not clickable. So the **hit target** went from
+       24px to 28px, and the thing you aim at went from a bare icon to an icon
+       with a word beside it. 28 is comfortably above WCAG 2.2's 24px floor and
+       still under Material's 40dp segmented-button ideal; the old 24px was
+       below every shadcn default (`sm` is `h-8`), which is most of why Greg
+       could not find this control.
+
+       The chips beside it are `h-7`, so the track stands 4px proud of them. A
+       control doing something different is allowed to be the taller thing in
+       the row, and at 32 against 28 it reads as deliberate rather than as a
+       mismatch.
 
        `rounded-sm` inside `rounded-md` is still not a guess: an inner radius is
        the outer one minus the padding between them, 8 − 2 = 6px, which is what

@@ -287,7 +287,8 @@ It is already icons, which is what Greg reached for — two 14px glyphs in 24px 
 track. The problem is that it is *too* quiet to find, and that a native `title` is the weakest
 tooltip there is: ~1s delay, unstyleable, and **absent entirely on touch**.
 
-- **Bigger.** 24px → 32px boxes, which is shadcn's own `sm`. The current size is below every shadcn
+- **Bigger.** A 32px track holding 28px targets — so the *hit target* went 24px → 28px, not
+  24 → 32, which is how this line first read and what the code review corrected. The current size is below every shadcn
   default and below Material's 40dp segmented-button spec. The `h-7`/`size-6` arithmetic in
   `chipClass` and `ShelfControls` is deliberate and documented, so this is a re-measure, not a nudge.
 - **Labelled, where there is room.** `Cards` / `Table` beside the icon above `sm`, icon-only below.
@@ -342,6 +343,32 @@ Two of its judgments were taken as offered — `RadioGroup` over a hand-rolled g
 the scroll shadow. Its endorsement of the two calls this plan had already argued — no shadcn `Table`
 primitives, and the `overflow-y` reasoning behind deferring the sticky header — was checked against
 the spec rather than accepted on the strength of agreeing.
+
+## What the second review changed
+
+[260906g-shelf-table-code-review-sol.md](260906g-shelf-table-code-review-sol.md) reviewed the built
+code and found no runtime regression — it checked the specificity arithmetic, the child chains
+against `TableView.tsx`'s real DOM (including `colgroup`, `rowSpan` and `withheldLeaf`), the design
+table, `min-w-56` against `max-w-0`, the row-cap predicates, and the Radix/Floating-UI composition,
+and cleared all of them. Three things were wrong anyway, all of them *claims* rather than behaviour:
+
+1. **The guard had false greens.** `:is(td, th)` hid the tag behind a bracket the pattern did not
+   treat as a boundary; `td:not(.zoom)` carried a dot and so read as scoped, when a class inside a
+   negation *widens* a rule rather than scoping it. Both now caught, both now calibration cases.
+2. **Every branch of a selector list got the first branch's line number.** It only looked right
+   because `thead th` happened to come first in the lists this bug was in — and the lists in this
+   file run to a dozen lines, so the failure mode was pointing a reader at an innocent selector.
+   Fixed, and asserted on a multi-line fixture.
+3. **"24px → 32px" overstated the toggle.** The track is 32px; the targets inside it are 28px.
+   Corrected here, in `ShelfControls.tsx`, and in the postmortem.
+
+One hole is left open deliberately: `:is(table, .zoom) td` reads as scoped and is not. Closing it
+needs a real selector parser rather than a pattern match, which is more than this tripwire is worth
+— so there is a test asserting the current behaviour, so that the boundary is written down and
+anybody who does write the parser gets told.
+
+The review also noted that **the row cap has no automated test**, only the browser check. That is
+now `tests/shelf-row-cap.test.ts`.
 
 ## What this plan passed over
 

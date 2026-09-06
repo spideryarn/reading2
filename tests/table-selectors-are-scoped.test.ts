@@ -55,8 +55,41 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const TABLE_TAG = /(^|[\s>+~])(table|thead|tbody|tfoot|tr|th|td)($|[\s>+~:.#[])/;
+/**
+ * A table tag standing on its own in a branch.
+ *
+ * `(` and `,` are boundary characters as well as the combinators, so a tag
+ * hidden inside a functional pseudo — `:is(td, th)` — is still found. Without
+ * them that spelling was a false green, which GPT Sol pointed out on
+ * 2026-09-06 while reviewing the built code.
+ */
+const TABLE_TAG = /(^|[\s>+~(,])(table|thead|tbody|tfoot|tr|th|td)($|[\s>+~:.#[),])/;
+
+/** A class, id or attribute — the thing that turns a tag into *this* table's tag. */
 const SCOPED = /[.#[]/;
+
+/**
+ * What `SCOPED` is allowed to look at.
+ *
+ * **A class inside `:not()` scopes nothing** — it *widens* the rule. `td:not(.zoom)`
+ * carries a dot and matches every cell in the app bar one, so testing the raw
+ * branch called it scoped and let it through. Stripping the negation's argument
+ * first is what makes the check mean what its name says. Also GPT Sol, 2026-09-06.
+ */
+function withoutNegations(branch: string): string {
+  let out = branch;
+  let previous: string;
+  do {
+    previous = out;
+    out = out.replace(/:not\([^()]*\)/g, "");
+  } while (out !== previous);
+  return out;
+}
+
+/** Does this branch name a table element without saying *which* table? */
+function offends(branch: string): boolean {
+  return TABLE_TAG.test(branch) && !SCOPED.test(withoutNegations(branch));
+}
 
 /** Every selector branch in a stylesheet, with the line it starts on, skipping @keyframes bodies. */
 function selectorBranches(css: string): { line: number; branch: string }[] {
@@ -93,10 +126,19 @@ function selectorBranches(css: string): { line: number; branch: string }[] {
     if (keyframeAt === -1 && /^@keyframes/i.test(selector)) keyframeAt = depth;
     if (keyframeAt !== -1 || !selector || selector.startsWith("@")) continue;
 
-    const line = lineAt(blanked, i - raw.length + (raw.length - raw.trimStart().length));
     /* Split on top-level commas only: `:is(h2, h3)` is one branch, and
-       splitting inside it invents selectors nobody wrote. */
-    for (const branch of splitTopLevel(selector)) out.push({ line, branch });
+       splitting inside it invents selectors nobody wrote.
+
+       **Each branch gets its own line**, not the first branch's. A selector list
+       here is routinely a dozen lines long (`.controls, .dock, …, thead th, …`),
+       and reporting the head of the list sends the reader to an innocent
+       selector — which is worse than reporting nothing. It only looked right
+       before because `thead th` happened to come first in the lists it was in.
+       GPT Sol, 2026-09-06. */
+    const selectorStart = i - raw.length;
+    for (const { branch, offset } of splitTopLevel(raw)) {
+      out.push({ line: lineAt(blanked, selectorStart + offset), branch });
+    }
   }
   return out;
 }
@@ -109,21 +151,28 @@ function lineAt(text: string, offset: number): number {
 }
 
 /** `a, :is(b, c) d` → ["a", ":is(b, c) d"]. Commas inside parentheses are not separators. */
-function splitTopLevel(selector: string): string[] {
-  const out: string[] = [];
+function splitTopLevel(selector: string): { branch: string; offset: number }[] {
+  const out: { branch: string; offset: number }[] = [];
   let depth = 0;
-  let cur = "";
-  for (const ch of selector) {
+  let start = 0;
+
+  const take = (from: number, to: number) => {
+    const slice = selector.slice(from, to);
+    const lead = slice.length - slice.trimStart().length;
+    const branch = slice.trim().replace(/\s+/g, " ");
+    if (branch) out.push({ branch, offset: from + lead });
+  };
+
+  for (let i = 0; i < selector.length; i++) {
+    const ch = selector[i];
     if (ch === "(") depth++;
-    if (ch === ")") depth--;
-    if (ch === "," && depth === 0) {
-      if (cur.trim()) out.push(cur.trim());
-      cur = "";
-      continue;
+    else if (ch === ")") depth--;
+    else if (ch === "," && depth === 0) {
+      take(start, i);
+      start = i + 1;
     }
-    cur += ch;
   }
-  if (cur.trim()) out.push(cur.trim());
+  take(start, selector.length);
   return out;
 }
 
@@ -132,9 +181,7 @@ describe("table selectors in styles.css are scoped", () => {
      actually have caught the bug, and would not fire on the fix. These are the
      real before-and-after strings. */
   it("recognises the selectors that caused the bug, and the ones that fixed it", () => {
-    const offends = (branch: string) => TABLE_TAG.test(branch) && !SCOPED.test(branch);
-
-    // The four that leaked.
+    // The two that leaked, in the spellings they actually had.
     expect(offends("td")).toBe(true);
     expect(offends("thead th")).toBe(true);
 
@@ -149,6 +196,39 @@ describe("table selectors in styles.css are scoped", () => {
     expect(offends(".mode-band")).toBe(false);
     expect(offends(".controls")).toBe(false);
     expect(offends(".install-hint")).toBe(false);
+  });
+
+  /**
+   * The spellings that got past the first version of this check, all found by a
+   * cross-family review of the built code rather than by the check itself.
+   *
+   * Each is a real way of writing the same bug: a rule that reaches every table
+   * in the app while *looking* scoped. They are here because the check is a
+   * pattern match rather than a parser, so the only honest way to state what it
+   * covers is to enumerate what it has been shown to catch.
+   */
+  it("is not fooled by a tag inside :is(), or by a class inside :not()", () => {
+    // Hidden behind a functional pseudo: still every td and th in the app.
+    expect(offends(":is(td, th)")).toBe(true);
+    expect(offends(":is(thead, tbody) tr")).toBe(true);
+    // A class inside a negation widens the rule; it does not scope it.
+    expect(offends("td:not(.zoom)")).toBe(true);
+    expect(offends("th:not(.pin-left):not(.pin-right)")).toBe(true);
+    // But a negation alongside a real scope is still scoped.
+    expect(offends("td.gist:not(.continuation)")).toBe(false);
+    expect(offends(".prose td:not(:first-child)")).toBe(false);
+  });
+
+  /**
+   * **The known hole, written down rather than papered over.** `:is(table, .zoom) td`
+   * carries a dot, so it reads as scoped, and it still matches every `td` in the
+   * app. Closing it needs a real selector parser rather than a pattern match,
+   * which is more machinery than this tripwire is worth — but a reader deserves
+   * to know the boundary of what it promises, and a test that asserts the
+   * current behaviour will fail loudly if someone ever does write the parser.
+   */
+  it("documents what it cannot see: a class in one branch of :is() reads as scope", () => {
+    expect(offends(":is(table, .zoom) td")).toBe(false);
   });
 
   it("skips @keyframes stops and does not split inside :is()", () => {
@@ -174,11 +254,29 @@ describe("table selectors in styles.css are scoped", () => {
     ]);
   });
 
+  /**
+   * **Each branch of a list gets its own line, not the head of the list.**
+   *
+   * The selector lists in this stylesheet run to a dozen lines, and the two
+   * transition rules that leaked had `thead th` several lines into one. The
+   * first version reported the whole list at its first branch's line, which
+   * only looked right because `thead th` happened to come first in the lists
+   * this bug was in. Pointing a reader at an innocent selector is worse than
+   * pointing them nowhere.
+   */
+  it("gives every branch of a multi-line list its own line", () => {
+    const css = [".controls,", ".dock,", "thead th,", ".spine {", "  transition: none;", "}"].join("\n");
+    expect(selectorBranches(css)).toEqual([
+      { line: 1, branch: ".controls" },
+      { line: 2, branch: ".dock" },
+      { line: 3, branch: "thead th" },
+      { line: 4, branch: ".spine" },
+    ]);
+  });
+
   it("no branch names a table element without a class, id or attribute", () => {
     const css = readFileSync(new URL("../src/web/styles.css", import.meta.url), "utf8");
-    const offenders = selectorBranches(css).filter(
-      ({ branch }) => TABLE_TAG.test(branch) && !SCOPED.test(branch),
-    );
+    const offenders = selectorBranches(css).filter(({ branch }) => offends(branch));
 
     expect(
       offenders.map(({ line, branch }) => `styles.css:${line}  ${branch}`),

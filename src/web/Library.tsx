@@ -55,6 +55,7 @@ import type { LibraryEntry, LibraryHit } from "../types.js";
 import { AddArticle } from "./AddArticle.js";
 import { ADDED_NOTE, CARD_NOTES, CHIP_ORDER, DEFAULT_BY, libraryColumns } from "./library-columns.js";
 import { DataTable, naturalDirections, useSortedTable } from "./lib/DataTable.js";
+import { capRows } from "./lib/row-cap.js";
 import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
 import { fold, foldWithMap, libraryHitHref, queryTerms } from "./library-hits.js";
@@ -297,6 +298,11 @@ export function Library({
   /* Whichever column is sorted first decides what a card says about itself. */
   const note = CARD_NOTES[sorting[0]?.id ?? ""] ?? ADDED_NOTE;
 
+  /* The table's first fifty, and whether there is a "show all" to offer. Taken
+     from `sorted`, which is after both `sinkLast` passes — capping before the
+     sort would pick its fifty out of the wrong order. lib/row-cap.ts. */
+  const capped = capRows(sorted, SHELF_ROW_CAP, expanded);
+
   return (
     <main className="tw:mx-auto tw:max-w-4xl tw:px-6 tw:py-10 tw:font-sans">
       <header className="tw:mb-8">
@@ -487,13 +493,13 @@ export function Library({
           Slicing before the sort would cap the wrong fifty. */}
       {sorted.length > 0 && view === "table" && (
         <>
-          <DataTable
-            table={table}
-            rows={expanded ? sorted : sorted.slice(0, SHELF_ROW_CAP)}
-            caption="Your articles"
-          />
-          {!expanded && sorted.length > SHELF_ROW_CAP && (
-            <ShowAllRows total={sorted.length} onShowAll={() => setExpanded(true)} />
+          <DataTable table={table} rows={capped.shown} caption="Your articles" />
+          {/* The button is drawn exactly when `revealTotal` is a number, and
+              that number is the only count it can print — see lib/row-cap.ts on
+              why the slice and the button come from one call rather than two
+              conditions that agree until somebody edits one of them. */}
+          {capped.revealTotal !== null && (
+            <ShowAllRows total={capped.revealTotal} onShowAll={() => setExpanded(true)} />
           )}
         </>
       )}

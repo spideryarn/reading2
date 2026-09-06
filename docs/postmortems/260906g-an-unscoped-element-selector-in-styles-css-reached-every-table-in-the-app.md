@@ -106,6 +106,16 @@ gap between those two patches and the third.
    fine (`*`, `body`, keyframe stops); narrowed to table tags there were exactly four, all this bug,
    all fixed together. Verified by reintroducing the bug and watching it report all four with line
    numbers.
+
+   **It is a pattern match, not a selector parser, and the difference is worth stating** — a
+   cross-family review of the built code found three ways past the first version, two of which are
+   now closed: a tag hidden inside a functional pseudo (`:is(td, th)`), and a class inside a
+   negation (`td:not(.zoom)`) that reads as scope while actually *widening* the rule. The third is
+   still open and deliberately so: `:is(table, .zoom) td` carries a dot, reads as scoped, and
+   matches every cell in the app. Closing it needs a real parser, which is more machinery than a
+   tripwire is worth; there is a test asserting the current behaviour so the boundary is written
+   down rather than assumed. **So this guard catches the bare-selector class it was built for, and
+   should not be read as a proof about every possible spelling.**
 2. **A habit that costs nothing: scope a rule to a class from the line it is written, even when the
    tag it names currently matches only one thing.** `thead th` was not wrong to write on the day only
    one table existed; it became wrong the moment a second one did, and nothing about writing it
