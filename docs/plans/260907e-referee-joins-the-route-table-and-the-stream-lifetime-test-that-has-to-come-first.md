@@ -511,6 +511,26 @@ friends (9), `reader/shelfOpen` (3), `models/transcribe/feedback` (3), `library/
 **the admin gate last, or never.** It is a gate rather than a route, `security-map.md` names it, and
 it should not be moved as part of a mechanical sweep.
 
+**One standing gap, agreed with 260907b on 2026-09-07 — a queue line, not a stage.** No new
+per-domain lifetime oracle is needed for a migration: Sol ruled it is once, not per domain, and the
+decomposition holds. Lifetime risk lives in exactly two places, and both are covered — inside the
+handler body, where the normalised body diff catches `await` → `void` (they are different tokens and
+none of the normaliser's four transforms touches them), and in the dispatcher's await, which is
+shared machinery the referee slice already tested. The referee oracle is not a migration artefact:
+it tests a pre-existing lifetime property nothing tested, and was worth writing whether or not
+referee ever moved. The migration was the occasion, not the reason.
+
+What is left over is real. **The body diff proves a move and then evaporates** — it is a one-off
+script, not a standing test. `assertHandlersAwaited` cannot close it: it calls
+`findFunction(statements, TABLE_DISPATCHER)` and walks only `dispatchAuthRoute`'s own body, so it is
+blind by construction to a `void` inside a row's handler closure. That is not a defect in the check;
+it answers a different question. But it means a moved domain has **no standing guard** against a
+future dropped `await` in a row handler, and referee has one only incidentally.
+
+The cheap shape, if someone takes it deliberately: **a static assertion that no promise-returning
+call inside any `AUTH_ROUTES` handler body is left un-awaited** — the same AST machinery the contract
+reader already has, and no database. Do not build it during a migration.
+
 Two corrections to carry forward, both from Sol:
 
 - **`quizMark` streams.** It calls `markOneAnswer`, which writes its own headers and ends the
