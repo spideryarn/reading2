@@ -366,6 +366,15 @@ hit, and `--hit-a` is the maximum over every mark covering a run, so **a quote l
 search hit repainted that hit's confidence at full**. `data-wash` now says which marks want search
 painting, and `--hit-a` is computed over those only.
 
+That was a fault in the renderer rather than something a reader ever saw: **one mode's marks are on
+the page at a time** ([the marks in the prose belong to the mode
+showing](../../tests/the-marks-in-the-prose-belong-to-the-mode-showing.test.tsx)), so a quote and a
+search hit are never drawn over one phrase in the reading view. The overlap is a contract
+`annotateHtml` holds, not a state the app can currently reach — worth being exact about, because the
+first write-up of this called it a live bug and it is not one. It still had to be fixed: the whole
+design rests on the two channels being independent, and "independent except that one silently
+overwrites the other" is not that.
+
 ### The bar hides what is below it
 
 Since 2026-09-03, and it took that from the glossary along with everything else here:

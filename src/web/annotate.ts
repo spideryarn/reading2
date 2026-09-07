@@ -223,11 +223,15 @@ interface MarkBase {
   /**
    * How heavily to **outline** these words — a quote, and `hit` marks only.
    *
-   * The counterpart of `strength`, and deliberately exclusive with it: a mark
-   * carrying a tier is drawn as a stroke and wants no wash, a mark carrying a
-   * strength is drawn as a wash and has no stroke. `search-hits.ts § baseMarks`
-   * is where one or the other is chosen, and its comment says what went wrong
-   * while a quote was both.
+   * The counterpart of `strength`, and exclusive with it **by convention rather
+   * than by type** — both are optional here, so nothing stops a caller setting
+   * both and getting a mark that is drawn as a stroke *and* washed. The single
+   * place that decides is `search-hits.ts § baseMarks`, whose comment says what
+   * went wrong while a quote was both. Said plainly because an earlier draft of
+   * this comment claimed the types enforced it; they do not, and a claim like
+   * that is exactly what stops the next person checking (GPT Sol, 2026-09-07).
+   * A discriminated union would enforce it, and would be the right shape if a
+   * third kind of painting ever arrives.
    *
    * Where two quotes cover the same words the **heaviest wins**, on the same
    * argument `strength` makes. In practice they cannot: `dedupeOverlaps`

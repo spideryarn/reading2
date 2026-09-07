@@ -518,6 +518,142 @@ wrong about CSS.
 Sol confirmed two things unchanged: `priorityOf` is the correct scalar, and the pressed rule's
 cascade is sound.
 
+## The code review, and the three things it left open
+
+The built code went back to GPT Sol, weighted higher than the plan review. Six findings; three fixed
+here, three recorded. It also corrected the write-up on a point worth being exact about.
+
+**Fixed:** the `/design` specimens were injected into a `<p>` when each is already a whole `<p>`,
+making `<p><p>…</p></p>`; the sanitiser test still covered only `data-hit` and `data-hues`, so the
+four new attributes were forbidden but unasserted — the omission this list has now suffered three
+times; and a quote in a **right-to-left** block would cap itself inside out, because
+`data-quote-start` is a *logical* end and a `box-shadow` offset is a *physical* one, so a split RTL
+quote would be capped on its two internal seams and left open at both ends. A single-fragment quote
+hides that completely, which is what makes it the kind of bug a browser pass would not find.
+
+**Three comments asserted things that are not true**, and all three are corrected in place:
+
+- The `slice`-is-safe explanation inherited from 2026-08-26 — that percentages resolve per fragment,
+  so `clone` and `slice` cannot disagree — **is contrary to CSS Fragmentation §5.4**, which says
+  `slice` uses the unbroken box's geometry. The Chrome measurement stands; the theory does not, and
+  it cannot be used to predict Firefox or Safari.
+- `Mark` does **not** type-enforce the `strength` / `quoteTier` exclusivity. Both are optional; only
+  `baseMarks` decides. A discriminated union would enforce it and is the right shape if a third kind
+  of painting arrives.
+- The stroke green is **not** "away from the categorical palette": `--cat-2-rgb` is `47 191 149` and
+  this is `122 200 160`, the same family. See § Open questions.
+
+**And one claim of mine was too strong.** The wash bug — a quote repainting a hedged search hit's
+confidence at full — is real in `annotateHtml`, but **not reachable by a reader**: one mode's marks
+are on the page at a time, so a quote and a search hit are never drawn over one phrase. It is a
+broken renderer contract, not something anybody has been seeing. The first commit message on this
+branch says "live bug"; this is the correction.
+
+### Left open, deliberately
+
+- **The pressed subtype is lost on a mixed run.** `data-hit-open` is emitted when *any* covering hit
+  is open, so an open search over a quote and an open quote over a search produce identical markup,
+  and both pressed rules fire. Sol's fix is separate `data-wash-open` / `data-quote-open`. Not built,
+  because the state is unreachable while modes are exclusive, and because inventing two more reserved
+  attributes for it would want the sanitiser bump and the tests that go with them. **It is the first
+  thing to build if quotes and search are ever drawn together.**
+- **Foreign content leaves an outline uncapped.** SVG and MathML text is counted in the offset space
+  but never wrapped, so a quote that starts or ends inside a diagram gets only one cap, and a
+  `whole: true` fallback spanning leading and trailing SVG gets neither. The fix is to cap the first
+  and last *wrappable* run rather than requiring the stored boundary itself to be wrappable. Rare,
+  cosmetic, and a real edge — recorded rather than hidden.
+- **The hue.** See § Open questions.
+
+## Stage 3, the acceptance pass: ship it, with one defect
+
+On the real article, signed in, 1280px. **The verdict is that the outline survives the sentence the
+wash version earned** — *"a few sentences someone bracketed, not a wall of boxes, not a form, not a
+table"* — and it held when pushed past the density it will actually see.
+
+**The seed was 16× too sparse and the pass worked round it, which is the useful part.** 32 quotes
+over 152,077 words is one per ~4,750, not the one per 300 the design assumes, so a 900px viewport
+showed **nothing at all on about eleven screens in twelve**. `qstroke-seed.mts` strides over text
+*blocks*, and this article has 1,766 of them but is enormous. So the crowded case was built by
+injecting extra marks into the real prose in the browser:
+
+| density | quotes per viewport | verdict |
+|---|---|---|
+| as seeded (1 per 4,750 words) | 0–1 | nothing to judge |
+| the design assumption (1 per 300) | 1–2 | calm |
+| **3× the assumption (1 per 90)** | **3–4** | **still reads as bracketing, not tabulation** |
+
+What rises with density is a faintly *ruled* quality, because a wrapped quote draws a rule in every
+interline gap it crosses; a paragraph with two multi-line heavy quotes is the closest thing to the
+failure mode, and even there it reads as bracketing. It is better than a wash would be at that
+density, because a wash would have filled half the paragraph.
+
+**The priority does help skimming — but through brightness more than thickness.** 3px at 95% alpha
+simply carries more green than 1px. The heavy ones read as bright brackets that catch the eye and
+the light ones recede to a hairline. The useful outcome, even though the mechanism is not quite the
+one on the tin.
+
+**Everything else checked out**: wrapping reads as one quote (22 of 32 wrap); a split quote's three
+fragments are exactly contiguous with no seam; the pressed white stroke is unmistakable; no stray
+yellow anywhere — every quote-only mark computes `rgba(0,0,0,0)`, so the `background: none` guard is
+doing its job; no stroke escapes its cell; no reflow; holds at 1024 and 900.
+
+### The step where a quote crosses a search hit
+
+**The one real defect.** `mark.hit[data-wash]` adds `padding-bottom: 2px` to make room for the hue
+band, so a fragment carrying both a quote and a search hit is **2px taller than its quote-only
+siblings** — and the quote's bottom rule therefore steps down 2px where the search hit begins and
+back up where it ends. Measured on `/design`: bottom 738.78 against 736.78.
+
+**Not fixed**, and the reasoning is worth stating because it is a judgement rather than an
+oversight. It is unreachable in the reading view — one mode's marks are on the page at a time — so
+today it appears only on `/design`, whose specimen label now names it rather than claiming the
+opposite. And the cheap fixes are each wrong: giving every quote the same 2px padding levels the
+rule but eats 2px of a 5px interline gap, which would fuse the rules of adjacent lines; and a
+`box-shadow` offset cannot place a bottom rule *inside* a taller box without becoming an inset band
+of the wrong height. The right fix is to stop the quote's bottom edge riding the padded box, and it
+belongs with whoever makes quotes and search coexist. **It is the second thing to build if they
+ever do**, after the pressed-subtype split.
+
+### The doubled hairline between lines
+
+Cosmetic, inherent, and recorded because it is the thing the pass said it would change if anything.
+Line boxes are 27px apart and mark boxes 22px tall, leaving 5px. A **light** quote's bottom rule and
+the next line's top rule are 1px each, so they sit 3px apart and read as a faint double rule — a
+little like ruled paper. A **heavy** quote's 3px rules overflow that gap and fuse into one ~6px
+band, which is why heavy multi-line quotes look chunkier inside than their own outer edges do.
+
+## Known gap: the paragraph rail still wears a search colour
+
+**Not fixed here, and it is a real inconsistency this change introduces.** The bar down the left of
+a marked paragraph (`td.text.has-hit`) is driven by `blockHues`, which reads `Found.slot` — and
+every quote has slot 0, so a paragraph containing only quotes draws a rail in the first *categorical
+search* hue. That was coherent while the mark in the prose wore the same hue as a band. It is not
+any more: the phrase is now outlined in green and the rail beside it is search-blue, so the two say
+different things about the same passage.
+
+Three reasons it is left alone rather than swept up:
+
+- It is **pre-existing behaviour**, deliberately chosen — quotes take a real slot rather than `null`
+  precisely so the paragraph bar is not blank (`useQuotesMode`'s own comment says so).
+- The rail answers a coarser question than the mark — *"one of yours is in here"* — so it is
+  arguably allowed to be a neutral "marked" colour rather than the mark's own. **Except that it is
+  not a neutral colour**, which the browser pass measured and this section originally got wrong: it
+  computes to `rgb(86 180 233)`, i.e. `--cat-0-rgb`, *the first categorical search hue*. So a
+  quote-marked paragraph is flagged in the colour that specifically means "saved search #1 matched
+  here", and a reader with a search running would have one blue meaning two things. That is a
+  latent collision rather than a cosmetic mismatch, and it raises the priority of the follow-up.
+- Fixing it means teaching `blockHues` about quotes, which is a second change to the same seam and
+  belongs with somebody looking at the rail, not bolted onto this.
+
+`blockStrength` is **not** affected: it reads `Found.confidence`, not the mark's `strength`, so
+splitting the two in `baseMarks` did not change the rail's intensity. Checked rather than assumed.
+
+**The browser pass's judgement:** not confusing *today*, because in Quotes mode at 1280px the rail
+sits at x=412 against a panel edge at x=413 and reads as panel chrome rather than as a mark; at
+1800px it sits in an empty gutter far from the words. So it goes on the follow-up list rather than
+the blocker list — and the fix is to **give the rail its own hue** (the quote colour, or a genuinely
+neutral one), not to make it green to match.
+
 ## Open questions for Greg
 
 Recorded rather than asked, since this ran autonomously.
@@ -527,5 +663,13 @@ Recorded rather than asked, since this ran autonomously.
 - **If Stage 0 says three tiers do not separate**, the plan is to ship two rather than fake a
   ranking. Say if you would rather have three at a larger step, which costs vertical room in a
   28.56px line box that is already tight.
-- **Blocker 1 is a live bug** — a quote over a search hit repaints that hit's confidence wash at
-  1.0 today. It is fixed here because this change forces it, but it would be worth fixing anyway.
+- **Blocker 1 is a broken renderer contract, not a live bug** — a quote over a search hit repaints
+  that hit's confidence wash at 1.0 in `annotateHtml`, but modes are exclusive so no reader has seen
+  it. Fixed here because this change forces it, and because the design's central claim is that the
+  two channels are independent.
+- **The stroke's green is in the same family as `--cat-2`**, the categorical "bluish green". Not a
+  collision a reader can currently reach — it would take a quote and a search drawn at once — and
+  the defence is that a stroke and a wash are different channels rather than different hues. But
+  "away from the palette" was not achievable: all eight slots plus the brand orange and the slate
+  wash are spoken for. **Violet is the least-used gap** if you want the stroke moved; it is a
+  one-token change and the browser pass would need re-running.

@@ -89,10 +89,22 @@
        that can be clicked. Checked in Chrome, 2026-09-07 — the green sits a
        device row below the comment's orange and both stay legible.
 
-       Away from the eight categorical search hues too, and from the slate wash,
-       for the reason the wash's own note gives: a mark wearing a colour that
-       already means something is a reader having to learn two meanings for one
-       hue. Held as three numbers because the stroke is drawn at partial alpha. */
+       **It is NOT away from the categorical palette, and the first draft of
+       this comment claimed it was.** `--cat-2-rgb` is `47 191 149`, a bluish
+       green, and this is `122 200 160` — the same family (GPT Sol, 2026-09-07).
+       The defence is the *channel*, not the hue: a search is a wash behind the
+       words and a quote is a line around them, so even in one colour family the
+       two cannot be read as the same thing. The case that would genuinely bite
+       — a green outline over a green `--cat-2` wash — needs a quote and a
+       search drawn at once, which the reader cannot reach today because one
+       mode's marks are on the page at a time.
+
+       **So the hue is an open question rather than a settled one**, recorded in
+       260907c § Open questions. Every one of the eight slots plus the brand
+       orange and the slate wash is spoken for, so "a hue nothing else uses" was
+       never actually available; violet is the least-used gap if Greg wants one.
+
+       Held as three numbers because the stroke is drawn at partial alpha. */
     --quote-stroke-rgb: 122 200 160;
     /* The alias every triplet here needs — see `--hit-wash` above for the
        invalid-declaration trap that makes it worth writing out. */

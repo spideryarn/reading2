@@ -271,9 +271,21 @@ mark.hit[data-wash] {
 
    **`slice`, overriding the `clone` above.** Within a single element that wraps,
    `slice` is what draws the caps at the true ends only rather than on every
-   line — the same rule at the smaller scale. Safe for a mark that is also a
-   search hit: the hue band is positioned in percentages, which is why `clone`
-   and `slice` were measured pixel-identical for it on 2026-08-26. */
+   line — the same rule at the smaller scale.
+
+   **What that costs a mark that is ALSO a search hit is measured, not
+   reasoned.** `clone` and `slice` were found pixel-identical for the hue band
+   on 2026-08-26 — but that was in Chrome, on one fixture, and the *explanation*
+   offered for it at the time (percentages resolve per fragment, so the two
+   modes have nothing to disagree about) is contrary to the spec, which says
+   `slice` uses the unbroken box's geometry and then slices it
+   (CSS Fragmentation §5.4). GPT Sol, 2026-09-07. So the honest statement is the
+   observation and not the theory: **in this Chrome, on a wrapped quote that is
+   also a hit, the band renders the same either way; in Firefox and Safari it is
+   untested.** If a wrapped quote-over-search ever looks wrong there, this line
+   is the first suspect. It is not reachable in the reader today — one mode's
+   marks are on the page at a time — which is why it is recorded rather than
+   engineered around. */
 mark.hit[data-quote] {
   --quote-stroke-width: 1px;
   --quote-edge-top: 0 calc(-1 * var(--quote-stroke-width)) 0 0 var(--quote-stroke-color);
@@ -289,6 +301,22 @@ mark.hit[data-quote] {
   box-shadow: var(--quote-edge-top), var(--quote-edge-bottom);
   -webkit-box-decoration-break: slice;
   box-decoration-break: slice;
+}
+/* **`data-quote-start` is a logical end, and a shadow offset is a physical
+   one.** `box-shadow` has no logical form, so in a right-to-left block the
+   quote's first fragment would draw its cap on the *left* — which is where that
+   fragment abuts the rest of the quote, not where the quote begins. A quote
+   split across an `<em>` would then be capped on its two internal seams and
+   left open at both ends: exactly inside out. A single-fragment quote hides it
+   completely, because it carries both caps and looks right either way, which is
+   what makes this the kind of bug that survives a browser pass.
+
+   Untested in a real RTL article — this repo has none — so it is written from
+   the geometry rather than from a screenshot, and a specimen is the thing to
+   add if an RTL piece ever arrives. GPT Sol, 2026-09-07. */
+mark.hit[data-quote]:dir(rtl) {
+  --quote-edge-start: inset calc(-1 * var(--quote-stroke-width)) 0 0 0 var(--quote-stroke-color);
+  --quote-edge-end: inset var(--quote-stroke-width) 0 0 0 var(--quote-stroke-color);
 }
 /* The heavy tier. Two tiers and not three: blind pairwise, three at 1/2/3px
    scored 13/20 — chance — while 1px against 3px scored 12/12 at both device

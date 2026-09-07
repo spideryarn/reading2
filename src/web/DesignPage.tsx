@@ -1087,8 +1087,15 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
                 {/* The real annotator's output, pasted rather than computed —
                     see `SPECIMEN_OUT`. It is our own markup, from our own
                     function, over our own fixture string: no article, no user
-                    content, nothing that has been near a network. */}
-                <p dangerouslySetInnerHTML={{ __html: SPECIMEN_OUT[i] ?? "" }} />
+                    content, nothing that has been near a network.
+
+                    **A `div`, because the specimen is already a whole `<p>`.**
+                    This was a `<p>`, which makes `<p><p>…</p></p>` — the parser
+                    closes the outer one and the result is a sibling with
+                    different spacing from every other paragraph on the page,
+                    which on a page whose whole job is showing what the reader
+                    sees is the worst place to have it. GPT Sol, 2026-09-07. */}
+                <div dangerouslySetInnerHTML={{ __html: SPECIMEN_OUT[i] ?? "" }} />
               </div>
             ))}
           </div>
@@ -1150,7 +1157,16 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
     ],
   },
   {
-    label: "A quote over a search hit — both channels, neither lost",
+    /* **This label used to say "both channels, neither lost", and the page was
+       visibly disproving it.** The fragments that also carry `data-wash` get
+       `padding-bottom: 2px` to make room for the hue band, so they are 2px
+       taller and the quote's bottom rule steps down where the search hit begins
+       and back up where it ends. Named here rather than quietly claimed
+       otherwise — /design exists to show what the reader gets, so a specimen
+       advertising a property it does not have is the worst thing on it.
+       Not reachable in the reading view today (one mode's marks at a time);
+       260907c § The step where a quote crosses a search hit. */
+    label: "A quote over a search hit — both channels drawn, but see the 2px step in the lower rule",
     marks: [
       { id: "h", start: 33, end: 78, kind: "hit", strength: 0.45, slot: 0 },
       { id: "q", start: 25, end: 65, kind: "hit", quoteTier: 2 },
