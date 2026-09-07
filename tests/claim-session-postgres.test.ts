@@ -117,7 +117,7 @@ import type { LabelsFile } from "../src/labels.js";
 import { INTERRUPTED, STEP_STOPPED } from "../src/messages.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEPS, type PipelineStep, type StepProduct } from "../src/pipeline.js";
-import { articleFingerprint, hashBlocks } from "../src/source-hash.js";
+import { articleFingerprint, hashBlocks, structureHash } from "../src/source-hash.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { pgArticleReader } from "../src/store/pg.js";
@@ -312,6 +312,15 @@ function treeFor(slug: string, blocks: Block[]): Tree {
  * `reasonsNotToPublish` refuses a revision whose `hierarchy` run row was stamped
  * against different blocks — so this hash is what carries *"this tree was built
  * from these blocks"* all the way to the publication gate.
+ *
+ * **`structureHash` is a second load-bearing field since 2026-09-07.** It read
+ * `"fixture-structure"` until then, which is a manifest declaring it was written
+ * against a tree that is not the one beside it — and `writeArtefacts` now refuses
+ * that write, because labels carried onto re-cut boundaries are the one failure
+ * stage 4b exists to prevent. Computed off the same tree this file's steps hand
+ * over, so the fixture states the invariant the real writers keep rather than a
+ * constant.
+ * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md#stage2a-review.
  */
 function labelsFor(slug: string, blocks: Block[]): LabelsFile {
   return {
@@ -319,10 +328,15 @@ function labelsFor(slug: string, blocks: Block[]): LabelsFile {
     generator: "fixture",
     slug,
     sourceHash: hashBlocks(blocks),
-    structureHash: "fixture-structure",
+    structureHash: structureHash(treeFor(slug, blocks)),
     structureVersion: "toc/1",
     labels: Object.fromEntries(blocks.map((b) => [b.id, "A paragraph"])),
-    batches: null,
+    /* `[]`, not `null`. Since 2026-09-06 `batches: null` is a
+       `PendingLabelsFile` — the manifest `hierarchy` writes before the labels
+       step has bought anything — and `writeArtefacts` reads it as an
+       instruction to mark the revision `pending` and delete its `labels`
+       receipt. This fixture is a finished stage 4. src/labels.ts. */
+    batches: [],
   };
 }
 

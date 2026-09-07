@@ -145,6 +145,39 @@ const STEPS: Step[] = [
     gate: true,
     argv: ["run", "--silent", "db:chain"],
   },
+  {
+    /**
+     * **An unresolved merge conflict in a tracked file.**
+     *
+     * The other half of `chain`'s postmortem, and the half that had not been
+     * built. On 2026-09-02 a half-finished merge left markers in
+     * `drizzle/meta/_journal.json`, every migration command went blind at once,
+     * and what the reader saw was a byte offset in a `SyntaxError`. The hour
+     * after that went on sha256ing every `.sql` file across eight trees to clear
+     * a ledger that had been correct all along.
+     * docs/postmortems/260903b-the-ledger-took-the-blame-for-a-half-finished-merge.md
+     * calls a repo-wide check *"the widest fix, and the one not yet done"*.
+     *
+     * It matters here more than in most repositories because AGENTS.md has a
+     * dozen agents integrating with `git merge` in trees they share — the
+     * journal is simply where the damage was loudest, not the only file it can
+     * happen to.
+     *
+     * **Gates from day one on this file's own rule:** green on this tree, and it
+     * needs no database and no network. About 400 ms, and it prints how many
+     * files it scanned rather than only that it found nothing — a count is the
+     * difference between a clean tree and a scan that reached none of it.
+     *
+     * Its false-positive design is most of the work, because a marker is seven
+     * identical characters and this repo quotes conflicts in its own docs. That
+     * reasoning and its three named blind spots are in
+     * scripts/conflict-markers.ts; the cases are in
+     * tests/conflict-markers.test.ts.
+     */
+    name: "conflicts",
+    gate: true,
+    argv: ["run", "--silent", "check:conflicts"],
+  },
 
   {
     /**

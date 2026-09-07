@@ -77,7 +77,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 
 const { CriteriaBand } = await import("../src/web/CriteriaPanel.js");
 const { MirrorView } = await import("../src/web/MirrorPanel.js");
-const { RefereeViews } = await import("../src/web/App.js");
+const { RefereeViews } = await import("../src/web/modes/referee/RefereeMode.js");
 const { ClaimsView } = await import("../src/web/ClaimsPanel.js");
 const { CandidatesPanel } = await import("../src/web/CandidatesPanel.js");
 const { PlaceOnCriterion } = await import("../src/web/PlaceOnCriterion.js");

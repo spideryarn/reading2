@@ -156,7 +156,17 @@ export function ContextPanel({
       p.scrollTop = 0;
       return;
     }
-    const focusY = window.innerHeight * FOCUS_LINE - p.getBoundingClientRect().top;
+    /* **`rect.top`, the panel's destination — not `p.getBoundingClientRect()`,
+       where it currently is.** The two are the same number in every settled
+       state: the panel is `position: fixed` at exactly this `top` with no
+       transform of its own. They differ only while it is sliding, which is when
+       the live rect is an interpolated value — and this effect runs once, on
+       `rect.top` changing, i.e. at the *start* of that slide, against the old
+       position. Nothing places the list again when the panel arrives, so the
+       current entry finished up to a bar's height off the focus line and stayed
+       there. Reading the destination is a simplification as well as the fix.
+       GPT Sol F1, 2026-09-07. */
+    const focusY = window.innerHeight * FOCUS_LINE - (rect?.top ?? 0);
     const wanted = cur.offsetTop + cur.offsetHeight / 2 - focusY;
     // Two clamps, and the current item wins both. It is the one thing that
     // must always be whole, and the panel does not scroll for the reader, so
@@ -181,10 +191,11 @@ export function ContextPanel({
     const top = cur.offsetTop - (head?.offsetHeight ?? 0);
     const bottom = cur.offsetTop + cur.offsetHeight - (p.clientHeight - FADE_PX);
     p.scrollTop = Math.max(0, Math.min(top, Math.max(bottom, wanted)));
-  }, []);
+  }, [rect?.top]);
 
   // `entries`, the column width and the viewport height are re-run triggers,
   // not values read here — the list changed, or moved, so place it again.
+  // `rect?.top` is now BOTH: a trigger, and the destination `place` reads.
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers
   useLayoutEffect(place, [place, entries, rect?.width, rect?.top, viewportH]);
 

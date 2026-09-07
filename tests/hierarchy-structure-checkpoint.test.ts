@@ -234,33 +234,54 @@ describe("generateHierarchy and the structure checkpoint", () => {
   });
 
   /**
-   * **The window this feature exists for, reproduced** — and the case every
-   * other test here would pass without.
+   * **The window this feature existed for, and it has been closed twice over.**
    *
-   * The runs above all succeed, so a checkpoint written *after* `generateLabels`
-   * would satisfy every one of them while losing the structure answer to exactly
-   * the failure the plan is about: 508 seconds of tree bought, then the label
-   * pass runs out of window and the next attempt buys the tree again. ⟨GPT Sol,
-   * on the code, 2026-09-04 — the gap was real and this is the test that closes
-   * it.⟩
+   * This case used to read *"keeps the tree when the label pass dies after it"*
+   * and asserted a **rejection**: with `labelsThrow` set, `generateHierarchy`
+   * threw, and the point was that the structure checkpoint had already been
+   * written, so the next attempt did not re-buy 508 seconds of tree. The
+   * checkpoint's position is what the case was really about. ⟨GPT Sol, on the
+   * code, 2026-09-04.⟩
+   *
+   * **Since 2026-09-06 that failure cannot happen at all**, because the label
+   * pass is not in this function: it is the `labels` step, in its own claim
+   * (docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md). So the
+   * assertion is inverted rather than deleted, and the inversion is the stronger
+   * statement of the same property. `labelsThrow` still arms a mock that throws
+   * on any call to `generateLabels`; this run **resolves**, which is a live
+   * proof that no such call was made — not a claim that a comment can drift away
+   * from.
+   *
+   * The half that is still about the checkpoint is kept underneath: the entry is
+   * there after the run, and the next run resumes from it.
    */
-  it("keeps the tree when the label pass dies after it", async () => {
+  it("never reaches the label pass at all, so no label failure can cost the tree", async () => {
     const checkpoints = memoryCheckpoints();
     labelsThrow = true;
-    await expect(
-      generateHierarchy({ blocks: BLOCKS, slug: "structure-checkpoint", checkpoints }),
-    ).rejects.toThrow(/ran out of window/);
-    expect(structureCalls).toBe(1);
-    expect(checkpoints.entries.size, "the tree the failed attempt paid for was thrown away").toBe(1);
+    try {
+      const first = await generateHierarchy({
+        blocks: BLOCKS,
+        slug: "structure-checkpoint",
+        checkpoints,
+      });
+      /* The tree came back, from a run whose label pass was armed to throw. */
+      expect(first.parts.tree).toBeTruthy();
+      /* And the manifest beside it is the empty one — `batches: null`, which is
+         what `writeArtefacts` reads as *the labels have to be bought*. */
+      expect(first.parts.labels.batches).toBeNull();
+      expect(structureCalls).toBe(1);
+      expect(checkpoints.entries.size, "the tree this attempt paid for was not kept").toBe(1);
 
-    labelsThrow = false;
-    const second = await generateHierarchy({
-      blocks: BLOCKS,
-      slug: "structure-checkpoint",
-      checkpoints,
-    });
-    expect(structureCalls, "the second attempt bought the tree again").toBe(1);
-    expect(second.structureResumed).toBe(true);
+      const second = await generateHierarchy({
+        blocks: BLOCKS,
+        slug: "structure-checkpoint",
+        checkpoints,
+      });
+      expect(structureCalls, "the second attempt bought the tree again").toBe(1);
+      expect(second.structureResumed).toBe(true);
+    } finally {
+      labelsThrow = false;
+    }
   });
 
   it("stores nothing when the answer builds a tree the invariants reject", async () => {

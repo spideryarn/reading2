@@ -431,7 +431,7 @@ const BLOCKS: Block[] = Array.from({ length: 30 }, (_, i) => ({
 let seen: (BlockId | null)[] = [];
 let host: HTMLDivElement;
 let root: Root;
-/** The jump's own write — App.tsx's `jumpTo`, byte for byte. */
+/** The jump's own write — `jumpTo` in reader/useReadingPosition.ts, byte for byte. */
 let pushAt: ((id: BlockId) => void) | null = null;
 /** The scroll spy's write: a replace, queued behind atParam's 300ms debounce. */
 let queueAt: ((id: BlockId) => void) | null = null;
@@ -446,7 +446,7 @@ function Position(): ReactNode {
   return null;
 }
 
-/** Exactly what App.tsx's `jumpTo` does, minus its `synced` bookkeeping. */
+/** Exactly what the reader's `jumpTo` does, minus its `synced` bookkeeping. */
 function jump(target: BlockId): boolean {
   return beginJump(BLOCKS, target, (id) => pushAt?.(id));
 }

@@ -1010,6 +1010,27 @@ export interface Quote {
 }
 
 /**
+ * How heavily a quote is outlined in the prose — **two levels, and the number of
+ * levels is the finding, not an accident.**
+ *
+ * `1` is the light stroke, `2` the heavy one. The stylesheet owns the widths
+ * (1px and 3px, styles/annotations.css § quote strokes); this is an ordinal so
+ * that the design values stay in the design layer, exactly as `data-hues` keeps
+ * a count here and the colours next door.
+ *
+ * **Why not three.** A blind pairwise test on the box, 2026-09-07, scored three
+ * tiers at 1/2/3px at **13/20 — chance** — and the tester's answers correlated
+ * with slot position rather than with thickness, which is the standard tell for
+ * guessing. Two tiers at 1px and 3px scored **12/12 at both device scale
+ * factors**, with no hesitation on any pair. Everything involving a middle tier
+ * is what fails: 1-vs-2 and 2-vs-3 are each marginal, while 1-vs-3 is obvious.
+ * So a third level would be a ranking the reader cannot see, which is worse than
+ * no ranking at all.
+ * docs/plans/260907c-quotes-drawn-as-a-stroke-in-the-prose-with-weight-carrying-priority.md
+ */
+export type QuoteTier = 1 | 2;
+
+/**
  * What was thrown away, and why. **Every one of these is invisible from
  * outside** — a dropped quote looks exactly like a line the model chose not to
  * offer — which is the whole reason they are counted and logged.
@@ -1240,6 +1261,38 @@ export interface Meta {
   /** Readability's own one-or-two-sentence excerpt. A last-resort card blurb. */
   excerpt?: string;
   note?: string;
+
+  /**
+   * **The reader's own name for a file they uploaded** — `raw_filename`, which
+   * stage 1 writes from `RawManifest.filename` and which is null for everything
+   * that was fetched.
+   *
+   * So its presence is the honest answer to *did this come off your disk?*, and
+   * that question stopped being answerable by `source === "pdf"` on 2026-09-07,
+   * when a web page became a legal upload
+   * (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md). `source` is the
+   * **media kind**; conflating the two axes is the thing src/source.ts's own
+   * header warns against, and the masthead and the metadata page were both
+   * doing it because until that day it happened to be true.
+   *
+   * **Owner-facing only.** It is not in `PublicMeta` and must not be — the
+   * public SQL projection does not select it and `publicMeta` is a hand-built
+   * allowlist, so it is withheld twice.
+   *
+   * **But do not read that as "nobody else can see what they called it."** The
+   * *stem* of the filename is already public for a published article, and has
+   * been since uploads existed: `slugFromFilename` (src/ingest.ts) mints the
+   * article's slug from it, and the slug is in `PublicMeta`. So
+   * `confidential-client-acme.html` becomes `/read/confidential-client-acme-spya-…`.
+   * What this field withholds is the exact string — the extension, the case, the
+   * punctuation, anything the kebabing dropped — and that is worth withholding,
+   * but it is a smaller claim than it first looks. ⟨Sol, 2026-09-07, who caught
+   * an earlier version of this comment claiming the larger one.⟩ The slug
+   * exposure predates this work and is Greg's call, not an agent's:
+   * docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md § A privacy question
+   * this work did not create and did not fix.
+   */
+  filename?: string;
 
   /* ---- PDFs only. Absent on everything Readability extracted. ---- */
 
@@ -2316,7 +2369,16 @@ export interface Comment {
  * docs/project/glossary.md.
  */
 export type StepName =
-  | "fetch" | "extract" | "blocks" | "hierarchy" | "assets" | "arc" | "tweets" | "glossary"
+  | "fetch" | "extract" | "blocks" | "hierarchy"
+  /* The per-paragraph navigation labels, which left the `hierarchy` step on
+     2026-09-06 because they were 79.5–92% of its wall clock and one measured
+     call took 602s of a 682s pass — past what the job lease allows.
+     `hierarchy` now writes a `PendingLabelsFile` (src/labels.ts) and this step
+     writes the real one, later, in a free successor job. **It is deliberately
+     NOT in `DEFAULT_INGEST_STEPS`**, which is the whole of the change.
+     docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md. */
+  | "labels"
+  | "assets" | "arc" | "tweets" | "glossary"
   /* The lines worth keeping, in the article's own words — docs/project/quotes.md.
      Beside `glossary` because the two send byte-identical article bytes at the
      same effort and share one cached prefix. */
@@ -2892,7 +2954,7 @@ export interface ThreadSummary {
    * prompt. A pasted `?mode=toc&thread=<a Remember thread>` would therefore
    * continue a Remember conversation as a chat. The overlay is gated on this
    * instead. See
-   * src/web/App.tsx § overlay, and GPT Sol's review of
+   * src/web/reader/Reader.tsx § overlay, and GPT Sol's review of
    * docs/plans/260827ah-review-mode.md, finding 7.
    */
   kind: ThreadKind;

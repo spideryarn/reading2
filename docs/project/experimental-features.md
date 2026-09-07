@@ -164,8 +164,9 @@ is a column rather than something in the browser's `localStorage`.
 four on 2026-09-03
 ([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)), Debate joined
 them on 2026-09-05, and Quotes came out on 2026-09-06; each row is a required
-`experimental: boolean` in `MODES_UI` ([`Dock.tsx`](../../src/web/Dock.tsx)), so mode fifteen cannot
-be added without somebody deciding which side of the line it is on.
+`experimental: boolean` in `MODE_CATALOG` ([`mode-catalog.ts`](../../src/mode-catalog.ts) — it was
+on the `MODES_UI` row in [`Dock.tsx`](../../src/web/Dock.tsx) until 2026-09-07), so mode fifteen
+cannot be added without somebody deciding which side of the line it is on.
 
 **The table is the list, and nothing counts the modes.** Both halves used to be restated — a count
 in five source comments and two other docs, and the complement written out by name — so promoting

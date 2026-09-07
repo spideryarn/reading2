@@ -69,6 +69,7 @@ import {
 import { CONTENT_TYPE } from "./blobs.js";
 import type { DocumentKind, RawManifest } from "../fetch.js";
 import { log } from "../log.js";
+import { structureHash } from "../source-hash.js";
 import type { Block, Meta, NavLabelStatus, StepName } from "../types.js";
 import {
   StepRunNotHeld,
@@ -230,6 +231,20 @@ export const STORAGE: {
      */
     blocks: { at: "blocks" },
   },
+  /**
+   * **The same two sites as `hierarchy` above**, in the sense `blocks`/`blocks`
+   * and `hierarchy`/`blocks` already are: one column each, written by two steps.
+   *
+   * Stage 4 writes the tree and a `PendingLabelsFile`; this step writes the tree
+   * again with the labels merged into its leaves, and the completed manifest
+   * beside it. Sharing a site does not share doneness — `hasArtefacts` asks the
+   * asking step's own run row first — and tests/shared-site-run-row-gate.test.ts
+   * is what pins that.
+   */
+  labels: {
+    labels: { at: "column", column: "labels" },
+    tree: { at: "column", column: "tree" },
+  },
   /* One column, like the arc — the manifest is a document, and the objects it
      names live in the `sources` bucket rather than in a table. There is
      deliberately no `raw_sources` row per image: that table exists so
@@ -311,6 +326,16 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
     excerpt: row.excerpt,
     publishedAt: row.publishedAt,
     note: row.note,
+    /* **The reader's own name for a file they uploaded**, and it is here so that
+       the two `Meta`s agree. `metaFrom` in src/store/pg.ts — the owner-facing
+       read — surfaces `raw_filename` as `Meta.filename`, and this rebuild did
+       not, so a pipeline stage's `Meta` and a reader's `Meta` for the same
+       article disagreed about a field. Nothing downstream asks yet, which is
+       exactly why it was worth fixing now: `cameOffADisk` on a pipeline-read
+       `Meta` would have quietly answered *no*, which is the same shape as the
+       `manifest.origin` bug this change already paid for once.
+       ⟨Sol, 2026-09-07⟩ docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md. */
+    filename: row.rawFilename,
     source: row.source as Meta["source"],
     method: row.extractMethod,
     pages: row.pages,
@@ -1296,6 +1321,91 @@ export async function writeArtefacts(
     assertStampAgrees(slug, step, kind, value, stamp);
   }
 
+  /**
+   * **A tree written with no labels manifest beside it is refused** — and it is
+   * refused up here, with the stamps, rather than beside the `nav_label_status`
+   * decision it belongs to.
+   *
+   * Same reason the loop above checks every part before any of them is written:
+   * a check interleaved with the writes would leave the earlier artefacts in
+   * place and roll back only because the caller's transaction happens to be
+   * one, which is true today and is not a thing to depend on.
+   *
+   * **What it is for.** It is what makes the `parts.labels` rule below a *rule*
+   * rather than a habit living inside one step's `run`. The next writer of this
+   * column is the deepening wave (docs/plans/260904d-deepen-fat-sections.md),
+   * which re-cuts the tree *without* running `hierarchy` — and would otherwise
+   * have to remember to invalidate the labels its new boundaries had just
+   * falsified. A label written to tell a paragraph apart from the wrong set of
+   * neighbours is wrong in the one way stage 4b exists to prevent
+   * (src/labels.ts § `structureHash`).
+   *
+   * So the store asks the question instead, and a writer that means it can
+   * always answer: hand over the manifest you are keeping, or a
+   * `PendingLabelsFile` saying the labels have to be bought again.
+   */
+  if (parts.tree !== undefined && parts.labels === undefined) {
+    throw new Error(
+      `${step} for "${slug}": a tree was written with no labels manifest beside it. ` +
+        `Re-cutting the tree can invalidate every navigation label written against it, ` +
+        `so a writer of "tree" must also write "labels" — the completed manifest it is ` +
+        `keeping, or a PendingLabelsFile (src/labels.ts) saying they must be bought again. ` +
+        `Nothing has been written.`,
+    );
+  }
+
+  /**
+   * **And the manifest it hands over has to be about the tree it hands over
+   * with it.**
+   *
+   * The refusal above asks the writer to *say something* about the labels. On
+   * its own that is weaker than the design claims, because a writer can answer
+   * with a `CompletedLabelsFile` describing some **other** tree and every later
+   * check agrees with it: `batches` is not null so the receipt is not deleted,
+   * the status goes to `ready`, and `STEPS.labels.stamp` compares the blocks,
+   * the prompt and the model — never the structure. The article then renders
+   * labels written to tell each paragraph apart from a set of neighbours it no
+   * longer has, which is the one failure stage 4b exists to prevent
+   * (src/labels.ts § `structureHash`). GPT Sol's F2 on stage 2a, 2026-09-06.
+   *
+   * **Both writers already satisfy it**, which is why this closes a hole rather
+   * than changing behaviour: `hierarchy` stamps `structureHash(structure)` beside
+   * `mergeLabels(structure, {})`, the `labels` step stamps the same hash (through
+   * `generateLabels`) beside `mergeLabels(structure, run.file.labels)`, and
+   * `mergeLabels` touches `navLabel` alone — which `structureHash` does not hash.
+   * Pinned as a property in tests/labels-batching.test.ts, end to end on the
+   * `hierarchy` writer in tests/hierarchy-write-guard.test.ts, and here in
+   * tests/labels-receipt-invalidation.test.ts.
+   *
+   * **Only of a `CompletedLabelsFile`.** A pending manifest makes no claim to be
+   * current — it deletes the receipt — so a stale `structureHash` on one has
+   * nothing to falsify.
+   *
+   * **And only when the manifest carries one**, which is the same rule
+   * `assertStampAgrees` follows a few lines above: an absent field is not a
+   * clash, it is the absence of a claim. The type requires `structureHash`, so
+   * no compiled writer can omit it; what can is a legacy artefact arriving
+   * through the deliberately shallow shape check — `data/constitution/labels.json`
+   * in the committed corpus is exactly that file, written before stage 4
+   * recorded any of the three hashes, and `copyArtefacts` puts it through here
+   * (tests/store-parity.test.ts § LEGACY_SLUG). Refusing it would turn a fixture
+   * the publish guard already handles correctly into a copy that cannot happen.
+   */
+  if (parts.tree !== undefined && parts.labels !== undefined && parts.labels.batches !== null) {
+    const declared: unknown = parts.labels.structureHash;
+    const actual = structureHash(parts.tree);
+    if (typeof declared === "string" && declared !== actual) {
+      throw new Error(
+        `${step} for "${slug}": the labels manifest was written against a different tree ` +
+          `than the one beside it (manifest structureHash ${declared}, tree ${actual}). ` +
+          `A label tells its paragraph apart from its neighbours, so labels carried onto ` +
+          `re-cut boundaries are wrong in the way src/labels.ts § structureHash describes — ` +
+          `write a PendingLabelsFile instead and let the labels step buy them again. ` +
+          `Nothing has been written.`,
+      );
+    }
+  }
+
   /* **The step-run row is locked here, before any artefact table is touched.**
      It used to be taken at the end, with the stamp, and the transaction made
      that *safe* — a late `StepRunNotHeld` rolls everything back. It was still
@@ -1323,27 +1433,86 @@ export async function writeArtefacts(
     }
   }
 
-  /* **Writing the labels sets where the labels are** — the one column in this
-     statement that is not an artefact, and the seam
-     docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md stage 2 will
-     edit rather than invent.
-     Here rather than in the step, because it has to be *atomic with the
-     artefact*: a revision that publishes saying `ready` over labels that did not
-     land is exactly the half-written state this one `UPDATE` exists to make
-     impossible, and a second write from the caller would have its own window.
-     Today `labels` is written by one step, `hierarchy`, which cannot finish
-     without producing a full set — `assertEveryBlockLabelled` and
-     `assertInsideCoverageFloor` are inside `generateLabels` — so `ready` is
-     simply true, and this changes nothing anybody can see. When the labels get
-     their own step, this is where the rule gains its second arm: the
-     `hierarchy` step writes a stamped-but-empty manifest and `pending`, and the
-     `labels` step writes the real one and `ready`.
-     `parts.labels` rather than `step === "hierarchy"`, so the rule follows the
-     artefact rather than the name of whoever wrote it — which is the whole
-     change stage 2 makes. `copyArtefacts` goes through here too, and a copied
-     labels file is a real one. */
+  /**
+   * **Where the labels are, and whether this revision still holds a receipt
+   * saying they are done.** Two writes, one rule, and the rule is keyed on the
+   * **artefact** rather than on the name of the step that wrote it.
+   *
+   * Here rather than in the step, because both halves have to be *atomic with
+   * the artefact*. A revision that publishes saying `ready` over labels that did
+   * not land is the half-written state this one `UPDATE` exists to make
+   * impossible, and a second write from the caller would have its own window.
+   *
+   * ## The three arms
+   *
+   * - **`batches === null`** — a `PendingLabelsFile` (src/labels.ts): the empty
+   *   manifest `hierarchy` writes now that the labels are their own step. The
+   *   status becomes `pending`, **and this revision's `labels` receipt is
+   *   deleted.**
+   * - **a real `batches`** — a run happened, so `ready`.
+   * - **a `tree` with no manifest beside it** — refused, up with the stamps,
+   *   before anything is written. So is a `tree` beside a *completed* manifest
+   *   whose `structureHash` is about some other tree, which is the same rule
+   *   asked of the answer rather than of its presence.
+   *
+   * ## Why the deletion is not optional
+   *
+   * `beginDraftIn` (src/store/pg-revisions.ts) copies **every**
+   * `revision_step_runs` row forward into a new draft. So a *second* ingest of
+   * an article that already has labels begins holding a `labels = done`
+   * receipt, and then `hierarchy` overwrites the labels column underneath it.
+   * Either the carried row's `input_hash` disagrees with the fresh manifest's
+   * `sourceHash` and `stampForStep` **throws** — inside `stepIsDone`, before
+   * `runStep`'s catch, so it escapes as a 409 and leaves the claim to recovery —
+   * or the two happen to agree and the labels step **skips**, leaving the empty
+   * manifest permanently. Deleting the row is the honest statement of the fact:
+   * the labels are not done in this revision. With no receipt, `has` is false
+   * and `stepIsDone` returns before it ever reads a stamp.
+   *
+   * ## It is also the structure-currency check
+   *
+   * Which is why this design carries no composite fingerprint anywhere. A re-cut
+   * tree can only come from a tree write; a tree write always carries a
+   * manifest; a pending manifest always invalidates. `StepStamp` has four fixed
+   * fields with no room for a `structureHash`, and it does not need one.
+   *
+   * `parts.labels` rather than `step === "hierarchy"`, so the rule follows the
+   * artefact rather than whoever wrote it. `copyArtefacts` goes through here
+   * too, and a copied manifest is judged by the same question as any other.
+   * ⟨Fable's arbitration, 2026-09-06:
+   * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md#fable-invalidation.⟩
+   */
   if (parts.labels !== undefined) {
-    columns = { ...columns, navLabelStatus: "ready" satisfies NavLabelStatus };
+    const unrun = parts.labels.batches === null;
+    /* **A pending manifest from the `labels` step itself is a contradiction, and
+       it is refused rather than obeyed.** The deletion below would take the very
+       row `lockStepRun` is holding for this write, and `recordStamp` would then
+       update nothing and say nothing — a silent success of exactly the kind
+       docs/reusable/silent-success.md is about, with the step's own receipt as
+       the casualty. Unreachable today: `generateLabels` cannot return a
+       `CompletedLabelsFile` with `batches: null`. It is here so that it stays
+       unreachable. */
+    if (unrun && step === "labels") {
+      throw new Error(
+        `labels for "${slug}": the labels step wrote a PENDING manifest (batches: null). ` +
+          `That would delete the very run row this write is holding. A labels run either ` +
+          `produces its batches or it fails; nothing has been written.`,
+      );
+    }
+    columns = {
+      ...columns,
+      navLabelStatus: (unrun ? "pending" : "ready") satisfies NavLabelStatus,
+    };
+    if (unrun) {
+      await tx
+        .delete(revisionStepRuns)
+        .where(
+          and(
+            eq(revisionStepRuns.revisionId, ref.revisionId),
+            eq(revisionStepRuns.stepName, "labels"),
+          ),
+        );
+    }
   }
 
   if (Object.keys(columns).length) {

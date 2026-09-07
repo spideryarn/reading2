@@ -14,7 +14,9 @@ not the same shape for every article.
   [`diagram-graph.test.ts`](../../tests/diagram-graph.test.ts) and
   [`scatter.test.ts`](../../tests/scatter.test.ts).
 - **The shell, the interaction and the paint** —
-  [`src/web/DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx),
+  [`src/web/DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx), with
+  [`src/web/modes/diagram/DiagramMode.tsx`](../../src/web/modes/diagram/DiagramMode.tsx)
+  as the mode controller that mounts it,
   `§ diagram mode` in [`src/web/styles/diagram.css`](../../src/web/styles/diagram.css) and
   `§ drift and trail` in [`src/web/styles/diagram-drift.css`](../../src/web/styles/diagram-drift.css).
 - **What the server computes for the last two** —
@@ -143,7 +145,8 @@ wrote in:
 >
 > — a reader, 2026-09-04 (SPIDERYARN-READING2-13)
 
-So Diagram's row in `MODES_UI` is `experimental: false` and each row of
+So Diagram is `experimental: false` in
+[`MODE_CATALOG`](../../src/mode-catalog.ts) and each row of
 `KIND_UI` ([`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx)) carries the flag
 instead — Sketch false, the other four true. The chip row draws the ones that
 are not experimental **plus whichever the URL names**, which is the mode bar's

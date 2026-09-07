@@ -132,6 +132,25 @@ The differences that matter to a reader:
   ([ingest-queue.md](ingest-queue.md)) — and the chunks the first attempt finished are read back
   rather than re-bought.
 - **A scan cannot be checked at all**, has no text layer to check against, and says so on the page.
+- **A figure leaves this stage as a caption and a marker, and the picture is fetched two stages
+  later.** `renderHtml` writes `<figure data-spya-pdf-figure="<ref>"><figcaption>…</figcaption></figure>`
+  and no `<img>` — because the model **cannot hand back the raster**, and because a final `/api/…`
+  URL written here would be *stripped* by the sanitiser in stage 3, which deliberately removes any
+  `src` resolving to our own API. (It does *see* the picture: the whole native PDF goes up as a
+  `file` part, embedded images and all. What it returns is text in a fixed record shape, so a
+  caption is the most a figure can come back as. An earlier draft of this bullet said the model
+  never sees the raster, which is a different and false claim — GPT Sol, 2026-09-07.) The marker is an opaque ref folding in the raw PDF's sha256, the page,
+  the figure's ordinal on that page and a digest of the caption, so it fails closed against a
+  document that has since changed; [`src/reserved.ts`](../../src/reserved.ts) is the one file
+  allowed to name it. Stage 4.5 reopens the PDF, extracts what it can and writes the outcome into
+  the manifest; the reading view turns marker plus manifest into an `<img>` after sanitising, and
+  puts a muted line under the caption when nothing was recovered.
+  [article-images.md](article-images.md) owns all of that. Until 2026-09-06 a PDF figure was a
+  caption and a blank space, on purpose and by v1's design, which Greg reasonably read as a bug —
+  [260906a](../plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md).
+- **A figure with no caption produces no element at all.** `renderHtml` returns early on empty text,
+  before it builds the `<figure>` — so there is no block to mark and no picture to recover. Worth
+  knowing before assuming every image in the PDF has somewhere to land.
 - **A word broken by a page break is mended from the text layer, not by a second model call.** The
   chunks are read in parallel and none of them sees over its own edge, so `dis-` / `patcher` arrives
   as two records and used to render as "dis patcher". `mendSeamHyphens` in
@@ -151,6 +170,55 @@ and Readability is the only caller that ever wanted it: not as something to fetc
 for relative links, which a PDF has not got. Asking for it up here made a missing URL the first
 thing an upload hit, three stages after the last thing that could have supplied one. The upload path
 is [ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf).
+
+## Stage 2 and the document with no address
+
+**Since 2026-09-07 the uploaded document can be a web page**, and moving `requireUrl` inside the
+HTML branch was not enough, because that is the branch it now arrives in
+([260907b](../plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md)). So the question the
+`extract` step asks is no longer *what kind is this* but *where did it come from*:
+
+```ts
+const url = cameFromAnUpload(manifest) ? null : requireUrl(ctx);
+```
+
+**And not `manifest.origin`, which is the field you would reach for.** It is set by `acquireUpload`
+and is **absent from every manifest read back**: `readRaw` in
+[`src/store/artifacts-pg.ts`](../../src/store/artifacts-pg.ts) rebuilds a manifest from columns,
+there is no `origin` column, and that adapter deliberately declines to invent one. This line was
+written as `manifest.origin === "upload"` first, passed every unit test, and failed on the first
+real upload — the tests asserted the manifest the step *returns* and the pipeline reads the one the
+store *keeps*. `cameFromAnUpload` ([`src/fetch.ts`](../../src/fetch.ts)) asks `filename` instead,
+which is the `raw_filename` column and does survive.
+
+`requireUrl` is still right for a fetched page — that one *must* have an address, and a missing one
+is our bug rather than the reader's. What is new is `null`, and it is `null` rather than a
+placeholder for the reason [fetching.md](fetching.md#not-everything-gets-fetched-rawmanifest-has-an-origin)
+already gives about `RawManifest`: a `file://` or an `upload://…` **reads as an address** to
+everything downstream — `meta.url`, the masthead, the metadata page, the dedup checks — and not one
+of them would have complained. `runExtract` therefore takes `url: string | null`, which omits
+JSDOM's `url` option and omits `meta.url`. `Meta.url` has been optional since uploads existed.
+
+**What it costs, said plainly rather than discovered.** `url` was doing exactly two jobs, and the
+one that matters here is being the base that relative links and relative `<img src>` resolve
+against. With no base they stay relative, so:
+
+- the prose is unaffected, which is what this app is for;
+- **relative images are dropped**, cleanly and by a rule that was already there —
+  [`src/assets.ts`](../../src/assets.ts) refuses a non-absolute URL and its own comment already
+  named this case, *"a relative URL after stage 2 means Readability had no base to resolve it
+  against"*;
+- relative hyperlinks in the prose go nowhere.
+
+So the class of article that comes out badly is **a saved page whose figures are all relative
+paths** — text intact, figures gone. That is named here rather than half-supported.
+
+**One case works for free, and it is the document's own doing.** A file carrying
+`<base href="https://…">` resolves correctly with no help from us, because that element *is* the
+document's base URL and `document.baseURI` is what Readability resolves against. Recovering an
+address from `<link rel="canonical">` would cover more saved pages and is **deliberately not
+done**: that URL would come out of untrusted file contents and flow into stage 4.5's image
+fetching, which is a security question worth answering on its own rather than as a rider.
 
 One thing it does **not** yet buy, and should: `fetchDocument` reports the URL it *ended up* at
 after redirects, and this stage still hands Readability the URL that was typed. Where those differ,

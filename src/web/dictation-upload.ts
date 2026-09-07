@@ -7,8 +7,11 @@
  * a string — which makes it the piece worth testing on its own.
  *
  * The server does the model call and assembles the vocabulary; see
- * [`src/transcribe.ts`](../transcribe.ts) for why a chat model rather than one
- * of OpenRouter's nineteen dedicated transcribers.
+ * [`src/transcribe.ts`](../transcribe.ts) for which model and why — a chat
+ * model until 2026-09-07, because the dedicated transcribers of 2026-08-27 had
+ * nowhere to put a vocabulary, and `openai/gpt-transcribe` since, because one
+ * of them turned out to have a `keywords` array after all. Nothing on this side
+ * changed: it is the same `Blob` in the same request either way.
  */
 import { MAX_AUDIO_BYTES, formatOf, tooLongMessage } from "../dictation-limits.js";
 import { apiFetch, failure } from "./lib/api.js";
@@ -129,13 +132,21 @@ export async function sendForTranscription(
          working the moment somebody rewords a message, which is the thing
          copy.md keeps freely rewritable on purpose.
 
-         **503 is the exception, and it is not a generic one.** The only 503
-         `POST /api/transcribe` returns is `[mic-not-set-up]` — this server has
-         no `OPENROUTER_API_KEY` (`src/transcribe.ts`). That is copy.md's `ours`
-         kind: nothing the reader can do, and a Retry button under it is the
-         expensive mistake that file names, where somebody presses five times
-         and concludes the app is broken. If this endpoint ever grows a
-         genuinely transient 503, this is the line to revisit. */
+         **503 is the exception, and it is not a generic one.** It used to be one
+         case and since 2026-09-07 it is a family, all of the same kind:
+         `[mic-not-set-up]` when this server has no `OPENROUTER_API_KEY`, and
+         every provider refusal that cannot succeed on a second attempt — a 400
+         the service found malformed, a 403 it declined, a 404 for a model this
+         app is no longer allowlisted for. `src/transcribe.ts` maps those
+         deliberately, using `canRetry` over copy.md's `FailureKind` rather than
+         a list of statuses.
+
+         All of them are copy.md's `ours`, `bug` or `blocked`: nothing the reader
+         can do, and a Retry button under any of them is the expensive mistake
+         that file names, where somebody presses five times and concludes the app
+         is broken. A retryable provider 503 arrives here as a **502** for
+         exactly that reason. If this endpoint ever grows a genuinely transient
+         503 of its own, this is the line to revisit. */
       const retryable = res.status === 429 || (res.status >= 500 && res.status !== 503);
       return { ok: false, message: err.message, retryable };
     }

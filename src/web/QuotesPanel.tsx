@@ -47,7 +47,7 @@
  */
 import { useState, type ReactElement } from "react";
 import { Info, Quote as QuoteIcon, RotateCcw, Sparkles, TriangleAlert } from "lucide-react";
-import type { BlockId, Job, Quote, QuoteDrops } from "../types.js";
+import type { BlockId, Job, Quote, QuoteDrops, QuoteTier } from "../types.js";
 import type { QuoteRank } from "./params.js";
 import type { UseQuotes } from "./useQuotes.js";
 import type { StepFailure } from "./useStepJob.js";
@@ -244,6 +244,36 @@ export function priorityOf(quote: Quote): number | undefined {
     (n): n is number => n !== undefined,
   );
   return scores.length === 0 ? undefined : Math.max(...scores);
+}
+
+/**
+ * The bar the heavy stroke starts at, and it is `QUOTE_BAR_DEFAULT` **on
+ * purpose**: at the bar's resting position every quote on the page is heavy, and
+ * the light ones are exactly what dragging the bar down reveals. Two controls
+ * telling one story rather than two.
+ */
+export const QUOTE_HEAVY_AT = QUOTE_BAR_DEFAULT;
+
+/**
+ * How heavily this quote is drawn in the prose — the priority the reader can see
+ * without opening the panel. docs/project/quotes.md § The stroke.
+ *
+ * **`priorityOf`, not `importance`.** Greg asked for *"an indicator of the Quote
+ * priority"*, and `priorityOf` is what `?bar=` already thresholds on. Driving the
+ * stroke from `importance` alone would let the two disagree — raising the bar
+ * could hide a heavy stroke and leave a light one on the page, which reads as a
+ * bug in the feature whose whole job is to say what matters. On this the bar and
+ * the stroke are the same statement.
+ *
+ * **A quote with no score at all is light, not absent.** It has earned no
+ * emphasis, but it must still be drawn: a quote scored on neither axis survives
+ * every position of the bar (docs/project/quotes.md § The bar hides what is
+ * below it), so an unmarked one would be a row in the panel with nothing in the
+ * prose — the precise failure `threshold.ts` exists to prevent.
+ */
+export function quoteTier(quote: Quote): QuoteTier {
+  const priority = priorityOf(quote);
+  return priority !== undefined && priority >= QUOTE_HEAVY_AT ? 2 : 1;
 }
 
 /**

@@ -15,6 +15,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { refuseUntraceableImportsInSource } from "./ts-ast.js";
+
 export const ROOT = path.resolve(import.meta.dirname, "..", "..");
 
 /**
@@ -24,9 +26,17 @@ export const ROOT = path.resolve(import.meta.dirname, "..", "..");
  * `type X` both erase, so neither is followed. Everything else is — including
  * `export … from`, a bare side-effect `import "…"`, and a dynamic `import("…")`,
  * because all three execute the module.
+ *
+ * A dynamic `import()` whose specifier is **not** a literal is refused rather
+ * than dropped: the walks built on this ask "is anything server-only reachable
+ * from the public door", and an edge with no name answers that question `no`
+ * every time. GPT Sol found the same hole in three other graph guards on
+ * 2026-09-06 (F21) — the argument, and the repo-wide scan saying nothing
+ * legitimate is in the way, are in [`ts-ast.ts`](ts-ast.ts).
  */
 export function runtimeImportsOf(file: string): string[] {
   const text = readFileSync(file, "utf8");
+  refuseUntraceableImportsInSource(text, path.relative(ROOT, file), "tests/helpers/import-graph.ts");
   const found: string[] = [];
   for (const m of text.matchAll(/(?:^|\n)\s*(?:import|export)\s+([^;'"]*?)from\s*["']([^"']+)["']/g)) {
     const clause = (m[1] ?? "").trim();

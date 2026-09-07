@@ -168,7 +168,7 @@ The **server predicts the same rewrite** — `readMode` in [read-address.ts](../
 [last-view.ts](../../src/web/last-view.ts): a restore runs after the rewrite, so a stored `text=0`
 would walk straight past it.
 
-Deleting the parameters outright would save little — `fitView` still needs a three-state answer, and App.tsx puts
+Deleting the parameters outright would save little — `fitView` still needs a three-state answer, and `Reader` puts
 `?spine=` back to *absent* when Search or Ideas opens for a reader who had hidden the rail — and it
 is a URL-contract change, which is a different kind of change from taking a button off a bar. So
 this is now a parameter with no writer, which is a fair description of a **link format**.
@@ -234,6 +234,20 @@ unrecognised-value rule landing it on a default that happened to be the view it 
 
 What is left of that rule is still true and still worth having: **an unrecognised mode lands on the
 default**, so a link from a future version degrades to the article rather than to an error page.
+
+**And `?mode=` decides which passages are marked, totally.** Five bands publish `Found[]` up to
+`Reader` — Ideas, Quotes, Timeline, Referee and Search — and which of those five slots the prose,
+the ring and the rail are drawn from is `selectPassages` in
+[`reader/passages.ts`](../../src/web/reader/passages.ts): one function, exhaustive over `Mode` with a
+`never` default, returning the marks and the open key **together** so they cannot come from
+different bands. The nine modes with no passage producer get the shared empty constant by name. It
+was two parallel ternary chains inside `Reader` until 2026-09-06, and both ended in Search's slot —
+so `?mode=plain` was drawing Search's, correct only for as long as the outgoing band cleared it on
+the way out (earlier the same day that clear became a layout cleanup, which is what stopped it
+painting a frame). A fifteenth mode is now a compile error there rather than another inheritor
+([new-mode.md](new-mode.md),
+[260906c](../plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md)
+§ Stage 4b).
 
 Modes push history, because a mode is where you are rather than a glance. Each
 carries its own parameters — `?thread=` for the open conversation, `?term=` for the selected glossary
@@ -351,7 +365,9 @@ across the article and may well want it undone. Clicking a gist is the original 
 question out of the comments drawer is another, added 2026-09-06
 ([comments.md § Opening a question is a jump](comments.md#opening-is-a-jump)) — and the dialog's
 Prev/Next deliberately are *not*, because stepping through twenty questions must not cost twenty
-presses of Back. The override is per-call in `App.tsx`, not in the parser.
+presses of Back. The override is per-call in
+[`useReadingPosition.ts`](../../src/web/reader/useReadingPosition.ts) § `jumpTo` — the one
+scroll that passes `history: "push"` — and not in the parser.
 
 #### The pushed entry says where you came from
 
@@ -460,7 +476,7 @@ piece was something to keep a copy of it and put it back. So: **the query string
 `localStorage` under the slug as the reader moves, and put back when they open that article at an
 address that says nothing.** [`src/web/last-view.ts`](../../src/web/last-view.ts), pinned in
 [`tests/last-view.test.ts`](../../tests/last-view.test.ts), wired into `ArticlePage`
-([`App.tsx`](../../src/web/App.tsx)). Per-device, no server, no schema — which is what he said was
+([`src/web/article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx)). Per-device, no server, no schema — which is what he said was
 fine.
 
 **This does not make `localStorage` a second source of truth**, which is what the rule at the top of
@@ -597,7 +613,7 @@ Two things about *when*, both worth knowing before you touch it:
 
 The rule itself is `arrivalTarget` in [`scroll.ts`](../../src/web/scroll.ts) — pure, and pinned in
 [`tests/scroll.test.ts`](../../tests/scroll.test.ts). The wiring is one effect in
-[`App.tsx`](../../src/web/App.tsx), beside `goToComment`.
+[`reader/Reader.tsx`](../../src/web/reader/Reader.tsx), beside `goToComment`.
 
 We do **not** rewrite `?at=` to match. The scroll moves the page, the position tracker notices, and
 the URL catches up 300ms later exactly as it does for a wheel — which is the same arrangement

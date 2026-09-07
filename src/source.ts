@@ -56,7 +56,7 @@ import {
   type ReaderFacingFailure,
   UPLOAD_CHECKSUM,
   UPLOAD_MISSING,
-  UPLOAD_NOT_A_PDF,
+  UPLOAD_UNREADABLE_FILE,
   UPLOAD_TOO_BIG,
   UPLOAD_TOO_MANY_PAGES,
 } from "./messages.js";
@@ -356,6 +356,17 @@ export function cleanFilename(raw: string): string | null {
  */
 export type RejectReason =
   | "too-big"
+  /**
+   * **The bytes are neither a PDF nor a web page** — the name is older than the
+   * meaning, and stays.
+   *
+   * A PDF was the only legal upload until 2026-09-07
+   * (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md). These strings go
+   * into `uploads.reason`, which is `text` with no check constraint, so a new
+   * spelling would need no migration — and would still orphan every row already
+   * written under this one, in exchange for nothing a reader ever sees. The
+   * sentence is `UPLOAD_UNREADABLE_FILE` and it says the true thing.
+   */
   | "not-a-pdf"
   | "checksum-mismatch"
   | "missing"
@@ -363,7 +374,7 @@ export type RejectReason =
 
 const REJECTIONS: Record<RejectReason, ReaderFacingFailure> = {
   "too-big": UPLOAD_TOO_BIG,
-  "not-a-pdf": UPLOAD_NOT_A_PDF,
+  "not-a-pdf": UPLOAD_UNREADABLE_FILE,
   "checksum-mismatch": UPLOAD_CHECKSUM,
   missing: UPLOAD_MISSING,
   /**

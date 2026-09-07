@@ -149,6 +149,52 @@ Three things about that number are deliberate:
   ([browser-testing.md](browser-testing.md)) — the number was there to be read only because the
   panel had been made to carry `data-ctx-lines` in the first place.
 
+### The panel's `top` moves for two reasons, and only one of them is animated
+
+Because the panel is placed by JavaScript, it is the one thing under the controls bar that CSS does
+not move — everything else reads `--bar-bottom`. So when the bar slides out of the way it needs a
+`transition: top` of its own, or it snaps 44px while the spine beside it glides.
+
+**It must not have that transition at any other time**, and that is the whole of
+[`column-context.css`](../../src/web/styles/column-context.css) § the panels and the measuring stick:
+
+| why `top` changes | when | wanted |
+|---|---|---|
+| the sticky head settling out from under the masthead | the first ~150px of scroll, every frame | **instant** — a transition here is a 180ms lag behind the column the panel covers |
+| the bar hiding or coming back | only past `BAR_KEEP_UNTIL` (160px) | the 180ms slide |
+
+**Under continuous scrolling the two cannot overlap**, which is what makes `:root[data-bar-moving]`
+an honest scope rather than an approximation: `stepBar` refuses to hide the bar inside the first
+160px, and the head has finished settling before then, so any gesture arriving frame by frame has
+left the first case before it can enter the second. The attribute is set by
+[`scroll.ts`](../../src/web/scroll.ts) on the frame it flips `data-bars`, and cleared on the bar's
+own `transitionend` **with a timer behind it** — a transition that never starts never ends, and a
+latched attribute is the lag above, permanently.
+
+**One frame that jumps more than 160px from the top does combine them**, and the first version of
+this said it could not. Measured in a browser, 2026-09-07: `scrollTo(0, 400)` from the top hides the
+bar on the same frame the panel is still measured at its unsettled position, so it glides the whole
+244px instead of snapping to 44 and sliding 44 → 0. A scrollbar drag or a hard fling can do it, an
+ordinary scroll cannot, and `markOurScroll` already covers every jump the app itself starts. Left
+alone: the panel arrives in the right place either way, the overshoot is bounded by the masthead's
+height, and closing it would mean teaching `scroll.ts` whether another module's measurement had
+settled.
+
+Two smaller things came with it, and both were live defects rather than consequences:
+
+- **`useColumnContext` watches `data-bars`.** The measurement used to be taken only on scroll, so a
+  reader who *stopped scrolling on the frame the bar gave way* got no further sample and their panels
+  stayed up to 44px out of place. Two rAF callbacks in the same frame cannot be ordered by hoping.
+- **`place()` centres the list on `rect.top`, the destination**, not on the panel's live rect, which
+  during a slide is an interpolated value. Nothing re-placed the list when the panel arrived, so the
+  current entry finished off the 40% line and stayed there.
+
+Both were reachable before this: a **landscape phone** at 844×390 matches the height half of
+§ a small device while 844 is past the 732 a gist column needs, so it has had a panel *and* a hiding
+bar all along. GPT Sol found all three reviewing
+[260907b](../plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md), which is what took
+the hiding bar to every width.
+
 **The fisheye stays a matter of size, not of length.** Every landmark on a level gets the same
 number of lines; what varies with distance is the type — the four tiers' sizes, now carried into the
 gist as well as the title. Giving `near` more lines than `far` would have meant several entries
