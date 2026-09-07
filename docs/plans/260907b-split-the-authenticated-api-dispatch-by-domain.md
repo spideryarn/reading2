@@ -24,7 +24,7 @@ The survey ran on the evening of 2026-09-06; 51 commits landed overnight. Re-mea
 
 | Survey target | State on 2026-09-07 |
 |---|---|
-| `src/web/styles.css` | **Solved.** The A10 style-ownership worktree landed. Now a 2.7 KB manifest of `@import`s over ~20 files in `src/web/styles/`. |
+| `src/web/styles.css` | **Solved.** The A10 style-ownership worktree landed. Now a 2.7 KB manifest of `@import`s over 37 files in `src/web/styles/` — 16,624 lines in all, so nothing shrank; it gained owners. |
 | `src/web/App.tsx` | **Not ours, and finished but unpushed.** `.claude/worktrees/a1-a3-reader-composition` is 8 commits ahead of `dev` with `App.tsx` down to **407 lines**; its tmux session was mid-task while this was written. Somebody should push it. Nobody else should touch it. |
 | `src/routes.ts` | **Unclaimed.** The finding is one function inside it. |
 
@@ -135,14 +135,23 @@ Numbered so the review and the implementation briefs can quote them.
 7. **[REGEX] Reject `global` and `sticky` patterns at registration.** All 51 literals currently have
    no flags and are freshly constructed per request, so hoisting them to module scope is safe today.
    A future `/g` would make matching depend on the previous request via `lastIndex`.
-8. **[TEXT] Four tests read `src/routes.ts` as a string, and they fail silently.**
+8. **[TEXT] One test reads `src/routes.ts` as a string and fails silently — and three others
+   already learned that lesson.** Corrected twice: by Sol (P2-R4) and then by stage 2 building it.
    `tests/cacheable-covers-artefact-routes.test.ts:105–140` derives every artefact route by grepping
-   for `const (\w+) = /^\/api\/<kind>\/([\w.%-]+)$/.exec(path)` and then for the literal
-   `if (<binding> && req.method === "GET")`. A rewrite deletes both halves of what it greps for, and
-   a missed match is **`filter`ed out rather than asserted** — the exact
-   [silent-success](../reusable/silent-success.md) class, and this test already has a documented
-   instance of it. Same shape at `owner-isolation.test.ts:1299`, `referee-scan-route.test.ts:336`
-   (which does it correctly, with a loud empty-match control) and `source-store.test.ts:67`.
+   for `const (\w+) = /^\/api\/<kind>\/([\w.%-]+)$/.exec(path)` and then for
+   `if (<binding> && req.method === "GET")`; a miss was **`filter`ed out rather than asserted** — the
+   [silent-success](../reusable/silent-success.md) class. `owner-isolation.test.ts:1306`,
+   `source-store.test.ts:84` and `referee-scan-route.test.ts:342` each already assert their
+   extraction was non-empty and need nothing.
+
+   **The hazard is the declaration *form*, not the binding name**, which is the opposite of what this
+   plan first said. A pure rename (`timeline` → `timelineRoute`) leaves the test green, because
+   `bindingOf` captures the name out of the declaration rather than assuming it — the 2026-09-02 fix
+   the file's own header describes. What goes quiet is the declaration changing shape. Measured in
+   stage 2: rewriting one matcher as `TIMELINE_PATTERN.exec(path)` — **exactly the module-scope
+   hoist constraint 7 contemplates for stage 3** — dropped that route from the test's universe, ran
+   19 tests instead of 20, and left both pre-existing controls green. Stage 2 closed it; stage 3 must
+   not reopen it.
 9. **[ISOLATION]** `tests/owner-isolation.test.ts` cuts the dispatcher's *anonymous region* and
    asserts it names no table and imports nothing outside a short pinned list. A rewrite must not
    widen it.
@@ -263,8 +272,11 @@ accepted method; feed it syntax the parser does not understand. **Not** the libr
 not "reorder two overlapping guards" — no two guards accept the same method/path pair, so any such
 swap is an equivalent mutation and would pin an implementation detail rather than behaviour.
 
-**Stage 2 — fix the one source-text test that is genuinely silent.** Narrowed by Sol (P2-R4) from
-four files to one. `tests/cacheable-covers-artefact-routes.test.ts:132` filters away a `null`
+**Stage 2 — fix the one source-text test that is genuinely silent. ✅ Landed, `3fd9e5c1`.**
+Narrowed by Sol (P2-R4) from four files to one. `ROUTELESS_KINDS` names the eight `SHAPE` kinds that
+are pipeline stages rather than URLs, and one new assertion requires the unresolved kinds to be
+*exactly* that set — so a lost route is named and a gained one has to leave the list deliberately.
+Both directions were watched red; see constraint 8 for what the mutation revealed. `tests/cacheable-covers-artefact-routes.test.ts:132` filters away a `null`
 binding, so a route that stops matching vanishes from the test's universe. The other three
 (`owner-isolation.test.ts:1306`, `referee-scan-route.test.ts:342`, `source-store.test.ts:84`)
 already assert their extraction was non-empty and need nothing. `referee-scan-route`'s exact source
