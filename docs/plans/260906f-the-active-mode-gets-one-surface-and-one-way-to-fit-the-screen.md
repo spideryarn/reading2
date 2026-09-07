@@ -49,7 +49,7 @@ Shipping unverified viewport geometry would be inventing a bug and a fix for it 
 | 2 step 0 — capture every band before touching it | **Done**, on `dev` (`e4952ecb`), committed on its own so the ordering is provable. |
 | 2 — the remaining eleven bands | **Done and committed** (`af589082`), two review rounds, F25–F33. Merged with `origin/dev` at `285437a8`; the collision below is **resolved**. |
 | 4 step 1 — the diagnostic | **Done**, on `dev` (`2dfa5235`). |
-| 3 — A6, who owns Escape | **Inventory done and committed**; the implementation is **not started**. |
+| 3 — A6, who owns Escape | **Done**, on `dev` (`3f2b37ad`). Two review rounds, eleven findings, all accepted. 30 one-press tests over real components; pairs 12 and 18 renounced with the reasoning written down. |
 | 4 — the fit itself | **Blocked**, and correctly so: it needs a trace from a real iPhone, which no machine here can produce. **A5 is therefore incomplete**, and the fit is not delivered. |
 
 **The collision with A1, and how it was settled.** A1

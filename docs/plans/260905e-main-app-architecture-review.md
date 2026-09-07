@@ -664,12 +664,17 @@ both would apply to any future schema change here.
   (`2dfa5235`). **Until a trace arrives, no viewport-fit arithmetic is chosen and A5 is incomplete.**
 - [ ] Check true modals separately from modeless annotations. Tab, Shift-Tab, Escape, click-away
   and return focus must follow the declared contract, including nested help/lightbox/tooltips. —
-  **the Escape half is inventoried and in build**;
-  [the escape inventory](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-escape-inventory.md)
-  is 15 surfaces and 18 reachable pairs, and its organising finding is that Escape is **five tiers in
-  a fixed order**, a surface's tier being the whole of its authority because nothing anywhere reads a
-  z-index or another surface's state. The focus/restore half was A2's and is done. Nine test files
-  mention Escape today and **every one paints a single surface**, which is the gap being closed.
+  **the Escape half is built; Tab, Shift-Tab and click-away are not audited.**
+  [The escape inventory](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-escape-inventory.md)
+  is 16 surfaces and 18 reachable pairs, and its organising finding is that Escape is **tiers in a
+  fixed order**, a surface's tier being the whole of its authority because nothing anywhere reads a
+  z-index or another surface's state. One press now closes one surface, with `tests/one-escape-closes-one-surface.test.tsx`
+  holding 30 of them over real components — where before, nine test files mentioned Escape and
+  **every one painted a single surface**. Two pairs are **renounced rather than fixed** (12 and 18),
+  because reaching them needs registration-order ownership, which § A6 forbids; the limit on that is
+  written down — no surface that can lose a reader's unsaved words is on the list. The focus/restore
+  half was A2's and is done. **Still open**: Tab and Shift-Tab order, and click-away, across the
+  nested help/lightbox/tooltip cases — Escape was the half with a reproduced loss behind it.
 - [ ] Migrate remaining surfaces in batches, including visitor/empty/error variants. Delete the
   replaced geometry rules after checking all callers, retaining feature-specific scrolling. —
   **migration done, deletion not.** All twelve bands are migrated, visitor and empty variants
