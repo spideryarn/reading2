@@ -1,7 +1,7 @@
 # Who owns Escape: the inventory
 
 Step 1 of **Stage 3** of
-[the active mode gets one surface](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md#stage-3--a6-who-owns-escape),
+[the active mode gets one surface](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md#stage-3-a6-who-owns-escape),
 which is item A6 of [the main-app architecture review](260905e-main-app-architecture-review.md).
 No code was changed to produce it.
 

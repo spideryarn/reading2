@@ -255,10 +255,27 @@ describe("where the band puts it", () => {
   });
 
   it("puts the reopen button in the mode header", () => {
-    const head = app.slice(
-      app.indexOf('className="band-head"'),
-      app.indexOf('className="ref-brief"'),
+    /* Sliced from the band's own opening tag rather than from
+       `className="band-head"`, because that string is no longer in `App.tsx`:
+       Referee's band went through `src/web/ModeSurface.tsx` on 2026-09-07 (item
+       A5), so the header row is a `head={…}` prop and the `.band-head` class is
+       written by the surface. The header is still the first thing inside the
+       band and still holds the button — the anchor moved, not the markup.
+
+       **Both endpoints are checked, and the search is for the tag rather than
+       the name.** The first repair of this test did neither, and was worse than
+       what it replaced: the migration comment now sitting inside this slice
+       contains the words `RefereeHowButton`, so `includes("RefereeHowButton")`
+       was satisfied by prose and stayed green with the button deleted. An
+       unchecked end anchor has the same shape — `slice(bandAt, -1)` reads most
+       of the file and finds the comment anyway. GPT Sol F31, 2026-09-07. */
+    const bandAt = app.indexOf('feature="gloss referee"');
+    const briefAt = app.indexOf('className="ref-brief"');
+    expect(bandAt, "no Referee band in App.tsx at all").toBeGreaterThan(-1);
+    expect(briefAt, "no `.ref-brief` after the band, so this slice is not the header").toBeGreaterThan(
+      bandAt,
     );
-    expect(head.includes("RefereeHowButton"), "there is no way back to the card").toBe(true);
+    const head = app.slice(bandAt, briefAt);
+    expect(head.includes("<RefereeHowButton"), "there is no way back to the card").toBe(true);
   });
 });

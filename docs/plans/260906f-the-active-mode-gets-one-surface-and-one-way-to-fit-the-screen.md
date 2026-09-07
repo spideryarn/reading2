@@ -262,12 +262,18 @@ and `npm run check` green.
 2. **`FeatureBoundary`'s fallback stays raw**, with a test that makes `ModeSurface` throw and asserts
    the feature fallback, the prose and the dock survive while `AppBoundary`'s fallback does not
    appear. That test is what stops a later tidy-up from re-introducing Sol F4.
-3. Delete the replaced markup after checking callers. The five `preview-*.tsx` files hand-copy band
-   markup and are not migrated; they are on the sweep list, not the migration list.
+3. Delete the replaced markup after checking callers. **Two** `preview-*.tsx` files hand-copy band
+   markup and are not migrated — `preview-sketch.tsx` (a raw `<aside>`) and `preview-chat-markdown.tsx`
+   (a raw `<div>`); they are on the sweep list, not the migration list. An earlier count of five was
+   wrong: `preview-colour`, `preview-timeline` and `preview-diagram-wait` mount the *real* panels and
+   only name `.mode-band` in a comment or an override rule, and `preview-illustrated` tests a dialog
+   with no band at all. GPT Sol F29, 2026-09-07. `DesignPage.tsx`'s band is a third exception of the
+   same kind — a specimen on `/design`, not a product mode band.
 
 Done when: every healthy product mode band and `VisitorBand` is emitted by `ModeSurface`;
-`FeatureBoundary` remains **the sole production raw `.mode-band`**, as the circuit breaker; the five
-preview copies remain documented exceptions; migrated variants match their baseline DOM and geometry
+`FeatureBoundary` remains **the sole production raw `.mode-band`**, as the circuit breaker; the two
+preview copies (`preview-sketch`, `preview-chat-markdown`) and the `/design` specimen remain
+documented exceptions; migrated variants match their baseline DOM and geometry
 (by `lastChild.bottom`, not a height sum); and changing the fallback to use `ModeSurface` makes the
 circuit-breaker test fail.
 
@@ -540,3 +546,58 @@ Sol also confirmed, established, that **no remaining band needs an extra wrapper
 Visitor, Summary and Outline omit `head`, Outline uses the existing ref and passthrough, the other
 fixed header rows fit `head`, and the six pinned rows fit `foot`. So the interface is stage-2 ready;
 what stage 2 still owes is the per-band evidence, which is now its step 0.
+
+### Stage 2 code, round 1 — GPT Sol, 2026-09-07
+
+Verdict: **refuse as written**, no P0 or P1, and "the runtime migration itself is correct".
+[The review](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-review-stage2-sol.md) ·
+[the prompt](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-review-stage2-prompt.md).
+
+Sol confirmed, established: all eight fragment sites preserve their prior DOM; **all six footer
+guards are exact conjunctions** of their former outer and inner guards; Debate's portal renders under
+`document.body` so `.dbt-again` stays after `.dbt-scroll`; Outline's ref still reaches the `<aside>`
+and `data-outline-rung` survives; Referee's two regex slices remain equally strong and fail
+non-vacuously; and the circuit-breaker test genuinely exercises the second-throw path. Every finding
+is about the stage's **evidence**, not its behaviour — which is the right place for them to be.
+
+| ID | Finding | Disposition |
+|----|---------|-------------|
+| F25 | Quiz's own trap is not pinned: the oracle always supplies `subMode`, and `tests/quiz-panel.test.tsx` omits it but never looks at `.band-head` — so `head={subMode}` deletes the row with the whole suite green | **Accepted, and the best finding of the round**, because it is the regression this stage's headline fix exists to prevent, left unguarded. `QUIZ_NO_SUBMODE` now pins it. Watched: with `head={subMode}`, that one test goes red and the other 31 stay green — exactly as described. The first attempt used a default parameter and caught *itself*: `mountQuiz(QUIZ, undefined)` selects the default, so it pinned the wrong shape. |
+| F26 | `new-mode.md` turns a migration exception into a universal rule, and would tell a future mode whose header genuinely belongs in one state only to manufacture a blank row in every other | **Accepted.** My wording, and it contradicted the very next rule in the same file. Rewritten as a question rather than an instruction: a row that must persist while its contents come and go takes a fragment; a header that should not exist takes the conditional. Also corrected there — it is four bands that empty *while loading*, plus Diagram's ordinary state, not five loading bands. |
+| F27 | The circuit-breaker test is untracked, and so is the review prompt — so the protection this stage claims would not have shipped | **Accepted, and it is the second time I have misdeclared untracked files to a review** (Sol caught the same thing on the round-2 plan prompt). Both are in this commit. An untracked test protects nothing, and "untracked: nothing" is a claim to check rather than assert. |
+| F28 | Diagram's fragment rationale overclaims: a conditional `head` would not undo the 2026-08-30 fix, because the caveat still builds a `.band-head` whenever it exists — it removes only the *empty* row | **Accepted.** The fragment is still right, for the plainer reason that this stage preserves the DOM the band already had. Corrected in the file. |
+| F29 | The raw-band inventory is stale: two preview files hand-copy band markup, not five, and the oracle's stage-2 describe still says the bands "have not migrated yet" | **Accepted.** `preview-colour`, `preview-timeline` and `preview-diagram-wait` mount the real panels and only name `.mode-band` in a comment or an override; `preview-illustrated` has no band. Corrected in the plan, the describe and `preview-diagram-wait`'s own comment. |
+
+**Three source-reading tests broke on this migration and all three were right to.** `referee-band-fits`
+slices `App.tsx` by regex in two places, and `referee-how-card` anchors on `className="band-head"`,
+which `ModeSurface` now writes instead of `App.tsx`. Each anchor was updated to the new form with the
+reason recorded beside it.
+
+### Stage 2 code, round 2 — GPT Sol, 2026-09-07
+
+Verdict: **refuse as written**, no P0 or P1, "the runtime migration remains correct". Discovery closes
+here — two rounds, then settle.
+[The review](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-review-stage2-sol-2.md) ·
+[the prompt](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-review-stage2-prompt-2.md).
+**All of F30–F33 are accepted**; nothing is overruled. F25, F26 and F28's primary claim were judged
+fixed, and the two `referee-band-fits` slices sound.
+
+| ID | Finding | Disposition |
+|----|---------|-------------|
+| F30 | F27 is **still** unfixed — the circuit-breaker test and both round-1 review files are still untracked, so the protection the stage claims would not ship | **Accepted, and this is the third time.** I asserted in the round-2 prompt that they were "tracked and in the pending commit"; they were not, because I had written the sentence instead of running `git add`. Fixed for real, and verified with `git ls-files` rather than by claim. The lesson is narrow and worth keeping: *a statement about the repository is a command's output, never a recollection.* |
+| F31 | The repaired `referee-how-card` assertion passes with the button deleted — the migration comment I added **inside the slice** contains the words `RefereeHowButton`, and the end anchor is unchecked so a missing `.ref-brief` reads most of the file | **Accepted. The worst finding of the stage, and I introduced it while fixing F29's neighbour.** A repair that makes a test pass on its own prose is worse than the break it replaced. Now asserts `briefAt > bandAt` and searches for `"<RefereeHowButton"`; watched red with the button removed, where the previous version stayed green. |
+| F32 | The F29 inventory correction is incomplete: the acceptance criterion still says "the five preview copies", and the oracle still says nineteen shapes and "the eleven bands the migration has not touched yet" | **Accepted.** Corrected in all three places. A correction that fixes the paragraph and not the checklist eight lines below it is the same class of error as the thing it was correcting. |
+| F33 | Three comments still assert what the code does not do — including **my own justification for duplicating the `referee-band-fits` regex**, which claimed a shared stale slice would pass vacuously; it would not, because `toContain` on an `undefined` match throws | **Accepted, and the middle one is mine twice over**: I wrote the wrong reason for a decision that was right anyway. The duplication makes a failure *local*; it is not what prevents a vacuous pass — the assertions naming real tags are. Also fixed: Quiz's helper pointing at a test that does not guard its case, and Diagram's surviving claim that an `h2` pushes a third child, when that `h2` went on 2026-09-05. |
+
+On the oracle's sufficiency Sol's answer is **reasoned, and I am taking it**: it is enough as the
+standing guard for the `ModeSurface` seam — root, exact class and name, attribute names, wrapper and
+sibling structure, ordered direct children, loose text, header contents — and it is **not** a full-DOM
+oracle. It cannot see descendants below a non-header direct child, attribute values on children, a
+branch no fixture mounts, portals, or geometry. That is the right boundary for what this seam is, and
+`new-mode.md` now says "surface shape" rather than "every band's markup", which was mine and overstated
+it.
+
+Sol also judged, reasoned, that this stage neither complicates nor helps A6, and that **Escape
+ownership must not move into `ModeSurface`** — it cannot know whether a tooltip, a drawer, a native
+dialog or an editor currently owns the press. That matches the inventory's tier model and stage 3
+keeps ownership local.

@@ -56,6 +56,7 @@ import { ScoreBars } from "./ScoreBars.js";
 import { Tooltip } from "./Tooltip.js";
 import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
+import { ModeSurface } from "./ModeSurface.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
 import { applyThreshold, hiddenNote, type ThresholdResult } from "./threshold.js";
@@ -542,26 +543,42 @@ export function QuotesPanel({
   );
 
   return (
-    <aside className="mode-band quotes" aria-label="Quotes">
-      <div className="band-head">
-        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
-            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-            stays for the count below it. */}
-        {quotes && (
-          <span className="quotes-count">
-            {quotes.quotes.length} {quotes.quotes.length === 1 ? "quote" : "quotes"}
-          </span>
-        )}
-        {/* Provenance about the owner's own run, so a visitor sees none of it:
-            `profileHash` never leaves the server (src/public-types.ts). */}
-        {quotes && owner && (
-          <WrittenForYou
-            written={owner.profiled}
-            changed={owner.profileChanged}
-            slug={owner.slug}
-          />
-        )}
-      </div>
+    <ModeSurface
+      label="Quotes"
+      feature="quotes"
+      /* **A fragment, so the row is there before the quotes are.** Both
+          children are gated on `quotes`; `head={quotes && …}` would pass the
+          surface `null` while the list loads and no `.band-head` would be
+          drawn at all. */
+      head={
+        <>
+          {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+              docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+              stays for the count below it. */}
+          {quotes && (
+            <span className="quotes-count">
+              {quotes.quotes.length} {quotes.quotes.length === 1 ? "quote" : "quotes"}
+            </span>
+          )}
+          {/* Provenance about the owner's own run, so a visitor sees none of it:
+              `profileHash` never leaves the server (src/public-types.ts). */}
+          {quotes && owner && (
+            <WrittenForYou
+              written={owner.profiled}
+              changed={owner.profileChanged}
+              slug={owner.slug}
+            />
+          )}
+        </>
+      }
+      /* Pinned under the list rather than at the end of it. Same guard it had
+          as a trailing child of the band. */
+      foot={
+        quotes && (owner === null || owner.status === "ready") && owner?.quotes ? (
+          <Foot rerun={rerun} />
+        ) : null
+      }
+    >
 
       {quotes && quotes.quotes.length > 1 && (
         <RankBar quotes={all} rank={rank} onRank={onRank} />
@@ -670,11 +687,9 @@ export function QuotesPanel({
               ))}
             </ol>
           </div>
-
-          {owner?.quotes && <Foot rerun={rerun} />}
         </>
       )}
-    </aside>
+    </ModeSurface>
   );
 }
 
