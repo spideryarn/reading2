@@ -276,7 +276,16 @@ swap is an equivalent mutation and would pin an implementation detail rather tha
 Narrowed by Sol (P2-R4) from four files to one. `ROUTELESS_KINDS` names the eight `SHAPE` kinds that
 are pipeline stages rather than URLs, and one new assertion requires the unresolved kinds to be
 *exactly* that set — so a lost route is named and a gained one has to leave the list deliberately.
-Both directions were watched red; see constraint 8 for what the mutation revealed. `tests/cacheable-covers-artefact-routes.test.ts:132` filters away a `null`
+Both directions were watched red; see constraint 8 for what the mutation revealed.
+[Reviewed](260907b-stage2-code-review-sol.md): no P0, no P1, and Sol reproduced the rename finding
+from the test's own derivation rather than taking it on trust. One **P2 left open deliberately** —
+the assertion is bidirectional over what the *grep* recognises, not over actual routes, so a
+currently-routeless kind that gained a route in an unsupported form (`LABELS_PATTERN.exec(path)`)
+would stay unbound and stay green. Stage 1's checked AST inventory is the proper fix; when it
+exists, this test should drop its grep and use it. Sol confirms the failure that matters is loud:
+hoisting an *existing* regex reddens the new assertion, and changing a GET guard's form reddens the
+old one, so stage 3 cannot quietly lose an artefact route — it will have to adapt this test on
+purpose. `tests/cacheable-covers-artefact-routes.test.ts:132` filters away a `null`
 binding, so a route that stops matching vanishes from the test's universe. The other three
 (`owner-isolation.test.ts:1306`, `referee-scan-route.test.ts:342`, `source-store.test.ts:84`)
 already assert their extraction was non-empty and need nothing. `referee-scan-route`'s exact source
