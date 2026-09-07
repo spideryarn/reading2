@@ -935,6 +935,46 @@ nothing red.
 `cost-ledger-shortfall`, `annotation-cost`, `cost-eval`, `request-spend`, `job-spend-fields` — 296
 tests green. `npm run typecheck` clean.
 
+### GPT Sol's review of Stage 6, and the P1 it found there too
+
+[The review](260902g-cost-tracking-stage6-review-sol.md) of commit `a0d60581`, against
+[this prompt](260902g-cost-tracking-stage6-review-prompt.md). Verdict: **approve after these
+revisions**. Six findings, all six accepted and fixed. It confirmed the parts that mattered
+independently — the non-gap branch of `moneyFields` preserves the old five expressions exactly;
+`totalRows`, the SQL aggregate, reconciliation, the admin markers and the realtime path all accept
+the new legal `none` shape; `jobSpend()` needs no scope correction; and the `Pick` and `other`
+worries in my own suspicions were both unfounded.
+
+**R1 (P1) is the one that matters, and it is F2 again in the report next door.** `--owners` chose its
+pricing basis with `COST_CATEGORIES.filter((c) => c !== "non-product")` — **another negative
+predicate**, written the same week as the one it was fixing. `unknown` is not `non-product`, so an
+unrecognised scope went straight into `ALL PRODUCT` and into the per-account spread a subscription
+price is read off. Sol reproduced it: a row with `scopeKind: "retired-in-2025"` contributed all 123
+of its nanos to owner product spend. My Stage 6 test claimed the two reports "cannot drift" and was
+only ever checking the categoriser.
+
+That the same mistake was made twice, in two files, by the same hand, in the same session, is the
+finding underneath the finding. **A negative predicate over an open set is the defect**, not either
+instance of it: `!== "eval"` and `!== "non-product"` are both correct when written and both stop
+being true the moment somebody adds a member. Every product definition in the tree is now positive.
+
+- **The fix is by scope, not by category**, which is Sol's and is better than the obvious one. A
+  *new job* in request scope classifies as `unknown` and is still a reader's cost, so it belongs in
+  the basis; an unrecognised *scope* is the case we cannot say that about. `ownersReport` now folds
+  `partitionByScope(groups).product` for the spread, the owner table and the margin, and keeps the
+  full fold behind the coverage header and the category table, which have to show everything. Two
+  tests hold both halves of that sentence.
+
+**R2–R6, all P3 and all prose that had become false:**
+
+| | |
+|---|---|
+| **R2** | `AiCallRow.costSource`'s contract said `provider` wins whenever OpenRouter answered — which F1 deliberately makes false. The exception is now written into the contract rather than only into the function. |
+| **R3** | "five independent ternaries" was wrong about the code it replaced: three ternaries, one helper call and one direct assignment. Now "five independently assigned fields". |
+| **R4** | Three other places still defined Product as `scopeKind !== "eval"` — `evals/cost/run.ts`, `evals/cost/feasibility.md`, `tests/cost-eval.test.ts`. All three corrected, and the feasibility note's stale line number with them. |
+| **R5** | The `UNRECOGNISED SCOPE` block said those scopes were "in no pocket above" immediately after printing them in a pocket. It now says which pocket, and that it is not Product. |
+| **R6** | "$2.85 of 837 calls" silently combined two snapshots taken minutes apart. Now stated as $2.85 across 349 CLI calls, with the before/after figures and the note that one row arrived between the runs. |
+
 **Stage 7 — no reader-facing job goes uncategorised by accident. ✅ Built, 2026-09-07.** F4's
 four-valued disposition table, `JOB_DISPOSITION: Record<AiJob, …>`, so the **compiler** refuses a new
 job that nobody has placed: *interactive request work*, *step-driven*, *voice*, *no product path*.

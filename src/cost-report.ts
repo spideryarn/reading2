@@ -258,7 +258,10 @@ export function spendPerAccount(
  * which the `--owners` pricing report groups by, has always put `cli` in
  * `non-product`. So the same rows were a product's cost in one report and ours
  * in the other, and the ordinary report's headline **Product spend** silently
- * carried our own CLI runs: $2.85 of 837 calls on 2026-09-07, found by GPT Sol.
+ * carried our own CLI runs: **$2.85 across 349 CLI calls** on 2026-09-07, found
+ * by GPT Sol. (Product read $21.19 over 837 calls before the fix and $18.51 over
+ * 489 after; the two runs are minutes apart and one further row arrived between
+ * them, so the call counts are two snapshots rather than one.)
  *
  * The `filter` sat three lines under a comment arguing the exact principle it
  * broke — *"a bake-off over forty PDF pages landing in the figure he prices

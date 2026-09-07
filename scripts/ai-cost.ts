@@ -959,7 +959,11 @@ function printCategories(fold: SpendFold): void {
  * from.
  */
 function printSpread(fold: SpendFold, population: string[], denominatorIsReal: boolean): number[] {
-  const product = COST_CATEGORIES.filter((c) => c !== "non-product");
+  /* **Every category in this fold**, because the fold handed in has already been
+     narrowed to product *scopes*. It used to be `COST_CATEGORIES.filter(c => c
+     !== "non-product")`, and that negative filter is what let `unknown` into the
+     pricing basis — GPT Sol, R1. `non-product` is empty here by construction. */
+  const product = COST_CATEGORIES;
   console.log(
     `\nPer-account spread — cash, over ${population.length} account(s), zero-spend included` +
       (denominatorIsReal ? "" : "  ** SPENDING OWNERS ONLY — see Denominator **"),
@@ -1013,7 +1017,8 @@ function ordinal(n: number): string {
 
 /** Who cost what, by name where the Auth service could supply one. */
 function printOwners(fold: SpendFold, accounts: Denominator, population: string[]): void {
-  const product = COST_CATEGORIES.filter((c) => c !== "non-product");
+  /* Narrowed by scope before it got here — see `printSpread` above and R1. */
+  const product = COST_CATEGORIES;
   console.log("\nBy owner — product spend only, cash");
   const named = [...fold.byOwner.entries()]
     .map(([id, mine]) => {
@@ -1216,8 +1221,23 @@ async function ownersReport(args: Args): Promise<void> {
      the spread is biased upward by exactly the population a subscription price
      cares most about. Falling back silently would be the worse half of that. */
   const population = accounts.ids.length > 0 ? accounts.ids : [...fold.byOwner.keys()];
-  const allProduct = printSpread(fold, population, accounts.ids.length > 0);
-  printOwners(fold, accounts, population);
+  /* **The pricing basis is chosen by SCOPE, not by category** — the same one
+     definition the ordinary report uses, which is what Stage 6 claimed and did
+     not deliver. `printSpread` and `printOwners` used to take the full fold and
+     subtract `non-product` by name, and that negative filter let **`unknown`**
+     through: a retired scope name, or a job nobody has placed yet, went straight
+     into `ALL PRODUCT` and into the spread a subscription price is read off.
+     GPT Sol reproduced it with `scopeKind: "retired-in-2025"` (R1) — the exact
+     mirror of the F2 defect, in the report next door.
+
+     Scope rather than category, deliberately: a *new job* in request scope is
+     `unknown` and is still a reader's cost, so it belongs in the basis; an
+     unrecognised *scope* does not, and `partitionByScope` puts it in `other`
+     where the ordinary report prints it. The full `fold` stays behind the
+     coverage header and the category table, which have to show everything. */
+  const priced = foldSpend(partitionByScope(groups).product);
+  const allProduct = printSpread(priced, population, accounts.ids.length > 0);
+  printOwners(priced, accounts, population);
   if (args.price !== undefined) printMargin(args.price, allProduct, marginPeriod(args, new Date()));
 
   unmetered();
@@ -1432,7 +1452,8 @@ async function main(): Promise<void> {
   if (other.length > 0) {
     pocket("UNRECOGNISED SCOPE", other);
     const names = [...new Set(other.map((r) => r.scopeKind))].sort();
-    console.log(`  scope_kind ${names.join(", ")} — in no pocket above. Classify in`);
+    console.log(`  scope_kind ${names.join(", ")} — in the unrecognised pocket above, and in`);
+    console.log("  no other. It is NOT in Product, which is what a price is set from. Classify in");
     console.log("  src/cost-report.ts § partitionByScope, or read this as the noise floor.");
   }
   if (rows.length > product.length && product.length > 0) {

@@ -374,13 +374,15 @@ function warnPaidLooksFree(record: SpendRecord): void {
  * **A row's five money fields, decided together and never apart.**
  *
  * One arm of `SpendProvenance` in, one legal combination out. They were five
- * independent ternaries at the call site, each reading `record.cost.source`,
- * with a comment explaining that spelling them that way was what kept the row
- * and `ai_calls_one_cost_source` from coming apart. That held while there was
+ * independently assigned fields at the call site — three ternaries over
+ * `record.cost.source`, one helper call and one direct assignment — under a
+ * comment explaining that spelling them that way was what kept the row and
+ * `ai_calls_one_cost_source` from coming apart. That held while there was
  * exactly one condition; `paidLooksFree` is a second, and a second condition
- * copied into five ternaries is precisely how they *do* come apart. So the
- * decision moves into one function that returns the whole combination, and
- * there is no path through it that sets two of the three money columns.
+ * spread across five separate assignments is precisely how they *do* come
+ * apart. So the decision moves into one function that returns the whole
+ * combination, and there is no path through it that sets two of the three money
+ * columns.
  */
 function moneyFields(
   record: SpendRecord,
@@ -543,10 +545,17 @@ export interface AiCallRow {
    * **Where the dollar figure came from**, so a total can say how much of
    * itself was measured and how much was worked out.
    *
-   * Derived from the two nanos fields rather than passed in, because there are
-   * exactly two sources and a third field free to disagree with them is a
-   * third thing that can be wrong. `provider` wins when OpenRouter answered at
-   * all — including the BYOK zero, which is a real answer and not an absence.
+   * Derived rather than passed in, because a third field free to disagree with
+   * the money columns is a third thing that can be wrong. `moneyFields` in this
+   * file is what derives it, from the `SpendProvenance` arm — so `provider`
+   * normally wins when OpenRouter answered at all, including the BYOK zero,
+   * which is a real answer and not an absence.
+   *
+   * **One deliberate exception, and it is the point of `paidLooksFree`.** A
+   * provider answer of `cost: 0` alongside a real upstream charge and no
+   * `is_byok` is stored as `none`, not `provider`: OpenRouter did answer, but
+   * the answer is internally inconsistent, and calling it a settled zero is the
+   * one reading that is certainly false. See `moneyFields`.
    */
   costSource: CostSource;
   computedCostNanos: Nanos | null;

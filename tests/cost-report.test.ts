@@ -233,6 +233,49 @@ describe("partitioning the ledger by whose money it is", () => {
     expect(split.other.map((r) => r.scopeKind)).toEqual(["retired-in-2025"]);
   });
 
+  it("keeps an unrecognised scope out of the pricing basis, not merely out of non-product", () => {
+    /* **The R1 counterexample, from GPT Sol's Stage 6 review.**
+     *
+     * The `--owners` report chose its pricing basis with
+     * `COST_CATEGORIES.filter(c => c !== "non-product")` — a negative filter,
+     * the same shape as the F2 defect it was written alongside. An unrecognised
+     * scope classifies as `unknown`, `unknown` is not `non-product`, so the row
+     * went straight into ALL PRODUCT and into the per-account spread a
+     * subscription price is read off. Sol reproduced it with
+     * `scopeKind: "retired-in-2025"` contributing all its nanos to owner spend.
+     *
+     * The basis is now chosen by scope, before the fold. This holds the two
+     * halves of that apart: the strange row must be absent from the priced fold
+     * **and** present in the full one, because the coverage header and the
+     * category table have to keep showing everything. */
+    const groups = [
+      group({ scopeKind: "request", job: "chat", creditsNanos: 100 }),
+      group({ scopeKind: "retired-in-2025", job: "chat", creditsNanos: 123 }),
+    ];
+    const priced = foldSpend(partitionByScope(groups).product);
+    const everything = foldSpend(groups);
+
+    expect(priced.totalCalls).toBe(1);
+    expect(everything.totalCalls).toBe(2);
+    /* The 123 nanos are the whole of the defect: they used to be in here. */
+    const pricedNanos = [...priced.byCategory.values()].reduce((n, t) => n + totalNanos(t), 0);
+    const allNanos = [...everything.byCategory.values()].reduce((n, t) => n + totalNanos(t), 0);
+    expect(pricedNanos).toBe(100);
+    expect(allNanos).toBe(223);
+  });
+
+  it("keeps an unrecognised JOB in the pricing basis, because a reader still paid for it", () => {
+    /* The other side of the same decision, and the reason the split is by scope
+       rather than by category. A job nobody has placed yet is `unknown`, but if
+       it ran in request scope a reader triggered it and the money is theirs —
+       dropping it would understate the basis. An unrecognised *scope* is the
+       case we cannot make that claim about. */
+    const groups = [group({ scopeKind: "request", job: "a-job-added-next-month", creditsNanos: 7 })];
+    const priced = foldSpend(partitionByScope(groups).product);
+    expect(priced.totalCalls).toBe(1);
+    expect(priced.byCategory.get("unknown")?.calls).toBe(1);
+  });
+
   it("loses no row, which is the only property a total depends on", () => {
     const split = partitionByScope(rows);
     expect(
