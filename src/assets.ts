@@ -344,6 +344,27 @@ export function isRehostableUrl(raw: string): boolean {
 }
 
 /**
+ * **The URL one `<img>` would have the browser fetch**, or `null` for one we
+ * would leave alone.
+ *
+ * Split out of the walk below on 2026-09-06, when the reading view finally
+ * acquired a second caller — and split out rather than re-typed there, because
+ * this one expression is the whole of the agreement described in § 1 above. The
+ * pipeline builds a manifest keyed on what this returns and the browser looks
+ * an element up by what this returns, so `getAttribute`, the `trim` and the
+ * rehostable test cannot drift apart between them: there is one copy.
+ *
+ * Re-typing it would not throw. It would miss every entry, silently, and the
+ * feature would appear to do nothing.
+ */
+export function imageSourceOf(element: AttributeReader): string | null {
+  const src = element.getAttribute("src");
+  if (src === null) return null;
+  const url = src.trim();
+  return isRehostableUrl(url) ? url : null;
+}
+
+/**
  * Every image URL in `root` worth fetching, in document order, each once.
  *
  * Deduped because one picture used twice is one object and one request, and
@@ -354,10 +375,8 @@ export function imageSourcesIn(root: ParsedRoot): string[] {
   const found: string[] = [];
   const seen = new Set<string>();
   for (const element of root.querySelectorAll(IMAGE_SELECTOR)) {
-    const src = element.getAttribute("src");
-    if (src === null) continue;
-    const url = src.trim();
-    if (!isRehostableUrl(url) || seen.has(url)) continue;
+    const url = imageSourceOf(element);
+    if (url === null || seen.has(url)) continue;
     seen.add(url);
     found.push(url);
   }

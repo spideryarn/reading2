@@ -52,8 +52,8 @@
  *
  * See docs/plans/260906g-the-shelf-table-is-ugly-because-the-reading-view-s-css-leaks-into-it.md.
  */
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readerCss } from "./helpers/stylesheets.js";
 
 /**
  * A table tag standing on its own in a branch.
@@ -275,8 +275,36 @@ describe("table selectors in styles.css are scoped", () => {
   });
 
   it("no branch names a table element without a class, id or attribute", () => {
-    const css = readFileSync(new URL("../src/web/styles.css", import.meta.url), "utf8");
-    const offenders = selectorBranches(css).filter(({ branch }) => offends(branch));
+    /* The reading-view sheets as a set, not `src/web/styles.css`, which has
+       held nothing but `@import`s since the split on 2026-09-06. Reading that
+       path now yields no selectors at all, so `offenders` would be empty and
+       this assertion would pass while checking nothing — the exact shape in
+       docs/reusable/silent-success.md. The positive control below is what
+       stops that happening again. */
+    const css = readerCss();
+    const branches = selectorBranches(css);
+
+    /* The scanner first, and it needs BOTH of these — GPT Sol, F25.
+
+       The count alone proves bulk, not relevance: `readerCss()` would still
+       hand over thousands of branches if the one sheet this test is about had
+       dropped out of the graph, and the offenders would be empty for the wrong
+       reason. So the second assertion is a **named witness from table.css
+       itself** — the scoped body-cell selector that exists because of this very
+       rule. If Table is not in the corpus, that is missing and this fails.
+
+       It has to be a selector UNIQUE to table.css, and the head one is not:
+       narrow-window.css repeats `:where(table.zoom > thead) > tr > th` inside a
+       media query, so a witness naming that survived table.css being dropped
+       from the manifest altogether. Found by running exactly that mutation,
+       which is the only reason it is not still written the wrong way. */
+    expect(branches.length, "the sheet set stopped resolving").toBeGreaterThan(500);
+    expect(
+      branches.map(({ branch }) => branch),
+      "table.css is not in the scanned corpus, so an unscoped `td` in it would go unseen",
+    ).toContain(":where(table.zoom > tbody > tr) > td");
+
+    const offenders = branches.filter(({ branch }) => offends(branch));
 
     expect(
       offenders.map(({ line, branch }) => `styles.css:${line}  ${branch}`),

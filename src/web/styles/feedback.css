@@ -1,0 +1,479 @@
+/* feedback.css — the Feedback button in the top-right corner and its modal
+   dialog. FeedbackButton.tsx, FeedbackDialog.tsx.
+
+   The file ends with a section banner marked `metadata` that has **no live
+   rules in it at all** — only the write-up of a bug whose fix now lives
+   globally in tailwind.css. It is kept where somebody looking at that page
+   would find it; do not delete it for being empty. */
+
+/* ============================================================== feedback ==
+   The Feedback button in the top-right corner and its modal dialog —
+   FeedbackButton.tsx, FeedbackDialog.tsx, and the plan at
+   docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.
+
+   `fb-*` classes rather than Tailwind: the house convention for dialogs, and
+   this one is a form with a dozen elements whose spacing has to agree.
+
+   **`.fb-button` is one of two shapes the trigger wears since 2026-09-06.** The
+   other is `.dock-feedback`, a button in the bottom bar, which needs no rule of
+   its own: it is a `.dock-btn` and § the bar's fit ladder owns its word. This
+   corner is what every page *without* a `Dock` still draws. */
+
+/* The mirror of `.logo-home` in the other corner, and the same three numbers:
+   `--safe-*` insets, `--bar-h` so it sits on the controls bar's line rather
+   than floating above it, and a z-index above the spine (45) and the bars (40)
+   but below the drawer's dim (92) — while the drawer is open, filing a report
+   is not one of the things being offered.
+
+   **And that last clause is now true of this corner only.** The bar's copy sits
+   at `.dock`'s z-index 96, above the dim and operable by design, so moving the
+   trigger into the bar reverses the decision this line records. Accepted, with
+   the same reasoning `.logo-home` carries: the bar is how the drawer is shut,
+   and it already holds a link off the page. Said in both places so the next
+   reader does not find one file contradicting the other. */
+.fb-button {
+  position: fixed;
+  top: var(--safe-top);
+  right: var(--safe-right);
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  width: var(--feedback-w);
+  height: var(--bar-h);
+  padding: 0 1rem 0 0.5rem;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+/* `--ink-faint` at rest and `--highlight` on hover. It is chrome offering to
+   take a complaint, not a call to action — a button that advertises itself in
+   the corner of every page is one more thing between the reader and the
+   article. */
+.fb-button:hover { color: var(--highlight); }
+.fb-button:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+.fb-dialog {
+  /* `inset: 0` rather than `100vw`/`100dvh`, for the reason .lightbox gives:
+     `100vw` includes the width a vertical scrollbar has taken. The two `none`s
+     undo the UA's own `max-width: calc(100% - 6px - 2em)`. */
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+.fb-dialog[open] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* A literal colour and not `var(--page)`, for the reason .lightbox::backdrop
+   spells out: `::backdrop` did not inherit custom properties from its
+   originating element for most of the time this app's browsers have been
+   shipping, and an invalid `background` is not an error — it is no dim at all. */
+.fb-dialog::backdrop {
+  background: rgb(10 10 10 / 0.7);
+  backdrop-filter: blur(2px);
+}
+
+/* **The panel does not scroll; the part between the header and the buttons
+   does.** `.cmt-dialog`'s shape, for `.cmt-dialog`'s reason: when the whole box
+   scrolls, the things a reader is aiming at — the ✕ at the top, Send at the
+   foot — are content, and content scrolls away. On a desktop that is a small
+   annoyance. On a phone with the keyboard up it is the bug Greg reported: Send
+   was below the fold of a box that had no fold of its own to scroll. */
+.fb-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(94vw, 34rem);
+  /* **90% of the `<dialog>`, not 90% of the screen**, and that is the whole
+     iOS fix in one line. The dialog is `inset: 0` — the layout viewport — and
+     FeedbackDialog.tsx overwrites its `top` and `height` from
+     `window.visualViewport` whenever there is one, so on a phone with the
+     keyboard up this resolves against the strip the reader can actually see.
+     It was `90dvh`, which is the same number on a desktop and a lie on iOS,
+     where the keyboard leaves `dvh` alone (useVisualViewport.ts).
+
+     **Measured in Chrome on 2026-09-04**, because "does a percentage resolve
+     against an `inset: 0` parent" is the assumption the whole change rests on:
+     900px in a 1000px window, and 306px once the dialog was given the
+     340px-tall strip a keyboard leaves — 90% of each, with the buttons inside
+     the strip both times. **It depends on `box-sizing: border-box`** (the
+     global reset at the top of this file): under `content-box` the padding and
+     border are added *after* the cap, and the same measurement came back 34px
+     over budget. */
+  max-height: 90%;
+  overflow: hidden;
+  padding: 1rem 1.15rem 1.15rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.8);
+  font-family: var(--font-ui);
+}
+
+/* The two that stay put, and the one that moves. `min-height: 0` is
+   load-bearing and silent — a flex item's default `min-height: auto` refuses to
+   shrink below its content, so without it `.fb-scroll` grows past the panel's
+   `max-height` and nothing scrolls at all, which is the stylesheet looking
+   right and doing nothing (`.cmt-body` says the same). The 2px of padding is
+   room for a focus ring that would otherwise be clipped by the new overflow. */
+.fb-head,
+.fb-actions { flex: 0 0 auto; }
+.fb-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-inline: 2px;
+  margin-inline: -2px;
+}
+
+.fb-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.fb-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.fb-close {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.fb-close:hover { color: var(--highlight); border-color: var(--rule-strong); }
+.fb-close:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; }
+
+.fb-intro {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+/* `.fb-email` was here. It set the reader's own address in mono inside the
+   sentence above, and the sentence went on 2026-09-05 — FeedbackDialog.tsx
+   § Props. */
+
+.fb-field { display: flex; flex-direction: column; gap: 0.3rem; }
+.fb-label { font-size: 0.78rem; font-weight: 600; }
+/* The three things we ask a bug report for, under the label and above the one
+   box — FeedbackDialog.tsx § KindHint says why they are not hidden behind a
+   disclosure, and why they change with the toggle. */
+.fb-hint {
+  font-size: 0.76rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
+/* **Problem picked, so the three asks are the shape of the answer.** A list
+   rather than a sentence, and it borrows the look the "Not sure what to write?"
+   panel used to have — a left rule and a step in from the box — because that is
+   what makes it read as guidance rather than as more label. `--ink-soft`, not
+   `--ink-faint`: this is meant to be read. */
+.fb-asks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.35rem 0 0.35rem 0.55rem;
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink-soft);
+}
+.fb-ask { font-weight: 500; }
+/* The reassurance, folded in from the panel this replaced. Quieter than the
+   asks above it, because it is the one line that is not a question. */
+.fb-ask-note { margin-top: 0.15rem; color: var(--ink-faint); }
+.fb-input {
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--page);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+.fb-input:focus-visible { outline: 1px solid var(--highlight); outline-offset: -1px; }
+.fb-over { font-size: 0.72rem; color: var(--highlight); }
+
+/* One box now, so it gets the height the three used to have between them.
+   docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md. */
+.fb-body { min-height: 7.5rem; }
+
+/* **The thanks, and it is the first thing in the panel.** Warmer than the
+   intro under it — `--ink` rather than `--ink-soft` — because a sentence in the
+   same grey as the instructions reads as more instructions. */
+.fb-thanks {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+/* Problem / Suggestion. Two toggles that behave as one choice, and neither is
+   pressed to begin with — FeedbackDialog.tsx says why they are not radios. */
+.fb-kind {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+/* A `<legend>` inside a flex `<fieldset>` is not a flex item in every engine, so
+   it is taken out of the flow and set inline instead — the label reads as part of
+   the row rather than floating above it. */
+.fb-kind-legend {
+  float: left;
+  padding: 0 0.4rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+  line-height: 1.9;
+}
+.fb-kind-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.fb-kind-button:hover { color: var(--ink); border-color: var(--ink-faint); }
+.fb-kind-button:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; }
+/* The pressed one is the state, so it is the attribute that carries the look —
+   one source of truth for "chosen", shared by the screen reader and the eye. */
+.fb-kind-button[aria-pressed="true"] {
+  color: var(--highlight);
+  border-color: var(--highlight);
+  background: color-mix(in oklch, var(--highlight) 12%, transparent);
+}
+
+/* The microphone's line under the box. It shared it with a "Not sure what to
+   write?" link until 2026-09-04; the guidance is above the box now, so the row
+   holds one control and keeps its shape for the next one. */
+.fb-under-box {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.fb-shot { display: flex; flex-direction: column; gap: 0.3rem; }
+.fb-shot-label { font-size: 0.78rem; font-weight: 600; }
+/* **`--rule-strong`, not `--rule`, and the reason is worth writing down because
+   it will catch the next dialog too.** `--rule` is `oklch(0.27 0 0)` and this
+   panel's ground is `--surface-raised` at `oklch(0.26 0 0)` — one hundredth of a
+   step apart, so the dashed edge was not faint, it was **invisible**. A browser
+   pass found it; nothing else would have, since the rule is valid CSS and the
+   element is the right size in every layout assertion.
+
+   `--rule` is calibrated against `--page`, which is darker. `.fb-input` above
+   looks fine with it only because that field paints its own `--page` background
+   underneath — the border colour is not doing the work there either. Anything
+   drawing a line directly on `--surface-raised` needs `--rule-strong`.
+   See docs/project/colour-scales.md. */
+.fb-shot-pick {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 6px;
+  font-size: 0.76rem;
+  color: var(--ink-faint);
+}
+.fb-shot-pick input { font-size: 0.72rem; color: var(--ink-soft); }
+.fb-shot-have { display: flex; align-items: center; gap: 0.6rem; }
+.fb-shot-thumb {
+  width: 4rem;
+  height: 3rem;
+  object-fit: cover;
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+}
+.fb-shot-facts { font-size: 0.74rem; color: var(--ink-faint); }
+.fb-shot-drop {
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: none;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.fb-shot-problem { margin: 0; font-size: 0.74rem; color: var(--ink-soft); }
+
+/* The tick-box is default-off and its label says in the reader's own words what
+   ticking it sends — docs/project/copy.md § Who is reading this. The `Never`
+   sentence is doing the load-bearing half: it is the promise the allowlist in
+   src/feedback-payload.ts actually keeps, so it can be made plainly. */
+.fb-consent {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.fb-consent input { margin-top: 0.15rem; flex: none; }
+.fb-consent strong { color: var(--ink); font-weight: 600; }
+
+.fb-failed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.fb-failed p { margin: 0; }
+/* Wraps, because the email link carries a whole address and this panel is at its
+   narrowest exactly when the app is at its least well — a failed send on a phone. */
+.fb-failed-outs { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+/* One rule for the button and the `mailto:` link beside it: they are two ways out
+   of the same dead end and should not look like different kinds of thing. */
+.fb-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.76rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+.fb-copy:hover { color: var(--highlight); border-color: var(--rule-strong); }
+
+/* **The hairline says the buttons are a foot, not the end of the content.**
+   Once the middle scrolls under them — a phone with the keyboard up, where
+   `.fb-scroll` shows about a third of what it holds — a row of buttons hard
+   against a sentence that has been cut mid-block reads as the bottom of the
+   dialog rather than as a footer with more above it. Seen at a 390×340 viewport,
+   which is what a 390×740 phone has left once the keyboard is up. */
+.fb-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.6rem;
+  /* `--rule-strong`, not `--rule`. `--rule` is `--border` (oklch 0.27) and the
+     panel is `--surface-raised` (0.26), so the line is there and nobody can see
+     it — measured in a browser at 390×340, where the divider is the whole point.
+     `.fb-shot-drop` below hit the same thing from the other direction. */
+  border-top: 1px solid var(--rule-strong);
+}
+.fb-cancel,
+.fb-send {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+/* Cancel and Send are both `--rule-strong` now (see the dropzone note above), so
+   the primary/secondary difference is carried by the ink rather than by the line
+   — which is the more legible of the two anyway at this size. */
+.fb-send { color: var(--ink); }
+.fb-send:disabled { opacity: 0.45; cursor: default; }
+.fb-send:not(:disabled):hover { color: var(--highlight); border-color: var(--highlight); }
+
+.fb-done {
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.6rem 1.2rem;
+  color: var(--ink);
+  text-align: center;
+}
+.fb-done p { margin: 0; font-size: 0.9rem; }
+
+@media (max-width: 731px) {
+  /* The word goes and the icon stays — § tokens shrinks `--feedback-w` to match,
+     and the two still have to move together, though what goes wrong if they do
+     not is smaller than it was: until 2026-09-06 the bars reserved room for a
+     label nobody was drawing, and now it is only this button's own hit area
+     that is three times the glyph in it. */
+  .fb-button-text { display: none; }
+  .fb-button { justify-content: center; padding: 0; }
+}
+
+/* ---------------------------------------------------------------- metadata --
+   **`.metadata-page button { font: inherit }` used to live here, and is gone
+   because the button reset now does it for the whole app** — tailwind.css § the
+   bit of preflight we need, 2026-09-04.
+
+   The diagnosis is worth keeping where somebody looking at this page will find
+   it. Greg, 2026-09-03: *"clean up their display (some of them seem larger than
+   others somehow?)"*. They were, and the cause is that **we import preflight
+   nowhere**, deliberately, because it would reset everything inside `.prose` —
+   the one place we render the article author's own HTML and cannot enumerate
+   the tags. So a `<button>` keeps the UA's own `font`, 13.333px Arial in
+   Chrome, and no Tailwind class contests it: `tw:text-inherit` is `color`, and
+   `tw:text-sm` sets a size while leaving the family alone.
+
+   The visible result was the collapsible section headings. A shut section's
+   heading is a button (Metadata.tsx § Section) carrying the h2's 0.68rem
+   uppercase classes on its parent and nothing of its own, so it drew half again
+   the size of every heading beside it, in a different typeface. Everything else
+   on the page was subtler: the right size in the wrong face.
+
+   That fix was scoped to this page on purpose, and the global one supersedes it
+   rather than contradicting it: `base` sits below `app`, so the forty-odd rules
+   in this file that declare their own `font: inherit` still win, and so does
+   every utility. Two spellings of one rule is the thing worth not leaving
+   behind. */
+

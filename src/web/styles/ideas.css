@@ -1,0 +1,401 @@
+/* ideas.css — Ideas mode (IdeasPanel.tsx). `.ideas` is `.gloss` with a class
+   beside it, so **this file must stay after glossary.css**: the band shell, the
+   head, the run button and the stale banner all come from there and are not
+   repeated here.
+
+   Its second half is not Ideas at all. `.diag-force*` and the link kinds are
+   the force-directed graph — a Diagram sub-mode, graph.ts § EdgeKind — which
+   the original stylesheet left in this interval. Its shared parts are in
+   diagram.css. */
+
+/* ---------------------------------------------------------- § ideas mode ----
+   The sixth mode, and the smallest stylesheet section of any of them — which is
+   the point rather than an accident. `.ideas` is `.gloss` with a class beside
+   it, so the band shell, the head, the run button, the stale banner and the two
+   provenance rules all come from § glossary mode unchanged. What is here is
+   only what an idea has and a term does not: two labelled groups, a name that
+   is a sentence rather than a word, and a list of quoted passages.
+
+   docs/plans/260826ac-ideas-mode.md. */
+
+/* The scroller. `.mode-band` is a fixed column between the controls bar and
+   the dock, and its `min-height: 0` exists for exactly this child — without one
+   the panel's own content decides the panel's height, which a fixed element
+   cannot honour, so everything past the dock is simply unreachable. The groups
+   were direct children until 2026-08-27 and it cost the second group entirely
+   whenever an idea was open on a laptop window. Same three properties as
+   `.gloss-list`, `.chat-scroll` and `.summ-scroll`.
+
+   **The horizontal padding is here rather than on each part**, and it was
+   missing altogether: every line of this panel below the head sat flush against
+   the band's left border and ran into its right one, while the head above it
+   was inset 0.7rem. `overscroll-behavior` for the reason `.summ-scroll` gives —
+   wheeling past the end of the ideas must not start scrolling the article. */
+.ideas-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0.7rem 0.7rem;
+}
+
+.ideas-group { margin: 0; padding: 0.5rem 0 0; }
+/* The two groups are the whole point of the mode, so the break between them is
+   heavier than the rule between two ideas inside one — `--rule-strong` against
+   the `--rule` on `.ideas-item`. Nine introduced ideas under one assumed one is
+   the normal shape on a long article (docs/project/ideas.md), and without this
+   the list read as ten of the same thing. */
+.ideas-group + .ideas-group {
+  margin-top: 0.7rem;
+  border-top: 1px solid var(--rule-strong);
+}
+.ideas-group > h3 {
+  /* Sticky, so the answer to *which half am I looking at* survives scrolling
+     past the heading — which on a nine-idea group is most of the time you spend
+     in it. The containing block is the group, which is many times the height of
+     the heading, so the range is real: see docs/reusable/css-sticky-containing-block.md
+     for the case where it silently is not. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.35rem 0 0.2rem;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.77rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+/* Hard right, under the "10 ideas" in the head — the two counts mean the same
+   kind of thing and lining them up is what says so. */
+.ideas-group > h3 > .gloss-count { margin-left: auto; letter-spacing: 0; }
+/* The group's own sentence, under its heading. It is doing real work: "the
+   piece leans on these and never states them" is the whole difference between
+   the two groups, and a reader who has not read the plan has no other way to
+   know it. */
+.ideas-blurb {
+  margin: 0.15rem 0 0.4rem;
+  color: var(--ink-faint);
+  font-size: 0.79rem;
+  line-height: 1.35;
+}
+
+.ideas-list { margin: 0; padding: 0; list-style: none; }
+.ideas-item { border-top: 1px solid var(--rule); }
+.ideas-item:first-child { border-top: none; }
+
+/* **Not `white-space: nowrap`, and not truncated.** A glossary term is a word
+   and fits on one line; an idea is a proposition of three to ten words and
+   wrapping is the normal case. Truncating it would hide the half that carries
+   the claim — "Writing is a test of thought, not a…" is exactly the wrong
+   half to keep. */
+/* **The three sizes below are `.gloss-*`'s, on purpose.** This section's own
+   header says `.ideas` is `.gloss` with a class beside it, and ideas.md calls
+   the two siblings — a term is a word you look up, an idea is a claim you hold.
+   They were not siblings on screen: after the 2026-09-03 lift (§ mode band) an
+   idea's name was 0.88rem against a term's 0.95, its quote 0.83 against a
+   definition's 0.89, and its reason 0.77 against a part's 0.86. Nobody chose
+   that; the two panels were written a week apart. GPT Sol, reviewing the lift,
+   was blunt about where it left the panel Greg actually complained about: the
+   badge grew 21% and the sentence stayed at 14px.
+
+   The order matters more than the numbers. `.ideas-quote` is **the article's own
+   words**, and § quotes mode's one rule is that the reader's eye should land on
+   the author's sentence — so it may not sit below the model's gloss of it, and
+   `.ideas-reason`, which its own comment below calls the load-bearing part of an
+   assumed idea, may not be the smallest thing on screen. */
+.ideas-name {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+.ideas-name:hover { color: var(--highlight-ink); }
+.ideas-item.open > .ideas-name { color: var(--highlight-ink); font-weight: 600; }
+
+.ideas-detail { padding: 0 0 0.6rem; }
+.ideas-where { margin-top: 0.55rem; }
+/* The stepper sits on the label line rather than under it — the label is short
+   and the row is otherwise empty to the right. `.cmt-nav` already pushes itself
+   over with `margin-left: auto`. */
+.ideas-where > .gloss-part-label { display: flex; align-items: center; gap: 0.3rem; }
+
+.ideas-occurrences {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: occurrence;
+}
+.ideas-occurrences > li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+.ideas-occurrences > li > button {
+  flex: 1;
+  min-width: 0;
+  padding: 0.2rem 0.35rem;
+  border: none;
+  border-left: 2px solid var(--rule);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.ideas-occurrences > li > button:hover { border-left-color: var(--highlight); }
+/* The one the reader last landed on, so the panel and the wash in the prose
+   agree about where they are. */
+.ideas-occurrences > li.open > button {
+  border-left-color: var(--highlight);
+  background: color-mix(in oklab, var(--highlight) 8%, transparent);
+}
+.ideas-quote {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.89rem; /* `.gloss-gloss` — see the note on `.ideas-name` */
+  line-height: 1.4;
+}
+/* The model's one line on what this passage does with the idea. For an assumed
+   idea this is the load-bearing part of the whole entry — it is where the local
+   inferential move gets named — so it is dimmer than the quote but not hidden. */
+.ideas-reason {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--ink-faint);
+  font-size: 0.86rem; /* `.gloss-part-text` — see the note on `.ideas-name` */
+  line-height: 1.35;
+}
+
+/* Pinned under the scroller rather than at the end of it, the way the
+   glossary's `Foot` is: the control that regenerates these must not be
+   something you have to scroll ten ideas to reach. */
+.ideas-again {
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+
+/* ---- force: the graph picture ---- */
+
+/* Force: the link IS the relationship, and the five kinds are five different
+ * claims. Rendering them as five shades of grey would be a texture rather than
+ * a statement, so each gets a weight, a dash and a hue — and it is deliberately
+ * over-determined, because hue alone is not a channel everybody has.
+ *
+ * The three coloured kinds are Okabe–Ito's sky blue, vermilion and bluish
+ * green (styles/colourscales.css), which is the trio that set is built to keep
+ * apart. Even so, none of them relies on colour alone: the fact is thin and
+ * solid, the arithmetic is medium and solid, the model's opinion is dotted.
+ *
+ * Ordered here by how much the edge knows — src/web/graph.ts § EdgeKind.
+ *
+ * ## Everything that is not the chain got quieter, 2026-08-27
+ *
+ * Greg: *"In Force, make the dotted links a bit fainter, and maybe also the
+ * other non-sequential links, so it's easier to see."*
+ *
+ * The picture had five kinds of line all competing at roughly the same
+ * loudness, and on a sixty-section article that is a mesh you look *at* rather
+ * than through. The reading-order chain is the one line that is a fact about
+ * the article rather than a claim about it, and it is what the reader is
+ * following, so it keeps its weight and everything else steps back from it.
+ *
+ * **The order is unchanged and that is the point.** The ladder in graph.ts §
+ * EdgeKind still holds: the author's own cross-reference is the brightest of
+ * the four quiet ones, the arithmetic is next, the model's opinion is faintest.
+ * What changed is the gap between the chain and the rest, not the ranking
+ * inside the rest — a fainter dotted line is still a dotted line, and it is
+ * still the only one drawn with a dash. */
+.diag-force .diag-link { fill: none; }
+
+/* Containment. Faintest of the five: it is the least surprising thing a
+   diagram of a document can tell you, and the bubbles' positions say it too. */
+/* **Unchanged at 0.35, and that is the finding rather than an omission.**
+   The first pass took it to 0.22 along with the others. Measured on this
+   ground: `--rule` at 0.35 over `--page` composites to rgb(20,20,20), which is
+   **1.07:1** against the page — and 0.22 gives 1.04:1. Both are under the
+   threshold where a line exists at all, so the reduction was not "fainter", it
+   was "gone", and the picture lost the one thing that says which bubbles are
+   inside which part. GPT Sol's finding on the built code, 2026-08-27, and the
+   arithmetic is in docs/project/diagram.md.
+
+   That 0.35 is *itself* barely visible is a real and separate problem, noted
+   there rather than fixed here: fixing it means making this line brighter,
+   which is the opposite of what this round was asked for. */
+.diag-force .diag-link-parent { stroke: var(--rule); stroke-width: 0.75; opacity: 0.35; }
+
+/* Reading order — the chain, with the arrowhead. Neutral rather than
+   categorical, because it is the one line that belongs to no part in
+   particular, and thick because Greg asked for the sequence to be the thing you
+   see first. `--diag-seq` is shared with the arrowhead's fill below: one token,
+   so the head cannot end up a different colour from its line. */
+.diag-force {
+  --diag-seq: rgb(var(--cat-7-rgb) / 0.9);
+}
+.diag-force .diag-link-sequence {
+  stroke: var(--diag-seq);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  /* **0.56 over an alpha of 0.9 is the 0.5 this line has always been drawn at**,
+     and it is split in two so that the ramp below has something to turn up.
+
+     A colour token at full strength plus an `opacity` the ramp overrides beats
+     seven `stroke` colours, for one reason that is not tidiness: **`opacity`
+     paints through to an element's `marker-end`, and `stroke` does not.** Every
+     path here shares one `#diag-arrow` def, so grading with `stroke` would fade
+     the line and leave the head at full strength — a bright arrowhead on a
+     faint line at the far end of every article.
+
+     Measured rather than read off the spec, 2026-08-30, because the failure is
+     silent and the spec is not what ships: two identical paths at opacity 1 and
+     0.3, both pointing at one shared marker, rasterised to a canvas over an
+     opaque ground and sampled with `getImageData` five pixels clear of the
+     stroke. Line 77/255 = 0.302; arrowhead 77/255 = 0.302. The head fades at
+     exactly the rate its line does. */
+  opacity: 0.56;
+}
+.diag-force .diag-arrowhead { fill: var(--diag-seq); }
+
+/* **The reader's own stretch of the chain, and it fades outward.**
+ *
+ * Greg, 2026-08-30: *"making the connections directly either side of the
+ * current node most prominent. Then a bit fainter for the ones at one remove,
+ * then a bit fainter for the ones at two removes, etc etc."*
+ *
+ * `diag-near-0` is the two lines touching the section the reader is standing
+ * in; the level is a hop count scaled to the chain's length, so the ramp covers
+ * the same range on a nine-section article and a fifty-section one — it ends
+ * where the chain's ordinary weight begins, either way. It does not always use
+ * all eight steps to get there: three hops come out as 0, 3, 5
+ * (`chainNearness`, src/web/diagram.ts).
+ *
+ * **It brightens toward the reader and never dims below the base**, which is
+ * why the last step is 0.56 — exactly the rule above. Dimming the far chain
+ * instead would put a visible edge wherever the ramp stopped and would take the
+ * rest of the article down with it; this way the ramp simply stops mattering.
+ * Width moves with it, a little, because opacity alone on a 2.2px line is a
+ * difference you have to look for.
+ */
+.diag-force .diag-link-sequence.diag-near-0 { opacity: 1; stroke-width: 3.2; }
+.diag-force .diag-link-sequence.diag-near-1 { opacity: 0.94; stroke-width: 3; }
+.diag-force .diag-link-sequence.diag-near-2 { opacity: 0.87; stroke-width: 2.8; }
+.diag-force .diag-link-sequence.diag-near-3 { opacity: 0.8; stroke-width: 2.7; }
+.diag-force .diag-link-sequence.diag-near-4 { opacity: 0.73; stroke-width: 2.5; }
+.diag-force .diag-link-sequence.diag-near-5 { opacity: 0.67; stroke-width: 2.4; }
+.diag-force .diag-link-sequence.diag-near-6 { opacity: 0.61; stroke-width: 2.3; }
+.diag-force .diag-link-sequence.diag-near-7 { opacity: 0.56; stroke-width: 2.2; }
+
+/* Shared distinctive words. Sky blue, medium — the measure the picture has
+   always had, unchanged so a reader who knew this picture still recognises it. */
+/* 0.5 → 0.4, not → 0.3. Measured: 0.5 is 2.87:1 against the page, 0.4 is
+   2.23:1, and 0.3 is 1.73:1 — which is quieter than the *page rules* and reads
+   as a smudge rather than as a line. The reading-order chain it has to sit
+   under is 3.63:1. */
+.diag-force .diag-link-vocabulary { stroke: rgb(var(--cat-0-rgb) / 0.4); stroke-width: 1.1; }
+
+/* Similar meaning, per the embedding model. **Dotted, and the dash is the
+   honest part**: it is the only line here that costs money, the only one that
+   can be confidently wrong, and the only one whose reasoning nobody can read.
+   A dotted line is the drawing convention for "inferred", and that is exactly
+   what this is. Bluish green, so it never reads as a variant of the blue
+   vocabulary edge it is there to be compared against. */
+/* 0.7 → 0.4, which is 4.57:1 → 2.20:1. Worth knowing what that measurement
+   found: at 0.7 the dotted line was **brighter than the reading-order chain**
+   (3.63:1), which is why the picture read as a mesh — the least certain line in
+   it was the loudest. */
+.diag-force .diag-link-semantic {
+  stroke: rgb(var(--cat-2-rgb) / 0.4);
+  stroke-width: 1.1;
+  stroke-dasharray: 1 3.5;
+  stroke-linecap: round;
+}
+
+/* The author's own cross-reference. **Thin, and the brightest thing in the
+   picture** — which is not a contradiction. It is thin because Greg asked for
+   thin, and because there are usually fewer than five of them in a whole
+   article; it is bright because it is the only line here that somebody *meant*,
+   and a fact should not be quieter than the two guesses drawn beside it.
+   Vermilion, the one hue in this trio that reads as a mark rather than as
+   structure. */
+/* 0.9 → 0.72: 5.35:1 → 3.77:1, so it now sits just above the chain's 3.63
+   rather than half again past it. It is still the brightest *stroke* in the
+   picture, which is the claim the paragraph above makes; the chain is the
+   heaviest *line*, at three times the width. Those are different things and
+   the picture can honestly have one of each. */
+.diag-force .diag-link-anchor {
+  stroke: rgb(var(--cat-1-rgb) / 0.72);
+  stroke-width: 1.2;
+}
+.diag-force .diag-node .diag-box { stroke-width: 1; }
+.diag-force .diag-label { font-weight: 600; }
+
+
+/* The one line of chrome the Force picture grows: whether the embeddings have
+   arrived. Beside the picture rather than over it — see DiagramPanel.tsx. */
+/* The strip is a paragraph in normal inline flow, not a flex row, so the
+   spinner has to be told where the baseline is and given its own gap — `flex:
+   none` on `.cmt-spinner` does nothing here. */
+.diag-note .cmt-spinner { vertical-align: -0.15em; margin-right: 0.3rem; }
+.diag-note {
+  margin: 0;
+  padding: 0.15rem 0.75rem 0.3rem;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--ink-faint);
+}
+
+/* The footer card's evidence rows, one per related section. The left rule is
+   the kind, repeating the picture's own colours so a row and the line it
+   explains are recognisably the same thing. */
+.diag-card-links li { border-left: 2px solid transparent; padding-left: 0.4rem; }
+/* **Not the same alphas as the lines themselves**, and deliberately so. A line
+   in the picture is one of hundreds crossing each other, so it is drawn faint
+   enough to look through; a rule beside four rows of text is on its own, and at
+   0.3 on this ground it is not there at all. Both are the same hue at full
+   saturation, which is what makes a row and the line it explains recognisably
+   the same thing — the alpha is a fact about how crowded the surface is. */
+.diag-card-link-anchor { border-left-color: rgb(var(--cat-1-rgb) / 0.9); }
+.diag-card-link-vocabulary { border-left-color: rgb(var(--cat-0-rgb) / 0.5); }
+.diag-card-link-semantic { border-left-color: rgb(var(--cat-2-rgb) / 0.7); }
+/* The author's own words, so they read as a quotation rather than as our copy. */
+.diag-card-link-anchor .diag-card-linkterms { font-style: italic; }
+
+
+/* The words behind a vocabulary link, in the footer card — see DetailCard.
+   These edges are a lexical heuristic, and a curve with no way to ask why looks
+   exactly as authoritative as one a model had reasoned about. Quiet type, but
+   present: the point is that the reader can check. */
+.diag-card-links {
+  margin: 0.3rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.81rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+.diag-card-links li {
+  display: flex;
+  gap: 0.4rem;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.diag-card-linknum {
+  flex: none;
+  color: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.95);
+  font-variant-numeric: tabular-nums;
+}
+.diag-card-linkterms { overflow: hidden; text-overflow: ellipsis; }
+

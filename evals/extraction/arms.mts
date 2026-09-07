@@ -163,8 +163,22 @@ function stamped(raw: string, url: string): ReturnType<typeof readArticleWithPro
  * the shipped extraction exactly — the stamps buy provenance and change nothing.
  */
 const shippedOf = (raw: string, url: string): Candidate => {
-  const { article } = stamped(raw, url);
-  if (!article?.content) {
+  const { article, refusal } = stamped(raw, url);
+  /**
+   * **The capability floor is a refusal here too, and this line is the whole
+   * reason it lives in a shared helper.**
+   *
+   * `shippedOf` calls `readArticleWithProvenance` directly and never goes
+   * through `runExtract`, so a floor written into `runExtract`'s catch would
+   * leave `refused` false on exactly the pages it exists for — production
+   * correct, `notAnArticle` scoring a refusal that never happened, and nothing
+   * to see. src/extract.ts § `capabilityFloor`.
+   *
+   * `refusal` and not `!article?.content`: Readability hands back a parse it has
+   * disowned rather than nothing, so on `medium-about` the article is present,
+   * titled "Medium", and 185 characters long.
+   */
+  if (!article?.content || (refusal && !floorSuspended)) {
     return { html: "", title: null, byline: null, refused: true };
   }
   return {
@@ -175,6 +189,63 @@ const shippedOf = (raw: string, url: string): Candidate => {
     refused: false,
   };
 };
+
+/**
+ * **The one door past the capability floor, and the corpus never opens it.**
+ *
+ * Refusing `pmc-article` cost the instrument something real: the arm
+ * `drop-every-short-block` applied to that page is the corpus's **only
+ * real-page witness** for partial flattening — the shape GPT Sol's ninth review
+ * of stage B found the order gate condemning, and the one case in
+ * `tests/extraction-scorer.test.ts` that is not hand-built by whoever was fixing
+ * the bug. With the shipped extraction empty, the arm has nothing to flatten and
+ * the oracle quietly turns into an assertion about `""`.
+ *
+ * So one test asks its question — *can the SCORER see this?* — with the floor
+ * held open. That is a different question from *should we publish this?*, which
+ * is the floor's and is answered `no` everywhere else, `score.mts` included:
+ * nothing in the runner calls this, and the corpus's rows for the two walls
+ * stay refused.
+ *
+ * **Not a way to score a wall.** A candidate obtained through here carries the
+ * provenance stamps of a page production refuses, so the gates will report on
+ * output no reader can ever get. Read `shippedOf` above and use that.
+ *
+ * The shape of it — a scoped mutation seam rather than a parameter — is the one
+ * `withPlacementFloor` in shapes.mts already established, and for the same
+ * reason: an arm's `run` takes bytes and a URL, and threading a flag through
+ * every arm to reach one test would be the larger change.
+ *
+ * **Synchronous only, and it says so rather than hoping** — the other half of
+ * that precedent, and it would be worse here. `finally` runs when the callback
+ * *returns*, so an `async` one would drop the suspension at its first `await`
+ * and every line after it would run at the shipped floor while appearing to run
+ * with the floor held open. In `withPlacementFloor` that costs a wrong verdict;
+ * here it would silently score `""`, which is the assertion-about-nothing this
+ * seam exists to prevent. Every arm's `run` is synchronous, so a thenable is
+ * refused rather than documented.
+ */
+let floorSuspended = false;
+export function withoutTheCapabilityFloor<T>(fn: () => T): T {
+  floorSuspended = true;
+  try {
+    const out = fn();
+    if (out !== null && typeof (out as { then?: unknown } | null)?.then === "function") {
+      throw new Error(
+        "withoutTheCapabilityFloor was given an asynchronous callback — the floor is restored " +
+          "when the callback returns, so anything after an await would run with the floor back " +
+          "in place while appearing to run without it",
+      );
+    }
+    return out;
+  } finally {
+    floorSuspended = false;
+    /* The per-page cache holds a parse, not a verdict, so nothing of the
+       suspension survives in it — but the next caller must not inherit a
+       candidate built under it, and `stamped()` is keyed on the bytes alone. */
+    stampedCache = null;
+  }
+}
 
 /**
  * **The document every arm is a transform of, as HTML** — and it is what the

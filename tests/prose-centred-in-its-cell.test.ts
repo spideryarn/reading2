@@ -39,12 +39,12 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readerCssNoComments } from "./helpers/stylesheets.js";
 
-const stripBlockComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "");
-
-const css = stripBlockComments(
-  readFileSync(new URL("../src/web/styles.css", import.meta.url), "utf8"),
-);
+/* The reading-view sheets as a set — one file until 2026-09-06 and thirty-eight
+   since, and asking for the set is what makes a rule that has *moved* go on
+   being found while a rule that is gone still fails. */
+const css = readerCssNoComments();
 
 /**
  * One CSS rule body, by selector, with whitespace flattened.
@@ -56,7 +56,7 @@ const css = stripBlockComments(
 function rule(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const found = new RegExp(`^${escaped}\\s*\\{([^}]*)\\}`, "m").exec(css);
-  expect(found, `no rule for \`${selector}\` in styles.css`).not.toBeNull();
+  expect(found, `no rule for \`${selector}\` in the reader stylesheets`).not.toBeNull();
   return (found?.[1] ?? "").replace(/\s+/g, " ").trim();
 }
 

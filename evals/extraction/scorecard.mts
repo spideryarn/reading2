@@ -367,10 +367,14 @@ export interface ProvenanceTally {
    * **And it is not hypothetical.** Measured 2026-09-06 over the shipped
    * extraction of all fifteen fixtures: **9 runs on 5 of them** — `medium-about`
    * 4, `quanta-year-physics` 2, `wiki-gdp-table` 1, `plos-biology` 1,
-   * `pmc-article` 1, reproduced independently. Their **global order is still
-   * checked**; what is missing is any claim about which container they belong
-   * in. [score.mts](score.mts) prints the line, so the number is read from the
-   * run rather than quoted from here.
+   * `pmc-article` 1, reproduced independently. **4 on 3 of them since C1a landed
+   * the same day**: stage 2 now refuses `medium-about` and `pmc-article`
+   * outright (src/extract.ts § `capabilityFloor`), so their runs are no longer
+   * shipped and no longer counted. The branch is still live on
+   * `wiki-gdp-table`, `plos-biology` and `quanta-year-physics`. Their **global
+   * order is still checked**; what is missing is any claim about which container
+   * they belong in. [score.mts](score.mts) prints the line, so the number is
+   * read from the run rather than quoted from here.
    */
   ownerlessStamped: number;
 }
@@ -2049,11 +2053,15 @@ function provenanceForm(
        * reported it too, and two reds for one fault is the cost. It is
        * deliberate: *"assume another check caught it"* is the shape of every hole
        * this gate has had, and a redundant red is cheaper than a silent skip.
-       * Measured zero across the fifteen **shipped** extractions — but not zero
-       * across the run: `drop-every-short-block` on `pmc-article` removes the
-       * `<a>here</a>` from the bot wall's *"Click here if you are not
-       * automatically redirected"*, and until this was fixed the card said this
+       * Measured zero across the fifteen **shipped** extractions, and it was not
+       * zero across the run until C1a: `drop-every-short-block` on `pmc-article`
+       * removes the `<a>here</a>` from the bot wall's *"Click here if you are not
+       * automatically redirected"*, and until this was fixed the card said that
        * run was invented while the attribution gate beside it said it was not.
+       * **Stage 2 refuses `pmc-article` since 2026-09-06**, so the runner no
+       * longer reaches that shape on a real page; the oracle for it is the case
+       * named for the ninth review in `tests/extraction-scorer.test.ts`, which
+       * holds the floor open for that one call to keep the witness.
        * The one thing this red is *not* is proof of invention on its own: a run
        * whose retained pieces are all present but in the wrong order inside the
        * subtree arrives here too, so the message below names both possibilities

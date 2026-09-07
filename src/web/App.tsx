@@ -64,7 +64,7 @@ import { armActivationForRefereeView } from "./activation.js";
 import { useQuiz } from "./useQuiz.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
-import { rehostImages } from "./rehost.js";
+import { beginArticleLoad, rehostImages, type ArticleLoad } from "./rehost.js";
 import { TableView } from "./TableView.js";
 import type { SelectionAnchor } from "./selection.js";
 import type { TermSelection } from "./annotate.js";
@@ -187,6 +187,7 @@ import {
   watchBarVisibility,
 } from "./scroll.js";
 import { orderComments, positionOf, stepComment } from "./comment-nav.js";
+import { jumpToComment, stepToComment } from "./comment-jump.js";
 import {
   buildSections,
   positionToWrite,
@@ -241,6 +242,7 @@ import {
 } from "./PublicChrome.js";
 import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
 import { SmallScreenHint } from "./SmallScreenHint.js";
+import { ViewportProbe } from "./ViewportProbe.js";
 import { useRenderCount } from "./perf.js";
 import { rowsForBlockIds } from "./rows.js";
 import {
@@ -912,16 +914,46 @@ function useArticleAccess(slug: string, readerId: string | null): ArticleAccess 
     /* Both can change under us — the slug via back/forward or a pasted link,
        the reader by signing in or out in another tab. Guard the response so a
        slow first fetch cannot overwrite a fast second one. */
+    /* **Ownership is claimed here, synchronously, before any await** — and
+       handed back by this effect's own cleanup. It used to be claimed inside
+       `rehostImages`, which runs only after the article payload has come back,
+       so *whose turn it was* was decided by which request finished last: a slow
+       article A returning after the reader had moved to B would revoke **B's**
+       object URLs and abort B's fetches, blanking the article on screen. That
+       is not rare — `<StrictMode>` double-invokes every effect in development.
+       rehost.ts § `ArticleLoad`, GPT Sol 2026-09-06. */
+    const load = beginArticleLoad();
     let live = true;
     setAnswer(null);
-    void resolveAccess(slug, readerId !== null)
-      .then((access) => live && setAnswer({ slug, readerId, access }))
+    void resolveAccess(slug, readerId !== null, load)
+      .then(({ access, withImages }) => {
+        if (!live) return;
+        setAnswer({ slug, readerId, access });
+        /* **The second draw**, and the same `live` guard for the same reason:
+           this one lands a second or so after the first, which is comfortably
+           long enough for the reader to have clicked something else. Without the
+           guard it would put the article they just left back on the screen.
+
+           An ordinary state transition rather than an `img.src = …` written into
+           the live DOM — `TableView` re-renders a block's html whenever its
+           annotations change, and would erase an imperative write while leaving
+           the object URL behind it unrevoked. GPT Sol, 2026-09-06. */
+        void withImages.then(
+          (drawn) => live && drawn && setAnswer({ slug, readerId, access: drawn }),
+        );
+      })
       .catch(
         (e: Error) =>
           live && setAnswer({ slug, readerId, access: { kind: "error", message: e.message } }),
       );
     return () => {
       live = false;
+      /* **And the resources, which `live` does not touch.** Leaving the reader
+         for the shelf, an article that turns out not to be shared, a payload
+         that hangs, an unmount while the second draw is still coming: none of
+         those reaches another `rehostImages`, so before this line each one left
+         a load fetching and its blobs allocated for the rest of the session. */
+      load.release();
     };
   }, [slug, readerId]);
 
@@ -959,9 +991,15 @@ function useArticleAccess(slug: string, readerId: string | null): ArticleAccess 
  * exactly the same route. The one thing worse than an unsanitised article is an
  * unsanitised article on the one page we invite strangers to.
  */
-async function resolveAccess(slug: string, signedIn: boolean): Promise<ArticleAccess> {
-  const found = await findArticle(slug, signedIn);
-  if (found.kind === "not-shared" || found.kind === "reauth-required") return found;
+async function resolveAccess(
+  slug: string,
+  signedIn: boolean,
+  load: ArticleLoad,
+): Promise<ResolvedAccess> {
+  const found = await findArticle(slug, signedIn, load.signal);
+  if (found.kind === "not-shared" || found.kind === "reauth-required") {
+    return { access: found, withImages: NO_SECOND_ANSWER };
+  }
   /* **`rehostImages` runs AFTER `sanitizeArticle`, and the order is the whole
      of why it is here at all.** `stripOwnApiUrls` (src/sanitize-policy.ts)
      removes any `src` resolving to our own API, deliberately — an article may
@@ -977,35 +1015,108 @@ async function resolveAccess(slug: string, signedIn: boolean): Promise<ArticleAc
      token on `/api/asset/…` for an owner, a bare `publicFetch` on
      `/api/public/asset/…` for a visitor — which is the `footing` argument and
      nothing else. Both end in a `blob:`, and rehost.ts § Why every picture
-     arrives as a `blob:` says what changed on 2026-09-06 and why. */
-  const article = await rehostImages(
-    sanitizeArticle(found.article),
+     arrives as a `blob:` says what changed on 2026-09-06 and why.
+
+     **Two answers back, not one**, since stage E switched the article's own
+     images on: the first has the PDF figures in it and every image we hold a
+     copy of blanked, and the second — a moment later — has the copies. The
+     prose must not wait for a hundred pictures, and the publisher's URL must
+     not be in the markup while we fetch ours, because by the time we swapped it
+     the reader would already have been counted. rehost.ts § The images are
+     blanked before the prose draws. */
+  const clean = sanitizeArticle(found.article);
+  const rehosted = await rehostImages(
+    clean,
     slug,
     found.kind === "owned" ? "owned" : "public",
+    load,
   );
-  return found.kind === "owned"
-    ? { kind: "owned", article }
-    : {
-        kind: "public",
-        article,
-        artefacts: artefactsOf(found.article),
-        available: artefactsIn(found.article),
-        /* Derived here, once, on the raw payload — `visitorComments` supplies
-           the `status` a `PublicComment` deliberately does not carry, and says
-           why. src/web/public-artefacts.ts. */
-        comments: visitorComments(found.article),
-        /* Derived here too, once, and for the same reason — `visitorSearches`
-           supplies the `status` a `PublicSearchRun` deliberately does not
-           carry. src/web/public-artefacts.ts. */
-        searches: visitorSearches(found.article),
-        sessionUnconfirmed: found.sessionUnconfirmed,
-      };
+
+  /**
+   * The whole answer for one article, given which of the two draws we are on.
+   *
+   * **A closure over `found` rather than a second literal**, because everything
+   * in the public arm below is derived from the *raw* payload and is identical
+   * on both draws — copying it would be four derivations that have to agree, one
+   * of which (`visitorComments`) is the kind of thing that gets edited on one
+   * copy only.
+   */
+  const accessWith = (article: Article): ArticleAccess =>
+    found.kind === "owned"
+      ? { kind: "owned", article }
+      : {
+          kind: "public",
+          article,
+          artefacts: artefactsOf(found.article),
+          available: artefactsIn(found.article),
+          /* Derived here, once, on the raw payload — `visitorComments` supplies
+             the `status` a `PublicComment` deliberately does not carry, and says
+             why. src/web/public-artefacts.ts. */
+          comments: visitorComments(found.article),
+          /* Derived here too, once, and for the same reason — `visitorSearches`
+             supplies the `status` a `PublicSearchRun` deliberately does not
+             carry. src/web/public-artefacts.ts. */
+          searches: visitorSearches(found.article),
+          sessionUnconfirmed: found.sessionUnconfirmed,
+        };
+
+  return {
+    access: accessWith(rehosted.article),
+    /* **`catch`, and it falls back to `clean` rather than to `null`.** The
+       second draw is decoration on an article the reader already has, so a
+       rejection must not turn a successful load into an error page. But `null`
+       would leave the *first* draw standing — and that draw deliberately has
+       every stored image's `src` removed, so an unexpected throw would leave
+       blank boxes for ever rather than losing only the pictures. `clean` is the
+       sanitised article with the publishers' own URLs still in it, which is
+       exactly what a reader saw before any of this existed. GPT Sol,
+       2026-09-06. */
+    withImages: rehosted.images
+      /* `null` is *no second draw was ever coming*, which `rehostImages` only
+         says when it blanked nothing — so there is nothing to put right and the
+         first draw stands. Mapping it to `clean` here would drop a PDF's
+         figures back out of an article that had just been given them. */
+      .then((article) => (article ? accessWith(article) : null))
+      .catch(() => accessWith(clean)),
+  };
 }
 
-/** The two-step itself: the owned route, then the public one. Raw payloads. */
+/**
+ * The article as it is now, and the article as it will be when its own images
+ * arrive.
+ *
+ * See `rehostImages` (rehost.ts § The article twice) for why there are two of
+ * them at all. What this type adds is that the second one is a whole
+ * `ArticleAccess` rather than an `Article`: the public arm carries four things
+ * derived beside the article, and handing the caller a bare article would make
+ * the hook responsible for rebuilding a union it has no business knowing the
+ * shape of.
+ */
+interface ResolvedAccess {
+  access: ArticleAccess;
+  /** `null` when there was never a second draw coming, which is most articles. */
+  withImages: Promise<ArticleAccess | null>;
+}
+
+/** Nothing of ours to draw on this one, so there is no second draw. */
+const NO_SECOND_ANSWER: Promise<ArticleAccess | null> = Promise.resolve(null);
+
+/**
+ * The two-step itself: the owned route, then the public one. Raw payloads.
+ *
+ * **`signal` is the article load's**, and it is here for the reason `ArticleLoad`
+ * exists at all (rehost.ts): a load owns its own requests, so that a reader who
+ * moves on stops paying for the one they left. Until 2026-09-07 the load's
+ * controller reached the *asset* fetches and not the payload fetch above them,
+ * which is the larger of the two — so releasing a load abandoned a 150KB
+ * download rather than cancelling it. Nothing visible was wrong: the `live`
+ * guard already refuses the stale render, and this is the resource half of the
+ * same rule. GPT Sol, reviewing the built code.
+ */
 async function findArticle(
   slug: string,
   signedIn: boolean,
+  signal: AbortSignal,
 ): Promise<
   | { kind: "not-shared" }
   | { kind: "reauth-required" }
@@ -1021,7 +1132,7 @@ async function findArticle(
    */
   let sessionUnconfirmed = false;
   if (signedIn) {
-    const res = await apiFetch(`/api/article/${encodeURIComponent(slug)}`);
+    const res = await apiFetch(`/api/article/${encodeURIComponent(slug)}`, { signal });
     /* 404 is *not mine*; 401 is *we cannot tell*, after `apiFetch` has already
        spent its one refresh and one retry on it (lib/api.ts). Everything else,
        `readJson` turns into a message — including a 500, which must not be
@@ -1046,7 +1157,7 @@ async function findArticle(
      disappears, and
      docs/plans/260902j-public-read-only-access-audit-and-improvements.md
      § Cluster B. */
-  const read = await loadPublicArticle(slug);
+  const read = await loadPublicArticle(slug, signal);
   /* **Both answers, and this is the line where they meet.** *Nobody shared it*
      is a complete answer to a reader we could identify; to one we could not it
      is only half of one, and the reader needs a way back in rather than a
@@ -2578,30 +2689,35 @@ function Reader({
     (c) => c.status === "pending" && c.id !== note,
   ).length;
 
+  /* ------------------------------------------ moving to a comment, twice --
+     **These were one function until 2026-09-06, and that was the bug.** The
+     drawer's list and the dialog's arrows want opposite things from the history
+     stack: choosing a question out of a list is an arbitrary jump and pushes,
+     while stepping between them is traversal and must not — twenty questions
+     cannot cost twenty presses of Back. The argument, and why the split is
+     better than either half alone, is comment-jump.ts. GPT Sol F9. */
+
+  /** The drawer's list: a jump, so there is a way back from it. */
+  const openCommentFromDrawer = useCallback(
+    (id: string) => jumpToComment(comments, id, setNote, jumpTo),
+    [comments, jumpTo, setNote],
+  );
+
   /**
-   * Step to another comment, bringing its passage into view *only if it isn't
-   * already*. Two comments in one paragraph are the common case, and jolting the
-   * page between them would lose the reader their place for no gain.
-   *
-   * It scrolls and writes no position state of its own — the listener in
-   * useReadingPosition notices and updates `?at=`, exactly as it does for a
-   * wheel. Same reasoning as keynav.ts.
+   * The dialog's arrows: traversal, writing no position state of their own —
+   * the listener in `useReadingPosition` notices the scroll and updates `?at=`,
+   * exactly as it does for a wheel. Same reasoning as keynav.ts.
    */
-  const goToComment = useCallback(
-    (id: string | null) => {
-      if (id === null) return;
-      void setNote(id);
-      const target = comments.find((c) => c.id === id);
-      if (target && !isBlockOnScreen(target.blockId)) scrollToBlock(target.blockId);
-    },
+  const stepToNeighbouringComment = useCallback(
+    (id: string | null) => stepToComment(comments, id, setNote),
     [comments, setNote],
   );
 
   /**
    * A `?note=` that arrived in the address bar brings its own passage into view.
    *
-   * The gap this closes: `goToComment` above scrolls, so stepping between
-   * questions inside the reading view was always fine — but that path needs the
+   * The gap this closes: the two above move the reader, so opening or stepping
+   * between questions inside the reading view was always fine — but they need the
    * comment in hand, and a pasted link has only an id. `/read/<slug>?note=<id>`
    * with no `?at=` beside it therefore opened a dialog about a paragraph that
    * was somewhere off screen, and which one was unguessable. That is exactly the
@@ -2615,13 +2731,14 @@ function Reader({
    * free — and then the comment arrives and this fires once.
    *
    * **Once**, and that is the ref. After the first honoured arrival, moving
-   * between comments belongs to `goToComment`, which deliberately holds still
-   * when the next passage is already on screen. Re-running this on every change
+   * between comments belongs to `comment-jump.ts`, which on both paths
+   * deliberately holds still when the next passage is already on screen —
+   * `passageToBringIntoView`. Re-running this on every change
    * to `note` would be a second thing moving the page, and the two would
    * disagree the moment either changed.
    *
    * `isBlockOnScreen` rather than an unconditional jump, for the same reason
-   * `goToComment` uses it: when `?note=` and `?at=` agree — the passage sits in
+   * comment-jump.ts uses it: when `?note=` and `?at=` agree — the passage sits in
    * the section the link restored — the reader is already looking at it, and a
    * jolt would cost them their place to move them nowhere.
    *
@@ -2907,7 +3024,22 @@ function Reader({
     [owner, setNote, setThread],
   );
 
-  const openCommentDialog = useCallback((id: BlockId) => void setNote(id), [setNote]);
+  /**
+   * Open a comment's dialog and **move nothing** — the third `onOpenComment`,
+   * and the one that is not a jump.
+   *
+   * `TableView`'s inline mark and gutter bookmark are controls attached to the
+   * block the reader is looking at, so the passage is on screen by
+   * construction; there is nothing to scroll to and nothing to push. The
+   * drawer's two closures go through `openCommentFromDrawer` instead, and the
+   * dialog's four arrows through `stepToNeighbouringComment` (comment-jump.ts).
+   *
+   * **`string`, not `BlockId`**: what arrives is a *comment* id, read off
+   * `data-comment`. It compiled as `BlockId` only because that is an alias for
+   * `string`, so the annotation was a lie a reader would have believed. GPT Sol
+   * F24, 2026-09-06.
+   */
+  const openCommentDialog = useCallback((id: string) => void setNote(id), [setNote]);
 
   /**
    * The whole address, subscribed to — the input to the block permalinks.
@@ -3338,8 +3470,8 @@ function Reader({
           total={ordered.length}
           hasPrev={stepComment(ordered, note, -1) !== null}
           hasNext={stepComment(ordered, note, 1) !== null}
-          onPrev={() => goToComment(stepComment(ordered, note, -1))}
-          onNext={() => goToComment(stepComment(ordered, note, 1))}
+          onPrev={() => stepToNeighbouringComment(stepComment(ordered, note, -1))}
+          onNext={() => stepToNeighbouringComment(stepComment(ordered, note, 1))}
           onClose={() => void setNote(null)}
         />
       )}
@@ -3350,8 +3482,8 @@ function Reader({
           total={ordered.length}
           hasPrev={stepComment(ordered, note, -1) !== null}
           hasNext={stepComment(ordered, note, 1) !== null}
-          onPrev={() => goToComment(stepComment(ordered, note, -1))}
-          onNext={() => goToComment(stepComment(ordered, note, 1))}
+          onPrev={() => stepToNeighbouringComment(stepComment(ordered, note, -1))}
+          onNext={() => stepToNeighbouringComment(stepComment(ordered, note, 1))}
           onClose={() => void setNote(null)}
           access={{
             kind: "owner",
@@ -3832,7 +3964,7 @@ function Reader({
                   // would otherwise be underneath the dim, which looks exactly
                   // like nothing happening.
                   void setPanel(null);
-                  goToComment(id);
+                  openCommentFromDrawer(id);
                 },
               }
             : /* **The same drawer, with the owner's comments in it**, since
@@ -3851,11 +3983,19 @@ function Reader({
                 onPanel: (next) => void setPanel(next),
                 onOpenComment: (id) => {
                   void setPanel(null);
-                  goToComment(id);
+                  openCommentFromDrawer(id);
                 },
               }
         }
       />
+
+      {/* **`?probe=1` only, and `null` for everybody else** — the viewport
+          diagnostic that stage 4 of
+          docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md
+          exists to get a measurement from. Inside `.reader` because that is
+          where `--mode-w` and `--spine-w` resolve, and after the `Dock` so it
+          is over the bars it is measuring. ViewportProbe.tsx. */}
+      <ViewportProbe />
     </div>
   );
 }

@@ -374,19 +374,42 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      job resumes from its artefacts, the same reason `jb-gone` is. See
      `STEP_STOPPED`. */
   "jb-stopped": "retry",
-  /* **The seven steps that know why they stopped**, and six of them are
-     `blocked` — see § the steps that know why they stopped below for what that
-     narrows and why. They are `jb-` rather than `ai-` because none of them is a
-     model call: four are a document that is not there, is not what it claims, or
-     has no words in it, and three are a Sketch that has to be drawn before the
-     painting can be.
+  /* **The two ways a publication is refused**, and the pair exists because the
+     difference between them is money. `PublishRefused` (src/store/pg-revisions.ts)
+     carried free text and no kind until 2026-09-07, so every refusal fell
+     through to `retry` — and on 2026-09-05 one article was refused four times in
+     thirteen minutes, each attempt completing and paying for its model call
+     before meeting the identical, deterministic refusal, and each telling the
+     reader that trying again was worth a go.
 
-     `jb-source-damaged` is the one `bug` of the seven: a stored object that does
-     not hash to its own name is an invariant of ours that broke, and it is the
-     only one of the seven the reader has no move against. */
+     `jb-publish-refused` is `bug` because the reader has no move: the remedy —
+     re-running the `hierarchy` step — belongs to whoever runs the app, and a
+     *retry* is not it, since a retry skips every step that finished and reads
+     the same artefacts back. `jb-publish-moved` is `retry` because for that one
+     the old sentence was true all along: another publication landed first, and
+     the next attempt starts from where the article now is. See
+     `PUBLICATION_REFUSED` below. */
+  "jb-publish-refused": "bug",
+  "jb-publish-moved": "retry",
+  /* **The steps that know why they stopped** — seven when this note was
+     written, eight since the capability floor joined them on 2026-09-06, and
+     all but one `blocked`: see § the steps that know why they stopped below for
+     what that narrows and why. They are `jb-` rather than `ai-` because none of
+     them is a model call: five are a document that is not there, is not what it
+     claims, or has too few words in it to build from, and three are a Sketch
+     that has to be drawn before the painting can be.
+
+     `jb-source-damaged` is the one `bug` of them: a stored object that does not
+     hash to its own name is an invariant of ours that broke, and it is the only
+     one the reader has no move against. */
   "jb-source-gone": "blocked",
   "jb-source-damaged": "bug",
   "jb-no-article": "blocked",
+  /* The capability floor, 2026-09-06: Readability handed back a parse it had
+     itself concluded had failed, and stage 2 used to publish it. Its own code
+     rather than `jb-no-article`'s because a code names a branch — there the
+     library found nothing at all, here it found too little. */
+  "jb-too-little-text": "blocked",
   "jb-no-text": "blocked",
   "jb-no-sketch": "blocked",
   "jb-sketch-stale": "blocked",
@@ -920,6 +943,86 @@ export const STEP_STOPPED: ReaderFacingFailure = {
     "again picks up from there rather than beginning over. [jb-stopped]",
 };
 
+/**
+ * **The work was done, and the store would not take it** — and it will not take
+ * it next time either.
+ *
+ * `PublishRefused` (src/store/pg-revisions.ts) is the last gate before a draft
+ * becomes the article: it refuses a draft with no blocks, no tree, a tree
+ * `checkTree` rejects, a `hierarchy` run that did not finish or ran against
+ * different blocks, or a revision that is not this article's to publish. Until
+ * 2026-09-07 it carried a list of free-text reasons and nothing else, so
+ * `failureKindOf` (src/job-failure.ts) found nothing to read and fell through
+ * to `retry`.
+ *
+ * What that cost is the whole of
+ * docs/postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md.
+ * A `checkTree` rule tightened over already-stored trees took roughly one
+ * article in twenty off the air permanently, and each attempt to publish
+ * *anything* for one of them — glossary, quotes, debate — completed its model
+ * call, paid for it, and was then refused at the door. Four times on one
+ * article in thirteen minutes, one of them $0.2454, every one of them shown
+ * this file's `retry` sentence: *"a step that stops like this often comes out
+ * differently on a second attempt — so trying again is worth a go"*.
+ *
+ * **`bug`, not `blocked`.** `blocked` is the one non-retryable kind that admits
+ * a way out, and there is none here that a reader can take: the remedy is
+ * re-running the `hierarchy` step, which is an instruction for whoever runs the
+ * app. And note that a **retry** is not that re-run — Retry skips every step
+ * that finished, so it reads the identical tree back and stops in the same
+ * place (src/job-failure.ts § `stageFailure`).
+ *
+ * **It does not say which reason it was**, and that is deliberate rather than
+ * lazy. The reasons name node ids, block indices and hashes: a diagnostic for
+ * whoever runs the app, addressed to somebody who cannot run anything. They go
+ * to the log instead (src/jobs.ts § `endAsStorageFailure`), and thirteen
+ * sentences, twelve of which say the same thing to a reader, is not the fix.
+ *
+ * **What it does not claim, and why the first draft claimed both.** ⟨Sol,
+ * 2026-09-07⟩ It opened *"This finished its work"* and promised *"Nothing was
+ * published and your library is unchanged"*. The first is false for the two
+ * refusals raised while the draft is being **opened**, before a single step
+ * runs; the second is false for the branch that refuses a revision which is
+ * *already published*, where the work is on the shelf already. One sentence
+ * stands in for eight throw sites, so it may only claim what is true at all of
+ * them — the ordinary hazard of shared copy, and the reason to write the
+ * narrow claim rather than the vivid one.
+ */
+export const PUBLICATION_REFUSED: ReaderFacingFailure = {
+  kind: "bug",
+  message:
+    "The app would not save this article's latest result — it found something about the article " +
+    "it will not publish. It has been recorded and needs fixing here; asking again would stop in " +
+    "the same place. [jb-publish-refused]",
+};
+
+/**
+ * **The other publication refusal, and the one where another go is the answer.**
+ *
+ * A draft may only replace the revision it was copied from
+ * (`publishRevisionIn`, src/store/pg-revisions.ts). When the article has moved
+ * on underneath it, publishing now would discard whatever landed first — so it
+ * is refused, and nothing is lost by refusing it.
+ *
+ * `retry`, and it means it: the next attempt begins a fresh draft from what the
+ * article is serving now, so the identical work over the newer base is exactly
+ * what happens. This is the case that makes the refusal a **distinction** rather
+ * than a blanket "never retry a publication" — get this one wrong in the other
+ * direction and the fix for `PUBLICATION_REFUSED` is a second bug, withholding
+ * a button that would have worked.
+ *
+ * It says *something else finished* rather than naming revision ids, for
+ * `PUBLICATION_REFUSED`'s reason: the ids are the diagnostic and belong in the
+ * log.
+ */
+export const PUBLICATION_MOVED_ON: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "Something else finished for this article while this was working, so saving now would have " +
+    "thrown that away. Nothing was published and your library is unchanged. Starting this again " +
+    "picks up from where the article is now. [jb-publish-moved]",
+};
+
 /* --------------------------------------- the steps that know why they stopped -- */
 
 /**
@@ -1010,6 +1113,52 @@ export const PAGE_HAS_NO_ARTICLE: ReaderFacingFailure = {
     "would be handed the same page again, so it is the address it came from that needs looking " +
     "at. [jb-no-article]",
 };
+
+/**
+ * **The page came back, and there was not enough of it to read** — the
+ * capability floor's sentence, and the count is in it deliberately.
+ *
+ * A factory rather than a constant for that one reason: *"there was no article"*
+ * is a verdict the reader can only take on trust, where *"185 characters"* is a
+ * fact they can check against the page they were looking at. It is also the
+ * fastest way for somebody reporting this to say which page they meant.
+ *
+ * **It says "usually", and it never says this is an error page.** The rule that
+ * produced it does not know that: it reads no markup and makes no claim about
+ * what the page *is* — only that there is too little text here to build
+ * anything from, which is equally true of a genuinely tiny real page
+ * (src/extract.ts § `capabilityFloor`). So the causes are named as the usual
+ * ones and the short-honest-page case is named beside them, because a reader
+ * whose genuinely 300-character page was refused must not be told they were shown a wall.
+ *
+ * **Its own code rather than `jb-no-article`'s**, on the rule the two failures
+ * either side of it already follow: a code names a branch, and a reader quoting
+ * four characters should land whoever is helping on the right one. The move is
+ * the same for all three; the finding is not.
+ *
+ * The floor is Readability's own constant, not ours —
+ * docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md § C1a.
+ */
+export function pageHadTooLittleText(chars: number): ReaderFacingFailure {
+  return {
+    kind: "blocked",
+    /* **The threshold is not in the sentence, only the count.** The reader has
+       no use for our number and cannot act on it — and `tests/messages.test.ts`
+       reads any bare 400-599 in a sentence as a leaked HTTP status, which 500
+       is. The count is the fact about *their* page; the threshold is ours. */
+    message:
+      /* **"could be read as article text", not "of text"**, which the reader
+         would hear as the whole page. It is the count of what the extractor got
+         out of it: Medium's 404 shell has 249 characters visible and this
+         reports 185, and a sentence that conflated the two would send somebody
+         to count words on a page. GPT Sol, 2026-09-06. */
+      `There was not enough on the page that was fetched to build an article from — only ${chars} ` +
+      "characters of it could be read as article text. That is usually a login wall, an error " +
+      "page, or a page whose words only appear once its own scripts have run, though a genuinely " +
+      "very short page ends the same way — and this step would be handed the same page again, so " +
+      "it is the address it came from that needs looking at. [jb-too-little-text]",
+  };
+}
 
 export const ARTICLE_HAD_NO_TEXT: ReaderFacingFailure = {
   kind: "blocked",

@@ -1,0 +1,740 @@
+/* dock.css — the bottom bar and the drawer that rises out of it (Dock.tsx), the
+   `.tip-soon` cards its controls open, the install hint, the offline strip, the
+   small-screen banner, and `.logo-home` in the opposite corner.
+
+   The mode switch and the bar's fit ladder are NOT here — they are dock-fit.css,
+   six files later, where the original stylesheet put them. */
+
+/* ------------------------------------------------------------------ dock --
+   The bottom bar and the drawer that rises out of it — Dock.tsx, and
+   docs/plans/260825c-bottom-bar.md for why the bottom rather than the left.
+
+   The whole point of this edge is that it costs the table nothing. Note what is
+   NOT here as a result: no `--dock-w`, no term added to any `calc()` that
+   `.reader`, the sticky bars or `td.pin-left` depend on, and nothing in
+   layout.ts. The page grows a bar's worth of bottom padding and that is the
+   entire interaction with the reading view.
+
+   `position: fixed`, so horizontal scrolling does not drag it sideways. That is
+   the one thing the spine had to be careful about too (see § spine) and the one
+   thing this gets for free: `fixed` is viewport-relative, and a bar that spans
+   the viewport has nowhere to drift to. */
+.dock {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 100vw;
+  /* `--dock-space`, not `--dock-h`: the bar's own height plus whatever the home
+     indicator has claimed, with the extra spent as padding below the buttons so
+     they sit above it rather than under it. On anything without one both terms
+     are `--dock-h` and this is the rule it always was. */
+  height: var(--dock-space);
+  /* **The bar gets out of the way while you read**, on a small device scrolled
+     down through — the same `data-bars="hidden"` switch the controls bar, the
+     table head, the spine and the mode band have answered to since
+     docs/plans/260827t-mobile-reading-view.md, which this one never joined. § a small device does
+     the switching; this turns it into movement, and `--dock-space -
+     --dock-bottom` is `0` at rest and a bar's height when hidden.
+
+     A transform rather than `bottom`, for the reason the controls bar gives:
+     it moves the paint and nothing else. Nothing under this bar is laid out
+     against it — `.reader` reserves `--dock-space` permanently — so a hidden
+     bar reflows nothing at all. */
+  transform: translateY(calc(var(--dock-space) - var(--dock-bottom)));
+  transition: transform 0.18s ease;
+  /* Above the scrim (92) and the drawer (95), not below them. The bar is how
+     you switch panels and how you shut the drawer, so dimming it along with the
+     article makes the live controls read as disabled — which is worse than
+     wrong, because it looks deliberate. The drawer sits exactly on top of the
+     bar rather than over it (`bottom: var(--dock-h)`), so nothing is hidden by
+     putting the bar in front. */
+  z-index: 96;
+  display: flex;
+  align-items: stretch;
+  gap: 0.15rem;
+  /* The bottom term is `--safe-bottom`, and it is in the shorthand rather than
+     in a `padding-bottom` of its own on purpose: a longhand declared *before*
+     this line is silently reset by it, which is how the home indicator got its
+     padding taken away again five minutes after it was given. Biome's
+     `noShorthandPropertyOverrides` caught it; nothing on screen would have.
+
+     The two side terms are the notch, which this bar meets in landscape for the
+     same reason the spine meets it in portrait: it is `position: fixed` and
+     spans the whole screen, so `left: 0` is inside the cut-out. */
+  /* **No right-hand term**, since 2026-09-02: the bar's trailing gutter is a
+     real child (`.dock-tail`) rather than padding. § the bar's fit ladder
+     measures the row by asking whether it overflows, and Chrome leaves a flex
+     container's trailing *padding* out of its scrollable overflow — so a gutter
+     spelled that way is invisible to the measurement, and the last button was
+     free to sit in it. That is six pixels on a laptop and `--safe-right` on a
+     phone held landscape, which is the cutout. GPT Sol, on the built code. */
+  padding: 0 0 var(--safe-bottom) calc(0.4rem + var(--safe-left));
+  background: var(--surface-raised);
+  border-top: 1px solid var(--rule-strong);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+}
+
+/* **The floor under § the bar's fit ladder, at every width.** Past its last
+   rung the row still does not fit — a phone in portrait cannot give fifteen
+   buttons a pressable width — and this is what makes that an honest overflow
+   you can scroll rather than a silent clip. Greg chose it, 2026-08-28:
+   *"maybe also row scrolls sideways if it doesn't fit horizontally"*.
+
+   **Unconditional since 2026-09-02**, on GPT Sol's finding. It lived in § a
+   narrow window, written when 731px was the only width at which the row could
+   overflow; that stopped being true the moment the ladder started deciding by
+   measurement, and the next few modes would have found a bar that clipped
+   silently at 800px with the safety net two hundred pixels below. It costs
+   nothing while the row fits.
+
+   No visible scrollbar: a 15px trough across the bottom bar of every window
+   would be chrome about chrome. The row is scrolled by dragging, by a trackpad,
+   or by tabbing — focus scrolls a hidden button into view on its own. */
+.dock {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.dock::-webkit-scrollbar { display: none; }
+
+/* `.dock-gap` is `flex: 1` and would collapse to nothing in a scrolling row,
+   which is exactly right — the buttons close up and the row scrolls. Every
+   other child holds its width.
+
+   **`flex-shrink: 0`, not `flex: none`**, since 2026-08-28. `none` is
+   `0 0 auto`, and the `0` that mattered here is the *shrink* — the silent
+   deletion machine `.dock-modes` warns about at length (§ the modes segment).
+   Pinning `flex-grow` to `0` as well was incidental, and it silently outranked
+   § a coarse pointer's attempt to let the buttons share the bar (this selector
+   is (0,2,0) against that rule's (0,1,0)), leaving fifteen icons huddled at the
+   left end of a phone. Nothing may shrink; growing into space that is already
+   there costs the guarantee nothing. */
+.dock > *:not(.dock-gap) { flex-shrink: 0; }
+
+/* The bar's trailing gutter, as content rather than as padding — see the
+   `padding` above for why it had to move.
+
+   It is also the ladder's **font-metric probe**, which is the second job one
+   element happened to be able to do. `useDockFit`'s `ResizeObserver` watches
+   this as well as the bar, and this box is `rem`-sized and rung-independent: a
+   reader who changes their browser's default font size resizes it (every label
+   changed width too), while switching rung never touches it. So it notices what
+   the bar's own `100vw` box cannot, and it cannot start the feedback loop that
+   observing the buttons would. */
+.dock-tail {
+  flex: none;
+  width: calc(0.4rem + var(--safe-right));
+}
+
+/* The reader must be able to scroll to the true end of the article. Without
+   this the last paragraph finishes underneath the bar, which does not look like
+   a bug — it looks like the article ends there. */
+/* The bar's resting room plus the hint's, which is `0px` unless the hint is on
+   screen. Both are resting values on purpose — see `--dock-bottom` in § tokens
+   for why the document's height must not follow a bar that moves. */
+.reader { padding-bottom: calc(var(--dock-space) + var(--hint-h)); }
+
+.dock-gap { flex: 1; }
+
+/* ------------------------------------------------------- the install hint --
+   One line above the bar, on an iPhone, once — InstallHint.tsx, and
+   docs/plans/260828av-mobile-screen-real-estate.md § 1 for why the advice is "leave the
+   browser" rather than anything this stylesheet could do.
+
+   Pinned to the bar's *resting* room (`--dock-space`) rather than to
+   `--dock-bottom`, so it does not chase the bar down the screen when the bar
+   slides away. It is one sentence the reader is meant to read or dismiss; a
+   sentence that slid about while they scrolled would be harder to do either
+   with. */
+:root:has(.install-hint) { --hint-h: 3.5rem; }
+
+/* ------------------------------------------------------ the offline strip --
+   The connection has gone — OfflineStrip.tsx, which carries the words and the
+   colours; this is only where it sits.
+
+   **Above the bar and above the hint**, because a notice that cannot be read is
+   not a notice: at `bottom: 0` and z-index 50 it was drawn underneath the dock
+   (96) and invisible whenever the bar was on screen, and when the bar slid away
+   it emerged into the home-indicator strip instead. Reading `--dock-space` and
+   `--hint-h` rather than `--dock-bottom` keeps it still while the bar moves,
+   for the same reason the hint does: it is a sentence to be read, not chrome
+   that gets out of the way. */
+.offline-strip {
+  position: fixed;
+  left: var(--safe-left);
+  right: var(--safe-right);
+  /* **`--return-chip-h` too**, because the two share this slot and the strip is
+     the one that can be told where to stand. The chip sat 0.75rem above the
+     same edge at z-index 46 and the strip covers it from 97, so at 390px —
+     where the offline sentence wraps to two lines — the way back was under it
+     and unreachable, while internal jumps and Back go on working offline. The
+     chip is a fixed single line, which is what makes *its* height a constant
+     and the strip's not: it truncates rather than wraps. GPT Sol F21,
+     2026-09-06. */
+  bottom: calc(var(--dock-space) + var(--hint-h) + var(--return-chip-h));
+  /* Above the bar (96), its drawer (95) and the drawer's dim (92). A lost
+     connection outranks everything the bar offers, because none of it is going
+     to work — and the dim exists to say "deal with this first", which is a
+     claim the drawer is not entitled to make while the server is unreachable. */
+  z-index: 97;
+}
+
+.install-hint {
+  position: fixed;
+  height: var(--hint-h);
+  left: var(--safe-left);
+  right: var(--safe-right);
+  bottom: var(--dock-space);
+  /* Under the drawer (95) and its dim (92), above the mode band (44) — it is
+     chrome about the app rather than part of the article, and a modal drawer
+     must cover it like everything else. */
+  z-index: 46;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface-raised);
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--ink-soft);
+  /* Leaves with the bar it sits on — § a small device sets the transform, this
+     is only how it travels, at the 0.18s everything else there uses. */
+  transition: transform 0.18s ease;
+}
+.install-hint-text { margin: 0; flex: 1; }
+.install-hint-text b { color: var(--ink); font-weight: 600; }
+/* The share glyph sits in the middle of a sentence, so it has to sit on the
+   text's baseline rather than on the line box's bottom edge. */
+.install-hint-icon { display: inline; vertical-align: -0.15em; }
+.install-hint-close {
+  flex: none;
+  /* 32px, which is smaller than the 44 § a coarse pointer gives the bar's own
+     buttons and deliberately so: this is a control the reader presses once and
+     never finds again, and a dismiss button the size of a mode button reads as
+     an equal of the things beside it. Still comfortably past the 24px CSS
+     minimum. */
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.install-hint-close:hover { color: var(--highlight); border-color: var(--highlight); }
+
+/* -------------------------------------------------------- the return chip --
+   "↩ back to <section>", above the bar, after a jump — ReturnChip.tsx, which
+   carries the words and the rule for when it is there at all.
+
+   **Bottom left, and the mirror of `.cmt-dialog`** (§ above), which is the
+   closest thing to it: a small fixed panel pinned above the bar, clear of the
+   hint band, that must not be under the dock or in the home-indicator strip.
+   The left, because the right is where the comment and chat dialogs open and a
+   chip that could be covered by one is a chip the reader cannot press.
+
+   **It clears the rail rather than starting at a flat gutter.** The plan said
+   `left: 1.25rem`, which is 20px and does clear the 12px spine — but only while
+   `--mode-w` is 0. Open chat on a wide window and the band takes real width
+   from that edge, and a chip written in a bare gutter would sit inside it. This
+   is the same expression `.reader`'s padding, `.masthead`, `.controls` and
+   `td.pin-left` all use for "after the furniture on the left", plus a gutter,
+   and it comes to the same 20px in the mode where the plan measured it. */
+/* 2.5rem of chip — 2rem of button, plus 0.15rem of padding and a 1px border
+   either side, measured at 38.78px rather than guessed — and then the 0.75rem
+   it stands off the edge below, because what the strip above needs is the room
+   the chip occupies rather than its height. `:root:has()`, the install hint's
+   arrangement, so that the strip can read it. Pinned by the browser check at
+   390px and 1280px: the two rectangles must not intersect. */
+:root:has(.return-chip) { --return-chip-h: 3.25rem; }
+
+.return-chip {
+  position: fixed;
+  left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left) + 0.5rem);
+  /* `--dock-space` rather than `--dock-bottom`, so it stays put while the bar
+     slides away — the install hint's reason, and it applies more here: this is
+     a target the reader is aiming at, and a target that moves while they reach
+     for it is worse than one a little further from the edge. */
+  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem);
+  /* Under the drawer (95), its dim (92) and the dock (96); above the mode band
+     (44) and the spine (45). `.install-hint`'s number and its reason — chrome
+     about the reading session rather than part of the article, which a modal
+     drawer must cover like everything else. */
+  z-index: 46;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  max-width: min(20rem, calc(100vw - 6rem));
+  padding: 0.15rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  /* The same lift `.cmt-dialog` has: it floats over prose, and a flat panel on
+     a dark ground reads as a hole in the article rather than as something in
+     front of it. */
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.return-chip-go {
+  /* One line, and the title is 2–6 words by construction — but the window can
+     be 390px wide, so it truncates rather than wrapping the chip into a block
+     of text sitting over the prose. */
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* 2rem, `.install-hint-close`'s floor and its reason: this is chrome about
+     getting somewhere, not one of the bar's own controls, and at 44px it would
+     read as an equal of them. */
+  min-height: 2rem;
+  padding: 0 0.5rem;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+.return-chip-go:hover { color: var(--ink); }
+
+.return-chip-close {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.return-chip-close:hover { color: var(--highlight); border-color: var(--highlight); }
+
+/* ------------------------------------------------- the small-screen hint --
+   One banner, once, at the top of the reading view on a narrow touch screen —
+   SmallScreenHint.tsx, and docs/plans/260905e-a-small-screen-banner-on-a-phone.md
+   for why the message is "the band covers the article, press Plain" rather
+   than anything this stylesheet could fix.
+
+   **In flow, not fixed**, which is the whole difference from the install hint
+   above and the reason it needs no `--hint-h` of its own: it is read once on
+   arrival and then scrolls away with the masthead. Two fixed strips over the
+   same bar would have needed a second token and an ordering rule between two
+   sentences that have nothing to say to each other.
+
+   Sized like `.shared-notice`, which is its neighbour in the flow, and
+   coloured like `.install-hint`, which is its sibling in purpose. */
+.small-screen-hint {
+  margin: 0 auto 1rem;
+  max-width: 48rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.small-screen-hint-text { margin: 0; flex: 1; }
+.small-screen-hint-text b { color: var(--ink); font-weight: 600; }
+.small-screen-hint-close {
+  flex: none;
+  /* 32px, `.install-hint-close`'s number and its reason: pressed once, never
+     found again, and one the size of a mode button would read as an equal of
+     the things beside it. Past the 24px CSS minimum either way. */
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.small-screen-hint-close:hover { color: var(--highlight); border-color: var(--highlight); }
+
+.dock-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.6rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  /* The active marker is an inset top border rather than a real one, so
+     switching panels cannot shift the row by a pixel. */
+  box-shadow: inset 0 2px 0 transparent;
+  transition: color 0.12s, background-color 0.12s, box-shadow 0.12s;
+}
+.dock-btn:hover { color: var(--highlight); background: var(--panel); }
+.dock-btn:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: -2px;
+}
+/* NOT `background: var(--accent)`. In this palette --accent is a raised dark
+   SURFACE, not the brand orange — an on-state painted with it is dark grey on
+   a near-black page: not an error, not visibly broken, just the signal quietly
+   gone. Both tokens.css and App.tsx's PILL carry the same warning. */
+.dock-btn.on {
+  color: var(--highlight-ink);
+  background: var(--highlight-wash);
+  box-shadow: inset 0 2px 0 var(--highlight);
+}
+
+/* **Dimmed and inert, but still focusable and still hoverable** — the tooltip
+   IS the content, so a button the pointer slides off would have nothing to say.
+   `aria-disabled` rather than `disabled` for the same reason: `disabled` would
+   take it out of the tab order and stop it firing the hover events the tooltip
+   needs, which is worst in exactly the case that needs explaining.
+
+   Written for buttons that were not built yet, and unused by anything for
+   weeks. Its first real user is the bar's experimental switch while it is
+   saving or waiting for its first answer — Dock.tsx §
+   `DockExperimentalSwitch`, whose comment repeats this argument because it is
+   the thing a reader of that file will want to argue with. */
+.dock-btn.soon {
+  color: var(--ink-faintest, var(--ink-faint));
+  opacity: 0.5;
+  cursor: default;
+}
+.dock-btn.soon:hover {
+  color: var(--ink-soft);
+  background: transparent;
+  opacity: 0.75;
+}
+
+.dock-count {
+  min-width: 1.05rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--rule-strong);
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  text-align: center;
+}
+/* Something is still with the model. The same signal the dialog gives, said
+   where you can see it without opening anything. */
+.dock-count.pending {
+  background: var(--highlight);
+  color: var(--page);
+}
+
+.dock-chev {
+  opacity: 0.5;
+  transition: transform 0.15s;
+}
+.dock-chev.open { transform: rotate(180deg); }
+
+/* The dim. A <button>, so it is reachable by keyboard and announced as
+   something you can press — hence the reset, which is undoing the fact that it
+   is a button rather than styling it as one. */
+.dock-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 92;
+  border: none;
+  padding: 0;
+  background: color-mix(in oklab, var(--page) 72%, transparent);
+  cursor: default;
+  animation: dock-fade 120ms ease-out;
+}
+
+.dock-drawer {
+  position: fixed;
+  /* Clear of the notch, like the bar it rises out of. */
+  left: var(--safe-left);
+  right: var(--safe-right);
+  /* Exactly on top of the bar, home indicator included — `--dock-space` and not
+     `--dock-bottom`, because an open drawer pins the bar down anyway (§ a small
+     device) and a drawer whose foot chased a sliding bar would be worse than
+     one that simply sits still. */
+  bottom: var(--dock-space);
+  z-index: 95;
+  max-height: min(60vh, 32rem);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-raised);
+  border-top: 1px solid var(--rule-strong);
+  box-shadow: 0 -12px 32px -12px rgb(0 0 0 / 0.6);
+  animation: dock-rise 140ms ease-out;
+}
+
+@keyframes dock-fade {
+  from { opacity: 0; }
+}
+@keyframes dock-rise {
+  from { transform: translateY(1.5rem); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dock-scrim, .dock-drawer { animation: none; }
+}
+
+.dock-drawer-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.55rem 1.1rem;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-ui);
+}
+.dock-drawer-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* The wordmark. Structure and class names are the original app's so its
+   CSS-only logo animations can be dropped in later as one file — see
+   docs/project/original-version/design-system.md, and the argument there for
+   not doing that. */
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--highlight);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}
+.logo-image { display: block; }
+
+/* The way home, fixed in the very top-left of the window — HomeLogo.tsx.
+   Height matches `--bar-h` so it sits on the same line as the reading view's
+   controls bar rather than floating above it.
+
+   **Not on the pages that mount a `Dock` since 2026-09-06** — the article, its
+   metadata and tweets pages, and the three visitor stand-ins draw `.dock-home`
+   in the bottom bar instead (Dock.tsx § the way home is back). This rule is for
+   everywhere else: the shelf-adjacent pages, `/privacy`, the article's loading
+   and error screens, and the two refusal pages. */
+.logo-home {
+  position: fixed;
+  /* Fixed in the corner the phone rounds off, so both insets apply. `--safe-top`
+     matches the masthead's own padding, which is what the wordmark sits beside. */
+  top: var(--safe-top);
+  left: var(--safe-left);
+  width: var(--logo-w);
+  height: var(--bar-h);
+  padding: 0 0.7rem;
+  /* Above the spine (45) and the controls bar (40), and below the drawer's dim
+     (92). The drawer is modal — while it is open, leaving the page is not one
+     of the things you are being offered, and Escape or the dim closes it.
+
+     **That rule is now local to this corner, and it was reversed for the copy
+     in the bar.** `.dock` is z-index 96, deliberately above the dim, so
+     `.dock-home` *stays* operable while the drawer is open — leaving the page
+     is one of the things being offered there. The flip was accepted rather than
+     overlooked (GPT Sol's G-note, Fable's item 4): the bar is already how you
+     shut the drawer and already carries Metadata, which is itself a link off
+     this page. Nothing about this rule changed; what changed is that it no
+     longer describes every copy of the wordmark, so this paragraph exists to
+     stop the next reader finding two files asserting opposite things.
+     § the bar's fit ladder and .dock above. */
+  z-index: 60;
+  text-decoration: none;
+  /* Opacity rather than a second colour: the wordmark is already `--highlight`
+     (see .logo above), and every other colour in the palette would be a step
+     *down* from it on hover, which reads as the control going away when you
+     point at it. */
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+.logo-home:hover { opacity: 1; }
+.logo-home:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: -2px;
+}
+
+.dock-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.dock-close:hover { color: var(--highlight); border-color: var(--highlight); }
+
+.dock-drawer-body {
+  overflow-y: auto;
+  padding: 0.9rem 1.1rem 1.1rem;
+}
+
+.dock-empty {
+  margin: 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+}
+
+/* The wait that stands where `.dock-empty` would. A flex row so the spinner
+   sits on the sentence's baseline, and a min-height so the drawer does not jump
+   when the spinner appears after useSlow's 600ms — QuestionsLoading in Dock.tsx. */
+.dock-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 1.2rem;
+}
+
+/* The questions list. Two columns where there is room, because these are short
+   and a single column down a wide drawer wastes the shape of it. */
+.dock-questions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  columns: 2 22rem;
+  column-gap: 1.5rem;
+}
+.dock-questions li {
+  /* Without this a card can be split down the middle by the column break, which
+     looks like two broken cards rather than one whole one. */
+  break-inside: avoid;
+  margin: 0 0 0.4rem;
+}
+.dock-question {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s, background-color 0.12s;
+}
+.dock-question:hover {
+  border-color: var(--highlight);
+  background: var(--highlight-wash);
+}
+.dock-question-quote {
+  /* Two lines and then stop: the quote is here to be recognised, not read.
+     `-webkit-box` is not a legacy spelling to be tidied away — it is still the
+     only display type `line-clamp` works against in every shipping browser, and
+     it is what makes this a block-level element too. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-family: var(--font-reading);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.dock-question-state {
+  display: block;
+  margin-top: 0.25rem;
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--ink-faint);
+}
+.dock-question-state.pending { color: var(--highlight); font-style: italic; }
+.dock-question-state.error { color: var(--danger, var(--highlight)); }
+/* The reader's own words, rather than the model's. Brighter, because in a list
+   that mixes the two the one you wrote is the one you are scanning for. */
+.dock-question-state.own { color: var(--ink-soft); }
+
+/* The placeholders' tooltips carry three lines rather than a label, so they
+   need room the spine's band cards don't.
+
+   **The `min()` is not decoration, and it was missing until 2026-09-03.** This
+   rule is more specific than `.tooltip` above, so a bare `22rem` here silently
+   defeated that rule's `min(22rem, calc(100vw - 1.75rem))` — the clamp that
+   stops a card becoming wider than the window it is shifting inside. Above
+   380px the two are the same value, which is why nothing showed it: the
+   difference only appears on a narrow phone, and only for `tip-soon`, which by
+   then was every control card in the app. Found by a cross-family review of the
+   Feedback button's card, which adopted this class and inherited the defect
+   with it. Any future override here must carry the `min()` too, or restate the
+   whole clamp. */
+.tooltip.tip-soon { max-width: min(22rem, calc(100vw - 1.75rem)); }
+.tip-soon-head {
+  font-weight: 600;
+  color: var(--ink);
+  /* Every other head here is a phrase with spaces in it and never needs this.
+     The masthead's origin card puts a *hostname* in the head (Masthead.tsx §
+     `OriginLine`), and a hostname is one unbroken token that can legally run to
+     253 characters — with no break opportunity it would push straight through
+     the `max-width` above. GPT Sol, 2026-09-06. */
+  overflow-wrap: anywhere;
+}
+.tip-soon-flag {
+  margin-left: 0.4rem;
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tip-soon p {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+/* Two footers, one treatment, because they sit in the same place and mean the
+   same kind of thing — an aside under the description rather than more of it.
+
+   `learned` is what that project learned the hard way; `tap` is "tap again to
+   do it", which a card opened by a finger has to say and no other card does
+   (Tooltip.tsx § `ControlTip.tap`, docs/project/touch.md). One rule rather than
+   two identical ones: if they ever need to differ, split it then.
+
+   Selector written as `.tip-soon p.tip-soon-learned` rather than the class on
+   its own so it outranks `.tip-soon p` above without an `!important`. Same
+   result, and the next person to add a rule here inherits a specificity ladder
+   they can reason about rather than one they have to escalate past. */
+.tip-soon p.tip-soon-learned,
+.tip-soon p.tip-soon-tap {
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-style: italic;
+}
+/* What the control drew for *this* article — the Sketch's own caption, in the
+   Sketch chip's card. The one line in these cards that is not the same words
+   for every reader, so it is quoted rather than blended into the description
+   above it: the rule says "and here is what came back", and it keeps its full
+   ink because it is the most specific thing in the card. `ControlTip`
+   § `drawn`. Specificity ladder as `.tip-soon-learned` above. */
+.tip-soon p.tip-soon-drawn {
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink);
+}
+

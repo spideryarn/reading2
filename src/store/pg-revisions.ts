@@ -77,6 +77,13 @@ import {
 import { isReservedSlug, shortIdInSlug } from "../ingest.js";
 import { mintId } from "../ids.js";
 import { log } from "../log.js";
+import {
+  codeOfMessage,
+  PUBLICATION_MOVED_ON,
+  PUBLICATION_REFUSED,
+  type FailureKind,
+  type ReaderFacingFailure,
+} from "../messages.js";
 import { currentOwnerId } from "../owner.js";
 import { hashBlocks } from "../source-hash.js";
 import { checkTree } from "../tree-invariants.js";
@@ -388,6 +395,42 @@ export { deriveLibraryScalars, type LibraryScalars } from "../library-scalars.js
 /* ------------------------------------------------------------- the errors -- */
 
 /**
+ * **Whether this door is ever going to open**, which is the one thing about a
+ * refusal that nobody could ask until 2026-09-07.
+ *
+ * `permanent` — the same job, retried, meets the identical refusal. A retry is
+ * narrower than a re-run: it **skips every step that finished**, so a bad tree,
+ * a `hierarchy` run against different blocks, or a revision that is not this
+ * article's is read straight back off the same rows.
+ *
+ * `transient` — the article moved on underneath this draft. Nothing is wrong
+ * with it or with the article; somebody published first, and the next attempt
+ * starts from where the article now is.
+ *
+ * **Two, and there is no third.** The thirteen distinct reasons below are all
+ * diagnostics already, and they already reach the log; the bit that was missing
+ * was the one that decides whether to spend another model call. See
+ * docs/plans/260907a-publish-refusal-reason-kinds-permanent-vs-transient.md
+ * § Two kinds only for the per-reason enum that was deliberately not built.
+ *
+ * **The parameter is `refusal`, not `kind`**, because `FailureKind` in
+ * src/messages.ts is already *the* `kind` on an error three files away, and two
+ * meanings of one word at one call site is how the next reader gets it wrong.
+ * It is not kept as a field — see the class below.
+ */
+export type RefusalKind = "permanent" | "transient";
+
+/**
+ * What each kind means to a reader, as a **total** map, so a third `RefusalKind`
+ * cannot be added without a sentence for it — the discipline `KNOWN_KINDS` in
+ * src/job-failure.ts and `RETRYABLE` in src/messages.ts already keep.
+ */
+const REFUSAL_FAILURES: Record<RefusalKind, ReaderFacingFailure> = {
+  permanent: PUBLICATION_REFUSED,
+  transient: PUBLICATION_MOVED_ON,
+};
+
+/**
  * A publication that was refused, with every reason at once.
  *
  * Every reason rather than the first, because the caller is a person looking at
@@ -397,14 +440,87 @@ export { deriveLibraryScalars, type LibraryScalars } from "../library-scalars.js
  *
  * `status: 409` so src/routes.ts answers a conflict rather than a 500 — this is
  * a draft that is not fit to publish, not a server fault.
+ *
+ * ## Why it says which kind it is
+ *
+ * It carried `reasons` and nothing else for its first year, so `failureKindOf`
+ * (src/job-failure.ts) found nothing to read and **every** refusal fell through
+ * to `retry` — the compatibility default, which is the right way to be wrong
+ * about a failure nobody classified and the wrong answer here.
+ *
+ * On 2026-09-05 a `checkTree` rule tightened over already-stored trees took
+ * roughly one article in twenty off the air, permanently, and every attempt to
+ * publish anything for one of them completed and **paid for** its model call
+ * before reaching this door. Four refusals on `nagel-bat` in thirteen minutes —
+ * $0.0378, $0.0348, $0.2454, $0.0365 — each one telling the reader that trying
+ * again was worth a go. It was not: the failure was deterministic, permanent,
+ * and charged.
+ * docs/postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md.
+ *
+ * ## The three fields, and who reads each
+ *
+ * - **`failureKind` and `readerFailure`** are read by `failureKindOf` and
+ *   `readerFailureOf` in src/job-failure.ts, and **only** by those two — that
+ *   file's `KindedError` says so, and the rule is about *reading*: keeping
+ *   "nobody said, so offer another go" in one place. Declaring them is what a
+ *   throw site is supposed to do, and `TooLongForOnePass` (src/token-budget.ts)
+ *   is the precedent for a *class* doing it, including why `stageFailure` is
+ *   not the answer when the class itself is `instanceof`-significant. So this
+ *   plugs into the seam rather than adding a second one — which is why
+ *   `src/jobs.ts` needed no change at all.
+ * - **`code`** is for monitoring. `SAFE_PROPS` in src/monitoring-scrub.ts
+ *   forwards it to Sentry as a tag and `SAFE_ERROR_PROPS` in src/log.ts puts it
+ *   on the log line, so two occurrences of a permanent refusal stop reading as
+ *   noise. Derived from the reader sentence rather than written out again, so
+ *   the two cannot drift.
+ *
+ * There is deliberately **no `refusal` field**. The discriminator is required at
+ * every throw site, which is where the decision belongs, and `failureKind` and
+ * `code` are already two copies of the answer — a third would be state nothing
+ * reads. ⟨Sol, 2026-09-07⟩
+ *
+ * **What is deliberately not done: the code is not appended to `message`.** That
+ * is the obvious way to make a refusal legible in Sentry and it is the one that
+ * must not be taken. `authored` in src/monitoring-scrub.ts does not ask *is
+ * there a code* — it treats a registered code as **proof that we wrote the whole
+ * string**, and `sanitise` then forwards the message verbatim. This message
+ * interpolates the **slug**, which is a path segment derived from the article's
+ * own title (src/store/db-errors.ts makes the same point about a slug in an
+ * error), and `reasons` is an unrestricted `string[]` that any future caller may
+ * fill from anywhere. Appending a code would sell that certificate to all of it.
+ * This is the six-hour hole of 2026-09-03 exactly, written up in
+ * src/job-failure.ts § *The detail goes on verbatim*; the message stays free
+ * text, stays withheld, and stays in the log where it belongs.
+ *
+ * ⟨Sol, 2026-09-07⟩ corrected the reason this note first gave — that a
+ * `checkTree` **problem** can quote a nav label. It cannot: src/tree-invariants.ts
+ * routes the nav-label complaint through `warn` into `advice`, and states as an
+ * invariant that no `problems` string carries article prose. The conclusion is
+ * unchanged; only its evidence was wrong, and a note resting on a false premise
+ * is one somebody disproves and then deletes.
  */
 export class PublishRefused extends Error {
   readonly status = 409;
   readonly reasons: readonly string[];
-  constructor(slug: string, reasons: readonly string[]) {
+  /** The reader's sentence's bracketed code, for Sentry and the log. */
+  readonly code: string | undefined;
+  /** Read by `failureKindOf` in src/job-failure.ts, and by nothing else. */
+  readonly failureKind: FailureKind;
+  /** Read by `readerFailureOf` in src/job-failure.ts, and by nothing else. */
+  readonly readerFailure: ReaderFacingFailure;
+  constructor(slug: string, refusal: RefusalKind, reasons: readonly string[]) {
     super(`Refusing to publish "${slug}": ${reasons.join("; ")}`);
     this.name = "PublishRefused";
     this.reasons = reasons;
+    const failure = REFUSAL_FAILURES[refusal];
+    this.failureKind = failure.kind;
+    this.readerFailure = failure;
+    /* `?? undefined` rather than a fallback string: every message in
+       src/messages.ts carries a registered code and tests/messages.test.ts
+       fails if one does not, so this branch is unreachable — and an *empty*
+       `code` tag in Sentry would be worse than no tag, while `undefined` is
+       dropped by both allowlists. */
+    this.code = codeOfMessage(failure.message) ?? undefined;
   }
 }
 
@@ -520,7 +636,9 @@ export async function lockOrCreateArticle(
      name, which is the only thing that could newly collide with `/read/public`.
      src/ingest.ts § `isReservedSlug` has the routing argument. */
   if (isReservedSlug(slug)) {
-    throw new PublishRefused(slug, [
+    /* `permanent`: the slug **is** the request. Every retry of this job asks for
+       the same reserved name and is refused in the same line. */
+    throw new PublishRefused(slug, "permanent", [
       `"${slug}" is an address the app already uses — /read/${slug} is the shelf of ` +
         "public articles, not an article. Choose another name.",
     ]);
@@ -558,7 +676,9 @@ export async function lockOrCreateArticle(
      what it does NOT do is let two readers keep the same URL, which is still an
      open question rather than a thing that works. */
   if (await slugIsTaken(slug, tx)) {
-    throw new PublishRefused(slug, [
+    /* `permanent`, and it is the known limit rather than a race: `articles.slug`
+       is unique across the whole install, so nobody gives this name back. */
+    throw new PublishRefused(slug, "permanent", [
       `the slug "${slug}" already belongs to another reader — ` +
         "slugs are unique across the whole install, which is a known limit",
     ]);
@@ -1715,7 +1835,9 @@ export async function publishRevisionIn(
   requireSlug(slug);
 
   const article = await lockArticle(tx, slug);
-  if (!article) throw new PublishRefused(slug, ["there is no such article"]);
+  /* `permanent`: the row is gone or was never this reader's, and publishing
+     cannot make one — `lockOrCreateArticle` is the only line that does. */
+  if (!article) throw new PublishRefused(slug, "permanent", ["there is no such article"]);
 
   /* A named projection, not `select()`. The bare form takes every column of the
      revision — including, until 2026-09-01, `raw_bytes`, up to 32 MiB of source
@@ -1730,11 +1852,38 @@ export async function publishRevisionIn(
     .where(eq(articleRevisions.id, revisionId))
     .limit(1);
   const draft = found[0];
-  if (!draft) throw new PublishRefused(slug, [`revision ${revisionId} does not exist`]);
+  /**
+   * **All three `permanent`, and they are one fact said three ways:** this
+   * caller is holding a revision id that is not a publishable draft of this
+   * article, and publishing cannot make it into one.
+   *
+   * The third was written `transient` first, on the reading that a retry mints
+   * a fresh draft — `openOrBeginJobDraft` above replaces a recorded pointer
+   * whose revision is no longer a `draft` — so the next attempt would get past
+   * this line. True, and the wrong question. Reaching it at all means the
+   * lifecycle is in a state that path exists to prevent, and the two ways it
+   * can happen are the two this change is about: if the revision is already
+   * `published`, a retry buys a second model call for work that is **already on
+   * the shelf**; if it is `failed`, something settled the draft out from under
+   * a live claim. Either is a defect worth recording, and neither is the
+   * ordinary concurrency the moved-base branch below describes — whose sentence
+   * to a reader, *something else finished while this was working*, would be
+   * false here.
+   *
+   * The cost is stated rather than hidden: one withheld button, on a state
+   * nothing ordinary produces. GPT Sol, reviewing 260907a, found the first
+   * draft's answer inconsistent with its own two neighbours — a missing
+   * revision can be re-minted by a new job too, and that one is `permanent`.
+   */
+  if (!draft) throw new PublishRefused(slug, "permanent", [`revision ${revisionId} does not exist`]);
   if (draft.articleId !== article.id)
-    throw new PublishRefused(slug, [`revision ${revisionId} belongs to another article`]);
+    throw new PublishRefused(slug, "permanent", [
+      `revision ${revisionId} belongs to another article`,
+    ]);
   if (draft.status !== "draft")
-    throw new PublishRefused(slug, [`revision ${revisionId} is already ${draft.status}`]);
+    throw new PublishRefused(slug, "permanent", [
+      `revision ${revisionId} is already ${draft.status}`,
+    ]);
 
   /**
    * **A draft may only replace the revision it was copied from.**
@@ -1774,7 +1923,12 @@ export async function publishRevisionIn(
    * do".
    */
   if (draft.basedOnRevisionId !== article.currentRevisionId) {
-    throw new PublishRefused(slug, [
+    /* **The one `transient` refusal that matters**, and the reason a refusal has
+       kinds at all rather than a flag saying never retry one. Its own last
+       sentence is the remedy — *start again from what is there* — and a retry is
+       exactly that: a fresh draft off whatever the article is serving now. Take
+       the button away here and the fix for the permanent case is a second bug. */
+    throw new PublishRefused(slug, "transient", [
       `this draft (${revisionId}) was copied from revision ` +
         `${draft.basedOnRevisionId ?? "none"}, but the article is now serving ` +
         `${article.currentRevisionId ?? "none"} — something else published while this draft was ` +
@@ -1792,7 +1946,39 @@ export async function publishRevisionIn(
   const carried = await publicationInputUnchanged(tx, revisionId, draft.basedOnRevisionId);
   const { reasons, carriedTreeProblems } = await reasonsNotToPublish(tx, revisionId, blocks, tree, carried);
 
-  if (reasons.length) throw new PublishRefused(slug, reasons);
+  /**
+   * **A refusal about input this draft *carried* cannot come out differently; a
+   * refusal about input it *made* can.** One boolean, already computed above,
+   * and it is the whole of the distinction at this door.
+   *
+   * `carried` means the blocks and the tree are exactly the base's. So the next
+   * attempt — a fresh draft off the same base — copies the identical rows
+   * forward (`beginDraftIn` copies `revision_blocks` *and* `revision_step_runs`,
+   * `status` and `input_hash` included) and is refused in this same line. That
+   * is a **permanently wedged article**: every mode refused, for ever, each
+   * attempt having completed and paid for its model call first. It is the
+   * `nagel-bat` shape of 2026-09-05, and it is what the `bug` kind is for.
+   * `checkTree`'s own problems are exempted before they get here when the input
+   * is carried — but the `hierarchy` run's status and hash are not, and a
+   * poisoned run row on the base wedges the article exactly as a poisoned tree
+   * did.
+   *
+   * **Not carried means the draft built or altered this pair, and then another
+   * go is a fresh draw.** ⟨Sol, 2026-09-07⟩ This line said `permanent` flatly
+   * until that review, on the reasoning that Retry skips every step that
+   * finished. It does — but a *failed* attempt's draft is discarded and its
+   * artefacts go with it, so the new attempt's freshness checks find nothing and
+   * correctly re-run (docs/project/ingest-queue.md § What makes a failure
+   * permanent). The case that shows it is the expensive one: a **first ingest**
+   * whose `hierarchy` draws a tree `checkTree` rejects. There is no base, so
+   * nothing is carried, so nothing is copied forward, and the next draw may well
+   * be sound — while `permanent` would withhold the button *and* `retryJob`'s
+   * own gate, leaving the reader no route to that article at all.
+   *
+   * The two kinds are not per-reason and there is no enum: it is one fact about
+   * the draft, and every reason in the list is judged by it.
+   */
+  if (reasons.length) throw new PublishRefused(slug, carried ? "permanent" : "transient", reasons);
 
   const scalars = deriveLibraryScalars({ blocks, tree, excerpt: draft.excerpt });
 

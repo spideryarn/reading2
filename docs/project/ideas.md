@@ -85,8 +85,8 @@ Code: [`src/ideas.ts`](../../src/ideas.ts) (stage 5f — the prompt, the call, t
 [`FeatureBoundary`](../../src/web/FeatureBoundary.tsx) could enclose the controller's own
 computation, this being the first mode a failure is contained in
 ([web-client.md § A mode that breaks](web-client.md#a-mode-that-breaks-does-not-take-the-article-with-it))
-— and `§ ideas mode` at the end of
-[`src/web/styles.css`](../../src/web/styles.css). Tests:
+— and `§ ideas mode` in
+[`src/web/styles/ideas.css`](../../src/web/styles/ideas.css). Tests:
 [`tests/ideas.test.ts`](../../tests/ideas.test.ts) (the stage) and
 [`tests/ideas-resolve.test.ts`](../../tests/ideas-resolve.test.ts) (the client, in jsdom).
 

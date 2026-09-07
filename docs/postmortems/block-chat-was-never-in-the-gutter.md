@@ -39,10 +39,10 @@ under is 68px to its left and *below* it.
 Three separate places described a layout that was not happening, and each was written by somebody
 reasoning from the others:
 
-- `styles.css`, on `.block-chat`: *"`pointer-events` has to go with the opacity, or **the gutter**
+- `styles/gutter.css`, on `.block-chat`: *"`pointer-events` has to go with the opacity, or **the gutter**
   grows an invisible target that eats clicks meant for **the block id above it**"* — the id is below
   it, and neither is in the gutter.
-- `styles.css`, § the gutter reveals: *"it joins the chat button that **already lives in the same
+- `styles/narrow-window.css`, § the gutter reveals: *"it joins the chat button that **already lives in the same
   gutter** and already worked this way"* — this is the sentence that made the error load-bearing,
   because the block-id reveal was then designed to match a button that was somewhere else.
 - `TableView.tsx`: *"A door into chat **beside** every paragraph … perhaps **underneath the

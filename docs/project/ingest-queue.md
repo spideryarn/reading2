@@ -1556,6 +1556,17 @@ identical artefact again. That is what separates the two lists:
 | a PDF that will not open — locked with a password, or damaged past parsing | |
 | a source document whose stored bytes are damaged — it is content-addressed, so a re-fetch lands on the same bad bytes | |
 | an answer truncated at `max_tokens` — *see below* | |
+| a publication refused over the draft's own blocks, tree or `hierarchy` run — `[jb-publish-refused]` | a publication refused because the article moved on underneath the draft — `[jb-publish-moved]` |
+| a step that needs a model with no API key configured — `[ai-not-set-up]` | |
+
+**The publication is a door of its own, and it said nothing about itself until 2026-09-07.**
+`PublishRefused` ([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) is the last gate
+before a draft becomes the article, and it carried a list of free-text reasons and no kind — so
+every refusal fell through to `retry`, whichever it was. It now takes a `RefusalKind` at each throw
+site, and that is the whole of the publication row above — the tree and the hash are artefacts a
+retry reads straight back, while a base that moved is fixed by exactly the next attempt. What it
+cost to have those two confused, four times in thirteen minutes on one article, is
+[260905f](../postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md).
 
 Model-output validation failures are in the right-hand column on purpose. The next call is a fresh
 draw, and the whole reason those checks are loud is that the model does occasionally get it right on

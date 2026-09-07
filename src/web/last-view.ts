@@ -124,6 +124,17 @@ export const NEVER_REMEMBERED = [
   "runs",
   "order",
   "conf",
+  /* **The viewport diagnostic** — `?probe=1`, ViewportProbe.tsx. A diagnostic
+     is not a place the reader was, and this one installs two visual-viewport
+     listeners and draws a panel over the article, so putting it back on a bare
+     address would be the app switching an instrument on by itself.
+
+     It is *listed* rather than left out, and that is the load-bearing half:
+     `hasArticleState` is built from both lists, so a parameter neither list has
+     heard of makes `/read/x?probe=1` read as a **bare** address — and a restore
+     would then overwrite it with the remembered view, taking the probe off the
+     URL that had just switched it on. */
+  "probe",
 ] as const;
 
 /** Every parameter this app puts on an article's address. */

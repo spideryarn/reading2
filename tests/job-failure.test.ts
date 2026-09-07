@@ -48,6 +48,8 @@
  * is what makes "longer than its manifest claims" a real condition rather than
  * a stub's opinion.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { createElement } from "react";
@@ -62,11 +64,13 @@ import {
 } from "../src/job-failure.js";
 import {
   canRetry,
+  codeOfMessage,
   MODEL_REFUSED,
   providerHttpFailure,
   stepGaveUp,
 } from "../src/messages.js";
 import { sanitise } from "../src/monitoring-scrub.js";
+import { PublishRefused } from "../src/store/pg-revisions.js";
 import { STEPS, type StepContext } from "../src/pipeline.js";
 import { memoryArtefacts } from "./helpers/memory-artefacts.js";
 import { storeRawSource } from "../src/store/blobs.js";
@@ -486,6 +490,58 @@ describe("the failures a retry cannot change", () => {
     expect(reader.message).not.toContain("[jb-step-no]");
     expect(reader.message).toMatch(/no article/i);
   });
+
+  it("calls a page with too little text on it `blocked`, and tells the reader how little", async () => {
+    /* **The capability floor, one branch along from the test above** — and the
+       rung of its ladder that says what PRODUCTION does, run through the real
+       step rather than asserted about a function.
+       docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md § C1a.
+
+       `medium_about.html` is Medium's 404 shell. Readability concluded its own
+       parse had failed — 185 characters, against its 500-character threshold —
+       and handed back the longest of its failed passes anyway, which stage 2
+       published as an article titled "Medium" until 2026-09-06. A published
+       article spends a paying reader's slot where a failed ingest is free
+       (src/store/pg-session.ts), so this is the one refusal that saves the
+       reader money rather than costing them a sentence.
+
+       `blocked` for the same reason as its neighbour: Retry never re-runs the
+       fetch, so the second attempt measures the identical page. */
+    const store = memoryArtefacts();
+    const page = new TextEncoder().encode(
+      readFileSync(
+        path.join(import.meta.dirname, "..", "evals", "extraction", "fixtures", "medium_about.html"),
+        "utf-8",
+      ),
+    );
+    const put = await storeRawSource(page, "html");
+    store.plant("a-slug", "fetch", "raw", {
+      kind: "html",
+      file: "raw.html",
+      requestedUrl: "https://medium.com/about",
+      url: "https://medium.com/about",
+      contentType: "text/html",
+      encoding: "utf-8",
+      bytes: page.byteLength,
+      sha256: put.sha256,
+      storedSha256: put.sha256,
+      storedBytes: page.byteLength,
+      fetchedAt: new Date().toISOString(),
+    });
+    const err = await threw(() =>
+      STEPS.extract.run(ctx({ url: "https://medium.com/about" }), store, nullCheckpointStore()),
+    );
+    expect(failureKindOf(err)).toBe("blocked");
+    const reader = readerFailureOf(err, "Extracting the article");
+    expect(reader.message).toContain("[jb-too-little-text]");
+    /* **The count, in the sentence.** The one fact about their own page the
+       reader can check — and the reason this message is a factory. */
+    expect(reader.message).toContain("185");
+    /* It must not name the library, and it must not assert what the page IS:
+       this rule reads no markup and knows nothing of walls or 404s. */
+    expect(reader.message).not.toMatch(/Readability/);
+    expect(reader.message).toMatch(/usually/);
+  });
 });
 
 /**
@@ -695,5 +751,137 @@ describe("which sentence the reader gets", () => {
       expect(reader.message, JSON.stringify(bad)).toContain(STEP);
       expect(reader.message).not.toContain("raw diagnostic");
     }
+  });
+});
+
+/**
+ * **A publication that was refused, and whether it is worth paying for again.**
+ *
+ * `PublishRefused` (src/store/pg-revisions.ts) carried `reasons: readonly
+ * string[]` and nothing else until 2026-09-07 — free text, no kinds — so
+ * `failureKindOf` found nothing to read and every refusal fell through to
+ * `retry`. On 2026-09-05 that put *"a step that stops like this often comes out
+ * differently on a second attempt — so trying again is worth a go"* under four
+ * refusals of one article in thirteen minutes, each after its model call had
+ * completed and been charged: $0.0378, $0.0348, $0.2454, $0.0365. The failure
+ * was deterministic, permanent, and every word of the sentence was false.
+ * docs/postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md.
+ *
+ * **Two kinds, and only two.** `permanent` is a refusal that cannot come out
+ * differently under a *retry* — which skips every step that finished, so a bad
+ * tree or a hash mismatch is read back identically. `transient` is the base
+ * moving under the draft: somebody published first, and starting again from
+ * what is there is exactly the remedy.
+ *
+ * The refusal is built here rather than provoked from a real row, deliberately:
+ * these ask what the *seam* does with a kind, and the query that produces one is
+ * tests/store-publish-guards.test.ts's subject. Both halves are needed — a real
+ * refusal with no seam is a green test and a wedged article.
+ *
+ * **Matched on the code, never the prose** (docs/project/copy.md).
+ *
+ * **Mutation.** Run 2026-09-07, on `REFUSAL_FAILURES` in src/store/pg-revisions.ts:
+ * `permanent` pointed at `PUBLICATION_MOVED_ON`, so a permanent refusal claims
+ * the retryable sentence — which is the 2026-09-05 bug written back in, exactly.
+ * **4 of the 7 below red**: *calls a permanent refusal a defect rather than a
+ * blip* on `expected 'retry' to be 'bug'`, *stops telling the reader that trying
+ * again is worth a go* on `expected 'jb-publish-moved' to be
+ * 'jb-publish-refused'`, *takes the button off the card* on the rendered HTML
+ * containing Retry, and *tells Sentry which kind of refusal it was* on the tag.
+ * Two more went red in the other two suites at the same time.
+ *
+ * **Blind to.** Which of the eight throw sites claims which kind — that is
+ * `tests/store-publish-guards.test.ts`, against real rows — and what the
+ * *storage* door persists, which is `tests/step-failure-seam.test.ts`. This
+ * block asks only what the seam does once a kind has been declared.
+ *
+ * **No store reaches this block**: the refusals are constructed, not provoked.
+ */
+describe("a publication the store refused", () => {
+  const STEP = "Finding the terms";
+  const SLUG = "nagel-bat";
+  /* The real sentence from 2026-09-05, verbatim. `SLUG` is the real slug for
+     the same reason: a slug is a path segment derived from the article's own
+     title, so the message this class builds carries article-derived text even
+     when every reason in it is ours. That is what `sanitise` is withholding
+     below, and it is why no bracketed code goes on the message. */
+  const TREE_PROBLEM =
+    "n0002 → n0003: covers its parent's whole range, so one rung finer restates the same blocks " +
+    "instead of compressing them";
+  const MOVED_BASE =
+    "this draft (r2) was copied from revision r0, but the article is now serving r1 — " +
+    "something else published while this draft was being written";
+
+  it("calls a permanent refusal a defect rather than a blip", () => {
+    const refusal = new PublishRefused(SLUG, "permanent", [TREE_PROBLEM]);
+    expect(failureKindOf(refusal)).toBe("bug");
+    expect(canRetry("bug")).toBe(false);
+  });
+
+  it("stops telling the reader that trying again is worth a go", () => {
+    const reader = readerFailureOf(new PublishRefused(SLUG, "permanent", [TREE_PROBLEM]), STEP);
+    expect(codeOfMessage(reader.message)).toBe("jb-publish-refused");
+    // The exact clause four paid retries were sold on.
+    expect(reader.message).not.toContain("trying again is worth a go");
+  });
+
+  it("keeps the retry for a base that moved under the draft", () => {
+    /* The one case where the sentence was true all along: another publication
+       landed first, and the next attempt starts from what is there. Withhold
+       the button here and the fix for one bug is a second bug. */
+    const refusal = new PublishRefused(SLUG, "transient", [MOVED_BASE]);
+    expect(failureKindOf(refusal)).toBe("retry");
+    expect(codeOfMessage(readerFailureOf(refusal, STEP).message)).toBe("jb-publish-moved");
+  });
+
+  it("takes the button off the card, not just the sentence off the field", () => {
+    /* The rule being right is not the feature — `JobCard` has to ask it.
+       `jobWorthRetrying` reads the kind `recordFailureKind` persisted, so this
+       is the whole chain from the throw to the rendered card. */
+    const kind = failureKindOf(new PublishRefused(SLUG, "permanent", [TREE_PROBLEM]));
+    expect(cardHtml(failed(kind))).not.toContain("Retry");
+    const moved = failureKindOf(new PublishRefused(SLUG, "transient", [MOVED_BASE]));
+    expect(cardHtml(failed(moved))).toContain("Retry");
+  });
+
+  it("shows the reader neither the tree's own words nor the slug", () => {
+    /* A reason names node ids, block indices and hashes — a diagnostic for
+       whoever runs the app, handed to somebody who cannot run anything — and the
+       message wraps them in the article's own slug. The reader's half is
+       authored copy and must contain none of it. */
+    const reader = readerFailureOf(new PublishRefused(SLUG, "permanent", [TREE_PROBLEM]), STEP);
+    expect(reader.message).not.toContain("covers its parent");
+    expect(reader.message).not.toContain(SLUG);
+  });
+
+  it("tells Sentry which kind of refusal it was, and still withholds the reasons", () => {
+    /* Both halves of the decision in
+       docs/plans/260907a-publish-refusal-reason-kinds-permanent-vs-transient.md
+       § What Sentry gets, and it drives the real `sanitise` because only the
+       function making the decision can say whether the decision is right.
+
+       Appending the bracketed code to `err.message` would have been the easy
+       way to make a refusal legible in Sentry, and it is the one that must not
+       be taken: `authored` treats a registered code as proof we wrote the whole
+       string, and this message carries the slug — derived from the article's
+       title — plus a `reasons` array any future caller may fill from anywhere.
+       The code travels as a property instead. */
+    const refused = sanitise(new PublishRefused(SLUG, "permanent", [TREE_PROBLEM]));
+    expect(refused.withheld, "the reasons were forwarded to Sentry").toBe(true);
+    expect(refused.error.message).not.toContain("covers its parent");
+    expect(refused.error.message).not.toContain(SLUG);
+    expect(refused.props.code).toBe("jb-publish-refused");
+    expect(sanitise(new PublishRefused(SLUG, "transient", [MOVED_BASE])).props.code).toBe(
+      "jb-publish-moved",
+    );
+  });
+
+  it("still carries the reasons, which are the diagnostic", () => {
+    // The log line in src/jobs.ts § `endAsStorageFailure` is built from these,
+    // and it was the only account of the 2026-09-05 outage that existed.
+    const refusal = new PublishRefused(SLUG, "permanent", [TREE_PROBLEM]);
+    expect(refusal.reasons).toEqual([TREE_PROBLEM]);
+    expect(refusal.message).toContain("covers its parent");
+    expect(refusal.status).toBe(409);
   });
 });

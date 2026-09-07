@@ -90,6 +90,7 @@ import {
   withFrontMatterHidden,
 } from "./pdf-frontmatter.js";
 import {
+  NOT_CONFIGURED,
   PDF_DAMAGED,
   PDF_LOCKED,
   pdfChunkTooBig,
@@ -779,7 +780,25 @@ export function openRouterReader(
     id: `${model}/${PROMPT_VERSION}`,
     async read(pdf, instruction, signal) {
       const key = process.env.OPENROUTER_API_KEY;
-      if (!key) throw new Error("OPENROUTER_API_KEY is not set — see docs/project/setup-dev.md.");
+      /* **A missing key is a misconfiguration, and it was reaching the reader
+         as a blip.** A bare `throw new Error(...)` declares no kind, so
+         `failureKindOf` answers `undefined`, `readerFailureOf` falls back to
+         `retry`, and the card offered another go at a call that cannot reach a
+         provider — the same defect as a permanent publication refusal reported
+         as retryable, in a different file. GPT Sol found it reviewing
+         docs/plans/260907a-publish-refusal-reason-kinds-permanent-vs-transient.md.
+
+         `NOT_CONFIGURED` is `ours` — *this app is misconfigured, tell somebody*
+         — which is exactly what this is, and it withholds the button.
+         `src/anthropic-call.ts` makes the same call at its own key check.
+
+         `{ authored }`: the variable's name and a documentation path, both
+         ours, nothing interpolated — so the diagnostic reaches the log *and*
+         Sentry, while the reader's half names neither. */
+      if (!key)
+        throw stageFailure(NOT_CONFIGURED, {
+          authored: "OPENROUTER_API_KEY is not set — see docs/project/setup-dev.md.",
+        });
       const data = Buffer.from(pdf).toString("base64");
       if (data.length > MAX_ENCODED_BYTES) {
         const megabytes = Math.round(data.length / 1024 / 1024);

@@ -132,6 +132,25 @@ The differences that matter to a reader:
   ([ingest-queue.md](ingest-queue.md)) — and the chunks the first attempt finished are read back
   rather than re-bought.
 - **A scan cannot be checked at all**, has no text layer to check against, and says so on the page.
+- **A figure leaves this stage as a caption and a marker, and the picture is fetched two stages
+  later.** `renderHtml` writes `<figure data-spya-pdf-figure="<ref>"><figcaption>…</figcaption></figure>`
+  and no `<img>` — because the model **cannot hand back the raster**, and because a final `/api/…`
+  URL written here would be *stripped* by the sanitiser in stage 3, which deliberately removes any
+  `src` resolving to our own API. (It does *see* the picture: the whole native PDF goes up as a
+  `file` part, embedded images and all. What it returns is text in a fixed record shape, so a
+  caption is the most a figure can come back as. An earlier draft of this bullet said the model
+  never sees the raster, which is a different and false claim — GPT Sol, 2026-09-07.) The marker is an opaque ref folding in the raw PDF's sha256, the page,
+  the figure's ordinal on that page and a digest of the caption, so it fails closed against a
+  document that has since changed; [`src/reserved.ts`](../../src/reserved.ts) is the one file
+  allowed to name it. Stage 4.5 reopens the PDF, extracts what it can and writes the outcome into
+  the manifest; the reading view turns marker plus manifest into an `<img>` after sanitising, and
+  puts a muted line under the caption when nothing was recovered.
+  [article-images.md](article-images.md) owns all of that. Until 2026-09-06 a PDF figure was a
+  caption and a blank space, on purpose and by v1's design, which Greg reasonably read as a bug —
+  [260906a](../plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md).
+- **A figure with no caption produces no element at all.** `renderHtml` returns early on empty text,
+  before it builds the `<figure>` — so there is no block to mark and no picture to recover. Worth
+  knowing before assuming every image in the PDF has somewhere to land.
 - **A word broken by a page break is mended from the text layer, not by a second model call.** The
   chunks are read in parallel and none of them sees over its own edge, so `dis-` / `patcher` arrives
   as two records and used to render as "dis patcher". `mendSeamHyphens` in
@@ -155,6 +174,78 @@ is [ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf).
 One thing it does **not** yet buy, and should: `fetchDocument` reports the URL it *ended up* at
 after redirects, and this stage still hands Readability the URL that was typed. Where those differ,
 relative links resolve against the wrong origin.
+
+## The two ways this stage refuses
+
+Neither of them publishes anything, and both end the job `error` — which **releases** the reader's
+slot rather than spending it, since only `done` charges
+([`src/store/pg-session.ts`](../../src/store/pg-session.ts), [billing.md](billing.md)).
+
+- **`ReadabilityRefused`** — the library looked at the page and found no article at all. The reader
+  gets `PAGE_HAS_NO_ARTICLE`, `[jb-no-article]`.
+- **`TooLittleTextToRead`** — the **capability floor**, since 2026-09-06. Readability *did* return
+  something, having already concluded its own parse failed: below `DEFAULT_CHAR_THRESHOLD` (500
+  characters of collapsed text) it pushes each pass onto `_attempts`, drops a flag, tries again, and
+  when it runs out of flags hands back the longest of its failures. Stage 2 used to publish that.
+  `medium_about.html` became an article titled *"Medium"* with 185 characters in it, and it spent a
+  paying reader's slot. The floor is us **not overriding the library's own verdict**; the reader gets
+  `pageHadTooLittleText`, `[jb-too-little-text]`, with the count in the sentence.
+
+**It decides nothing about what the page is** — no markup is read and no wall is diagnosed, so it
+fires on a genuinely tiny real page too, and the message says *usually*. Recognising a bot wall by
+its own markup is a separate registry that has not been built yet
+([260904e § C1](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md)).
+
+**It is prospective, and that is a boundary rather than an oversight.** The floor is a rule inside
+stage 2, and stage 2 does not run when its artefact is already there: `stepIsDone` derives what is
+finished from the artefacts, and an unforced job skips a step that has one. So an article published
+from a short page before 2026-09-06 stays published and stays readable, its slot stays spent, and a
+job that skips extraction can still settle `done` without the floor ever being consulted. Nothing
+audits or refunds what was charged before the rule existed. What a **forced** re-extraction of such
+an article does is refuse — leaving the reader on the revision they were already on, since a draft
+that fails is never published ([`scripts/stage.ts`](../../scripts/stage.ts)). Making the floor
+retrospective would mean invalidating extractions on a policy version, which is a schema-shaped
+change and is not this one. GPT Sol, reviewing C1a.
+
+**The floor lives in a helper both read paths call** (`capabilityFloor` in
+[`src/extract.ts`](../../src/extract.ts)), because `readArticle` and `readArticleWithProvenance` are
+separate entry points and the eval harness uses the second one directly. In `runExtract`'s catch it
+would have been correct in production and permanently invisible to the corpus.
+
+## The one thing this pipeline deletes
+
+Since 2026-09-06 stage 2 deletes some of the publisher's own chrome before Readability sees the
+page. Other things here remove elements too — the note pass, Readability, the sanitiser — but
+[`src/furniture.ts`](../../src/furniture.ts) is the only place that deletes something **because of
+what the publisher called it**. The class is narrow on purpose — **platform-generated controls beside content, recognised by the
+platform's own selector, that contain no block-level descendants** — and there are four of them:
+MediaWiki's `span.mw-editsection` and `.mw-empty-elt`, Sphinx's `a.headerlink`, PLOS's
+`ul.reflinks`. `.ambox`, `.navbox`, sidebars and maintenance banners **stay**: those say something
+about the piece, and a reader may want them.
+
+**That "contains no block-level descendants" clause is a floor and not a proof**, and the module
+says so: it asks about *descendants*, so it never sees the matched element's own tag or its own
+text, and `td`, `th` and `li` cannot be added to it. **Eleven page shapes got an author's words past
+it** — two found by walking the corpus, eight across two GPT Sol reviews, one by us — and each is now
+a named test beside the narrowing that stops it. The claim the module makes is therefore *no shape
+anybody has constructed gets through, and every one that did is pinned*, **not** that deletion is
+structurally impossible: `ul.reflinks` is the entry where markup runs out, since a *View Article*
+button and a citation whose every word is inside its link are the same thing to a parser.
+
+Greg's decision, the licence it spends, the guards and where they stop, and the measured effect are
+on `removePlatformFurniture` and in
+[260904e § C4](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md). Two things
+worth knowing from here:
+
+- **The largest effect was not the chrome.** Parsoid puts MediaWiki's edit link inside the heading's
+  own wrapper, and a wrapper of one heading plus one link scores to Readability as navigation — so
+  `wiki_transformer.html` was reaching the reader with 19 of its 47 section headings. Taking the edit
+  links out recovers all 47, and every MediaWiki article ingested before this had a hierarchy built
+  on a quarter of its headings.
+- **What went is recorded as counts per selector, and nothing more.** They ride on `ExtractResult`
+  and reach the log; they are deliberately **not** on `Meta`, which is persisted as columns
+  ([database.md](database.md)), so the audit line stage D will show is a migration that waits for the
+  reader who needs it.
 
 ## The publisher's furniture, and the title it stole
 

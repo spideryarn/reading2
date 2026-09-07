@@ -1,0 +1,427 @@
+/* glossary.css — the Glossary panel (GlossaryPanel.tsx), and with it the
+   `.gloss-*` base classes that Ideas, Timeline, Debate, Quiz and Referee reuse
+   by putting a second class beside `.gloss`.
+
+   **Its position ahead of those files is load-bearing, not incidental.**
+   `.gloss-quiet` below sets `padding: 1rem 0.9rem`; `.tl-thin` (timeline.css)
+   and `.dbt-empty` (debate.css) reset the padding on the *same* element at
+   *equal* specificity — `<p className="gloss-quiet tl-thin">` in
+   TimelinePanel.tsx, and its twin in DebatePanel.tsx. Source order decides
+   that, which means the import list in ../styles.css decides it. Move this file
+   later and both go wrong with nothing to show for it.
+
+   It also carries `.srch-gate-*`, the search panel's confidence bar, kept
+   beside `.gloss-gate` on purpose — the comment above it says why they are
+   grouped rather than merged. The glossary's own tail (the foot, its buttons
+   and the *Look up a term* box) is at the end of footnotes.css. */
+
+/* ------------------------------------------------------- § glossary mode ----
+   The terms this piece uses, in the mode band. The shell is `.mode-band` above;
+   everything here is what goes inside it.
+
+   Read GlossaryPanel.tsx before changing what is on screen: several things this
+   panel does not do were decided rather than skipped — no inline marks in the
+   prose, no silent sort by the model's scores, and no hiding an entry that
+   matches nothing in the article. */
+
+/* The title row is `.band-head`, § mode band. */
+.gloss-count { color: var(--ink-faint); font-size: 0.85rem; }
+
+/* The sort control. Small, quiet, and always visible when there is a choice —
+   the whole condition on keeping the model's scores is that ordering by them is
+   something the reader presses rather than something the list arrives already
+   having done. */
+.gloss-sort {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.gloss-sort-label {
+  margin-right: 0.15rem;
+  color: var(--ink-faint);
+  font-size: 0.83rem;
+  text-transform: lowercase;
+}
+.gloss-sort-btn {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+.gloss-sort-btn:hover { color: var(--ink); background: var(--surface-raised); }
+.gloss-sort-btn.on {
+  border-color: var(--rule-strong);
+  background: var(--surface-raised);
+  color: var(--highlight-ink);
+}
+.gloss-sort-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+/* The threshold slider — the one control in this panel that sets a number
+   rather than picking from a list. Shown only in `prioritised` order.
+
+   A native `<input type="range">`, styled with `accent-color` and nothing else:
+   the moment you reach for `::-webkit-slider-thumb` you own the track, the
+   thumb, the focus ring and the dark-mode colours of all three in two vendor
+   dialects. `accent-color` is one line, is honoured by every current browser,
+   and takes the token so the thumb matches the pressed sort button beside it. */
+.gloss-gate {
+  padding: 0.4rem 0.7rem 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+.gloss-gate-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.gloss-gate-label {
+  color: var(--ink-faint);
+  font-size: 0.83rem;
+  text-transform: lowercase;
+}
+/* Monospaced and pushed right, like the scores on the rows it governs — this
+   number and those numbers are the same quantity, and lining them up is the
+   cheapest way to say so. */
+.gloss-gate-value {
+  margin-left: auto;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 0.79rem;
+  white-space: nowrap;
+}
+.gloss-gate-reset {
+  display: flex;
+  align-items: center;
+  padding: 0.1rem;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.gloss-gate-reset:hover { color: var(--ink); }
+.gloss-gate-reset:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.gloss-gate-range {
+  display: block;
+  width: 100%;
+  margin: 0.3rem 0 0;
+  accent-color: var(--highlight);
+  cursor: pointer;
+}
+.gloss-gate-range:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+/* Said in words, because a bar that is holding rows back looks exactly like a
+   glossary that never had them. Until 2026-09-03 this said when the bar had
+   *divided* nothing; the bar hides rather than groups now, so what it reports
+   is the count — `hiddenNote` in threshold.ts owns the wording for all three
+   panels. */
+.gloss-gate-note {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.81rem;
+  line-height: 1.35;
+}
+
+/* ---- the search panel's confidence bar ----
+   The prioritised order's threshold — see search.md § Prioritised. Deliberately
+   the same rules as `.gloss-gate` above, and the shared block below is where
+   they are actually shared: one idea in the reader's hands, one look, whichever
+   band it is in. What is NOT shared is the value's alignment story — the
+   glossary's number lines up with scores on its rows, and this one lines up
+   with the confidence chips on its own. Both are mono for that reason.
+
+   Grouped by selector rather than merged into one `.gate` class because the two
+   panels' paddings differ and always have; sharing the class would have meant a
+   modifier on every rule to say which band it was in. */
+.srch-gate {
+  padding: 0.4rem 0.7rem 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+.srch-gate-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.srch-gate-label {
+  color: var(--ink-faint);
+  font-size: 0.83rem;
+  text-transform: lowercase;
+}
+.srch-gate-value {
+  margin-left: auto;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 0.79rem;
+  white-space: nowrap;
+}
+.srch-gate-reset {
+  display: flex;
+  align-items: center;
+  padding: 0.1rem;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.srch-gate-reset:hover { color: var(--ink); }
+.srch-gate-reset:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.srch-gate-range {
+  display: block;
+  width: 100%;
+  margin: 0.3rem 0 0;
+  accent-color: var(--highlight);
+  cursor: pointer;
+}
+.srch-gate-range:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+/* Said in words, because a bar that is hiding everything looks exactly like a
+   search that found nothing. The clause that used to end this — *and unlike the
+   glossary's, this one really does take rows away* — went on 2026-09-03, when
+   the glossary and quotes started taking rows away too. */
+.srch-gate-note {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.81rem;
+  line-height: 1.35;
+}
+
+.gloss-quiet { padding: 1rem 0.9rem; margin: 0; color: var(--ink-faint); }
+.gloss-look-wait {
+  margin: 0.35rem 0 0;
+  max-width: 46ch;
+  color: var(--ink-faint);
+  font-size: 0.83rem;
+  line-height: 1.45;
+}
+.gloss-error {
+  margin: 0.4rem 0.7rem 0;
+  color: var(--highlight-ink);
+  font-size: 0.88rem;
+}
+
+.gloss-empty { padding: 1rem 0.9rem; color: var(--ink-faint); }
+.gloss-empty p { margin: 0 0 0.5rem; }
+.gloss-hint { font-size: 0.91rem; line-height: 1.45; }
+
+.gloss-stale {
+  margin: 0.5rem 0.7rem 0;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.gloss-stale p {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.5rem;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.gloss-stale svg { flex: none; color: var(--highlight); }
+
+/* ---- the list ---- */
+
+/* The scroller. A `div` wrapping one `ol` rather than being the `ol` itself:
+   that came in on 2026-08-26 when `prioritised` order drew two headed groups,
+   and the headings went again on 2026-09-03 when the threshold started hiding
+   what is below it. The wrapper stays because it is the element the CSS
+   scrolls, and unpicking it would move `min-height: 0` for nothing. */
+.gloss-list {
+  flex: 1;
+  margin: 0;
+  padding: 0.25rem 0;
+  overflow-y: auto;
+  /* Or the scroller refuses to shrink and pushes the footer off the band. The
+     same `min-height: 0` the chat scroller needs, and for the same reason. */
+  min-height: 0;
+}
+.gloss-list-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* `.gloss-group-head` and `.gloss-group-count` lived here until 2026-09-03 —
+   the sticky "worth knowing first" / "the rest" divider (gone 2026-09-03; the
+   name is what the list *is*, not what it used to be divided into). The threshold hides
+   what is below it now, so there is one list and nothing to head. */
+
+.gloss-term { border-bottom: 1px solid var(--rule); }
+.gloss-term:last-child { border-bottom: none; }
+.gloss-term.on { background: var(--surface-raised); }
+
+/* The whole row is the target. In an 18rem band a name-sized hit area is a
+   dart game, and there is nothing else inside a closed row to click. */
+.gloss-term-btn {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.gloss-term-btn:hover { background: var(--surface-raised); }
+.gloss-term-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+
+.gloss-term-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+.gloss-name {
+  /* `min-width: 0` because a flex item refuses by default to shrink below its
+     longest word, and this row now carries two numbers as well as a name in an
+     18rem band. Without it a long term name overflows the band instead of
+     wrapping; with it the name wraps and the numbers stay put, which is the
+     right way round. */
+  min-width: 0;
+  overflow-wrap: break-word;
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.gloss-term.on .gloss-name { color: var(--highlight-ink); }
+.gloss-kind {
+  color: var(--ink-faint);
+  font-size: 0.79rem;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+/* Pushed right, and monospaced, because a column of numbers you are ordered by
+   should line up. Only present when the list IS ordered by them — one number
+   under `hardest` or `most central`, two under `prioritised`, none under `first
+   use`. The single letter in front of each is which score it is; the full words
+   are in the cell's `title`. */
+/* The bars, where `d·72 c·85` used to be — see src/web/ScoreBars.tsx and the
+   comment at the call site. `flex-shrink: 0` for the same reason it always
+   was: the term's name gives way, the scores do not. */
+.gloss-score {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.gloss-gloss {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--ink-soft);
+  font-size: 0.89rem;
+  line-height: 1.45;
+}
+
+/* The two labelled sections of an open entry, added 2026-08-26. The label is
+   the provenance — "in this piece" is from the article, "background" is the
+   model's own knowledge — so it has to read as a label rather than as a
+   heading somebody might mistake for part of the definition. Hence small,
+   faint, lowercase and letter-spaced, the same register as the group headings
+   in the prioritised order. */
+.gloss-part { margin-bottom: 0.5rem; }
+.gloss-part:last-child { margin-bottom: 0; }
+.gloss-part-label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0 0 0.15rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.77rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+/* A left rule rather than a colour, because the difference between these two
+   sections is a claim about where words came from, and colour is the one
+   channel this app has already learned not to trust for meaning
+   (docs/project/browser-testing.md). The rule is visible in both themes and
+   survives a screenshot. */
+.gloss-part-senseHere { border-left: 2px solid var(--rule-strong); padding-left: 0.5rem; }
+.gloss-part-background { border-left: 2px dotted var(--rule-strong); padding-left: 0.5rem; }
+.gloss-part-text {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+/* `tabIndex={0}` on the span it wraps, so the tooltip is reachable by keyboard
+   and not only by hover — the same treatment the comment dialog's search badge
+   gets, and for the same reason. */
+.gloss-part-hint {
+  display: inline-flex;
+  color: var(--ink-faint);
+  cursor: help;
+}
+.gloss-part-hint:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+
+/* The web's answer for one term, and the button that asks for it. Set apart
+   from the two prose sections above by a filled ground rather than a rule,
+   because it is a different KIND of thing from either of them: not the article,
+   not the model's memory, but a thing that was checked on a particular day. */
+.gloss-look { margin: 0.55rem 0 0; }
+.gloss-look.on {
+  padding: 0.45rem 0.5rem;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+/* An answer the model chose not to search for is still memory, and it is set
+   apart from a searched one by more than its label — a dotted edge, the same
+   one `background` carries, because that is what it is. */
+.gloss-look.on:has(.gloss-globe.off) {
+  border-left: 2px dotted var(--rule-strong);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.gloss-look .gloss-part-text { margin-top: 0.15rem; white-space: pre-wrap; }
+/* The globe, on or off. **The off state is drawn rather than omitted** — the
+   model chooses per call whether to search, so "it decided it already knew" is
+   a real outcome, and a missing icon could not be told apart from a broken
+   tool. Same call CommentDialog's badge makes. */
+.gloss-globe {
+  display: inline-flex;
+  color: var(--ink-faint);
+  cursor: help;
+}
+.gloss-globe.on { color: var(--highlight); }
+.gloss-globe:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+/* Host names, one per line. The page title is the useful thing to read and the
+   wrong thing to lay out in an 18rem band, so it lives in the hover tooltip. */
+.gloss-sources {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.gloss-sources li { margin-top: 0.15rem; }
+.gloss-sources a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--ink-faint);
+  font-size: 0.81rem;
+  text-decoration: none;
+}
+.gloss-sources a:hover { color: var(--highlight-ink); text-decoration: underline; }
+.gloss-sources a:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+
+.gloss-open { padding: 0 0.7rem 0.65rem; }
+.gloss-open p { margin: 0 0 0.4rem; font-size: 0.86rem; line-height: 1.45; }
+.gloss-open p:last-child { margin-bottom: 0; }
+.gloss-aliases { color: var(--ink-faint); }
+.gloss-detail { color: var(--ink-soft); }
+.gloss-outside {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--highlight-ink);
+}
+.gloss-outside svg { flex: none; }
+.gloss-link a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--ink-faint);
+}
+.gloss-link a:hover { color: var(--highlight-ink); }
+

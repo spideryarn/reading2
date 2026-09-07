@@ -1,0 +1,199 @@
+/* timeline.css — Timeline mode (TimelinePanel.tsx): the date column and the row
+   that stacks, and little else, because `.timeline` is `.gloss` with a class
+   beside it.
+
+   **It must stay after glossary.css.** `.tl-thin` below resets the padding
+   `.gloss-quiet` sets, on the same element and at the same specificity, so
+   source order is the only thing deciding it — see ../styles.css. */
+
+/* ------------------------------------------------------- § timeline mode ----
+   The eleventh mode. `.timeline` is `.gloss` with a class beside it, like
+   `.ideas` next door, so the band shell, the head, the run button, the stale
+   banner and the two provenance rules all come from § glossary mode unchanged.
+   What is here is only what an event has and an idea does not: a date column
+   that has four quite different things to say, and a row that stacks rather
+   than sitting on one line.
+
+   **There are no marks and no legend**, deliberately — Greg deferred the drawn
+   notation on 2026-08-31 and v1 writes the words instead. So there is nothing
+   here that draws a bracket, a bar or a ⊘, and adding one is a change to the
+   design rather than to this file.
+   docs/plans/260831i-timeline-mode.md § Appendix: the visual design, deferred. */
+
+/* Same three properties as `.ideas-scroll`, `.gloss-list`, `.chat-scroll` and
+   `.summ-scroll`, and for the reason the ideas panel had to learn the hard way:
+   `.mode-band` is a fixed column between the controls bar and the dock, so
+   without a scrolling child the panel's own content decides its height — which
+   a fixed element cannot honour — and everything past the dock is unreachable.
+   Twenty-six events is well past it on any laptop window, and it looks
+   perfectly fine on a tall one. */
+.tl-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0.7rem 0.7rem;
+}
+
+/* The two sentences above the list — the year the piece is in, and how few
+   events there are. Both are said once here rather than on every row. */
+.tl-frame,
+.tl-thin {
+  margin: 0;
+  padding: 0.3rem 0.7rem 0.45rem;
+  color: var(--ink-faint);
+  font-size: 0.79rem;
+  line-height: 1.4;
+}
+.tl-thin { border-bottom: 1px solid var(--rule); }
+
+.tl-group { margin: 0; padding: 0.5rem 0 0; }
+/* Heavier than the rule between two events, because the break between what the
+   piece says happened and what it merely expects is a change of tense rather
+   than a change of row — the whole reason the divider exists is to stop a
+   reader's eye running from a date into a forecast. */
+.tl-group + .tl-group {
+  margin-top: 0.7rem;
+  border-top: 1px solid var(--rule-strong);
+}
+.tl-group > h3 {
+  /* Sticky, so *which half am I looking at* survives scrolling — see the note
+     on `.ideas-group > h3`, and docs/reusable/css-sticky-containing-block.md
+     for the case where a sticky heading silently does nothing. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.35rem 0 0.2rem;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.77rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tl-group > h3 > .gloss-count { margin-left: auto; letter-spacing: 0; }
+.tl-blurb {
+  margin: 0.15rem 0 0.4rem;
+  color: var(--ink-faint);
+  font-size: 0.79rem;
+  line-height: 1.35;
+}
+
+.tl-list { margin: 0; padding: 0; list-style: none; }
+.tl-item { border-top: 1px solid var(--rule); }
+.tl-item:first-child { border-top: none; }
+
+/* **Stacked, not two columns**, and that is a measurement rather than a taste:
+   the band is 288px at `MODE_MIN` (layout.ts), and "at or before 12 May" beside
+   a ten-word label in that width leaves both of them about nine characters a
+   line. The date leads because a chronology is what the reader scans down. */
+.tl-row {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* The date column, and the four things it can say. They are four different
+   kinds of statement, so they are four different treatments — one class with
+   the text carrying the difference would set *"dated — but which year?"* in the
+   same face as *"26 May"*, which reads as a very odd date rather than as a note
+   about one. */
+.tl-when {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 0.81rem;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+}
+/* A fact the article stated. The only one of the four in the full ink. */
+.tl-when-dated { color: var(--ink); font-weight: 600; }
+/* The article's own words, already in quotation marks in the markup. Italic
+   because it is a quotation and not our sentence. */
+.tl-when-words { color: var(--ink-soft); font-style: italic; }
+/* No time at all. Faint, because there is nothing here to read — and it must
+   not be mistaken for the row below it, which is us failing rather than the
+   article saying nothing. */
+.tl-when-none { color: var(--ink-faint); }
+/* **We could not read a date the piece plainly gives.** The one state that is
+   about us, and the one that must not look like an ordinary blank: the review's
+   whole point was that a rejected date rendering identically to a genuine
+   absence makes "fails visibly" true only inside a counter. A dotted underline
+   rather than a colour alone, so it is still distinguishable without colour. */
+.tl-when-rejected {
+  color: var(--ink-faint);
+  font-style: italic;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--rule-strong);
+}
+
+/* A handle, not a retelling — three to ten words, wrapping. Wrapping rather
+   than truncating for the reason `.ideas-name` gives: the half a truncation
+   keeps is the wrong half. */
+.tl-label {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+.tl-row:hover .tl-label { color: var(--highlight-ink); }
+.tl-item.open > .tl-row .tl-label { color: var(--highlight-ink); font-weight: 600; }
+
+.tl-detail { padding: 0 0 0.6rem; }
+.tl-where { margin-top: 0.55rem; }
+/* The stepper on the label line rather than under it — the label is short and
+   the row is otherwise empty to the right. Almost always invisible: 26 of the
+   26 events on the test article have exactly one occurrence. */
+.tl-where > .gloss-part-label { display: flex; align-items: center; gap: 0.3rem; }
+
+.tl-occurrences { margin: 0.25rem 0 0; padding: 0; list-style: none; }
+.tl-occurrences > li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+.tl-occurrences > li > button {
+  flex: 1;
+  min-width: 0;
+  padding: 0.2rem 0.35rem;
+  border: none;
+  border-left: 2px solid var(--rule);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.tl-occurrences > li > button:hover { border-left-color: var(--highlight); }
+/* The one the reader last landed on, so the panel and the wash in the prose
+   agree about where they are. */
+.tl-occurrences > li.open > button {
+  border-left-color: var(--highlight);
+  background: color-mix(in oklab, var(--highlight) 8%, transparent);
+}
+.tl-quote {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.83rem;
+  line-height: 1.4;
+}
+
+/* Pinned under the scroller rather than at the end of it, like `.ideas-again`:
+   the control that spends a model call must not be something you have to
+   scroll twenty-six events to reach. */
+.tl-again {
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+

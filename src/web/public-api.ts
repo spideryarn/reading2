@@ -111,9 +111,23 @@ export async function publicFetch(path: string, signal?: AbortSignal): Promise<R
  */
 const SAME_ORIGIN = "https://spideryarn.invalid";
 
-/** `GET /api/public/article/:slug`. */
-export async function loadPublicArticle(slug: string): Promise<PublicRead<PublicArticle>> {
-  return read<PublicArticle>(`/api/public/article/${encodeURIComponent(slug)}`);
+/**
+ * `GET /api/public/article/:slug`.
+ *
+ * **The `signal` is the article load's**, so a reader who moves on before the
+ * payload arrives stops paying for it. Added 2026-09-07: `rehostImages` had
+ * carried an `AbortController` since stage E and the *payload* fetch above it
+ * had none, so releasing a load abandoned the request rather than cancelling
+ * it — on a 150KB payload over a slow connection that is a real download for an
+ * article nobody is looking at. Nothing visible was wrong, because the `live`
+ * guard already refused the stale render; this is the resource half. GPT Sol,
+ * reviewing the built code.
+ */
+export async function loadPublicArticle(
+  slug: string,
+  signal?: AbortSignal,
+): Promise<PublicRead<PublicArticle>> {
+  return read<PublicArticle>(`/api/public/article/${encodeURIComponent(slug)}`, signal);
 }
 
 /**
@@ -144,8 +158,8 @@ export async function loadPublicLibrary(): Promise<PublicRead<PublicLibrary>> {
  * 2026-09-04, when the library listing arrived — kept as a shared helper through
  * that, which is why the second loader is two lines.
  */
-async function read<T>(path: string): Promise<PublicRead<T>> {
-  const res = await publicFetch(path);
+async function read<T>(path: string, signal?: AbortSignal): Promise<PublicRead<T>> {
+  const res = await publicFetch(path, signal);
   /* Read before the body, because `readJson` throws on a 404 and this is the
      one place a 404 is the answer rather than the problem. */
   if (res.status === 404) return { kind: "not-shared" };
