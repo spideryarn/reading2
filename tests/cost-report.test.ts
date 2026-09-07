@@ -14,9 +14,11 @@ import {
   cashNanos,
   foldSpend,
   spendPerAccount,
+  partitionByScope,
   spread,
   totalNanos,
 } from "../src/cost-report.js";
+import { costCategoryOf } from "../src/cost-categories.js";
 import type { SpendGroup } from "../src/store/ai-calls-spend-pg.js";
 
 const ALICE = "cf000000-0000-4000-8000-000000000001";
@@ -171,5 +173,70 @@ describe("the spread across accounts", () => {
 
   it("does not divide by zero on an empty population", () => {
     expect(spread([])).toMatchObject({ n: 0, median: 0, p95: 0, max: 0, total: 0 });
+  });
+});
+
+/**
+ * **Which scopes are a product's cost, and which are ours** —
+ * `partitionByScope` in [src/cost-report.ts](../src/cost-report.ts).
+ *
+ * This partition existed twice and the two copies disagreed, which is the whole
+ * reason it is now a function with tests under it. `scripts/ai-cost.ts` said
+ * *"everything that is not `eval`"* and so counted **dev-CLI spend as Product**;
+ * `src/cost-categories.ts`, which the `--owners` pricing report uses, correctly
+ * calls `cli` non-product. On 2026-09-07 that was $2.85 of our own CLI runs
+ * sitting inside the figure a subscription price would be set against — found by
+ * GPT Sol (F2), in a file whose own comment three lines above argues the exact
+ * principle it was breaking: *"a bake-off over forty PDF pages landing in the
+ * figure he prices against is how a price gets set wrong."*
+ *
+ * docs/plans/260902g-cost-tracking-that-can-set-a-price.md § F2.
+ */
+describe("partitioning the ledger by whose money it is", () => {
+  const rows = [
+    { scopeKind: "request" },
+    { scopeKind: "job_step" },
+    { scopeKind: "job_step" },
+    { scopeKind: "cli" },
+    { scopeKind: "eval" },
+  ];
+
+  it("keeps dev-CLI spend OUT of product, where it was until 2026-09-07", () => {
+    const split = partitionByScope(rows);
+    expect(split.product.map((r) => r.scopeKind)).toEqual(["request", "job_step", "job_step"]);
+    expect(split.devCli).toHaveLength(1);
+    expect(split.evals).toHaveLength(1);
+  });
+
+  it("agrees with the categoriser about what is not a product's cost", () => {
+    /* The two must not drift apart again: anything this calls non-product must
+       be `non-product` to src/cost-categories.ts, which is what the `--owners`
+       report groups by. A disagreement here is the same defect coming back
+       under a different name. */
+    for (const scopeKind of ["cli", "eval"]) {
+      expect(costCategoryOf({ scopeKind, job: "chat", stepName: null })).toBe("non-product");
+    }
+    for (const scopeKind of ["request", "job_step"]) {
+      expect(costCategoryOf({ scopeKind, job: "chat", stepName: "hierarchy" })).not.toBe(
+        "non-product",
+      );
+    }
+  });
+
+  it("puts a scope it does not recognise somewhere visible rather than into product", () => {
+    /* The ledger is an append-only historical record and a retired scope name is
+       a real possibility. Folding one into `product` would overstate the price
+       basis silently; dropping it would understate the total silently. It gets
+       its own bucket and the report prints it. */
+    const split = partitionByScope([...rows, { scopeKind: "retired-in-2025" }]);
+    expect(split.product).toHaveLength(3);
+    expect(split.other.map((r) => r.scopeKind)).toEqual(["retired-in-2025"]);
+  });
+
+  it("loses no row, which is the only property a total depends on", () => {
+    const split = partitionByScope(rows);
+    expect(
+      split.product.length + split.devCli.length + split.evals.length + split.other.length,
+    ).toBe(rows.length);
   });
 });

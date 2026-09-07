@@ -307,27 +307,24 @@ export type CostSource = "provider" | "computed" | "none";
  * "no".
  */
 function normaliseByokUpstream(record: SpendRecord): Nanos | null {
-  if (record.isByok !== true) {
-    warnIfPaidLooksFree(record);
-    return null;
-  }
+  if (record.isByok !== true) return null;
   if (record.providerAccount !== "openrouter") return null;
   if (record.cost.source !== "provider") return null;
   return record.upstreamCostNanos;
 }
 
 /**
- * **The one shape in which this narrowing can record a paid call as a free
- * one**, said out loud in the log rather than left to be discovered in a total.
+ * **The one shape in which the narrowing above would record a paid call as a
+ * free one** — a provider that reports `cost: 0` **and** a real
+ * `upstream_inference_cost` **without** saying `is_byok`.
  *
- * The three conditions above are right and must not be loosened — `=== true`
- * is what keeps "we were not told" from being read as "yes", and loosening it
- * is how the doubled bill comes back. But they leave one gap: a provider that
- * reports `cost: 0` **and** a real `upstream_inference_cost` **without** saying
- * `is_byok`. `costSource` is then `provider` — a zero OpenRouter genuinely
- * stated — the upstream figure is dropped here, and the row reads
- * `credits_used_nanos = 0` with every `CHECK` satisfied. Money left, and the
- * ledger says none did.
+ * The three conditions in `normaliseByokUpstream` are right and must not be
+ * loosened: `=== true` is what keeps "we were not told" from being read as
+ * "yes", and loosening it is how the doubled bill comes back. But they leave
+ * this gap, and until 2026-09-07 the row that came out of it claimed
+ * `cost_source: "provider"` with `credits_used_nanos = 0` — the ledger asserting
+ * that OpenRouter **settled the call at nothing**, with every `CHECK` satisfied.
+ * Money left and the ledger said none did, in the direction that flatters us.
  *
  * That has never been observed on the chat wire, where an ordinary call reports
  * `upstream == cost` and this is simply the double-count being removed. It is
@@ -336,17 +333,29 @@ function normaliseByokUpstream(record: SpendRecord): Nanos | null {
  * exception — so the failure would look exactly like the feature working.
  * `src/ai-call.ts`'s images seam, 2026-09-03.
  *
- * A warning rather than a repair, deliberately. Writing the figure anyway would
- * violate the database `CHECK` and lose the row entirely; guessing `isByok`
- * would put the double-count back. What the ledger cannot do is be quietly
- * wrong about it — so it says so, once, with the numbers a person needs to go
- * and look.
+ * ⟨This was a **warning rather than a repair** until 2026-09-07, and said so:
+ * writing the figure anyway violates the `CHECK` and loses the row entirely,
+ * and guessing `isByok` puts the double-count back. Both of those are still
+ * true. GPT Sol found the third option neither the code nor its test had
+ * considered — **record the row as unpriced** — and it costs nothing: `none`
+ * with both money columns null is already one of the three legal arms of
+ * `ai_calls_one_cost_source`. The warning stays; what changed is that the row
+ * now agrees with it.⟩
  */
-function warnIfPaidLooksFree(record: SpendRecord): void {
-  if (record.providerAccount !== "openrouter") return;
-  if (record.cost.source !== "provider") return;
-  if (record.cost.costNanos !== 0) return;
-  if (record.upstreamCostNanos === null || record.upstreamCostNanos === 0) return;
+function paidLooksFree(record: SpendRecord): boolean {
+  if (record.isByok === true) return false;
+  if (record.providerAccount !== "openrouter") return false;
+  if (record.cost.source !== "provider") return false;
+  if (record.cost.costNanos !== 0) return false;
+  return record.upstreamCostNanos !== null && record.upstreamCostNanos !== 0;
+}
+
+/**
+ * Said out loud in the log rather than left to be discovered in a total. Fires
+ * once per affected call, from `moneyFields` below, which is the single place
+ * that decides the row's money.
+ */
+function warnPaidLooksFree(record: SpendRecord): void {
   /* No prompt, no answer, no article — src/log-redaction.ts. Only the job, the
      wire and two numbers. */
   log("model").warn(
@@ -357,8 +366,49 @@ function warnIfPaidLooksFree(record: SpendRecord): void {
       isByok: record.isByok,
     },
     "provider reported no credits and a non-zero upstream cost without is_byok; " +
-      "this call is recorded as free and is not",
+      "this call is recorded as unpriced, not as free",
   );
+}
+
+/**
+ * **A row's five money fields, decided together and never apart.**
+ *
+ * One arm of `SpendProvenance` in, one legal combination out. They were five
+ * independent ternaries at the call site, each reading `record.cost.source`,
+ * with a comment explaining that spelling them that way was what kept the row
+ * and `ai_calls_one_cost_source` from coming apart. That held while there was
+ * exactly one condition; `paidLooksFree` is a second, and a second condition
+ * copied into five ternaries is precisely how they *do* come apart. So the
+ * decision moves into one function that returns the whole combination, and
+ * there is no path through it that sets two of the three money columns.
+ */
+function moneyFields(
+  record: SpendRecord,
+): Pick<
+  AiCallRow,
+  "creditsUsedNanos" | "byokUpstreamNanos" | "costSource" | "computedCostNanos" | "priceVersion"
+> {
+  if (paidLooksFree(record)) {
+    warnPaidLooksFree(record);
+    /* **Unpriced, not a settled zero.** The upstream figure is still dropped —
+       the CHECK gives it nowhere to go — so the honest claim left to make is
+       that this call reported no money we can attribute, which is what `none`
+       means and what the report counts under "short by an unknown amount". */
+    return {
+      creditsUsedNanos: null,
+      byokUpstreamNanos: null,
+      costSource: "none",
+      computedCostNanos: null,
+      priceVersion: null,
+    };
+  }
+  return {
+    creditsUsedNanos: record.cost.source === "provider" ? record.cost.costNanos : null,
+    byokUpstreamNanos: normaliseByokUpstream(record),
+    costSource: record.cost.source,
+    computedCostNanos: record.cost.source === "computed" ? record.cost.computedCostNanos : null,
+    priceVersion: record.cost.source === "computed" ? record.cost.priceVersion : null,
+  };
 }
 
 /**
@@ -1004,18 +1054,13 @@ function write(
     finishedAt: new Date(finishedAt).toISOString(),
     durationMs: record.ms,
     outcome: record.outcome,
-    /* **One arm of the union in, one legal combination out.** Spelled as a
-       ternary chain over `source` rather than as three independent field reads,
-       so that the row and the CHECK it is about to meet
-       (`ai_calls_one_cost_source`) cannot come apart: there is no path through
-       this that sets two of the three money fields. */
-    creditsUsedNanos: record.cost.source === "provider" ? record.cost.costNanos : null,
-    byokUpstreamNanos: normaliseByokUpstream(record),
+    /* **One arm of the union in, one legal combination out** — decided in
+       `moneyFields`, which is the only place that reads `record.cost.source`
+       for the row, so the row and the CHECK it is about to meet
+       (`ai_calls_one_cost_source`) cannot come apart. */
+    ...moneyFields(record),
     isByok: record.isByok,
     providerAccount: record.providerAccount,
-    costSource: record.cost.source,
-    computedCostNanos: record.cost.source === "computed" ? record.cost.computedCostNanos : null,
-    priceVersion: record.cost.source === "computed" ? record.cost.priceVersion : null,
     reportedInputTokens: record.inputTokens,
     outputTokens: record.outputTokens,
     cacheReadTokens: record.cacheReadTokens,

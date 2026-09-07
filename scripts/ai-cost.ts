@@ -73,6 +73,7 @@ import {
   type SpendFold,
   cashNanos,
   foldSpend,
+  partitionByScope,
   spendPerAccount,
   spread,
   totalNanos,
@@ -1328,19 +1329,34 @@ async function main(): Promise<void> {
      right way round: a scope can always be excluded from a total, and a row
      that was never written cannot be recovered. GPT Sol, 2026-08-28, on the
      open question Greg has not answered (260827q-ai-cost-tracking.md, question 4). */
-  const product = rows.filter((r) => r.scopeKind !== "eval");
-  const evals = rows.filter((r) => r.scopeKind === "eval");
+  /* ⟨This was `rows.filter((r) => r.scopeKind !== "eval")` until 2026-09-07, so
+     **dev-CLI spend was counted as Product** — $2.85 of 837 calls on the day it
+     was found — while the `--owners` report next door correctly called the same
+     rows non-product. A negative predicate three lines under the paragraph
+     above, which is the argument against it. `partitionByScope` in
+     src/cost-report.ts is now the one definition, enumerated positively and
+     tested against the categoriser so the two cannot drift again. GPT Sol, F2.⟩ */
+  const { product, devCli, evals, other } = partitionByScope(rows);
   /* An empty pocket is not printed as `$0.0000 over 0 call(s)`: a zero with a
      label reads as a measurement, and "we recorded nothing here" is the one
      thing it is not. */
   if (product.length > 0) pocket("Product spend", product);
   else console.log("\nProduct spend:  no calls recorded in this range.");
+  if (devCli.length > 0) pocket("Dev CLI spend", devCli);
   if (evals.length > 0) pocket("Eval spend", evals);
-  if (evals.length > 0 && product.length > 0) {
-    const a = totalRows(product);
-    const b = totalRows(evals);
+  /* A scope this build does not recognise. Named rather than folded, for
+     src/cost-report.ts's reason: either fold is silent and one of them inflates
+     the number a price is set from. */
+  if (other.length > 0) {
+    pocket("UNRECOGNISED SCOPE", other);
+    const names = [...new Set(other.map((r) => r.scopeKind))].sort();
+    console.log(`  scope_kind ${names.join(", ")} — in no pocket above. Classify in`);
+    console.log("  src/cost-report.ts § partitionByScope, or read this as the noise floor.");
+  }
+  if (rows.length > product.length && product.length > 0) {
+    const all = totalRows(rows);
     console.log(
-      `\nAll recorded:  ${formatNanos(a.credits + a.upstream + a.computed + b.credits + b.upstream + b.computed)} over ${rows.length} call(s)`,
+      `\nAll recorded:  ${formatNanos(all.credits + all.upstream + all.computed)} over ${rows.length} call(s)`,
     );
   }
 

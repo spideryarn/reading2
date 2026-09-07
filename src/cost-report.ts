@@ -245,3 +245,57 @@ export function spendPerAccount(
     return sum;
   });
 }
+
+/**
+ * **Whose money a row is** — the split the ordinary report leads with, and the
+ * one Greg sets a price against.
+ *
+ * ## Why this is a function rather than a `filter`
+ *
+ * It was a `filter`, and there were two of them that disagreed.
+ * `scripts/ai-cost.ts` defined product as `scopeKind !== "eval"` — everything
+ * that is not a bake-off — while [cost-categories.ts](cost-categories.ts),
+ * which the `--owners` pricing report groups by, has always put `cli` in
+ * `non-product`. So the same rows were a product's cost in one report and ours
+ * in the other, and the ordinary report's headline **Product spend** silently
+ * carried our own CLI runs: $2.85 of 837 calls on 2026-09-07, found by GPT Sol.
+ *
+ * The `filter` sat three lines under a comment arguing the exact principle it
+ * broke — *"a bake-off over forty PDF pages landing in the figure he prices
+ * against is how a price gets set wrong."* It excluded `eval` and forgot `cli`,
+ * which is what a negative predicate does the moment a third case appears: it
+ * keeps being *written* correctly and stops being *true*. Hence a positive
+ * enumeration, in one place, with tests.
+ *
+ * ## Four buckets, because losing a row is worse than either mistake
+ *
+ * `other` exists for a scope name this build does not know. The ledger is
+ * append-only and holds historical strings, so that is a real possibility rather
+ * than a defensive nicety, and both alternatives are silent: folding it into
+ * `product` overstates the basis a price is set from, and dropping it
+ * understates every total. It gets a bucket and the report prints it — the same
+ * argument `unknown` makes in [cost-categories.ts](cost-categories.ts).
+ */
+export interface ScopePartition<T> {
+  /** A reader's work: an HTTP request, or a pipeline step run for their article. */
+  product: T[];
+  /** Ours — a developer at a terminal. Real money on the bill, not a reader's. */
+  devCli: T[];
+  /** Ours — a bake-off. Real money, and the reason `eval` scope exists at all. */
+  evals: T[];
+  /** A scope name this build does not recognise. Printed, never folded. */
+  other: T[];
+}
+
+export function partitionByScope<T extends { scopeKind: string }>(
+  rows: readonly T[],
+): ScopePartition<T> {
+  const split: ScopePartition<T> = { product: [], devCli: [], evals: [], other: [] };
+  for (const row of rows) {
+    if (row.scopeKind === "request" || row.scopeKind === "job_step") split.product.push(row);
+    else if (row.scopeKind === "cli") split.devCli.push(row);
+    else if (row.scopeKind === "eval") split.evals.push(row);
+    else split.other.push(row);
+  }
+  return split;
+}

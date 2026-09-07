@@ -893,17 +893,47 @@ Each ends green and committable, and each gets its own Sol review of the committ
 **Stage 5 — correct the record.** The status header, this whole section, and F5's correction. No
 code. ✅
 
-**Stage 6 — the two P1s in what the numbers mean.** F1 and F2 together, because they are the same
-kind of defect as the original Tier 0 — a figure that is confidently wrong with nothing red.
+**Stage 6 — the two P1s in what the numbers mean. ✅ Built, 2026-09-07.** F1 and F2 together, because
+they are the same kind of defect as the original Tier 0 — a figure that is confidently wrong with
+nothing red.
 
-- F1: an inconsistent paid-looking-free row is recorded **unpriced** (`cost_source = 'none'`, null
-  credits and null BYOK), not settled-$0. The warning stays. Two tests in
-  `tests/ai-call-images.test.ts` currently assert the old behaviour and must be changed to require an
-  unpriced row — changing a test to assert the opposite is exactly the sort of edit that needs saying
-  out loud, so: **those assertions encoded a known-wrong behaviour that the source comment beside them
-  already called wrong**, and the change is the point of the stage rather than a casualty of it.
-- F2: Product is `request | job_step`; `cli` is printed as its own pocket beside `eval`. The scope
-  partition becomes one named, tested function so the two reports cannot drift again.
+- **F1.** An inconsistent paid-looking-free row is now recorded **unpriced** (`cost_source = 'none'`,
+  null credits and null BYOK), not settled-$0. The `is_byok === true` narrowing is untouched — it is
+  right, and loosening it is how the double-count returns. What changed is the rest of the row.
+  `paidLooksFree` is the predicate, and the five money fields now come from **one** function,
+  `moneyFields`, instead of five independent ternaries: the old comment argued that spelling them as
+  a ternary chain was what kept the row and `ai_calls_one_cost_source` from coming apart, and that
+  held while there was one condition. A second condition copied into five ternaries is how they *do*
+  come apart.
+
+  Two tests in `tests/ai-call-images.test.ts` asserted the old behaviour and were changed to require
+  an unpriced row. Changing a test to assert the opposite of what it said is the sort of edit that
+  needs saying out loud, so: **those assertions encoded a known-wrong behaviour that the comment
+  beside them already called wrong** — *"This pins what happens today; it does not endorse it"* — and
+  flipping them is the point of the stage rather than a casualty of it. Both watched red first, on
+  `expected +0 to be null`.
+
+- **F2.** Product is `request | job_step`; `cli` is its own pocket beside `eval`, and an unrecognised
+  scope gets a fourth, printed rather than folded. `partitionByScope` in `src/cost-report.ts` is the
+  one definition, enumerated **positively** — the defect was a negative predicate (`!== "eval"`) that
+  kept being written correctly and stopped being true when a third scope appeared. One of its four
+  tests holds it against `costCategoryOf`, so the two reports cannot disagree again without going
+  red.
+
+  Measured before and after, same database, same window:
+
+  | | before | after |
+  |---|---|---|
+  | Product spend | $21.1886 / 837 calls | **$18.5050 / 489 calls** |
+  | Dev CLI spend | *(inside Product)* | **$2.8501 / 349 calls** |
+  | Eval spend | $28.8609 / 387 calls | unchanged |
+
+  So the figure a subscription price would have been set against was **15% too high**, all of it our
+  own terminal.
+
+**Done:** `tests/ai-spend`, `ai-cost-cli`, `cost-report`, `cost-categories`, `ai-call-images`,
+`cost-ledger-shortfall`, `annotation-cost`, `cost-eval`, `request-spend`, `job-spend-fields` — 296
+tests green. `npm run typecheck` clean.
 
 **Stage 7 — no reader-facing job goes uncategorised by accident.** F4's four-valued disposition
 table, keyed on `AiJob` so the compiler refuses a new job that nobody has placed: *interactive
