@@ -21,6 +21,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readerCss } from "./helpers/stylesheets.js";
 import {
   CHAIN_NEAR_LEVELS,
   DIAGRAMS,
@@ -29,7 +30,10 @@ import {
   UNLABELLED,
 } from "../src/web/diagram.js";
 
-const CSS = readFileSync("src/web/styles.css", "utf8");
+/* The reading-view sheets, comments and all — the `§` banners this file slices
+   on are comments. Asked for as a set rather than as `src/web/styles.css`,
+   which since 2026-09-06 is the list of `@import`s and holds no rule. */
+const CSS = readerCss();
 
 /** The `font-size` a selector declares, in px, or null if it declares none. */
 function fontSizeOf(selector: string): number | null {
@@ -102,6 +106,15 @@ describe("the diagram's colours go through the palette rather than naming one", 
     /\/\*[\s\S]*?\*\//g,
     "",
   );
+
+  it("finds the diagram section at all", () => {
+    /* **The vacuity guard.** `indexOf` answers -1 for a banner that has been
+       renamed, or that has moved into a sheet this set no longer reaches, and
+       `slice(-1)` then hands the loop below a single character — which contains
+       no `var(--cat-rgb, …)` and so passes over nothing. */
+    expect(FROM, "no `§ diagram mode` banner in the reader stylesheets").toBeGreaterThan(-1);
+    expect(BLOCK.length, "the `§ diagram mode` section is empty").toBeGreaterThan(500);
+  });
 
   it("uses the shared --cat-* slots and never a literal colour", () => {
     /* The eight hues live in styles/colourscales.css, where the reasoning about

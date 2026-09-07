@@ -289,8 +289,8 @@ Added 2026-09-05, after a rule tightened that morning retroactively invalidated 
 roughly one article in twenty off the air entirely — at a paid model call per attempt, with the
 reader told to try again:
 [260905f](../postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md).
-The lesson worth carrying: **tightening an invariant over durable stored data is a migration** —
-sweep the rows in the same commit, or say in the commit why not.
+The lesson worth carrying has its own section below:
+[§ Tightening an invariant over stored data is a migration](#tightening-an-invariant-over-stored-data-is-a-migration).
 
 **A writable disk is still what the `files` store *is*** — that host question is unchanged — but it
 is no longer a waypoint Postgres writes pass through, because `ArtifactStore.write()` has one caller
@@ -1247,6 +1247,28 @@ could not be `search_runs` with a column added. The short version is a unit: `Se
 is a 0–100 match strength whose validator clamps negatives to zero, so a signed valence sent through
 it arrives as `0` and every negative judgement is gone with nothing to see.
 
+## Tightening an invariant over stored data is a migration
+
+**Sweep the rows in the same commit, or say in the commit message why not.**
+
+A migration is not only a `.sql` file. Any change that makes some already-stored shape illegal is a
+migration of that data, whether or not the schema moved — a new rule in a validator, a narrowed
+union, a stricter parse, a check now run at a place it was not run before. Fixing the *producer* is
+half the job; the rows the old producer wrote are the other half, and they are the half nothing
+reminds you about.
+
+*Say why not* is a real answer — the invalid rows may be harmless, or few enough to repair by hand,
+or a sweep may touch real reader data, which is Greg's call. But it goes in the commit message,
+because a rule tightened silently is indistinguishable from one whose data was checked. The question
+to ask first is **what reads this invariant, and what does it do when it is broken**: one that only
+warns can be swept later, and one standing in front of a gate that refuses whole artefacts cannot.
+
+`c8e2cc7e` on 2026-09-05 is the cost of getting it wrong. Its own comment said the new rule applied
+*"for the ones already stored"* and read that as a feature; nothing migrated them, and roughly one
+article in twenty could then publish nothing at all for eleven hours, at a paid model call per
+attempt.
+[260905f](../postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md).
+
 ## Two traps recorded elsewhere, repeated here because they are expensive
 
 - **The Supabase CLI does not know about our migrations.** Ours are Drizzle's, in
@@ -1273,16 +1295,24 @@ it arrives as `0` and every negative judgement is gone with nothing to see.
 ## Checkpoints — work a failed attempt already paid for
 
 Two stages keep working state that has to **survive their own failure**: `hierarchy` records each
-batch of nav labels as it comes back, and the PDF reader records each transcribed chunk. A 429 eight
+batch of nav labels as it comes back — the `labels` step's since 2026-09-06, though the namespace
+still carries the old owner's name (below) — and the PDF reader records each transcribed chunk. A 429 eight
 batches into a book then costs one batch rather than eight, and these are the expensive calls.
 
 **Four namespaces**, and the list is `CheckpointNamespace` in
 [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts): `pdf-chunk` for a transcribed chunk,
-and three that all belong to the `hierarchy` step — `hierarchy-structure` (the one whole-document
+and three named for the `hierarchy` step — `hierarchy-structure` (the one whole-document
 call for the tree), `hierarchy-deepen` (each scoped call that splits a section too fat to read,
 [`src/hierarchy-deepen.ts`](../../src/hierarchy-deepen.ts)) and `hierarchy-labels` (the nav-label
 batches). They are separate because they are separate questions with separate prices: a run that
-dies in the labels must not buy the tree again. Adding one is a migration, since the CHECK on the
+dies in the labels must not buy the tree again.
+
+**`hierarchy-labels` belongs to the `labels` step since 2026-09-06, and keeps its name on purpose.**
+`batchFingerprint` carries no step and no job identity, so every stored row survived the split
+([260906a](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md)) — but only because the
+namespace did not move. Renaming it to match the new owner would have invalidated every row and
+bought the next run nothing. So the name records where these batches came from rather than who asks
+for them now, and that is the trade. Adding one is a migration, since the CHECK on the
 table is the other copy of the list — and since 2026-09-05 `tests/db-schema.test.ts` inserts a row
 under every name, so the two cannot drift in silence. Before that they could, and the symptom would
 have been a `warn` nobody reads and a bill that goes up.

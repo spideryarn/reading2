@@ -31,7 +31,7 @@ import { armJump, clearArmedJump, readStamp } from "../src/web/jump-history.js";
 import { atParam } from "../src/web/params.js";
 import type { Section } from "../src/web/position.js";
 import { ReturnChip } from "../src/web/ReturnChip.js";
-import { watchHistoryWrites } from "../src/web/router.js";
+import { dismissJumpOrigin, watchHistoryWrites } from "../src/web/router.js";
 
 /* main.tsx's order — nuqs patches first, so ours is the outer wrapper. Both are
    idempotent; a second patch would double every event. */
@@ -133,6 +133,10 @@ async function goBack(): Promise<void> {
 beforeEach(() => {
   history.replaceState(null, "", "/read/x");
   clearArmedJump();
+  /* A same-path replace preserves the stamp on purpose, so resetting the
+     address is not enough to reset the *entry* — the previous test's origin
+     rides in and the chip is already up. GPT Sol F27, 2026-09-06. */
+  dismissJumpOrigin();
   document.body.replaceChildren();
   mount();
 });

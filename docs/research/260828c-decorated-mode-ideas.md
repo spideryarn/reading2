@@ -495,7 +495,7 @@ were drawing the underlines — and we had made them **solid**, while giving **d
 assumptions and to hedges.
 
 Spideryarn's reading view has had one convention since 2026-08-26: `mark.term` in
-[`src/web/styles.css`](../../src/web/styles.css) is a **dotted** rule, always on, with a rich card on
+[`src/web/styles/annotations.css`](../../src/web/styles/annotations.css) is a **dotted** rule, always on, with a rich card on
 hover, and Greg set it that way himself. A reader who learns that convention in the reading view
 should not have to unlearn it here. The channel table above said "glossary solid, assumption dotted,
 introduced dashed" and nobody noticed it contradicted the product, because the playground was read

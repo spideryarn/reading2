@@ -45,12 +45,16 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+import { readerCss } from "./helpers/stylesheets.js";
+
 import {
   REFEREE_TEXT_ALREADY_SENT,
   REFEREE_TEXT_ALREADY_SENT_SHORT,
 } from "../src/messages.js";
 
-const CSS = readFileSync("src/web/styles.css", "utf8");
+/* The reading-view sheets as a set rather than one path — `src/web/styles.css`
+   has held nothing but `@import`s since 2026-09-06. */
+const CSS = readerCss();
 const APP = readFileSync("src/web/App.tsx", "utf8");
 
 /** The declarations inside `selector { … }`, or null if there is no such rule. */

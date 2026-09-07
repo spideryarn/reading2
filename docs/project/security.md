@@ -1134,8 +1134,32 @@ Honest list. None is a reason to delay the fix above; all are worth knowing.
 - ~~**Old artefacts are not re-sanitised on read.**~~ **Closed 2026-08-26** — see
   [§ An artefact that was cleaned by nothing looks exactly like one that was cleaned](#the-stamp)
   below.
-- **Remote content still loads.** Images, and an allowlisted embed, fetch from third parties on
-  render, which tells them you are reading the piece. Inherent to displaying an article's images.
+- **Remote content still loads for whatever we do not hold a copy of.** Narrowed on 2026-09-06 and
+  not closed. Since then the reading view fetches every image the assets step actually stored
+  **from us**, and the publisher's URL never reaches the DOM while our copy is on its way — the
+  block is drawn with the `src` stripped rather than with the publisher's in it, because rendering
+  it and swapping ours in a moment later is a fetch that has already happened
+  ([article-images.md § The two draws](article-images.md#the-two-draws-and-why-an-image-is-blank-for-a-moment)).
+
+  **A complete manifest is not on its own a guarantee, and the wording here said it was until GPT
+  Sol corrected it on 2026-09-07.** The fallback is what makes it conditional: an image whose
+  request to *us* fails, or does not arrive inside `IMAGE_WAIT_MS`, is restored from the original
+  html — publisher's URL and all — because the second draw is rebuilt from the article as stored.
+  That is the right behaviour (the alternative is a permanently blank picture) and it means a bad
+  day at our own end reopens the exposure without anything reporting a failure. **Measured, not
+  hypothetical**: on 2026-09-07 one article in the local corpus had 102 of 102 images marked
+  `stored` and *none of the objects in the bucket*, so every asset request answered 500 and the
+  reader's browser fetched all of them from the publisher. That article turned out to be a seeded
+  fixture rather than something this box ingested — every other article's objects were present —
+  but it is exactly the shape the guarantee fails in, and nothing on the page says so.
+
+  What else still announces the reader is **every image the step did not store** — a `failed` entry,
+  one the budget never reached, or an article ingested before the step existed — plus the
+  allowlisted embed. For those, *leave the element completely alone* is the deliberate fallback, so
+  they go on hot-linking exactly as before. The exposure is therefore now a function of **how
+  complete a given article's manifest is and whether we can serve what it names**, not of whether
+  the feature exists, and the first half varies widely: one article in the local corpus names 102
+  images and another names 6 of its 24.
 - **An `/add/…` link makes us fetch, and we only stop half of what it could point at.** Added
   2026-08-26 with the add page ([ingest-queue.md § The add page](ingest-queue.md#the-add-page)),
   and it is a genuinely new shape: everywhere else, something expensive happens because the reader

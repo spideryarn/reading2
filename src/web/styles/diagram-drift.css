@@ -1,0 +1,388 @@
+/* diagram-drift.css — the Drift and Trail sub-modes of Diagram, which reuse
+   `.diag-dot` and `.diag-box` from diagram.css rather than growing geometry of
+   their own. src/web/scatter.ts.
+
+   **Its last forty lines are the dictation microphone** — `.prof-mic-*` and
+   `.spin` — which belong with profile.css six files back and are here because
+   this is where the original stylesheet had them. The split cuts on section
+   boundaries and moves nothing, so they stayed. */
+
+/* ---------------------------------------------------- § drift and trail ----
+ *
+ * The two pictures whose axes came out of a model: one dot per paragraph,
+ * placed by what the paragraph is *about* (src/web/scatter.ts,
+ * docs/plans/260827g-embedding-scatter-diagrams.md).
+ *
+ * **They reuse `.diag-dot` rather than growing a shape of their own.** A dot on
+ * a spine is what `arc` and `cluster` already draw, and the arrangement those
+ * two settled — `.diag-box` as an invisible square that catches the pointer,
+ * `.diag-dot` as the mark — is exactly what a 4px target needs. So there is no
+ * new geometry here, only new colours and one new fade.
+ */
+
+/* The second control strip: what sideways means, and what colour means. Quieter
+   than the kind chips above it, because these are ways of looking at one
+   picture rather than a different picture. */
+.diag-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.7rem;
+  padding: 0.3rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.diag-opt { display: inline-flex; align-items: center; gap: 0.25rem; }
+/* **The scatter's caveat, at the end of the heading row.** It replaced four
+   lines of 10.5px prose above the picture, and the sentence itself is still in
+   the DOM as an `.sr-only` live region — this is a change to where it is
+   *shown*, not to whether it is said. DiagramPanel.tsx § ScatterNote.
+
+   **It lives in `.band-head` because `.band-head` cannot wrap.** It was on
+   `.diag-opts` first, which does, and the "costs no vertical space" claim was
+   false there in a way that took two checks and a browser sweep to see. Auto
+   margins right-align an item on the line it lands on; they do not stop it
+   starting a new one — and nesting the chips in an inner wrapping box only moved
+   which item wrapped, because the binding constraint is **total intrinsic
+   width**, not alignment. At the ideal band width Drift's two chip groups plus
+   this icon do not fit on one line, so something wraps whichever way the
+   alignment is written. `.band-head` has no `flex-wrap`, so it shrinks its
+   heading instead of gaining a flex line.
+
+   **That is still not the whole argument, and the missing half is a text
+   line.** A row with no `flex-wrap` cannot gain a line, but the flexible item
+   inside it can wrap its own text once it has been shrunk far enough, and the
+   row is then just as tall. Nothing about `.band-head` prevented that; only
+   the heading being the single unbreakable word "Diagram" did, which is a fact
+   about today's copy rather than about the row. `.band-head h2` declares the
+   one-line-cut four (§ mode band), so the claim is a property of the markup —
+   and since 2026-09-02 it is true of every band's head, not only this one.
+
+   `flex: none` so it is the icon that keeps its size when that shrinking
+   happens, rather than collapsing and taking the caveat with it;
+   `h2 { flex: 1 }` above is what pushes it right.
+
+   `cursor: help` rather than `pointer`, because pressing it does nothing — the
+   card is the whole of it. Sized to the row rather than to a thumb: what this
+   panel offers a finger is the step bar. */
+.diag-about {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.15rem;
+  border: 0;
+  background: none;
+  color: var(--ink-faintest, var(--ink-faint));
+  cursor: help;
+}
+.diag-about:hover, .diag-about:focus-visible { color: var(--ink-soft); }
+.diag-opt-set { display: inline-flex; align-items: center; gap: 0.15rem; }
+.diag-opt-label {
+  margin-right: 0.15rem;
+  color: var(--ink-faintest, var(--ink-faint));
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.diag-opt-btn {
+  padding: 0.1rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) * 0.5);
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.79rem;
+  cursor: pointer;
+}
+.diag-opt-btn:hover { color: var(--ink); }
+.diag-opt-btn.on { border-color: var(--rule-strong); color: var(--highlight-ink); }
+
+/* The lane legend — one chip per topic, carrying its most distinctive word.
+ *
+ * **A grid of exactly `k` equal columns, not a wrapping row**, and that is the
+ * whole design rather than a styling preference. The first version was a
+ * `flex-wrap` list: with eight lanes it wrapped after five, so chip 6 sat under
+ * chip 0 and the legend's *order* was the only thing tying a word to a column.
+ * A reader had to count. Seen in a browser pass, 2026-08-27 — and it looked
+ * perfectly tidy, which is why counting the chips against the columns was worth
+ * doing rather than glancing at it.
+ *
+ * Now chip `i` sits over lane `i`, so the mapping is **position**, which is
+ * what a legend beside a picture is for. The column count comes from the
+ * component as `--lanes`, because only it knows how many lanes there are.
+ *
+ * The cost is honest and stated: at 288px and eight lanes a chip is 34px, so
+ * the word is clipped to three or four letters. The full three terms are in the
+ * hover, and the position is the part that cannot be got any other way. Fewer
+ * lanes — a short article — and the words fit outright. */
+.diag-lanes {
+  display: grid;
+  grid-template-columns: repeat(var(--lanes, 8), minmax(0, 1fr));
+  gap: 0.15rem;
+  margin: 0;
+  /* The same 13px inset the picture's own padding uses (PAD_X in scatter.ts),
+     so a chip's left edge lines up with the left edge of its lane rather than
+     with the panel. Moving one without the other silently shears the legend. */
+  padding: 0.25rem 13px 0.35rem;
+  list-style: none;
+}
+.diag-lane {
+  min-width: 0;
+  padding: 0.05rem 0.25rem;
+  border-left: 2px solid rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.8);
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.77rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: help;
+}
+
+/* A dot. Filled at its hue and ringed a little brighter, so a cluster reads as
+   a mass at low alpha while a single dot still has an edge. */
+.diag-drift .diag-node .diag-box,
+.diag-trail .diag-node .diag-box { fill: transparent; stroke: none; }
+.diag-drift .diag-dot,
+.diag-trail .diag-dot {
+  fill: rgb(var(--cat-rgb) / 0.55);
+  stroke: rgb(var(--cat-rgb) / 0.9);
+  stroke-width: 0.6;
+  /* A dot moves when the reader changes what colour means, not when they
+     scroll, so this transition cannot chase a scroll. */
+  transition: fill 120ms ease-out;
+}
+/* Pointed at, or focused. The halo is the invisible hit square becoming
+   visible — the reader's own confirmation that the thing under the pointer is
+   the thing the card is describing. */
+.diag-drift .diag-node:hover .diag-box,
+.diag-drift .diag-node.on .diag-box,
+.diag-trail .diag-node:hover .diag-box,
+.diag-trail .diag-node.on .diag-box {
+  fill: rgb(var(--cat-rgb) / 0.14);
+  rx: 3;
+}
+.diag-drift .diag-node:hover .diag-dot,
+.diag-drift .diag-node.on .diag-dot,
+.diag-trail .diag-node:hover .diag-dot,
+.diag-trail .diag-node.on .diag-dot { fill: rgb(var(--cat-rgb) / 0.95); }
+
+/* Where the reader is. A ring rather than a fill, for the reason the rest of
+   this panel gives: the fill already means something (which section, or how far
+   through) and a position marker must not change colour as you read.
+
+   **On the dot, not on the box** — and that has to be said in a rule of its own
+   rather than left to the cascade. The panel's general `.diag-node.here
+   .diag-box` puts the ring on the hit target, which here is an invisible square
+   thirteen pixels across: a ring round a box the reader cannot see reads as a
+   stray rectangle floating beside the dot it is about. `stroke: none` above
+   happens to beat it on source order, and this is the rule that means it, so
+   that moving either block cannot silently bring the square back. */
+.diag-drift .diag-node.here .diag-box,
+.diag-trail .diag-node.here .diag-box { stroke: none; }
+.diag-drift .diag-node.here .diag-dot,
+.diag-trail .diag-node.here .diag-dot {
+  stroke: var(--highlight);
+  stroke-width: 2;
+  paint-order: stroke;
+}
+
+/* **The keyboard focus ring, and it is not decoration.** The panel's general
+   rule draws a dashed outline on `.diag-box`, which these two pictures have
+   just made transparent and strokeless — so without this, arrowing through 276
+   dots would move focus with nothing on screen following it. The picture is one
+   tab stop and the arrows move inside it; a focus ring that is invisible makes
+   that whole contract unusable, and it is invisible in exactly the way nothing
+   reports. So: the ring goes on the dot, dashed, as everywhere else. */
+.diag-drift .diag-node:focus-visible .diag-box,
+.diag-trail .diag-node:focus-visible .diag-box { stroke: none; }
+.diag-drift .diag-node:focus-visible .diag-dot,
+.diag-trail .diag-node:focus-visible .diag-dot {
+  stroke: var(--highlight);
+  stroke-width: 2;
+  stroke-dasharray: 3 2;
+  paint-order: stroke;
+}
+
+/* The chain, on Trail. **`depth` is not a depth here** — scatter.ts writes how
+   strongly to draw the segment into it, 0 to 6, because a link already has that
+   field and inventing a second one would mean touching every picture's
+   stylesheet. It says one thing and one only: how far through the article this
+   segment is, so the chain brightens as the piece goes on and the eye can tell
+   which end it started at.
+
+   Where the reader is standing is the *other* ramp, `diag-near-*` below, and it
+   is deliberately not folded into this number: it comes from the panel rather
+   than from the layout, so that Force can have the same ramp without re-running
+   a force simulation on every scroll. */
+.diag-trail {
+  --diag-chain: var(--cat-7-rgb);
+}
+.diag-trail .diag-link {
+  stroke: rgb(var(--diag-chain) / 0.5);
+  stroke-width: 0.75;
+  fill: none;
+  /* The fallback matters: a segment with no `diag-d*` at all must not render at
+     the browser default of 1, which on this additive layer is a white line. */
+  opacity: var(--chain-fade, 0.5);
+  /* **Segments add up rather than paint over each other**, so a corridor the
+     article travels repeatedly glows and a single transit stays a whisper.
+     This is the one move that turns 263 crossings from noise into a reading:
+     the hairball becomes a heat map of where the piece keeps going, and every
+     segment is still drawn, so nothing is hidden to achieve it. Fable's
+     suggestion, 2026-08-27, and much the best idea of that round.
+
+     `plus-lighter` rather than `screen`: it is the compositing operator that
+     genuinely sums, so two faint lines are twice as bright and four are four
+     times. On a near-black ground that is exactly the behaviour wanted; on a
+     light one it would do nothing, which is worth knowing before anybody moves
+     this picture. */
+  mix-blend-mode: plus-lighter;
+}
+/* **The global fade is a custom property, not an `opacity`, and that is what
+   lets the local ramp compose with it instead of replacing it.**
+
+   It was a plain `opacity` until GPT Sol reviewed this on 2026-08-30 and found
+   the cliff it produced: `diag-near-7` — the ramp's last step, which is supposed
+   to be indistinguishable from an unclassed segment — set 0.52, while the
+   unclassed `diag-d0` segment beside it sat at 0.16. Roughly 0.26 against 0.08
+   of effective alpha, a threefold jump, at exactly the boundary the design
+   claims to have no boundary at. Force does not have this problem because its
+   chain has one base weight; Trail's varies from 0.16 to 0.5 along the article,
+   so "land on the base" is only meaningful if the ramp can *see* the base. */
+.diag-trail .diag-link.diag-d0 { --chain-fade: 0.16; }
+.diag-trail .diag-link.diag-d1 { --chain-fade: 0.2; }
+.diag-trail .diag-link.diag-d2 { --chain-fade: 0.25; }
+.diag-trail .diag-link.diag-d3 { --chain-fade: 0.3; }
+.diag-trail .diag-link.diag-d4 { --chain-fade: 0.36; }
+.diag-trail .diag-link.diag-d5 { --chain-fade: 0.42; }
+.diag-trail .diag-link.diag-d6 { --chain-fade: 0.5; }
+
+/* **The reader's own stretch, and it fades outward rather than stopping.**
+ *
+ * Greg, 2026-08-30: *"making the connections directly either side of the
+ * current node most prominent. Then a bit fainter for the ones at one remove,
+ * then a bit fainter for the ones at two removes, etc etc."*
+ *
+ * This used to be one step — `diag-d8`, seventeen segments at full strength and
+ * a hard edge back to the global fade — decided inside `chainStep` in
+ * scatter.ts. It is now eight steps decided by `chainNearness` in diagram.ts,
+ * which is the same code the Force chain uses, so the two pictures cannot drift
+ * apart in what "near the reader" means.
+ *
+ * **Each step is a lerp from full strength to `--chain-fade`, not a number.**
+ * `calc(fade + (1 - fade) * k)` with `k` walking 1 → 0: level 0 is opacity 1
+ * wherever it lands in the article, and level 7 resolves to *exactly* the
+ * global fade that segment would have had unclassed. That is what makes the
+ * ramp end without an edge, and writing it as eight literal opacities is what
+ * put an edge there in the first place — see the note above the `diag-d*` rules.
+ *
+ * Two more things ride the ramp, and neither can be interpolated in CSS, which
+ * is why the steps are still written out. The **hue** walks from the chain's
+ * own violet at the far end to the marker colour at the reader's feet, because
+ * opacity alone on a hairline that is already glowing additively does not
+ * separate the run from the tangle. And **`plus-lighter` comes off** at the
+ * near end: the bright run is a line to follow rather than texture to
+ * accumulate, and left in the additive layer it blows out wherever it crosses
+ * the rest of the chain, which is precisely where the reader is looking.
+ */
+.diag-trail .diag-link.diag-near-0 {
+  opacity: 1;
+  stroke: rgb(var(--cat-4-rgb) / 0.95);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  mix-blend-mode: normal;
+}
+.diag-trail .diag-link.diag-near-1 {
+  opacity: calc(var(--chain-fade, 0.5) + (1 - var(--chain-fade, 0.5)) * 0.88);
+  stroke: rgb(var(--cat-4-rgb) / 0.88);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  mix-blend-mode: normal;
+}
+.diag-trail .diag-link.diag-near-2 {
+  opacity: calc(var(--chain-fade, 0.5) + (1 - var(--chain-fade, 0.5)) * 0.75);
+  stroke: rgb(var(--cat-4-rgb) / 0.78);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  mix-blend-mode: normal;
+}
+.diag-trail .diag-link.diag-near-3 {
+  opacity: calc(var(--chain-fade, 0.5) + (1 - var(--chain-fade, 0.5)) * 0.62);
+  stroke: rgb(var(--cat-4-rgb) / 0.66);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  mix-blend-mode: normal;
+}
+/* From here on the segments are back in the additive layer, which is what makes
+   the run dissolve into the chain instead of ending. */
+.diag-trail .diag-link.diag-near-4 {
+  opacity: calc(var(--chain-fade, 0.5) + (1 - var(--chain-fade, 0.5)) * 0.48);
+  stroke: rgb(var(--cat-4-rgb) / 0.55);
+  stroke-width: 1.1;
+}
+.diag-trail .diag-link.diag-near-5 {
+  opacity: calc(var(--chain-fade, 0.5) + (1 - var(--chain-fade, 0.5)) * 0.33);
+  stroke: rgb(var(--cat-4-rgb) / 0.44);
+  stroke-width: 1;
+}
+.diag-trail .diag-link.diag-near-6 {
+  opacity: calc(var(--chain-fade, 0.5) + (1 - var(--chain-fade, 0.5)) * 0.17);
+  stroke: rgb(var(--cat-4-rgb) / 0.32);
+  stroke-width: 0.9;
+}
+/* Level 7 is the ramp arriving: every property here is the unclassed rule's,
+   spelled out so the boundary is visible to a reader and to a test. */
+.diag-trail .diag-link.diag-near-7 {
+  opacity: var(--chain-fade, 0.5);
+  stroke: rgb(var(--diag-chain) / 0.5);
+  stroke-width: 0.75;
+}
+
+/* The heads only ever land on the reader's own run (scatter.ts decides that,
+   because a head changes where the line is trimmed to), so they take that run's
+   colour rather than the chain's. `--diag-chain` violet on a `--cat-4` line was
+   a head that did not look like it belonged to the line it was on. */
+.diag-trail .diag-arrowhead { fill: rgb(var(--cat-4-rgb) / 0.9); }
+
+/* **The microphone's one promise, and it is invisible.**
+   Where the "unreliable" sticker used to be (removed 2026-08-27, along with the
+   bug it was about). The sentence — your voice is sent to be transcribed and is
+   not stored — is carried as the button's accessible description and as its
+   `title`, and takes no room on screen: it is a fact about how the control
+   works, not a warning about whether it does. docs/plans/260827x-dictation-two-pass.md. */
+/* **Nothing at all, on purpose.** It carries the sentence for screen readers
+   and takes no space, because it now sits inside every microphone button
+   wherever one appears — including the chat composer, which is a flex row where
+   a `margin-left: auto` on this would have shoved the send button across the
+   page. The profile box's own layout puts the gap on the button instead. */
+.prof-mic-note {
+  display: contents;
+}
+.prof-box-head .prof-mic {
+  margin-left: auto;
+}
+
+/* Turning the words into text. The microphone is off, so no orange — this is
+   work happening rather than a device being open, and it must not look like a
+   third listening state. */
+.prof-mic.busy {
+  color: var(--ink-faint);
+  border-color: var(--rule);
+  opacity: 1;
+}
+.prof-mic.busy:disabled { opacity: 1; cursor: progress; }
+.spin { animation: cmt-spin 0.9s linear infinite; }
+
+/* A microphone was chosen and could not be opened, so something else is in use.
+   Warm rather than red: it is a fact worth knowing, not a failure — dictation is
+   working, just not through the device the reader picked.
+   docs/plans/260827k-microphone-device-and-recording.md. */
+.prof-mic-warn {
+  margin: 0.25rem 0 0;
+  color: var(--highlight-ink, var(--highlight));
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+  line-height: 1.4;
+}
+
+

@@ -8,7 +8,7 @@ is missing is listed at the bottom, honestly, rather than left for you to discov
 Nothing here restates [web-client.md](web-client.md), [icons.md](icons.md) or
 [tooltips.md](tooltips.md). This is the map; those are the territory.
 
-## The five files, in load order
+## The stylesheets, in load order
 
 `main.tsx` imports **one** stylesheet, and it is not the one you would guess.
 
@@ -16,9 +16,13 @@ Nothing here restates [web-client.md](web-client.md), [icons.md](icons.md) or
 |---|---|---|
 | 1 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the entry point.** The `@layer` statement, the Tailwind imports, the token bridge, the source-scanning rule |
 | 2 | `tailwindcss/theme.css` + `utilities.css` | Tailwind v4, prefixed `tw`, in layers `theme` and `utilities`. **Preflight is deliberately not imported** |
-| 3 | [`src/web/styles.css`](../../src/web/styles.css) | every hand-written rule, ~12,800 lines, imported by *file 1* so it lands in `@layer app` |
+| 3 | [`src/web/styles.css`](../../src/web/styles.css) | **nothing but `@import`s.** Imported by *file 1* so everything below it lands in `@layer app`, and it is the authoritative statement of the order the hand-written CSS loads in. A **new sheet takes two edits**: the `@import`, at the position you want it in the cascade, and the same name at the same position in `MANIFEST` in [`tests/styles-entry-is-imports-only.test.ts`](../../tests/styles-entry-is-imports-only.test.ts), which is the independent witness to that order |
+| 3a | [`src/web/styles/`](../../src/web/styles/) | every hand-written rule, one file per area, imported by *file 3*. Three positions in that order are load-bearing: [`tokens.css`](../../src/web/styles/tokens.css) first, because everything below reads its semantic names; [`narrow-window.css`](../../src/web/styles/narrow-window.css) near the end, because nearly every phone rule wins by being later rather than by specificity — its own header says so; and [`site.css`](../../src/web/styles/site.css) last. Read `styles.css` for the rest of the order rather than guessing it from the file names |
 | 4 | [`styles/tokens.css`](../../styles/tokens.css) | the brand palette and the four font stacks, imported in turn by *file 3* |
 | 5 | [`styles/colourscales.css`](../../styles/colourscales.css) | the three palettes that are **not** the brand — categorical, sequential, diverging — imported by *file 4*. See [colour-scales.md](colour-scales.md) |
+
+`wc -l src/web/styles.css src/web/styles/*.css` on 2026-09-06: 65 lines of `@import` over 37 files,
+15,951 lines in all.
 
 The nesting is the load-bearing part. Importing `styles.css` from `main.tsx` alongside
 `tailwind.css` **does not work** — it lands unlayered, outranks every utility, and Tailwind
@@ -31,7 +35,7 @@ silently does nothing. The full reasoning is in the header comment of
 Three mechanisms can style the same element, and picking wrongly is how the cascade fights get
 started. The rule of thumb:
 
-- **`styles.css`** owns anything structural, anything that reads as a *system* — the table
+- **`src/web/styles/`** owns anything structural, anything that reads as a *system* — the table
   geometry, the spine, the tooltip card, the reading typography — each scoped to a class it
   owns. A bare `thead th` is not table geometry, it is every table in the app
   ([postmortem](../postmortems/260906g-an-unscoped-element-selector-in-styles-css-reached-every-table-in-the-app.md)).
@@ -51,7 +55,7 @@ started. The rule of thumb:
   but because there were three copies of one component and two of them carried their own
   hand-written rules — `gloss-btn` and `summ-btn`, identical apart from two paddings, a gap and two
   colours. A button that appears in three panels is a *system*, which by the first bullet would put
-  it in `styles.css`; but it is also chrome, which the third bullet puts in shadcn. Chrome won,
+  it in `src/web/styles/`; but it is also chrome, which the third bullet puts in shadcn. Chrome won,
   because the alternative was inventing a third set of numbers for something the thread page was
   already drawing correctly. 38 lines of CSS went.
 
@@ -68,13 +72,13 @@ from that, and both bite:
   what to do if light mode ever comes back.
 - **`--accent` is a raised dark *surface*, not the orange.** That is shadcn's meaning of the name,
   and shadcn's own components walk straight into it. Anything meaning the brand orange says
-  `--highlight`. See the token block at the top of
-  [`styles.css`](../../src/web/styles.css), and
+  `--highlight`. See the token block in
+  [`src/web/styles/tokens.css`](../../src/web/styles/tokens.css), and
   [260825a-shadcn-migration.md § Trap A](../plans/260825a-shadcn-migration.md#the-token-bridge).
 
-The semantic layer at the top of `styles.css` (`--ink`, `--page`, `--panel`, `--surface-raised`,
-`--rule`) sits over the brand tokens so the rules below read in reading-view terms rather than in
-shadcn surface names. On a dark ground the greys run the other way: *soft* and *faint* are darker,
+The semantic layer in [`src/web/styles/tokens.css`](../../src/web/styles/tokens.css)
+(`--ink`, `--page`, `--panel`, `--surface-raised`, `--rule`) sits over the brand tokens so the
+rules below read in reading-view terms rather than in shadcn surface names. On a dark ground the greys run the other way: *soft* and *faint* are darker,
 not lighter.
 
 ### Both of those are checked, because both had already happened
@@ -196,18 +200,21 @@ Two numbers from that research doc *are* worth keeping, because they are indepen
 - **65ch**, the reading measure — which the previous app really did ship, as `max-w-[65ch]`. Since
   2026-09-04 it also **sits in the middle of whatever cell it is given**, in every mode and at every
   width — Greg: *"Always centre the Text view within its column when visible, no matter which mode
-  is active."* Three rules carry it and each is commented where it lives, in
-  [`styles.css`](../../src/web/styles.css): § text centres `.prose`; § the gutter moves the reader's
-  icon column the same distance; and § the title over the column puts the masthead on the prose's own
-  left edge wherever the two share a box. (There was a fourth, § the header over the article's
-  column, which did the same for `Text verbatim`. The column-header row lost its height on
+  is active."* Three rules carry it and each is commented where it lives:
+  [`styles/prose.css`](../../src/web/styles/prose.css) § text centres `.prose`;
+  [`styles/gutter.css`](../../src/web/styles/gutter.css) § the gutter moves the reader's
+  icon column the same distance; and
+  [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css) § the title over the column
+  puts the masthead on the prose's own left edge wherever the two share a box. (There was a
+  fourth, § the header over the article's column, which did the same for `Text verbatim`. The column-header row lost its height on
   2026-09-05 and its labels became `.sr-only` spans, so there is no heading left to align and the
   rule went with it.) **Everything that names the text follows it; nothing
   that names the row does** — the search bar and `row-active` stay at the cell's edge on purpose,
   and the footnotes opt out as a block, both for reasons given in place. All three are self-limiting:
   below about 900px the measure is wider than the cell and none of them does anything. The separate
   mechanism that centres the whole *table* when the article is the only thing on the page is
-  § plain, centred, and `PROSE_ALONE_MAX_REM` in [`layout.ts`](../../src/web/layout.ts) — **its
+  § plain, centred in [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css), and
+  `PROSE_ALONE_MAX_REM` in [`layout.ts`](../../src/web/layout.ts) — **its
   masthead follows the prose too, and learning that it did not was the expensive part.** Two correct
   changes landing on two branches, one moving the prose within its cell and one widening the cell,
   each left that rule re-centring a box it no longer described; the errors added rather than
@@ -216,7 +223,7 @@ Two numbers from that research doc *are* worth keeping, because they are indepen
 - **Space above a heading exceeds space below it** — `mt-6` against `mb-4` in their document
   viewer. We had lost this; every block here is a table row and every row had the same padding, so
   a heading sat exactly halfway between the section it ended and the one it introduced. It is back,
-  as `td.text.kind-heading` in [`styles.css`](../../src/web/styles.css).
+  as `td.text.kind-heading` in [`styles/prose.css`](../../src/web/styles/prose.css).
 
 `TableView` writes `kind-<the splitter's kind>` onto every cell, so that hook now carries two more:
 `kind-callout`, an indent and a big faint quote mark ([260831ae-callouts-the-box-the-author-drew.md](../plans/260831ae-callouts-the-box-the-author-drew.md)),
@@ -335,8 +342,8 @@ beats inheritance, and `tw:text-sm` sets a size and leaves the family alone — 
 set no font of its own, shadcn's included, was Arial on a Geist page; "Sign in with Google" on the
 live landing page was, on 2026-09-04. Greg had seen the symptom on the Metadata page the day before
 (*"some of them seem larger than others somehow?"*), and the fix there was **deliberately scoped to
-that page rather than made global**, because forty-odd buttons in `styles.css` set their own font
-and had been laid out against the UA face beneath them. It went global the next day anyway, in
+that page rather than made global**, because forty-odd buttons under `src/web/styles/` set their
+own font and had been laid out against the UA face beneath them. It went global the next day anyway, in
 `base`: that layer sits below `app`, so every one of those rules and every utility still wins, and
 what changes is the buttons that set nothing — which were the bug.
 
@@ -376,8 +383,8 @@ Three things kept it hidden, and all three are worth naming:
 - **The file was never wrong.** [`landing-assets.test.ts`](../../tests/landing-assets.test.ts) reads
   the JPEG's own header and checks it is the shape the page reserves space for. It passed, because
   it was true. The test is about the *asset*; the bug was in the *rule*.
-- **`.prose img` in [`styles.css`](../../src/web/styles.css) has carried `height: auto` all along**,
-  so every image inside an article was fine. Only chrome images were affected — a split that stops
+- **`.prose img` in [`styles/prose.css`](../../src/web/styles/prose.css) has carried
+  `height: auto` all along**, so every image inside an article was fine. Only chrome images were affected — a split that stops
   anyone suspecting something global.
 - **The page around it looked perfect.** This reads as "the screenshots look odd", which sounds like
   a capture problem, not a stylesheet one.
@@ -395,9 +402,10 @@ they stop being about aspect ratio and start being about size.
 
 ### Two hover languages, and the orange one won
 
-`--accent` is a raised dark grey **surface**, not the orange; both `tokens.css` and `styles.css`
-carry shouted comments about that name. shadcn's `outline` and `ghost` both hovered to `bg-accent`,
-while every hand-rolled control on the shelf hovered to `bg-highlight/10`. Same page, two answers.
+`--accent` is a raised dark grey **surface**, not the orange; both `styles/tokens.css` and
+[`src/web/styles/tokens.css`](../../src/web/styles/tokens.css) carry shouted comments about that
+name. shadcn's `outline` and `ghost` both hovered to `bg-accent`, while every hand-rolled control
+on the shelf hovered to `bg-highlight/10`. Same page, two answers.
 The variants were repainted to the app's own; see the header comment in
 [`button.tsx`](../../src/web/components/ui/button.tsx), which is now **two** local edits rather than
 one.
@@ -466,8 +474,9 @@ document.documentElement.scrollWidth - document.documentElement.clientWidth  // 
 Everything above is the shelf, where a narrow window breaks *rows*. On the reading view it breaks
 the **columns**, and the fix is not CSS at all — it is arithmetic in
 [`src/web/layout.ts`](../../src/web/layout.ts), which stops offering gist columns once one will not
-fit beside the prose. `styles.css` § **a narrow window** and § **a short viewport** at the end of the
-file are only what is left over after that: the wordmark and the two bars that were silently clipping
+fit beside the prose. [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css)
+§ **a narrow window** and § **a short viewport**, near the end of the import order, are only what is
+left over after that: the wordmark and the two bars that were silently clipping
 their own controls. **Two more used to be on that list and are not any more**, and both left for the
 better reason. Since 2026-08-31 the prose gutter is icons at every width, so there is
 nothing for a narrow window to ration ([prose-gutter-icons.md](../plans/prose-gutter-icons.md)) —
@@ -485,8 +494,9 @@ since 2026-09-03 the mode band going full-screen is a *class*, not a query — `
 `band-covers` on `.reader` from `fit.modeW === 0`. That one could never have been a width: the
 crossover is the window minus the rail, so it moves with `?spine=0`, and the `@media (max-width:
 843px)` that guessed it disagreed with `fitMode` from 832 to 843 with the rail off, laying the band
-over an article the table had just been squeezed to make room for (styles.css § a band with no
-room). That is the shape to aim for — a breakpoint disappears when the wide layout stops being
+over an article the table had just been squeezed to make room for
+([`styles/narrow-window.css`](../../src/web/styles/narrow-window.css) § a band with no room).
+That is the shape to aim for — a breakpoint disappears when the wide layout stops being
 extravagant or when somebody who knows the answer writes it down, not when the narrow one gets
 another rule.
 
@@ -517,8 +527,8 @@ Three things worth carrying to whatever is built next:
 - **When what has to fit is the content, a media query is the wrong tool.** The bottom bar dropped
   its labels at `max-width: 1100px`, a number measured against six modes. At thirteen the spelled-out
   row wants 1416px, so two thirds of a laptop screen showed every label *and* ran the last buttons
-  off the edge. It is measured now — [`src/web/dock-fit.ts`](../../src/web/dock-fit.ts), styles.css
-  § the bar's fit ladder, and
+  off the edge. It is measured now — [`src/web/dock-fit.ts`](../../src/web/dock-fit.ts),
+  [`styles/dock-fit.css`](../../src/web/styles/dock-fit.css) § the bar's fit ladder, and
   [260902k](../plans/260902k-the-bottom-bar-measures-its-own-fit.md) for the shape of the argument.
   A breakpoint is right when the *window* is what changed; this bar keeps growing instead.
 - **`.controls` moves by `transform`; everything under it moves by `top`.** A bullet here used to
@@ -543,8 +553,8 @@ The full account, including what the measuring harness cannot see, is
 
 `index.html` carries `viewport-fit=cover`, so on an iPhone the document is laid out across the whole
 physical screen and the notch, the home indicator and — in the installed app — the status bar all
-overlap it. `styles.css` § **safe areas** turns each edge into a token (`--safe-top`, `--safe-bottom`,
-`--safe-left`, `--safe-right`) and every piece of fixed or sticky chrome adds the one it faces. The
+overlap it. [`styles/tokens.css`](../../src/web/styles/tokens.css) § **safe areas** turns each edge into a
+token (`--safe-top`, `--safe-bottom`, `--safe-left`, `--safe-right`) and every piece of fixed or sticky chrome adds the one it faces. The
 article itself does not: prose running a few pixels behind a rounded corner is what `cover` is for.
 
 Three things to know before touching any of it:
@@ -587,14 +597,14 @@ are native modal `<dialog>` elements in the browser's top layer, which is above 
 page by definition. That is the cheapest answer available for anything that must cover *everything*,
 and it is worth reaching for again rather than minting a bigger number.
 
-The full inventory is 28 declarations from 0 to 100, counted on 2026-09-04 with
-`grep -nE '^\s*z-index:' src/web/styles.css` — a dated example rather than a fact to maintain here.
+The full inventory is 31 declarations from 0 to 100, counted on 2026-09-06 with
+`grep -nE '^\s*z-index:' src/web/styles/*.css` — a dated example rather than a fact to maintain here.
 Run it before assuming a gap is free.
 
 ## What is not written down yet
 
-The honest list. Each of these currently lives only as values in `styles.css`, and someone will
-eventually have to decide whether they are a system or an accident:
+The honest list. Each of these currently lives only as values under `src/web/styles/`, and someone
+will eventually have to decide whether they are a system or an accident:
 
 - **The z-index budget.** Still not a system, but no longer unwritten — see
   [the stacking order](#the-stacking-order-which-is-real-even-though-it-is-not-a-scale) below.
@@ -607,21 +617,25 @@ eventually have to decide whether they are a system or an accident:
   collapsing from 13rem to a strip on width; the expanded rail was deleted on 2026-08-26 and it is
   now one width, on or off — 12px since 2026-08-28.)
 - **Motion.** Settled, mostly. One global guard in `@layer base` at the foot of
-  [`tailwind.css`](../../src/web/tailwind.css) flattens every animation and transition; four
-  narrower blocks in `styles.css` remain, for the things that are *wrong* when reduced rather than
-  merely fast (a tooltip's transform, the context panel's scroll-behaviour). Written globally
+  [`tailwind.css`](../../src/web/tailwind.css) flattens every animation and transition; narrower
+  blocks under [`src/web/styles/`](../../src/web/styles/) remain, for the things that are *wrong*
+  when reduced rather than merely fast (a tooltip's transform, the context panel's scroll-behaviour).
+  How many: `grep -rc "prefers-reduced-motion" src/web/styles/*.css` — **18 across 13 files** on
+  2026-09-06. `tailwind.css` said "four" until that day, and had been wrong by more than four times
+  for long enough that nobody could say when it drifted. Written globally
   before most of the motion it guards exists — which is the lesson from the previous app, where
   the guard covered two class names while fifteen keyframe animations ran regardless. Individual
   durations are still per-rule.
-- **What "done" looks like.** Whether this project wants a design system, or whether ~12,800
-  lines of well-commented CSS *is* the answer at this size, is genuinely undecided — and the
-  number is the sharp end of the question. This line said "~1200" until 2026-09-03, and it was
-  right when it was written: the file was 1,211 lines on 2026-08-25.
+- **What "done" looks like.** Whether this project wants a design system, or whether this much
+  well-commented CSS *is* the answer at this size, is genuinely undecided — and the number is the
+  sharp end of the question. Count it with `wc -l src/web/styles.css src/web/styles/*.css`; on
+  2026-09-06 that was 15,951 lines over 38 files. This line said "~1200" until 2026-09-03, and it
+  was right when it was written: there was one file and it was 1,211 lines on 2026-08-25.
 
 ## Under this doc
 
-- **[marketing-pages.md](marketing-pages.md)** — `/` and `/features`: the `site-*` block at the foot
-  of `styles.css` and the four rules in it, how to shoot a product screenshot that shows what it
+- **[marketing-pages.md](marketing-pages.md)** — `/` and `/features`: the `site-*` block in
+  [`styles/site.css`](../../src/web/styles/site.css) and the four rules in it, how to shoot a product screenshot that shows what it
   claims to, and the two ways a full-page capture of these pages lies to you.
 
 ## See also

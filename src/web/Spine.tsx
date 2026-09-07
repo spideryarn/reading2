@@ -105,10 +105,12 @@ import type { BlockMatch } from "./search-hits.js";
 import type { BlockId } from "../types.js";
 import {
   bandMatchCounts,
+  jumpOriginMark,
   laneOrder,
   spineMarks,
   type Row,
 } from "./spine-marks.js";
+import { useJumpOrigin } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 import { onFontsChanged } from "./fonts.js";
@@ -668,6 +670,40 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
   );
 
   /**
+   * **Where the reader jumped from**, while there is a way back to it.
+   *
+   * Subscribed here rather than threaded down as a prop, which is the same call
+   * `ReturnChip` makes and for the same two reasons. The stamp is a store over
+   * `history.state` (router.ts § `useJumpOrigin`), so reading it where it is
+   * drawn keeps `App` out of a re-render it has no use for; and the mark and
+   * the chip are then **one fact with two views** rather than two things kept
+   * in step — the × that strips the stamp takes both away without either
+   * knowing the other exists.
+   *
+   * `matches` is a prop because it is derived from search state that lives up
+   * there. This is not.
+   *
+   * **It does not put the rail back on the scroll path**, which is the thing
+   * this component is careful about: `jumpOriginSnapshot` caches the object it
+   * returns, so the `?at=` replace the scroll spy makes about once a second
+   * fires the store's listener and changes nothing. What re-renders the rail is
+   * a change in the *effective stamp* — typically a jump, a Back or Forward, a
+   * push that strips it, or a dismissal — which is a few times a minute at most.
+   *
+   * **Only while the chip is up, and never the other way round** — the same
+   * `readStamp` is behind both. Two cases draw no mark, and they are not the
+   * same case: an origin of `{ kind: "top" }`, where the **chip remains** and
+   * says "back to the beginning" in words because there is no block to mark
+   * (GPT Sol F8); and a stamp this page cannot resolve, where **both** go.
+   * spine-marks.ts § `jumpOriginMark` owns all three rules.
+   */
+  const jumpOrigin = useJumpOrigin();
+  const from = useMemo(
+    () => (metrics ? jumpOriginMark(metrics.rows, jumpOrigin) : null),
+    [metrics, jumpOrigin],
+  );
+
+  /**
    * How many matches fall inside each hoverable band, by its node id.
    *
    * This is where "how common" gets a number rather than a shape. The rail
@@ -816,6 +852,53 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
           />
         ))}
 
+        {/* **Where the reader jumped from**, while the chip offering the way
+            back is up — Stage C of
+            docs/plans/260906g-back-to-where-you-jumped-from.md. The chip names
+            the place in words; this answers *how far did I come?*, which is the
+            question a label cannot.
+
+            **One mark, and not a trail.** Greg asked for previous locations
+            fading over time; the rail's own rule is that it acquires marks when
+            the reader asks for them and at no other time, and a decaying trail
+            is ambient information with no action attached and a legend to
+            learn. This is tied to a button the reader can press, and it goes
+            when that button goes.
+
+            **Its position in this list is as load-bearing as `.spine-here`'s**,
+            and for the same reason: no z-index between these siblings, so tree
+            order is paint order. After the hairlines, or a 3px mark reads as
+            one of them; before the search marks, or it hides the hit in the
+            very paragraph the reader jumped from — invisible until somebody is
+            searching, which is the case tests/spine-jump-origin.test.ts pins.
+
+            **It is not in `.spine-matches`, and that is the whole of "takes no
+            lane".** Lanes are packed by `laneOrder`, so a mark that joined that
+            container would have to be given a track out of the same 10px
+            gutter and every search would shift sideways to make room.
+
+            `aria-hidden`: the chip is a button carrying this sentence in words
+            and in the tab order, so a second announcement — on an element the
+            reader cannot press — would only be in the way.
+
+            `--from-top` rather than `top`, exactly as `.spine-here` does it:
+            the stylesheet clamps the number so the 3px floor cannot grow out of
+            `.spine { overflow: hidden }` for a jump made from the last rows of
+            the article, and a `calc(min(…))` written here would be mangled by
+            jsdom's CSSOM into a string every test would agree with. */}
+        {from && (
+          <div
+            className="spine-from"
+            aria-hidden="true"
+            style={
+              {
+                "--from-top": pct(from.top),
+                height: pct(from.height),
+              } as CSSProperties
+            }
+          />
+        )}
+
         {/* Where the searches matched — Greg, 2026-08-26. One lane per search
             down the right-hand edge, each mark as tall as the paragraph it
             names. The module docstring at the top of this file has why lanes
@@ -843,9 +926,20 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
               <div
                 key={m.key}
                 className="spine-match"
+                /* `--match-top` rather than `top`, for the reason `.spine-here`
+                   and `.spine-from` do it: the stylesheet clamps the number so
+                   the 3px floor cannot grow out of `.spine { overflow: hidden }`
+                   for a hit in the article's last block. Found in a browser on
+                   an article whose final block is a short citation — the mark
+                   was drawn at `top: 798.9, bottom: 801.9` against a rail ending
+                   at 800, so two thirds of it was outside. GPT Sol F31 has the
+                   precise statement: what the overflow removes is the *floor*,
+                   cutting the box back to the row's own proportional height, so
+                   a short enough final block loses its mark entirely and a
+                   slightly taller one is left as a sliver. 2026-09-06. */
                 style={
                   {
-                    top: pct(m.top),
+                    "--match-top": pct(m.top),
                     height: pct(m.height),
                     "--lane": m.lane,
                     "--h": m.rgb,

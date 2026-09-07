@@ -165,6 +165,14 @@ const LAYOUT: {
     labels: (at) => path.join(at.dir, "labels.json"),
     blocks: (at) => path.join(at.dir, "blocks.json"),
   },
+  /* The same two files as `hierarchy` above, and for the same reason
+     `blocks` appears twice: two steps write one site. The fixture corpus
+     predates the split (2026-09-06), so on disk these are the files stage 4 as
+     a whole produced. */
+  labels: {
+    labels: (at) => path.join(at.dir, "labels.json"),
+    tree: (at) => path.join(at.dir, "tree.json"),
+  },
   assets: { assets: (at) => path.join(at.dir, "assets.json") },
   arc: { arc: (at) => path.join(at.dir, "arc.json") },
   tweets: { tweets: (at) => path.join(at.dir, "tweets.json") },

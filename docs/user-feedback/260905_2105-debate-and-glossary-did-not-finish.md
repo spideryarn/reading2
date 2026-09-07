@@ -64,19 +64,21 @@ not fingerprint `kind`. The comparison now covers the blocks too.
 **The workaround existed all along, with no deploy: re-run the structure step.** `buildTree` splices
 the shape away, so the rebuilt tree publishes normally. Nobody could know that, because the refusal
 text reached neither the reader nor Sentry — `sanitise` withholds any message without a bracketed
-code, correctly, since `checkTree` problems can quote nav labels. It was in the Vercel runtime log
-and nowhere else.
+code, correctly, since the refusal's message wraps its reasons in the article's own slug. It was in
+the Vercel runtime log and nowhere else.
 
 ## Recorded, not built
 
-- **The reader is told to retry a permanent failure**, and each retry costs a model call.
+- ~~**The reader is told to retry a permanent failure**, and each retry costs a model call.
   `PublishRefused` needs reason kinds so a tree-invalid refusal is a bug rather than a retry, while a
-  moved-base conflict stays retryable.
+  moved-base conflict stays retryable.~~ **Built 2026-09-07**,
+  [260907a](../plans/260907a-publish-refusal-reason-kinds-permanent-vs-transient.md).
 - **The money is spent before the gate is consulted.** Fixing that means a preflight, which has to
   know the step's planned write set — otherwise an invalid inherited tree would block the very
   `hierarchy` step that repairs it.
-- **A convention:** tightening an invariant over stored data is a migration. Sweep the rows in the
-  same commit, or say in the commit why not.
+- ~~**A convention:** tightening an invariant over stored data is a migration. Sweep the rows in the
+  same commit, or say in the commit why not.~~ **Written down 2026-09-07**, in
+  [database.md](../project/database.md#tightening-an-invariant-over-stored-data-is-a-migration).
 
 Full write-up:
 [260905f](../postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md).

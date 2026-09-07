@@ -201,9 +201,10 @@ function GlossaryBand({ slug }: { slug: string }): ReactElement {
  *
  * Ideas and Quotes carry the awkward sequences; this band asks one question —
  * does pressing Timeline in the real bar start a timeline? — because nothing
- * else in the suite did. Remove `useAutoRun` from `useTimeline`, or drop
- * `timeline` from `MODE_TARGET`, and every other test here stays green. GPT
- * Sol, 2026-09-02.
+ * else in the suite did. Remove `useAutoRun` from `useTimeline`, or turn
+ * `timeline`'s `MODE_TARGET` row to `{ kind: "none" }` — which typechecks,
+ * because the table asks for a decision and not for a target — and every other
+ * test here stays green. GPT Sol, 2026-09-02.
  */
 function TimelineBand({ slug }: { slug: string }): ReactElement {
   const view = useTimeline(slug);
@@ -234,8 +235,8 @@ function QuotesBand({ slug }: { slug: string }): ReactElement {
  * worth more here than anywhere, and the only thing holding it is one call to
  * `useAutoRun` in useDebate.ts.
  *
- * Remove that call, or drop `debate` from `MODE_TARGET`, and every other test
- * in this file stays green.
+ * Remove that call, or turn `debate`'s `MODE_TARGET` row to
+ * `{ kind: "none" }`, and every other test in this file stays green.
  */
 function DebateBand({ slug }: { slug: string }): ReactElement {
   const view = useDebate(slug);
@@ -253,10 +254,10 @@ function DebateBand({ slug }: { slug: string }): ReactElement {
  * Every other band here is opened by a bar button that arms *its own* name.
  * Diagram's button arms whichever picture `?diagram=` says it is about to land
  * on — `sketch` by default, `illustrated` if the reader last chose that — and
- * the reason it is not a fixed row in `MODE_TARGET` is the sequence in
- * § "spends nothing on a Back step after opening a picture it did not arm"
- * below. Change `armActivationForDiagram` to a constant and that test is the
- * only thing in the suite that notices.
+ * the reason its `MODE_TARGET` row is `delegated` rather than `fixed` is the
+ * sequence in § "spends nothing on a Back step after opening a picture it did
+ * not arm" below. Make that row a fixed target — or make its `arm` ignore the
+ * press context — and that test is the only thing in the suite that notices.
  */
 function SketchBand({ slug }: { slug: string }): ReactElement {
   const view = useSketch(slug, EMPTY_BLOCK_ORDER);
@@ -581,8 +582,11 @@ describe("a press", () => {
        state's Draw button was the only way in; the argument for the change is
        Greg's rule that opening a mode is the reader asking for it.
 
-       Remove `armActivationForDiagram` from Dock.tsx, or make it arm nothing,
-       and this is the only test in the file that goes red. */
+       Make `MODE_TARGET`'s delegated `diagram` row arm nothing — its `arm` is
+       the only thing between this button and the money — and this is the only
+       test in the file that goes red. The bar itself no longer names Diagram:
+       since 2026-09-06 it makes one `armActivationForMode` call for all
+       fourteen and the table executes its own row. */
     await open("plain");
     await press("Diagram");
     await settle();
@@ -647,7 +651,7 @@ describe("arriving without pressing", () => {
   it("spends nothing on a Back step after opening a picture it did not arm", async () => {
     /**
      * **The sequence a fixed `diagram: "sketch"` row would have paid for**, and
-     * it is the reason `armActivationForDiagram` is a function. GPT Sol found it
+     * it is the reason `activationForDiagram` is a function. GPT Sol found it
      * in the plan for this change, 2026-09-06:
      *
      *  1. the reader is on Illustrated, so `?diagram=illustrated`;
