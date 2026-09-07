@@ -324,6 +324,55 @@ One Escape then discards a half-typed annotation *and* closes the comment.
    cannot express the requirement. If the inventory turns up a pair local ownership genuinely cannot
    express, that is a finding to report — not a licence to build one here.
 
+#### What the inventory found, and the four calls it sent back
+
+The inventory is
+[the escape inventory](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-escape-inventory.md):
+**15 surfaces, 18 reachable pairs in 9 classes, 5 unreachable.** Its organising finding is that
+Escape is **five tiers running in a fixed order** — `window` capture (the Dock alone), the React root
+(the text boxes), `document` bubble (Floating UI, the hover cards, `BlockGutter`), `window` bubble
+(`useEscapeToClose`), then the platform's close request for a native `<dialog>` — and that a
+surface's tier is the whole of its authority, because nothing anywhere reads a z-index or another
+surface's state.
+
+**The audit in this plan was incomplete, not merely wrong about Floating UI.** It had no T1 tier at
+all, and the text boxes decide whether a press reaches any tier below them. Two further consequences
+it did not have: `stopPropagation` on `document` does not stop *siblings* on `document`, so one press
+closes every open T2 surface at once; and T2 protects T3 while T3 protects nothing, so an open
+Floating UI surface silently saves the comment dialog while an open hover card does not.
+
+**The lossy pair is three pairs**, and the third needs no click: hovering a glossary term opens a
+hover card that stops nothing, so one Escape closes the card *and* discards a half-typed annotation.
+The loss is not a property of Comment at all — it is `setAnnotating(null)` being reachable from a
+listener that never asks whether anything is in front of it.
+
+| Q | The call |
+|---|----------|
+| **Q1** — when "later" and "topmost" come apart, which wins? | **Topmost.** § Stage 3 above said "the later and visually topmost surface", which conflates two things that pair 6 splits. Topmost is what the reader can see; "later" was only ever a proxy for it. The rule is now: **the surface the reader sees in front owns the press.** |
+| **Q2** — does the Dock drawer keep winning over a tooltip painted above it (pair 12)? | **Yes, and it is written down rather than fixed.** This is the one pair local ownership cannot express — beating a `window`-capture listener needs either registration order, which § A6 forbids, or a global signal, which is the thin end of the manager it also forbids. The only reachable instance is a hover/focus tooltip on the dock bar, which costs nothing to leave standing and closes itself when the pointer moves. Renouncing the requirement is cheaper than the machinery, and **no other pair asks for a manager**. |
+| **Q3** — how does a native modal silence the JS tiers? | **A target test inside `useEscapeToClose`**, not a new `useNativeModalOpen()` hook. Asking `dialog[open]` is asking *the platform what the platform already owns* — the top layer is the authority, so this reads an existing fact rather than building a parallel registry. Fewer parts touching each other, and the same test goes in the Dock for pair 16. |
+| **Q4** — should an annotation draft survive a close at all? | **Not here. This is a product call and it is Greg's.** The ordering fix below is already authorised and makes the draft survive *these* pairs, because Annotate is never closed by a press that belongs to something in front of it. Making the draft survive a **deliberate** close of Annotate is a different, user-visible change that nobody asked for, and A5's own § *What is out of scope* is explicit that a refactor does not get to decide product quietly. Flagged to Greg, not built. |
+
+#### What gets built, from the inventory
+
+1. **Topmost owns the press, expressed as explicit local enablement** — `useEscapeToClose` takes an
+   `enabled` argument, and Annotate passes `false` while Comment, `ChatDialog` or a hover card is in
+   front. Never registration order, which encodes mount time rather than what the reader can see.
+2. **The two T2 members that forget to stop, stop** — `useHoverCard` and `BlockGutter` call
+   `stopPropagation` **when they actually have something open**, which is two lines and fixes five
+   pairs. Conditional, because the hover card's handler runs whenever the hook is mounted and an
+   unconditional stop would swallow Escape for the whole reader.
+3. **`useEscapeToClose` declines a press that belongs to an open native `<dialog>`**, and so does the
+   Dock. Nothing calls `preventDefault` on `cancel` anywhere, and the two `cancel` handlers take no
+   event argument at all, so the fix cannot live in the dialog.
+4. **A one-press test for every reachable overlap**, which is the thing that does not exist today:
+   nine test files mention Escape and every one paints a single surface.
+
+Also from F6, and small: two comments asserting the tooltip layer is 80 when it is 100
+(`annotations.css`, `Dock.tsx`), and `openCommentDialog`'s parameter typed `BlockId` while two
+callers pass a *comment* id — harmless only because `BlockId` is a bare alias, and a type error the
+day it is branded.
+
 Done when one Escape closes the topmost intended surface once, every underlying draft and open state
 survives it, and each reachable overlap has a test.
 
