@@ -1,13 +1,18 @@
 # Back to where you jumped from
 
-Status as of 2026-09-06: **Stages A and B built**; B2, C and the docs are not — evidence:
-`src/web/ReturnChip.tsx` exists, and `goToComment` in `App.tsx` still pushes nothing.
-**Four cross-family reviews, four refusals** — [round 1](260906g-plan-review-sol.md) and
-[round 2](260906g-plan-review2-sol.md) on the plan, [round 3](260906g-stage-a-review-sol.md) on
-Stage A's code and [round 4](260906g-stage-b-review-sol.md) on Stage B's. What each changed is in
+Status as of 2026-09-06: **every stage, every review and the docs are done** — evidence:
+`src/web/ReturnChip.tsx` and `src/web/comment-jump.ts` exist, `Spine.tsx` draws a `.spine-from` mark
+for a jump origin, and every stage has been through a cross-family review whose findings are all
+either fixed or written down below as deliberately not.
+
+**Six cross-family reviews, five refusals and one acceptance** —
+[round 1](260906g-plan-review-sol.md) and [round 2](260906g-plan-review2-sol.md) on the plan, then
+[round 3](260906g-stage-a-review-sol.md), [round 4](260906g-stage-b-review-sol.md),
+[round 5](260906g-stage-b2-review-sol.md) and [round 6](260906g-stage-c-review-sol.md) on the code
+of Stages A, B, B2 and C. What each changed is in
 [§ What the reviews changed](#what-the-reviews-changed).
-Twenty-one findings over four rounds, all accepted, none overruled — the fourth also re-checked the
-third's fixes rather than trusting them, and found one still open.
+Thirty-one findings over six rounds, all accepted, none overruled — the fourth and sixth also
+re-checked earlier rounds' fixes rather than trusting them, and each found one still open.
 
 A reader clicks a glossary term, lands three thousand words away, and cannot find their way home.
 On a desktop browser they press Back and it mostly works. Added to an iOS home screen — which is
@@ -115,12 +120,21 @@ dropdown's function without its machinery.
 
 ### Why not the fading spine trail
 
-Greg floated marks in the spine, fading over time. Recommended **against** in that form, and the
-reason is the rail's own stated rule: it *"acquires marks when the reader asks for them and at no
-other time"* ([`Spine.tsx`](../../src/web/Spine.tsx)). It is a 12px strip already carrying the
-bands, the you-are-here marker and one lane per active search
-([`spine-marks.ts`](../../src/web/spine-marks.ts)). A decaying trail is ambient information with no
-action attached and a legend the reader would have to learn.
+Greg floated marks in the spine, fading over time. Recommended **against** in that form, for two
+reasons — and a third that was offered first and does not hold up.
+
+- **Simpler first.** A trail needs a history store of our own, with retention and decay rules,
+  because the browser's stack cannot be read. Stage C's machinery does not remove any of that: it
+  draws *one* mark from a stamp that is already there.
+- **Rail density.** It is a 12px strip already carrying the bands, the you-are-here marker and one
+  lane per active search ([`spine-marks.ts`](../../src/web/spine-marks.ts)). A decaying trail is
+  ambient information with no action attached and a legend the reader would have to learn.
+
+The argument first given here was the rail's own stated rule — that it *"acquires marks when the
+reader asks for them and at no other time"* ([`Spine.tsx`](../../src/web/Spine.tsx)) — and the Stage
+C review was right that it is the **weakest** of the three: every entry in the trail would also have
+originated in a jump the reader asked for, so the rule does not actually exclude it. Left in as a
+correction rather than quietly swapped, because the plan was leaning on it.
 
 The single-mark version earns its place, because it answers something the chip's label cannot —
 *how far did I come?* **One faint tick at the block you jumped from, drawn only while the chip is
@@ -210,6 +224,46 @@ the six closed — F18 was not, and its remaining defects are corrected above.
 The three suspicions were closed rather than confirmed: `useJumpOrigin`'s cache has no defect;
 `useArticleAccess` refuses a previous slug's payload synchronously, so there is no paint combining a
 new entry's stamp with the old article's sections; and the empty-title fallback is the right trade.
+
+### Round five: Stage B2
+
+[The Stage B2 review](260906g-stage-b2-review-sol.md), against `c09d4db1`. **A fifth refusal**, on
+three P1s — and the through-line is that all three are the *history* being right while the *page*
+does nothing, which is the one shape this whole feature can least afford: a chip is a promise about
+movement.
+
+| ID | Finding | What changed |
+|----|---------|--------------|
+| F10 | P1 — **the same finding again, in the path B2 created.** `isBlockOnScreen` requires the whole row to fit between the bars, so a paragraph *taller than the viewport* can never satisfy it at any scroll position — and stepping between two questions inside one jolted to its top, the exact case the guard exists to prevent. Reproduced with a row at `top=-300, bottom=1200` | **Accepted.** A row *crossing the reading line* now counts as where the reader is — the same line `measureRow` uses for "which item am I in", so the two cannot disagree |
+| F22 | P1 — **an on-screen step did not stop the glide about to carry it away.** A step to a far question starts a 200ms glide; while it passes a nearer one the reader presses Prev; the note changes and the glide carries serenely on, leaving the question they asked for off screen. `scrollToBlock` is also where an in-flight animation is cancelled, and the on-screen branch does not go through it | **Accepted.** `abandonScroll` — `cancel` with none of its other duties, since the reader has not taken over and nothing new is starting |
+| F23 | P1 — **selecting an orphan comment pushed without moving.** A comment whose block went in a re-extraction is deliberately kept and sorted to the end of the drawer; its row is not in the document, so `scrollToBlock` returns at its missing-row guard while the push has already happened. `history.length` 1 → 2, scroll count 0 — a chip offering the way back from a journey that never happened | **Accepted**, and the harness was as much at fault as the code: the test recorded every `scrollToBlock` **call** as a scroll, while the real one returns without moving. The decision now has three answers rather than two, and `nowhere` opens the dialog and does nothing else |
+| F24 | P2 — the seventh closure declares `id: BlockId` and receives a comment id; it compiles only because `BlockId` is an alias for `string` | **Accepted.** `string`, with a comment saying why that closure moves nothing |
+| F25 | P3 — `url-state.md` still called clicking a gist "the one exception" | **Accepted.** The exception is *a deliberate jump*, with the gist and the drawer as its two examples and the arrows as the deliberate non-example |
+| F26 | P3 — two sentences in `comments.md` overstated the implementation | **Accepted**: the arrows add no history *entries* rather than writing no history, and both paths check where the passage is *before moving* rather than asking `isBlockOnScreen` *first* — they open the note first |
+
+Sol confirmed the six call sites are wired correctly today, and — asked for a cheap type-level
+guarantee that an arrow closure cannot call the pushing path — said plainly that there is none worth
+having: both intents consume the same comment id and both have side effects, so a discriminated
+action would document the intent without preventing the wrong one being chosen. **The gap stands,
+recorded rather than papered over**, and the cheap protection it named is an App-level wiring test
+rather than a type.
+
+### Round six: Stage C — **accepted**
+
+[The Stage C review](260906g-stage-c-review-sol.md), against `1df91b3b`. The first acceptance in six
+rounds: no established P0 or P1 in the implementation. Five findings, all taken.
+
+| ID | Finding | What changed |
+|----|---------|--------------|
+| F27 | P2 — **the new suite leaked jump stamps between its own tests.** A same-path replace preserves the stamp on purpose, so `beforeEach` reset the address and not the entry, and a later test mounted with the previous test's mark already drawn. Established by running the file with `--sequence.shuffle.tests --sequence.seed=2` | **Accepted**, and it was worse than reported: three of the four suites in this feature had it, not one. All four now call `dismissJumpOrigin()` in `beforeEach`, and all four pass under three shuffle seeds. This is also the trap that caught the orphan test being written the same evening — the same fact, met twice in an hour |
+| F28 | P3 — the plan's header claimed four reviews and twenty-one findings at a commit that added the fifth, and called every stage built while three P1s stood against Stage B2 | **Accepted**, corrected here |
+| F29 | P3 — the rail's comment said only a jump, Back or dismissal re-renders it; Forward and a stamp-stripping push do too | **Accepted** |
+| F30 | P3 — the same comment called `top` and an unresolvable stamp "two cases where the chip stands without a mark", but only `top` keeps the chip | **Accepted** |
+| F31 | P3 — this plan overstated the pre-existing `.spine-match` bug as "clipped away" | **Accepted** — what is lost is the 3px floor, not the mark |
+
+Sol also answered the product question properly, and against the plan: **one mark is still the right
+v1**, but not for the reason § Why not the fading spine trail gave first. That section is corrected
+above.
 
 #### F21's fix was wrong the first time, and the browser is what caught it
 
@@ -460,41 +514,133 @@ kind of thing that goes wrong quietly. And a section whose title is empty draws
 **"↩ back to where you were"** rather than nothing — the return is valid and only its *name* is
 missing, which is not the case F2 refused to suppress.
 
-### Stage B2 — opening a question is a jump; stepping between them is not
+### Stage B2 — opening a question is a jump; stepping between them is not — **built, 2026-09-06**
 
-Both paths call `goToComment` today, and F9 is that they are two different intents wearing one
-function. Splitting them is the whole stage.
+Both paths called `goToComment`, and F9 is that they are two different intents wearing one
+function. Splitting them was the whole stage.
 
-- [ ] **Opening a question from the drawer is an arbitrary jump** and goes through the transaction
+- [x] **Opening a question from the drawer is an arbitrary jump** and goes through the transaction
       when it moves the page. The call sites are the two `onOpenComment` closures in
       [`App.tsx`](../../src/web/App.tsx) (the owner's and the visitor's).
-- [ ] **The dialog's Prev/Next do not push** — the four `onPrev`/`onNext` closures in the same file.
+- [x] **The dialog's Prev/Next do not push** — the four `onPrev`/`onNext` closures in the same file.
       They keep replacing `?note=` and scrolling, exactly as
       [comments.md § Reading order](../project/comments.md#reading-order) says: *"Like keynav.ts, it
       writes no position state of its own"*. Twenty questions must not cost twenty presses of Back.
-- [ ] **The stamp survives those replaces**, which is what makes the split better than either half:
+- [x] **The stamp survives those replaces**, which is what makes the split better than either half:
       after stepping through several questions the chip still points at the place the reader
       **entered** the traversal from, not at the previous question.
-- [ ] When the target is already on screen, nothing moves and nothing is pushed — the existing
+- [x] When the target is already on screen, nothing moves and nothing is pushed — the existing
       deliberate behaviour, and the reason two comments in one paragraph do not jolt.
-- [ ] Tests: drawer selection of an off-screen question adds **one** entry; **ten** off-screen
+- [x] Tests: drawer selection of an off-screen question adds **one** entry; **ten** off-screen
       Prev/Next steps add **none**, and the chip still names where the traversal began.
+      [`tests/comment-jump.test.ts`](../../tests/comment-jump.test.ts), eight of them, red first
+      against the unsplit behaviour. Three mutations of the finished code, each caught: the drawer
+      scrolling instead of jumping (four red), dropping the `isBlockOnScreen` guard (two), and the
+      arrows writing an entry of their own (two, including the stamp one).
 
-### Stage C — one tick in the spine
+#### What was built, and the three things the code says that the plan could not
 
-- [ ] A single faint mark at the origin block, drawn only while the chip is up, and none at all for a `{ kind: "top" }` origin (F8), through the rail's
+The two behaviours are [`src/web/comment-jump.ts`](../../src/web/comment-jump.ts) rather than two
+closures in `App.tsx`, because **the only assertion that can tell them apart is the entry count**,
+and a test of a closure written out again in the test file would have proved nothing about the app.
+`App.tsx` keeps two one-line `useCallback`s, `openCommentFromDrawer` and
+`stepToNeighbouringComment`, and the six call sites the plan named were all six there.
+
+**There is a *third* `onOpenComment`, and it is not a call site of this.** `TableView`'s, wired to
+`openCommentDialog` — the `Bookmark` in the gutter beside a commented block. It only sets `?note=`
+and never moves the page, which is right: the reader pressed a control attached to the block, so
+the block is on screen by construction. Left alone. (Its declared parameter is `BlockId` while what
+it is handed is a *comment* id. Harmless — both are spideryarn ids and `parseAsBlockId` is
+`createParser<string>` — but the type is a lie, and worth a minute the next time anything near it
+moves.)
+
+**`?note=` and `?at=` land on one entry only because they are set in the same tick**, and that is
+nuqs's queue rather than anything this code does: pending updates are merged into one flush and any
+push option upgrades the whole flush to a push. Across two ticks a drawer selection would cost two
+presses of Back, with the first taking the reader to a dialog about a paragraph they can no longer
+see. § puts the note and the position on the same entry is the test, and it checks the *predecessor*
+after a step back rather than only the entry count.
+
+**The drawer inherits F10's trade, in one reachable case.** A comment on a paragraph tall enough to
+be crossing the reading line with its top above the viewport is *not* `isBlockOnScreen`, so the old
+code scrolled to it; `beginJump` now aborts the whole jump, because origin and target are the same
+block and moving the reader irreversibly is the thing F10 refused. So choosing that comment from the
+drawer opens its dialog and moves nothing. Same trade, same reason, and the same fix if it ever
+matters: a finer origin than a block id.
+
+**Stepping cannot push, structurally — but nothing stops the wiring changing.** `stepToComment` has
+no `jumpTo` in scope, so no edit *inside* it can reintroduce F9. What no type can refuse is
+`App.tsx` calling `jumpToComment` from an arrow closure instead, and the test suite pins the module
+rather than the wiring. The comment at the call sites says so; a reviewer is the check.
+
+### Stage C — one tick in the spine — **built, 2026-09-06**
+
+- [x] A single faint mark at the origin block, drawn only while the chip is up, and none at all for a `{ kind: "top" }` origin (F8), through the rail's
       existing mark machinery ([`spine-marks.ts`](../../src/web/spine-marks.ts)).
-- [ ] It must not take a search lane or move the search marks sideways.
-- [ ] Test the arithmetic, not the pixels — that is what `spine-marks.ts` is a separate module for.
+- [x] It must not take a search lane or move the search marks sideways.
+- [x] Test the arithmetic, not the pixels — that is what `spine-marks.ts` is a separate module for.
+      `tests/spine-marks.test.ts` § `jumpOriginMark` is the five-case arithmetic;
+      `tests/spine-jump-origin.test.ts` is the ten things about the mark that are not arithmetic
+      and are all invisible — the gate, the lane, and the paint order.
+- [x] Three mutations of the finished code at the end of the stage, each caught: dropping the `top`
+      case (three red), keeping a mark whose row the page no longer has (two), and rendering the
+      mark after the search marks instead of before them (one).
+
+#### What was built, and the three things the code says that the plan could not
+
+`jumpOriginMark` in [`spine-marks.ts`](../../src/web/spine-marks.ts), a `.spine-from` element in
+[`Spine.tsx`](../../src/web/Spine.tsx), and one rule in `styles.css`. **No edit to `App.tsx` at
+all**, which is the first of the three.
+
+**The rail subscribes to the stamp itself.** `matches` is a prop because it is derived from search
+state that lives in `App`; the jump origin is not, so `Spine` calls `useJumpOrigin` exactly as
+`ReturnChip` does. That makes the mark and the chip **one fact with two views** rather than two
+things kept in step — the × strips the stamp and both go, with neither knowing the other exists —
+and it keeps `App` out of a re-render it has no use for. It does *not* put the rail back on the
+scroll path, which is the thing that component is careful about: `jumpOriginSnapshot` caches the
+object it returns, so the scroll spy's `?at=` replace fires the store's listener about once a second
+and changes nothing.
+
+**The mark needed `.spine-here`'s clamp, and for a sharper reason than the ring did.** The 3px floor
+grows the box downward from `top`, so a mark placed in the last rows of the article grows out of
+`.spine { overflow: hidden }` and disappears — and a jump made from the end of a long piece is
+exactly the one whose reader is furthest from home. Same `--from-top` custom property, same
+`min()` in the stylesheet, same reason it cannot be a `calc()` written inline (jsdom's CSSOM mangles
+it into a string every assertion would agree with). **`.spine-match` had the same bug**, and the
+precise statement of it is Sol's rather than the first draft's (F31): the clip does not remove the
+mark, it removes the **3px floor** — the overflow cuts the box back to the row's own proportional
+height, so a final block that is short enough disappears and one that is merely small is left as a
+sliver. Confirmed in a browser on `antikythera-mechanism-spya-zhxrzm`, whose last block is a short
+citation: a mark for a word unique to it was drawn at `top: 798.9, bottom: 801.9` against a rail
+ending at 800, so two thirds of it was outside. Fixed in its own commit rather than inside Stage C,
+which was told not to disturb the search marks.
+
+**"Takes no lane" is a shape, not a discipline.** The origin is not a `SpineMark`: that type carries
+a `lane` and an `rgb`, and lanes are *packed* by `laneOrder`, so anything holding one has to be given
+a track out of the same 10px gutter and every search shifts sideways to make room. Returning
+`{ top, height }` from a different function into a different element makes that impossible rather
+than merely avoided, and the test pins the search mark's whole inline style across a jump.
 
 ### Docs
 
-- [ ] [url-state.md § Position replaces history](../project/url-state.md#position-replaces-history-deliberate-acts-push)
-      gains the transaction and the chip: the same section, because it is the same rule. It must say
-      that `?at=` is *rewritten* at jump time, which is new and surprising.
-- [ ] [reading-view-overview.md](../project/reading-view-overview.md) gains a line for the chip.
-- [ ] [comments.md](../project/comments.md) if Stage B2 changes what stepping between questions
-      means for Back.
+- [x] [url-state.md § Position replaces history](../project/url-state.md#position-replaces-history-deliberate-acts-push)
+      gains the transaction and the chip: the same section, because it is the same rule. Done as a
+      sub-section under the gist-jump exception, since that exception is the thing it extends. It
+      says the three things a future reader would otherwise reverse-engineer — that the origin is
+      *measured* rather than read, that both writes belong to the wrapper because two nuqs setters in
+      one tick are not a transaction, and that a push strips the stamp unless a jump armed it.
+- [x] **[reading-view-overview.md](../project/reading-view-overview.md): nothing, deliberately.**
+      That file is a map of *docs*, and this feature has no doc of its own — its facts live in
+      `url-state.md` and in [`jump-history.ts`](../../src/web/jump-history.ts)'s header, which is one
+      home each. Its existing line for `url-state.md` already promises "which push history and which
+      replace", which is exactly where a reader looking for this would go. Adding a second home for
+      the same fact is what [documentation-policy.md](../reusable/documentation-policy.md) refuses,
+      and an entry point's wording is a rule needing Greg's approval — not worth spending on a line
+      that would restate a link already there.
+- [x] [comments.md](../project/comments.md) if Stage B2 changes what stepping between questions
+      means for Back. It did, for half of it: § Reading order gained
+      [§ Opening a question is a jump](../project/comments.md#opening-is-a-jump), which says which
+      half of the old sentence still holds and which no longer does.
 
 ## Deliberately not in this plan
 

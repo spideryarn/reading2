@@ -631,6 +631,30 @@ put a `0 of 1` over a list of three rows.
 
 **Then the obligatory Sol review**, on all three commits together.
 
+**Two merges of `dev`, and what each cost.** Both are recorded because the second one is the more
+instructive.
+
+- **2026-09-06, `c7f7a348`.** `styles.css` had been split into 37 sheets under `src/web/styles/`
+  while Stage P was being built, so P3's 61-line `.dbt-bar` block had to move into
+  `styles/debate.css` at its identical position. Neither conflict revealed the actual breakage:
+  dev's new `tests/every-mode-draws-its-surface.test.tsx` gave its Debate fixture a `named`-only
+  row, and the default bar is `quoted`, so the band drew nothing but chrome. **The fixture was
+  wrong, not the default** — hiding a title-only row is the feature. Fixed by giving the fixture a
+  `quoted` signal on a *prose* block, prose being the only place quotation evidence may come from.
+- **2026-09-07, in progress.** `App.tsx` went from ~6,100 lines to 462
+  ([260906c](260906c-separate-article-access-reader-composition-and-mode-controllers.md)): every
+  mode's controller moved to `src/web/modes/<feature>/`. The conflict was the whole file; the debt
+  was 13 lines, which moved to `src/web/modes/debate/DebateMode.tsx`. Again the conflict was not the
+  problem — dev's new `tests/mode-surface-changes-no-markup.test.tsx` built a `DebatePanel` without
+  the props P3 made required, and pinned a Debate band shape with no `.dbt-bar` in it. Both were
+  updated, the second with the reason recorded beside the shape.
+
+**The class, twice over: a merge conflict marks where two edits touched the same lines, not where
+one branch invalidated the other's assumption.** Both real breakages were in files that merged
+cleanly, and both were found by `npm run typecheck` and the suite rather than by reading the
+conflict. The instrument that caught them is dev's own — two new tests that enumerate every mode's
+surface — which is the argument for that kind of test.
+
 ### Stage F — full-page verification fallback — **Stage A said yes, and it must not land alone**
 
 **Answered 2026-09-06: `recovered 6 of 6`.** Every quotation the model reported that was missing from

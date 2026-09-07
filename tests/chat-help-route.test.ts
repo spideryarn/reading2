@@ -403,7 +403,7 @@ describe("what help: true is allowed to claim", () => {
   });
 
   it("still lets through the thing the real client sends", async () => {
-    /* `helpAboutBlock` in src/web/App.tsx mints exactly this: a draft with a
+    /* `helpAboutBlock` in src/web/reader/Reader.tsx mints exactly this: a draft with a
        whole-block anchor, no kind, and `help: true` on the send that creates
        the thread. If this goes red the rules above have locked the reader out
        of the button they were written for. */

@@ -2529,7 +2529,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      here.
 
      The real client sends exactly what these allow: `helpAboutBlock` in
-     src/web/App.tsx mints a draft with `{ blockId }`, no kind, and `help: true`
+     src/web/reader/Reader.tsx mints a draft with `{ blockId }`, no kind, and `help: true`
      on the send that creates the thread — pinned by *still lets through the
      thing the real client sends* in tests/chat-help-route.test.ts, so tightening
      this any further goes red rather than quiet.
@@ -3635,7 +3635,7 @@ function summarise(thread: ChatThread): ThreadSummary {
        `ChatDialog` in every mode but the two conversation modes, and that
        dialog is chat's UI asking with chat's prompt; a pasted
        `?mode=hierarchy&thread=<a Remember thread>` would continue it as a chat. The
-       overlay is gated on this. src/web/App.tsx § overlay. */
+       overlay is gated on this. src/web/reader/Reader.tsx § overlay. */
     kind: thread.kind,
     turns: thread.messages.filter((m) => m.role === "user").length,
     ...(last ? { lastLine: last } : {}),
@@ -6512,6 +6512,290 @@ interface ApiRequest {
   query: URLSearchParams;
 }
 
+/* -------------------------------------------------------- the route table */
+
+/**
+ * **The five verbs the authenticated dispatcher answers.**
+ *
+ * A closed union rather than `string`, so a sixth verb is a compile error here
+ * rather than a row nothing asks about: `METHOD_UNIVERSE` in
+ * tests/authenticated-api-route-contract.test.ts is the universe every refusal
+ * and collision question is asked over, and a verb outside it is skipped by all
+ * of them (GPT Sol, review § P2-METHOD-UNIVERSE). HEAD and OPTIONS are
+ * deliberately absent: this dispatcher has no handling for either, and that
+ * stays a matter for the terminal 404 rather than a pair to answer.
+ */
+type AuthRouteMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+/**
+ * **Everything a table handler is given, and all of it.**
+ *
+ * The entries below are built once, at module scope, so a handler cannot close
+ * over anything about the request — it is handed the request instead (GPT Sol,
+ * review § P2-STATIC-CONTRACT). `user` is here rather than only `request`
+ * because one handler outside billing already needs it (`fileFeedback`), and
+ * because the alternative — reading the owner back out of the async store — is
+ * a second way to answer a question this parameter already answers.
+ */
+interface AuthRouteContext {
+  user: VerifiedUser;
+  request: ApiRequest;
+}
+
+/** An entry whose path is exact, the shape all four billing routes have. */
+interface ExactAuthRoute {
+  kind: "exact";
+  method: AuthRouteMethod;
+  path: string;
+  handler: (context: AuthRouteContext) => Promise<void>;
+}
+
+/**
+ * An entry whose path has captures.
+ *
+ * The handler is handed the **raw `RegExpExecArray`**, not a decoded tuple, and
+ * that is the point of the discriminated union: dispatch does no decoding. Which
+ * happens first — reading the body or decoding the slug — differs per route and
+ * is observable from outside as two different status codes for the same two
+ * malformed inputs (§ [DECODE] in
+ * docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md, and two
+ * cases in tests/authenticated-api-route-contract.test.ts pin both). A dispatcher
+ * that decoded captures for its handlers would have to pick one order for all of
+ * them. `part` and `slugPart` go on doing the decoding and the validation they
+ * already do, at the point in the handler where they were already called.
+ */
+interface PatternAuthRoute {
+  kind: "pattern";
+  method: AuthRouteMethod;
+  pattern: RegExp;
+  handler: (context: AuthRouteContext, captures: RegExpExecArray) => Promise<void>;
+}
+
+/**
+ * One row of the table: exact or pattern, and never both.
+ *
+ * Discriminated so a handler cannot be registered against a match that captures
+ * nothing — an exact route has no `captures` parameter to be given, and a
+ * pattern route's handler cannot be attached to a `path`.
+ */
+type AuthRoute = ExactAuthRoute | PatternAuthRoute;
+
+/**
+ * **The ordered table `serveAuthenticatedApi`'s `if` chain is being moved into,
+ * one domain at a time.**
+ *
+ * docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md § *The
+ * shape, and the fork that had to be settled*. Three opinions disagreed; this is
+ * the settled one — a static ordered table of closures, gates outside it,
+ * handlers owning their own response and returning nothing. The alternative was
+ * fourteen `async function tryXRoutes(): Promise<boolean>` dispatchers, and the
+ * argument against it is one centralised handled/miss protocol instead of
+ * fourteen boolean ones.
+ *
+ * ## Why it is consulted *after* the chain rather than instead of it
+ *
+ * Because the move is incremental and must reorder nothing. Billing is the four
+ * guards at the very end of the chain, immediately above the terminal 404, so
+ * asking the table after every remaining guard and before that 404 puts each of
+ * them in exactly the position it already had. A domain moved out of the middle
+ * of the chain could not be added here without also proving the reorder is safe
+ * — which the contract test's § *no two guards accept the same method and path*
+ * is what would say.
+ *
+ * ## What the entries may not do
+ *
+ * **Nothing, at construction.** Building this array evaluates string literals,
+ * regex literals and function expressions and calls nothing — so importing
+ * src/routes.ts still contacts no provider, opens no pool and reads no store.
+ * tests/owner-isolation.test.ts does not cover that (GPT Sol, review §
+ * P2-ISOLATION-SCOPE), so the contract test asserts it directly against this
+ * literal.
+ *
+ * **No `g` or `y` flag**, refused by `assertDispatchableRoutes` below.
+ */
+const AUTH_ROUTES: readonly AuthRoute[] = [
+  /**
+   * **The four billing routes.** No slug and no id in any path: each is about
+   * the reader who is signed in, and the only one that takes an identifier at
+   * all takes a Checkout Session id in its *body*, where it is proved to be
+   * theirs before anything is done with it (src/billing/checkout.ts).
+   *
+   * They are exact paths, like the shelf's, so `/api/billing/anything` is a 404
+   * rather than a quiet match — and none of them is a namespace, for the same
+   * reason `/api/webhooks/stripe` is not: a namespace is somewhere a later
+   * endpoint gets added without anybody re-reading the ordering rules that make
+   * checkout safe.
+   *
+   * **Three POSTs and one GET, and the split is not about which of them writes.**
+   * `checkout` and `portal` each *create a Stripe object* — a Checkout Session
+   * is a real, chargeable thing — and `confirm` retrieves one and then **writes
+   * a subscription into `billing_accounts`**. A GET is something a browser
+   * prefetches, a crawler follows and a cache may keep, and none of those three
+   * should be. `usage` reads four of our own tables, writes nothing and never
+   * touches the network, so asking for it twice costs nothing and means nothing:
+   * that is a GET.
+   * docs/project/billing.md.
+   *
+   * **Start a subscription — or, if they already have one, manage it.**
+   *
+   * The whole handler is one call, and that is deliberate: the order of
+   * operations inside `startCheckout` is what stops a paying customer arriving
+   * at a webhook that cannot find them, and it is written out once in
+   * src/billing/checkout.ts rather than spread across a route.
+   *
+   * The reply carries `kind` as well as `url`, so a client *can* tell which
+   * door it is being sent through — the two look identical to
+   * `location.assign`. **Ours does not use it**, and that was a decision
+   * rather than an omission: it navigates immediately, and a sentence rendered
+   * for the half-second before a navigation is a sentence nobody reads. The
+   * page says which door it is before the press instead of after it: since
+   * 2026-09-04 `summary.purchase` (src/billing-plan.ts) carries the same
+   * distinction, so a subscriber's button reads *Switch plan* and the sentence
+   * under the cards names the Portal. The field stays because the two outcomes
+   * really are different and a caller that wanted to wait could say so. This
+   * comment claimed the client explained it; it did not. GPT Sol, 2026-09-03.
+   *
+   * **200, not 302.** A redirect would be answered by `fetch` before the page
+   * could say anything, and the client is an SPA that navigates itself.
+   */
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/billing/checkout",
+    handler: async ({ request: { req, res } }) => {
+      const asked = parseCheckoutRequest(await readBody(req));
+      send(res, 200, await startCheckout(currentOwnerId(), asked));
+    },
+  },
+
+  /**
+   * The hosted place to see invoices, change a card, or cancel — none of which
+   * this app implements, on purpose (docs/project/billing.md § *We never touch
+   * a card*). No body at all: the only thing it could carry is a customer id,
+   * and that comes from the reader's own row.
+   */
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/billing/portal",
+    handler: async ({ request: { res } }) => {
+      send(res, 200, await openPortal(currentOwnerId()));
+    },
+  },
+
+  /**
+   * The return path from a completed Checkout.
+   *
+   * It takes **only** a session id, and `confirmCheckout` proves the session
+   * is this reader's before it syncs anything — a callback that synced
+   * whatever id it was handed would let one reader make this server work on
+   * another's subscription, and would answer the question *did that person
+   * subscribe?*.
+   *
+   * It is a convenience rather than the mechanism: the webhook is what makes a
+   * subscription real, and this exists so the reader landing back on
+   * `/profile` a second after paying sees their new plan.
+   */
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/billing/confirm",
+    handler: async ({ request: { req, res } }) => {
+      const body = fields(await readBody(req));
+      const sessionId = body.sessionId;
+      if (typeof sessionId !== "string" || sessionId === "") {
+        throw httpError(400, "Expected { sessionId } from the Checkout return URL");
+      }
+      send(res, 200, await confirmCheckout(currentOwnerId(), sessionId));
+    },
+  },
+
+  /**
+   * **What plan this reader is on, and what they have used.** The one billing
+   * route that is a read.
+   *
+   * It never reaches Stripe — see src/billing/summary.ts. A stored period that
+   * has run out comes back as *we cannot say*, rather than as a guess or as
+   * the 503 admission answers, because nothing is being decided here.
+   */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/billing/usage",
+    handler: async ({ request: { res } }) => {
+      send(res, 200, await readBillingSummary(currentOwnerId()));
+    },
+  },
+];
+
+/**
+ * **Refuse a `g` or `y` pattern at registration**, once, at import.
+ *
+ * A table entry's `RegExp` is constructed once and shared by every request that
+ * reaches it — which is the whole point of a static table, and the one way it
+ * differs from the 51 literals in the chain above, each of which is built fresh
+ * per request. `lastIndex` on a `/g` or `/y` regex survives a call, so a shared
+ * one would make whether a route matches depend on the *previous* request. All
+ * 51 have no flags today, so nothing is being fixed here; this is the check that
+ * stops the property being lost silently when the next domain moves.
+ * § [REGEX] in docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md.
+ *
+ * A throw at import rather than a per-request check: a bad registration is a
+ * programmer error, and boot is when it should be found.
+ */
+function assertDispatchableRoutes(routes: readonly AuthRoute[]): void {
+  for (const route of routes) {
+    if (route.kind !== "pattern") continue;
+    if (/[gy]/.test(route.pattern.flags)) {
+      throw new Error(
+        `AUTH_ROUTES: ${route.method} ${route.pattern} uses a \`g\` or \`y\` flag, so whether it matches would depend on the request before it`,
+      );
+    }
+  }
+}
+assertDispatchableRoutes(AUTH_ROUTES);
+
+/**
+ * **First match wins, the handler is awaited, and then this returns whether it
+ * answered.**
+ *
+ * `true` means an entry took the request and has already replied on `res`; the
+ * caller must return rather than fall through to its 404. The boolean is the
+ * *table's* handled/miss protocol and there is exactly one of it — handlers
+ * themselves return nothing, so there is no per-handler "did you take it?" value
+ * to get wrong (the shape argued for in the plan's § *The shape*).
+ *
+ * **The `await` is not decoration.** The catch and the finally live in
+ * `serveApi`, which awaits `serveAuthenticatedApi`; a handler that returned a
+ * floating promise would have its errors land nowhere and its spend counted
+ * nowhere — the collector at § `withSpendAttribution` depends on the request
+ * still being open. Streaming handlers must stay awaited to completion. Billing
+ * opens no stream, which is part of why it is the first domain moved, but the
+ * next one does. § [LIFETIME].
+ *
+ * **No decoding, no normalisation, no trailing-slash tolerance, no `Allow`.**
+ * The method is compared, the path is compared, and nothing else happens here.
+ */
+async function dispatchAuthRoute(
+  routes: readonly AuthRoute[],
+  context: AuthRouteContext,
+): Promise<boolean> {
+  const { req, path } = context.request;
+  for (const route of routes) {
+    if (route.method !== req.method) continue;
+    if (route.kind === "exact") {
+      if (route.path !== path) continue;
+      await route.handler(context);
+      return true;
+    }
+    const captures = route.pattern.exec(path);
+    if (captures === null) continue;
+    await route.handler(context, captures);
+    return true;
+  }
+  return false;
+}
+
 /**
  * **Everything behind the gate.** Reached only with a `VerifiedUser`, which only
  * `requireUser` can make.
@@ -6922,32 +7206,10 @@ export async function serveAuthenticatedApi(
   const job = /^\/api\/jobs\/([\w.%-]+)$/.exec(path);
   const jobAction = /^\/api\/jobs\/([\w.%-]+)\/(cancel|retry)$/.exec(path);
   const jobAdvance = /^\/api\/jobs\/([\w.%-]+)\/advance$/.exec(path);
-  /**
-   * **The four billing routes.** No slug and no id in any path: each is about
-   * the reader who is signed in, and the only one that takes an identifier at
-   * all takes a Checkout Session id in its *body*, where it is proved to be
-   * theirs before anything is done with it (src/billing/checkout.ts).
-   *
-   * They are exact paths, like the shelf's, so `/api/billing/anything` is a 404
-   * rather than a quiet match — and none of them is a namespace, for the same
-   * reason `/api/webhooks/stripe` is not: a namespace is somewhere a later
-   * endpoint gets added without anybody re-reading the ordering rules that make
-   * checkout safe.
-   *
-   * **Three POSTs and one GET, and the split is not about which of them writes.**
-   * `checkout` and `portal` each *create a Stripe object* — a Checkout Session
-   * is a real, chargeable thing — and `confirm` retrieves one and then **writes
-   * a subscription into `billing_accounts`**. A GET is something a browser
-   * prefetches, a crawler follows and a cache may keep, and none of those three
-   * should be. `usage` reads four of our own tables, writes nothing and never
-   * touches the network, so asking for it twice costs nothing and means nothing:
-   * that is a GET.
-   * docs/project/billing.md.
-   */
-  const billingCheckout = path === "/api/billing/checkout";
-  const billingPortalRoute = path === "/api/billing/portal";
-  const billingConfirm = path === "/api/billing/confirm";
-  const billingUsage = path === "/api/billing/usage";
+  /* The four billing matchers used to be declared here and handled at the very
+     end of the chain. They are the first domain in `AUTH_ROUTES` above, which is
+     consulted after every guard below and before the terminal 404 — the position
+     they already had, so the move reorders nothing. */
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
@@ -8086,76 +8348,19 @@ export async function serveAuthenticatedApi(
     }
 
     /**
-     * **Start a subscription — or, if they already have one, manage it.**
+     * **The table, asked after every guard above and before the 404 below.**
      *
-     * The whole handler is one call, and that is deliberate: the order of
-     * operations inside `startCheckout` is what stops a paying customer arriving
-     * at a webhook that cannot find them, and it is written out once in
-     * src/billing/checkout.ts rather than spread across a route.
+     * Billing's four routes live in `AUTH_ROUTES` (above `serveAuthenticatedApi`)
+     * rather than in this chain. They were its last four guards, immediately
+     * above the terminal 404, so consulting the table exactly here leaves each of
+     * them where it already was and reorders nothing — the property that makes
+     * this increment a rearrangement rather than a behaviour change.
      *
-     * The reply carries `kind` as well as `url`, so a client *can* tell which
-     * door it is being sent through — the two look identical to
-     * `location.assign`. **Ours does not use it**, and that was a decision
-     * rather than an omission: it navigates immediately, and a sentence rendered
-     * for the half-second before a navigation is a sentence nobody reads. The
-     * page says which door it is before the press instead of after it: since
-     * 2026-09-04 `summary.purchase` (src/billing-plan.ts) carries the same
-     * distinction, so a subscriber's button reads *Switch plan* and the sentence
-     * under the cards names the Portal. The field stays because the two outcomes
-     * really are different and a caller that wanted to wait could say so. This
-     * comment claimed the client explained it; it did not. GPT Sol, 2026-09-03.
-     *
-     * **200, not 302.** A redirect would be answered by `fetch` before the page
-     * could say anything, and the client is an SPA that navigates itself.
+     * `true` means an entry answered on `res`, so this returns instead of
+     * falling into the 404. The handler is awaited inside `dispatchAuthRoute`;
+     * see there for why that is load-bearing rather than tidy.
      */
-    if (billingCheckout && req.method === "POST") {
-      const asked = parseCheckoutRequest(await readBody(req));
-      send(res, 200, await startCheckout(currentOwnerId(), asked));
-      return;
-    }
-
-    /* The hosted place to see invoices, change a card, or cancel — none of which
-       this app implements, on purpose (docs/project/billing.md § *We never touch
-       a card*). No body at all: the only thing it could carry is a customer id,
-       and that comes from the reader's own row. */
-    if (billingPortalRoute && req.method === "POST") {
-      send(res, 200, await openPortal(currentOwnerId()));
-      return;
-    }
-
-    /**
-     * The return path from a completed Checkout.
-     *
-     * It takes **only** a session id, and `confirmCheckout` proves the session
-     * is this reader's before it syncs anything — a callback that synced
-     * whatever id it was handed would let one reader make this server work on
-     * another's subscription, and would answer the question *did that person
-     * subscribe?*.
-     *
-     * It is a convenience rather than the mechanism: the webhook is what makes a
-     * subscription real, and this exists so the reader landing back on
-     * `/profile` a second after paying sees their new plan.
-     */
-    if (billingConfirm && req.method === "POST") {
-      const body = fields(await readBody(req));
-      const sessionId = body.sessionId;
-      if (typeof sessionId !== "string" || sessionId === "") {
-        throw httpError(400, "Expected { sessionId } from the Checkout return URL");
-      }
-      send(res, 200, await confirmCheckout(currentOwnerId(), sessionId));
-      return;
-    }
-
-    /**
-     * **What plan this reader is on, and what they have used.** The one billing
-     * route that is a read.
-     *
-     * It never reaches Stripe — see src/billing/summary.ts. A stored period that
-     * has run out comes back as *we cannot say*, rather than as a guess or as
-     * the 503 admission answers, because nothing is being decided here.
-     */
-    if (billingUsage && req.method === "GET") {
-      send(res, 200, await readBillingSummary(currentOwnerId()));
+    if (await dispatchAuthRoute(AUTH_ROUTES, { user, request })) {
       return;
     }
 

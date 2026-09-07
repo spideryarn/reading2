@@ -299,6 +299,22 @@ Assume it *can* prompt. A modal blocks iTerm and leaves `osascript` waiting.
 
 `write … text` types a line into a session; `contents` reads the visible screen back.
 
+### A TUI does not accept `write`'s newline as Enter
+
+`write` appends `\n` (the `newline` parameter, default yes). A shell submits on that; a full-screen
+TUI — Codex, Claude Code — does not, because iTerm delivers the text as a bracketed paste, where a
+newline is literal content by design. The text lands in the input box and simply sits there, which
+looks identical to a command that ran and produced no output. Submit with a bare carriage return
+afterwards:
+
+```applescript
+write s text commandText
+write s text (character id 13) newline no   -- 0x0D; this is the Enter
+```
+
+Verified on iTerm2 3.6.6 against Codex 0.153.4, 2026-09-07: without the CR the input box held
+`Continue` indefinitely.
+
 ### Pass data as `argv`, never by interpolation
 
 Building AppleScript by pasting a shell variable into a quoted literal is an injection hole: a `"`

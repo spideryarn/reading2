@@ -18,7 +18,7 @@
  *
  * That description slot carries something worth saying instead. For one day it
  * was an *"unreliable"* sticker; since 2026-08-27 it is the microphone's one
- * promise — **your voice is sent to be transcribed, and is not stored** — which
+ * promise — **your voice is sent to OpenAI to be transcribed** — which
  * is a fact about how the control works rather than a warning about whether it
  * does. The sticker went with the bug it was about; the sentence replacing it
  * is the privacy reversal that dictation's second pass required, and it is
@@ -134,7 +134,7 @@ describe("the microphone button", () => {
     const describedBy = button.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
     const described = host.querySelector(`#${describedBy}`);
-    expect(described?.textContent).toContain("sent to be transcribed");
+    expect(described?.textContent).toContain("transcribed");
   });
 
   /* The microphone is already off by then, so a press could only mean "start
@@ -213,11 +213,23 @@ describe("the microphone button", () => {
 });
 
 describe("what the reader is told before they press it", () => {
-  it("says the voice is sent to be transcribed, and not stored", () => {
+  /* **This used to assert "isn't stored", and that claim was withdrawn on
+     2026-09-07** — dictation moved to a transcriber that cannot be routed with
+     zero data retention (docs/plans/260907c-dictation-onto-an-openai-transcriber.md).
+     The test was red when the sentence changed, which is what it is for.
+
+     What it pins now is deliberately not the exact wording, because the wording
+     is Greg's to approve and will very likely be tuned. It pins the two things
+     that make the sentence honest, either of which a well-meaning edit could
+     drop while making it read more nicely: **who gets the recording**, and that
+     we do **not** tell the reader it is unstored. The second is a negative
+     assertion on purpose — it is the one that would otherwise creep back. */
+  it("names who receives the voice, and does not claim it is unstored", () => {
     render();
     const words = host.querySelector(".prof-mic-note .sr-only")?.textContent ?? "";
-    expect(words).toContain("sent to be transcribed");
-    expect(words).toContain("isn't stored");
+    expect(words).toContain("transcribed");
+    expect(words).toMatch(/OpenAI/);
+    expect(words).not.toMatch(/isn't stored|is not stored|never stored/i);
   });
 
   /* **It belongs to the button, not to this box**, which is the fix for a
@@ -231,7 +243,7 @@ describe("what the reader is told before they press it", () => {
     const describedBy = button.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
     const described = host.querySelector(`#${describedBy}`);
-    expect(described?.textContent).toContain("sent to be transcribed");
+    expect(described?.textContent).toContain("transcribed");
   });
 
   /* Somebody arriving by keyboard should meet it on the way to the control,

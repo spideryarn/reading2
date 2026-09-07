@@ -41,7 +41,7 @@ code* names. **A rights-holder cannot check any of it and is relying on us to ha
 
 | Briefed | What is actually true |
 |---|---|
-| "zero-data-retention AI models that won't train on your work" | **False as a blanket claim.** `zdr: true` is set on dictation and nothing else (`AI_JOB_ROUTE`, [`src/ai-call.ts`](../../src/ai-call.ts)), and live conversation does not go through the gateway at all ([ai-gateway.md](ai-gateway.md)). The page makes the *no-training* commitment carrying the same hedge `/privacy` gives it — that it rests partly on an account setting, so it is a commitment we hold ourselves to rather than something the page can prove |
+| "zero-data-retention AI models that won't train on your work" | **False, and it has got worse.** When this was checked, `zdr: true` was set on dictation and nothing else, which made it false as a *blanket* claim. Since 2026-09-07 it is set on **nothing** (`AI_JOB_ROUTE`, [`src/ai-call.ts`](../../src/ai-call.ts)): dictation moved to `openai/gpt-transcribe` on the transcription endpoint, where OpenRouter does not apply routing preferences or `zdr` — [260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md). Live conversation still does not go through the gateway at all ([ai-gateway.md](ai-gateway.md)). The page makes the *no-training* commitment carrying the same hedge `/privacy` gives it — that it rests partly on an account setting, so it is a commitment we hold ourselves to rather than something the page can prove |
 | "the SEO canonical link points to your original page" | **True and inert.** The `<link rel="canonical">` is real ([`src/public/page-head.ts`](../../src/public/page-head.ts) § `tags`) and no search engine ever reads it, because every response is `noindex, nofollow` and `robots.txt` is `Disallow: /`. It is also omitted entirely when the source URL carries a query string (`safePublicCanonical`, [`src/urls.ts`](../../src/urls.ts)). So the page leads with the strong claim — **we are not in search engines at all** — and mentions the canonical after it as belt-and-braces |
 | "we prominently link to the original" | **True, and stronger than briefed** — the article's `<h1>` *is* a link to the original, and `OriginLine` prints host and path beneath it, both shown to a signed-out visitor ([`src/web/Masthead.tsx`](../../src/web/Masthead.tsx)) |
 | "we check with users before making things public" | **True as a mechanism, and it is not a check.** A dialog, a tick-box, a server that returns 400 without it ([`src/routes.ts`](../../src/routes.ts)), and an audit row in `article_visibility_changes`. The page says all of that **and** says plainly that nobody reviews an article before it appears |
@@ -69,7 +69,9 @@ page restates things other files know, and every restatement is a chance to rest
 
 The other seven, in one line each, because each is now pinned by a test:
 
-- **Web images are stored**, just not served — the page had claimed we do not copy them at all.
+- **Web images are stored** — the page had claimed we do not copy them at all. They were not yet
+  *served* when that was written; since 2026-09-06 they are, and the sentence was rewritten on the
+  day the test said so (below).
 - **The source link and the canonical share one condition** (`safePublicCanonical` refuses a query
   string), and the draft hedged the canonical while stating the source link unconditionally.
 - **`scripts/deploy.ts` checks `robots.txt` and nothing else** — it never invokes the shell checker
@@ -131,13 +133,22 @@ no-training wording that has to keep matching `/privacy`, and the five the revie
 shared link carries, what `rehost.ts` serves, the query-string condition, what `deploy.ts` verifies,
 and the allowance qualifier.
 
-**The image sentence is the one that will go stale first, and it will do it on a known day.**
-[`src/web/rehost.ts`](../../src/web/rehost.ts) describes a later stage that turns on serving our
-stored copies of a web article's images — one addition to that file. The page currently says *we do
-not serve those copies*, and on the day that stage lands the sentence is false with nothing else
-noticing. The test asserts against `rehost.ts`'s own "this walks only the second" comment, so it
-goes red on that day and names this page. **A claim about a header is exactly the
-kind that stays on a page for a year after the header goes** —
+**The image sentence was the one predicted to go stale first, on a known day, and it did — the
+tripwire fired on 2026-09-07.** Written 2026-09-06 asserting against `rehost.ts`'s own *"this walks
+only the second"* comment, precisely so that the day stage E of
+[260906a](../plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md) turned on serving
+our stored copies of a web article's images, the page's *we do not serve those copies* would be
+caught rather than left standing. Stage E landed and it was.
+
+**What replaced it is a hedge rather than a new state**, and that is the durable part. Most of the
+traffic has moved to us, and *never* is still not the word: an image the ingest could not store, and
+one of ours that fails or is too slow (`IMAGE_WAIT_MS`), both fall back to the publisher's URL. So
+the page claims the move and names the exceptions, and the test now pins that shape — both
+collections walked, the fallback still real, the page hedged, and an explicit refusal of any
+sentence promising a reader never reaches the author's servers. A tripwire re-aimed rather than
+deleted, because the claim can go stale in the other direction too.
+
+**A claim about a header is exactly the kind that stays on a page for a year after the header goes** —
 [silent-success.md](../reusable/silent-success.md) — so the test reads the page as text and fails
 when one of the four stops being true, the way `tests/privacy-page.test.ts` pins model names.
 

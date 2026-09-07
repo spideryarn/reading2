@@ -168,6 +168,10 @@ const STEPS = [
   "extract",
   "blocks",
   "hierarchy",
+  /* Stage 4b, 2026-09-06 — the paragraph labels, which left the `hierarchy`
+     step. `tests/feedback-payload.test.ts` named it the moment it entered
+     `STEP_ORDER`, which is what the header means by keeping the copy honest. */
+  "labels",
   "assets",
   "arc",
   "tweets",

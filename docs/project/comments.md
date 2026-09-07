@@ -381,6 +381,42 @@ jolting the page between them costs the reader their place for nothing. Like
 Deleting steps to the neighbour instead of closing the panel — deleting one of nine is a tidy-up, not
 a reason to lose your place.
 
+#### Opening a question is a jump; stepping between them is not <a id="opening-is-a-jump"></a>
+
+Those two sentences used to describe **all** movement between comments, and since 2026-09-06 they
+describe only half of it. Both paths went through one function, and they are two different intents:
+
+- **Choosing a question out of the drawer** is an arbitrary jump — the list is a table of contents,
+  and pressing an entry can fling the reader three thousand words. That is a deliberate act, so it
+  **pushes**, exactly as the glossary and the spine do
+  ([url-state.md § Position replaces history](url-state.md#position-replaces-history-deliberate-acts-push)):
+  one press of Back undoes it, and a return chip offers the way home on a home-screen shell that has
+  no Back button at all
+  ([260906g](../plans/260906g-back-to-where-you-jumped-from.md)).
+- **The dialog's arrows** are traversal, and the paragraph above still holds for them in full. They
+  replace `?note=` and scroll, and add **no history entries** — they do write history, with
+  `replaceState`, which is how the address stays current without the stack growing. Twenty questions
+  spread through an article must
+  not cost twenty presses of Back — the misery `keynav.ts` refuses for a keypress, and browsers
+  throttle rapid Back, so it is not merely tedious. GPT Sol F9, 2026-09-06.
+
+**The split is worth more than either half alone**, and this is the part to know: a replace preserves
+the entry's stamp, so after stepping through eight questions the chip still points at the place the
+reader **entered** the traversal from rather than at the previous question.
+
+Both paths open the note first and **check where the passage is before moving**, so neither jolts
+the page — and the drawer's neither moves nor pushes — for one the reader is already looking at.
+That check has three answers rather than two, and the two extra ones were both bugs found in review
+(GPT Sol F10, F22, F23, 2026-09-06): a paragraph **taller than the viewport** counts as *here*,
+because it can never fit between the bars and the reader is standing inside it; a comment whose
+passage is **no longer on the page** — an orphan, kept and sorted to the end — opens its dialog and
+does nothing else, since a push would buy an entry for a journey that cannot happen; and deciding
+*here* now also **stops a glide still running** from the last step, which would otherwise carry the
+reader away from what they just asked for.
+[`src/web/comment-jump.ts`](../../src/web/comment-jump.ts) holds both, and
+[`tests/comment-jump.test.ts`](../../tests/comment-jump.test.ts) pins the entry count on each, which
+is the only assertion that can tell the two apart.
+
 ### A pasted `?note=` brings its own passage into view <a id="note-arrival"></a>
 
 Stepping was always fine, because stepping has the comment in hand. **Arriving was not.** A link that
@@ -411,10 +447,11 @@ has seen anything. This one lands on a page that is already up and being looked 
 what says the article moved rather than was replaced. It is also the safer of the two: the glide gives
 way to a wheel or a touch, so a reader who started reading during the fetch is not dragged off their
 line. The decision itself is `arrivalTarget`, pure and pinned in
-[`tests/scroll.test.ts`](../../tests/scroll.test.ts). The wiring is one effect in `App.tsx`, and
+[`tests/scroll.test.ts`](../../tests/scroll.test.ts). The wiring is one effect in `Reader`, and
 whether the page *actually moves* can only be checked in a browser — there is no component runner
 here. What is guarded is narrower and worth knowing the shape of:
-[`tests/note-arrival.test.ts`](../../tests/note-arrival.test.ts) reads `App.tsx` and checks the call
+[`tests/note-arrival.test.ts`](../../tests/note-arrival.test.ts) reads
+[`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) and checks the call
 survives, **with comments stripped first**. The effect's own explanation names `arrivalTarget` twice,
 so a guard on the raw file would have been satisfied by prose while the call was gone — the same
 silent pass a `sanitizeStoredBlocks` guard hit on 2026-08-26. Match a call, never a mention.
@@ -666,6 +703,8 @@ used to claim the opposite:
   focus as it opens and returns it to the Comments button when it closes. React flushes the drawer's
   cleanup before the dialog's setup, which is what makes the hand-off land on a stable control.
   [`tests/opening-a-comment-moves-focus-into-its-dialog.test.tsx`](../../tests/opening-a-comment-moves-focus-into-its-dialog.test.tsx).
+  It is also **a jump**, unlike the arrows in the dialog it opens —
+  [§ Opening a question is a jump](#opening-is-a-jump).
 - **Tab is deliberately not trapped**, because the bar behind it is meant to stay reachable. So the
   drawer keeps a labelled `role="dialog"` and carries **no `aria-modal`**: that attribute tells
   assistive technology the rest of the page does not exist, which was a false statement about a bar
@@ -689,6 +728,7 @@ what stops one press closing `CommentDialog` underneath the dim.
 | [`src/web/CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | the panel: the reader's words, then the quote, spinner, answer, sources |
 | [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the `Bookmark` beside a commented block, and what opens when it is pressed |
 | [`src/web/comment-nav.ts`](../../src/web/comment-nav.ts) | reading order, stepping, and grouping onto blocks for the gutter |
+| [`src/web/comment-jump.ts`](../../src/web/comment-jump.ts) | **moving** to one: the drawer pushes, the arrows do not — [§ Opening a question is a jump](#opening-is-a-jump) |
 | [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts) | the same five operations against Postgres |
 | [`src/explain.ts`](../../src/explain.ts) | the OpenRouter call and the system prompt |
 | [`src/comments.ts`](../../src/comments.ts) | the shared types and rules (`NewComment`, `MarkPatch`, `AnswerPatch`), and `loadComments` for fixtures |
@@ -737,7 +777,7 @@ nothing to poll.
 3. **The browser's own selection highlight** sits on top of the mark we just drew, so without
    `removeAllRanges()` after asking, the new artefact is invisible until the reader clicks
    elsewhere — and it looks exactly like a mark that was never drawn. The call is in
-   [`App.tsx`](../../src/web/App.tsx) § `onSelect`.
+   [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `onSelect`.
 4. **Retry, which shipped broken and was caught in the browser.** `retry` fired the POST from
    inside a `setComments` updater. An updater must be pure — React StrictMode invokes it twice — so
    one click sent *two* requests; and because `CommentStore.create` refused a client id that was

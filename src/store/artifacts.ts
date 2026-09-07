@@ -639,6 +639,74 @@ export const PIPELINE_RUN = "pipeline";
 export const NO_INPUT_HASH = "unstamped";
 
 /**
+ * Why a `hierarchy` run is not the one we would write again today, or that it
+ * is. Ordered: a run that has not finished well has a hash that means nothing,
+ * so the status arms come before the hash one.
+ */
+export type HierarchyCurrency =
+  | { current: true }
+  | { current: false; why: "no-run" | "unfinished" | "errored" }
+  /* Carries the hash rather than sending the caller back to the row for it: the
+     only caller that writes a sentence about this would otherwise reach through
+     an optional chain that can never be undefined here, which reads as a case
+     somebody has thought about and is not one. */
+  | { current: false; why: "different-blocks"; ranAgainst: string };
+
+/**
+ * **Is this `hierarchy` run the one that describes these blocks?**
+ *
+ * One function because two inline copies of *"is this row good"* drift, and
+ * nothing says so — docs/postmortems/260827d-toc-status-never-checked.md, whose
+ * recommendation this is. It asked for `isTocCurrent`; the step was renamed
+ * `toc` → `hierarchy` afterwards, so the name follows the step.
+ *
+ * Its two callers are `articleMetadata` (src/store/pg.ts), which draws the
+ * metadata page's *"would we write this again today"* column and reads only
+ * `.current`, and `reasonsNotToPublish` (src/store/pg-revisions.ts), the last
+ * gate before a draft becomes the article, which turns `why` into the sentence
+ * it hands back. They answered this question in two separately-maintained
+ * expressions until 2026-09-07 and **agreed on every state** — so nothing about
+ * any article changed when they were joined. What changed is that a fifth
+ * reason now cannot be added without both of them coming here.
+ *
+ * ## Two questions, and the hash only answers one
+ *
+ * *Is the tree current* (does this row describe the blocks in front of us) and
+ * *did the step succeed* (is this row's output trustworthy at all) are
+ * different, and the original bug was one comparison standing for both. A step
+ * writes its row — `input_hash` included — when it **starts**, so a run that
+ * crashed halfway, or one still going in another process, leaves a hash that
+ * matches the blocks exactly, because nothing has touched the blocks since.
+ *
+ * @param run the `revision_step_runs` row for `hierarchy`, or `undefined` if
+ *   there is none. `(revisionId, stepName)` is the primary key, so there is at
+ *   most one.
+ * @param blocksHash `hashBlocks` of the blocks being asked about — **not
+ *   nullable**. "There are no blocks" is a different question, and both callers
+ *   answer it before they get here: `articleMetadata` on a null `blocksHash`,
+ *   and `reasonsNotToPublish` with its own earlier no-blocks/no-tree reasons.
+ *   Threading that case through here would put a third question in a function
+ *   named for one. GPT Sol, 2026-09-07.
+ */
+export function hierarchyCurrency(
+  run: { status: string; inputHash: string } | undefined,
+  blocksHash: string,
+): HierarchyCurrency {
+  if (!run) return { current: false, why: "no-run" };
+  /* Anything that is not `done` is not to be trusted, rather than everything
+     that is `running` or `error` — the column is constrained to those three
+     today, and a fourth value added later must land on the safe side of this
+     line rather than falling through to current. */
+  if (run.status !== "done") {
+    return { current: false, why: run.status === "running" ? "unfinished" : "errored" };
+  }
+  if (run.inputHash !== blocksHash) {
+    return { current: false, why: "different-blocks", ranAgainst: run.inputHash };
+  }
+  return { current: true };
+}
+
+/**
  * What a step's output was made from, and by what.
  *
  * Every field is optional and that is the honest shape, not a convenience:
@@ -758,6 +826,26 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
   extract: null,
   blocks: null,
   hierarchy: "labels",
+  /**
+   * **The same artefact as `hierarchy` above, and two steps really can read
+   * their stamp off one file.**
+   *
+   * It looks like the clash `assertStampAgrees` exists to refuse, and it is not:
+   * `hasArtefacts` (src/store/artifacts-pg.ts) asks the **asking step's own**
+   * `revision_step_runs` row before it looks at any artefact, so doneness is
+   * keyed on the receipt rather than on the file. Two steps sharing a site is a
+   * shape this project already had — `STORAGE` maps both `blocks`/`blocks` and
+   * `hierarchy`/`blocks` to the same rows — and
+   * tests/shared-site-run-row-gate.test.ts pins it on that existing pair.
+   *
+   * The difference between the two rows is what each step *declares*.
+   * `hierarchy` declares an `inputHash` alone, because the manifest it writes is
+   * a `PendingLabelsFile` with no `version` and no `generator`. This step
+   * declares all three, because it bought them.
+   * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md
+   * § the question that had to be settled first.
+   */
+  labels: "labels",
   assets: "assets",
   arc: "arc",
   tweets: "tweets",

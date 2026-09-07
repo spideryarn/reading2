@@ -42,6 +42,7 @@ import {
   revisionBlocks,
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
+import { failureKindOf, readerFailureOf } from "../src/job-failure.js";
 import { hashBlocks } from "../src/source-hash.js";
 import {
   PublishRefused,
@@ -397,5 +398,114 @@ describe("the publication guard", () => {
     } finally {
       await putBack();
     }
+  });
+
+  /* -------------------------------------------------------------------------
+     Which refusals are worth paying for again.
+
+     The exemption above is what stops the 2026-09-05 outage happening again for
+     a tree nobody changed. These two are about the refusals that are still
+     refusals, and about the sentence the reader gets under them: until
+     2026-09-07 `PublishRefused` carried free text and no kind, so
+     `failureKindOf` had nothing to read and *every* refusal fell through to
+     `retry` — "trying again is worth a go", under a button whose every press
+     completes and pays for a model call before meeting the identical refusal.
+
+     Asked of a real row rather than of a hand-built error, which is the half
+     tests/job-failure.test.ts § *a publication the store refused* cannot do: a
+     seam that reads a kind correctly proves nothing if the query that raises
+     the refusal never sets one. Both halves, or neither is evidence.
+     ------------------------------------------------------------------------- */
+
+  /**
+   * **The permanently wedged article, and what actually makes one.**
+   *
+   * The base's `hierarchy` run row is poisoned to `error` and nothing else is
+   * touched, so the draft's blocks and tree are *exactly* the base's — `carried`
+   * is true. `beginDraftIn` copies `revision_step_runs` row for row, `status`
+   * included, so the next attempt off this base copies the same bad row and is
+   * refused in the same line. Every mode, for ever, at a model call a go. That
+   * is the `nagel-bat` shape, and it is why the kind is `bug`.
+   *
+   * `bug` rather than `blocked`: `blocked` is the one non-retryable kind that
+   * admits a way out, and there is none a *reader* can take. Re-running the
+   * `hierarchy` step is the remedy, and it belongs to whoever runs the app.
+   */
+  it("calls a refusal over carried-forward input a permanent one", async () => {
+    const db = getDb();
+    const [article] = await db
+      .select({ current: articles.currentRevisionId })
+      .from(articles)
+      .where(eq(articles.slug, SLUG));
+    const base = article?.current;
+    if (!base) throw new Error("no published revision to poison — beforeAll did not run");
+    await hierarchyRun(base, "error");
+    try {
+      // No `.set(...)` on this draft at all: it is exactly what it was copied
+      // from, which is what makes the refusal a permanent one.
+      const { revisionId } = await beginRevision({ slug: SLUG });
+
+      const refusal = await publishRevision({ slug: SLUG, revisionId }).catch((err) => err);
+      expect(refusal).toBeInstanceOf(PublishRefused);
+      expect((refusal as PublishRefused).message).toContain("ended in error");
+      expect(failureKindOf(refusal)).toBe("bug");
+      expect(readerFailureOf(refusal, "Finding the terms").message).not.toContain(
+        "trying again is worth a go",
+      );
+    } finally {
+      await hierarchyRun(base, "done");
+    }
+  });
+
+  /**
+   * **The other half, and the one that would have cost a reader an article.**
+   *
+   * ⟨Sol, 2026-09-07⟩ This site claimed `permanent` for every reason until that
+   * review, on the reasoning that Retry skips every step that finished. It does
+   * — but a failed attempt's draft is discarded and its artefacts go with it, so
+   * the next attempt re-runs and draws again. The expensive case is a **first
+   * ingest** whose `hierarchy` produces a tree `checkTree` rejects: nothing is
+   * carried, nothing is copied forward, the next draw may be sound, and
+   * `permanent` would have withheld the button *and* `retryJob`'s own gate,
+   * leaving no route to that article at all.
+   *
+   * Here the draft alters the tree, so `carried` is false and the same reason
+   * comes back `retry`. The two cases differ in one boolean and nothing else,
+   * which is the point.
+   */
+  it("keeps the retry for a bad tree this draft drew itself", async () => {
+    const putBack = await poisonThePublishedTree();
+    try {
+      const { revisionId } = await beginRevision({ slug: SLUG });
+      await getDb()
+        .update(articleRevisions)
+        .set({ tree: RESTATED_RUNG_MOVED })
+        .where(eq(articleRevisions.id, revisionId));
+
+      const refusal = await publishRevision({ slug: SLUG, revisionId }).catch((err) => err);
+      expect(refusal).toBeInstanceOf(PublishRefused);
+      expect((refusal as PublishRefused).message).toContain("covers its parent's whole range");
+      expect(failureKindOf(refusal)).toBe("retry");
+    } finally {
+      await putBack();
+    }
+  });
+
+  it("keeps the retry when the base moved under the draft", async () => {
+    /* The one refusal where the old sentence was true, and the reason this is a
+       distinction rather than a flag saying "never retry a refusal". Two drafts
+       off the same published revision; the first one wins, and the second is
+       refused because publishing it would discard the first. Starting again
+       from what is there is exactly what the reader should do. */
+    const first = await draftReadyToPublish();
+    const second = await draftReadyToPublish();
+    await hierarchyRun(first, "done");
+    await hierarchyRun(second, "done");
+    await publishRevision({ slug: SLUG, revisionId: first });
+
+    const refusal = await publishRevision({ slug: SLUG, revisionId: second }).catch((err) => err);
+    expect(refusal).toBeInstanceOf(PublishRefused);
+    expect((refusal as PublishRefused).message).toContain("something else published");
+    expect(failureKindOf(refusal)).toBe("retry");
   });
 });

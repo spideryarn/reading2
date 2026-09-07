@@ -84,6 +84,7 @@ import type {
   ToolRun,
 } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
+import { ModeSurface } from "./ModeSurface.js";
 import { PassageLinks } from "./PassageLinks.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { LiveButton } from "./live/LiveButton.js";
@@ -442,37 +443,45 @@ export function ChatPanel({
     /* `mode-band` is the slot — fixed between the spine and the prose, and
        shared with the glossary. `chat` is a hook for anything only this panel
        wants; see § mode band in styles.css. */
-    <aside
-      className={`mode-band chat${remember ? " remember" : ""}`}
-      aria-label={remember ? "Remember what you took from this article" : "Chat about this article"}
-    >
-      <div className="band-head">
-        <h2>{open ? open.title : remember ? "Remember" : "Chat"}</h2>
-        {subMode}
-        {open ? (
-          <>
-            {/* The same delete the list offers, where the reader actually is.
-                Greg, 2026-08-26: *"Also add a Delete button within a chat."*
-                Asking twice rather than once, unlike the list — see ArmedDelete
-                — because in here the whole conversation is on the screen and
-                there is nothing to put it back. */}
-            <ArmedDelete key={open.id} onDelete={() => onDelete(open.id)} />
-            <button type="button" className="chat-icon" title="All conversations" onClick={() => void leave()}>
-              <X size={14} />
+    <ModeSurface
+      feature={`chat${remember ? " remember" : ""}`}
+      label={remember ? "Remember what you took from this article" : "Chat about this article"}
+      head={
+        <>
+          <h2>{open ? open.title : remember ? "Remember" : "Chat"}</h2>
+          {subMode}
+          {open ? (
+            <>
+              {/* The same delete the list offers, where the reader actually is.
+                  Greg, 2026-08-26: *"Also add a Delete button within a chat."*
+                  Asking twice rather than once, unlike the list — see
+                  ArmedDelete — because in here the whole conversation is on the
+                  screen and there is nothing to put it back. */}
+              <ArmedDelete key={open.id} onDelete={() => onDelete(open.id)} />
+              <button type="button" className="chat-icon" title="All conversations" onClick={() => void leave()}>
+                <X size={14} />
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="chat-icon"
+              title={remember ? "Start remembering" : "Start a new conversation"}
+              onClick={onNew}
+            >
+              <MessageSquarePlus size={14} />
             </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="chat-icon"
-            title={remember ? "Start remembering" : "Start a new conversation"}
-            onClick={onNew}
-          >
-            <MessageSquarePlus size={14} />
-          </button>
-        )}
-      </div>
-
+          )}
+        </>
+      }
+    >
+      {/* **No `foot`, and that is the documented exception.** Chat's composer
+          is built deep inside `Conversation`, which owns the scroller ref, the
+          stick-to-bottom logic and the draft, and returns the transcript and
+          the composer as one fragment — so `Conversation` goes into `children`
+          whole rather than being cut in half to fill a slot.
+          § There is a `foot` slot, in
+          docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md */}
       {error && <p className="chat-error">{error}</p>}
 
       {open ? (
@@ -612,7 +621,7 @@ export function ChatPanel({
           )}
         </>
       )}
-    </aside>
+    </ModeSurface>
   );
 }
 
@@ -1890,9 +1899,12 @@ export function Composer({
    * `{ kind: "article", slug }` is what tells the server to prime the
    * transcriber with this article's glossary — which is exactly the vocabulary
    * a reader asking about this article is about to use. Measured on 2026-08-27:
-   * with the terms in the prompt the model got this app's own jargon right
-   * every run; without them it made the same mistakes as every dedicated
-   * speech-to-text model. docs/plans/260827x-dictation-two-pass.md.
+   * with the terms supplied the model got this app's own jargon right every run;
+   * without them it made the same mistakes as every dedicated speech-to-text
+   * model. docs/plans/260827x-dictation-two-pass.md. (They went *in the prompt*
+   * until 2026-09-07 and go in `keywords` now — the finding is about telling it
+   * the words, not about where they sit;
+   * docs/plans/260907c-dictation-onto-an-openai-transcriber.md.)
    */
   const dictate = useDictationField({
     value,

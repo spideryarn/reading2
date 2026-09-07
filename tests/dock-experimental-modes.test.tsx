@@ -24,9 +24,11 @@
  * and a count cannot tell you *which* mode escaped. Everything below compares
  * identities against `BEHIND_THE_SWITCH`, the one literal list; the day
  * Structure merges Hierarchy and Outline, nothing here needs a number changed.
- * GPT Sol asked for this, weighing it against deriving the list from `MODES_UI`
- * itself: that would assert the bar draws what the table says, which is
- * `visibleModes`' own definition, and the canary would be gone.
+ * GPT Sol asked for this, weighing it against deriving the list from the table
+ * the flags actually live in — `MODES_UI` until 2026-09-07, `MODE_CATALOG`
+ * (src/mode-catalog.ts) since: either way that would assert the bar draws what
+ * the table says, which is `visibleModes`' own definition, and the canary would
+ * be gone.
  *
  * ## The two rules, and the second is the one that is easy to lose
  *
@@ -62,8 +64,9 @@ import {
  * **The independent copy of the policy**, by name, so that moving a mode in or
  * out of the switch cannot be done by editing the flag alone — somebody has to
  * say so here too. That second edit is the whole point and is not duplication
- * to be tidied away: derive this from `MODES_UI` and the test asserts the bar
- * draws what the table says, which is what `visibleModes` means.
+ * to be tidied away: derive this from `MODE_CATALOG` (src/mode-catalog.ts, and
+ * `MODES_UI` before 2026-09-07) and the test asserts the bar draws what the
+ * table says, which is what `visibleModes` means.
  */
 const BEHIND_THE_SWITCH: readonly Mode[] = ["timeline", "referee", "remember", "debate"];
 

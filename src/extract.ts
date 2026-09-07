@@ -29,6 +29,7 @@ import { jsdom } from "./jsdom-lazy.js";
 import { Readability } from "@mozilla/readability";
 import { escapeHtml } from "./html.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
+import { type FurnitureRemovals, removePlatformFurniture } from "./furniture.js";
 import { canonicaliseNotes, type NoteStats } from "./notes.js";
 /* The namespace and its scrub — src/reserved.ts is the only file allowed to
    name one of these attributes. See `stampSourceIds`. */
@@ -165,6 +166,18 @@ export interface ExtractResult {
   notes: NoteStats;
   /** What the callout pass found — see src/callouts.ts. */
   callouts: CalloutStats;
+  /**
+   * **How much platform chrome stage 2 deleted, per selector** — the audit line
+   * for the one thing this pipeline removes (src/furniture.ts).
+   *
+   * It rides here rather than on `Meta` for a reason worth stating: `Meta` is
+   * persisted as *columns* on `article_revisions` (src/store/pg.ts §
+   * `metaFrom`, src/store/artifacts-pg.ts § `metaColumns`), so putting it there
+   * is a migration, two mapping functions and the export round-trip — for a
+   * field whose only reader, stage D's audit line, does not exist yet. Stage D
+   * is where that trade stops being premature.
+   */
+  removed: FurnitureRemovals;
 }
 
 /**
@@ -351,12 +364,15 @@ const CJK_SEGMENT_BREAK = new RegExp(`(?<=[${CJK}])[^\\S\\n]*\\n\\s*(?=[${CJK}])
  */
 export function readArticle(
   html: string,
-  url: string,
+  /** `null` for a document with no address — see `sourceDom`. */
+  url: string | null,
 ): {
   article: ReturnType<Readability["parse"]>;
   refusal: TooLittleTextToRead | null;
   notes: NoteStats;
   callouts: CalloutStats;
+  /** What `removePlatformFurniture` deleted, per selector — see src/furniture.ts. */
+  removed: FurnitureRemovals;
 } {
   /* **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
      JSDOM's default forwards its own errors straight to `console`, and one of
@@ -376,9 +392,9 @@ export function readArticle(
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
   const dom = sourceDom(html, url);
-  const { notes, callouts } = prepareDocument(dom.window.document);
+  const { notes, callouts, removed } = prepareDocument(dom.window.document);
   const article = new Readability(dom.window.document).parse();
-  return { article, refusal: capabilityFloor(article), notes, callouts };
+  return { article, refusal: capabilityFloor(article), notes, callouts, removed };
 }
 
 /**
@@ -496,9 +512,27 @@ function capabilityFloor(
  * the same class, and the first one where the leak was a dependency's rather
  * than ours. See docs/project/logging.md.
  */
-function sourceDom(html: string, url: string): InstanceType<ReturnType<typeof jsdom>["JSDOM"]> {
+function sourceDom(
+  html: string,
+  /**
+   * **The base relative links resolve against, or `null` for a document that
+   * has no address** — an uploaded HTML file, since 2026-09-07
+   * (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md).
+   *
+   * Omitting the option is not the same as passing something harmless. `""`
+   * throws `TypeError: Invalid URL` out of the JSDOM constructor, where nothing
+   * here would catch it; `"about:blank"` is what JSDOM defaults to anyway, so
+   * spelling it here would only look like a decision. What omission buys is
+   * that `document.baseURI` stays `about:blank`, `new URL(relative, base)`
+   * throws inside Readability's own `toAbsoluteURI`, and the relative URI is
+   * left exactly as the document wrote it — which `src/assets.ts` already knows
+   * how to refuse. And a document carrying `<base href="…">` resolves properly
+   * with no help from us, because that element *is* the document's base URL.
+   */
+  url: string | null,
+): InstanceType<ReturnType<typeof jsdom>["JSDOM"]> {
   const { JSDOM, VirtualConsole } = jsdom();
-  return new JSDOM(html, { url, virtualConsole: new VirtualConsole() });
+  return new JSDOM(html, { ...(url === null ? {} : { url }), virtualConsole: new VirtualConsole() });
 }
 
 /**
@@ -511,7 +545,11 @@ function sourceDom(html: string, url: string): InstanceType<ReturnType<typeof js
  * `readArticleWithProvenance` below is a third caller and would have been a
  * third chance to get it wrong.
  */
-function prepareDocument(doc: Document): { notes: NoteStats; callouts: CalloutStats } {
+function prepareDocument(doc: Document): {
+  notes: NoteStats;
+  callouts: CalloutStats;
+  removed: FurnitureRemovals;
+} {
   unhideCollapsedSections(doc);
   /* **The PDF figure marker, scrubbed on the one path a stranger's markup
      arrives by.** Nothing on this path ever *writes* one — only `renderHtml`
@@ -525,6 +563,24 @@ function prepareDocument(doc: Document): { notes: NoteStats; callouts: CalloutSt
      PDF's sha256 and a web article has no raw PDF and therefore no `pdfFigures`
      entry to match. This is belt to that braces, and it is one line. */
   scrubReserved(doc, [RESERVED_ATTRS.pdfFigure]);
+  /* **The one step that deletes something because of what the publisher called
+     it** — other things here remove elements, but only this one does it as a
+     policy about furniture. What it may delete, and why that licence is narrow
+     enough to spend, is on `removePlatformFurniture` (src/furniture.ts). It is
+     not a general furniture pass: everything else stays and waits for stage D.
+
+     First of the three recognisers **by preference, not by need.** The
+     preference is that `a.headerlink` is a fragment anchor and `ul.reflinks`
+     holds them, which is the shape `canonicaliseNotes` starts from, and there
+     is nothing to be gained by offering it PLOS's button strips and Sphinx's
+     pilcrows to consider — though the note pass goes on to require a marker
+     label and a publisher topology neither would satisfy (src/notes.ts). So
+     this was measured rather than argued: run last instead of first, over every
+     fixture this pass touches plus `acx_footnotes` and `tufte` — the two the
+     note pass does most to — the removal counts, the `NoteStats`, the
+     `CalloutStats` and Readability's output HTML are byte-identical on all
+     nine. 2026-09-06. */
+  const removed = removePlatformFurniture(doc);
   /* Before Readability, and it has to be: Readability's `keepClasses: false`
      takes the identifying classes off, and the sanitiser downstream of it
      deletes the `<label>`/`<input>` that Tufte's sidenotes are made of. By stage
@@ -535,7 +591,7 @@ function prepareDocument(doc: Document): { notes: NoteStats; callouts: CalloutSt
      neither reads what the other writes — so it is simply the later arrival.
      src/callouts.ts. */
   const callouts = canonicaliseCallouts(doc);
-  return { notes, callouts };
+  return { notes, callouts, removed };
 }
 
 /**
@@ -674,6 +730,16 @@ export function readArticleWithProvenance(
   refusal: TooLittleTextToRead | null;
   notes: NoteStats;
   callouts: CalloutStats;
+  /**
+   * What `removePlatformFurniture` deleted, per selector.
+   *
+   * **Removed before the source is stamped**, which is the fact the gates rest
+   * on: `prepareDocument` runs first, so a deleted control is absent from the
+   * stamped source *and* from Readability's output, and the order and
+   * provenance gates never see a hole. Confirmed by running the corpus rather
+   * than assumed — C4a, 2026-09-06.
+   */
+  removed: FurnitureRemovals;
   /** The stamped source, as Readability was handed it and before it pruned anything. */
   source: Document;
   /**
@@ -695,7 +761,7 @@ export function readArticleWithProvenance(
   stampedElements: number;
 } {
   const prepared = sourceDom(html, url);
-  const { notes, callouts } = prepareDocument(prepared.window.document);
+  const { notes, callouts, removed } = prepareDocument(prepared.window.document);
   const stampedElements = stampSourceIds(prepared.window.document);
   const sourceHtml = prepared.window.document.documentElement.outerHTML;
   const forReadability = sourceDom(prepared.serialize(), url);
@@ -707,6 +773,7 @@ export function readArticleWithProvenance(
     refusal: capabilityFloor(article),
     notes,
     callouts,
+    removed,
     source: prepared.window.document,
     sourceHtml,
     stampedElements,
@@ -852,7 +919,19 @@ export class TooLittleTextToRead extends Error {
  */
 export async function runExtract(opts: {
   html: string;
-  url: string;
+  /**
+   * **`null` for a document the reader uploaded**, which has no address at all —
+   * docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md.
+   *
+   * It is used for exactly two things and they want the same answer: as the
+   * base relative links resolve against (`sourceDom`), and as `meta.url`. A
+   * placeholder would have been wrong in both — a fake base silently resolves
+   * relative links to an origin nobody named, and a fake `meta.url` reads as an
+   * address to the masthead, the metadata page and every dedup check. Absent is
+   * what `Meta.url` already allows, because an uploaded PDF has been arriving
+   * without one since 2026-08-27.
+   */
+  url: string | null;
   slug: string;
 }): Promise<ExtractResult> {
   const { slug } = opts;
@@ -874,7 +953,7 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const { article, refusal, notes, callouts } = readArticle(opts.html, opts.url);
+  const { article, refusal, notes, callouts, removed } = readArticle(opts.html, opts.url);
   if (!article) {
     throw new ReadabilityRefused();
   }
@@ -905,7 +984,11 @@ export async function runExtract(opts: {
     ...(byline ? { byline } : {}),
     ...(article.siteName ? { siteName: article.siteName } : {}),
     ...(article.lang ? { lang: article.lang } : {}),
-    url: opts.url,
+    /* **Spread rather than assigned**, since 2026-09-07, for the same reason
+       every optional field above is: `url: undefined` and no `url` key are
+       different artefacts, and the round-trip test compares them. An uploaded
+       document has no address and must not carry one. */
+    ...(opts.url === null ? {} : { url: opts.url }),
     fetchedAt: new Date().toISOString(),
     ...(publishedAt ? { publishedAt } : {}),
     ...(article.excerpt ? { excerpt: article.excerpt } : {}),
@@ -919,6 +1002,7 @@ export async function runExtract(opts: {
     excerpt: article.excerpt ?? null,
     notes,
     callouts,
+    removed,
   };
 }
 

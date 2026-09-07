@@ -27,6 +27,8 @@ import { readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { refuseUntraceableImportsInSource } from "./helpers/ts-ast.js";
+
 const ROOT = path.resolve(import.meta.dirname, "..");
 const WEB = path.join(ROOT, "src", "web");
 
@@ -279,6 +281,22 @@ const SHARED = new Set([
      another a second later. It imports nothing at all, and `params.ts`
      re-exports every name so no component knows it moved. See src/modes.ts. */
   "modes.js",
+  /* What each of those modes *is*: the sentence a reader is shown about it, the
+     words they might type meaning it, and whether it is still behind the
+     experimental switch. On the list because it qualifies — it imports
+     `modes.js` and nothing else — and because being on it is the point rather
+     than a convenience.
+
+     The two older fields were `blurb` and `experimental` on a `MODES_UI` row in
+     src/web/Dock.tsx, which is a 2,300-line React component, and they moved on
+     2026-09-07 because a second reader was arriving that cannot import it (the
+     command bar, docs/plans/260906h-mode-catalog-and-a-command-bar.md). The
+     alternative was a fifth field on a Dock layout row, which is how `MODES_UI`
+     became the place everything about a mode ended up. Nothing under
+     src/public/ reads it yet; it is written to this rule anyway, so that the
+     day a server-composed page wants to say what a mode is, the answer is one
+     import rather than a second copy. See src/mode-catalog.ts. */
+  "mode-catalog.js",
   /* What a `/read/…` address asks for — the view, and whether the client is
      about to rewrite a legacy spelling into the metadata page. On the list
      because it imports nothing at all, and because being on it is the point:
@@ -465,6 +483,13 @@ interface Imported {
 /** Every import one file makes — `import` and `export … from` alike. */
 function scan(file: string): Imported[] {
   const text = readFileSync(file, "utf8");
+  /* **A dynamic `import()` with a computed specifier is refused**, not skipped.
+     Every rule below reads a list of specifiers, so an edge with no name is an
+     edge that passes every one of them — GPT Sol, 2026-09-06, F21, which showed
+     the same hole in three graph guards at once. The refusal, and the repo-wide
+     scan behind it, are in tests/helpers/ts-ast.ts; it parses only when the
+     text could contain one. */
+  refuseUntraceableImportsInSource(text, path.relative(ROOT, file), "tests/client-imports.test.ts");
   const found: Imported[] = [];
   /* The middle capture is everything between the keyword and `from`, which is
      what decides `typeOnly`: ` type { X } ` says yes, ` { type A, b } ` says

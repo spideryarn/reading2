@@ -85,8 +85,9 @@ Code: [`src/quotes.ts`](../../src/quotes.ts) (stage 5h — the prompt, the call,
 [`src/store/pg.ts`](../../src/store/pg.ts) § `loadQuotes`, [`src/routes.ts`](../../src/routes.ts),
 [`src/web/QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx),
 [`src/web/useQuotes.ts`](../../src/web/useQuotes.ts), `resolveQuotes` in
-[`src/web/search-hits.ts`](../../src/web/search-hits.ts), `QuotesBand` in
-[`src/web/App.tsx`](../../src/web/App.tsx), and `§ quotes mode` in
+[`src/web/search-hits.ts`](../../src/web/search-hits.ts),
+[`src/web/modes/quotes/QuotesMode.tsx`](../../src/web/modes/quotes/QuotesMode.tsx)
+(`QuotesBand`, `VisitorQuotesBand`, `useQuotesMode`), and `§ quotes mode` in
 [`src/web/styles/quotes.css`](../../src/web/styles/quotes.css). Tests:
 [`tests/quotes.test.ts`](../../tests/quotes.test.ts) (the stage),
 [`tests/quotes-panel.test.ts`](../../tests/quotes-panel.test.ts) (the orders and the bar),
@@ -305,11 +306,74 @@ Two things had to move with it, and both are about there now being sixteen marks
   band pushes it in the same layout effect as the marks, so no paint can show the ring on one quote
   and the washes of another set.
 
-**Still slate, not yellow.** Greg's *"maybe a yellow highlighter pen"* is not built and is a decision
-he has not made: `mark.hit`'s low-chroma slate is deliberate, because the wash channel carries
-confidence and the hue channel carries *which search found it* (2026-08-26). Yellow means either
-borrowing that channel or adding a quotes-specific wash — a second way of drawing a marked passage,
-which is what this mode was built not to have.
+### The stroke, which is how a quote says how much it matters
+
+**Not yellow, and since 2026-09-07 not a wash at all: a quote is drawn as an outline.** Greg
+decided it on 2026-09-06, against his own earlier *"maybe a yellow highlighter pen"*:
+
+> Perhaps use another UI convention, e.g. provide a border (i.e. the boundary but not the fill) for
+> quotes, perhaps with bold, and use thickness and boldness as an indicator of the Quote priority.
+> … Failing that, let's just use a fluorescent-yellow highlighter, and tweak the Search colourings
+> to be pastel or something so they have a different feel to them.
+
+The yellow was the fallback and was not needed. It would have cost the hue channel — which carries
+*which search found this*, 2026-08-26 — or added a quotes-specific wash, a second way of drawing a
+marked passage, which is what this mode was built not to have. **A stroke costs neither, because it
+is a channel nothing else in the prose was using. Search fills; quotes outline.** If a later design
+finds it needs a fill for quotes after all, the reason this was chosen has been lost.
+
+| Channel | Carries |
+|---|---|
+| the wash | a search's **confidence** (`--hit-a`) |
+| the bottom band's hues | **which search** found it |
+| the `::after` glyph | a referee criterion's **direction** |
+| **the stroke** | **that this is a quote, and how much it matters** |
+
+**Two tiers, from `priorityOf`.** `quoteTier` (QuotesPanel.tsx, beside `priorityOf`) is heavy at or
+above `QUOTE_BAR_DEFAULT` and light below it — so at the bar's resting position every quote on the
+page is heavy, and the light ones are what dragging the bar down reveals. The two controls tell one
+story: **raise the bar and what survives is exactly the heavier strokes.** Driving it from
+`importance` alone would let them disagree, since `?bar=` thresholds on `max(importance, striking)`;
+a quote that is merely *striking* clears the bar, so it must also draw heavy.
+
+**A quote with no score at all is light, and still drawn.** It has earned no emphasis, but a quote
+scored on neither axis survives every position of the bar (§ The bar hides what is below it), so
+leaving it unmarked would be a row in the panel with nothing in the prose.
+
+**Two tiers and not three, and that is a measurement rather than a preference.** Blind pairwise on
+the box, 2026-09-07: three tiers at 1/2/3px scored **13/20, which is chance**, with answers
+correlating to slot position rather than thickness. Two tiers at 1px and 3px scored **12/12 at both
+device scale factors**. Everything involving a middle tier is what fails. A third level would be a
+ranking the reader cannot see, which is worse than no ranking.
+
+**Bold is out**, though Greg asked for *"perhaps with bold"*. It does not change the paragraph's
+height — measured — but it **re-wraps** the prose, moving the text after the mark by 80px in the
+sample. With quotes on a slider, every drag would reshuffle the words under the reader's eye.
+`text-shadow` and `-webkit-text-stroke` thicken without reflowing and are rejected too, for the
+older rule: the verbatim column is not restyled to advertise our annotation.
+
+**How it is drawn, and the two things that make it work.** `box-shadow`, because it reserves no
+layout space at all — measured identical to three decimal places with the ring on and off — where a
+border costs inline width per fragment and `outline` is the focus ring. And **the caps are the hard
+part**: `annotateHtml` emits one `<mark>` per text node and splits again at every annotation
+boundary, so one quote containing an `<em>` is *three sibling elements*, and three closed rings read
+as three quotes. So the rules above and below are drawn on every fragment and the inline caps only
+on the two carrying `data-quote-start` / `data-quote-end`. The caps are **inset**, because drawn
+outside they weld two abutting quotes into one. `annotations.css` § quote strokes has the numbers.
+
+**And quotes stopped being washes at all**, which had to happen first: a quote was a `strength: 1`
+hit, and `--hit-a` is the maximum over every mark covering a run, so **a quote lying over a hedged
+search hit repainted that hit's confidence at full**. `data-wash` now says which marks want search
+painting, and `--hit-a` is computed over those only.
+
+That was a fault in the renderer rather than something a reader ever saw: **one mode's marks are on
+the page at a time** ([the marks in the prose belong to the mode
+showing](../../tests/the-marks-in-the-prose-belong-to-the-mode-showing.test.tsx)), so a quote and a
+search hit are never drawn over one phrase in the reading view. The overlap is a contract
+`annotateHtml` holds, not a state the app can currently reach — worth being exact about, because the
+first write-up of this called it a live bug and it is not one. It still had to be fixed: the whole
+design rests on the two channels being independent, and "independent except that one silently
+overwrites the other" is not that.
 
 ### The bar hides what is below it
 

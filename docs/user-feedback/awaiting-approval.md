@@ -21,10 +21,22 @@ deliberately not taken by an agent, written into the report's note and therefore
 somebody goes and reads it. That is the same failure this file exists to prevent, so they are listed
 here too.
 
-None of them blocks anything. Each is a few minutes of attention, and each has a note that already
-sets out the options and their cost.
+Each is a few minutes of attention, and each has a note that already sets out the options and their
+cost. **One of them now blocks a deploy** — that used to be true of none of them, and the first row
+says which.
 
-<!-- All four were answered on 2026-09-06; see below. -->
+> **⚠ Do not deploy until the dictation privacy wording is signed off.** 2026-09-07: dictation moved
+> onto an OpenAI transcriber, which cannot be routed with zero data retention, so the sentence
+> `/privacy` and every microphone have carried until now — *"your voice … isn't stored"* — is false
+> on `dev` as of this landing. The replacement wording is written and is quoted on its own, out of
+> the diff, in
+> [260907c § The proposed reader-facing wording](../plans/260907c-dictation-onto-an-openai-transcriber.md#the-proposed-reader-facing-wording).
+> Deploying before you have read it publishes a false promise about people's voices.
+
+| report | the decision resting with you |
+|---|---|
+| dictation privacy wording (2026-09-07, **blocks the next deploy**) | **A published zero-data-retention promise about a reader's voice has to go.** Greg chose the switch to an OpenAI transcriber on 2026-09-06 knowing it cost this; what needs your eye is not the decision but the four sentences that replace it, one of which is the line beside every microphone. Measured reason it cannot be kept: OpenRouter does not apply routing on its transcription endpoint, so `zdr: true` there is a flag nobody reads — `only: ["anthropic"]`, which no transcriber can satisfy, returns a transcript anyway. [plan](../plans/260907c-dictation-onto-an-openai-transcriber.md#the-proposed-reader-facing-wording) |
+| [2A](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2A) — upload an HTML file (shipped 2026-09-07) | **An uploaded file's name is in its public URL.** `slugFromFilename` mints the article slug from the filename's stem and the slug is in `PublicMeta`, so publishing `confidential-client-acme.html` publishes `confidential-client-acme`. This predates the report by weeks — it has been true of uploaded PDFs since August — and was found only because this work was about to assert the opposite in a comment. Minting an opaque slug for uploads instead would change existing addresses and is a decision about what a URL should look like, so no agent took it. [note](260906_1709-upload-an-html-file-and-a-url-for-a-pdf.md) · [plan](../plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md#a-privacy-question-this-work-did-not-create-and-did-not-fix) |
 
 **Answered 2026-09-06, in one sitting, and this is what happened to each** — kept here briefly
 rather than deleted, because "the file shrank" is only good news if you can see what it shrank into:
@@ -41,9 +53,11 @@ options put to Greg. Two of them dissolved a trade-off an agent had accepted as 
 mark by using a channel nobody had thought to use, and the quiz by removing the control rather than
 tuning it. That is the argument for this file existing rather than for agents deciding faster.
 
-## Nothing is waiting on Greg
+## Two things are waiting on Greg
 
-Everything this file listed on 2026-09-06 has been answered. The `toc/6` question that stood here —
+The dictation privacy wording, which blocks the next deploy, and the 2A slug question above, both
+added 2026-09-07. Everything this file listed on 2026-09-06 has been
+answered. The `toc/6` question that stood here —
 whether to re-run the structure stage across the library so existing articles picked up the new gist
 lengths — was answered *"leave it, new articles only"*, and is now recorded where it belongs, in
 [hierarchy.md § A new prompt reaches new articles only](../project/hierarchy.md#prompt-versions),

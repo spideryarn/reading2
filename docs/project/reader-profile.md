@@ -459,9 +459,14 @@ something it used to say:
 - **The audio now leaves the machine.** *"Free, no server, and no audio of the reader's voice
   crossing anything of ours"* was the argument for the browser's recogniser, and it is over — Greg's
   call, with the trade put to him in those words. What is true now: the recording is held in memory
-  for one request, base64'd into one OpenRouter call routed only through zero-data-retention
-  providers, never written to disk by us and never logged. One sentence beside the button says so,
-  as the button's own `aria-describedby`.
+  for one request, base64'd into one OpenRouter call, never written to disk by us and never logged.
+  One sentence beside the button says so, as the button's own `aria-describedby`.
+  **The routing half of that sentence went on 2026-09-07**, and it went because the vocabulary won:
+  dictation moved to `openai/gpt-transcribe` on the transcription endpoint, where OpenRouter does not
+  apply routing preferences or `zdr`, so "routed only through zero-data-retention providers" is a
+  thing we can no longer say. What we still control — memory only, no disk, no logs — is unchanged.
+  [privacy.md](privacy.md) owns the current claim and the evidence for it;
+  [260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md) is the trade.
 - **Safari and Firefox no longer get live words, and Firefox gets dictation at all.** WebKit allows
   one microphone source at a time, so on Safari the choice is live text *or* a recording. We take the
   recording, because the transcript is the half that gets saved. Firefox, which had no button at
@@ -634,7 +639,7 @@ The measurements, both reviews and the two bugs the tests found after the review
 | [`src/web/DictationStrip.tsx`](../../src/web/DictationStrip.tsx) | the button and the strip, so every box that adopts a microphone gets the same one |
 | [`src/web/mic-lock.ts`](../../src/web/mic-lock.ts) | one microphone per **page**, however many boxes have a button |
 | [`src/web/dictation-upload.ts`](../../src/web/dictation-upload.ts) | the client half of `POST /api/transcribe` |
-| [`src/transcribe.ts`](../../src/transcribe.ts) | the server half: the vocabulary, the model call, and why it is a chat model |
+| [`src/transcribe.ts`](../../src/transcribe.ts) | the server half: the vocabulary, the model call, and why it is a transcriber rather than a chat model |
 | [`src/dictation-limits.ts`](../../src/dictation-limits.ts) | how big a dictation may be and what containers we can send — shared by both ends |
 | [`src/web/useAudioLevel.ts`](../../src/web/useAudioLevel.ts) | the analyser and the frame loop, and everything that must not be mistaken for silence |
 | [`src/web/audio-level.ts`](../../src/web/audio-level.ts) | pure: RMS, the decibel mapping, the measured floor, the smoothing |
@@ -698,8 +703,17 @@ that made the sticker good:
 
 What it drops is the fourth: it no longer says *"type instead, whatever is in the box is safe"*,
 because that sentence was reassurance about a defect and the defect is fixed. What it says now is
-what a reader needs to know before pressing a button that was free and is not any more: **your
-voice is sent to be transcribed, and it isn't stored.**
+what a reader needs to know before pressing a button that was free and is not any more: where their
+voice goes, and what we can and cannot promise about it.
+
+**It said *"and it isn't stored"* until 2026-09-07, and that clause is the thing this section is
+really about.** It was true while dictation was routed only through zero-data-retention providers,
+and it stopped being true the day dictation moved to a transcription endpoint that does not apply
+that routing — so the sentence had to change on a day when nothing a reader could see had changed.
+The sentence itself lives once, in `DICTATION_PROMISE`
+([`src/web/DictationStrip.tsx`](../../src/web/DictationStrip.tsx)); read it there rather than
+here, and read [privacy.md](privacy.md) for why it says what it says. Quoting it in a second place
+is how the promise above outlived the routing that made it true.
 
 A word like *unreliable*, left on a control after it stops being true, is worse than no label at
 all — it teaches people not to use something that works, and it teaches whoever reads the code

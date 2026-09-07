@@ -232,11 +232,20 @@ describe("acquiring an uploaded file", () => {
     expect(await blobs.head(stagingKey(id))).not.toBeNull();
   });
 
-  it("refuses a file whose bytes are not a PDF, whatever it is called", async () => {
+  /**
+   * **A `.pdf` name and bytes that are neither kind.** The sentence widened on
+   * 2026-09-07 when a web page became a legal upload
+   * (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md); the refusal, the
+   * `not-a-pdf` reason and the `[up-pdf]` code did not move, and this case is
+   * still the one that proves a name buys nothing.
+   */
+  it("refuses a file whose bytes are neither kind, whatever it is called", async () => {
     const bytes = new TextEncoder().encode("PK this is a zip, honestly");
     const { id, ctx } = await readyToVerify(bytes);
 
-    await expect(STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).rejects.toThrow(/isn't a PDF inside/);
+    await expect(STEPS.fetch.run(ctx, artefacts, nullCheckpointStore())).rejects.toThrow(
+      /isn't a PDF or a web page inside/,
+    );
     expect((await readUpload(id))?.status).toBe("rejected");
     expect((await readUpload(id))?.reason).toBe("not-a-pdf");
   });

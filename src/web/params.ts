@@ -177,6 +177,30 @@ export function currentAt(): string | null {
 }
 
 /**
+ * **`?probe=1` — the viewport diagnostic, and nothing else in the app reads it.**
+ *
+ * `ViewportProbe.tsx` records what a phone's visual viewport does to the mode
+ * band while the keyboard opens, because stage 4 of
+ * docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md
+ * refuses to choose the arithmetic without a measurement off a real iPhone.
+ *
+ * **Read, never written, and never subscribed to** — `currentAt()` above is the
+ * same trick for the same reason, and here the reason is sharper: the probe
+ * must cost an ordinary reader *nothing*, and a `useQueryState` is a
+ * subscription and a re-render on every address change for a component that
+ * renders `null`. A diagnostic switched on by a link has no reason to react to
+ * the URL changing under it either.
+ *
+ * `parseAsBit` rather than `=== "1"` so the spelling is the app's — `probe=0`
+ * means off rather than "some string I did not recognise", the same as `text`
+ * and `spine`.
+ */
+export function currentProbe(): boolean {
+  const raw = new URLSearchParams(location.search).get("probe");
+  return raw === null ? false : parseAsBit.parse(raw) === true;
+}
+
+/**
  * Which explanation dialog is open — see docs/project/comments.md.
  *
  * A comment id is a block id by construction (both come from `mintId`), so the

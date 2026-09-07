@@ -103,7 +103,7 @@
  * referee's own work, which wants thought before it wants code.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQueryState } from "nuqs";
 
 import type {
@@ -115,6 +115,7 @@ import type {
 } from "../referee-criteria.js";
 import type { Block, BlockId, Comment } from "../types.js";
 import { assignSlots, PALETTE_BY_HUE } from "./hit-colours.js";
+import { usePassageLifecycle } from "./passage-lifecycle.js";
 import { critsParam, refScaleParam } from "./params.js";
 import { placementWords } from "./PlaceOnCriterion.js";
 import { type Found, resolveCriterion } from "./search-hits.js";
@@ -202,10 +203,12 @@ const CRITERION_PRESETS: {
  *   leaves the status `pending` until the authoritative answer lands, so
  *   filtering on `done` would quietly undo every frame upstream. A **failed**
  *   one still contributes nothing.
- * - **`useLayoutEffect`, not `useEffect`, to push the results up.** This
- *   component renders the new list immediately and the prose only changes after
- *   the setter runs, so a passive effect leaves a frame where the panel shows
- *   the new passages and the article still shows the old marks.
+ * - **The passage lifecycle is `usePassageLifecycle`'s**, not this file's:
+ *   publish before paint, drop a pressed passage that is no longer drawn, and
+ *   clear both on the way out in a separate cleanup that depends on nothing but
+ *   the parent's setters. src/web/passage-lifecycle.ts says why each of those is
+ *   the way it is, and why the clear is a *layout* cleanup — this band and
+ *   `ClaimsBand` share one slot.
  */
 export function CriteriaBand({
   slug,
@@ -273,44 +276,27 @@ export function CriteriaBand({
     return out;
   }, [api.criteria, on, slots, blocks]);
 
-  useLayoutEffect(() => onFound(found), [found, onFound]);
+  /* **The three rules every passage producer follows** — publish before paint,
+     drop a pressed passage that is no longer drawn, and clear both on the way
+     out — in src/web/passage-lifecycle.ts rather than here. Until 2026-09-06
+     this was the third of six copies of them, and it had been *half* of one
+     until 2026-09-02: it cleared `onFound` and left `openKey` set, so leaving
+     Referee handed the next mode a key naming a passage nobody marks any more.
+     docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md § T0.2,
+     and tests/passage-mode-cleanup.test.tsx is the executable form of it.
 
-  /* **A pressed passage that is no longer drawn cannot stay pressed.**
-     Unticking a criterion, deleting it, or re-running it and getting different
-     passages all take a key's mark out of the prose while the key survives — and
-     the ring then belongs to nothing, or worse, to whatever else minted that
-     key. Keyed on absence from `found`, so an ordinary tick is left alone.
-     `useIdeasMode` in App.tsx has the same effect for the same reason.
+     **This band and `ClaimsBand` are the pair the phase of the clear matters
+     for.** They are siblings inside `RefereeSubMode` writing the *same* slot, so
+     changing `?referee=` hands one slot from one producer to the other inside a
+     single commit — which is why the helper's clear is a layout cleanup rather
+     than a passive one. docs/postmortems/260906d-one-publication-slot-two-producers-two-commit-phases.md.
 
      There is deliberately no counterpart that opens the *first* passage the way
      Ideas does. An idea is one selection with a stepper over its occurrences;
      several criteria can be switched on at once, so "the first" would be the
      first of whichever criterion happened to sort first, and pressing a row is
      the only thing here that means the referee chose a passage. */
-  useEffect(() => {
-    if (openKey !== null && !found.some((f) => f.key === openKey)) onOpenKey(null);
-  }, [found, openKey, onOpenKey]);
-
-  /* Leaving referee mode must take the marks out of the prose with it. Its own
-     effect, with no dependency on the results, so it runs on unmount and only
-     on unmount — folding it into the cleanup above would clear the marks on
-     every frame and set them again immediately, which is a visible flicker of
-     every highlight on the page. The trap `GlossaryBand` documents.
-
-     **Both halves, and this is the third copy of the same rule.** Until
-     2026-09-02 this cleared `onFound` and left `openKey` set, so leaving
-     Referee handed the next mode a key naming a passage nobody marks any more.
-     The note on `TimelineBand`'s five effects in App.tsx says *"a fix to one of
-     these belongs in all three"* — it said *"in both"* until referee became the
-     third — and tests/passage-mode-cleanup.test.tsx is the executable form of
-     it. docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md § T0.2. */
-  useEffect(
-    () => () => {
-      onFound([]);
-      onOpenKey(null);
-    },
-    [onFound, onOpenKey],
-  );
+  usePassageLifecycle({ kind: "keyed", found, openKey, onFound, onOpenKey });
 
   const toggle = useCallback(
     (id: string) => {

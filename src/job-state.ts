@@ -416,6 +416,20 @@ interface StepTiming {
  */
 const STEP_TIMING: Partial<Record<StepName, StepTiming>> = {
   hierarchy: { slowAfterMs: 600_000 },
+  /* **MEASURED**, and it needs a row for the same reason `hierarchy` does: the
+     fallback below is 180 s, and the worst recorded label pass is **682 s**, so
+     without this every long article would raise the alarm — an alarm the code
+     knows is false at the moment it raises it, which is the failure this file's
+     header is about. Ten minutes, matching `hierarchy`'s, is past the worst
+     measured pass and inside the 740 s at which the claimant kills itself.
+
+     **No `usually`**, at the bar this file sets: the 682 s figure comes from the
+     measurement in
+     docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md rather than
+     from a spread of runs of the step under its own name, and this step has
+     never run under its own name at all. A guessed-shaped threshold does not buy
+     a "usual" — see `SLOW_AFTER_MS` below. */
+  labels: { slowAfterMs: 600_000 },
   sketch: { slowAfterMs: 420_000, usually: STEP_USUALLY_A_COUPLE_OF_MINUTES },
   illustrated: { slowAfterMs: 600_000 },
 };
