@@ -1572,6 +1572,21 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "was chosen by the flag, so five of its seven cases went red the moment the flag went. The " +
       "article is `scratchArticleInPg` now instead of a copied `example/` directory.",
   },
+  "tests/streaming-route-request-lifetime.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "**Written 2026-09-07, after the witness ran**, which is why the evidence is static: it is " +
+      "on this list only because `scratchArticleInPg` reaches the fixture loader, and it names no " +
+      "condemned module of its own. Its subject is a request's *lifetime* rather than a store — " +
+      "`POST /api/referee/criteria/:slug` driven through `handleApi` with the model call paused, " +
+      "so that the response, the `refereeing` lock and the caller's promise can each be asked " +
+      "whether they are still where the guard left them. It needs Postgres because its whole " +
+      "oracle is whether the GET's sweep buries a backdated `pending` row, which is the only way " +
+      "a caller can see that lock at all. Stage 4a of " +
+      "docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md.",
+  },
   "tests/term-lookup.test.ts": {
     category: "database-integration",
     reason:
@@ -2696,6 +2711,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      the flag was unset, and it is `pgChatStore`/`pgSearchStore` now. */
   "tests/store-wiring.test.ts": "private-postgres",
   "tests/store-writes-land-in-postgres.test.ts": "private-postgres",
+  /* Landed 2026-09-07 with stage 4a of
+     docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md. It
+     drives `POST /api/referee/criteria/:slug` through `handleApi` with the
+     model call paused, and its whole oracle is a `pending` row a sweep may or
+     may not bury — so it needs a database, and it needs one nobody else is
+     sweeping. */
+  "tests/streaming-route-request-lifetime.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. It seeds one corpus article under a
      throwaway slug with an extra glossary entry the text never matches, and
      then asks `lookUpTerm` — built by `src/store/index.ts` out of whichever

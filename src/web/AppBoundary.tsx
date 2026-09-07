@@ -49,7 +49,7 @@ export class AppBoundary extends Component<Props, State> {
     return { broken: true };
   }
 
-  override componentDidCatch(error: Error, info: ErrorInfo): void {
+  override componentDidCatch(error: unknown, info: ErrorInfo): void {
     /* `componentStack` is deliberately not sent. It is a list of component
        display names, which is safe, but it arrives as one free-text blob and
        this file is not the place to start making exceptions to "no free text
@@ -64,9 +64,16 @@ export class AppBoundary extends Component<Props, State> {
        The name only: `error.message` is not sent for the same reason it is not
        rendered above. See src/web/log-buffer.ts § ClientErrorLogEntry.
 
-       Not `error.name`: the parameter is typed `Error` and the runtime value
-       need not be one, so the read is `nameOfThrown`'s job and not this file's
-       — src/web/log-buffer.ts § nameOfThrown. */
+       Not `error.name`: the read is `nameOfThrown`'s job and not this file's —
+       src/web/log-buffer.ts § nameOfThrown. **The parameter is `unknown` rather
+       than React's own `Error`**, because React does not enforce that type and
+       the value here is whatever was thrown. Declared `Error`, `error.name`
+       compiles — and then *can* throw a `TypeError` out of the handler, on a
+       `throw null` or an object whose `name` getter throws; on a real `Error` it
+       is simply fine, which is why it survives review. Declared `unknown`, the
+       compiler refuses the read. That is the same rule the sweep in
+       tests/no-boundary-reads-the-caught-value.test.ts keeps, held one layer
+       lower where nobody has to remember it. */
     recordLog({ kind: "client-error", source: "boundary", name: nameOfThrown(error) });
   }
 

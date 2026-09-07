@@ -183,7 +183,7 @@ class FeatureErrorBoundary extends Component<BoundaryProps, BoundaryState> {
     return null;
   }
 
-  override componentDidCatch(error: Error, info: ErrorInfo): void {
+  override componentDidCatch(error: unknown, info: ErrorInfo): void {
     /* `componentStack` is deliberately not sent, for the reason `AppBoundary`
        gives: it is a list of component display names, which is safe, but it
        arrives as one free-text blob and this is not the place to start making
@@ -242,10 +242,15 @@ class FeatureErrorBoundary extends Component<BoundaryProps, BoundaryState> {
        cannot. The **name only**: `error.message` is not sent for the same
        reason it is not rendered. src/web/log-buffer.ts § ClientErrorLogEntry.
 
-       Not `error.name`: the parameter is typed `Error` and the runtime value
-       need not be one, so the read is `nameOfThrown`'s job and not this file's
-       — src/web/log-buffer.ts § nameOfThrown, which is where F10 above now
-       lives. */
+       Not `error.name`: the read is `nameOfThrown`'s job and not this file's —
+       src/web/log-buffer.ts § nameOfThrown, which is where F10 above now lives.
+       **The parameter is `unknown` rather than React's own `Error`**, which is
+       what makes F10 a compile error rather than a rule. Said in the right
+       tense, because the obvious phrasing is now false: `throw null` reaching
+       `error.name` **once skipped the retirement**, before the retirement was
+       moved ahead of every diagnostic. It could not do so today — the ordering
+       above is what prevents it — and the type is the second lock, on the read
+       itself. AppBoundary.tsx makes the argument in full. */
     recordLog({ kind: "client-error", source: "boundary", name: nameOfThrown(error) });
   }
 
