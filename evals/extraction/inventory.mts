@@ -304,8 +304,28 @@ function visibleText(doc: Document): string {
  * by construction — which is why it is counted separately rather than folded
  * into the ratio. Kept over present, per tag.
  */
+/**
+ * The tags whose survival is worth counting.
+ *
+ * **`h4`, `h5` and `h6` were added on 2026-09-07, and `h1` was deliberately
+ * left out.** The list used to stop at `h3`, which meant the summary could not
+ * see `acx` losing **80 of its 80 `h4`s** — on the page whose headings are the
+ * reason the fixture is here. Measured over all 39 fixtures, widening surfaces
+ * a real loss on eight of them: `acx` h4 0/80, `python_docs_itertools` h4 0/4,
+ * `quanta_year_physics` h4 0/2 and h6 0/1, `npr_ozy_style_feature` h6 0/4,
+ * `whatwg` h5 94/105, plus a single heading each on `blogger_bldgblog`,
+ * `acx_footnotes` and `eurlex_regulation`.
+ *
+ * **`h1` is excluded because its loss is correct.** Readability promotes the
+ * page's own `<h1>` to the title, so it is *supposed* to leave the body — and
+ * including it reported `h1 0/1` on **29 of the 39 fixtures**, every one of them
+ * right. An instrument that is wrong twenty-nine times out of twenty-nine stops
+ * being read, which costs more than the one page where a genuine `h1` loss
+ * might hide.
+ */
 export const STRUCTURE = [
-  "math", "table", "pre", "figcaption", "code", "blockquote", "li", "h2", "h3", "img",
+  "math", "table", "pre", "figcaption", "code", "blockquote", "li",
+  "h2", "h3", "h4", "h5", "h6", "img",
 ] as const;
 
 export interface Comparison {

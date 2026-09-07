@@ -267,12 +267,20 @@ function line(p: Probe): string {
     );
   }
   parts.push(
+    /* **The numbers are KEPT, and the label used to say "lost".** `h2 0/6 (0%)`
+       means zero of the page's six h2s survived, which is total loss — and on
+       2026-09-07 a careful reader took that same line to mean "zero lost of
+       six", concluded every heading survived, and recommended deleting a true
+       claim from docs/project/content-extraction.md on the strength of it. The
+       instrument was right and read as its own opposite, which is a defect in
+       the instrument. Spell the direction out at every number; the width is
+       cheap and being misread is not. */
     p.structureLosses.length
-      ? `      structure lost: ` +
+      ? `      structure: ` +
         p.structureLosses
-          .map((s) => `${s.tag} ${s.kept}/${s.present} (${pct(s.kept, s.present)})`)
+          .map((s) => `${s.tag} ${s.kept} of ${s.present} kept (${pct(s.kept, s.present)})`)
           .join(", ")
-      : `      structure: nothing under 90%`,
+      : `      structure: every tag over 90% kept`,
   );
   parts.push(
     `      blocks ${p.blocks} · longest ${p.longestBlockChars.toLocaleString()} ch` +

@@ -153,7 +153,23 @@ function mountControlled(): HTMLDialogElement {
   return dialog;
 }
 
-/** Shut it the way Escape or the backdrop does, then open it again. */
+/**
+ * Flip `open` off and on again — **which is where every close route ends up, and
+ * is not any of them.**
+ *
+ * This comment used to say "shut it the way Escape or the backdrop does", and
+ * that was false: Escape reaches the platform, the backdrop reaches an `onClick`
+ * that compares its target, and this reaches neither. It costs nothing *today*,
+ * because both routes end at the same `onClose` and therefore at this same prop
+ * change — but a fixture whose comment names a route it does not take is exactly
+ * the class of
+ * docs/postmortems/260907b-a-test-blurred-away-the-condition-it-existed-to-test.md,
+ * and it was one divergence away from carrying a real bug.
+ *
+ * The route itself is now pinned separately, in § *the backdrop* below, which is
+ * the countermeasure that postmortem actually recommends: not a truer comment,
+ * but a test of the thing the comment was claiming.
+ */
 function reopen() {
   show(false);
   show(true);
@@ -756,6 +772,65 @@ describe("the feedback dialog", () => {
  * with a stylesheet that still looks right — `.cmt-dialog` learnt this once
  * already, with its ✕.
  */
+/**
+ * ## § the backdrop
+ *
+ * **Five native `<dialog>`s in this app close on a press outside them, all five
+ * by the same three lines** — `onClick` on the dialog, `if (e.target ===
+ * ref.current) onClose()`. Until 2026-09-07 not one test anywhere dispatched a
+ * click whose target was the dialog — Lightbox, this, Illustrated full, Sketch
+ * full and the CommandBar.
+ *
+ * **How much of it was actually unpinned, measured rather than asserted.**
+ * Deleting the comparison here reddens three tests, not one: this file's
+ * *"stays open when the press lands on something inside it"* below, plus
+ * *"shuts before it empties the panel"* and *"keeps a sentence added after
+ * Send"*, both of which click controls inside the dialog and would now be
+ * dismissing it. So the *inside* half had incidental cover and the claim that
+ * the guard was wholly unprotected was too strong. What had **no** cover in any
+ * of the five, and has it in the first test below, is the half that says a press
+ * on the backdrop closes the dialog at all: with `onClose()` deleted and the
+ * comparison left in place, **the whole suite — 15,137 tests — went red on
+ * exactly one of them, the first test below.** Measured 2026-09-07, not assumed;
+ * the sentence before it was written from a single file's run and was too
+ * strong twice over.
+ *
+ * **Why the target comparison is the whole of it.** A modal `<dialog>`'s
+ * `::backdrop` is not a separate element — a press on it is delivered with the
+ * dialog itself as the target, while a press on anything the dialog contains
+ * arrives with that child as the target and bubbles up through the same handler.
+ * So one equality test tells "outside" from "inside", and dropping it turns
+ * every click in the panel into a dismissal: for this dialog that discards a
+ * half-written report, and for the CommandBar the query.
+ *
+ * jsdom has no `showModal` and no `::backdrop`, and neither is needed here —
+ * the handler compares targets and nothing else. What jsdom cannot show is that
+ * a real backdrop press *does* target the dialog; that is the platform's
+ * contract, and it is why the assertion is written against the target rather
+ * than against a pixel.
+ */
+describe("the backdrop", () => {
+  it("closes on a press whose target is the dialog itself", () => {
+    const dialog = mountControlled();
+    expect(dialog.open).toBe(true);
+    act(() => {
+      dialog.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(dialog.open).toBe(false);
+  });
+
+  it("stays open when the press lands on something inside it", () => {
+    const dialog = mountControlled();
+    const box = firstBox();
+    act(() => {
+      box.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    /* The half-written report is the thing being protected: without the target
+       comparison this press would shut the panel and take the words with it. */
+    expect(dialog.open).toBe(true);
+  });
+});
+
 describe("the thank-you, and getting out of it", () => {
   /** The sentence in the `.fb-done` panel, whitespace-collapsed. */
   function thanks(): string {

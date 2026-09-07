@@ -206,4 +206,44 @@ describe("the profile panel", () => {
     await open();
     expect(asked).toHaveLength(2);
   });
+
+  /* **The dismissal this file was not watching.** `useDismiss(context)` is
+     passed no options, and its defaults — read out of
+     node_modules/@floating-ui/react on 2026-09-07, where they are written
+     `outsidePress = true` and `outsidePressEvent = 'pointerdown'` — are what
+     close this panel for a reader who has finished with it. Until now the only
+     dismissal any test here dispatched was Escape, so the whole outside-press
+     default was unpinned: taking `useDismiss` out of `useInteractions` left
+     every other test in this file green.
+
+     `pointerdown` rather than `click`, so the panel is gone before the press
+     lands on whatever is underneath it — otherwise the paragraph behind it
+     needs two presses. Same reason, same shape, as
+     tests/block-gutter.test.tsx § "closes on a press anywhere else". */
+  it("closes when the reader presses somewhere else on the page", async () => {
+    render({ hasProfile: true });
+    await open();
+    await act(async () => {
+      document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+    expect(document.querySelector(".prof-panel")).toBeNull();
+  });
+
+  /* The other half of that default, and the half that would make the panel
+     pointless if it went the wrong way: this is a popover rather than a tooltip
+     precisely so a reader can put a pointer *into* it and press one of the two
+     `Edit →` links. A press that lands inside must therefore not dismiss it.
+     Floating UI answers this twice over — a React capture handler on the
+     floating element and a native containment check — and what is pinned here
+     is the behaviour, not either mechanism. */
+  it("stays open when the press lands inside the panel itself", async () => {
+    render({ hasProfile: true });
+    const panel = await open();
+    const inside = panel.querySelector(".prof-panel-lede");
+    if (!inside) throw new Error("the panel rendered without its lede");
+    await act(async () => {
+      inside.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+    expect(document.querySelector(".prof-panel")).not.toBeNull();
+  });
 });

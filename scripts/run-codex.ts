@@ -50,7 +50,7 @@ export { formatAnswer, readAnswerForConsole };
 
 /** Frontier tier. `gpt-5.6-terra` is the everyday middle, `gpt-5.6-luna` the cheap/fast one. */
 const DEFAULT_MODEL = 'gpt-5.6-sol';
-/** minimal|low|medium|high|xhigh. `xhigh` for a hard review, `low` for mechanical work. */
+/** `xhigh` for a hard review, `low` for mechanical work; see EFFORTS for the whole vocabulary. */
 const DEFAULT_EFFORT = 'high';
 const DEFAULT_TIMEOUT_MINUTES = 30;
 /**
@@ -96,7 +96,19 @@ export function reviewProfileDefined(repoDir: string): boolean {
  */
 const AUTH_MODES = ['subscription-first', 'key-first', 'subscription-only'];
 const DEFAULT_AUTH = 'subscription-first';
-const EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh'];
+/**
+ * The spellings codex is known to take — a vocabulary, not a per-model compatibility check, which
+ * this cannot be: the enum differs by model. Measured 2026-09-07 on 0.153.4, one probe per value:
+ * `gpt-5.6-sol` accepts `none` and `gpt-6-astra` rejects it, both reject `minimal`, and both
+ * complete a run at `max` and at `ultra`. `ultra` is absent from the enum a rejection quotes yet
+ * runs, so something upstream maps or ignores it — the probes don't say which, or what it costs.
+ *
+ * So this catches a *typo* for nothing, before a spawn, and codex catches the mismatch: a value the
+ * chosen model refuses comes back as a 400 naming the ones it takes. That 400 is new. The same
+ * misspelling was silent on 0.146.0 (2026-08-24) — it parsed as a good TOML string and the run
+ * proceeded at the model's own default effort — which is why this check exists at all.
+ */
+const EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
 /** ~5k tokens. Big enough for any real review, small enough that a runaway answer can't flood a
  * calling agent's context — which is the whole point of this wrapper. */
 const DEFAULT_MAX_PRINT_CHARS = 20_000;
@@ -200,8 +212,7 @@ export function parseArgs(argv: string[]): Args {
   if (out.passEnv.includes(CODEX_SECRET)) {
     throw new Error(`--pass-env ${CODEX_SECRET} would override --auth; use --auth key-first instead`);
   }
-  // Caught here rather than by codex: `-c model_reasoning_effort=hgih` is accepted by the config
-  // parser as a literal string, so a typo silently runs at the model's own default effort.
+  // A typo costs nothing here; codex catches the rest. See EFFORTS for what each side now owns.
   if (!EFFORTS.includes(out.effort)) throw new Error(`--effort must be one of: ${EFFORTS.join(', ')}`);
   // Integer and positive: a fractional or zero cap made `half` zero, and the truncation branch then
   // printed the whole answer under a banner saying it had been cut. `--print` is the way to ask for

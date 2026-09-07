@@ -119,26 +119,58 @@
  *
  * **Whether anything is stale.** The first version of this page led with a red
  * warning when a later artefact was older than an earlier one. That check is
- * wrong: a *successful* hierarchy run writes `tree.json` and then copies
- * `blocks.json` beside it, so every correct run tripped it. More deeply, an
- * mtime records when a file was written, not what it was written *from*. Until
- * `tree.json` and `arc.json` carry a hash of the blocks they consumed — the way
- * `tweets.json` already does — the honest thing is to say which stages have
- * run and stop. A confident wrong verdict is worse here than no verdict,
- * because this is the page you open once you have stopped trusting the others.
+ * wrong: a *successful* hierarchy run writes the tree and then copies the blocks
+ * beside it, so every correct run tripped it. More deeply, an mtime records when
+ * a file was written, not what it was written *from*. A confident wrong verdict
+ * is worse here than no verdict, because this is the page you open once you have
+ * stopped trusting the others.
+ *
+ * **Half of that reasoning is now about the page rather than about the store,
+ * and the correction matters.** This paragraph said until 2026-09-07 that the
+ * honest thing was to say which stages had run *"until `tree.json` and
+ * `arc.json` carry a hash of the blocks they consumed"*. The store answers that
+ * now, though **not** in the shape that sentence imagined, and the difference is
+ * worth stating rather than glossing: there is no `tree.json`, and `Tree`
+ * carries no `sourceHash` to this day. What carries it for the tree is the
+ * **run** — `revision_step_runs.input_hash`, read by `hierarchyCurrency`, the
+ * very function `reasonsNotToPublish` uses — while `Arc` does carry a
+ * `sourceHash` of its own. `articleMetadata` (src/store/pg.ts) puts a per-step
+ * `isCurrent` over both, which is why `StageState.done` has meant *ran, and
+ * would not be re-run today* since the Postgres move.
+ * **So the store can answer; this page cannot say.** `done` is one boolean
+ * carrying two facts, and `StageRow` renders it as a two-state pill, so a
+ * *stale* glossary reads here as *not run* beside a glossary the reader can open
+ * next door. Telling *absent* from *stale* needs a second field, and that is
+ * named and deferred in
+ * docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md.
+ *
+ * What has **not** changed is the rule: no verdict this page cannot stand
+ * behind. *Generate it again* offers a re-run and claims nothing about whether
+ * you need one, which is exactly why it could ship while the placeholder it
+ * replaced could not.
  *
  * **How hard the article is to read.** No badge, and no paragraph explaining
  * the absence either; the case is in
- * original-version/difficulty-and-reading-time.md. Note that it is *not* in the
- * "not built yet" section at the bottom either — that section is a list of
- * things we mean to build, and this is a thing we have decided against.
+ * original-version/difficulty-and-reading-time.md. It was *"not in the 'not
+ * built yet' section at the bottom either"* — that section and its one row went
+ * on 2026-09-07 when the row shipped (see the note where `SOON` stood), so what
+ * is left of the distinction is this: an absence here is a decision, and it is
+ * recorded rather than left to be rediscovered as an oversight.
  *
  * Tailwind utilities rather than a block in styles.css: this page is chrome,
  * and chrome is what Tailwind is here for
  * (docs/project/web-client.md#tailwind-and-shadcn-components). Every class needs
  * the `tw:` prefix — unprefixed names silently do nothing.
  */
-import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import { useQueryState } from "nuqs";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import {
@@ -192,6 +224,10 @@ import type {
   Visibility,
 } from "../types.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
+/* The nine steps this page will re-run, from a leaf rather than from
+   `src/pipeline.ts` — which is a server module the client may not import
+   (tests/client-imports.test.ts). See src/rerun-steps.ts. */
+import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js";
 import { WPM } from "../reading-time.js";
 import { isWebUrl } from "../urls.js";
 import { forgetSummaries } from "./link-facts.js";
@@ -212,6 +248,11 @@ import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { CARD } from "./card.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { PageContents } from "./PageContents.js";
+import { Button } from "@/components/ui/button";
+import { JobProgress } from "./JobProgress.js";
+import { SKETCH_PRICE, SKETCH_WAIT } from "./sketch-cost.js";
+import { useOrderedRead, type ArtefactRead } from "./useOrderedRead.js";
+import { useStepJob } from "./useStepJob.js";
 
 /**
  * Clear of the fixed bottom bar, in terms of `--dock-space` rather than a number.
@@ -287,27 +328,29 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   debate: MessagesSquare,
 };
 
-/**
- * Things this page should say and cannot yet, each with what the previous
- * version's attempt at it taught us.
+/*
+ * **`SOON` and its one row stood here until 2026-09-07, and the row was this
+ * feature.**
  *
- * Same shape and same tooltip treatment as `SOON` in Dock.tsx — one convention
- * for "this is a real intention, not an oversight", so a reader who has met a
- * dimmed button in the bar already knows what a dimmed row here means.
+ * It was the convention Dock.tsx still uses — a dimmed line saying *this is a
+ * real intention, not an oversight* — and its single entry was *"Re-run a
+ * stage"*. The list is gone rather than left empty because it had exactly one
+ * member and the member shipped; the convention itself lives in Dock.tsx, which
+ * is where this one was copied from, so the next dimmed row on this page is
+ * three lines from there rather than a thing to reinvent.
  *
- * **Reading difficulty is deliberately not in this list.** It is not unbuilt;
- * it is declined, and putting it here would promise it.
+ * **What the row knew, kept.** Its `learned` line said the queue already
+ * accepted the request and that what was missing was *"the sentence above it —
+ * nothing here can honestly tell you a stage is stale until the artefacts
+ * record what they were built from."* That diagnosis is why it sat unbuilt for
+ * three days, and it is only half right now: `articleMetadata`'s per-step
+ * `isCurrent` (src/store/pg.ts) does answer currency, and what the page still
+ * lacks is a way to *say* it — see § What it deliberately does not say, above.
+ * The deeper point survives all of it, and is the reason this shipped: a button
+ * that offers a re-run and claims nothing about whether you need one needs no
+ * such answer.
+ * docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md.
  */
-const SOON: { key: string; label: string; icon: ComponentType<{ size?: number }>; blurb: string; learned: string }[] = [
-  {
-    key: "rerun",
-    label: "Re-run a stage",
-    icon: RefreshCw,
-    blurb: "Regenerate the tree, or the arc, from the row above that says it is out of date.",
-    learned:
-      "The queue already accepts the request. What is missing is the sentence above it — nothing here can honestly tell you a stage is stale until the artefacts record what they were built from.",
-  },
-];
 
 /**
  * How long to wait before admitting we are still fetching.
@@ -374,21 +417,51 @@ export function Metadata({
   const [provenance, setProvenance] = useState<ArticleMetadata | null>(null);
   const [provenanceError, setProvenanceError] = useState<string | null>(null);
   const [slow, setSlow] = useState(false);
+  /**
+   * **On `useOrderedRead`, because nine rows below can now ask for this again.**
+   *
+   * This was a bare `useEffect` with a `live` flag until 2026-09-07, which is
+   * exactly right for a page that reads once and never again — and *Generate it
+   * again* made that false. Every row hands its `useStepJob` the `refresh`
+   * below, and a `reload` there would **join** the GET already in flight: a read
+   * that started before the job wrote is not an answer to *"it has changed"*,
+   * and landing last it would put the pre-job stages back for good, because
+   * nothing announces a job twice. `useOrderedRead` is that distinction, and its
+   * header is the story.
+   *
+   * The error is cleared on a success and set on a failure, and **`provenance`
+   * is not thrown away by a failed refresh** — the reader keeps the rows they
+   * had, with the sentence beside them, rather than watching the page empty out
+   * because one revalidation did not land.
+   */
+  const readProvenance = useCallback<ArtefactRead>(
+    async (current) => {
+      try {
+        const answer = await readJson<ArticleMetadata>(
+          await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`),
+        );
+        if (!current()) return;
+        setProvenance(answer);
+        setProvenanceError(null);
+      } catch (e) {
+        if (!current()) return;
+        setProvenanceError((e as Error).message);
+      }
+    },
+    [slug],
+  );
+  const { reload, refresh } = useOrderedRead(readProvenance);
+  /* Keyed on `reload`, whose identity changes with the slug and with nothing
+     else — so "a different article" is said once, in the place `useOrderedRead`
+     already has to be right about it, rather than a second time here. */
   useEffect(() => {
-    let live = true;
     setProvenance(null);
     setProvenanceError(null);
     setSlow(false);
-    const timer = setTimeout(() => live && setSlow(true), LOADING_AFTER_MS);
-    apiFetch(`/api/metadata/${encodeURIComponent(slug)}`)
-      .then((r) => readJson<ArticleMetadata>(r))
-      .then((m) => live && setProvenance(m))
-      .catch((e: Error) => live && setProvenanceError(e.message));
-    return () => {
-      live = false;
-      clearTimeout(timer);
-    };
-  }, [slug]);
+    const timer = setTimeout(() => setSlow(true), LOADING_AFTER_MS);
+    void reload();
+    return () => clearTimeout(timer);
+  }, [reload]);
 
   /**
    * The per-article half of the reader profile, as a draft.
@@ -404,12 +477,28 @@ export function Metadata({
   const [purposeDraft, setPurposeDraft] = useState<string | null>(null);
   const [purposeSaved, setPurposeSaved] = useState<string | null>(null);
   const [purposeError, setPurposeError] = useState<string | null>(null);
+  /**
+   * **Seeded once per article, not on every read of it.**
+   *
+   * This ran on every `provenance` change, which was the same thing while the
+   * page read once and stopped being so on 2026-09-07, when a finished re-run
+   * started firing a refresh: a reader half-way through typing why they are
+   * reading this would have had the stored sentence dropped over their draft by
+   * a job they started in a row below.
+   *
+   * A ref keyed on the slug rather than a `null` check, so a reader who has
+   * deliberately **cleared** the box does not get the stored sentence put back
+   * by the next refresh — an empty draft and an unseeded one are the same value
+   * and must not be the same behaviour.
+   */
+  const seededPurposeFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!provenance) return;
+    if (!provenance || seededPurposeFor.current === slug) return;
+    seededPurposeFor.current = slug;
     const value = provenance.purpose ?? "";
     setPurposeDraft(value);
     setPurposeSaved(value);
-  }, [provenance]);
+  }, [provenance, slug]);
 
   /* Blur, or Cmd/Ctrl+Enter — the same moment `TitleEditor` on the shelf
      commits at, and no debounce, because there is no debounce anywhere in this
@@ -894,14 +983,22 @@ export function Metadata({
           </div>
         </Section>
 
-        {/* -------------------------------------------------- 7. export it --
+        {/* ------------------------------------------- 7. generate it again --
+            After "Your reading" and before Export, because the page's order is
+            what the article is, then where it goes, then the reader's own work
+            on it, then the machinery — and asking for something to be generated
+            again is the reader's own work. Greg, 2026-09-06:
+            *"there should be a way to re-run any of the generated modes"*. */}
+        <RerunSection slug={slug} provenance={provenance} onFinished={refresh} />
+
+        {/* -------------------------------------------------- 8. export it --
             Below sharing because both are decisions about where this article's
             data goes, and above the machinery because this one is a thing the
             owner does rather than a thing we did. Still above Archive, which
             stays last. */}
         <ExportSection slug={slug} offer={hasShelfRow} />
 
-        {/* ------------------------------------------- 8. technical details --
+        {/* ------------------------------------------- 9. technical details --
             Everything that is true, is ours rather than the reader's, and has
             no bearing on reading the article: the two identifiers, the PDF's
             fingerprint, which stages have run, and the one thing this page
@@ -918,7 +1015,7 @@ export function Metadata({
           arcGenerator={arc ? `${arc.generator} · ${arc.version}` : undefined}
         />
 
-        {/* ----------------------------------------------- 9. archiving it --
+        {/* ---------------------------------------------- 10. archiving it --
             Last on the page, and last on purpose: the control that takes the
             article off the shelf belongs past everything somebody might have
             come here to read, not beside it. Under the technical section rather
@@ -1004,6 +1101,467 @@ function SharingSection({
         />
       </div>
     </Section>
+  );
+}
+
+/**
+ * **The nine things this page will ask for again.**
+ *
+ * Greg, 2026-09-06, declining a library-wide backfill and asking for this in the
+ * same breath:
+ *
+ * > Leave it, new articles only. Although i think there should be a way to
+ * > re-run any of the generated modes (either within the UI for the mode, or
+ * > perhaps in the Metadata section) - I realise this is a new piece of work,
+ * > but it's important
+ *
+ * ## A section of its own, not a button on each stage row
+ *
+ * The stage rows in *Technical details* answer a different question, and only
+ * one of the two is a menu: that list is a **record** — all sixteen stages, when
+ * each last wrote, no controls — and this is a **menu** of the nine you can ask
+ * for. Interleaving them would put an eligibility branch inside `StageRow` and
+ * rows with a button beside rows that cannot have one.
+ *
+ * It is also where a reader can find it. The dimmed *"Re-run a stage"*
+ * placeholder sat inside `Technical details` — a shut section, behind a second
+ * subheading — from 2026-09-03, and Greg asked for this feature three days later
+ * without mentioning it. Building the real control into the same hole would be
+ * repeating that experiment.
+ *
+ * ## What it claims, and what it deliberately does not
+ *
+ * **Nothing about staleness.** A button that says *regenerate this* and makes no
+ * claim about whether you need to is honest and needs no artefact provenance —
+ * which is the whole reason this shipped and the placeholder never did. The
+ * button's wording is chosen off `StageState.done` so that it cannot contradict
+ * the `ran` / `not run` pill next door, and that is the extent of it. The plan's
+ * § Deferred keeps the staleness half, including why *absent* and *stale* are
+ * one boolean today.
+ *
+ * **Which nine, and why not the other seven**, is `METADATA_RERUN_STEPS`
+ * (src/rerun-steps.ts) — read it there rather than restating it here.
+ *
+ * ## No gate, unlike Export and Archive two sections down
+ *
+ * Those two are withheld until we know there is a shelf row, because their only
+ * possible outcome without one is a 404 and pressing them is how you would find
+ * out. This is not that shape: a run is `POST /api/jobs`, whose refusal comes
+ * back as a sentence written for a reader, and `JobProgress` is built to show
+ * exactly that beside the row it belongs to. So the rows are drawn while the
+ * metadata request is still out — which also keeps the nine `useStepJob`
+ * subscriptions mounted for the whole visit rather than appearing under a
+ * reader who has already scrolled past.
+ *
+ * The cost, said out loud: nine subscriptions to one shared engine
+ * (`useJobs` is a `useSyncExternalStore` over `jobEngine`), so this is nine
+ * store subscriptions and **not** nine polls.
+ */
+function RerunSection({
+  slug,
+  provenance,
+  onFinished,
+}: {
+  slug: string;
+  /** Null until the metadata request lands; the rows draw either way. */
+  provenance: ArticleMetadata | null;
+  /**
+   * **`refresh`, never `reload`** — see the read in `Metadata` above and
+   * `useOrderedRead`'s header. The same function for all nine, so a completion
+   * in any row is one question asked of one reader.
+   */
+  onFinished: () => void;
+}) {
+  return (
+    <Section label="Generate it again">
+      {/* Two facts and no third. **It does not say anything is out of date** —
+          nothing here can honestly tell you that, and the whole reason this
+          shipped while the placeholder it replaces did not is that a button
+          saying *regenerate this* needs no such claim. And no timing: the nine
+          are not one speed, so a *"takes a minute or two"* here would be wrong
+          about the Sketch, which says its own wait in its own confirm. */}
+      <p className="tw:mt-0 tw:mb-3 tw:text-xs tw:text-ink-faint">
+        Ask for any of these to be written again. It costs you nothing, and what is here now stays
+        until the new run succeeds.
+      </p>
+      <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
+        {METADATA_RERUN_STEPS.map((step) => (
+          <RerunRow
+            key={step}
+            slug={slug}
+            step={step}
+            /* `undefined` while the request is out, and it stays `undefined`
+               rather than becoming `false`, because a `false` would be a claim
+               we cannot make yet. `RerunRow` reads either as *not that we know
+               of*, which is what picks *Run it* over *Run it again*. */
+            done={provenance?.stages.find((s) => s.step === step)?.done}
+            onFinished={onFinished}
+          />
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+/**
+ * The reader-facing name of each of the nine — a noun, not the present-tense
+ * label the stage rows carry.
+ *
+ * `Record<MetadataRerunStep, string>`, so a tenth member of the list is a
+ * typecheck failure here rather than a blank row.
+ */
+const RERUN_LABEL: Record<MetadataRerunStep, string> = {
+  arc: "Arc",
+  tweets: "Thread",
+  glossary: "Glossary",
+  quotes: "Quotes",
+  ideas: "Ideas",
+  timeline: "Timeline",
+  quiz: "Quiz",
+  sketch: "Sketch",
+  debate: "Debate",
+};
+
+/**
+ * **What the confirm says, and it is the sentence that has to be true of every
+ * row it appears under.**
+ *
+ * *"The result changes only if the run succeeds"* rather than *"what is here now
+ * is replaced"*, because replacement is false for the glossary — and because
+ * this is the draft-then-publish guarantee said where it is worth something
+ * instead of left in the database docs: a step writes into a draft revision and
+ * the draft replaces the live artefact only on success (`failRevision`,
+ * src/store/pg-revisions.ts). A single-step re-run is therefore binary — either
+ * the new artefact is published or the reader keeps exactly what they had.
+ */
+const RERUN_CONFIRM = "Another model call. The result changes only if the run succeeds.";
+/**
+ * **The glossary's own, because forcing that step appends.**
+ *
+ * `generateGlossary` (src/glossary.ts) adds a batch of terms rather than
+ * replacing the list, which is why `src/pipeline.ts` names it as the reason
+ * glossary is in `FORCE_ONLY_WHEN_NAMED` at all. Changing only the *button* to
+ * say *Find more terms* would leave the confirmation lying — found by a
+ * cross-family review of the plan, and the reason there are two variants rather
+ * than a label swap.
+ */
+const RERUN_CONFIRM_GLOSSARY = "Another model call. New terms are added only if the run succeeds.";
+/**
+ * The one row where *"another model call"* understates the press by an order of
+ * magnitude — `SKETCH_PRICE` and `SKETCH_WAIT` from ./sketch-cost.ts, so this
+ * page and the Sketch panel cannot name two different prices.
+ */
+const RERUN_CONFIRM_SKETCH = `${RERUN_CONFIRM} It is the slowest one here — ${SKETCH_WAIT} — and it costs ${SKETCH_PRICE}.`;
+/**
+ * **The one row where *"another model call"* is not even the right number.**
+ *
+ * Debate makes **two separately metered calls** and not one call producing two
+ * lists — src/debate.ts § *Two groups, two passes, one atomic step*, which says
+ * why the split is load-bearing rather than incidental. Pass B runs only if
+ * pass A succeeded, so a failure costs one rather than two; *up to* is doing
+ * real work in the sentence.
+ *
+ * **The price is a range and not a number, and this said “up to about $0.27”
+ * until 2026-09-07.** ⟨Sol, F12.⟩ That ceiling is
+ * docs/plans/260905f-debate-mode-stage-0-spike-results.md § The spend ceiling,
+ * and the *same document* corrects it twenty-seven lines further down —
+ * § Stage 3½ § 1, *“The cost figure is a range, and the plan's ceiling was too
+ * low”*: a completed live run cost **$0.3527**, because the ceiling was
+ * measured with probes **carrying no article** while pass B sends the whole
+ * thing. Per-pass cost varied **2.4×** ($0.0725 to $0.1780) with how much the
+ * model chose to search, so any single figure is a sample. That section asks
+ * for the words this constant now uses: *$0.20–0.40 for a completed run on a
+ * short article*, rising with length, said as a range.
+ *
+ * Left here rather than only in the plan, because the next person to want a
+ * Debate price will grep for one and the first hit is what they will take —
+ * which is exactly how the wrong number got here.
+ *
+ * `src/step-order.ts` calls the step the second dearest thing in the app; on
+ * **this** page it is the dearest of the nine, which is the comparison the
+ * reader in front of it can act on, and the Sketch's row next door is what
+ * makes that legible.
+ *
+ * **Inline rather than a constant beside `SKETCH_PRICE`.** That leaf exists
+ * because three surfaces render the sketch's price to a reader and must not
+ * disagree; this figure reaches a reader here and nowhere else, while the
+ * ~$0.27 that appears a dozen times in `src/` is prose in comments that a
+ * constant could not have collected anyway. A shared home would look like one
+ * without being one. ⟨Sol, F9 — the generic sentence understated the press.⟩
+ *
+ * *"only if the run succeeds"* is word for word the clause the other three
+ * carry: it is the draft-then-publish guarantee, and it is true here too.
+ */
+const RERUN_CONFIRM_DEBATE =
+  "Two model calls, not one: it searches the open web, and it is the dearest thing " +
+  "on this page — $0.20–0.40 for a completed run on a short article, and more on a " +
+  "long one. The result changes only if the run succeeds.";
+
+/**
+ * One row: the mode's name, and a control that asks before it spends anything.
+ *
+ * **A component per row rather than a loop of hooks**, because each row owns its
+ * own `useStepJob` and `provenance` is null before the fetch lands — a `.map` of
+ * hooks inside the section would change the hook count between renders the
+ * moment anything about the row list came off the request.
+ *
+ * ## Two clicks, and the confirm is the whole answer to the objection
+ *
+ * A re-run costs the reader nothing — `POST /api/jobs` spends a slot only for a
+ * request carrying a `url`, and ours is a bare slug (src/routes.ts;
+ * docs/project/billing.md) — and costs **us** a model call. Nothing rate-limits
+ * job creation, and Greg declined a per-reader spend cap on 2026-09-06 on the
+ * strength of a **global** monthly cap at OpenRouter, whose failure mode is
+ * every reader losing every paid feature until the month turns. So a one-click
+ * repeatable paid button, on a page holding nine of them, is the wrong shape.
+ *
+ * The pattern is `Rewrite` in ./Tweets.tsx — an inline confirm row, no dialog,
+ * nothing blocked, and a `busy` that survives the round trip so a press cannot
+ * look ignored. Copied rather than imported: that component is welded to the
+ * thread page's layout.
+ *
+ * **On every row, including the ones the pill says have not run.** The uniform
+ * rule is one code path, and the branch it saves would live in the one place a
+ * mistake costs money.
+ *
+ * ## Everything after the press is `JobProgress`
+ *
+ * Running, failed, stalled, Retry and the gap between the POST and the first
+ * poll that sees the job — all of it is already right in that component, so the
+ * two things this row hands it that are its own are `onRun` and a wrapped
+ * `retry`, both of which open the confirm instead of spending anything.
+ *
+ * **The Retry went straight through until 2026-09-07, and that was the two-click
+ * rule with a hole in it.** ⟨Sol, F10, on the built code.⟩ `retryJob` carries the
+ * original force forward — `force: forceForRetry(old.steps)`, src/jobs.ts —
+ * so the new job forces the same paid step, and the button that buys it sits
+ * under a failure at the moment a reader is most likely to press without
+ * reading. One click, one forced paid step, no sentence. It is not the shelf
+ * card's shape either: there a Retry resumes a many-stage ingest that mostly
+ * worked.
+ */
+function RerunRow({
+  slug,
+  step,
+  done,
+  onFinished,
+}: {
+  slug: string;
+  step: MetadataRerunStep;
+  /** `StageState.done`, or undefined while the metadata request is out. */
+  done: boolean | undefined;
+  onFinished: () => void;
+}) {
+  const { job, failed, stalled, starting, start, cancel } = useStepJob(slug, step, onFinished);
+  /**
+   * **Which press the confirm is standing in front of**, or null for no confirm.
+   *
+   * A boolean called `asking` until 2026-09-07, and the boolean was the bug:
+   * with only one paid press to guard it left the *other* one — Retry — no way
+   * of routing through the same sentence. Three states, one confirm row, and
+   * the Yes button dispatches on this.
+   */
+  const [pending, setPending] = useState<null | "run" | "retry">(null);
+  /**
+   * **A confirm may not outlive the state it was opened over.** ⟨Sol, F14.⟩
+   *
+   * Two ways it can, and both were reachable: a job arriving from another tab
+   * (or the CLI) while the reader is still reading the sentence, and the
+   * failure a Retry stands over clearing underneath it — `useStepJob` sets
+   * `failed` to null and nothing here noticed, so `failed?.retry?.()` became a
+   * button whose only effect was to close itself. A press that does nothing and
+   * says nothing is the failure this repo names most often.
+   *
+   * **An active job wins over both kinds of confirm**, not just the retry. The
+   * confirm asks whether to buy a run; a job in the polled list means the run
+   * the reader is being asked about is *already happening*, and drawing the
+   * question over it costs them the progress, the Stop button and the stall
+   * warning for as long as they take to answer. `job` is only ever a queued or
+   * running row (src/web/useStepJob.ts § `job`), so this cannot be tripped by a
+   * finished one.
+   *
+   * **`job`, deliberately, and never `starting`.** `starting` is the gap
+   * between our own POST and the first poll that sees it — so keying on it
+   * would tear the confirm away between the click on Yes and the answer, which
+   * is the state `busy` exists to hold on screen.
+   */
+  const obsolete =
+    pending !== null && (job !== null || (pending === "retry" && !failed?.retry));
+  /* Cleared rather than only hidden, so that a job finishing does not bring a
+     question the reader never answered back out from behind it. Asking again is
+     one press, and it is the press they would have made. */
+  useEffect(() => {
+    if (obsolete) setPending(null);
+  }, [obsolete]);
+  /* What is actually drawn. Derived rather than waited for, because the effect
+     above lands a render later and that render is the one showing the confirm
+     over the live job. */
+  const asking = obsolete ? null : pending;
+  /* The round trip. `start` resolves when the POST has been answered, not when
+     the job has, and until then there is nothing in the polled list — so
+     without this the confirm row would come and go under a press that had
+     already landed. */
+  const [busy, setBusy] = useState(false);
+  /**
+   * **Where focus goes when the confirm opens**, and it went to `BODY`
+   * until 2026-09-07 ⟨Sol, F13⟩: the press unmounts the button it was on, and
+   * nothing here caught it. A reader who could not see the sentence therefore
+   * had to go looking for the control that had replaced the one they pressed,
+   * and would meet Yes with no idea what it was standing over.
+   */
+  const yesRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (asking) yesRef.current?.focus();
+  }, [asking]);
+  /**
+   * **The id the sentence is reachable by**, keyed on the step because nine of
+   * these rows are on screen at once and a fixed id would give the reader
+   * whichever row happened to be first in the document.
+   */
+  const confirmId = `rerun-confirm-${step}`;
+
+  const Icon = STAGE_ICONS[step];
+  /* *Find more terms* for the glossary, in the words its own panel already uses,
+     because forcing that step appends. Otherwise off `done`, so the button and
+     the `ran` / `not run` pill in Technical details cannot contradict each
+     other — and `undefined` reads as "not that we know of". */
+  const label = step === "glossary" ? "Find more terms" : done ? "Run it again" : "Run it";
+  const confirm =
+    step === "glossary"
+      ? RERUN_CONFIRM_GLOSSARY
+      : step === "sketch"
+        ? RERUN_CONFIRM_SKETCH
+        : step === "debate"
+          ? RERUN_CONFIRM_DEBATE
+          : RERUN_CONFIRM;
+  /* **The same sentence for a Retry as for a run, and that is not laziness.**
+     `JobProgress`'s Retry says *"skipping the stages that already worked"* in
+     its tooltip, which is true of an ingest and vacuous here: our job has one
+     step, so there is nothing else in it that could have worked. A retry of it
+     *is* a re-run, and it forces the same step, so it buys exactly what the run
+     buys and the confirm can honestly say the same thing. Only the Yes button's
+     words differ, so the reader can tell which press they are agreeing to. */
+  const yes =
+    asking === "retry" ? "Yes, try again" : step === "glossary" ? "Yes, find more" : "Yes, run it";
+  /* Retry, routed through the confirm instead of straight to the retry route —
+     see § the Retry in this component's header. The original `failed.retry` is
+     read at click time below, off this render's `failed`, so nothing here has to
+     hold a stale copy of it. `retry: null` (a POST that never became a job)
+     stays null, because that is what tells `JobProgress` to draw the run button
+     instead — and that one already asks. */
+  const failedAsking =
+    failed?.retry ? { ...failed, retry: () => setPending("retry") } : failed;
+
+  return (
+    <div
+      /* The hook the tests find a row by, so that asserting on DOM order — which
+         would pass whatever the list happened to be — is never the way in. The
+         same argument `data-section` on this page's headings makes.
+
+         **It is not what tells the nine buttons apart**, and reading it that way
+         is how the missing accessible names went unnoticed: every actionable
+         control in the row now carries the mode's name in its own `aria-label`,
+         and the tests assert on those. */
+      data-rerun-step={step}
+      className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2 tw:px-4 tw:py-3 tw:text-sm"
+    >
+      <Chip icon={Icon} />
+      <span className="tw:text-foreground">{RERUN_LABEL[step]}</span>
+      {/* A `div` and not a `span`: `JobProgress` draws a `div` for its starting
+          row and its running band, and a block element inside phrasing content
+          is invalid markup that nothing here would ever go red over. */}
+      <div className="tw:ml-auto tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2">
+        {asking ? (
+          <>
+            <span id={confirmId} className="tw:text-xs tw:text-muted-foreground">
+              {confirm}
+            </span>
+            <Button
+              type="button"
+              ref={yesRef}
+              variant="outline"
+              size="xs"
+              disabled={busy}
+              /* **What the press costs, said to the reader who cannot see it.**
+                 The sentence beside this button is a plain sibling `<span>`,
+                 which a screen reader announces on its way past and not at all
+                 to somebody navigating by button list — so without this, Yes
+                 announced its own words and nothing about two model calls or
+                 the price, and the two-click rule bought nothing for exactly
+                 the reader who can least afford a surprise. ⟨Sol, F13.⟩
+
+                 **On Yes and not on Cancel.** A description is read after the
+                 name every time the control is reached, and Cancel spends
+                 nothing: repeating the price on it would be noise on the safe
+                 button. The guarded press carries it. */
+              aria-describedby={confirmId}
+              /* Every actionable control in this row carries the mode's name,
+                 because the name itself is a sibling `<span>` and a screen
+                 reader's button list does not read those — nine rows of *Yes,
+                 run it* and *Cancel* otherwise. The visible words come first, so
+                 saying them still matches. ⟨Sol, F11.⟩ */
+              aria-label={`${busy ? "Starting…" : yes} — ${RERUN_LABEL[step]}`}
+              onClick={async () => {
+                setBusy(true);
+                if (asking === "retry") {
+                  /* The failure's own retry, taken from this render rather than
+                     from the wrapper handed to `JobProgress`. It returns void —
+                     `queue.retry` is fired and not awaited (src/web/useStepJob.ts)
+                     — so there is no round trip to hold `busy` across, unlike the
+                     branch below. */
+                  failed?.retry?.();
+                } else {
+                  /* Forced, and forced **by name**. The step's own freshness check
+                     would otherwise skip an artefact that is, by construction,
+                     current — a run that looks like it worked and changed
+                     nothing. `useStepJob` turns this into `force: [step]`, never a
+                     positional force, so nothing after it in `STEP_ORDER` is
+                     swept in. */
+                  await start({ force: true });
+                }
+                setBusy(false);
+                setPending(null);
+              }}
+            >
+              {busy ? "Starting…" : yes}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              disabled={busy}
+              aria-label={`Cancel — ${RERUN_LABEL[step]}`}
+              onClick={() => setPending(null)}
+            >
+              Cancel
+            </Button>
+          </>
+        ) : (
+          <JobProgress
+            job={job}
+            starting={starting}
+            failed={failedAsking}
+            stalled={stalled}
+            /* Opens the confirm rather than starting a run — the two-click rule,
+               kept in the one place the button is actually drawn. */
+            onRun={async () => setPending("run")}
+            onCancel={cancel}
+            label={label}
+            step={step}
+            icon={<RefreshCw size={13} />}
+            /* What the band's own two buttons are about, for their accessible
+               names — see `about` in JobProgress.tsx. Nine bands on one page is
+               the case that prop exists for. */
+            about={RERUN_LABEL[step]}
+            /* Only ever shown for the moment before the step reports a label of
+               its own, so it says the neutral thing rather than guessing a verb
+               — the pipeline's own are *Writing the arc*, *Finding the terms*,
+               *Drawing the argument*, and none of those generalises. */
+            runningLabel={`Working on the ${RERUN_LABEL[step].toLowerCase()}`}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1412,10 +1970,16 @@ function SubHeading({ children }: { children: ReactNode }) {
  *
  * > Move "What we did to it" down, and maybe put that in the Technical Details.
  *
- * So: both, and the "not built yet" row too, which is a note about the stage
+ * So: both, and the "not built yet" row too, which was a note about the stage
  * rows above it and had a section of the page to itself for one dimmed line.
  * Everything in here is *true* and none of it changes how you read the article,
  * which is the test for what belongs.
+ *
+ * **That row has gone**, on 2026-09-07: its one entry was *"Re-run a stage"* and
+ * it shipped, as *Generate it again* — a section of its own, further up, and
+ * open. Which is the second half of the story this paragraph tells: burying it
+ * here is exactly why nobody found it. See `RerunSection` above, and the note
+ * where `SOON` stood.
  *
  * ## The rule this section inherits, and must not break
  *
@@ -1578,54 +2142,6 @@ function TechnicalDetails({
         </TooltipGroup>
       )}
 
-      {/* Dimmed rows rather than absence, because absence is indistinguishable
-          from an oversight. Same tooltip convention as the bar's placeholder
-          buttons (Dock.tsx): what the thing would be, and what the previous
-          version's attempt at it taught us.
-
-          **Under the stage rows rather than in a section of its own**, since
-          2026-09-03. Its one entry is "re-run a stage", which is a sentence
-          about the list directly above it — and a whole section of the page for
-          one dimmed line was more prominence than a thing that does not exist
-          has earned. */}
-      <SubHeading>Not built yet</SubHeading>
-      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-        <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden tw:opacity-70`}>
-          {SOON.map((idea) => (
-            <Tooltip
-              key={idea.key}
-              placement="top"
-              className="tip-soon"
-              content={
-                <>
-                  <div className="tip-soon-head">
-                    {idea.label} <span className="tip-soon-flag">not built yet</span>
-                  </div>
-                  <p>{idea.blurb}</p>
-                  <p className="tip-soon-learned">{idea.learned}</p>
-                </>
-              }
-            >
-              {/* A button so it is focusable and reaches the tooltip by
-                  keyboard, `aria-disabled` so nothing announces it as
-                  something that will happen if pressed. */}
-              <button
-                type="button"
-                aria-disabled="true"
-                className="tw:flex tw:w-full tw:items-center tw:gap-3 tw:px-4 tw:py-3 tw:text-left tw:text-sm tw:text-muted-foreground tw:cursor-help tw:hover:bg-accent/40 tw:focus-visible:outline-none tw:focus-visible:bg-accent/40"
-              >
-                <Chip icon={idea.icon} />
-                <span className="tw:border-b tw:border-dotted tw:border-rule-strong">
-                  {idea.label}
-                </span>
-                <span className="tw:ml-auto tw:shrink-0 tw:rounded-full tw:border tw:border-border tw:px-2 tw:py-0.5 tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em]">
-                  not built yet
-                </span>
-              </button>
-            </Tooltip>
-          ))}
-        </div>
-      </TooltipGroup>
     </Section>
   );
 }
