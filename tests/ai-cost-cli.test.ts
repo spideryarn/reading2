@@ -8,7 +8,7 @@
  * month, and the same boundary OpenRouter's own key limits reset on, which is
  * what makes the reconciliation comparable at all.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AiCallRow } from "../src/ai-spend.js";
 import {
   by,
@@ -446,5 +446,103 @@ describe("what the report says it cannot see", () => {
        evidence that the server lost nothing. */
     const notes = shortfallNotes(read({ lateCalls: 1 }));
     expect(notes.join(" ")).toContain("this process");
+  });
+});
+
+/**
+ * **The whole ordinary page, run against fixture rows.**
+ *
+ * This suite tested the report's *pieces* and never the page, and GPT Sol's
+ * round-two check (F11) named the cost precisely: with `billReport` thoroughly
+ * unit-tested and nothing reaching a renderer, **deleting the
+ * `printBillsPlain(rows)` call would have left every suite green**. A pure
+ * builder with no caller prints nothing and looks perfect —
+ * docs/reusable/silent-success.md, and the same deletion mutation the previous
+ * round had asked the tests to catch.
+ *
+ * `ledgerReport` takes its rows and needs no database; `reconcile` is behind
+ * `args.reconcile` so nothing here touches the network.
+ */
+describe("the ordinary report, end to end", () => {
+  const row = (over: Partial<AiCallRow>): AiCallRow =>
+    ({
+      id: "00000000-0000-4000-8000-00000000f001",
+      runId: "00000000-0000-4000-8000-00000000f000",
+      scopeKind: "job_step",
+      ownerId: "00000000-0000-4000-8000-00000000f0a1",
+      stepName: "hierarchy",
+      job: "hierarchy",
+      wire: "messages",
+      requestedModel: "test-model",
+      startedAt: "2026-09-01T00:00:00.000Z",
+      finishedAt: "2026-09-01T00:00:01.000Z",
+      durationMs: 1000,
+      outcome: "ok",
+      providerAccount: "openrouter",
+      isByok: false,
+      costSource: "provider",
+      creditsUsedNanos: 1_000_000,
+      byokUpstreamNanos: null,
+      computedCostNanos: null,
+      ...over,
+    }) as AiCallRow;
+
+  async function pageFor(rows: AiCallRow[]): Promise<string> {
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      lines.push(args.map(String).join(" "));
+    });
+    try {
+      const { ledgerReport } = await import("../scripts/ai-cost.js");
+      await ledgerReport(parseArgs(["--month", "2026-09"]), {
+        rows,
+        unreadable: 0,
+      } as unknown as LedgerRead);
+    } finally {
+      spy.mockRestore();
+    }
+    return lines.join("\n");
+  }
+
+  it("prints the bill block, so deleting the call cannot pass", async () => {
+    const page = await pageFor([row({})]);
+    expect(page).toContain("Billed to");
+    expect(page).toContain("openrouter");
+  });
+
+  it("prints the cap caveat on the ordinary path, not only under --owners", async () => {
+    /* F6: this whole block existed only in `--owners`' coverage header, so the
+       path the header advertises first said nothing about which of three bills
+       it was reporting. */
+    const page = await pageFor([row({})]);
+    expect(page).toContain("RECORDED KNOWN-DOLLAR SPEND OUTSIDE THE CAP");
+    expect(page).toContain("cannot see its amount or the headroom left");
+  });
+
+  it("names each bill separately when the money is on two accounts", async () => {
+    const page = await pageFor([
+      row({}),
+      row({
+        id: "00000000-0000-4000-8000-00000000f002",
+        providerAccount: "anthropic",
+        costSource: "computed",
+        creditsUsedNanos: null,
+        computedCostNanos: 3_000_000,
+        priceVersion: "test",
+      }),
+    ]);
+    expect(page).toContain("openrouter");
+    expect(page).toContain("anthropic");
+  });
+
+  it("keeps dev-CLI spend out of Product on the page itself", async () => {
+    /* F2, asserted where a reader would actually see it rather than only in the
+       partition function. */
+    const page = await pageFor([
+      row({}),
+      row({ id: "00000000-0000-4000-8000-00000000f003", scopeKind: "cli", stepName: null }),
+    ]);
+    expect(page).toContain("Product spend");
+    expect(page).toContain("Dev CLI spend");
   });
 });

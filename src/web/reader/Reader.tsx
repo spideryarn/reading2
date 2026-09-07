@@ -2027,6 +2027,23 @@ export function Reader({
              are fetched inside the section rather than lifted out of the
              Criteria panel, which only mounts on one of them. */
           placing={mode === "referee"}
+          /* **Escape belongs to whatever is in front of this box**, and two
+             things can be: `CommentDialog`, whose arm below renders on
+             `openComment`, and `ChatDialog`, whose arm renders on `overlay`.
+             Both are reachable with a selection still live — clicking a comment
+             mark goes through `openCommentDialog`, which clears nothing, and
+             `chatAboutBlock`/`helpAboutBlock` clear `note` but not `annotating`
+             — and until 2026-09-07 one press closed the box in front *and* this
+             one, discarding a half-typed annotation.
+
+             The two conditions are repeated here rather than lifted into a
+             `somethingInFront` variable on purpose: they are the render
+             conditions of the two arms below, and a reader checking that this
+             is right should be comparing them with those, not with a third
+             name. Stage 3 of
+             docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md;
+             the pairs are tests/one-escape-closes-one-surface.test.tsx. */
+          escapeEnabled={!openComment && !overlay}
           onCancel={() => setAnnotating(null)}
           onSave={(id, body, ask, mark) => {
             const anchor = annotating;

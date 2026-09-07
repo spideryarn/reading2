@@ -22,20 +22,32 @@ somebody goes and reads it. That is the same failure this file exists to prevent
 here too.
 
 Each is a few minutes of attention, and each has a note that already sets out the options and their
-cost. **One of them now blocks a deploy** — that used to be true of none of them, and the first row
-says which.
+cost. **One of them was written as a deploy blocker and the deploy went out anyway** — the first row
+says what happened.
 
-> **⚠ Do not deploy until the dictation privacy wording is signed off.** 2026-09-07: dictation moved
-> onto an OpenAI transcriber, which cannot be routed with zero data retention, so the sentence
-> `/privacy` and every microphone have carried until now — *"your voice … isn't stored"* — is false
-> on `dev` as of this landing. The replacement wording is written and is quoted on its own, out of
-> the diff, in
+> **⚠ The dictation privacy wording shipped before it was signed off, and it is live now.**
+> 2026-09-07: dictation moved onto an OpenAI transcriber, which cannot be routed with zero data
+> retention, so the sentence `/privacy` and every microphone had carried — *"your voice … isn't
+> stored"* — stopped being true. New wording was written in the same commit (`b088b24a`, 14:03) and
+> this line was added asking that nobody deploy until Greg had read it. **A deploy went out at
+> 17:37 regardless**: production serves `c0fb04a4` (`/api/health`), which contains both the new
+> transcriber and the new sentence. Checked by the feedback-reports loop, 2026-09-07 17:20.
+>
+> **The good half:** what shipped is the *corrected* wording, not the false one — *"Your voice goes
+> to OpenRouter and OpenAI to be transcribed. We don't save it on our servers; they may keep it
+> under their own policies."* No false promise is live. Greg's read is now a review of live copy
+> rather than a gate before it, and the four sentences are still quoted on their own, out of the
+> diff, in
 > [260907c § The proposed reader-facing wording](../plans/260907c-dictation-onto-an-openai-transcriber.md#the-proposed-reader-facing-wording).
-> Deploying before you have read it publishes a false promise about people's voices.
+>
+> **The half worth fixing:** a "do not deploy" sentence in this file is not a gate. Nothing reads it
+> — not `npm run deploy`, not the deploy loop — so it stopped a deploy for exactly as long as a
+> human happened to be looking. If reader-facing copy is ever to be gated on a person, the gate has
+> to live somewhere the deploy path executes.
 
 | report | the decision resting with you |
 |---|---|
-| dictation privacy wording (2026-09-07, **blocks the next deploy**) | **A published zero-data-retention promise about a reader's voice has to go.** Greg chose the switch to an OpenAI transcriber on 2026-09-06 knowing it cost this; what needs your eye is not the decision but the four sentences that replace it, one of which is the line beside every microphone. Measured reason it cannot be kept: OpenRouter does not apply routing on its transcription endpoint, so `zdr: true` there is a flag nobody reads — `only: ["anthropic"]`, which no transcriber can satisfy, returns a transcript anyway. [plan](../plans/260907c-dictation-onto-an-openai-transcriber.md#the-proposed-reader-facing-wording) |
+| dictation privacy wording (2026-09-07, **already live — shipped unsigned-off**) | **A published zero-data-retention promise about a reader's voice has to go.** Greg chose the switch to an OpenAI transcriber on 2026-09-06 knowing it cost this; what needs your eye is not the decision but the four sentences that replace it, one of which is the line beside every microphone. Measured reason it cannot be kept: OpenRouter does not apply routing on its transcription endpoint, so `zdr: true` there is a flag nobody reads — `only: ["anthropic"]`, which no transcriber can satisfy, returns a transcript anyway. [plan](../plans/260907c-dictation-onto-an-openai-transcriber.md#the-proposed-reader-facing-wording) |
 | [2A](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2A) — upload an HTML file (shipped 2026-09-07) | **An uploaded file's name is in its public URL.** `slugFromFilename` mints the article slug from the filename's stem and the slug is in `PublicMeta`, so publishing `confidential-client-acme.html` publishes `confidential-client-acme`. This predates the report by weeks — it has been true of uploaded PDFs since August — and was found only because this work was about to assert the opposite in a comment. Minting an opaque slug for uploads instead would change existing addresses and is a decision about what a URL should look like, so no agent took it. [note](260906_1709-upload-an-html-file-and-a-url-for-a-pdf.md) · [plan](../plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md#a-privacy-question-this-work-did-not-create-and-did-not-fix) |
 
 **Answered 2026-09-06, in one sitting, and this is what happened to each** — kept here briefly
@@ -59,8 +71,8 @@ tuning it. That is the argument for this file existing rather than for agents de
 
 ## Two things are waiting on Greg
 
-The dictation privacy wording, which blocks the next deploy, and the 2A slug question above, both
-added 2026-09-07. Everything this file listed on 2026-09-06 has been
+The dictation privacy wording, which is already live rather than pending, and the 2A slug question
+above, both added 2026-09-07. Everything this file listed on 2026-09-06 has been
 answered. The `toc/6` question that stood here —
 whether to re-run the structure stage across the library so existing articles picked up the new gist
 lengths — was answered *"leave it, new articles only"*, and is now recorded where it belongs, in

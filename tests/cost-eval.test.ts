@@ -500,8 +500,9 @@ async function rowFrom(step: PipelineStep<"fetch">): Promise<AiCallRow> {
 describe("the eval attribution overlay", () => {
   it("control arm — an unwrapped step's call is `job_step`, which is Product spend", async () => {
     /* The mutation, and the reason the test below is evidence rather than
-       decoration: without the overlay the identical row lands in the bucket
-       `scripts/ai-cost.ts` calls Product (`scopeKind !== "eval"`). */
+       decoration: without the overlay the identical row lands in the bucket the
+       report calls Product — `request | job_step`, per `partitionByScope` in
+       src/cost-report.ts. */
     expect((await rowFrom(spendingStub())).scopeKind).toBe("job_step");
   });
 

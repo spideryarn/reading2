@@ -755,7 +755,10 @@ td.text.has-hit[data-hues="8"] {
   box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
   font-family: var(--font-ui);
   /* Above everything structural — the sticky bars (≤40) and the spine (45) —
-     but BELOW the tooltip layer (.tooltip-anchor, 80).
+     but BELOW the tooltip layer (.tooltip-anchor, 100 — it said 80 here until
+     2026-09-07, which had been wrong since the drawer arrived at 95 and
+     tooltip.css raised the layer over it; the relation this comment describes
+     is unchanged).
      
      It was 90 first, on the reasoning that a hover should never cover something
      the reader deliberately opened. That was wrong, and visibly so: the panel
