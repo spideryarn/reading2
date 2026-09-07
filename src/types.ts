@@ -3285,6 +3285,28 @@ export type TimelineFound = TimelineResponse;
 export type QuizBand = "easy" | "medium" | "hard";
 
 /**
+ * **Whether the reader got a question right — judged in private, shown to
+ * nobody.**
+ *
+ * The adaptive ladder steps on this: right, and the next question is harder;
+ * wrong, and it is easier (src/web/quiz-ladder.ts).
+ * [`src/quiz-verdict.ts`](quiz-verdict.ts) produces it by reading the finished
+ * mark, and it rides the terminal `done` frame.
+ *
+ * **Two values and an absence, not three.** Greg's rule is binary, and a
+ * `partly` in the middle would absorb most short-answer responses and leave the
+ * ladder stationary while looking adaptive. Absence — `undefined` — is a
+ * designed outcome rather than an error: the classifier failed, timed out,
+ * declined an ill-posed question, or the mark never finished. It means *hold
+ * the band*, so every failure in this feature is quiet.
+ *
+ * It lives here rather than beside the ladder because both sides speak it: the
+ * server puts it on `done`, the client reads it off. docs/project/quiz.md § It
+ * adapts, and docs/plans/260907d-make-the-quiz-adaptive.md.
+ */
+export type QuizVerdict = "right" | "wrong";
+
+/**
  * **Where the reference answer lives — checked, never trusted.**
  *
  * A block id on its own proves only that a paragraph exists; it says nothing

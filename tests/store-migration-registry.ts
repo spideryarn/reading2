@@ -2556,6 +2556,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      because it inherits both `DATABASE_URL` and `SPIDERYARN_ENV_PINNED`. */
   "tests/request-spend.test.ts": "private-postgres",
   "tests/remember-route.test.ts": "private-postgres",
+  /* The guarantee the Metadata page's "Generate it again" control sells: a
+     re-run that fails leaves the reader on the artefact they already had
+     (docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md).
+     It publishes a revision, fails a draft over it, and reads back through
+     `loadQuotes` — the reader's own path — so there is no honest version of it
+     without a database. */
+  "tests/rerun-failure-keeps-the-old-artefact.test.ts": "private-postgres",
   /* Landed 2026-09-04 with the reservation of `/read/public`
      (docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3a). Two of
      its three enforcers are pure functions and need nothing; the third is

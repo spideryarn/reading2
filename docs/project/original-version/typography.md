@@ -26,7 +26,7 @@ Checked against the repo itself:
 So the reading surface was **sans**, and the serif below is a recommendation that was never taken.
 Greg's call on 2026-08-25 was to follow what they did rather than what they wrote — this app is now
 sans throughout the reading surface too, and the reasoning is in
-[../design-css-overview.md § Typography](../design-css-overview.md#typography).
+[../typography.md](../typography.md).
 
 **The lesson is not about fonts.** A document that says "✓ Implemented" is a claim about code, and
 it is the one kind of claim in a doc that can be checked mechanically and almost never is. Two

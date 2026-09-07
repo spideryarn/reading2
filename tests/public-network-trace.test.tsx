@@ -845,6 +845,24 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
   hierarchy: { where: null, says: PUBLIC_GIST },
   /* Free for a visitor since slice 1b: the same tree, one nested list. */
   outline: { where: ".mode-band.outln", says: OUTLINE_ROW },
+  /* And Structure, from 2026-09-07, on the same terms: the same tree again, in
+     columns. It draws no arc, so it does not even have Outline's one rung that
+     an absent artefact would skip.
+
+     **Behind the experimental switch and still asserted here**, which is the
+     point rather than an inconsistency: the switch hides the *button*, and a
+     signed-out reader is treated as switch-off, so this mode is not in a
+     visitor's bar. `?mode=structure` still reaches it — hiding a feature never
+     breaks a link to it — and what it then draws has to be the real band, with
+     no request behind it. This row is what says so.
+
+     **What it cannot say is that the band is two columns.** This file's tree is
+     a root and one part with no section beneath it, so the only string available
+     is a part title from column A. That half of the mode is asserted in
+     tests/structure-panel-draws-both-columns.test.tsx instead; what belongs here
+     is the network trace, which is the question this file is actually about.
+     GPT Sol's review of the plan, finding 8. */
+  structure: { where: ".mode-band.struct", says: OUTLINE_ROW },
   /* Free since 2026-08-31 — the gist, with no summary artefact behind it. */
   summary: { where: ".mode-band.summ", says: PUBLIC_GIST },
   /* The payload carries a glossary, so the visitor gets the real thing. */

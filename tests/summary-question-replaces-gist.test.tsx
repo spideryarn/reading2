@@ -19,10 +19,14 @@
  * disappears on the rows that have no question. A panel that dropped both would
  * pass any assertion that only asked "is the question drawn", and an article
  * whose hierarchy predates 2026-09-05 has a question on no row at all. So every
- * case here asserts a presence AND an absence, and the mixed-depth case is the
- * one that would have caught shipping this against the real corpus, where a
- * cascade-built depth-1 node has no question because `EXPAND_SYSTEM` has no such
- * field (docs/plans/260905f § P1-5).
+ * case here asserts a presence AND an absence, and the mixed case is the one
+ * that would have caught shipping this against the real corpus, where a
+ * cascade-built part could carry no question at all — P1-5, fixed at generation
+ * by `expand/4` on 2026-09-07 (docs/plans/260907d § stage 2). **The rule here
+ * did not change with it**: absence is still ordinary — every tree built before
+ * the field existed has none, and a part whose answer came back without one is
+ * a logged omission rather than a failure — so the panel's fallback is exactly
+ * as load-bearing as it was.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -163,11 +167,17 @@ describe("a row with no question", () => {
 });
 
 /**
- * The case that would have caught this against real data. `EXPAND_SYSTEM` has
- * no question field, so a depth-1 node the deepening cascade built carries none
- * while its siblings do — and the panel then draws two different kinds of line
- * at one depth. That is not a fault and must not be reported as one; it is why
- * the fallback is `question ?? gist` and not `question ?? "No summary"`.
+ * The case that would have caught this against real data: a part carrying no
+ * question beside siblings that do, so the panel draws two different kinds of
+ * line at one depth. That is not a fault and must not be reported as one; it is
+ * why the fallback is `question ?? gist` and not `question ?? "No summary"`.
+ *
+ * Until `expand/4` (2026-09-07) it was the *ordinary* state of any part the
+ * deepening cascade built, because `EXPAND_SYSTEM` had no question field at all.
+ * It is now the residue: a tree built before the field existed, and a part whose
+ * answer came back without one — which is counted
+ * (src/hierarchy-deepen.ts § `DeepenStats.missingQuestions`) and never fixed by
+ * hiding the neighbour's gist.
  */
 describe("a part built by the cascade, beside parts that were not", () => {
   it("falls back to its gist rather than reporting a fault", () => {

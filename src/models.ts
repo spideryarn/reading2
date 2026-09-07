@@ -427,6 +427,20 @@ export type Task =
      because it is already there would attribute every mark to Explain in the
      cost report, quietly and for ever. GPT Sol's finding 9. */
   | "quiz-mark"
+  /* **Did the reader get it right?** — the hidden half of the adaptive quiz,
+     docs/plans/260907d-make-the-quiz-adaptive.md. It reads the question, the
+     reader's answer and the mark that was just written for them, and answers in
+     one word that nobody is ever shown; the ladder steps on it.
+
+     Its own job rather than a mode of `quiz-mark`, for the reason this list
+     keeps giving: a call billed under another job's name is spend nobody can
+     find later. Sharper here than usual, because this one fires *once per
+     answer, beside* a `quiz-mark` call — folded together, the mark's cost per
+     answer would silently include a second call on a different tier.
+
+     Quick tier, and it can be: it never sees the article. The mark it reads has
+     already done the comparing, with citations. */
+  | "quiz-verdict"
   | "search"
   /* The model reading a referee's own notes rather than the paper —
      docs/plans/260831an-referee-mode-for-peer-reviewers.md § 3. It is the only
@@ -710,6 +724,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   explain: "capable",
   chat: "capable",
   "quiz-mark": "capable",
+  "quiz-verdict": "quick",
   search: "capable",
   "referee-mirror": "capable",
   /* Capable, like search — this reads a whole paper and answers with quoted
@@ -913,6 +928,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   explain: "chat",
   chat: "chat",
   "quiz-mark": "chat",
+  "quiz-verdict": "chat",
   search: "chat",
   "referee-mirror": "chat",
   "referee-criteria": "chat",
@@ -1009,6 +1025,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",
+  "quiz-verdict": "SPIDERYARN_QUIZ_VERDICT_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
   /* It has one because comparing two models on the same cached transcriptions is
      exactly what `evals/pdf/titles.mts` does, and a code change to run an arm
@@ -1024,10 +1041,11 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      until there is a rate to compare. A code change to run an arm would make
      the arm and the shipped path different things. */
   debate: "SPIDERYARN_DEBATE_MODEL",
-  /* It has one because it is the app's only quick-tier task, so "is the cheap
-     model good enough for this" is a question somebody will want to answer by
-     running the real feature against a capable model for an evening rather than
-     by editing the tier table and rebuilding. */
+  /* It has one because "is the cheap model good enough for this" is a question
+     somebody will want to answer by running the real feature against a capable
+     model for an evening rather than by editing the tier table and rebuilding.
+     The same goes for `quiz-verdict` above, the other quick-tier task — it was
+     the only one until 2026-09-07. */
   "link-summary": "SPIDERYARN_LINK_SUMMARY_MODEL",
 };
 

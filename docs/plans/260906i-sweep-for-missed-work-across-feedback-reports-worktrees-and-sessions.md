@@ -1,6 +1,7 @@
 # Sweep for missed work: feedback reports, worktrees, and sleeping sessions
 
-**Status:** in progress, 2026-09-06. Written before the work, per
+**Status:** the dispatch is done and most of it has landed, 2026-09-07. § How the fourteen turned
+out is the record. Two things wait on Greg, one of which blocks a deploy. Written before the work, per
 [engineering-manager.md](../reusable/engineering-manager.md).
 
 Greg asked for a sweep rather than a feature: *find anything valuable that we had intended but
@@ -314,6 +315,53 @@ on another, the dependency is written into the brief as something the agent chec
 *is this on `dev` yet, and if not, do the part that does not depend on it.* Six briefs carry a check
 for whether the `App.tsx` split has landed, because a new mode written against the old 6,105-line
 file would hand its owner a conflict nobody needs.
+
+## How the fourteen turned out
+
+Checked 2026-09-07 15:00, against the panes and against `git log origin/dev` — **69 commits landed
+overnight**, typecheck is clean, and `doc-links` is green again.
+
+| landed | still going | note |
+|---|---|---|
+| `publish-refused-reason-kinds` · `pdf-figures-stage-f` · `class-killers-and-a-conflict-check` · `fb15-dictation-to-openai` · `fb1z-quotes-outlined-by-priority` · upload-an-HTML-file · the routes split | `structure-mode-as-a-third-mode` (suite running) · `rerun-any-generated-mode` (in its worktree) · `adversarial-fixtures` · `cheap-postmortem-preventions` · `split-routes-one-slice` | `fb1v-socratic-v4`, `cost-tracking` and `fb21-adaptive-quiz` had not begun at 15:00 — each woke, judged the box too loaded, and armed a one-shot for ~16:36 |
+
+**Two of the fourteen were redundant, and both agents worked that out for themselves rather than
+duplicating.** `fb2a-upload-an-html-file` found another session already on report 2A and stood down;
+`split-routes-one-slice` found `worktree-api-dispatch-by-domain` **already splitting `src/routes.ts`**
+— its stage 3a had moved about 280 lines — and deferred rather than picking a slice against a moving
+file. That second one is a brief I should not have written: the sweep looked for work nobody was
+doing and this was work somebody was already doing. The session caught what the dispatch missed.
+
+### What the sessions found that the sweep did not
+
+Three findings came out of the work that no audit would have produced, and all three are worth more
+than the tasks that surfaced them:
+
+- **The zero-data-retention promise was already unreachable.** `fb15` was sent to move dictation to
+  OpenAI and rewrite `/privacy` accordingly. It stayed on OpenRouter (`openai/gpt-transcribe`), which
+  removed the separate-billing-account problem entirely — and then *probed* the endpoint and found
+  that **OpenRouter does not apply routing on its transcription endpoint at all**: an impossible
+  `only: ["anthropic"]` returns a transcript anyway, and so does `zdr: true` for a model absent from
+  the ZDR list. So the flag nobody could keep was a flag nobody had been reading. `zdr` is now set on
+  nothing. [260907c](260907c-dictation-onto-an-openai-transcriber.md).
+- **An uploaded file's name is in its public URL.** `slugFromFilename` mints the slug from the
+  filename stem and the slug is in `PublicMeta`, so publishing `confidential-client-acme.html`
+  publishes `confidential-client-acme`. True of PDFs since August; found only because the upload work
+  was about to assert the opposite in a comment.
+- **A memory of mine was wrong.** The `adversarial-fixtures` session found that the 84-of-360
+  constitution cut is the fixture corpus's **deliberate negative fixture** — it has no
+  `labels.sourceHash`, so publication correctly refuses — and not a degraded copy, which is what a
+  prior session had recorded and what its brief inherited.
+
+### And one thing the audit of the sessions got wrong
+
+A Sonnet pass over the panes reported four sessions *"blocked on an interactive Bash approval
+prompt … apparently weren't in auto-accept mode"*. Checked by hand: **all four say `⏵⏵ auto mode on`
+and none is blocked.** What it had read as a pending approval was the `❯` input line carrying text
+somebody had typed and not sent. This is the second time in two days a pane-reader has produced a
+confident wrong answer about session state — the first read a context-usage bar as progress. The
+lesson is in the agent memory, and it is the same one: **check a session's claim against `git log`
+and its worktree, never against a screenshot of its terminal.**
 
 ## What is left for Greg
 

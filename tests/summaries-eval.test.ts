@@ -6,11 +6,14 @@
  * Four of these blocks are guarding something specific rather than exercising
  * code:
  *
- * - **`questionFor` mangles V4's shape**, which is GPT Sol's P1-4 in executable
- *   form. It is the reason V4 is the only arm that would need a change to
- *   `src/hierarchy.ts`, and it is asserted against *production's own function*
- *   so the day the patch lands this test goes red and somebody has to decide
- *   what the arm now means.
+ * - **`questionFor` keeps V4's shape**, which is GPT Sol's P1-4 in executable
+ *   form — **inverted on 2026-09-07, when the patch landed.** It used to assert
+ *   that production *mangled* the line, against production's own function, so
+ *   that the day the patch landed this test would go red and somebody would
+ *   have to decide what the arm now meant. That day came: V4 won, shipped as
+ *   `toc/7`, and the assertion now runs the other way. It is **inverted rather
+ *   than deleted**, for the reason `summary-expand.test.tsx` was inverted rather
+ *   than relaxed — "either would do" is how a rule stops holding anything.
  * - **The calibration gate refuses an empty set.** Stated forwards, like
  *   `coverage.ts`'s `clean`: a gate that passes when nothing was checked is the
  *   shape of `docs/postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md`,
@@ -38,10 +41,21 @@ import {
   MAX_ANCHOR_INVERSIONS,
   type RankedLineup,
 } from "../evals/summaries/anchors.js";
-import { ARMS, armByName, armsNeedingCodeChange, promptBlocksFor, questionForTrailingHint } from "../evals/summaries/arms.js";
-import { CORPUS, defaultCorpus } from "../evals/summaries/corpus.js";
+import { ARMS, armByName, armsNeedingCodeChange, promptBlocksFor } from "../evals/summaries/arms.js";
+import { CORPUS, defaultCorpus, loadDocument } from "../evals/summaries/corpus.js";
 import type { LoadedDocument } from "../evals/summaries/corpus.js";
-import { proseWindows, rngFrom, seedFrom, shuffled } from "../evals/summaries/judge.js";
+import {
+  AXES,
+  type DocumentLineup,
+  type JudgeAnswer,
+  proseWindows,
+  rngFrom,
+  RUBRIC,
+  seedFrom,
+  shuffled,
+  validateAnswer,
+} from "../evals/summaries/judge.js";
+import { stubJudge } from "../evals/summaries/run.js";
 import { productionGists, productionQuestions, productionSystem, sectionOf, THE_DIAGNOSED_SENTENCE } from "../evals/summaries/production-prompt.js";
 import { structureRequest } from "../src/hierarchy.js";
 import {
@@ -65,6 +79,127 @@ import type { Tree } from "../src/types.js";
 const REPO = new URL("..", import.meta.url).pathname;
 
 /* -------------------------------------------------------- the two sources -- */
+
+/**
+ * **The rubric's axes and its answer schema have to agree**, and an axis named in
+ * prose but missing from the JSON example is the sort of drift that produces
+ * inconsistent answers no one can attribute.
+ *
+ * `demand` was added on 2026-09-07 and is the substantive half of the
+ * calibration repair: until it existed the rubric had **no criterion for the
+ * lookup failure every variant's prompt forbids**, so the run of 2026-09-05 gave
+ * the designated lookup anchor a perfect `5,5,5,5,5` and the gate failed on it.
+ * ⟨GPT Sol, F3 on 260907d.⟩
+ */
+describe("the judge's rubric", () => {
+  it("asks for the argument-demand axis, and asks for it in the schema too", () => {
+    expect(RUBRIC).toContain("  demand ");
+    expect(RUBRIC).toContain('"demand": 3');
+    /* Every question axis the schema names must be described above it, or the
+       judge is being asked to fill in a field nobody defined. */
+    const schema = /"questions":[\s\S]*?"ranking"/.exec(RUBRIC)?.[0] ?? "";
+    for (const axis of ["fidelity", "distinctive", "triage", "orientation", "simplicity", "leakage", "demand", "shapeHint"]) {
+      expect(schema, `${axis} in the questions schema`).toContain(`"${axis}"`);
+      expect(RUBRIC, `${axis} described in the axis list`).toMatch(new RegExp(`^  ${axis}\\s`, "m"));
+    }
+  });
+
+  it("does not turn the new axis into a penalty on straight questions", () => {
+    /* V3's whole axis is a question asked straight, and the rubric's existing
+       guarantee — "a question asked straight, including a yes/no question, is
+       legitimate" — must survive the addition. A rubric that quietly made
+       yes/no score low on `demand` would decide against V3 before the judge read
+       a word of it. */
+    expect(RUBRIC).toContain("including a yes/no question — is legitimate");
+    expect(RUBRIC).toContain("A yes/no question is not automatically low");
+  });
+
+  /**
+   * **The examples must not let the judge pattern-match its way to the answer.**
+   * ⟨GPT Sol, F23 on 260907d.⟩ The first `demand` wording taught the axis with
+   * *"how many arguments are there?"* — which is anchor 2 almost verbatim — and
+   * *"is computation sufficient for consciousness?"*, which is the core of V3's
+   * worked example. A judge shown those can reject anchor 2 and reward V3 by
+   * surface resemblance without ever applying the criterion, and the gate would
+   * pass while measuring nothing. So the examples come from a domain no
+   * candidate, no anchor and no corpus article is about.
+   */
+  it("teaches the demand axis from a domain nothing in the run is about", () => {
+    const demand = /^ {2}demand[\s\S]*?^ {2}shapeHint/m.exec(RUBRIC)?.[0] ?? "";
+    expect(demand, "the demand paragraph was found").not.toBe("");
+    /* The subjects of the calibration lineup. The criterion's own word,
+       "argument", is fine and unavoidable; what must not appear is what the
+       candidates and anchors are ABOUT. */
+    for (const subject of ["computation", "conscious", "functionalism", "how many arguments"]) {
+      expect(demand.toLowerCase(), `${subject} kept out of the examples`).not.toContain(subject);
+    }
+  });
+
+  /** The validator and the rubric have to name the same axes, or one of them is fiction. */
+  it("validates exactly the axes it asks for", () => {
+    for (const which of ["gists", "questions"] as const) {
+      for (const axis of AXES[which].numeric) expect(RUBRIC, `${axis} in the rubric`).toMatch(new RegExp(`^  ${axis}\\s`, "m"));
+      for (const axis of Object.keys(AXES[which].enums)) expect(RUBRIC, `${axis} in the rubric`).toMatch(new RegExp(`^  ${axis}\\s`, "m"));
+    }
+    expect(AXES.questions.numeric).toContain("demand");
+    expect(AXES.gists.numeric).not.toContain("demand");
+  });
+});
+
+/**
+ * **The corpus pin has to fire on the article and not on the envelope.**
+ *
+ * `blocks.json` is `{sanitizer, blocks}`. Hashing the whole file meant every
+ * document drifted at once whenever `SANITIZER_VERSION` moved — which happened
+ * between 2026-09-05 and 2026-09-07, when all seven default documents reported
+ * drift on the same day with no tree moved and every block count unchanged. A
+ * signal that fires for a reason unrelated to the articles is one somebody
+ * explains away every time, until the day it means something.
+ *
+ * Established before the change, not assumed: the exported blocks for
+ * `noema-mythology-of-conscious-ai` were compared field by field against the
+ * committed fixture cut, and id, tag, kind, text, words, gistable **and html**
+ * were identical on all 141.
+ */
+describe("the corpus pin", () => {
+  const write = (dir: string, sanitizer: number, text: string) => {
+    fs.mkdirSync(path.join(dir, "s"), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "s", "blocks.json"),
+      JSON.stringify({ sanitizer, blocks: [{ id: "spya-a", tag: "p", kind: "text", text, words: 2, gistable: true, html: `<p>${text}</p>` }] }),
+    );
+    fs.writeFileSync(
+      path.join(dir, "s", "tree.json"),
+      JSON.stringify({ version: "toc/7", generator: "x", slug: "s", rootId: "n1", nodes: { n1: { id: "n1", depth: 0, parent: null, children: [], range: ["spya-a", "spya-a"], title: "T", gist: "g" } } }),
+    );
+  };
+
+  it("ignores the sanitiser stamp and notices the prose", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "summaries-corpus-pin-"));
+    write(dir, 5, "one two");
+    const entry = { ...CORPUS[0]!, slug: "s" };
+    const pinned = await loadDocument(dir, entry);
+    /* Whatever the manifest says, this run's own hash is the baseline for the
+       two perturbations below. */
+    const sha = /blocks\.json is ([0-9a-f]+)…/.exec(pinned.drift[0] ?? "")?.[1];
+    expect(sha, "the drift line names the hash it computed").toBeTruthy();
+
+    /* Same blocks, different envelope: no drift. This is the case that fired on
+       every document and meant nothing. */
+    write(dir, 6, "one two");
+    const bumped = await loadDocument(dir, { ...entry, sha256: `${sha}${"0".repeat(64 - sha!.length)}` });
+    const bumpedSha = /blocks\.json is ([0-9a-f]+)…/.exec(bumped.drift[0] ?? "")?.[1];
+    expect(bumpedSha, "a sanitiser bump alone must not move the hash").toBe(sha);
+
+    /* One word of the article changed: drift. This is the case the pin is for. */
+    write(dir, 6, "one three");
+    const edited = await loadDocument(dir, entry);
+    const editedSha = /blocks\.json is ([0-9a-f]+)…/.exec(edited.drift[0] ?? "")?.[1];
+    expect(editedSha, "a changed block must move the hash").not.toBe(sha);
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
 
 describe("variants.md is the source of the prompt text", () => {
   it("yields four variants, one GISTS block and five anchors", () => {
@@ -91,6 +226,33 @@ describe("variants.md is the source of the prompt text", () => {
     expect(v.questions.get("V2")).toContain("ARGUES");
   });
 
+  /**
+   * **A duplicated heading is the one lenient parse that survived.**
+   *
+   * `fencedUnder` takes the **first** matching heading and each discovery loop
+   * writes into a `Map`, so two `## The shipped QUESTIONS block, toc/6` sections
+   * parsed silently as one: the map reported a single entry, the block on the
+   * wire was the first copy, and the copy somebody had just edited was ignored.
+   * GPT Sol found it on 2026-09-07 (F14) by poisoning the first copy and
+   * watching every test stay green.
+   *
+   * Written against a temp file rather than the real `variants.md`, and under
+   * `os.tmpdir()` rather than `node_modules/` for the reason the test below
+   * gives: the review sandbox mounts the tree read-only.
+   */
+  it("refuses two headings of one name, rather than silently using the first", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "summaries-variants-dupe-"));
+    const file = path.join(dir, "variants.md");
+    const real = fs.readFileSync(new URL("../evals/summaries/variants.md", import.meta.url), "utf-8");
+    const start = real.indexOf("## The shipped QUESTIONS block, toc/6");
+    expect(start).toBeGreaterThan(0);
+    /* The whole section, appended a second time — exactly the shape a careless
+       merge or a copy-paste produces. */
+    fs.writeFileSync(file, `${real}\n\n${real.slice(start)}\n`);
+    expect(() => readVariants(new URL(`file://${file}`))).toThrow(/two "## " headings for the shipped toc\/6 QUESTIONS block/);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   it("refuses a file whose section moved, rather than returning nothing", () => {
     /* `silent-success.md`: an arm sent an empty QUESTIONS block still produces
        plausible output, because the OUTPUT schema alone tells the model what to
@@ -111,11 +273,23 @@ describe("the incumbent arm's rules are sliced out of the live SYSTEM", () => {
   it("finds both blocks, and they are production's", () => {
     expect(productionGists()).toMatch(/^GISTS\b/);
     expect(productionQuestions()).toMatch(/^QUESTIONS\b/);
-    /* The sentence the plan diagnoses as the cause of the generic questions.
-       Every variant drops it; the control keeps it. If production drops it
-       without this eval being re-run, the control is no longer what the
-       variants were measured against. */
-    expect(productionQuestions()).toContain(THE_DIAGNOSED_SENTENCE);
+    /* **The sentence the plan diagnosed as the cause of the generic questions,
+       and it has left production — deliberately, on 2026-09-07.**
+
+       This assertion used to run the other way: every variant dropped it, the
+       control kept it, and the comment here said that if production ever
+       dropped it without the eval being re-run, the control would no longer be
+       what the variants were measured against. That is exactly what happened,
+       and it was answered rather than absorbed: the block V4 replaced is pinned
+       in `variants.md` § *The shipped QUESTIONS block, toc/6* and carried by the
+       `questions-toc6` arm, which is now the QUESTIONS axis's control.
+
+       So the sentence must be GONE from production and PRESENT in the pin. Both
+       halves, because either alone passes over the failure that matters: gone
+       from both is the pin never having been taken, and present in both is the
+       patch never having landed. */
+    expect(productionQuestions()).not.toContain(THE_DIAGNOSED_SENTENCE);
+    expect(promptBlocksFor(armByName("questions-toc6")).questions).toContain(THE_DIAGNOSED_SENTENCE);
     /* **This used to assert production had NO meta-narration rule**, which was
        the point of `gists-only`. `toc/6` (2026-09-06) put that rule into
        production, so the assertion now runs the other way: the live block is
@@ -162,45 +336,125 @@ describe("the incumbent arm's rules are sliced out of the live SYSTEM", () => {
 
 /* ------------------------------------------------------------ V4's patch -- */
 
-describe("V4 is the only arm that needs a change to production code", () => {
+/**
+ * **This block used to be called "V4 is the only arm that needs a change to
+ * production code", and the rename is the record of the change landing.**
+ *
+ * Every assertion here is against production's own `questionFor`, imported, not
+ * against a copy — which is what made the old version able to go red on the day
+ * the patch landed instead of quietly agreeing with itself.
+ */
+describe("production keeps V4's shape, which is the patch that shipped as toc/7", () => {
   const V4_LINE = "Computational functionalism — why isn't computation sufficient for consciousness? (4 arguments)";
-
-  it("production's questionFor mangles V4's shape — GPT Sol's P1-4, executable", () => {
-    expect(questionFor({ title: "", range: ["", ""], question: V4_LINE }, 1)).toBe(`${V4_LINE}?`);
+  const only = (question: string, gist?: string) => ({
+    title: "",
+    range: ["", ""] as [string, string],
+    ...(gist !== undefined ? { gist } : {}),
+    question,
   });
 
-  it("V4's rule keeps it", () => {
-    expect(questionForTrailingHint({ question: V4_LINE }, 1)).toBe(V4_LINE);
+  it("keeps the trailing hint instead of appending a second ? — GPT Sol's P1-4, closed", () => {
+    /* Red before the patch, asserting `${V4_LINE}?`. That was the defect
+       written down; this is the same line saying it is fixed. */
+    expect(questionFor(only(V4_LINE), 1)).toBe(V4_LINE);
   });
 
-  it("agrees with production everywhere the two are meant to agree", () => {
+  it("leaves every other shape exactly as it always did", () => {
     const gist = "Four independent arguments undermine the assumption that computation alone can produce consciousness.";
-    const same: { gist?: string; question: string; depth: number }[] = [
-      { question: "Computational functionalism (4 arguments): why isn't computation sufficient?", depth: 1 },
-      /* A trailing full stop is not evidence of mood — the rule GPT Sol killed
-         and this one must not resurrect. */
-      { question: "How did this affect the U.S.", depth: 1 },
-      { question: "why?", depth: 2 },
-      { question: "   ", depth: 1 },
-      { gist, question: `${gist.replace(/\.$/, "")}?`, depth: 1 },
-    ];
-    for (const c of same) {
-      const mn = { title: "", range: ["", ""] as [string, string], ...(c.gist ? { gist: c.gist } : {}), question: c.question };
-      expect(questionForTrailingHint(c, c.depth), JSON.stringify(c)).toBe(questionFor(mn, c.depth));
-    }
+    /* The behaviours the patch must NOT have moved. Each was true under toc/6
+       and has to stay true: a hint-free question is untouched, a trailing full
+       stop is not evidence of mood (the rule GPT Sol killed, which this must
+       not resurrect), depth is enforced, whitespace is nothing, and the gist
+       re-asked is dropped. */
+    expect(questionFor(only("Computational functionalism (4 arguments): why isn't computation sufficient?"), 1))
+      .toBe("Computational functionalism (4 arguments): why isn't computation sufficient?");
+    expect(questionFor(only("How did this affect the U.S."), 1)).toBe("How did this affect the U.S.?");
+    expect(questionFor(only("why?"), 2)).toBeUndefined();
+    expect(questionFor(only("   "), 1)).toBeUndefined();
+    expect(questionFor(only(`${gist.replace(/\.$/, "")}?`, gist), 1)).toBeUndefined();
   });
 
-  it("still catches the gist echoed back with a hint bolted on", () => {
-    /* variants.md's second hunk: strip the bracket BEFORE the terminal
-       punctuation, or anchor 5 in V4's shape would sail through. */
+  /**
+   * **The gist re-asked, in every dress `toc/7` lets it wear.**
+   *
+   * `variants.md`'s second hunk, and the failure it was written for is anchor 5.
+   * The bare form was always caught. The two V4-shaped forms were **not**, and
+   * that was found by GPT Sol on 2026-09-07 as F10 — the topic prefix and the
+   * bracketed hint each defeat a plain word comparison on their own, so the one
+   * check in `questionFor` that means exactly what it says had quietly stopped
+   * catching the failure the shipped prompt names, in exactly the shape the
+   * shipped prompt asks for. The panel draws `question ?? gist`, so the reader
+   * got the wall instead of the door.
+   */
+  it("still catches the gist echoed back, hint and topic and all", () => {
     const gist = "Four independent arguments undermine the assumption that computation alone can produce consciousness.";
-    expect(questionForTrailingHint({ gist, question: `${gist.replace(/\.$/, "")}? (4 arguments)` }, 1)).toBeUndefined();
+    const bare = gist.replace(/\.$/, "");
+    /* The three shapes, from the one that always worked to the one production
+       actually ships. */
+    expect(questionFor(only(`${bare}?`, gist), 1)).toBeUndefined();
+    expect(questionFor(only(`${bare}? (4 arguments)`, gist), 1)).toBeUndefined();
+    expect(questionFor(only(`Computational functionalism — ${bare}? (4 arguments)`, gist), 1)).toBeUndefined();
+    expect(questionFor(only(`Computational functionalism — ${bare}?`, gist), 1)).toBeUndefined();
   });
 
-  it("names v4 and only v4 as needing it", () => {
-    expect(armsNeedingCodeChange()).toEqual(["v4"]);
-    expect(armByName("v4").questionRule).toBe("trailing-hint");
-    for (const arm of ARMS.filter((a) => a.name !== "v4")) expect(arm.questionRule).toBe("production");
+  /**
+   * **The other half of F11: the unwrapping is the QUESTION's business, not the
+   * gist's.**
+   *
+   * For one day `bareWords` itself stripped a trailing bracket, which changed
+   * the answer for inputs that have nothing to do with V4. Sol's two
+   * counter-examples are both here, and both would pass under the shipped
+   * behaviour of `toc/6` and fail under that one-day version — which is the
+   * point, because the commit that introduced it claimed every other shape was
+   * unchanged.
+   */
+  it("leaves a gist and a question that merely end in brackets alone", () => {
+    /* Not an echo: the gist has no parenthetical and the question does. */
+    expect(questionFor(only("The treatment works (tentatively)", "The treatment works."), 1))
+      .toBe("The treatment works (tentatively)?");
+    /* An echo the one-day version missed, because it stripped "(in principle)"
+       off the gist and not off the question. */
+    const gist = "Systems can compute without awareness (in principle)";
+    expect(questionFor(only(`${gist}? (a thought experiment)`, gist), 1)).toBeUndefined();
+  });
+
+  /**
+   * **A hint may be as long as the prompt allows, which is not 40 characters.**
+   *
+   * `questionFor` carried `[^()]{1,40}` for a day — a number I made up — and it
+   * put a second `?` on lines the prompt itself permits. The test that claimed
+   * to hold that bound tested nothing: its input had no `?` before the bracket,
+   * so the bounded and the unbounded regex both rejected it and it passed either
+   * way. ⟨GPT Sol, F9.⟩ Both halves are here now, and the second one is what the
+   * bound was actually reaching for.
+   */
+  it("keeps a long hint, and still appends visibly where there is no question mark", () => {
+    const long = "Evidence — how should we compare these accounts? (a comparison across historical and modern cases)";
+    expect(long.length).toBeGreaterThan(40);
+    expect(questionFor(only(long), 1)).toBe(long);
+    /* No `?` before the bracket, so this is not a finished line however short
+       the bracket is: the mark is appended, and visibly. */
+    const statement = "It closes by reflecting (on a great many things, at considerable and unhelpful length indeed)";
+    expect(questionFor(only(statement), 1)).toBe(`${statement}?`);
+  });
+
+  it("says nothing needs a production code change any more, because V4 shipped", () => {
+    expect(armsNeedingCodeChange()).toEqual([]);
+    for (const arm of ARMS) expect(arm.questionRule).toBe("production");
+  });
+
+  /**
+   * **"We shipped what we measured", as an assertion rather than a claim in a
+   * plan doc.** GPT Sol's F2 on 260907d: every other gate in stage 1 — the
+   * parity pin, the checkpoint key, a real run showing V4-shaped output —
+   * passes just as happily if a word or a comma drifted while the shape held.
+   * This one does not.
+   *
+   * Seen red, 2026-09-07, by changing "four arguments" to "4 arguments" in
+   * `variants.md` § V4 and nowhere else.
+   */
+  it("ships exactly the V4 QUESTIONS block that was measured, byte for byte", () => {
+    expect(productionQuestions()).toBe(readVariants().questions.get("V4"));
   });
 });
 
@@ -227,7 +481,7 @@ describe("the arms", () => {
        so `isolated` must not appear anywhere. */
     for (const arm of ARMS) expect(["baseline", "noise-floor", "bakeoff"]).toContain(arm.comparison);
     expect(ARMS.filter((a) => a.comparison === "bakeoff").map((a) => a.name)).toEqual([
-      "gists-only", "v1", "v2", "v3", "v4", "gists-toc5", "gists-toc6",
+      "gists-only", "v1", "v2", "v3", "gists-toc5", "gists-toc6", "questions-toc6",
     ]);
   });
 
@@ -242,6 +496,74 @@ describe("the arms", () => {
    * is byte-identical to `gists-toc6`'s, so a run of the two would measure the
    * model's wobble and report it as the effect of the bump.
    */
+  /**
+   * **The questions axis's pinned control, and the identity that makes it
+   * necessary — the same argument as the gists pair above, one bump later.**
+   *
+   * `incumbent` has been V4 since `toc/7` landed, so it cannot be the before
+   * half of a before/after. Without `questions-toc6` this eval would have two
+   * names for one recipe and could never return *"the control was better all
+   * along"*, which it was built to be able to return.
+   */
+  it("pins the pre-V4 QUESTIONS block, and it is not the one production sends", () => {
+    const before = promptBlocksFor(armByName("questions-toc6"));
+    const after = promptBlocksFor(armByName("gists-toc6"));
+    /* **Equal where intended, unequal where intended** — GPT Sol's F1 on
+       260907d, whose whole point is that a pair claimed as one-variable has to
+       be checked in both directions. Equal on GISTS, because both pin toc/6.
+       Unequal on QUESTIONS, because that is the variable. */
+    expect(before.gists).toBe(after.gists);
+    expect(before.questions).not.toBe(after.questions);
+    /* **The "after" half is PINNED to V4, and equal to what production ships
+       today.** Both halves, and the difference between them is F13: for a day
+       `gists-toc6` resolved its questions through `productionQuestions()`, so
+       one word changed in `src/hierarchy.ts` would have silently changed what
+       this comparison was *of*, while the arm's own note claimed both halves
+       stay put. Pinning makes the claim true; the equality keeps it honest
+       about today. */
+    expect(after.questions).toBe(readVariants().questions.get("V4"));
+    expect(after.questions).toBe(productionQuestions());
+    expect(armByName("gists-toc6").variant).toBe("V4");
+    expect(armByName("gists-toc5").variant).toBe("V4");
+    /* The two sentences that separate the halves, one from each side. */
+    expect(before.questions).toContain(THE_DIAGNOSED_SENTENCE);
+    expect(before.questions).toContain("Under 15 words");
+    expect(after.questions).toContain("<topic> — <question>? (<shape hint>)");
+  });
+
+  /**
+   * **No two arms may share a recipe unless they are the declared noise floor.**
+   *
+   * This is what removed the `v4` arm on 2026-09-07: production took V4's
+   * QUESTIONS block, so `v4` (replacement GISTS + V4 QUESTIONS) became
+   * byte-identical to `gists-only` (replacement GISTS + production's QUESTIONS).
+   * Two arms with one recipe and no `noise-floor` label report the model's own
+   * wobble as an effect — which is the entire reason `incumbent-repeat` is
+   * spelled out as a pair rather than left to be noticed.
+   *
+   * **The surviving group has three members, and that was true before any of
+   * this.** `gists-toc6` pins the toc/6 GISTS block, `incumbent` slices the live
+   * one, and they are the same block — the identity `arms.ts`
+   * § `LENGTH_PAIR_DELTAS` states outright and the next test asserts over the
+   * whole system prompt. So `gists-toc6` buys a third sample of the incumbent
+   * recipe. It stays because it is the named *after* half of two pinned pairs
+   * (`gists-toc5` before it, `questions-toc6` beside it), and a pair with a half
+   * that follows the live prompt stops being a pair the day that prompt moves.
+   *
+   * The value here is the **exactness**: a new duplicate changes this list and
+   * has to be argued for rather than discovered in a null result.
+   */
+  it("has no accidental duplicate recipes — only the two declared groups", () => {
+    const seen = new Map<string, string[]>();
+    for (const arm of ARMS) {
+      const { gists, questions } = promptBlocksFor(arm);
+      const key = [gists, questions, arm.questionRule].join("\u0000");
+      seen.set(key, [...(seen.get(key) ?? []), arm.name]);
+    }
+    const shared = [...seen.values()].filter((names) => names.length > 1);
+    expect(shared).toEqual([["incumbent", "incumbent-repeat", "gists-toc6"]]);
+  });
+
   it("pins toc/6 to what production sends, and toc/5 to what it sent before", () => {
     expect(promptBlocksFor(armByName("gists-toc6")).gists).toBe(productionGists());
     expect(systemFor(armByName("incumbent"))).toBe(systemFor(armByName("gists-toc6")));
@@ -261,7 +583,10 @@ describe("the arms", () => {
     expect(armByName("gists-only").isolatedAgainst).toBe("incumbent");
     expect(armByName("gists-toc6").isolatedAgainst).toBe("gists-toc5");
     expect(armByName("v1").isolatedAgainst).toBe("gists-only");
-    for (const name of ["v2", "v3", "v4"]) expect(armByName(name).isolatedAgainst).toBe("v1");
+    for (const name of ["v2", "v3"]) expect(armByName(name).isolatedAgainst).toBe("v1");
+    /* The QUESTIONS axis's pinned pre/post pair — see the arm's own note for
+       why its partner is `gists-toc6` and not `incumbent`. */
+    expect(armByName("questions-toc6").isolatedAgainst).toBe("gists-toc6");
     /* Every name it points at has to exist, or the report quotes a pair that
        does not. */
     for (const arm of ARMS) if (arm.isolatedAgainst) expect(() => armByName(arm.isolatedAgainst!)).not.toThrow();
@@ -269,10 +594,19 @@ describe("the arms", () => {
 
   it("sends the variant text the file defines, and refuses one it does not", () => {
     expect(promptBlocksFor(armByName("v3")).questions).toContain("asked STRAIGHT");
-    expect(promptBlocksFor(armByName("incumbent")).questions).toContain(THE_DIAGNOSED_SENTENCE);
-    expect(promptBlocksFor(armByName("gists-only")).questions).toContain(THE_DIAGNOSED_SENTENCE);
+    /* `incumbent` and `gists-only` both take production's live QUESTIONS block,
+       which since toc/7 is V4's. They used to be checked for
+       THE_DIAGNOSED_SENTENCE; that assertion moved to `questions-toc6`, the
+       pinned arm that is now the only thing carrying it. What is checked here
+       is the identity that replaced it — the live slice, not a copy of it. */
+    expect(promptBlocksFor(armByName("incumbent")).questions).toBe(productionQuestions());
+    expect(promptBlocksFor(armByName("gists-only")).questions).toBe(productionQuestions());
     expect(promptBlocksFor(armByName("gists-only")).gists).toContain("No empty meta-narration");
     expect(() => promptBlocksFor({ ...armByName("v1"), variant: "V9" })).toThrow(/which variants.md does not define/);
+    expect(() => promptBlocksFor({ ...armByName("questions-toc6"), shippedQuestions: "toc/99" })).toThrow(/does not pin/);
+    /* An arm may name at most one source for its QUESTIONS block. The lenient
+       reading sends one and reports the other. */
+    expect(() => promptBlocksFor({ ...armByName("questions-toc6"), variant: "V1" })).toThrow(/at most one/);
   });
 });
 
@@ -387,6 +721,119 @@ describe("the calibration gate", () => {
   });
 });
 
+/**
+ * **The answer is checked against the lineup before any of it is believed.**
+ * ⟨GPT Sol, F26 on 260907d.⟩ The `demand` axis was requested by the rubric and
+ * required by nothing: a complete ranking with no axes at all passed the
+ * calibration gate, removing every `demand` field from a valid answer left
+ * calibration and ranking usable, and the stub judge — the thing that stands in
+ * for the real one on every free run — did not answer the schema it was
+ * pretending to be.
+ */
+describe("the judge's answer is validated against the lineup", () => {
+  const lineup = (): DocumentLineup => ({
+    slug: "d",
+    title: "D",
+    repeat: 1,
+    seed: 1,
+    nodes: [
+      {
+        nodeId: "n1",
+        title: "N",
+        depth: 1,
+        prose: "p",
+        proseComplete: true,
+        proseChars: 1,
+        gists: [
+          { id: "v1", label: "G1", text: "a" },
+          { id: "incumbent", label: "G2", text: "b" },
+        ],
+        questions: [
+          { id: "v1", label: "Q1", text: "a?" },
+          { id: "incumbent", label: "Q2", text: "b?" },
+        ],
+      },
+    ],
+  });
+
+  const scores = (which: "gists" | "questions") =>
+    Object.fromEntries(
+      (which === "gists" ? ["G1", "G2"] : ["Q1", "Q2"]).map((l) => [
+        l,
+        which === "gists"
+          ? { fidelity: 3, distinctive: 3, triage: 3, orientation: 3, simplicity: 3, length: "right" }
+          : { fidelity: 3, distinctive: 3, triage: 3, orientation: 3, simplicity: 3, leakage: 2, demand: 3, shapeHint: "none" },
+      ]),
+    );
+
+  const wholeAnswer = (): JudgeAnswer => ({
+    nodes: {
+      n1: {
+        gists: { axes: scores("gists"), ranking: ["G1", "G2"] },
+        questions: { axes: scores("questions"), ranking: ["Q1", "Q2"] },
+        rowForm: "both",
+      },
+    },
+  });
+
+  it("accepts an answer that fills in everything the rubric asked for", () => {
+    expect(validateAnswer(lineup(), wholeAnswer())).toEqual([]);
+  });
+
+  it("refuses an answer with no axes at all, which the calibration gate passes", () => {
+    const bare: JudgeAnswer = {
+      nodes: { n1: { gists: { axes: {}, ranking: ["G1", "G2"] }, questions: { axes: {}, ranking: ["Q1", "Q2"] } } },
+    };
+    /* The gate is about ORDER and says so: it passes this, correctly. */
+    expect(calibrationOf([{ where: "d/n1", ranking: ["v1", "incumbent", "anchor-1"], present: ["v1", "incumbent", "anchor-1"] }]).passed).toBe(true);
+    expect(validateAnswer(lineup(), bare).join(" ")).toContain("not scored");
+  });
+
+  it("refuses an answer that drops the new demand axis", () => {
+    const a = wholeAnswer();
+    for (const s of Object.values(a.nodes.n1!.questions!.axes)) delete (s as Record<string, unknown>).demand;
+    expect(validateAnswer(lineup(), a).join(" ")).toContain("demand");
+  });
+
+  it("refuses a score outside 1-5 and an enum outside its allowed values", () => {
+    const low = wholeAnswer();
+    low.nodes.n1!.questions!.axes.Q1!.demand = 0;
+    expect(validateAnswer(lineup(), low).join(" ")).toContain("outside 1-5");
+    const enumish = wholeAnswer();
+    enumish.nodes.n1!.questions!.axes.Q2!.shapeHint = "maybe";
+    expect(validateAnswer(lineup(), enumish).join(" ")).toContain("shapeHint");
+  });
+
+  it("refuses a ranking that is not a permutation of its own lineup", () => {
+    const short = wholeAnswer();
+    short.nodes.n1!.gists!.ranking = ["G1"];
+    expect(validateAnswer(lineup(), short).join(" ")).toContain("left out of the ranking — G2");
+    const twice = wholeAnswer();
+    twice.nodes.n1!.questions!.ranking = ["Q1", "Q1"];
+    expect(validateAnswer(lineup(), twice).join(" ")).toContain("ranked twice — Q1");
+  });
+
+  it("refuses a node the lineup never showed, and notices one left unanswered", () => {
+    const extra = wholeAnswer();
+    extra.nodes.n9 = { gists: { axes: {}, ranking: [] } };
+    expect(validateAnswer(lineup(), extra).join(" ")).toContain("n9");
+    expect(validateAnswer(lineup(), { nodes: {} }).join(" ")).toContain("n1");
+  });
+
+  /**
+   * **The stub is the judge on every free run**, so a stub that answers a
+   * different schema from the one the rubric asks for is a harness exercising a
+   * seam it does not have. It omitted `demand` from the day the axis was added.
+   */
+  it("holds the stub judge to the schema it is pretending to be", async () => {
+    const l = lineup();
+    const answer = await stubJudge("good", new Map([["d-r1", l]]))("", "d-r1");
+    expect(validateAnswer(l, answer)).toEqual([]);
+    const bad = await stubJudge("bad", new Map([["d-r1", l]]))("", "d-r1");
+    expect(validateAnswer(l, bad)).toEqual([]);
+  });
+});
+
 describe("the prose the judge is shown", () => {
   it("samples across the section rather than taking its head", () => {
     /* **GPT Sol's P0-2.** The calibration node is 30,187 characters; its opening
@@ -457,7 +904,7 @@ describe("shape facts are facts", () => {
     expect(Object.keys(f)).not.toContain("penalty");
   });
 
-  it("reads V4's shape, which is the one production mangles", () => {
+  it("reads V4's post-question hint shape, which is production's since toc/7", () => {
     const f = shapeFacts("Computational functionalism — why isn't computation sufficient for consciousness? (4 arguments)");
     expect(f.hintAfterQuestionMark).toBe(true);
     expect(f.endsInQuestionMark).toBe(false);
@@ -489,16 +936,22 @@ describe("ranking, the noise floor and the threshold", () => {
     expect(ranks.find((r) => r.arm === "incumbent")!.meanRank).toBe(1);
   });
 
+  /** Two repeats, each led outright by `v1` — the shape everything else varies from. */
+  const LED_BY_V1 = [
+    { repeat: 1, leaders: ["v1"] },
+    { repeat: 2, leaders: ["v1"] },
+  ];
+
   it("calls a gap inside the threshold not a gap", () => {
     const ranks = [
       { arm: "v1", meanRank: 1.0, lineups: 10 },
       { arm: "incumbent", meanRank: 1.4, lineups: 10 },
       { arm: "v3", meanRank: 3.9, lineups: 10 },
     ];
-    const sep = separate(ranks, 0.5, { perRepeatLeaders: ["v1", "v1"], coverageClean: true });
+    const sep = separate(ranks, 0.5, { perRepeatLeaders: LED_BY_V1, coverageClean: true, judgingComplete: true });
     expect(sep.separable).toBe(false);
     expect(sep.tiedWithLeader).toEqual(["v1", "incumbent"]);
-    expect(separate(ranks, 0.2, { perRepeatLeaders: ["v1", "v1"], coverageClean: true }).separable).toBe(true);
+    expect(separate(ranks, 0.2, { perRepeatLeaders: LED_BY_V1, coverageClean: true, judgingComplete: true }).separable).toBe(true);
   });
 
   it("refuses a leader that did not lead in every repeat", () => {
@@ -509,9 +962,16 @@ describe("ranking, the noise floor and the threshold", () => {
       { arm: "v1", meanRank: 1.0, lineups: 10 },
       { arm: "v3", meanRank: 3.9, lineups: 10 },
     ];
-    const sep = separate(ranks, 0.2, { perRepeatLeaders: ["v1", "v3"], coverageClean: true });
+    const sep = separate(ranks, 0.2, {
+      perRepeatLeaders: [
+        { repeat: 1, leaders: ["v1"] },
+        { repeat: 2, leaders: ["v3"] },
+      ],
+      coverageClean: true,
+      judgingComplete: true,
+    });
     expect(sep.separable).toBe(false);
-    expect(sep.refusedBecause.join(" ")).toContain("not the same in every repeat");
+    expect(sep.refusedBecause.join(" ")).toContain("not the sole leader of every repeat");
   });
 
   it("refuses a leader on a run that is not a clean bill", () => {
@@ -521,7 +981,7 @@ describe("ranking, the noise floor and the threshold", () => {
       { arm: "v1", meanRank: 1.0, lineups: 4 },
       { arm: "v3", meanRank: 3.9, lineups: 10 },
     ];
-    const sep = separate(ranks, 0.2, { perRepeatLeaders: ["v1", "v1"], coverageClean: false });
+    const sep = separate(ranks, 0.2, { perRepeatLeaders: LED_BY_V1, coverageClean: false, judgingComplete: true });
     expect(sep.separable).toBe(false);
     expect(sep.refusedBecause.join(" ")).toContain("not a clean bill");
   });
@@ -591,7 +1051,79 @@ describe("ranking, the noise floor and the threshold", () => {
   it("names the leader of each repeat's own table", () => {
     expect(
       perRepeatLeaders([judged("d", 1, ["v1", "v3"]), judged("d", 2, ["v3", "v1"])], "questions"),
-    ).toEqual(["v1", "v3"]);
+    ).toEqual([
+      { repeat: 1, leaders: ["v1"] },
+      { repeat: 2, leaders: ["v3"] },
+    ]);
+  });
+
+  /**
+   * **A tie is not a leader, and insertion order is not a tie-break.** ⟨GPT Sol,
+   * F25 on 260907d.⟩ `perRepeatLeaders` took `[0]` of each repeat's table, so
+   * two arms on the same mean rank were separated by whichever `meanRanks`
+   * happened to have inserted first — and the 2026-09-07 run's repeat 3 was an
+   * exact tie at 1.6667 between `questions-toc6` and `incumbent`, reported as a
+   * leader flip. Here the two arms swap places on two lineups of one repeat, so
+   * their means are equal by construction.
+   */
+  it("calls a per-repeat tie a tie rather than letting insertion order pick", () => {
+    const tie: Judgement[] = [
+      {
+        slug: "d",
+        repeat: 1,
+        nodes: {
+          n1: { questions: { axes: {}, ranking: ["v1", "incumbent"] } },
+          n2: { questions: { axes: {}, ranking: ["incumbent", "v1"] } },
+        },
+      },
+      { slug: "d", repeat: 2, nodes: { n1: { questions: { axes: {}, ranking: ["v1", "incumbent"] } } } },
+    ];
+    const leaders = perRepeatLeaders(tie, "questions");
+    expect(leaders[0]!.leaders.slice().sort()).toEqual(["incumbent", "v1"]);
+    expect(leaders[1]!.leaders).toEqual(["v1"]);
+  });
+
+  it("refuses a leader that only tied at the top of a repeat", () => {
+    const ranks = [
+      { arm: "v1", meanRank: 1.0, lineups: 10 },
+      { arm: "incumbent", meanRank: 3.9, lineups: 10 },
+    ];
+    const sep = separate(ranks, 0.2, {
+      perRepeatLeaders: [
+        { repeat: 1, leaders: ["v1"] },
+        { repeat: 2, leaders: ["v1", "incumbent"] },
+      ],
+      coverageClean: true,
+      judgingComplete: true,
+    });
+    expect(sep.separable).toBe(false);
+    expect(sep.refusedBecause.join(" ")).toContain("tied");
+    /* And the wording says WHICH repeat tied, so a reader is not left to guess. */
+    expect(sep.refusedBecause.join(" ")).toContain("repeat 2");
+  });
+
+  /**
+   * **A judging pass that did not finish may show its table and may not name a
+   * leader.** ⟨GPT Sol, F24 on 260907d.⟩ `failures` was never passed into
+   * `separate`, so two agreeing repeats could name a leader while the third
+   * requested repeat had failed — and the repeat that failed is exactly the one
+   * that might have moved it.
+   */
+  it("refuses a leader when a requested judging call failed", () => {
+    const ranks = [
+      { arm: "v1", meanRank: 1.0, lineups: 10 },
+      { arm: "v3", meanRank: 3.9, lineups: 10 },
+    ];
+    const leaders = [
+      { repeat: 1, leaders: ["v1"] },
+      { repeat: 2, leaders: ["v1"] },
+    ];
+    expect(separate(ranks, 0.2, { perRepeatLeaders: leaders, coverageClean: true, judgingComplete: true }).separable).toBe(true);
+    const partial = separate(ranks, 0.2, { perRepeatLeaders: leaders, coverageClean: true, judgingComplete: false });
+    expect(partial.separable).toBe(false);
+    expect(partial.refusedBecause.join(" ")).toContain("judging");
+    /* The table itself is still there — a partial run is shown, not suppressed. */
+    expect(partial.ordered.map((r) => r.arm)).toEqual(["v1", "v3"]);
   });
 });
 
@@ -764,6 +1296,48 @@ describe("every eval that imports coverage.ts takes its exit code from it", () =
       expect(raises.length, "of which raise process.exitCode").toBe(calls.length);
     });
   }
+
+  /**
+   * **A failed calibration gate has to reach the shell**, and until 2026-09-07 it
+   * did not: `commandJudge` never touched `process.exitCode`, and
+   * `commandReport`'s came from `exitCodeFor(coverage)` alone. So *"No ranking is
+   * reported"* — the declared outcome of the 2026-09-05 run — was a printed
+   * sentence that a wrapper, a cron or a `&&` read as success.
+   *
+   * **Both commands, counted rather than merely present**, for the reason the
+   * coverage guard above gives in full: a check satisfied by one of two exits
+   * passes a file where the other one shrugs. `judge` is where the verdict is
+   * computed and where a caller that stops early finds out; `report` is where it
+   * is written up.
+   */
+  it("raises process.exitCode on a failed calibration gate, in both commands", () => {
+    const src = fs.readFileSync(path.join(REPO, "evals/summaries/run.ts"), "utf8");
+    const RAISES_ON_GATE = /!\w+(?:\.\w+)*\.passed\) process\.exitCode = 1/g;
+    const raises = src.match(RAISES_ON_GATE) ?? [];
+    expect(raises.length, "commands that raise on a failed gate").toBe(2);
+    /* And the guard can fire: the shape it is written against is a file that
+       computes the verdict and only prints it. */
+    const shrugs = "const verdict = calibrationOf(x);\nconsole.log(verdict.passed);\n";
+    expect(shrugs.match(RAISES_ON_GATE) ?? []).toHaveLength(0);
+  });
+
+  /**
+   * **A judging pass that did not finish has to reach the shell too**, for the
+   * same reason a failed gate does. The saved 2026-09-07 run asked for three
+   * repeats, completed two, recorded one failure — and `report` exited `0` over
+   * it while naming a leader on the gists. ⟨GPT Sol, F24 on 260907d.⟩
+   *
+   * Counted in both commands, like the gate above: `judge` is where the calls
+   * are made and where a caller that stops early finds out, `report` is where a
+   * caller reading the frozen artefact does.
+   */
+  it("raises process.exitCode when judging calls failed, in both commands", () => {
+    const src = fs.readFileSync(path.join(REPO, "evals/summaries/run.ts"), "utf8");
+    const RAISES_ON_FAILURES = /failures\.length\) process\.exitCode = 1/g;
+    expect((src.match(RAISES_ON_FAILURES) ?? []).length, "commands that raise on a failed judging call").toBe(2);
+    const shrugs = 'if (failures.length) console.log(failures.length + " judging call(s) failed.");\n';
+    expect(shrugs.match(RAISES_ON_FAILURES) ?? []).toHaveLength(0);
+  });
 
   it("can still fire — the guard, against a file that counts and shrugs", () => {
     /* A check you have never seen fail is not evidence. Both shapes: one that

@@ -27,6 +27,7 @@ import {
   pdfChunkTooBig,
   pdfPagesCutOff,
   pdfPagesFiltered,
+  pdfPagesIncomplete,
   pdfTooManyPages,
   placingFailed,
   saidNothing,
@@ -161,6 +162,7 @@ const FROM_FACTORIES: Record<FactoryName, ReaderFacingFailure[]> = {
   pdfChunkTooBig: [pdfChunkTooBig(34, 30)],
   pdfPagesCutOff: [pdfPagesCutOff([12, 13])],
   pdfPagesFiltered: [pdfPagesFiltered([12, 13])],
+  pdfPagesIncomplete: [pdfPagesIncomplete([12, 13])],
 };
 
 const EVERY: ReaderFacingFailure[] = [...CONSTANTS, ...Object.values(FROM_FACTORIES).flat()];

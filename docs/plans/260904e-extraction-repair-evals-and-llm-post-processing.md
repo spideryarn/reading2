@@ -2,8 +2,9 @@
 
 **Status: stages A and B are done. C is under way — rewritten 2026-09-06 into C0–C5 after review by
 Fable and GPT Sol and a re-measurement that found one of its six items already fixed and two of them
-misdescribed; C0 is done and on `dev` (C0.1 the order-gate fix, C0.2 the shape corpus), and C1a
-is in progress. D is not started. Scope narrowed after review.** The model repair pass Greg asked for is
+misdescribed. On `dev`: C0.1 the order-gate fix, C0.2 the shape corpus, C1a the capability floor,
+C4a the narrow delete class. C1 is deferred until a long-wall fixture exists — C1a took its argument
+away, and its own § says so. Left: C2, C3, C4b, C5. D is not started. Scope narrowed after review.** The model repair pass Greg asked for is
 **not** in this plan — GPT Sol's review found its operation layer not yet designable, and it moves to
 its own plan with the preconditions named in
 [What this plan deliberately does not build](#what-this-plan-deliberately-does-not-build-the-model-repair-pass).
@@ -2576,8 +2577,17 @@ ruler's five recorded preconditions, which are conditions on **how stage C may u
   paragraphs and the 75 PLOS reference-list controls § C4 counted — the furniture, leaving.
   **Sphinx and MkDocs churn nothing**: `¶` folds to nothing, so `foldedKey`'s second pass carries
   every id, 152/152 and 53/53. `acx` and `wiki-gdp-table` are untouched. Nobody is affected until an
-  article is re-extracted, which is always an explicit act — but a *bulk* re-extraction of MediaWiki
-  or PLOS articles should wait for somebody to have looked at what is anchored to those blocks.
+  article is re-extracted, which is always an explicit act.
+
+  **Decided 2026-09-07: we do not re-extract the shelf.** Greg was offered four routes — measure what
+  reader data is anchored to the blocks that would be lost and re-extract the safe majority; re-extract
+  everything now; leave it; or build a per-article button — and chose to leave it. So new extractions
+  are correct from C4a onwards, articles already on readers' shelves keep the structure they were
+  imported with, and **an existing MediaWiki article's outline stays wrong until its reader
+  re-imports it**. That is the cost of the decision, stated rather than buried: the reader who added a
+  Wikipedia page last week still has 2 headings of 56. Do not open this again without a new reason —
+  a reader complaint, or a re-extraction that becomes necessary for some other purpose and can carry
+  the fix along for free.
 
   ###### The audit line is a log line, and that is a deferral rather than the design
 

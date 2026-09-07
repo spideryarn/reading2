@@ -1515,6 +1515,30 @@ describe("reading a records file back", () => {
     expect(() => parseRecordsFile(older, "f.json")).toThrow(/carries no `range`/);
   });
 
+  /**
+   * **And the format it was bumped from last**, which is the one an old artefact
+   * on this machine actually is. A `/3` file's `stats` carries no
+   * `missingQuestions`, and everything else about it is the shape this harness
+   * expects — so accepting it would hand a reader `undefined` where the type
+   * promises a list of names, and the reading that gets is *the model answered
+   * every question it was asked*, over runs made before it was asked anything.
+   * The version is the only place that can be caught: downstream, an absent
+   * field and an empty list look identical. GPT Sol's third review of stage 2,
+   * F17.
+   */
+  it("refuses the format it was bumped from, whose stats predate `missingQuestions`", () => {
+    const three = JSON.parse(good) as Record<string, unknown>;
+    three.version = "deepen-records/3";
+    const stats: Record<string, unknown> = { ...(three.stats as Record<string, unknown>) };
+    three.stats = stats;
+    /* The point of the fixture, spelled out: this is a file from before the
+       field existed, not a file with an empty one. */
+    expect(stats.missingQuestions).toBeUndefined();
+    const older = JSON.stringify(three);
+    expect(() => parseRecordsFile(older, "f.json")).toThrow(/deepen-records\/3/);
+    expect(() => parseRecordsFile(older, "f.json")).toThrow(/`missingQuestions`/);
+  });
+
   it("refuses a file that is missing what it is for", () => {
     const empty = JSON.stringify({ version: RECORDS_VERSION, slug: "book", writtenAt: "x", stats: NO_STATS });
     expect(() => parseRecordsFile(empty, "f.json")).toThrow(/records is missing/);

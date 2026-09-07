@@ -14,8 +14,12 @@
  * what goes on the wire, verbatim.
  *
  * **The parse is loud on every failure and silent on none.** A section that
- * moved, a fence that lost its language tag, an anchor row that stopped being a
- * table row: each throws, naming the heading it was looking under. That matters
+ * moved, a section that appeared twice, a fence that disappeared, an anchor row
+ * that stopped being a table row: each throws, naming the heading it was looking
+ * under. (It used to say *"a fence that lost its language tag"*, which was never
+ * true — every prompt fence in `variants.md` is untagged and always has been, so
+ * the one example given was the one thing that could not happen. GPT Sol, F15,
+ * 2026-09-07.) That matters
  * more here than in most parsers, because the failure mode of a lenient one is
  * an arm that sends an EMPTY questions block, produces plausible output anyway
  * (the model still has the gist rules and the shape of the JSON) and scores as
@@ -118,7 +122,40 @@ export interface VariantsFile {
    * before/after cannot be built out of the `incumbent` arm alone.
    */
   shippedGists: Map<string, string>;
+  /**
+   * **Shipped QUESTIONS blocks, pinned by prompt version** — `"toc/6"`.
+   *
+   * The exact mirror of `shippedGists`, and it exists for the same reason one
+   * bump later: `productionQuestions()` slices the *live* SYSTEM, which has been
+   * V4 since `toc/7`, so the block V4 replaced has no other home. Without it the
+   * eval has no pre-V4 control and cannot return *"the control was better all
+   * along"*.
+   */
+  shippedQuestions: Map<string, string>;
   anchors: AnchorRow[];
+}
+
+/**
+ * **Two headings of one name is a fault, not a preference**, and it has to throw
+ * where the discovery loop finds the second one.
+ *
+ * `fencedUnder` always takes the **first** heading that matches, and each
+ * discovery loop below writes into a `Map`, so a duplicated section parsed
+ * silently: the map reported one entry, the block used was the first copy, and
+ * the copy a person had just edited was the one ignored. GPT Sol demonstrated it
+ * on 2026-09-07 by adding a second `## The shipped QUESTIONS block, toc/6`,
+ * poisoning the **first** with a rule the prompt forbids, and watching
+ * `readVariants` return happily with every current test still green. ⟨F14.⟩
+ *
+ * That is this file's own stated failure mode — *"an arm that sends an EMPTY
+ * questions block, produces plausible output anyway and scores as a variant"* —
+ * in the one form the loud-on-every-failure parse did not cover.
+ */
+function refuseDuplicate(seen: Map<string, string>, key: string, label: string): void {
+  if (!seen.has(key)) return;
+  throw new Error(
+    `variants.md: two "## " headings for ${label}. The first copy is the one that would be parsed and the second silently ignored, so the block you just edited may not be the block that goes on the wire. Delete one.`,
+  );
 }
 
 let cached: VariantsFile | null = null;
@@ -143,6 +180,7 @@ export function readVariants(path: URL = VARIANTS_PATH): VariantsFile {
     const m = /^## (V\d+)\b/.exec(line);
     if (m) {
       const name = m[1]!;
+      refuseDuplicate(questions, name, `variant ${name}`);
       questions.set(name, fencedUnder(markdown, new RegExp(`^${name}\\b`), name));
     }
   }
@@ -154,9 +192,23 @@ export function readVariants(path: URL = VARIANTS_PATH): VariantsFile {
     const m = /^## The shipped GISTS block, (toc\/\d+)\s*$/.exec(line);
     if (m) {
       const version = m[1]!;
+      refuseDuplicate(shippedGists, version, `the shipped ${version} GISTS block`);
       shippedGists.set(
         version,
         fencedUnder(markdown, new RegExp(`^The shipped GISTS block, ${version.replace("/", "\\/")}\\s*$`), `the shipped ${version} GISTS block`),
+      );
+    }
+  }
+  /* The same discovery, for the QUESTIONS axis's before halves. */
+  const shippedQuestions = new Map<string, string>();
+  for (const line of markdown.split("\n")) {
+    const m = /^## The shipped QUESTIONS block, (toc\/\d+)\s*$/.exec(line);
+    if (m) {
+      const version = m[1]!;
+      refuseDuplicate(shippedQuestions, version, `the shipped ${version} QUESTIONS block`);
+      shippedQuestions.set(
+        version,
+        fencedUnder(markdown, new RegExp(`^The shipped QUESTIONS block, ${version.replace("/", "\\/")}\\s*$`), `the shipped ${version} QUESTIONS block`),
       );
     }
   }
@@ -178,10 +230,25 @@ export function readVariants(path: URL = VARIANTS_PATH): VariantsFile {
       throw new Error(`variants.md: the shipped ${version} GISTS block does not begin "GISTS" — it begins ${JSON.stringify(text.slice(0, 40))}`);
     }
   }
+  for (const [version, text] of shippedQuestions) {
+    if (!text.startsWith("QUESTIONS")) {
+      throw new Error(`variants.md: the shipped ${version} QUESTIONS block does not begin "QUESTIONS" — it begins ${JSON.stringify(text.slice(0, 40))}`);
+    }
+  }
+  /* The pre-V4 control has to exist, and it has to be the block V4 replaced.
+     A lenient parse here gives `questions-toc6` no block at all, which
+     `promptBlocksFor` would throw on — but the count is checked anyway, because
+     the day somebody renames the section is the day the eval quietly loses the
+     only arm that can say the control won. */
+  if (!shippedQuestions.has("toc/6")) {
+    throw new Error(
+      `variants.md: no "## The shipped QUESTIONS block, toc/6" section — that block is the pre-V4 control (arms.ts § questions-toc6) and the live SYSTEM has been V4 since toc/7, so nothing else has a copy of it`,
+    );
+  }
   if (anchors.length !== 5) {
     throw new Error(`variants.md: found ${anchors.length} anchor rows, expected 5 — the calibration gate's claim is about all five`);
   }
-  const parsed = { questions, gists, shippedGists, anchors };
+  const parsed = { questions, gists, shippedGists, shippedQuestions, anchors };
   if (path === VARIANTS_PATH) cached = parsed;
   return parsed;
 }

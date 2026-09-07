@@ -149,6 +149,37 @@ describe("structure, which characters cannot show", () => {
     expect(inv.structure.math).toBeUndefined();
     expect(inv.structure.table).toBeUndefined();
   });
+
+  it("counts every heading level from h2 down, because acx lost 80 h4s unseen", () => {
+    /* STRUCTURE stopped at h3 until 2026-09-07, so a page could lose all of its
+       h4s and the summary would say the structure was fine. `acx.html` does
+       exactly that — 80 of 80 — on the fixture whose headings are the reason it
+       is in the corpus. Narrow the list again and this test goes red. */
+    const src = page([
+      `<h2>Two</h2><p>${para(1)}</p>`,
+      `<h3>Three</h3><p>${para(2)}</p>`,
+      `<h4>Four</h4><p>${para(3)}</p>`,
+      `<h5>Five</h5><p>${para(4)}</p>`,
+      `<h6>Six</h6><p>${para(5)}</p>`,
+    ]);
+    /* The extraction keeps the prose and drops every heading — the shape the
+       h2/h3-only list could only half see. */
+    const out = [1, 2, 3, 4, 5].map((n) => `<p>${para(n)}</p>`).join("");
+    const inv = compare(src, out, URL);
+    for (const tag of ["h2", "h3", "h4", "h5", "h6"]) {
+      expect(inv.structure[tag], `${tag} must be counted`).toEqual({ present: 1, kept: 0 });
+    }
+  });
+
+  it("does not count h1, whose loss is Readability doing its job", () => {
+    /* Readability promotes the page's own h1 to the title, so h1 leaving the
+       body is correct. Counting it reported `h1 0/1` on 29 of the 39 fixtures,
+       every one of them right — and an instrument that cries wolf that often
+       stops being read. If h1 is ever added back, this goes red and the
+       reasoning on STRUCTURE has to be answered rather than skipped. */
+    const inv = compare(page([`<h1>Title</h1><p>${para(1)}</p>`]), `<p>${para(1)}</p>`, URL);
+    expect(inv.structure.h1).toBeUndefined();
+  });
 });
 
 describe("the fifth bug: multiplicity", () => {

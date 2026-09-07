@@ -423,6 +423,46 @@ export function BlockGutter({
     };
     const key = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      /* **The press stops here**, which is the whole of this gutter's claim on
+         it. This is tier T2 of five — `document`, bubble — and the three
+         modeless dialogs listen one hop further on, at `window` bubble
+         (useEscapeToClose.ts), so without this line one press closed the
+         disclosure *and* whichever of Comment, Chat or Annotate was open behind
+         it, discarding a half-typed annotation in the last case. Floating UI's
+         `useDismiss`, the third member of this tier, has always stopped;
+         `useHoverCard` learned to on the same day as this.
+
+         **Unconditional here, and conditional in `useHoverCard`**, and the
+         difference is not an inconsistency: the effect this handler lives in
+         returns at the top unless `open`, so the listener does not exist while
+         there is nothing to close. The hover card's runs whenever its hook is
+         mounted, so it has to ask.
+
+         `stopPropagation`, not `stopImmediatePropagation`: the other listeners
+         on `document` are the *siblings* in this tier — a tooltip, another
+         gutter — and only `stopImmediatePropagation` reaches a sibling, which
+         resolves by **registration order**. § A6 forbids that in as many words,
+         because order encodes mount time rather than what the reader can see,
+         and it would have this z-3 row claiming authority over a tooltip
+         painted at z-100. So pair 18 is **renounced rather than fixed**, on the
+         same reckoning as pair 12 and with the same limit on it: what it costs
+         is one extra tooltip or disclosure closing, never a draft. The decision
+         is § *Two amendments* of
+         docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md,
+         not this comment — GPT Sol's P2 on stage 3 was that a code comment
+         asserting an exception is not the same as one having been decided. docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-escape-inventory.md;
+         the pairs are tests/one-escape-closes-one-surface.test.tsx. */
+      /* **A native modal outranks this, and the platform will close it whatever
+         we do.** A dialog opened with `showModal()` sits in the top layer and
+         its Escape is a platform close request rather than a listener, so
+         nothing here can stop it — meaning that without this line the press
+         closes the dialog *and* this surface, which is pair 17. Asking
+         `dialog[open]` is asking the platform what the platform already owns;
+         `useEscapeToClose.ts` explains why that is a query rather than a
+         registry, and why it is safe while every `<dialog>` here is opened with
+         `showModal()`. GPT Sol's P2 on stage 3, 2026-09-07. */
+      if (document.querySelector("dialog[open]") !== null) return;
+      e.stopPropagation();
       goTo.current = "more";
       setOpen(false);
     };

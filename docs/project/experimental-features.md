@@ -180,12 +180,21 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
 | [Referee](referee-mode.md) | **Not because it is unfinished** — its own doc opens by saying all four sub-modes are built and working. It is the newest mode and by far the narrowest: it is for somebody who has been *asked to peer-review* the piece, which most readers never are. Greg's call, and the one row here that is about audience rather than readiness. |
 | [Remember](remember-mode.md) | The name suggests saved notes and spaced repetition, neither of which exists; the quiz half is newer still. |
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
+| [Structure](../plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md) | **Hiding it is half of the decision to build it.** It is a *third* view of the tree Hierarchy and Outline already draw, and it exists to be compared against them rather than to be read — so behind the switch, an ordinary reader's bar is unchanged and the band does not grow. Greg, 2026-09-06: *"I don't know if Structure will be better, so let's build it as a third, and that way I can flip back and forth to compare. It'll be in the 'Experimental Features' section."* The second row here that is about what a mode is **for** rather than about its readiness, Referee being the first. |
 
-**Everything else is what everybody sees**, a signed-out visitor included. Hierarchy and Outline
-are both stand-ins for the merged **Structure** mode
-([260903b](../plans/260903b-one-structure-mode-hierarchy-and-outline-merged.md)); when that lands
-those two become one, and because nothing here or in the tests counts them, that merge needs no
-number changed anywhere.
+**Everything else is what everybody sees**, a signed-out visitor included.
+
+**This paragraph used to say that Hierarchy and Outline were stand-ins for a merged Structure mode,
+and that "when that lands those two become one". That is no longer the plan.** Asked on 2026-09-06
+whether Structure should replace both, replace only Outline, be dropped, or be added as a third, Greg
+chose to add it as a third and put it behind this switch — so all three now exist, and the merge
+[260903b](../plans/260903b-one-structure-mode-hierarchy-and-outline-merged.md) proposed is **deferred
+pending the comparison Structure was built to make**, not rejected. Whether it eventually replaces
+either of the other two is a later decision; nothing in this work pre-empts it, and nothing was
+removed. [260907c](../plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md).
+
+The half of the old paragraph that survives is the arithmetic: because nothing here or in the tests
+counts the modes, a third structural mode needed no number changed anywhere.
 
 **Quotes left the table on 2026-09-06.** Greg:
 

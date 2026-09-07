@@ -318,6 +318,11 @@ const GENERATES: Record<Mode, boolean> = {
   plain: false,
   hierarchy: false,
   outline: false,
+  /* Three views of one already-built tree, so none of the three has anything to
+     fill. Behind the experimental switch does not change this answer: the bar
+     lists exactly what the Dock lists, so a reader with the switch off never
+     sees this row, and a reader with it on sees a row that starts no work. */
+  structure: false,
   summary: false,
   search: false,
   chat: false,

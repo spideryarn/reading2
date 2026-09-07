@@ -29,8 +29,14 @@
  * The plan asks for both because the first was being used as if it covered the
  * second, and it does not: a judge could rank identically-produced arms
  * identically every time and still reorder the real arms on every pass. Both are
- * reported in **ranks**, so an arm-to-arm gap can be compared with them directly,
- * and the separability threshold is the larger of the two.
+ * reported in **ranks**, so an arm-to-arm gap can be compared with them directly.
+ *
+ * **The separability threshold is judge instability alone**, not the larger of
+ * the two. This sentence said "the larger" until 2026-09-07 and the code has
+ * never done that: `separabilityThreshold` returns `instability.ranks`, and the
+ * note above it says why — taking the max of the two was the ad-hoc scalar GPT
+ * Sol objected to. The generation floor is reported beside it and read by a
+ * person.
  *
  * ## The decision rules
  *
@@ -74,7 +80,7 @@ export interface ShapeFacts {
   hasBracketedHint: boolean;
   /** The hint claims a count — a digit or a number word inside the brackets. */
   hintClaimsCount: boolean;
-  /** The hint sits after the `?`, which is V4's shape and the one production mangles. */
+  /** The hint sits after the `?`, which is V4's shape and production's since toc/7. */
   hintAfterQuestionMark: boolean;
   metaNarration: string[];
 }
@@ -399,11 +405,17 @@ export interface Separation {
   /** Arms whose mean rank is within the threshold of the leader's — one group, no winner among them. */
   tiedWithLeader: string[];
   /**
-   * **Did the same arm lead in every judge repeat's own table?**
+   * **Was the same arm the SOLE leader of every judge repeat's own table?**
    *
    * GPT Sol's replacement for the scalar comparison, and the stronger half of
    * the test: an ordering that does not reproduce under a fresh shuffle of the
    * same frozen output is not an ordering.
+   *
+   * "Sole" was added on 2026-09-07. It read the top row of each repeat's table
+   * and nothing else, so two arms on the same mean rank were separated by
+   * whichever `meanRanks` had inserted first — and repeat 3 of the run it was
+   * built for was an exact tie at 1.6667, reported as a leader flip. ⟨GPT Sol,
+   * F25 on 260907d.⟩
    */
   ledEveryRepeat: boolean;
   /** Why a leader was refused, in words, when one was. */
@@ -415,7 +427,7 @@ export interface Separation {
 export function separate(
   ranks: readonly RankSummary[],
   threshold: number | null,
-  opts: { perRepeatLeaders?: readonly string[]; coverageClean?: boolean } = {},
+  opts: { perRepeatLeaders?: readonly RepeatLeaders[]; coverageClean?: boolean; judgingComplete?: boolean } = {},
 ): Separation {
   const ordered = [...ranks].sort((a, b) => a.meanRank - b.meanRank);
   const leader = ordered[0];
@@ -428,17 +440,28 @@ export function separate(
     refusedBecause.push(`${tiedWithLeader.join(", ")} sit within ${threshold.toFixed(2)} ranks of each other`);
   }
   const leaders = opts.perRepeatLeaders;
-  const ledEveryRepeat = leaders !== undefined && leaders.length > 1 && leaders.every((l) => l === leader.arm);
+  const ledEveryRepeat =
+    leaders !== undefined && leaders.length > 1 && leaders.every((r) => r.leaders.length === 1 && r.leaders[0] === leader.arm);
   if (leaders === undefined || leaders.length < 2) {
     refusedBecause.push("fewer than two judge repeats, so no ordering was checked for reproducibility");
   } else if (!ledEveryRepeat) {
-    refusedBecause.push(`the leader is not the same in every repeat (${[...new Set(leaders)].join(", ")})`);
+    refusedBecause.push(`\`${leader.arm}\` is not the sole leader of every repeat (${leadersLine(leaders)})`);
   }
   /* **Coverage gates the leader, not the table.** An arm that answered only its
      easy nodes is ranked over fewer lineups than its rivals and can still top
      the mean; naming it the leader would reward the omission. ⟨GPT Sol, P0-3.⟩ */
   if (opts.coverageClean === false) {
     refusedBecause.push("the run is not a clean bill, so an arm may lead by having answered less");
+  }
+  /* **The same refusal, one stage later.** A judging pass that asked for three
+     repeats and completed two is a table over fewer repeats than were
+     pre-registered, and the repeat that failed is exactly the one that might
+     have moved the leader. Until 2026-09-07 `failures` was not passed in here at
+     all, so two agreeing repeats could name a leader while a third had died.
+     ⟨GPT Sol, F24 on 260907d.⟩ The table is still shown — a partial run is
+     reported, not suppressed — but it may not name a winner. */
+  if (opts.judgingComplete === false) {
+    refusedBecause.push("some judging calls failed, so this table is missing repeats that were asked for and might have moved the leader");
   }
   return {
     ordered,
@@ -450,9 +473,47 @@ export function separate(
   };
 }
 
-/** The top arm in each judge repeat's own table — what `separate` checks for reproducibility. */
-export function perRepeatLeaders(judgements: readonly Judgement[], which: "gists" | "questions"): string[] {
-  return repeatsIn(judgements)
-    .map((r) => meanRanks(judgements.filter((j) => j.repeat === r), which)[0]?.arm)
-    .filter((a): a is string => a !== undefined);
+/** Everything on the top mean rank of one repeat's own table. `leaders` is usually one arm. */
+export interface RepeatLeaders {
+  repeat: number;
+  leaders: string[];
+}
+
+/**
+ * **Two arms whose sums differ only in the last bits are tied, not ordered.**
+ *
+ * Mean ranks are sums of small integers over a count, so a genuine tie usually
+ * lands on the same double — but `10/6` and `5/3` need not, and the direction
+ * this can be wrong in matters: calling a tie a tie refuses a leader, and
+ * calling a rounding difference an ordering names one. So the comparison is
+ * within an epsilon far below anything a rank arithmetic can mean.
+ */
+const TIE = 1e-9;
+
+/**
+ * **The arms on top of each judge repeat's own table** — what `separate` checks
+ * for reproducibility.
+ *
+ * It returns the whole leading SET, and the repeat number with it. It used to
+ * return `[0]` of each table, which made insertion order the tie-break: repeat 3
+ * of the 2026-09-07 run had `questions-toc6` and `incumbent` both on 1.6667, and
+ * the report described a leader flip where a repeat had in fact tied. ⟨GPT Sol,
+ * F25 on 260907d.⟩
+ */
+export function perRepeatLeaders(judgements: readonly Judgement[], which: "gists" | "questions"): RepeatLeaders[] {
+  return repeatsIn(judgements).map((repeat) => {
+    const table = meanRanks(judgements.filter((j) => j.repeat === repeat), which);
+    const best = table[0];
+    return {
+      repeat,
+      leaders: best ? table.filter((r) => r.meanRank - best.meanRank <= TIE).map((r) => r.arm) : [],
+    };
+  });
+}
+
+/** The per-repeat leaders as one line, with a tie printed as a tie. */
+export function leadersLine(leaders: readonly RepeatLeaders[]): string {
+  return leaders
+    .map((r) => `repeat ${r.repeat}: ${r.leaders.length > 1 ? `${r.leaders.join(" = ")} tied` : (r.leaders[0] ?? "nothing ranked")}`)
+    .join("; ");
 }

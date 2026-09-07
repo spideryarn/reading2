@@ -43,10 +43,15 @@ const evalSteps = Object.fromEntries(
 
 ### The acceptance criterion is met with no reporting change
 
-`scripts/ai-cost.ts:423` is `rows.filter((r) => r.scopeKind !== "eval")` for Product and
-`=== "eval"` for Eval. Rows carrying `scopeKind: "eval"` are already outside the Product bucket by
-that line's existing behaviour. **Nothing in the cost-tracking machinery needs to change**, which
+Product is `request | job_step` and Eval is its own pocket — `partitionByScope` in
+`src/cost-report.ts`. Rows carrying `scopeKind: "eval"` are outside the Product bucket by that
+function's existing behaviour. **Nothing in the cost-tracking machinery needs to change**, which
 is why this beats every alternative.
+
+⟨This paragraph cited `scripts/ai-cost.ts:423` and `rows.filter((r) => r.scopeKind !== "eval")`.
+That was the code, and the negative form was the F2 defect — it also swept dev-CLI spend into
+Product. The conclusion here was unaffected, but the line number had drifted and the definition has
+moved into a tested function. Corrected 2026-09-07.⟩
 
 Proved, not asserted — see the transcript: the control arm (no overlay) lands in
 `Product spend`, the eval arm in `Eval spend`, from the same fixture, the same step and the same

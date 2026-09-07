@@ -32,6 +32,7 @@ import { QuotesBand, VisitorQuotesBand } from "../modes/quotes/QuotesMode.js";
 import { DebateBand } from "../modes/debate/DebateMode.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
+import { StructureBand } from "../modes/structure/StructureMode.js";
 import { SummaryBand } from "../modes/summary/SummaryMode.js";
 import { DiagramBand } from "../modes/diagram/DiagramMode.js";
 import { RefereeBand } from "../modes/referee/RefereeMode.js";
@@ -157,7 +158,7 @@ const EMPTY_DEPTHS: number[] = [];
  * one of those, so this is not a line that was crossed here — but the gates are
  * worth a number and the number keeps going up. `band()` below took eight off
  * it and is scored **46** in its own right, which is the honest arithmetic: a
- * switch over fourteen modes is not simpler than fourteen `&&`s to a counter of
+ * switch over every mode is not simpler than one `&&` per mode to a counter of
  * branches. What it is instead is *checked*, and that was the point.
  *
  * The extraction this docblock proposed was a `<ModeBands>` component taking
@@ -852,7 +853,7 @@ export function Reader({
 
      **One call rather than two ternary chains, since 2026-09-06.** The chains
      agreed only because both tested `mode` in the same order, and both ended in
-     Search's slot — so the nine modes with no passage producer were reading
+     Search's slot — so every mode with no passage producer was reading
      Search's, and were correct only for as long as `SearchBand`'s unmount
      cleared it. (That clear became a layout cleanup earlier the same day, which
      is what removed the frame this used to paint on the way into Plain.)
@@ -1501,6 +1502,29 @@ export function Reader({
             onJump={jumpTo}
           />
         );
+      /* **The third structural view, and it owns its own hooks.** Outline's
+         tree and focus sampler are computed up in this component, gated on
+         `mode === "outline"`, because that is where they were when App.tsx was
+         split. Structure's are inside `StructureBand`, which is only mounted
+         here — so nothing of this mode's is measured or built while the reader
+         is in any other one. Same reason there is no owner/visitor pair: the
+         tree is in the payload every reader already holds, so there is nothing
+         to fetch and nothing for a visitor to be short of. */
+      case "structure":
+        return (
+          <StructureBand
+            article={article}
+            leafDepth={geometry.leafDepth}
+            sections={sections}
+            layoutKey={layoutKey}
+            /* `modeW` is 0 exactly when the band covers the prose instead of
+               sitting beside it (layout.ts) — the same input `OutlinePanel`
+               takes, read from the layout rather than from a width guessed
+               here. */
+            proseBeside={fit.modeW > 0}
+            onJump={jumpTo}
+          />
+        );
       case "summary":
         return <SummaryBand article={article} onJump={jumpTo} />;
       /* **Mounted for a visitor too, since 2026-09-04** — one branch rather
@@ -2003,6 +2027,23 @@ export function Reader({
              are fetched inside the section rather than lifted out of the
              Criteria panel, which only mounts on one of them. */
           placing={mode === "referee"}
+          /* **Escape belongs to whatever is in front of this box**, and two
+             things can be: `CommentDialog`, whose arm below renders on
+             `openComment`, and `ChatDialog`, whose arm renders on `overlay`.
+             Both are reachable with a selection still live — clicking a comment
+             mark goes through `openCommentDialog`, which clears nothing, and
+             `chatAboutBlock`/`helpAboutBlock` clear `note` but not `annotating`
+             — and until 2026-09-07 one press closed the box in front *and* this
+             one, discarding a half-typed annotation.
+
+             The two conditions are repeated here rather than lifted into a
+             `somethingInFront` variable on purpose: they are the render
+             conditions of the two arms below, and a reader checking that this
+             is right should be comparing them with those, not with a third
+             name. Stage 3 of
+             docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md;
+             the pairs are tests/one-escape-closes-one-surface.test.tsx. */
+          escapeEnabled={!openComment && !overlay}
           onCancel={() => setAnnotating(null)}
           onSave={(id, body, ask, mark) => {
             const anchor = annotating;

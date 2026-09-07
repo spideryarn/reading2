@@ -37,6 +37,7 @@ import { CriteriaBand } from "../../CriteriaPanel.js";
 import { ClaimsBand } from "../../ClaimsPanel.js";
 import { MirrorBand } from "../../MirrorPanel.js";
 import { CandidatesBand } from "../../CandidatesPanel.js";
+import { ModeSurface } from "../../ModeSurface.js";
 
 /**
  * **Referee mode — for somebody who has been asked to peer-review this piece.**
@@ -187,13 +188,28 @@ export function RefereeBand({
   const how = useHowCard();
 
   return (
-    <aside className="mode-band gloss referee" aria-label="Referee">
-      <div className="band-head">
-        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
-            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-            stays for the "how this works" button beside it. */}
-        <RefereeHowButton open={how.open} onToggle={() => how.show(!how.open)} />
-      </div>
+    <ModeSurface
+      label="Referee"
+      feature="gloss referee"
+      /* **A fragment, even though this header's one child is unconditional.**
+         `ModeSurface` renders no `.band-head` at all for an absent, null or
+         boolean `head`, and five bands ship an *empty* header row today whose
+         children are all gated on an artefact — so `head={cond && <X/>}` is the
+         shape that deletes a row a reader can see. Referee is not one of those:
+         `RefereeHowButton` is always there. The fragment is defensive rather
+         than necessary, so that every band reads the same way and making this
+         child conditional one day cannot quietly remove the row.
+         docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md
+         § Stage 2. */
+      head={
+        <>
+          {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+              docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+              stays for the "how this works" button beside it. */}
+          <RefereeHowButton open={how.open} onToggle={() => how.show(!how.open)} />
+        </>
+      }
+    >
 
       {/* **The two things that belong to the mode rather than to a sub-mode**,
           in one box so that together they can be given a share of the band and
@@ -277,7 +293,7 @@ export function RefereeBand({
           onOpenKey={onOpenKey}
         />
       </div>
-    </aside>
+    </ModeSurface>
   );
 }
 
