@@ -5,9 +5,11 @@ Status as of 2026-09-07: **reviewed; stages 1, 1b and 2 landed, stage 3 not star
 input from GPT 6 Astra (high) and Fable, and a plan review from GPT Sol
 ([review](260907b-split-the-authenticated-api-dispatch-by-domain-review-sol.md),
 [prompt](260907b-split-the-authenticated-api-dispatch-by-domain-review-prompt.md)), are folded in
-and attributed. Sol returned **no P0**; it reversed the shape decision, rejected stage 1's first
-design as circular, narrowed stage 2 from four files to one, and corrected the ordering model in
-both directions. Each correction is marked below.
+and attributed. Sol returned **no P0**; it **endorsed** the ordered closure table over per-domain
+functions, rejected stage 1's first design as unproven, corrected the source-reader inventory from
+four files to five, and corrected the ordering model in both directions. Each correction is marked
+below. (An earlier version of this line said Sol *reversed* the shape decision. That was the
+mis-read review — see § *What the mis-read review cost*.)
 
 ## Brief
 
