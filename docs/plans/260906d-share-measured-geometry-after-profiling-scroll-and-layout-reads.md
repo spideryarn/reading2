@@ -846,6 +846,31 @@ From **arm A's own counters**, and recorded here before arm B is run at all:
 
 Writing (3) down before seeing arm B is the point. A threshold chosen afterwards is not a threshold.
 
+#### Arm A, written down before arm B was built
+
+Taken from the retake of 2026-09-07 on `m1-kuhn`, desktop, three sessions × two start positions.
+
+**1. The predicted read reduction.** `columnContext` performs `2 + resolvedRows + gistHeaders + pin`
+reads per frame; on `m1-kuhn` that is **1,242**, of which **1,237** are the section-row rectangles
+`readingPosition` has already read in the same frame. Removing the second scan should therefore take:
+
+- **1,237 reads per scroll frame**, leaving `columnContext` at **5**;
+- **37,110 reads per 3,000px gesture** (30 sampler calls), taking the ten-site total from **74,766**
+  to about **37,656** — a 49.6% fall in every layout read the page performs during a scroll.
+
+Anything materially short of that means the spike did not do what it claims, and nothing else it
+reports may be read.
+
+**2. Arm A's pilot per-frame distribution.** p50 **9.40–10.80**, p95 **14.60–17.20**, max
+**32.10–77.40** across the six runs.
+
+**3. The run-to-run range — the noise floor.** The widest per-repetition spread inside a single run is
+session 2 from the top: **9.99–13.82**, a range of **3.83 ms**. That is the number arm B has to beat,
+and it is deliberately the *widest* observed rather than the average, because a threshold set at the
+friendliest noise estimate is not a threshold.
+
+**So: arm B must remove ~37,110 reads per gesture, and improve the pilot p50 by more than 3.83 ms.**
+
 #### The rule, precommitted
 
 **Stage 3 is authorised only if both hold:**
