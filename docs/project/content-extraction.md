@@ -212,6 +212,41 @@ change and is not this one. GPT Sol, reviewing C1a.
 separate entry points and the eval harness uses the second one directly. In `runExtract`'s catch it
 would have been correct in production and permanently invisible to the corpus.
 
+## The one thing this pipeline deletes
+
+Since 2026-09-06 stage 2 deletes some of the publisher's own chrome before Readability sees the
+page. Other things here remove elements too — the note pass, Readability, the sanitiser — but
+[`src/furniture.ts`](../../src/furniture.ts) is the only place that deletes something **because of
+what the publisher called it**. The class is narrow on purpose — **platform-generated controls beside content, recognised by the
+platform's own selector, that contain no block-level descendants** — and there are four of them:
+MediaWiki's `span.mw-editsection` and `.mw-empty-elt`, Sphinx's `a.headerlink`, PLOS's
+`ul.reflinks`. `.ambox`, `.navbox`, sidebars and maintenance banners **stay**: those say something
+about the piece, and a reader may want them.
+
+**That "contains no block-level descendants" clause is a floor and not a proof**, and the module
+says so: it asks about *descendants*, so it never sees the matched element's own tag or its own
+text, and `td`, `th` and `li` cannot be added to it. **Eleven page shapes got an author's words past
+it** — two found by walking the corpus, eight across two GPT Sol reviews, one by us — and each is now
+a named test beside the narrowing that stops it. The claim the module makes is therefore *no shape
+anybody has constructed gets through, and every one that did is pinned*, **not** that deletion is
+structurally impossible: `ul.reflinks` is the entry where markup runs out, since a *View Article*
+button and a citation whose every word is inside its link are the same thing to a parser.
+
+Greg's decision, the licence it spends, the guards and where they stop, and the measured effect are
+on `removePlatformFurniture` and in
+[260904e § C4](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md). Two things
+worth knowing from here:
+
+- **The largest effect was not the chrome.** Parsoid puts MediaWiki's edit link inside the heading's
+  own wrapper, and a wrapper of one heading plus one link scores to Readability as navigation — so
+  `wiki_transformer.html` was reaching the reader with 19 of its 47 section headings. Taking the edit
+  links out recovers all 47, and every MediaWiki article ingested before this had a hierarchy built
+  on a quarter of its headings.
+- **What went is recorded as counts per selector, and nothing more.** They ride on `ExtractResult`
+  and reach the log; they are deliberately **not** on `Meta`, which is persisted as columns
+  ([database.md](database.md)), so the audit line stage D will show is a migration that waits for the
+  reader who needs it.
+
 ## The publisher's furniture, and the title it stole
 
 **Reported 2026-09-05: a 142-page Elsevier paper was ingested and given the journal's name.** The

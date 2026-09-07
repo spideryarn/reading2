@@ -289,8 +289,8 @@ Added 2026-09-05, after a rule tightened that morning retroactively invalidated 
 roughly one article in twenty off the air entirely — at a paid model call per attempt, with the
 reader told to try again:
 [260905f](../postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md).
-The lesson worth carrying: **tightening an invariant over durable stored data is a migration** —
-sweep the rows in the same commit, or say in the commit why not.
+The lesson worth carrying has its own section below:
+[§ Tightening an invariant over stored data is a migration](#tightening-an-invariant-over-stored-data-is-a-migration).
 
 **A writable disk is still what the `files` store *is*** — that host question is unchanged — but it
 is no longer a waypoint Postgres writes pass through, because `ArtifactStore.write()` has one caller
@@ -1246,6 +1246,28 @@ kind, two poles and a scale, and [`src/db/schema.ts`](../../src/db/schema.ts) st
 could not be `search_runs` with a column added. The short version is a unit: `SearchHit.confidence`
 is a 0–100 match strength whose validator clamps negatives to zero, so a signed valence sent through
 it arrives as `0` and every negative judgement is gone with nothing to see.
+
+## Tightening an invariant over stored data is a migration
+
+**Sweep the rows in the same commit, or say in the commit message why not.**
+
+A migration is not only a `.sql` file. Any change that makes some already-stored shape illegal is a
+migration of that data, whether or not the schema moved — a new rule in a validator, a narrowed
+union, a stricter parse, a check now run at a place it was not run before. Fixing the *producer* is
+half the job; the rows the old producer wrote are the other half, and they are the half nothing
+reminds you about.
+
+*Say why not* is a real answer — the invalid rows may be harmless, or few enough to repair by hand,
+or a sweep may touch real reader data, which is Greg's call. But it goes in the commit message,
+because a rule tightened silently is indistinguishable from one whose data was checked. The question
+to ask first is **what reads this invariant, and what does it do when it is broken**: one that only
+warns can be swept later, and one standing in front of a gate that refuses whole artefacts cannot.
+
+`c8e2cc7e` on 2026-09-05 is the cost of getting it wrong. Its own comment said the new rule applied
+*"for the ones already stored"* and read that as a feature; nothing migrated them, and roughly one
+article in twenty could then publish nothing at all for eleven hours, at a paid model call per
+attempt.
+[260905f](../postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md).
 
 ## Two traps recorded elsewhere, repeated here because they are expensive
 
