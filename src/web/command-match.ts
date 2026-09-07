@@ -53,8 +53,9 @@ import type { Mode } from "../modes.js";
  * A `mode` row carries only its `Mode` — the label comes from `MODE_LABEL` and
  * the nicknames and the sentence from `MODE_CATALOG`, so there is no second copy
  * of any of them to fall out of step. (Two tables rather than one, which is not
- * this file's doing: `MODE_LABEL` is what the Dock buttons are labelled with.) A `page` row carries its own, because there is no
- * catalog of pages and one entry does not justify inventing one.
+ * this file's doing: `MODE_LABEL` is what the Dock buttons are labelled with.)
+ * A `page` row carries its own, because there is no catalog of pages and one
+ * entry does not justify inventing one.
  */
 export type Command =
   | { readonly kind: "mode"; readonly mode: Mode }
