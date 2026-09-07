@@ -29,6 +29,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  FEATURE_DRIFT,
   unfinishedSubscriptions,
   ensurePortalConfiguration,
   ensureTier,
@@ -973,5 +974,133 @@ describe("moving a tier row onto a different price", () => {
     const steps = await ensureTier(tier({ stripePriceId: null }), false, stripe);
     expect(detailOf(steps)).toMatch(/would create "Spideryarn Reader"/);
     expect(steps.filter((s) => s.failed)).toEqual([]);
+  });
+});
+
+/**
+ * **A sixth Portal feature cannot go unnoticed.**
+ *
+ * `portalDrift` compared five features with hand-written `if`s. Today's SDK
+ * (`stripe@22.6.1`,
+ * `node_modules/stripe/esm/resources/BillingPortal/Configurations.d.ts:88`)
+ * declares **exactly those five**, so the comparison was complete — by
+ * coincidence of nobody having upgraded, which is not a property anything was
+ * holding.
+ *
+ * A sixth feature going unnoticed is precisely how `subscription_update` was
+ * missed, at the cost of a paying customer unable to upgrade for a month:
+ * docs/postmortems/260904a-four-billing-faults-and-the-witnesses-that-agreed-with-the-code.md.
+ * It is the one item in docs/plans/260905b-improve-the-codebase-third-sweep.md
+ * § T2.1 with a known customer-facing cost, and it was re-verified as unbuilt
+ * by the fourth sweep a day later (260906h § T2.2).
+ *
+ * The fix is `FEATURE_DRIFT`, a `Record` over
+ * `keyof Stripe.BillingPortal.Configuration.Features`: **a sixth feature cannot
+ * compile without somebody deciding what to do about it.** That half is a type,
+ * so its failure is a `tsc` error rather than anything this file can watch —
+ * recorded in
+ * docs/plans/260907b-five-class-killers-from-the-postmortems-become-checks.md.
+ *
+ * What this file adds is the half a type cannot reach: **that each entry in the
+ * map actually compares something.** Without it the map is decoration, and the
+ * next author, forced to add a key to make the build pass, could satisfy the
+ * compiler with a function that returns `[]` — a list that says "compared" over
+ * a comparison nobody wrote, which is the shape of every entry in
+ * docs/reusable/silent-success.md.
+ */
+describe("every Portal feature the SDK declares is compared", () => {
+  it("has one entry per feature and no more", () => {
+    /* The names, spelled out. Deriving them from the same `keyof` the map is
+       typed by would make this assertion true of any map at all. */
+    expect(Object.keys(FEATURE_DRIFT).sort()).toEqual([
+      "customer_update",
+      "invoice_history",
+      "payment_method_update",
+      "subscription_cancel",
+      "subscription_update",
+    ]);
+  });
+
+  /**
+   * **Each entry, driven to produce drift**, against a live configuration that
+   * is correct except for the one field under test. A key added to satisfy the
+   * compiler and left returning `[]` fails here.
+   */
+  /**
+   * **Derived from `FEATURE_DRIFT` itself, not written out again.** GPT Sol
+   * found the first version listing the five names here as well as in the
+   * census above — two hand-copied lists, so a sixth feature could be added to
+   * the map, added to the census, and left out of *this* list, and the entry
+   * that compares nothing would pass both. That is the exact silent-success
+   * class the map exists to close, reintroduced in its own test.
+   */
+  it.each(Object.keys(FEATURE_DRIFT).map((name) => [name as keyof typeof FEATURE_DRIFT]))(
+    "reports drift when %s is wrong",
+    (name) => {
+    const live = liveConfig() as unknown as { features: Record<string, Record<string, unknown>> };
+    /* `enabled: false` **merged into** the feature rather than replacing it —
+       every one of the five carries it, and a replacement would delete the
+       neighbouring fields the checks read, so the entry would throw rather than
+       report. That is a different red, and it passed for the wrong reason. */
+    const features = {
+      ...live.features,
+      [name]: { ...live.features[name], enabled: false },
+    };
+    const found = FEATURE_DRIFT[name](features as never, want(BOTH_PRODUCTS));
+    expect(found.join(" "), `${name} compared nothing`).toMatch(new RegExp(name));
+
+    /* And the same feature, correct, says nothing — otherwise an entry that
+       always reports drift would pass the line above while making
+       `stripe:check` permanently and unfixably red. */
+      expect(FEATURE_DRIFT[name](live.features as never, want(BOTH_PRODUCTS))).toEqual([]);
+    },
+  );
+});
+
+
+/**
+ * **The other route a sixth feature arrives by**, and the one no type can
+ * reach: Stripe's API returning a key the installed SDK does not declare.
+ *
+ * The fixture above has carried `subscription_pause: { enabled: false }` since
+ * it was written, and the SDK's `Features` does not declare it — so this
+ * repository already had a live-shaped example of the case, sitting in the test
+ * data, uncompared. That is why the rule is *switched on*, not *unrecognised*:
+ * an inert legacy key would otherwise make `stripe:check` permanently red under
+ * advice (`run stripe:setup --apply`) that cannot remove it.
+ */
+describe("a Portal feature nothing compares", () => {
+  it("says nothing about an unrecognised feature that is off", () => {
+    /* The fixture's own `subscription_pause: { enabled: false }`, unchanged. */
+    expect(portalDrift(liveConfig(), want(BOTH_PRODUCTS))).toEqual([]);
+  });
+
+  it("reports one that is on, because it is a control nobody costed", () => {
+    const live = liveConfig() as unknown as { features: Record<string, unknown> };
+    const withPause = {
+      ...(liveConfig() as unknown as object),
+      features: { ...live.features, subscription_pause: { enabled: true } },
+    };
+    expect(portalDrift(withPause as never, want(BOTH_PRODUCTS))).toEqual([
+      "the Portal has subscription_pause switched on and nothing here compares it",
+    ]);
+  });
+
+  /**
+   * **The five it does compare are never reported as uncompared** - otherwise
+   * the guard above would fire on every correct configuration, which is the
+   * failure mode it was designed around rather than an incidental one.
+   */
+  it("never reports a feature FEATURE_DRIFT already covers", () => {
+    const live = liveConfig() as unknown as { features: Record<string, unknown> };
+    for (const name of Object.keys(FEATURE_DRIFT)) {
+      const broken = {
+        ...(liveConfig() as unknown as object),
+        features: { ...live.features, [name]: { ...(live.features[name] as object), enabled: true } },
+      };
+      expect(portalDrift(broken as never, want(BOTH_PRODUCTS)).join(" ")).not.toContain(
+        "nothing here compares it",
+      );
+    }
   });
 });
