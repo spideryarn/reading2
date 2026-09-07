@@ -580,13 +580,52 @@ with an error nobody inspects — so without the check the second silently wins.
 a reader resolving a name to something the source does not unambiguously say, which is the P1's class
 exactly. Kept.
 
+**Stage 4a — the lifetime oracle, written before anything moves. ✅ Landed, reviewed clean.**
+`tests/streaming-route-request-lifetime.test.ts` drives `POST /api/referee/criteria/:slug` through
+`handleApi` with the model call paused, **while that guard is still an `if` in the chain**, and asks
+whether the response, the `refereeing` lock and the caller's promise are each still where the guard
+left them. No guard moved; `src/routes.ts` byte-identical; contract hash untouched.
+
+**The silent success the brief walked past.** `sweepPending` spares any row younger than
+`CRITERION_ORPHAN_GRACE_MS` (150 s), so the obvious version of this test — issue the GET, check the
+row is still `pending` — **passes with the lock deleted outright.** The row survives for being young
+and the assertion never touches the lock: a check agreeing with the code because it shares an
+assumption with it ([silent-success.md](../reusable/silent-success.md)). The test therefore backdates
+`attempt_started_at` past the grace window while the stream is paused, leaving the lock as the only
+thing between that row and the sweep, then restores and backdates identically *after* the request
+resolves, where the same GET buries it with `CRITERION_SWEPT`. One arrangement, two opposite answers,
+the only difference being whether the request is in flight — which is also how lock *removal* gets
+observed. Sol confirmed the equivalence: after backdating, every sweep predicate except
+`notInArray(id, keep)` is satisfied, so survival means the id is in `liveCriteria(slug)`, which is
+derived directly from `refereeing`.
+
+Three mutations, each red for the reason under test. The load-bearing one — `refereeing` released
+immediately after being taken — **was reproduced by the orchestrator rather than taken on the
+implementer's word**: `expected 'error' to be 'pending'`, reverted by editing the text back, green
+again. That is precisely the failure `assertHandlersAwaited` cannot see, because the syntax it reads
+never changed.
+
+**Sol's review: sound and pushable, no P0/P1/P2.** One P3 fixed in the same stage
+(**P3-CASE-ISOLATION**): the rejection case asserted a fixed row count and passed only on residue
+from the preceding case, so it failed when run alone — which is how a case stops being run at all. It
+counts before and after now, and was verified passing in isolation.
+
+**The nuance stage 4b must not miss.** Sol: at stage 4a the rejection case "does not yet exercise
+`dispatchAuthRoute`" — criteria still matches the chain guard, so it currently proves propagation
+through the guard's `await`, `serveAuthenticatedApi` and `serveApi`'s catch. Once criteria moves, the
+**unchanged** case exercises the dispatcher's awaited handler calls instead. **That post-move green is
+when the dispatcher half is discharged** — so 4b must run this file and require it green, and if 4b
+ever finds itself *editing* it, that is a finding rather than a chore.
+
 ## Where stage 3 stands, and what the next slice costs
 
 **13 of 81 guards migrated** (billing 4, jobs/uploads 9). 68 remain in the chain, plus the admin gate
 and the one table call. Biome on `serveAuthenticatedApi`: **244 → 234 → 183**. `npm run check`
 EXIT=0 at each stage, all seven hard checks clean.
 
-The next slice up is **referee, and it is where the cheap part ends**:
+The next slice up is **referee, and it is the one slice with a real prerequisite** — but not the
+start of an expensive stretch, which is how this section first read. See § *Fable settles the
+end-state, and corrects the price* below: the prerequisite is paid **once**, not once per domain.
 
 - **It is the first streaming slice, and not for the reason first thought.** `POST criteria`
   (`:8321`) calls `runRefereeCriterion`, which opens SSE *and holds `refereeing`*; Claims POST
@@ -609,6 +648,88 @@ The next slice up is **referee, and it is where the cheap part ends**:
 - **A note against ourselves:** stage 3b already moved `jobAdvance`, a long-lived lease-owning
   handler. Its awaits are correct, but under the lifetime finding's own wording the integration
   coverage was arguably already due — we moved it on a syntactic check.
+
+## Fable settles the end-state, and corrects the price
+
+Asked to arbitrate between **(A)** finishing the migration and **(B)** stopping at a deliberate
+hybrid — table for stateless domains, chain for streaming and lock-holding ones — Fable picked **(A)**
+and dismantled (B). Its three factual claims were checked in the tree and all hold:
+
+**The shape distinction (B) rests on does not exist here.** Every streaming guard left in the chain
+is the same three lines — read the body, call a helper with `res`, return:
+
+```ts
+const criteriaBody = await readBody(req);
+await withSpendAttribution({ articleSlug: slugPart(criteria, 1) }, () =>
+  runRefereeCriterion(slugPart(criteria, 1), criteriaBody, res),
+);
+return;
+```
+
+No guard opens a stream or touches a lock registry. The helper does: `refereeing.add`/`.delete` at
+`:4149`/`:4177`, `pullingClaims` at `:4284`/`:4315`, `searching` at `:3902`/`:3929` — each its own
+`try`/`finally`, one call below dispatch. **At the dispatch layer a streaming guard already *is*
+"match, call, return"** — the thing (B) says a table row is good for. And because the plan chose
+closures precisely so rows carry no shared behaviour, there is nothing for a stream to be an
+exception *to*.
+
+**(B) is a budget wearing a design's clothes.** Three tells, all verifiable. The argument was already
+made by 260906h § T3.1 and already answered by Sol in the stage 3a review — quoted at line 491 above:
+helpers "go on closing over exactly the same module state". Stage 3b already moved `jobAdvance`, a
+long-lived lease-owning handler, so the boundary (B) proposes is one the table has already crossed.
+And the line falls exactly where the next step got expensive: had referee been cheap and chat first,
+the "principled" line would have been drawn under chat instead. **A line whose position is set by the
+cost of the next step is a budget, not a design** — and the cost of calling it a design is that the
+next reader defends it, leaving two mechanisms permanently plus a rule nothing can enforce.
+
+**Nothing could enforce it.** Every candidate rule needs facts about handler *behaviour*, which the
+contract reader cannot see: the guard body names no registry and writes no header, both being inside
+`runX`. The reader enumerates *dispatch syntax*, so a rule about which form a route must take would
+decay to "whatever the last person thought". The file already shows what that looks like — endpoints
+hand-counted in comments as "the one", "the third", "the fourth", "the sixth", "the fifth". There is
+no "second", and the fifth is written below the sixth. The informal bookkeeping has already drifted,
+and that is the enforcement mechanism (B) would inherit.
+
+### The correction that matters most: "per streaming domain" was never Sol's
+
+§ *Where stage 3 stands* calls referee "where the cheap part ends", and the orchestrator priced the
+rest of the job at a lifetime integration test **per streaming domain**. That multiplication was
+**the orchestrator's, not the review's** — it does not appear in Sol's text at all. Sol wrote "before
+a streaming/stateful domain moves" and named exactly one instance, criteria POST. It never said
+*per*. That invented factor is where most of (A)'s imagined cost came from, and it is also what made
+(B) look attractive. What the two tests actually cover:
+
+- **The deferred-handler rejection test is about `dispatchAuthRoute`**, not any domain. Written once,
+  it covers every row present and future.
+- **The criteria-POST lifetime test is about `runRefereeCriterion`**, not about dispatch. It proves
+  the helper holds `refereeing` across the stream — true before the move and after, because the move
+  does not touch the helper. It does not need repeating for chat or searches: a verbatim move of a
+  three-line caller cannot change what a callee does. It is also a test this app should own
+  regardless; there is no request-lifetime test for any stream today.
+
+What actually speaks to a move is what stage 3b already did: a character-for-character body diff and
+an order fixture captured *before* the move. That scales to every remaining slice at near-zero cost.
+
+**So the honest price of finishing is one dispatcher test, one lifetime test, and ~10 mechanical
+slices verified the 3b way** — not a project. By this repo's own definition it is also the *simpler*
+end state: one mechanism, one order fixture, and no policy to document.
+
+**Sol was asked to overrule this and did not.** Because the argument reinterprets Sol's own finding,
+the stage 4a review put the question to it directly. Its answer: *"I agree with Fable: this is once,
+not per domain. No separate lifetime oracle is required for chat, searches, claims, or Mirror. Their
+locks/streams live inside their helpers; a verbatim caller move cannot alter those lifetimes."* It
+named the three things that cover the remaining move-specific risk — the body/order diff, the static
+awaited-handler check, and this unchanged rejection case passing through `dispatchAuthRoute` once
+criteria has moved — and set the condition under which a domain would need its own test after all:
+**only if its helper or caller responsibilities change**, not for a mechanical table migration. So
+both the cross-family reviewer and the arbitrating model agree, and the inflated estimate was the
+orchestrator's alone.
+
+**One caution of Fable's did not survive checking.** It warned that three worktrees carry unmerged
+`routes.ts` edits, making every slice a conflict. Listing non-merge commits on all branches that are
+not on `dev` and touch `src/routes.ts` returns **nothing**: the five that look like it are merges
+carrying dev's own change. No worktree holds an original unmerged edit, so that blocker does not
+apply. Recorded because the rule is to check each finding rather than bank it, and this one was wrong.
 
 ## The baseline, so a later red is attributable
 
