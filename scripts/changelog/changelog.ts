@@ -69,8 +69,14 @@ import {
 } from "../../src/changelog.js";
 import { isMain } from "../../src/is-main.js";
 
-/** The file the whole process exists to append to. Relative to the repo root. */
-const CHANGELOG_FILE = "docs/changelog/versions.ndjson";
+/**
+ * The file the whole process exists to append to. Relative to the repo root.
+ *
+ * It sits beside its reader rather than in `docs/`, where this process would
+ * naturally have filed it, because `src/web/ChangelogPage.tsx` imports it and
+ * `.vercelignore` drops `docs` from the upload — docs/postmortems/260907a-an-import-into-a-vercelignored-directory-built-everywhere-except-vercel.md.
+ */
+const CHANGELOG_FILE = "src/web/changelog-versions.ndjson";
 
 /** Gitignored at `/logs/`, so a run leaves nothing for a commit to pick up. */
 const DEFAULT_WORK = "logs/changelog";

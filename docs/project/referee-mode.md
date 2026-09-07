@@ -639,7 +639,7 @@ Where the cards are, and the one thing each says that the label cannot:
 
 | Control | The half a press would not tell you |
 |---|---|
-| the four sub-mode chips ([`App.tsx`](../../src/web/App.tsx) § `RefereeViews`) | Criteria never scores; Claims asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Candidates reaches a search engine and checks no conflicts |
+| the four sub-mode chips ([`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `RefereeViews`) | Criteria never scores; Claims asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Candidates reaches a search engine and checks no conflicts |
 | the three kind chips | `KIND_NOTE` — the same string the panel prints under the selected kind, so the two kinds a referee has *not* pressed explain themselves too |
 | the preset chips | they replace the whole form: text, kind and both poles |
 | *Run this criterion*, *Pull the paper's claims*, *Try again* | one model call over the whole paper, at full price, nothing resumed |
@@ -852,7 +852,8 @@ Each is meant to be a test rather than an intention, whichever sub-mode eventual
    hands back — the **raw source**, never the extracted blocks, because extraction throws hidden
    text away with everything else it does not keep. The panel is
    [`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx), drawn by
-   [`RefereeBand`](../../src/web/App.tsx) above the sub-mode chips rather than as a fifth chip: rule
+   [`RefereeBand`](../../src/web/modes/referee/RefereeMode.tsx) above the sub-mode chips rather than
+   as a fifth chip: rule
    5 says *before anything else*, and a chip is one more thing a referee can fail to press. The band
    opens at once and the answer lands when it lands ([`useSourceScan`](../../src/web/useSourceScan.ts)),
    because a scan is hundreds of milliseconds on a short paper and about nine seconds on a 1.3 MB
@@ -935,7 +936,8 @@ So there are three sentences, in three places, and the **tense is the whole poin
   sent. `tests/direct-add-says-the-text-has-gone.test.tsx` asserts both the sentence and the
   asymmetry, so that making the three disclosures "consistent" goes red.
 - **Past tense, inside Referee mode itself** — `REFEREE_TEXT_ALREADY_SENT`
-  (`src/messages.ts`), shown by `RefereeBand` ([`src/web/App.tsx`](../../src/web/App.tsx)), and
+  (`src/messages.ts`), shown by `RefereeBand`
+  ([`src/web/modes/referee/RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx)), and
   **collapsed since 2026-09-02** at Greg's asking. The *fact* is the label on the control —
   `REFEREE_TEXT_ALREADY_SENT_SHORT`, which is the long sentence's own opening clause — so shutting
   the box hides the venues and the audience, never that the text has gone; and `noticeOpen` is a

@@ -475,7 +475,8 @@ on the re-run — which is the right answer.
 - **The two-state fix has no test.** `resolveIdea` and the stepper's arithmetic are covered by
   [`tests/ideas-resolve.test.ts`](../../tests/ideas-resolve.test.ts); the search → ideas → search
   mode handoff is not, and it is the one place a React-level test would earn its keep.
-- **`Reader` in App.tsx is over Biome's complexity ceiling** (29 against 25). Pre-existing and
+- **`Reader` is over Biome's complexity ceiling** (29 against 25; in `App.tsx` when this was
+  written, src/web/reader/Reader.tsx since 2026-09-06). Pre-existing and
   structural rather than caused here, but this feature added to it.
 - **Quote-copy failures are real but rare** — 3 of ~30 occurrences on the noema article. Those fall
   back to washing the whole paragraph and saying so, which is the right behaviour, but the rate is

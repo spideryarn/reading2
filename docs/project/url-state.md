@@ -51,6 +51,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `run` | which saved meaning-search is showing, absent for the list of them | **replace** | `?run=spya-p7w2dn` |
 | `order` | how the results list is stacked: `document`, `confidence` or `prioritised` | push | `?order=confidence` |
 | `conf` | the bar the search results' `prioritised` order hides under, 0–100, in the unit the rows print. No default: absent means untouched | replace, debounced | `?conf=65` |
+| `name` | the bar debate mode's group-one rows hide under — **the word, not a number**: `named`, `quoted` or `linked`, the name of the strongest evidence that a page is about this piece. **Absent means nobody has touched it**, which the panel reads as `DEBATE_LEVEL_DEFAULT` ([`debate-levels.ts`](../../src/web/debate-levels.ts)); rows answering what the article *claims* carry no level and are never under it | **replace** | `?name=linked` |
 | `deep` | how far down the tree summary mode goes: `0` the article, `1` the parts, `2` the sections | push | `?deep=2` |
 | `diagram` | which of the five pictures diagram mode is drawing, absent for the default `sketch` — [diagram.md](diagram.md) | push | `?diagram=trail` |
 | `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
@@ -168,7 +169,7 @@ The **server predicts the same rewrite** — `readMode` in [read-address.ts](../
 [last-view.ts](../../src/web/last-view.ts): a restore runs after the rewrite, so a stored `text=0`
 would walk straight past it.
 
-Deleting the parameters outright would save little — `fitView` still needs a three-state answer, and App.tsx puts
+Deleting the parameters outright would save little — `fitView` still needs a three-state answer, and `Reader` puts
 `?spine=` back to *absent* when Search or Ideas opens for a reader who had hidden the rail — and it
 is a URL-contract change, which is a different kind of change from taking a button off a bar. So
 this is now a parameter with no writer, which is a fair description of a **link format**.
@@ -235,6 +236,20 @@ unrecognised-value rule landing it on a default that happened to be the view it 
 What is left of that rule is still true and still worth having: **an unrecognised mode lands on the
 default**, so a link from a future version degrades to the article rather than to an error page.
 
+**And `?mode=` decides which passages are marked, totally.** Five bands publish `Found[]` up to
+`Reader` — Ideas, Quotes, Timeline, Referee and Search — and which of those five slots the prose,
+the ring and the rail are drawn from is `selectPassages` in
+[`reader/passages.ts`](../../src/web/reader/passages.ts): one function, exhaustive over `Mode` with a
+`never` default, returning the marks and the open key **together** so they cannot come from
+different bands. The nine modes with no passage producer get the shared empty constant by name. It
+was two parallel ternary chains inside `Reader` until 2026-09-06, and both ended in Search's slot —
+so `?mode=plain` was drawing Search's, correct only for as long as the outgoing band cleared it on
+the way out (earlier the same day that clear became a layout cleanup, which is what stopped it
+painting a frame). A fifteenth mode is now a compile error there rather than another inheritor
+([new-mode.md](new-mode.md),
+[260906c](../plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md)
+§ Stage 4b).
+
 Modes push history, because a mode is where you are rather than a glance. Each
 carries its own parameters — `?thread=` for the open conversation, `?term=` for the selected glossary
 term, `?run=` for the saved search being shown, all `replace` because stepping between them is
@@ -248,6 +263,14 @@ links are unaffected — they all say what they want — and a glossary whose sc
 prioritising falls back to `document` in the panel without touching the URL. See
 [glossary.md § Prioritised, which is now the default](glossary.md#prioritised-which-is-now-the-default).
 
+**`?name=` is the only threshold that carries a word**, and that is a decision rather than a shortcut.
+The other three sit on scores, so a number is the fact itself; debate's sits on the *name of the
+strongest evidence* a page gave that it is about this piece — a link, a quotation, a title — and there
+is a rank inside the panel only because `applyThreshold` needs one. Putting that rank in the URL would
+be our arithmetic dressed as a measurement, which is the composite the feature refused
+([260906b § 2](../plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md)). A word also needs
+none of `snapToStop`'s machinery: it is a stop or it is nothing, and anything else reads as untouched.
+
 **`?gate=`, `?bar=` and `?conf=` are deliberately left without parser defaults**, which is the same
 call `?cols=` makes and for a related reason. Each carries the threshold its mode hides under, and
 the panel — not the parser — resolves an absent one to its own starting constant. Giving them
@@ -258,7 +281,8 @@ asked for and one that simply arrived
 ([glossary.md § The threshold, and whose it is](glossary.md#the-threshold-and-whose-it-is)). All
 three replace rather than push, and are debounced, for the reason `?at=` and `?find=` are: a range
 input writes on every pixel of a drag, and Back should undo the decision that got you here rather
-than the drag.
+than the drag. **`?name=` makes the same call about the default and, alone, is not debounced**: it
+has three stops, so a drag across the whole track writes twice and there is nothing to rate-limit.
 
 `?term=` is in the URL for a reason worth stating: **a selected term underlines every one of its
 occurrences in the prose**, so "the article as I am currently looking at it" is not fully described
@@ -351,7 +375,9 @@ across the article and may well want it undone. Clicking a gist is the original 
 question out of the comments drawer is another, added 2026-09-06
 ([comments.md § Opening a question is a jump](comments.md#opening-is-a-jump)) — and the dialog's
 Prev/Next deliberately are *not*, because stepping through twenty questions must not cost twenty
-presses of Back. The override is per-call in `App.tsx`, not in the parser.
+presses of Back. The override is per-call in
+[`useReadingPosition.ts`](../../src/web/reader/useReadingPosition.ts) § `jumpTo` — the one
+scroll that passes `history: "push"` — and not in the parser.
 
 #### The pushed entry says where you came from
 
@@ -460,7 +486,7 @@ piece was something to keep a copy of it and put it back. So: **the query string
 `localStorage` under the slug as the reader moves, and put back when they open that article at an
 address that says nothing.** [`src/web/last-view.ts`](../../src/web/last-view.ts), pinned in
 [`tests/last-view.test.ts`](../../tests/last-view.test.ts), wired into `ArticlePage`
-([`App.tsx`](../../src/web/App.tsx)). Per-device, no server, no schema — which is what he said was
+([`src/web/article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx)). Per-device, no server, no schema — which is what he said was
 fine.
 
 **This does not make `localStorage` a second source of truth**, which is what the rule at the top of
@@ -597,7 +623,7 @@ Two things about *when*, both worth knowing before you touch it:
 
 The rule itself is `arrivalTarget` in [`scroll.ts`](../../src/web/scroll.ts) — pure, and pinned in
 [`tests/scroll.test.ts`](../../tests/scroll.test.ts). The wiring is one effect in
-[`App.tsx`](../../src/web/App.tsx), beside `goToComment`.
+[`reader/Reader.tsx`](../../src/web/reader/Reader.tsx), beside `goToComment`.
 
 We do **not** rewrite `?at=` to match. The scroll moves the page, the position tracker notices, and
 the URL catches up 300ms later exactly as it does for a wheel — which is the same arrangement

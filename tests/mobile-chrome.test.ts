@@ -28,7 +28,7 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { dockOffset, stickyOffset } from "../src/web/scroll.js";
+import { dockOffset, stickyDestination, stickyOffset } from "../src/web/scroll.js";
 import { shouldOfferInstall } from "../src/web/install-hint.js";
 import { safeAreaInsets } from "../src/web/safe-area.js";
 
@@ -166,6 +166,84 @@ describe("stickyOffset with a status bar", () => {
        for. */
     poseBar(-3, SAFE_TOP);
     expect(stickyOffset()).toBe(SAFE_TOP); // 47, not 0
+  });
+
+  /**
+   * **A bar that is halfway back reserves the room it is going to need.**
+   *
+   * `stickyOffset` returned the bar's *current* coverage, and that is only the
+   * right answer at rest. `scrollToBlock` calls this **once** and hands the
+   * number to `glide()` as a fixed destination; `markOurScroll` then stops the
+   * bar reacting to the jump, but it cannot stop a CSS transition that is
+   * already running. So a reader who scrolls up — starting the 180ms reveal —
+   * and clicks a gist 90ms later got a target placed under a bar on its way
+   * back to covering it, and the row they asked for finished underneath the
+   * chrome.
+   *
+   * Both directions are posed because they are not symmetrical. Mid-*reveal*
+   * the new answer is exactly right. Mid-*hide* it over-reserves by up to a
+   * bar's height, and that is the deliberate way round: an over-reserved target
+   * lands a little lower than it needed to, an under-reserved one lands
+   * invisible.
+   *
+   * GPT Sol F2, reviewing
+   * docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md,
+   * which extends this animation from phones to every laptop.
+   */
+  it("reserves the whole bar while the bar is still travelling", () => {
+    // Halfway through the reveal: 22 of 44 drawn, and climbing.
+    poseBar(SAFE_TOP + BAR_H / 2, SAFE_TOP);
+    expect(stickyDestination()).toBe(SAFE_TOP + BAR_H); // not 69
+
+    // Halfway through the hide: 22 of 44 drawn, and falling.
+    document.body.innerHTML = "";
+    poseBar(SAFE_TOP + BAR_H / 2, SAFE_TOP);
+    expect(stickyDestination()).toBe(SAFE_TOP + BAR_H);
+
+    /* And a sliver still showing is still "the bar is there". */
+    document.body.innerHTML = "";
+    poseBar(SAFE_TOP + 1, SAFE_TOP);
+    expect(stickyDestination()).toBe(SAFE_TOP + BAR_H);
+  });
+
+  /**
+   * **The first `safeTop` pixels of a reveal are still a reveal**, and the first
+   * version of this drew the "fully hidden" line in the wrong place.
+   *
+   * A hidden bar is translated by `--bar-h + --safe-top`, so it rests with its
+   * bottom edge at exactly **0** — not at `--safe-top`. Coming back, its bottom
+   * travels 0 → 91 on a 47px inset, and a boundary of `bottom <= safeTop`
+   * called the whole first half of that journey "hidden" and reserved 47 where
+   * 91 was needed. Invisible on every machine without a notch, because there
+   * the two boundaries are the same number. GPT Sol F7, 2026-09-07.
+   */
+  it("knows a bar 20px into its reveal from one that has gone", () => {
+    poseBar(SAFE_TOP / 2, SAFE_TOP); // 23.5: climbing, not hidden
+    expect(stickyDestination()).toBe(SAFE_TOP + BAR_H);
+
+    document.body.innerHTML = "";
+    poseBar(0, SAFE_TOP); // exactly where a hidden bar rests
+    expect(stickyDestination()).toBe(SAFE_TOP);
+  });
+
+  /**
+   * **`stickyOffset` still answers "where is the bar now", and that is the
+   * whole reason there are two functions.**
+   *
+   * The destination prediction was briefly given to `stickyOffset` itself, and
+   * that was wrong for most of its callers: `readingLine()` in keynav.ts, the
+   * `?at=` tracker in App.tsx, `isBlockOnScreen` and `whereIsBlock` all ask
+   * where the reader *is*, not where a jump should land. Handing them a
+   * prediction moves the reading line up to a bar's height mid-transition — so
+   * pressing ↓ during the slide could treat the next paragraph as the current
+   * one and skip the one after it. GPT Sol F8, 2026-09-07, with the arithmetic:
+   * at `safeTop` 47 and a bar bottom of 69, rows at [0, 80, 120] give current
+   * row 0 by measurement and row 1 by prediction.
+   */
+  it("keeps reporting the bar's actual coverage to the callers who ask where the reader is", () => {
+    poseBar(SAFE_TOP + BAR_H / 2, SAFE_TOP);
+    expect(stickyOffset()).toBe(SAFE_TOP + BAR_H / 2); // 69, the measurement
+    expect(stickyDestination()).toBe(SAFE_TOP + BAR_H); // 91, the prediction
   });
 
   it("is unchanged on a machine with no status bar", () => {

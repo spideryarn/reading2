@@ -17,27 +17,38 @@
  * industry does not do it that way either — Deepgram, AssemblyAI, Speechmatics
  * and Gemini's own transcription API all expose filler removal as a
  * **parameter**, a word-level classification inside the model, rather than as
- * an instruction. None of those is reachable from here: this app talks to a
- * *chat* model through OpenRouter, because the dedicated transcription route
- * ignores the vocabulary and the vocabulary is the whole reason the feature
- * works ([transcribe.ts](./transcribe.ts)).
+ * an instruction. None of those was reachable when this was written: the app
+ * talked to a *chat* model through OpenRouter, because the dedicated
+ * transcription route ignored the vocabulary and the vocabulary is the whole
+ * reason the feature works ([transcribe.ts](./transcribe.ts)).
  *
- * That leaves the system prompt or this. The system prompt is not a neutral
- * place to put an instruction: read it in `transcribe.ts` and it is one long
- * argument that the model is a transcriber and must not be helpful — the word
- * **verbatim**, three sentences forbidding it from answering the audio, and a
- * JSON schema whose comment says the failure mode is *"a perfectly good answer
- * to a question nobody asked"*. *"Remove the filler words"* is an **editing**
- * instruction in a prompt whose one job is to refuse to edit, and a model that
- * takes the hint too far returns a fluent paraphrase, which is indistinguishable
- * from a good transcript by any test anybody can write.
+ * That left the system prompt or this. The system prompt was not a neutral
+ * place to put an instruction: it was one long argument that the model is a
+ * transcriber and must not be helpful — the word **verbatim**, three sentences
+ * forbidding it from answering the audio, and a JSON schema whose comment said
+ * the failure mode is *"a perfectly good answer to a question nobody asked"*.
+ * *"Remove the filler words"* is an **editing** instruction in a prompt whose
+ * one job is to refuse to edit, and a model that takes the hint too far returns
+ * a fluent paraphrase, which is indistinguishable from a good transcript by any
+ * test anybody can write.
  *
- * **GPT Sol disagrees**, and the disagreement is recorded in the plan rather
- * than settled here: it holds that the prompt already sets a non-verbatim
+ * **On 2026-09-07 the prompt went away entirely** and this file did not move.
+ * Dictation is now `openai/gpt-transcribe` on `/v1/audio/transcriptions`, which
+ * takes the vocabulary as a `keywords` array — so the premise above is a
+ * historical one, and the conclusion survives it twice over: there is no prompt
+ * to put the instruction in, and nobody has looked up whether this model exposes
+ * a filler parameter of the kind the four above do. If one turns up, it is
+ * strictly better than this file and this file should go.
+ * docs/plans/260907c-dictation-onto-an-openai-transcriber.md.
+ *
+ * **GPT Sol disagreed**, and the disagreement is recorded in the plan rather
+ * than settled here: it held that the prompt already set a non-verbatim
  * convention (*"sensible punctuation and capitalisation"*) and that a narrow
- * rule would be safe. It is probably right that the experiment is worth running;
- * what it needs is an audio corpus with real hesitations in it, which does not
- * exist yet. This is the version whose safety can be checked today.
+ * rule would be safe. It was probably right that the experiment was worth
+ * running; what it needed was an audio corpus with real hesitations in it, which
+ * still does not exist. The prompt it was arguing about is gone, so the argument
+ * is now the parameter one above — but the corpus is what both of them wait on.
+ * This is the version whose safety can be checked today.
  *
  * ## So it deletes, and it can only delete
  *

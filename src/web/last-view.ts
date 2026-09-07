@@ -80,6 +80,7 @@ export const REMEMBERED = [
   "gate", // glossary threshold
   "rank", // quotes order
   "bar", // quotes threshold
+  "name", // debate's identification threshold
   "term", // selected glossary term
   "idea", // selected idea
   "quote", // selected quote

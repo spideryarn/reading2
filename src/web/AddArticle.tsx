@@ -329,7 +329,7 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
                       what keeps that unambiguous when both a URL and a file are
                       present. See `takesTheFile`. */}
                   <Button type="submit" disabled={!slug && !slots.chosen}>
-                    {takesTheFile(slots) ? "Add PDF" : "Add"}
+                    {takesTheFile(slots) ? "Add file" : "Add"}
                   </Button>
                 </div>
               </div>

@@ -33,17 +33,22 @@ rest.** A fifteenth word there is red until it has a row in each of these totals
 |---|---|
 | `MODE_LABEL` | [`src/title-text.ts`](../../src/title-text.ts) — the only place a mode is spelled for a person |
 | `OWNER_MODE_NOTE` | [`src/messages.ts`](../../src/messages.ts) |
-| `MODES_UI`, via `ModesMissingFromDock` | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) — an ordered array, because the order is Greg's; the type check stands in for the `Record`. **The row carries a required `experimental: boolean`**, so adding a mode means deciding whether it is finished enough to draw for everybody — [experimental-features.md](experimental-features.md). Say why in the table there either way; moving one later is [§ Moving a mode in or out of the switch](#moving-a-mode-in-or-out-of-the-switch) |
+| `MODE_CATALOG` | [`src/mode-catalog.ts`](../../src/mode-catalog.ts) — **what the mode *is***: the **two sentences** on its bar-button card (`description` and `how` — see [§ The card on the button](#the-card-on-the-button), which is where the second one is written), the words they might type meaning it (`aliases`, which the command bar matches on), and whether it is still behind the experimental switch. A pure module importing only `modes.js`, so both runtimes can read it. All four fields are required, so a new mode means choosing its aliases and **deciding whether it is finished enough to draw for everybody** — [experimental-features.md](experimental-features.md). Say why in the table there either way; moving one later is [§ Moving a mode in or out of the switch](#moving-a-mode-in-or-out-of-the-switch). The `description` and `experimental` fields were on the `MODES_UI` row until 2026-09-07 ([260906h](../plans/260906h-mode-catalog-and-a-command-bar.md)); `how` arrived the same day ([260907b](../plans/260907b-rich-tooltips-on-the-dock-modes.md)) |
+| `MODES_UI`, via `ModesMissingFromDock` | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) — an ordered array, because the order is Greg's; the type check stands in for the `Record`. **Layout only** since 2026-09-07: the row is `{ mode, icon, keepLabel? }`, the icon being a React component and `keepLabel` a fact about the bar's fit ladder |
 | `POLICY` | [`src/web/visitor.ts`](../../src/web/visitor.ts) — what a visitor may see; there is no fall-through any more, a missing row is a typecheck error |
 | `BAND_SAYS` | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) — what a **visitor** is shown |
 | `MODE_TARGET` | [`src/web/activation.ts`](../../src/web/activation.ts) — **whether pressing it spends money.** Total since 2026-09-06, over a tagged union: `fixed` carries the target, `delegated` carries **an arming function** (Diagram, whose target is whatever `?diagram=` says), `none` carries the reason in a sentence. A `delegated` row holding a *name* rather than a function was the first draft and GPT Sol refused it — nothing consumes a string, so a mode could claim delegation with no arming path anywhere |
 | `SPENDS` and `DRAWS` | [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx) — what an **owner's** press buys, and what the band actually draws. Both independently written, never derived from the tables above. `DRAWS` is total over `Mode` with no exclusions — a mode that draws no band says so as a `kind: "none"` row **carrying the positive control**, what is on screen instead. It was keyed `Exclude<Mode, NO_BAND_MODES>` until GPT Sol's F21 on 2026-09-06, and that one list both excused a mode from the table and skipped it at run time, so a mode added to it was checked by nothing |
+| `band()`'s `switch` | [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) — **which band the mode opens**, and it is a `switch` with a `never` default rather than a `Record`, because each arm is JSX with its own gates. A mode with no arm is a compile error; a mode that deliberately has no band says `return null` in its own case, as `plain` and `hierarchy` do |
+| `selectPassages` | [`src/web/reader/passages.ts`](../../src/web/reader/passages.ts) — **which passage slot the prose marks, the ring and the rail are drawn from.** Same `never` default. A mode with no passage producer answers `NO_FOUND` explicitly; nine do |
 
 Then the residue, which is why this page exists:
 
-- **The band branch**: the `mode === "…"` if-chain near the bottom of `Reader` in
-  [`App.tsx`](../../src/web/App.tsx), whose own header comment records why it is still a chain and
-  not a table. *Nothing; this list.*
+- ~~**The band branch**~~ — **it left this list on 2026-09-06.** It was seventeen sibling
+  `{mode === "…" && <Band/>}` expressions that nothing checked, so a mode with no branch opened an
+  empty band and errored nowhere; it is now the `band()` switch in the table above, and so is the
+  passage selection beside it. Both are compiler-checked, and what a fifteenth mode makes red is
+  written out below.
 - **The mode's URL params**, [`params.ts`](../../src/web/params.ts) — [url-state.md](url-state.md).
   *Nothing.*
 - **A resolver in [`search-hits.ts`](../../src/web/search-hits.ts)** if the mode marks passages;
@@ -60,6 +65,31 @@ Then the residue, which is why this page exists:
   for the modes already in it, and since 2026-09-06
   [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx)
   § `SPENDS` for a new one — an independently written table of what each press buys.*
+- **The band itself**: render it with
+  [`ModeSurface`](../../src/web/ModeSurface.tsx), which owns the `<aside class="mode-band">`, its
+  **required** `aria-label`, the optional `head` and `foot` slots, and nothing else. Do not
+  hand-write the `<aside>` — twelve panels did until 2026-09-07, and the four places that still do
+  are documented exceptions rather than precedents: `FeatureBoundary`'s fallback (a deliberate
+  circuit breaker — read the comment there before you touch it), the `/design` band specimen, and
+  the two demo shells in `preview-sketch.tsx` and `preview-chat-markdown.tsx`.
+  **Decide whether your header row is meant to persist when it has nothing in it**, because
+  `ModeSurface` renders no header element at all for an absent, `null` or boolean `head`:
+  - a row that should **stay put while its contents come and go** — because something below it
+    would otherwise shift, or because it is the only line that cannot wrap — takes an
+    always-present fragment, `head={<>{artefact && <X/>}</>}`;
+  - a header that genuinely **should not exist** in a state takes the conditional directly,
+    `head={artefact && <X/>}`, and no empty row is drawn.
+
+  Five existing bands are in the first camp and it is not obvious from their code: Glossary, Ideas,
+  Quotes and Timeline all empty their header while the artefact loads, and **Diagram's is empty in
+  its ordinary state** — its only header child is a caveat that draws on the projected pictures,
+  while Sketch is the default. Those five were migrated as fragments to keep exactly the row they
+  already had. Do not copy the fragment by reflex; copy the question.
+  [260906f](../plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md).
+  *[`tests/mode-surface-changes-no-markup.test.tsx`](../../tests/mode-surface-changes-no-markup.test.tsx),
+  which pins each band's **surface shape** — its root, its ordered direct children, its header's
+  children — against what it was before the surface existed. Not a full-DOM oracle: it does not see
+  descendants below a direct child, attribute values on children, or a branch no fixture mounts.*
 - **The band's chrome**: the scroller is documented in
   [`styles/mode-band.css`](../../src/web/styles/mode-band.css) § mode band. A `.band-head` title row is **optional, and
   the default is not to have one** — since 2026-09-05 it must not carry the mode's own name, because
@@ -77,17 +107,71 @@ Then the residue, which is why this page exists:
 
 A mode that shows nothing generated — Plain, Hierarchy, Search — stops here.
 
+## The card on the button
+
+Both halves of the card are `MODE_CATALOG` fields, so the compiler asks for them; what it cannot ask
+for is that the second one is worth reading. The rule is
+[tooltips.md § `ControlTip`](tooltips.md#controltip-which-is-what-most-of-them-are-now):
+
+> The first sentence is what a reader could have guessed by pressing the control; the second is what
+> they could not — where the answer comes from, what it costs, or what the control does *not*
+> promise.
+
+So `description` is the mode in one fragment — it is also what the command bar draws inline beside
+the name, which is why it stays short — and `how` is the half a press would not have told them. For
+these fourteen that is almost always one of three things: **it reads something already built**
+(Hierarchy, Outline, Summary), **its content is a model pass over the article, written once and
+stored** (Glossary, Ideas, Quotes, Timeline, Debate and Diagram's Sketch — the six a press on the
+reading view can start paying for, `MODE_TARGET` in [`activation.ts`](../../src/web/activation.ts)),
+or **it waits on the reader's own words** (Search, Chat, Referee, Remember). Plain is the fourteenth
+and generates nothing at all.
+
+Five things to get right, and the first is the one that cost this field a whole review round:
+
+- **Write about the mode, not about pressing the button.** The same string is read on four surfaces
+  at least — the segment on the reading view, the loose links on the metadata and tweets pages
+  (which navigate and arm *nothing*), and either of those seen by a visitor, who gets an explanatory
+  band rather than a generator. So *"opening it runs a model pass"* is false on three of the four.
+  Four of the fourteen opened that way in first draft and every one was caught by a cross-family
+  review rather than by anything in the diff. *"One model pass over the article, written once and
+  then stored"* says the same thing and is true wherever the card is read — and it is what makes
+  `how` an intrinsic fact about the mode rather than a Dock string parked in a shared module, which
+  is the argument for it living in the catalog at all.
+
+- **No price.** Say that work starts and roughly how long it takes, never what it costs. The command
+  bar marks a generating row with the single muted word `generates` and no figure, because a bar
+  with a price on it would be more disclosed than the button beside it
+  ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)) — and a
+  tooltip on that button is the same surface. Diagram's empty state is the one place the number is
+  said out loud, and the card points at it rather than repeating it.
+- **Not the first paragraph again.** The cheapest way to fill `how` is to reword `description`, and a
+  hover that costs a reader 300ms to learn nothing they knew is worse than no card at all.
+- **Not something already on screen.** The band this button opens says its own thing, and the
+  visitor's sentence is `markedModes`' — neither belongs here as a second copy.
+- **Read it out of the source before you write it.** The known failure of this job is a *plausible
+  invention* in the second paragraph: four of the nine cards on the shelf's action row were false in
+  first draft, and two of the fourteen here were thrown away for the same reason
+  ([260907b](../plans/260907b-rich-tooltips-on-the-dock-modes.md) has both, and the table of where
+  each claim was checked). The restatement check can see a card arguing with itself and cannot see
+  one arguing with the code.
+
+*[`tests/dock-mode-tooltips.test.tsx`](../../tests/dock-mode-tooltips.test.tsx) — that both exist,
+that the second is not a copy of the first, that no price crept in, and that every mode's card opens
+in **both** arms of the bar: the segment on the reading view, and the loose links on the metadata and
+tweets pages, which are a different component and were the arm left carrying a `title` attribute.*
+
 ## Moving a mode in or out of the switch
 
 Three edits, and the second is the point:
 
-1. **The `experimental` flag on its `MODES_UI` row.** That is the whole of the behaviour — the route,
+1. **The `experimental` flag on its `MODE_CATALOG` entry**, [`src/mode-catalog.ts`](../../src/mode-catalog.ts)
+   — it was on the `MODES_UI` row until 2026-09-07. That is the whole of the behaviour — the route,
    the band and the URL do not change, and a hidden mode was always reachable by `?mode=…` anyway.
 2. **Its name in `BEHIND_THE_SWITCH`**, [`tests/dock-experimental-modes.test.tsx`](../../tests/dock-experimental-modes.test.tsx).
    An independent copy of the policy on purpose, so that nobody moves a mode in or out of every
    reader's bar by editing one boolean: change the flag alone and six of that file's tests go red,
-   in either direction. Deriving the list from `MODES_UI` would assert that the bar draws what the
-   table says, which is what `visibleModes` *means* — a check that cannot fail. GPT Sol weighed the
+   in either direction. Deriving the list from `MODE_CATALOG` would assert that the bar draws what
+   the table says, which is what `visibleModes` *means* — a check that cannot fail. GPT Sol weighed the
    alternatives on 2026-09-06 and this is the one it kept.
 3. **The row, and the reason, in [experimental-features.md](experimental-features.md)** — going in
    or coming out, say why. That doc owns the argument.
@@ -216,6 +300,52 @@ use" — that clause was written and then cut for exactly this reason.
 The dock, the visitor's view, the exported bundle and the offline copy each have a test that
 walks `MODES` or `STEP_ORDER`; if yours went green without a new row somewhere, one of the residue
 items above is the reason — [silent-success.md](../reusable/silent-success.md).
+
+**What a fifteenth mode makes red, measured rather than remembered.** Adding one word to `MODES` and
+running `npm run typecheck` gives exactly six source errors and one test error — no more, and the
+list is the checklist above with a compiler behind it. Measured 2026-09-06, on
+[260906c](../plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md)
+§ Stage 4b:
+
+| Red | What it is asking for |
+|---|---|
+| [`src/title-text.ts`](../../src/title-text.ts) § `MODE_LABEL` | the word a person sees |
+| [`src/messages.ts`](../../src/messages.ts) § `OWNER_MODE_NOTE` | the owner's one-line note |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) § `ModesMissingFromDock` | a row in the bar, with `experimental:` decided |
+| [`src/web/visitor.ts`](../../src/web/visitor.ts) § `POLICY` | what a visitor may see |
+| [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `band()` | the band, or an explicit `null` |
+| [`src/web/reader/passages.ts`](../../src/web/reader/passages.ts) § `selectPassages` | the passage slot, or `NO_FOUND` |
+| [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) § `BAND_SAYS` | what a visitor's band says, asserted against the network |
+
+**Re-measured 2026-09-07, adding `structure`: seven source errors and four test errors.** The list
+above is unchanged and still complete for `src/`; what moved is the test half, because two tables
+written since have the same shape and the same purpose:
+
+| Also red | What it is asking for |
+|---|---|
+| [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx) § `SPENDS` **and** § `DRAWS` | two errors, not one — what the press buys, and what the band draws |
+| [`tests/command-bar.test.tsx`](../../tests/command-bar.test.tsx) § `GENERATES` | whether the bar marks the row `generates`, checked against `MODE_TARGET` from the other side |
+
+That is the mechanism working rather than drifting: each new table is an independently written
+`Record<Mode, …>`, so every one of them adds a place a fifteenth mode has to be decided rather than
+defaulted. **The count is the thing to re-measure, never the thing to trust** — it is a fact about
+today's tables, not a rule, which is why it is written with its date each time.
+
+**And four more tests go red that the typecheck cannot see**, because their tables are keyed on
+`string` or written as a `case` list rather than as a `Record<Mode, …>`. Running the suite is the
+only way to find them, so run it before believing the compiler was the whole checklist:
+
+| Also red, without a type error | What it is asking for |
+|---|---|
+| [`tests/visitor-gaps.test.ts`](../../tests/visitor-gaps.test.ts) § `ALWAYS_FREE` **and** the gap walk | two failures — whether a visitor is short of anything, said twice from two directions |
+| [`tests/page-title.test.ts`](../../tests/page-title.test.ts) § `named` | the word the tab says, checked against `MODE_LABEL` from the other side |
+| [`tests/styles-entry-is-imports-only.test.ts`](../../tests/styles-entry-is-imports-only.test.ts) § `MANIFEST` | **where in the cascade the mode's stylesheet loads**, if it has one. The order *is* the cascade, so a new sheet has to say where it goes and what it sits between |
+
+One test also goes red without the typecheck being run at all:
+[`tests/every-mode-says-which-passages-it-marks.test.ts`](../../tests/every-mode-says-which-passages-it-marks.test.ts)
+walks `MODES` and requires the new mode to be named a producer or a non-producer — which is the
+guard against the cheap wrong fix, quietly adding it to the `NO_FOUND` arm to make the compiler
+stop.
 
 ---
 

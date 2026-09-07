@@ -35,12 +35,17 @@
  *
  * ## And the wiring, which no render can see
  *
- * `RefereeBand` is not exported and mounting `Reader` to reach it would pull in
- * the whole page. The two facts that live in App.tsx — the card is inside
- * `.ref-panel` and *not* inside `.ref-brief`, and the header carries the button
- * that brings it back — are asserted against the source text, which is
+ * Mounting `Reader` to reach `RefereeBand` would pull in the whole page. The two
+ * facts that live in the mode controller — the card is inside `.ref-panel` and
+ * *not* inside `.ref-brief`, and the header carries the button that brings it
+ * back — are asserted against the source text, which is
  * tests/referee-band-fits.test.ts's method for exactly this seam and for the
  * same reason: delete the placement and every rendering test still passes.
+ *
+ * That controller left `App.tsx` for src/web/modes/referee/RefereeMode.tsx on
+ * 2026-09-06, and `BAND_FILE` below names it in the guard, so a subject that
+ * moves again fails loudly instead of slicing an empty string out of the wrong
+ * file — docs/reusable/silent-success.md.
  */
 import { readFileSync } from "node:fs";
 import { act, createElement } from "react";
@@ -230,15 +235,27 @@ describe("a browser that will not keep the bit", () => {
 describe("where the band puts it", () => {
   /* **`RefereeBand`'s own body**, not the whole file: `band-head` is every
      band's title row and there are a dozen of them above this one. */
-  const whole = readFileSync("src/web/App.tsx", "utf8");
-  const app = whole.slice(whole.indexOf("function RefereeBand("));
+  const BAND_FILE = "src/web/modes/referee/RefereeMode.tsx";
+  const whole = readFileSync(BAND_FILE, "utf8");
+  /* **The guard, not a convenience.** `indexOf` returns -1 when the subject has
+     moved, `slice(-1)` hands back the file's last character, and every
+     assertion below then passes or fails against nothing at all. */
+  const start = whole.indexOf("function RefereeBand(");
+  if (start === -1) {
+    throw new Error(
+      `RefereeBand is not in ${BAND_FILE} any more, so the two placement facts ` +
+        `below would be checked against nothing. Point BAND_FILE at whatever owns ` +
+        `the band now.`,
+    );
+  }
+  const app = whole.slice(start);
 
   /**
    * **Inside `.ref-panel`, and not inside `.ref-brief`.** The plan is explicit
    * about this and the reason is not cosmetic: `.ref-brief` holds the
    * confidentiality notice and the injection scan, neither of which may ever be
    * dismissed, and a closable card beside a non-closable one invites closing the
-   * wrong one. Move the card up two lines in App.tsx and every rendering
+   * wrong one. Move the card up two lines in the band and every rendering
    * assertion in this file still passes.
    */
   it("renders the card in the panel, under the chips", () => {
@@ -255,10 +272,27 @@ describe("where the band puts it", () => {
   });
 
   it("puts the reopen button in the mode header", () => {
-    const head = app.slice(
-      app.indexOf('className="band-head"'),
-      app.indexOf('className="ref-brief"'),
+    /* Sliced from the band's own opening tag rather than from
+       `className="band-head"`, because that string is no longer in the band's
+       source: Referee went through `src/web/ModeSurface.tsx` on 2026-09-07 (item
+       A5), so the header row is a `head={…}` prop and the `.band-head` class is
+       written by the surface. The header is still the first thing inside the
+       band and still holds the button — the anchor moved, not the markup.
+
+       **Both endpoints are checked, and the search is for the tag rather than
+       the name.** The first repair of this test did neither, and was worse than
+       what it replaced: the migration comment now sitting inside this slice
+       contains the words `RefereeHowButton`, so `includes("RefereeHowButton")`
+       was satisfied by prose and stayed green with the button deleted. An
+       unchecked end anchor has the same shape — `slice(bandAt, -1)` reads most
+       of the file and finds the comment anyway. GPT Sol F31, 2026-09-07. */
+    const bandAt = app.indexOf('feature="gloss referee"');
+    const briefAt = app.indexOf('className="ref-brief"');
+    expect(bandAt, `no Referee band in ${BAND_FILE} at all`).toBeGreaterThan(-1);
+    expect(briefAt, "no `.ref-brief` after the band, so this slice is not the header").toBeGreaterThan(
+      bandAt,
     );
-    expect(head.includes("RefereeHowButton"), "there is no way back to the card").toBe(true);
+    const head = app.slice(bandAt, briefAt);
+    expect(head.includes("<RefereeHowButton"), "there is no way back to the card").toBe(true);
   });
 });

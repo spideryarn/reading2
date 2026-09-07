@@ -312,6 +312,22 @@ function coded(text: string, failure: ReaderFacingFailure): string {
  * @param step the failed step's **label** — see `stepGaveUp`.
  */
 export function readerFailureOf(err: unknown, step: string): ReaderFacingFailure {
+  return declaredFailure(err) ?? stepGaveUp(failureKindOf(err) ?? "retry", step);
+}
+
+/**
+ * **The sentence the throw site wrote for the reader, or `null` if it wrote
+ * none** — the first branch of `readerFailureOf` above, given a name.
+ *
+ * It is separate for one reason: `undeclaredBlocked` below has to ask the same
+ * question, and an expression written out twice is free to answer it two ways.
+ * That is the class named in
+ * docs/postmortems/260827d-toc-status-never-checked.md, and a log line
+ * disagreeing with the sentence beside it would be a quiet, especially
+ * expensive instance of it — the operator's record of the miss and the reader's
+ * experience of it are the two halves of the same event.
+ */
+export function declaredFailure(err: unknown): ReaderFacingFailure | null {
   const declared = (err as KindedError | null | undefined)?.readerFailure;
   /* Shape-checked rather than trusted. `readerFailure` is read off a thrown
      value, so it is outside the type system in exactly the way `KNOWN_KINDS`
@@ -327,7 +343,36 @@ export function readerFailureOf(err: unknown, step: string): ReaderFacingFailure
   ) {
     return declared;
   }
-  return stepGaveUp(failureKindOf(err) ?? "retry", step);
+  return null;
+}
+
+/**
+ * **A step refused the reader and named no way out.**
+ *
+ * `blocked` is the one non-retryable kind that admits a way out — that is its
+ * definition in docs/project/copy.md and the reason the illustrate refusals
+ * were moved onto it from `ours`. So a `blocked` failure arriving here with no
+ * sentence of its own is a step making a promise and breaking it in the same
+ * breath: the reader gets `stepGaveUp`'s generic copy, which names the step and
+ * nothing else, and no button.
+ *
+ * **No type can catch this**, which is why it is a predicate and a log line
+ * rather than a compile error. `stageFailure(kind, { generic })` refuses the
+ * old bare-string spelling, but a step is still free to `throw new Error(...)`
+ * bare, and TypeScript has no checked exceptions —
+ * docs/postmortems/260904b-a-sentence-written-for-the-reader-was-thrown-away-at-the-seam.md
+ * § What would have caught it, recommendation 2, which also says why it is the
+ * *ordinary* case that wants logging here rather than the exception.
+ *
+ * The caller is src/jobs.ts, which owns the logger; this file is in the client
+ * bundle (src/web/useStepJob.ts imports `jobWorthRetrying`) and may not import
+ * one — docs/project/logging.md, and tests/client-imports.test.ts § shared
+ * modules stay leaves.
+ *
+ * @param failure what `readerFailureOf` returned for this same `err`.
+ */
+export function undeclaredBlocked(err: unknown, failure: ReaderFacingFailure): boolean {
+  return failure.kind === "blocked" && declaredFailure(err) === null;
 }
 
 /**

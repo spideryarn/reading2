@@ -29,7 +29,7 @@
  *
  * ## `isolatedAgainst`, which the template did not have
  *
- * One `comparison` value per arm was not enough to say what is true here. V1–V4
+ * One `comparison` value per arm was not enough to say what is true here. V1–V3
  * change the GISTS block **and** the QUESTIONS block against the incumbent — two
  * variables — but against `gists-only` they change exactly one. Recording only
  * the first would throw away the comparison that can attribute a gap, and
@@ -59,7 +59,7 @@
  *   result from it may be read as covering the cascade.
  */
 
-import { MAX_QUESTION_DEPTH, type ModelNode, questionFor } from "../../src/hierarchy.js";
+import { type ModelNode, questionFor } from "../../src/hierarchy.js";
 import { productionGists, productionQuestions } from "./production-prompt.js";
 import { readVariants } from "./variants-file.js";
 
@@ -70,13 +70,24 @@ export type Comparison = "baseline" | "noise-floor" | "bakeoff";
  * **The rule the generated line has to survive to reach a reader**, applied by
  * the harness exactly where production applies it.
  *
- * `production` is `questionFor` itself, imported rather than described.
- * `trailing-hint` is the two-line patch `variants.md` specifies for V4 — and it
- * is **not applied to any other arm**, because "this variant requires touching
- * production code" is part of V4's cost and hiding it inside a shared helper
- * would spend it silently.
+ * `production` is `questionFor` itself, imported rather than described, and
+ * since 2026-09-07 it is the only member.
+ *
+ * **There used to be a second, and its retirement is the record of a cost being
+ * paid rather than a simplification.** `trailing-hint` was the two-line patch
+ * `variants.md` § *The code change V4 needs* specifies, reimplemented here so
+ * that "this variant requires touching production code" stayed visible instead
+ * of being absorbed into a shared helper. V4 then won and shipped
+ * (`toc/7`), production's own `questionFor` has that clause, and a
+ * reimplementation of a rule the imported function already has is a second home
+ * for one fact.
+ *
+ * **This is the slot for the next one.** A future variant that cannot be
+ * expressed in the prompt alone adds a member here, a function beside
+ * `questionRuleFor`, and an entry in `deltas` — and `armsNeedingCodeChange()`
+ * starts returning its name again.
  */
-export type QuestionRule = "production" | "trailing-hint";
+export type QuestionRule = "production";
 
 export interface ArmSpec {
   name: string;
@@ -99,6 +110,22 @@ export interface ArmSpec {
    * `src/hierarchy.ts` moves again.
    */
   shippedGists?: string;
+  /**
+   * A **pinned shipped** QUESTIONS block (`"toc/6"`) instead of production's
+   * live one — `variants.md` § *The shipped QUESTIONS block, …*. The exact
+   * mirror of `shippedGists`, added on 2026-09-07 for the same reason and by
+   * the same argument, one bump later.
+   *
+   * V4 shipped that day, so `incumbent` **is** V4 from that commit on. Without
+   * a pinned copy of the block V4 replaced, this eval would have two names for
+   * one recipe and no pre-V4 control at all — and could therefore never return
+   * the answer *"the control was better all along"*, which it was deliberately
+   * built to be able to give.
+   *
+   * Mutually exclusive with `variant`: a QUESTIONS block comes from exactly one
+   * place, and `promptBlocksFor` throws rather than silently preferring one.
+   */
+  shippedQuestions?: string;
   questionRule: QuestionRule;
   /**
    * Everything about this arm's request that differs from production's, listed
@@ -123,9 +150,22 @@ const SHARED_DELTAS: readonly string[] = [
  * Everything else here is choosing between Socratic *question* shapes.
  * `gists-toc5` and `gists-toc6` ask one thing only: **did the `toc/6` per-depth
  * length ceiling change the gists the model writes, and in the direction asked
- * for?** Both carry production's QUESTIONS block unchanged, so the GISTS block
- * is the single variable — the one genuinely isolated pair here, though both
- * stay `bakeoff` because `SHARED_DELTAS` is still true of them.
+ * for?** Both carry the same QUESTIONS block, so the GISTS block is the single
+ * variable — the one genuinely isolated pair here, though both stay `bakeoff`
+ * because `SHARED_DELTAS` is still true of them.
+ *
+ * **That QUESTIONS block is PINNED to V4, and was production's live slice until
+ * 2026-09-07.** Holding a *live* block equal on both members is enough to keep
+ * this pair isolated — it moves on both at once — but it is not enough for the
+ * pair `questions-toc6` makes with `gists-toc6`, which claims to be V4's wording
+ * against the wording it replaced. With a live slice on one half, editing one
+ * word of `src/hierarchy.ts` silently changes what that comparison is of, while
+ * the arm's own note claims both halves stay put. ⟨GPT Sol, F13, 2026-09-07.⟩
+ *
+ * So both length-pair arms name `variant: "V4"`. They still send exactly what
+ * production sends today — `tests/summaries-eval.test.ts` asserts
+ * `productionQuestions()` is byte-identical to `variants.md` § V4 — and they go
+ * on sending it after production moves on, which is what a pinned arm is for.
  *
  * **Run them at `--depth 2`.** Depth 2 is where 852 of the 1,239 stored gists
  * live and where the *"22-32 words, and use them"* half of the change has to
@@ -139,7 +179,7 @@ const SHARED_DELTAS: readonly string[] = [
  */
 const LENGTH_PAIR_DELTAS: readonly string[] = [
   ...SHARED_DELTAS,
-  "GISTS: a PINNED copy of a shipped block from variants.md, not the live slice; QUESTIONS: production's, unchanged",
+  "GISTS: a PINNED copy of a shipped block from variants.md, not the live slice; QUESTIONS: PINNED to V4, which is what production sends today and will go on being what this pair sends after production moves",
 ];
 
 export const ARMS: readonly ArmSpec[] = [
@@ -166,6 +206,14 @@ export const ARMS: readonly ArmSpec[] = [
     deltas: SHARED_DELTAS,
   },
   {
+    /**
+     * **Since `toc/7` this arm also carries V4's questions**, because production
+     * does and it takes production's live block. It is therefore byte-identical
+     * to the arm that used to be called `v4`, which is why that entry was
+     * removed rather than kept beside it — see the note above `questions-toc6`.
+     * Its own axis is unchanged: it is still the GISTS block alone against
+     * `incumbent`.
+     */
     name: "gists-only",
     comparison: "bakeoff",
     isolatedAgainst: "incumbent",
@@ -174,7 +222,7 @@ export const ARMS: readonly ArmSpec[] = [
     questionRule: "production",
     deltas: [
       ...SHARED_DELTAS,
-      "GISTS: the replacement block from variants.md; QUESTIONS: production's, unchanged",
+      "GISTS: the replacement block from variants.md; QUESTIONS: production's, unchanged — which since toc/7 is V4's",
     ],
   },
   {
@@ -220,37 +268,32 @@ export const ARMS: readonly ArmSpec[] = [
     questionRule: "production",
     deltas: [...SHARED_DELTAS, "GISTS and QUESTIONS both replaced (vs `v1`, the QUESTIONS block alone)"],
   },
-  {
-    /**
-     * **The only arm that needs a change to production code**, and the harness
-     * says so rather than absorbing it. Greg's literal reading order puts the
-     * shape hint after the question mark, and `questionFor` appends a second `?`
-     * to anything that does not end in one — GPT Sol's P1-4, verified: the
-     * stored value becomes *"…consciousness? (4 arguments)?"*.
-     *
-     * `variants.md` § *The code change V4 needs, and only V4* has the two-line
-     * patch. This harness does **not** apply it to `src/hierarchy.ts` — stage C
-     * builds the instrument only — it applies V4's rule to V4's lines here, and
-     * `tests/summaries-eval.test.ts` watches production's own `questionFor`
-     * mangle V4's shape, so the cost is a red test rather than a sentence.
-     */
-    name: "v4",
-    comparison: "bakeoff",
-    isolatedAgainst: "v1",
-    axis: "Greg's literal order: topic — question? (hint). Needs a production code change",
-    variant: "V4",
-    newGists: true,
-    questionRule: "trailing-hint",
-    deltas: [
-      ...SHARED_DELTAS,
-      "GISTS and QUESTIONS both replaced (vs `v1`, the QUESTIONS block alone — reading order is the one variable)",
-      "questionFor: the trailing-hint rule from variants.md, which production does NOT have",
-    ],
-  },
+  /**
+   * **`v4` used to be here, and it was removed on 2026-09-07 because it won.**
+   *
+   * Its recipe was the replacement GISTS block plus V4's QUESTIONS block. V4
+   * shipped as `toc/7` that day, so `productionQuestions()` now returns V4's
+   * block byte for byte — which makes that recipe **identical to `gists-only`**,
+   * character for character on both blocks. Two arms with one recipe is the
+   * shape this file reserves for `incumbent` / `incumbent-repeat` and forbids
+   * anywhere else: a noise-floor pair measures the model's wobble, and an
+   * undeclared one would report that wobble as an effect.
+   *
+   * So the reading-order comparison that used to be `v1` against `v4` is now
+   * `v1` against `gists-only` — the same bytes under the arm that was already
+   * carrying production's questions.
+   *
+   * **What replaces it as evidence is `questions-toc6` below**, which is the
+   * comparison that still has a question to answer: V4 against the wording it
+   * displaced, both halves pinned. And `tests/summaries-eval.test.ts` asserts
+   * `productionQuestions()` is byte-identical to `variants.md` § V4 directly,
+   * without needing an arm to carry the claim.
+   */
   {
     name: "gists-toc5",
     comparison: "bakeoff",
     axis: "the GISTS block as it shipped BEFORE the toc/6 bump: one sentence, no ceiling anywhere",
+    variant: "V4",
     newGists: false,
     shippedGists: "toc/5",
     questionRule: "production",
@@ -261,10 +304,61 @@ export const ARMS: readonly ArmSpec[] = [
     comparison: "bakeoff",
     isolatedAgainst: "gists-toc5",
     axis: "the GISTS block as it ships today: root <=18 words, depth 1 <=25, deeper 22-32",
+    variant: "V4",
     newGists: false,
     shippedGists: "toc/6",
     questionRule: "production",
     deltas: LENGTH_PAIR_DELTAS,
+  },
+  {
+    /**
+     * **Immediate pre-V4 production, both blocks pinned — the QUESTIONS axis's
+     * before half, and the arm that lets "the control was better all along" be
+     * an answer this eval can return.**
+     *
+     * Added 2026-09-07, when V4 shipped. `incumbent` slices the live SYSTEM, so
+     * from that commit it carries V4's questions; the wording V4 displaced has
+     * no other home, and without one the eval's null would look like a finding
+     * rather than a missing arm.
+     *
+     * **Its partner is `gists-toc6`, not `incumbent`, and that is the whole
+     * design.** `gists-toc6` is pinned toc/6 GISTS with production's live —
+     * i.e. V4's — QUESTIONS. This arm is pinned toc/6 GISTS with pinned toc/6
+     * QUESTIONS. So the pair differs in **exactly one block**, both halves stay
+     * put when `src/hierarchy.ts` moves again, and the comparison is *V4's
+     * wording against the wording it replaced* rather than a bakeoff of two
+     * recipes. `incumbent` could not play that part: its gists follow the live
+     * SYSTEM, so the day the GISTS block moves the pair is two variables and
+     * nobody notices.
+     *
+     * **The normaliser is production's, and the difference is measured at
+     * zero.** An arm is a GISTS block, a QUESTIONS block and the rule the line
+     * survives, so a *fully* pinned pre-V4 snapshot would want pre-V4
+     * `questionFor` too. The two rules differ on exactly one input: a line
+     * ending in `?` followed by a short bracket. The toc/6 block never asks for
+     * one, and the 2026-09-05 run measured **0% bracketed hints across 183
+     * questions** from the three arms carrying it (`incumbent`,
+     * `incumbent-repeat`, `gists-only`). So pinning a second normaliser would
+     * add a branch that cannot fire. Recorded rather than assumed: GPT Sol
+     * raised it as F1 on 260907d and this is the answer, with the number.
+     *
+     * It is also the only remaining home of the sentence
+     * `production-prompt.ts` exports as `THE_DIAGNOSED_SENTENCE` — *"and its
+     * gist does NOT"* — which the plan diagnosed as the cause of the generic
+     * questions `antikythera` still carries in the wild.
+     */
+    name: "questions-toc6",
+    comparison: "bakeoff",
+    isolatedAgainst: "gists-toc6",
+    axis: "the QUESTIONS block as it shipped BEFORE toc/7 — the pre-V4 control, pinned on both blocks",
+    newGists: false,
+    shippedGists: "toc/6",
+    shippedQuestions: "toc/6",
+    questionRule: "production",
+    deltas: [
+      ...SHARED_DELTAS,
+      "GISTS and QUESTIONS are BOTH pinned copies from variants.md, not the live slice — vs `gists-toc6`, the QUESTIONS block alone",
+    ],
   },
 ];
 
@@ -274,7 +368,7 @@ export function armByName(name: string): ArmSpec {
   return arm;
 }
 
-/** The GISTS and QUESTIONS blocks this arm sends, resolved from the two sources. */
+/** The GISTS and QUESTIONS blocks this arm sends, resolved from the three sources. */
 export function promptBlocksFor(arm: ArmSpec): { gists: string; questions: string } {
   const file = readVariants();
   let gists: string;
@@ -289,6 +383,24 @@ export function promptBlocksFor(arm: ArmSpec): { gists: string; questions: strin
   } else {
     gists = arm.newGists ? file.gists : productionGists();
   }
+  /* Two ways to name a QUESTIONS block that is not production's, and an arm
+     naming both is a bug in ARMS rather than a preference to resolve — the
+     lenient reading would send one block while the results file named the
+     other. */
+  if (arm.variant !== undefined && arm.shippedQuestions !== undefined) {
+    throw new Error(
+      `arm "${arm.name}" declares both variant ${arm.variant} and the shipped ${arm.shippedQuestions} QUESTIONS block; it may name at most one`,
+    );
+  }
+  if (arm.shippedQuestions !== undefined) {
+    const pinned = file.shippedQuestions.get(arm.shippedQuestions);
+    if (pinned === undefined) {
+      throw new Error(
+        `arm "${arm.name}" wants the shipped ${arm.shippedQuestions} QUESTIONS block, which variants.md does not pin — it has ${[...file.shippedQuestions.keys()].join(", ") || "none"}`,
+      );
+    }
+    return { gists, questions: pinned };
+  }
   if (arm.variant === undefined) return { gists, questions: productionQuestions() };
   const questions = file.questions.get(arm.variant);
   if (questions === undefined) {
@@ -299,42 +411,26 @@ export function promptBlocksFor(arm: ArmSpec): { gists: string; questions: strin
   return { gists, questions };
 }
 
-/* ------------------------------------------------ V4's rule, and only V4's -- */
+/* ---------------------------------------------------- the rule, which is -- */
+/* ------------------------------------------------------ production's now -- */
 
 /**
- * **`questionFor` with V4's trailing-hint clause** — the patch `variants.md`
- * specifies, run here instead of in `src/hierarchy.ts`.
+ * **`questionForTrailingHint` used to live here, and its deletion on 2026-09-07
+ * is the point rather than a tidy-up.**
  *
- * It is a reimplementation and not a wrapper, because the two lines that change
- * are inside `questionFor` and `bareWords`, and `bareWords` is module-private.
- * That is a real duplication, so it is held down two ways: the behaviour that is
- * meant to be **identical** to production's is asserted case by case against the
- * imported `questionFor`, and the one behaviour that is meant to **differ** is
- * asserted to differ — `tests/summaries-eval.test.ts`. A copy nobody compares is
- * how the drift in `hierarchy-structure/arms.ts` happened.
+ * It was a reimplementation of `questionFor` carrying V4's two-line patch,
+ * written here because the lines that change are inside `questionFor` and the
+ * module-private `bareWords`. A copy is a real duplication, so it was held down
+ * two ways: every behaviour meant to be *identical* to production's was
+ * asserted case by case against the imported `questionFor`, and the one meant to
+ * *differ* was asserted to differ.
+ *
+ * V4 shipped, production took the patch, and the half of that pairing that
+ * justified the copy — *something differs* — stopped being true. What replaces
+ * it in `tests/summaries-eval.test.ts` is the same assertion pointed at the real
+ * thing: production's own `questionFor` keeps `…consciousness? (4 arguments)`
+ * and still drops the gist re-asked in that shape.
  */
-export function questionForTrailingHint(
-  node: { gist?: string | undefined; question?: string | undefined },
-  depth: number,
-): string | undefined {
-  if (depth > MAX_QUESTION_DEPTH) return undefined;
-  if (typeof node.question !== "string") return undefined;
-  const q = node.question.trim();
-  if (q === "") return undefined;
-  /* The gist-echo check, with the bracketed hint stripped FIRST so that
-     "<gist>? (4 arguments)" is still caught. variants.md's second hunk. */
-  const bare = (s: string) =>
-    s
-      .toLowerCase()
-      .replace(/\s*\([^()]*\)\s*$/, "")
-      .replace(/[.!?]+$/, "")
-      .replace(/\s+/g, " ")
-      .trim();
-  if (node.gist !== undefined && bare(q) === bare(node.gist)) return undefined;
-  /* A `?` followed by nothing but one short bracketed hint is a finished line. */
-  if (/\?(\s*\([^()]{1,40}\))?$/.test(q)) return q;
-  return `${q.replace(/!+$/, "")}?`;
-}
 
 /** The rule this arm's lines are put through, as a function. */
 export type QuestionRuleFn = (
@@ -342,8 +438,7 @@ export type QuestionRuleFn = (
   depth: number,
 ) => string | undefined;
 
-export function questionRuleFor(arm: ArmSpec): QuestionRuleFn {
-  if (arm.questionRule === "trailing-hint") return questionForTrailingHint;
+export function questionRuleFor(_arm: ArmSpec): QuestionRuleFn {
   /* `questionFor` takes a whole `ModelNode` and reads two fields of it. The
      two it does not read are filled in here rather than widened in `src/`:
      production's signature is production's business, and an eval is not a
@@ -356,7 +451,15 @@ export function questionRuleFor(arm: ArmSpec): QuestionRuleFn {
   };
 }
 
-/** Arms whose winning would require editing `src/hierarchy.ts` beyond the prompt. */
+/**
+ * Arms whose winning would require editing `src/hierarchy.ts` beyond the prompt.
+ *
+ * **Empty since 2026-09-07, and that is a fact worth printing rather than a
+ * function to delete.** It returned `["v4"]` for two days; V4 won, the patch
+ * landed, and the results file now says `(none)` — which is the true statement
+ * about the current lineup and the thing a reader of a future run needs to
+ * know. `QuestionRule` above is the slot the next one goes in.
+ */
 export function armsNeedingCodeChange(): string[] {
   return ARMS.filter((a) => a.questionRule !== "production").map((a) => a.name);
 }

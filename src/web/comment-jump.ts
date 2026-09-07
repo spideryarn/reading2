@@ -73,7 +73,8 @@ function passageOf(comments: readonly AnchoredComment[], id: string): BlockId | 
 /**
  * **Choosing a question out of the drawer: a jump.**
  *
- * `jumpTo` is App.tsx's, which is `beginJump` (keynav.ts) — it measures where
+ * `jumpTo` is the reader's, from `reader/useReadingPosition.ts`, which is
+ * `beginJump` (keynav.ts) — it measures where
  * the reader was standing, arms that origin, pushes one entry and scrolls. So
  * one drawer selection costs one press of Back and draws one chip.
  *

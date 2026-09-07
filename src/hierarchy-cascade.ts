@@ -1206,6 +1206,17 @@ export interface ProposedChild {
   start: string;
   title: string;
   gist?: string;
+  /**
+   * **The Socratic question, where the request asked for one** — the children of
+   * the whole work and nothing else (src/hierarchy-expand.ts §
+   * `asksChildQuestions`).
+   *
+   * Optional on every child whatever was asked, because absence is ordinary and
+   * non-fatal: it is logged and counted, never thrown over. Carried here and
+   * judged nowhere in this file — `questionFor` (src/hierarchy.ts) decides at
+   * the node's real depth, in `buildTree`, and counts what it drops.
+   */
+  question?: string;
   sourceHeading?: string;
 }
 
@@ -1535,6 +1546,16 @@ export function normaliseExpansion<C extends ProposedChild>(opts: {
          should not be a second place where a field can disappear, and the two
          behaving alike is what stops the next reader having to check which. */
       ...(proposed.gist !== undefined ? { gist: proposed.gist } : {}),
+      /* **The question, carried and not judged**, by the same presence rule and
+         for a sharper version of the same reason. Depth, shape and the
+         gist-re-asked check all belong to `questionFor` (src/hierarchy.ts),
+         which `buildTree` runs over the finished proposal at each node's real
+         depth and which counts every drop into `report.droppedQuestions`. A
+         depth test here would be a second rule that could disagree with the one
+         that ships, and it would take the drop out of the one number that says
+         the prompt has drifted. So an expansion writing a question on a
+         depth-3 child is expected to produce a *counted* drop, not a quiet one. */
+      ...(proposed.question !== undefined ? { question: proposed.question } : {}),
       /* Carried through unchecked. `buildTree` asks whether a heading block in
          the node's range backs the claim, drops it when nothing does, and
          counts that in `report.droppedHeadings` — asking the same question here

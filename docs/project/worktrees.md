@@ -190,6 +190,14 @@ weaker test and proves nothing.
   npm test, after setup          14 of 477 files fail
 ```
 
+**Re-measured 2026-09-07, the after-setup half only: 2 of 786 files fail**, and both are one cause —
+`api-dist/vercel.js` is missing until `npm run build` runs, which `tests/cold-start-lazy-imports.test.ts`
+and `tests/pdf-bundle-trace.test.ts` both say out loud rather than skipping. The bare-run half was not
+re-measured, so the 95 above is still the 2026-09-01 figure and the two numbers are no longer a pair.
+The suite has grown 477 → 786 files in six days, which is why a bare count ages badly; what did not
+change is that `worktree:setup` is the difference between a suite that runs and one that cannot
+collect.
+
 The plan had 4–5 s and 564 MB, both from an earlier measurement, and both optimistic. The 95 → 14 is
 what `worktree:setup` buys, and it is the number that made a worktree worth having: the bare run also
 *collected* 1,137 fewer tests, so its lower raw failure count was hiding the problem rather than

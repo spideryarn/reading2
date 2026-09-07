@@ -56,14 +56,18 @@ they are named by what they *are*, so a manifest cannot point at last week's doc
 The differences that matter to a reader:
 
 - **A PDF costs money to extract.** Readability is free and deterministic; a model reading pages is
-  neither. Every chunk's raw response is checkpointed against the **article**, one row per chunk
+  neither. Every completed chunk that passes its checks is checkpointed against the **article**, one row per chunk
   ([`src/store/checkpoints.ts`](../../src/store/checkpoints.ts)), so a second attempt at a document
-  the first one ran out of time on buys only the chunks it has not got — and re-running after a
-  *renderer* fix is free. A **prompt** change is deliberately not free: the key carries
+  the first one ran out of time on buys only the chunks it has not got. A checkpoint is fully
+  shape-checked and revalidated against the current page-integrity rules before reuse; a defective
+  one is recovered without rebuying its valid neighbours. A recovered chunk is saved only after the
+  final cross-chunk deduplication still leaves every witnessed page present. Re-running after a
+  *renderer* fix is free.
+  A **prompt** change is deliberately not free: the key carries
   `promptFingerprint()`. And `npm run eval:pdf-read` (`npm run pdf` until 2026-09-05) remembers
   nothing between runs at all, because a command
   line has no article to key on and takes `nullCheckpointStore()`.
-- **It is checked, and since 2026-08-30 it no longer fails.** The transcription is scored per page
+- **It is checked, and noisy content disagreements do not fail it.** The transcription is scored per page
   against the PDF's own text layer ([`src/pdf-score.ts`](../../src/pdf-score.ts)). This used to
   `throw`, and the argument for throwing was the point of the whole stage — a model can drop a
   paragraph, summarise one or invent one, and all three read as fluent English. What changed was
@@ -75,11 +79,19 @@ The differences that matter to a reader:
   **The saying-so is the half that is not built.** The *score* is shown — the masthead's source note
   and the metadata page's `Missed` row both report recall and pages checked. The specific complaints
   go to `meta.quality`, and **nothing renders it**, so the sentence in
-  [`src/pdf-read.ts`](../../src/pdf-read.ts) § `runPdfExtract` — "if the reader does not look, nobody
-  looks" — currently describes a reader who cannot. Restoring a gate later means choosing which
-  failures are fatal, and the missing-run check is the one worth it; note that `coverageOf`'s
-  `missing` is *any requested page with no record at all*, so a gate on it as-is would refuse a blank
-  verso or a full-page figure, which is the false-refusal class that stood the old one down.
+  [`src/pdf-read.ts`](../../src/pdf-read.ts) § `runPdfExtract` therefore remains reader-invisible.
+  Structural defects are separate: malformed responses, impossible or descending page labels, and
+  absent substantive records on a text-bearing page trigger context-free single-page recovery. For
+  this presence check, a page needs an independent furniture-free baseline of at least three lexical
+  words, and its records need at least three lexical words in total; hidden records count. This small
+  floor prevents a folio such as `1` from certifying a page of prose without turning isolated maths or
+  publisher furniture into a hard failure. The check is page-local even when the document as a whole
+  is classified as a scan. The server assigns each recovered page from its one-page source body; an
+  unresolved defect refuses the extraction before HTML is returned. Truly blank/no-text-layer pages
+  remain unverified rather than fatal, and scans remain explicitly marked unverified. A partial
+  trailing bibliography is excluded from noisy recall scoring only when the page's own text layer and
+  present transcribed `reference` records independently identify it; a wholly absent bibliography page
+  is recovered or refused, not inferred from year density.
 - **A PDF can be too long, and on the queue's path it is refused in stage 1.** The cap is
   [`src/uploads.ts`](../../src/uploads.ts) § `MAX_PAGES` — a limit on what reading a document is
   allowed to cost, not a technical one — and since 2026-09-04 it is enforced where the bytes first
@@ -157,6 +169,9 @@ The differences that matter to a reader:
   [`src/pdf-read.ts`](../../src/pdf-read.ts) glues it back where pass 0's own lines say so on both
   pages, and declines otherwise — the evidence rules, and the case it deliberately gives up on, are
   in the comment above the function.
+- **A continuation joins only on the same source page or the immediately following one.** The join
+  cursor advances after every joined record, so legitimate three-page continuations work without
+  allowing backwards or cross-gap joins.
 
 The whole of it — the model, the prompt, the chunking, the check, and what it cost to decide — is in
 [../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md).
@@ -170,6 +185,55 @@ and Readability is the only caller that ever wanted it: not as something to fetc
 for relative links, which a PDF has not got. Asking for it up here made a missing URL the first
 thing an upload hit, three stages after the last thing that could have supplied one. The upload path
 is [ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf).
+
+## Stage 2 and the document with no address
+
+**Since 2026-09-07 the uploaded document can be a web page**, and moving `requireUrl` inside the
+HTML branch was not enough, because that is the branch it now arrives in
+([260907b](../plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md)). So the question the
+`extract` step asks is no longer *what kind is this* but *where did it come from*:
+
+```ts
+const url = cameFromAnUpload(manifest) ? null : requireUrl(ctx);
+```
+
+**And not `manifest.origin`, which is the field you would reach for.** It is set by `acquireUpload`
+and is **absent from every manifest read back**: `readRaw` in
+[`src/store/artifacts-pg.ts`](../../src/store/artifacts-pg.ts) rebuilds a manifest from columns,
+there is no `origin` column, and that adapter deliberately declines to invent one. This line was
+written as `manifest.origin === "upload"` first, passed every unit test, and failed on the first
+real upload — the tests asserted the manifest the step *returns* and the pipeline reads the one the
+store *keeps*. `cameFromAnUpload` ([`src/fetch.ts`](../../src/fetch.ts)) asks `filename` instead,
+which is the `raw_filename` column and does survive.
+
+`requireUrl` is still right for a fetched page — that one *must* have an address, and a missing one
+is our bug rather than the reader's. What is new is `null`, and it is `null` rather than a
+placeholder for the reason [fetching.md](fetching.md#not-everything-gets-fetched-rawmanifest-has-an-origin)
+already gives about `RawManifest`: a `file://` or an `upload://…` **reads as an address** to
+everything downstream — `meta.url`, the masthead, the metadata page, the dedup checks — and not one
+of them would have complained. `runExtract` therefore takes `url: string | null`, which omits
+JSDOM's `url` option and omits `meta.url`. `Meta.url` has been optional since uploads existed.
+
+**What it costs, said plainly rather than discovered.** `url` was doing exactly two jobs, and the
+one that matters here is being the base that relative links and relative `<img src>` resolve
+against. With no base they stay relative, so:
+
+- the prose is unaffected, which is what this app is for;
+- **relative images are dropped**, cleanly and by a rule that was already there —
+  [`src/assets.ts`](../../src/assets.ts) refuses a non-absolute URL and its own comment already
+  named this case, *"a relative URL after stage 2 means Readability had no base to resolve it
+  against"*;
+- relative hyperlinks in the prose go nowhere.
+
+So the class of article that comes out badly is **a saved page whose figures are all relative
+paths** — text intact, figures gone. That is named here rather than half-supported.
+
+**One case works for free, and it is the document's own doing.** A file carrying
+`<base href="https://…">` resolves correctly with no help from us, because that element *is* the
+document's base URL and `document.baseURI` is what Readability resolves against. Recovering an
+address from `<link rel="canonical">` would cover more saved pages and is **deliberately not
+done**: that URL would come out of untrusted file contents and flow into stage 4.5's image
+fetching, which is a security question worth answering on its own rather than as a rider.
 
 One thing it does **not** yet buy, and should: `fetchDocument` reports the URL it *ended up* at
 after redirects, and this stage still hands Readability the URL that was typed. Where those differ,

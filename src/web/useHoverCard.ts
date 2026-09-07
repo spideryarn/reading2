@@ -636,13 +636,65 @@ export function useHoverCard<T>({
       if (event.pointerType === "touch") return;
       close();
     };
+    /**
+     * Escape drops the card — and, **when there is one**, keeps the press.
+     *
+     * This listens on `document` in the **capture** phase, which puts it ahead
+     * of every other tier but the Dock's — see the section below, which is the
+     * whole reason it is not where it looks like it should be. The three
+     * modeless dialogs listen at `window` bubble (useEscapeToClose.ts), so
+     * until 2026-09-07 merely *hovering* a glossary term while a selection was
+     * open meant one press closed the card and discarded a half-typed
+     * annotation — the cheapest path to that loss in the whole inventory, and
+     * the one that needs no click at all.
+     *
+     * **`shut()` stays unconditional; only the stop is conditional**, and that
+     * asymmetry is the trap. `shut()` also calls `disarm()`, which cancels a
+     * card that is *mid-open-delay* — so writing this as an early return on
+     * `currentRef.current` reads like the same fix and silently loses that: the
+     * card the reader walked away from opens 320ms after they pressed Escape.
+     * The stop has to be conditional the other way, because this handler runs
+     * whenever the hook is mounted — which is the whole reading view — and an
+     * unconditional one would swallow Escape for everything behind it.
+     *
+     * ## The **capture** phase, which is the whole of the fix for a hovered card
+     *
+     * Registered with `true`, and a bubble listener here does not work. A card
+     * opened by *hovering* moves no focus, so with an annotation open the focus
+     * is still in its textarea — `AnnotateDialog` puts it there on mount — and
+     * that textarea has its own React `onKeyDown` that clears a non-empty draft
+     * on Escape and stops the event. React's root container is a **descendant**
+     * of `document`, so on the bubble path it is reached first: the draft was
+     * wiped and this handler never ran at all.
+     *
+     * Capture runs the other way, outside in, so `document` capture is ahead of
+     * every React handler as well as of the `document`-bubble and
+     * `window`-bubble tiers. That is the correct order rather than a lucky one:
+     * this card is `z-index: 100`, the topmost thing on the screen, and the
+     * inventory's Q1 says the surface the reader sees in front owns the press.
+     * The Dock's drawer still outranks it — that listener is `window` capture,
+     * which is one step further out again — which is pair 12, left standing on
+     * purpose.
+     *
+     * docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-escape-inventory.md
+     * § F2; both halves are tests/one-escape-closes-one-surface.test.tsx.
+     */
     const key = (event: KeyboardEvent) => {
-      if (event.key === "Escape") shut();
+      if (event.key !== "Escape") return;
+      /* **A native modal outranks this too**, and unlike the tiers below it we
+         cannot stop the platform closing it — so without this line one press
+         closes the dialog and the card, which is pair 17. The card is left
+         standing rather than shut, because the press was never ours.
+         `useEscapeToClose.ts` has the reasoning and the caveat. GPT Sol's P2 on
+         stage 3, 2026-09-07. */
+      if (document.querySelector("dialog[open]") !== null) return;
+      if (currentRef.current) event.stopPropagation();
+      shut();
     };
 
     document.addEventListener("pointerover", over);
     document.addEventListener("pointerleave", leave);
-    document.addEventListener("keydown", key);
+    document.addEventListener("keydown", key, true);
     /* All seven only for a consumer that opted into touch. `pointermove` on the
        document is the one that would actually cost something otherwise — it
        would run on every mouse move on the page to read one null. */
@@ -679,7 +731,7 @@ export function useHoverCard<T>({
       clearTimeout(closeTimer);
       document.removeEventListener("pointerover", over);
       document.removeEventListener("pointerleave", leave);
-      document.removeEventListener("keydown", key);
+      document.removeEventListener("keydown", key, true);
       if (tapSelector) {
         document.removeEventListener("pointerdown", pointerDown);
         document.removeEventListener("pointermove", pointerMove);

@@ -23,6 +23,14 @@
  * that costs money. Re-pin only alongside a deliberate edit to SYSTEM, and say
  * which in the commit message.
  * docs/plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md.
+ *
+ * **RE-PINNED AGAIN 2026-09-07 for `toc/7`**, and it fired the same way: the
+ * QUESTIONS block became V4 — the reading order Greg drew, `<topic> —
+ * <question>? (<shape hint>)` — so the bytes moved on purpose a second time.
+ * The block below is byte-identical to `evals/summaries/variants.md` § V4,
+ * which is the copy the eval measured; `tests/summaries-eval.test.ts` asserts
+ * that identity, so this pin and that one cannot drift apart quietly.
+ * docs/plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md.
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -123,16 +131,28 @@ QUESTIONS (the root and depth-1 nodes only)
 
 - Exactly ONE question on the root and on each depth-1 node. Omit it entirely
   on deeper nodes.
-- It is the question this node's text answers and its gist does NOT. The reader
-  has the gist beside it; the question is what sends them into the prose for
-  the rest of the answer.
-- It must need the argument to answer, not a fact to look up: "why", "how", or
-  "what follows if" — never "which example", "who said", or anything one
-  sentence settles.
-- Not rhetorical, not yes/no, and never the gist with a question mark on it.
+- It is the question this node is BUILT to answer — the author's question, not
+  a reader's. A reader must be able to tell from this line alone whether to go
+  in: it carries the same direction as the gist, in a different mood.
+- Shape: "<topic> — <question>? (<shape hint>)" — the topic first, in the
+  author's own term; then the question, ending in "?"; then an optional hint
+  in brackets. Nothing follows the hint.
+- The question presupposes where the section lands. "Why isn't computation
+  sufficient" carries the claim; "is computation sufficient?" hides it. So
+  "why", "how", "what follows if" — never "which", "who", or anything a single
+  fact settles.
+- Where the section does NOT land — it weighs, describes, or leaves the matter
+  open — do not invent a landing. Ask the question it leaves open and let the
+  hint say so: "(two options weighed)", "(no settled answer)".
+- The hint is the SHAPE of the answer, never its content: a count or a kind
+  ("a thought experiment", "two case studies", "a recommendation"). A count
+  only when the section itself counts ("four arguments") or you could list
+  each item from its text. Never count this node's children — that is a
+  different number. Omit the hint when there is no honest shape.
 - The root's question is the one the whole piece exists to answer.
-- Under 15 words, ending in "?". The article's own words for what it names,
-  ordinary words for the rest, exactly as with gists.
+- Not rhetorical, not yes/no, never the gist with a question mark on it.
+- Under 20 words in all. Digits for counts. The article's own words for what it
+  names, ordinary words for the rest, exactly as with gists.
 
 OUTPUT
 

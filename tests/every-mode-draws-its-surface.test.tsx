@@ -32,6 +32,16 @@
  * checks `SPENDS`. Phase B serves a populated, deliberately asymmetric one for
  * each and checks `DRAWS`.
  *
+ * ## Phase A runs twice: once per door into a mode
+ *
+ * Since 2026-09-07 there are two ways to open a mode — the bar button, and the
+ * command bar's Enter — and Greg's rule is that the second costs exactly what
+ * the first costs. So phase A is parameterised over `TRIGGERS` and the same
+ * four assertions run through each. **That had to be here rather than in a unit
+ * test**: GPT Sol's F4 on 260906h is that comparing `pendingActivation` proves
+ * nothing, because a token is not a post and Diagram's Force, Drift and Trail
+ * spend through mount-time POSTs that leave no token at all. See `Trigger`.
+ *
  * ## Neither table is derived from the code it is about
  *
  * `SPENDS` is written from the product rule — *pressing a mode with nothing in
@@ -381,8 +391,33 @@ const DEBATE: Debate = {
         articleReferenceQuote: "The instrument was built",
         /* The witness is the same string as `articleReferenceQuote` — that is
            how src/debate.ts builds a `named` signal, and a fixture that split
-           them would describe a row the pipeline cannot produce. */
-        identifies: [{ kind: "named", by: "title", witness: "The instrument was built" }],
+           them would describe a row the pipeline cannot produce.
+
+           **The `quoted` signal beside it is what keeps this row on screen.** The
+           identification bar landed on 2026-09-06 and this fixture on the same
+           day, on separate branches; the signal was added on 2026-09-07, when
+           the merge first put the two in one tree and the band came out empty.
+           The bar defaults to `quoted` — measured on the corpus, because a page that
+           merely shares a title may be about a same-named successor — so a
+           `named`-only row is hidden by design, and this fixture drew a band with
+           nothing in it but chrome: exactly the F6 failure this sweep was
+           calibrated against, reached by a real change rather than by a mutation.
+
+           The quote is a genuine run of `PARAGRAPH`, and its block is
+           `spya-bbbbbb` rather than the `h1`, because quotation evidence is taken
+           from prose only (GPT Sol's F1): a title of eight words was otherwise
+           evidence for itself. The two ratios are what `shingleOverlap` returns
+           for one window of a short article. */
+        identifies: [
+          {
+            kind: "quoted",
+            quote: "instrument was built before anybody could say what it would measure",
+            blockId: "spya-bbbbbb",
+            coverage: 0.5,
+            density: 0.2,
+          },
+          { kind: "named", by: "title", witness: "The instrument was built" },
+        ],
       },
     ],
     counts: COUNTS,
@@ -681,6 +716,21 @@ beforeEach(() => {
   resetActivations();
   jobEngine.reset();
   resetExperimental();
+  /* The command bar is a native `<dialog>` and jsdom implements neither
+     `showModal` nor `close`, while `open` is a real attribute — the same
+     stand-in tests/feedback-dialog.test.tsx uses, for the same reason. Phase A
+     presses through that bar as well as through the bar button (see
+     `TRIGGERS`), so this file needs it too. */
+  const dialogs = window.HTMLDialogElement?.prototype;
+  if (dialogs) {
+    dialogs.showModal = function showModal(this: HTMLDialogElement) {
+      this.open = true;
+    };
+    dialogs.close = function close(this: HTMLDialogElement) {
+      this.open = false;
+      this.dispatchEvent(new Event("close"));
+    };
+  }
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
     Promise.resolve(
       reply(String(input), init?.method ?? "GET", (init?.body as string | undefined) ?? null),
@@ -769,6 +819,98 @@ async function press(mode: Mode): Promise<void> {
   await settle();
 }
 
+/* ------------------------------------------------------- the two doors --
+
+   Two surfaces open a mode, and phase A below runs the identical assertions
+   through each. */
+
+/**
+ * **A way a reader opens a mode**, so that "and it costs the same from the
+ * command bar" is the same sweep rather than a second, weaker one written
+ * beside it.
+ *
+ * The command bar arrived on 2026-09-07 and its whole promise is Greg's answer
+ * 1: pressing Enter on a row opens that mode *exactly as pressing its bar
+ * button does — same activation, same generate-on-open, same cost*
+ * (docs/plans/260906h-mode-catalog-and-a-command-bar.md).
+ *
+ * **A `pendingActivation` comparison would not have proved that**, and GPT Sol's
+ * F4 is why this is here instead of in a cheap unit test: a token is not a
+ * post (see `stillPending` above, and F12 before it), and Diagram's Force,
+ * Drift and Trail spend through **mount-time POSTs that leave no token at
+ * all**. The only instrument that can see those is the one already in this
+ * file — the whole app, a stubbed `fetch`, and a list of what was asked for.
+ *
+ * The two doors share `activateMode` in Dock.tsx, which is what makes parity
+ * *likely*; this is what makes it **checked**. If the bar ever grows its own
+ * copy of the arming — a "cheap preview", a skipped token, a second POST — the
+ * command-bar arm of the sweep goes red on the same four assertions the Dock
+ * arm passes.
+ */
+interface Trigger {
+  /** What the test name calls it. */
+  readonly name: string;
+  /** Open this mode, and come back when the page has settled. */
+  press(mode: Mode): Promise<void>;
+}
+
+/**
+ * The real bar button, found the way a screen reader would find it — and until
+ * 2026-09-07 the only way in, which is why `press` above has the plain name.
+ */
+const BAR_BUTTON: Trigger = { name: "bar button", press };
+
+/**
+ * **The command bar**, reached through its own button in the bar rather than
+ * through ⌘-K: the chord and the button set the same state, and the button is
+ * the door a phone has. tests/command-bar.test.tsx owns the chord's own
+ * contract (repeat, text fields, other modals, the drawer).
+ *
+ * The query typed is the mode's **whole label**, and the selection is asserted
+ * before Enter rather than assumed. Labels are unique and a full label is a
+ * label-prefix match, so the wanted mode is first — but "the sweep pressed
+ * Enter on whatever happened to be at the top" is exactly the shape that turns
+ * a money test green for the wrong reason.
+ */
+const COMMAND_BAR: Trigger = {
+  name: "command bar",
+  async press(mode: Mode): Promise<void> {
+    const before = modeInUrl();
+    const opener = host.querySelector<HTMLButtonElement>(".dock-commands");
+    expect(opener, "the bar must draw a command-bar button").not.toBeNull();
+    await act(async () => (opener as HTMLButtonElement).click());
+
+    const box = host.querySelector<HTMLInputElement>("dialog.cmdbar input.cmdbar-input");
+    expect(box, "the command bar must be open, with a box to type in").not.toBeNull();
+    const field = box as HTMLInputElement;
+    /* React's value tracker does not see a plain `.value =`, so the native
+       setter goes first and the `input` event after — the standard workaround. */
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(field, MODE_LABEL[mode]);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const selected = field.getAttribute("aria-activedescendant");
+    expect(selected, `typing "${MODE_LABEL[mode]}" selected nothing`).not.toBeNull();
+    expect(
+      selected?.endsWith(`-${mode}`),
+      `typing "${MODE_LABEL[mode]}" selected ${selected} rather than ${mode}`,
+    ).toBe(true);
+
+    await act(async () => {
+      field.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    await modeAfterPress(before);
+    await settle();
+  },
+};
+
+/** Both doors, and phase A runs the whole sweep through each of them. */
+const TRIGGERS: readonly Trigger[] = [BAR_BUTTON, COMMAND_BAR];
+
 /** Hidden either way, and screen-reader copies. Used on the element and inside it. */
 const UNREADABLE = '[aria-hidden="true"], [hidden], [class*="sr-only"]';
 
@@ -805,7 +947,8 @@ function stillPending(): AutoRunTarget[] {
 
 /* ============================================================== phase A ====
 
-   Artefacts missing. What each mode's press spends. */
+   Artefacts missing. What opening each mode spends, from each of the two doors
+   into it — see `TRIGGERS`. */
 
 /**
  * **One press the sweep makes, and everything it is allowed to spend.**
@@ -862,6 +1005,8 @@ const SPENDS: Record<Mode, Spend> = {
   hierarchy: { kind: "none", why: "the gist columns come from the tree that is already there" },
   /* The same tree, one nested list. */
   outline: { kind: "none", why: "the nested list is that same tree; no model call" },
+  /* And the same tree a third time, in linked columns. */
+  structure: { kind: "none", why: "the columns are that same tree; no model call" },
   /* And the same gists again, in a band instead of in the columns. */
   summary: { kind: "none", why: "the gists are the tree's own; no artefact behind them" },
   /* The five artefact modes, each arming its own name. */
@@ -925,64 +1070,69 @@ function pressesFor(spend: Spend): Press[] {
 
 const PHASE_MS = 30_000;
 
-describe("phase A — what a press on each mode's real bar button spends", () => {
-  for (const mode of MODES) {
-    const spend = SPENDS[mode];
-    it(
-      `${mode}: ${spend.kind === "none" ? `spends nothing — ${spend.why}` : "arms what it says it arms"}`,
-      async () => {
-        let ran = 0;
-        for (const want of pressesFor(spend)) {
-          ran += 1;
-          /* A fresh root per press: `root.render` reconciles rather than
-             remounts, so a second address would inherit the first's mode. */
-          await act(async () => root.unmount());
-          host.remove();
-          host = document.createElement("div");
-          document.body.append(host);
-          root = createRoot(host);
-          posts.length = 0;
-          mutations.length = 0;
-          resetActivations();
-          jobEngine.reset();
-          /* Illustrated is painted from the Sketch, so its press can only arm
-             anything on an article that has one. See `sketchDrawn`. */
-          sketchDrawn = want.steps.includes("illustrated");
+/* **One sweep per door**, and the assertions inside are the same four either
+   way — that identity is the test. See `Trigger`, and GPT Sol's F4, which is
+   why cost parity is measured here rather than by comparing tokens. */
+for (const trigger of TRIGGERS) {
+  describe(`phase A — what opening each mode from the ${trigger.name} spends`, () => {
+    for (const mode of MODES) {
+      const spend = SPENDS[mode];
+      it(
+        `${mode}: ${spend.kind === "none" ? `spends nothing — ${spend.why}` : "arms what it says it arms"}`,
+        async () => {
+          let ran = 0;
+          for (const want of pressesFor(spend)) {
+            ran += 1;
+            /* A fresh root per press: `root.render` reconciles rather than
+               remounts, so a second address would inherit the first's mode. */
+            await act(async () => root.unmount());
+            host.remove();
+            host = document.createElement("div");
+            document.body.append(host);
+            root = createRoot(host);
+            posts.length = 0;
+            mutations.length = 0;
+            resetActivations();
+            jobEngine.reset();
+            /* Illustrated is painted from the Sketch, so its press can only arm
+               anything on an article that has one. See `sketchDrawn`. */
+            sketchDrawn = want.steps.includes("illustrated");
 
-          await open(want.search, { strict: false });
-          /* The positive control: the page is a working reader before the
-             press, so "no POST" below is a settled page rather than an empty
-             one. */
-          expect(host.querySelector(".dock-modes"), "no bar to press").not.toBeNull();
-          await press(mode);
-          await settle();
+            await open(want.search, { strict: false });
+            /* The positive control: the page is a working reader before the
+               press, so "no POST" below is a settled page rather than an empty
+               one. */
+            expect(host.querySelector(".dock-modes"), "no bar to press").not.toBeNull();
+            await trigger.press(mode);
+            await settle();
 
-          expect(modeInUrl(), `${mode}: the button did not change mode`).toBe(mode);
-          expect(
-            posts.map((p) => p.steps),
-            `${mode}${want.search}: what the press asked the queue for`,
-          ).toEqual(want.steps.length === 0 ? [] : [[...want.steps]]);
-          /* The other half of the money, and the half nothing watched until
-             2026-09-06: a paid request the press made for itself. */
-          expect(
-            paidPosts(),
-            `${mode}${want.search}: what the press bought outside the job queue`,
-          ).toEqual([...want.spends].sort());
-          /* And what it left **armed**. A token nobody claimed is money not yet
-             spent rather than money not spent — see `stillPending`. */
-          expect(
-            stillPending(),
-            `${mode}${want.search}: presses left armed and unclaimed after the page settled`,
-          ).toEqual([]);
-        }
-        /* **Outside the loop**, because a table can promise a press and then
-           list none, and a loop over nothing passes. See `AtLeastOne`. */
-        expect(ran, `${mode}: the row named no press to make`).toBeGreaterThan(0);
-      },
-      PHASE_MS,
-    );
-  }
-});
+            expect(modeInUrl(), `${mode}: the ${trigger.name} did not change mode`).toBe(mode);
+            expect(
+              posts.map((p) => p.steps),
+              `${mode}${want.search}: what the ${trigger.name} asked the queue for`,
+            ).toEqual(want.steps.length === 0 ? [] : [[...want.steps]]);
+            /* The other half of the money, and the half nothing watched until
+               2026-09-06: a paid request the press made for itself. */
+            expect(
+              paidPosts(),
+              `${mode}${want.search}: what the ${trigger.name} bought outside the job queue`,
+            ).toEqual([...want.spends].sort());
+            /* And what it left **armed**. A token nobody claimed is money not yet
+               spent rather than money not spent — see `stillPending`. */
+            expect(
+              stillPending(),
+              `${mode}${want.search}: presses left armed and unclaimed after the page settled`,
+            ).toEqual([]);
+          }
+          /* **Outside the loop**, because a table can promise a press and then
+             list none, and a loop over nothing passes. See `AtLeastOne`. */
+          expect(ran, `${mode}: the row named no press to make`).toBeGreaterThan(0);
+        },
+        PHASE_MS,
+      );
+    }
+  });
+}
 
 /* ============================================================== phase B ====
 
@@ -1055,6 +1205,30 @@ const DRAWS: Record<Mode, Draws> = {
      the columns beside the prose as well, so a gist would pass over an empty
      band the moment the columns happened to be open. */
   outline: { kind: "band", where: ".mode-band.outln", says: OUTLINE_ROW },
+  /* **The part's title, and it is `OUTLINE_ROW` because the fixture has one
+     depth-1 node and that is its title** — not because this row was copied from
+     the one above. The two modes draw the same word here and the selectors are
+     what tell them apart, which is the scope this table's `where` exists to
+     provide: Outline's list and Structure's column A are the same tree read two
+     ways, so on a one-part fixture they necessarily agree about the word.
+
+     **This row can only ever prove column A**, and that is a limit of the
+     fixture rather than of the table. The tree above has a root and one part and
+     no section, so there is no depth-2 title to name and no reader position that
+     puts column B on screen; a Structure that never rendered its right-hand
+     column would satisfy this row exactly. Widening the fixture would change
+     what Hierarchy, Outline and Summary draw in the same run, so the other half
+     is asserted in a file of its own —
+     tests/structure-panel-draws-both-columns.test.tsx, which mounts the panel on
+     a two-part tree and reads both columns by position. GPT Sol's review of the
+     plan, finding 8.
+
+     Structure draws `aria-hidden` measuring copies of both its columns, exactly
+     as Outline does, so this row depends on `readable()` stripping them — the
+     trap documented on `BAND_SAYS` in tests/public-network-trace.test.tsx. Read
+     raw, a `textContent` assertion here would be satisfied by a panel whose
+     visible columns rendered nothing at all. */
+  structure: { kind: "band", where: ".mode-band.struct", says: OUTLINE_ROW },
   /* The root's own gist, drawn as the band rather than as a column. */
   summary: { kind: "band", where: ".mode-band.summ", says: ROOT_GIST },
   /* An entry's name, which is what a closed row shows — a canary the panel

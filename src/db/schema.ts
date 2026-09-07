@@ -2299,10 +2299,15 @@ export const revisionStepRuns = spideryarn.table(
        * the `summary` step runs before it narrows the constraint. It does, in
        * that order.
        *
-       * `labels` is deliberately NOT here. `labels.json` is one of the `hierarchy`
-       * step's OUTPUTS rather than a step of its own, so its currency rides
-       * with the `hierarchy` row. Verified against src/pipeline.ts rather than
-       * inferred from the file existing.
+       * **`labels` IS here, since 2026-09-06**, and this sentence used to say
+       * the opposite: *"`labels` is deliberately NOT here. `labels.json` is one
+       * of the `hierarchy` step's OUTPUTS rather than a step of its own."* It
+       * became a step of its own with
+       * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md — the
+       * label pass was 79.5–92% of stage 4's wall clock, past what the job lease
+       * allows — so it now has a `revision_step_runs` row like every other step,
+       * and `drizzle/20260906…_labels_step.sql` is the migration that widened
+       * this CHECK to admit it.
        */
       /* **This list is `STEP_ORDER` and it has drifted twice.** `sketch` was added
          to the database by drizzle/0031 and never got back into this literal,
@@ -2311,7 +2316,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch','illustrated','debate')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch','illustrated','debate')`,
     ),
     check(
       "revision_step_runs_status",

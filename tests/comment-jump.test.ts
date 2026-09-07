@@ -163,9 +163,9 @@ const NEAR = 18;
 
 let host: HTMLDivElement;
 let root: Root;
-/** App.tsx's `jumpTo` write, byte for byte. */
+/** The reader's `jumpTo` write, byte for byte — reader/useReadingPosition.ts. */
 let pushAt: ((id: BlockId) => void) | null = null;
-/** App.tsx's `setNote`, which is `?note=` and a replace (params.ts). */
+/** The reader's `setNote`, which is `?note=` and a replace (params.ts). */
 let noteSetter: ((id: string) => unknown) | null = null;
 
 function Address(): ReactNode {
@@ -178,7 +178,7 @@ function Address(): ReactNode {
   return null;
 }
 
-/** Exactly what App.tsx's `jumpTo` does, minus its `synced` bookkeeping. */
+/** Exactly what the reader's `jumpTo` does, minus its `synced` bookkeeping. */
 const jumpTo = (target: BlockId) => void beginJump(BLOCKS, target, (id) => pushAt?.(id));
 const note = (id: string) => noteSetter?.(id);
 

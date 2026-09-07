@@ -85,7 +85,8 @@ import {
   cachedText,
   underCacheFloor,
 } from "./article-prompt.js";
-import type { Block, Meta, QuizEvidence } from "./types.js";
+import type { Block, Meta, QuizEvidence, QuizVerdict } from "./types.js";
+import { classifyVerdict } from "./quiz-verdict.js";
 
 /**
  * What this call sends: whichever tier src/models.ts puts `quiz-mark` on, or
@@ -357,6 +358,21 @@ export interface QuizMarkRequest {
 export interface QuizMarkResult {
   reply: string;
   model: string;
+  /**
+   * **Whether the reader got it right — never shown to them.**
+   *
+   * The adaptive ladder steps on this (src/web/quiz-ladder.ts); the panel renders
+   * it nowhere, and nothing writes it down. It is judged by a separate call
+   * (src/quiz-verdict.ts) that reads the finished `reply` above rather than by
+   * this prompt, so that `QUIZ_MARK_SYSTEM` — which spends two pages refusing to
+   * grade — is not asked to grade after all. That reasoning is the spine of
+   * docs/plans/260907d-make-the-quiz-adaptive.md.
+   *
+   * **Optional, and absent often.** The classifier failing, timing out, or
+   * declining an ill-posed question all arrive here as `undefined`, which means
+   * *hold the band*. A mark is complete and correct without it.
+   */
+  verdict?: QuizVerdict;
 }
 
 /**
@@ -815,7 +831,26 @@ export async function* markAnswerStream({
     // already watched arrive.
   }
 
-  yield { type: "done", reply, model: used };
+  /* **The hidden half of the adaptive quiz, and it runs after the mark is
+     complete** — the reader has already read every word of `reply` by now, so
+     what this waits on is the `done` frame and therefore the answered tick, not
+     a syllable of what is on screen.
+
+     It cannot fail: `classifyVerdict` swallows a refusal, a timeout and an
+     unparseable answer alike and hands back `undefined`, which the ladder reads
+     as *hold the band*. So the worst outcome here is a reader offered another
+     question at the same level, and a mark is never lost over a number nobody
+     was going to see. src/quiz-verdict.ts says why it is a second call rather
+     than a line in this file's prompt.
+
+     `req.signal` goes with it, so a reader who navigates away stops paying for
+     this too. */
+  const verdict = await classifyVerdict({ question, answer, mark: reply, signal });
+
+  /* Spread rather than `verdict: undefined`, so that an absent verdict is a
+     field that is genuinely not there — over SSE the two are different bytes,
+     and `exactOptionalPropertyTypes` is on for exactly this distinction. */
+  yield { type: "done", reply, model: used, ...(verdict ? { verdict } : {}) };
 }
 
 /**

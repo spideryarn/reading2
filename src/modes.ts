@@ -1,6 +1,6 @@
 /**
- * **The reader's fourteen middle-band modes, named once, in a module that
- * imports nothing.**
+ * **The reader's middle-band modes, named once, in a module that imports
+ * nothing.**
  *
  * This vocabulary was in src/web/params.ts, which is where it is used and where
  * its history is. It moved here on 2026-08-30 because a **second** reader of it
@@ -101,20 +101,33 @@ export const MODES = [
      the two sub-modes that now live under it, Recall and Quiz.
 
      The cost, named rather than hidden: *Remember* can suggest saved memories
-     or spaced repetition, and this mode does neither. The dock blurb
-     (src/web/Dock.tsx) carries the weight of correcting that, so it has to
-     stay accurate.
+     or spaced repetition, and this mode does neither. Its description
+     (`MODE_CATALOG` in src/mode-catalog.ts, and a `blurb` on a `MODES_UI` row
+     in src/web/Dock.tsx until 2026-09-07) carries the weight of correcting
+     that, so it has to stay accurate.
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
   "remember",
   /* The eighth, 2026-08-28: the whole document as one nested list that never
      scrolls and expands around where the reader is. It costs this list one
      word like the six before it, and it is the first mode that is a second
      answer to a question an existing surface already answers — the gist
-     columns' context panels — rather than a new question. That is deliberate
-     and temporary: Greg asked for it as an eighth mode "for now, so that it
-     doesn't mess with what we have, and so that I can go back and forth to
-     compare". docs/plans/260828aw-outline-mode.md § Where it sits, and what happens if
-     it wins. */
+     columns' context panels — rather than a new question. It arrived as a
+     comparison rather than as a commitment: Greg asked for it as an eighth mode
+     "for now, so that it doesn't mess with what we have, and so that I can go
+     back and forth to compare".
+     docs/plans/260828aw-outline-mode.md § Where it sits, and what happens if it
+     wins.
+
+     **Outline is staying**, and this comment said the opposite until
+     2026-09-07. It called the duplication "deliberate and temporary", pending a
+     reconciliation with the context panels that never happened. Asked on
+     2026-09-06 whether the merged Structure mode should replace both Hierarchy
+     and Outline, replace only Outline, be dropped, or be added as a third, Greg
+     chose the third and kept both: "I don't know if Structure will be better,
+     so let's build it as a third, and that way I can flip back and forth to
+     compare." So the second answer is now a *standing* one — three views of one
+     tree, which is what `structure` below exists to be compared against.
+     docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md. */
   "outline",
   /* The tenth, 2026-08-31: the lines worth keeping, in the article's own words.
      It costs this list one word like the eight before it, and it is the first
@@ -156,6 +169,35 @@ export const MODES = [
      escape.
      docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
   "debate",
+  /* The fifteenth, 2026-09-07, and the only one so far that is an *instrument*
+     rather than an addition: two linked columns over the same tree Hierarchy
+     and Outline already draw — every part on the left, the current part's
+     sections on the right — so that the three can be flipped between on one
+     article and compared.
+
+     It costs this list one word like the twelve before it, and it is the second
+     mode (after `outline`) that is another answer to a question an existing
+     surface already answers. That is the point of it rather than a cost of it.
+
+     **It is behind the Experimental Features switch, and the two halves of that
+     are one decision.** docs/plans/260903b-one-structure-mode-hierarchy-and-outline-merged.md
+     proposed *merging* Hierarchy and Outline into this; asked on 2026-09-06
+     which of four things to do, Greg chose to add it as a third and hide it:
+
+     > I don't know if Structure will be better, so let's build it as a third,
+     > and that way I can flip back and forth to compare. It'll be in the
+     > "Experimental Features" section.
+
+     So an ordinary reader's bar is unchanged, which is what makes a fourteenth
+     visible mode not the thing being added here. Whether Structure eventually
+     replaces either of the other two is the later decision this one exists to
+     inform; the merge is deferred, not rejected.
+
+     **`structure` and not `map` or `contents`**: Map collides with Diagram,
+     Contents sounds authored, and Outline already names the flattened
+     rendering. GPT Sol's pick, and Greg's decision 9 in 260903b.
+     docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md. */
+  "structure",
 ] as const;
 export type Mode = (typeof MODES)[number];
 

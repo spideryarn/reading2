@@ -66,7 +66,9 @@ listed here; the names under each are files in `docs/project/`.
 - **[design-css-overview.md](docs/project/design-css-overview.md)** — the map for anything visual:
   the stylesheets and their order, which mechanism owns a given rule, the colour and type tokens.
   Its live counterpart is `/design`.
-  <br>↳ `colour-scales.md` · `icons.md` ·
+  <br>↳ `colour-scales.md` · `typography.md` (one sans, the weight axis, the vertical rhythm) ·
+  `controls.md` (one height, one radius, and the preflight we do not import) ·
+  `narrow-windows.md` (rows wrap, columns are given up in JS, and the notch) · `icons.md` ·
   `marketing-pages.md` (the signed-out pages, and how to shoot a screenshot that shows what it
   claims to)
 - **[security-map.md](docs/project/security-map.md)** — start here for security: the untrusted
@@ -94,7 +96,7 @@ listed here; the names under each are files in `docs/project/`.
   `cron-scheduler.md` (there is no scheduler, and what that keeps costing us)
 
 Two of those are worth reading before you touch anything they bear on:
-**[granularity-zoom.md](docs/project/granularity-zoom.md)**, the feature this whole app is for, and
+**[granularity-zoom.md](docs/project/granularity-zoom.md)**, one of the features this app is for, and
 **[block-ids.md](docs/project/block-ids.md)**, the contract everything else depends on — see below.
 
 Docs are cross-linked, so a doc often appears under an entry point other than the one that owns it.

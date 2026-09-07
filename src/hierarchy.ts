@@ -45,8 +45,8 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
 import { isStructural } from "./block-policy.js";
 import { isSpideryarnId, nameValue } from "./ids.js";
-import { COVERAGE_FLOOR, generateLabels, isHeading, mergeLabels, type LabelsFile } from "./labels.js";
-import { checkpointKey, hashBlocks } from "./source-hash.js";
+import { COVERAGE_FLOOR, isHeading, mergeLabels, type PendingLabelsFile } from "./labels.js";
+import { checkpointKey, hashBlocks, structureHash } from "./source-hash.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
 import { type KeptChild, snapStartsToHeadings } from "./heading-snap.js";
@@ -149,16 +149,28 @@ QUESTIONS (the root and depth-1 nodes only)
 
 - Exactly ONE question on the root and on each depth-1 node. Omit it entirely
   on deeper nodes.
-- It is the question this node's text answers and its gist does NOT. The reader
-  has the gist beside it; the question is what sends them into the prose for
-  the rest of the answer.
-- It must need the argument to answer, not a fact to look up: "why", "how", or
-  "what follows if" — never "which example", "who said", or anything one
-  sentence settles.
-- Not rhetorical, not yes/no, and never the gist with a question mark on it.
+- It is the question this node is BUILT to answer — the author's question, not
+  a reader's. A reader must be able to tell from this line alone whether to go
+  in: it carries the same direction as the gist, in a different mood.
+- Shape: "<topic> — <question>? (<shape hint>)" — the topic first, in the
+  author's own term; then the question, ending in "?"; then an optional hint
+  in brackets. Nothing follows the hint.
+- The question presupposes where the section lands. "Why isn't computation
+  sufficient" carries the claim; "is computation sufficient?" hides it. So
+  "why", "how", "what follows if" — never "which", "who", or anything a single
+  fact settles.
+- Where the section does NOT land — it weighs, describes, or leaves the matter
+  open — do not invent a landing. Ask the question it leaves open and let the
+  hint say so: "(two options weighed)", "(no settled answer)".
+- The hint is the SHAPE of the answer, never its content: a count or a kind
+  ("a thought experiment", "two case studies", "a recommendation"). A count
+  only when the section itself counts ("four arguments") or you could list
+  each item from its text. Never count this node's children — that is a
+  different number. Omit the hint when there is no honest shape.
 - The root's question is the one the whole piece exists to answer.
-- Under 15 words, ending in "?". The article's own words for what it names,
-  ordinary words for the rest, exactly as with gists.
+- Not rhetorical, not yes/no, never the gist with a question mark on it.
+- Under 20 words in all. Digits for counts. The article's own words for what it
+  names, ordinary words for the rest, exactly as with gists.
 
 OUTPUT
 
@@ -240,13 +252,54 @@ export interface ModelNode {
 export const MAX_QUESTION_DEPTH = 1;
 
 /** Lower-cased, terminal punctuation and repeated spaces gone — for comparing
-    two sentences on their words alone. */
+    two sentences on their words alone. Unchanged since it was written, and it
+    must stay that way: it is applied to the **gist**, which is an ordinary
+    sentence and may legitimately end in a parenthetical.
+
+    An earlier version of the `toc/7` patch stripped a trailing bracket in here
+    instead of in `bareQuestionWords` below, which changed the answer for inputs
+    that have nothing to do with V4. GPT Sol disproved the "every other shape
+    unchanged" claim with two of them: a question *"The treatment works
+    (tentatively)"* beside a gist *"The treatment works."* started being dropped
+    as an echo, and a gist genuinely ending *"(in principle)"* stopped matching
+    its own echo. One helper doing two jobs. ⟨F11, 2026-09-07.⟩ */
 function bareWords(s: string): string {
   return s
     .toLowerCase()
     .replace(/[.!?]+$/, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * **A question reduced to the sentence inside it**, so that a gist re-asked in
+ * V4's shape can be recognised as one.
+ *
+ * `toc/7` asks for `<topic> — <question>? (<shape hint>)`, and both wrappers
+ * defeat a plain word comparison: the topic is a prefix the gist does not have,
+ * and the hint is a suffix it does not have either. So the gist-echo check —
+ * the one rule in this file that means exactly what it says — silently stopped
+ * catching the failure its own prompt names, *"never the gist with a question
+ * mark on it"*, in precisely the shape production now ships. Since the panel
+ * draws `question ?? gist`, the reader gets the wall instead of the door and
+ * nothing anywhere says so. ⟨GPT Sol, F10, 2026-09-07 — established with
+ * `"Computational functionalism — Four independent arguments undermine
+ * computation? (4 arguments)"` against that gist.⟩
+ *
+ * **The hint comes off first, then the topic**, and both are anchored: the hint
+ * only where it directly follows the `?` that ends the line, the topic only up
+ * to the **first** em dash. A topic that itself contains an em dash therefore
+ * loses only part of itself and stops matching — the question is *kept*, which
+ * is the safe direction: this check exists to drop a duplicate, and a missed
+ * drop shows a redundant line while a wrong drop loses a good one silently.
+ */
+function bareQuestionWords(s: string): string {
+  return bareWords(
+    s
+      .trim()
+      .replace(/\?[ \t]*\([^()\r\n]+\)$/, "?")
+      .replace(/^[^—\r\n]+—[ \t]*/, ""),
+  );
 }
 
 export function questionFor(mn: ModelNode, depth: number): string | undefined {
@@ -259,8 +312,31 @@ export function questionFor(mn: ModelNode, depth: number): string | undefined {
   if (q === "") return undefined;
   /* The gist, asked again. Two lines saying one thing is the duplication this
      whole feature exists to avoid, so it is dropped rather than drawn. */
-  if (mn.gist !== undefined && bareWords(q) === bareWords(mn.gist)) return undefined;
-  if (q.endsWith("?")) return q;
+  if (mn.gist !== undefined && bareQuestionWords(q) === bareWords(mn.gist)) return undefined;
+  /* **A `?` followed by nothing but one short bracketed hint is a finished
+     line**, and since `toc/7` that is the shape the prompt asks for:
+     *"Computational functionalism — why isn't computation sufficient for
+     consciousness? (4 arguments)"*. Without this clause the `endsWith("?")`
+     test it replaces sees a line ending in `)`, falls through to the append
+     below, and stores *"…(4 arguments)?"* — GPT Sol's P1-4, found before a
+     penny was spent and held by `tests/summaries-eval.test.ts`.
+
+     **There is no length bound on the hint, and there was one for a day.**
+     `[^()]{1,40}` was a number I made up to separate "a shape hint" from "a
+     parenthetical sentence", and it rejected lines the prompt itself permits:
+     *"Evidence — how should we compare these accounts? (a comparison across
+     historical and modern cases)"* is fifteen words, names a shape rather than
+     an answer, satisfies every stated rule, and came out with a second `?` on
+     it. ⟨GPT Sol, F9, 2026-09-07 — and the test that claimed to hold the bound
+     did not: its input had no `?` before the bracket, so both the bounded and
+     the unbounded regex rejected it and the test passed either way.⟩
+
+     What the shape still requires is a `?` **immediately** before the bracket
+     and nothing but one un-nested single-line bracket after it. A trailing
+     parenthetical on a line with no `?` — *"It closes by reflecting (on a great
+     many things)"* — still falls through and gets its mark appended visibly,
+     which is the case the bound was reaching for and this handles properly. */
+  if (/\?(?:[ \t]*\([^()\r\n]+\))?$/.test(q)) return q;
   /* **Only `!` is stripped, never `.`** — a trailing full stop is as likely to
      belong to an abbreviation as to a sentence, and stripping it turned GPT
      Sol's example *"How did this affect the U.S."* into *"the U.S?"*. So the
@@ -1868,7 +1944,23 @@ export function buildTree(
  */
 export interface HierarchyArtefacts {
   tree: Tree;
-  labels: LabelsFile;
+  /**
+   * **The empty manifest, since 2026-09-06** — `PendingLabelsFile`, not
+   * `LabelsFile`, and the narrowing is the declaration.
+   *
+   * This stage no longer buys a single navigation label. It writes the three
+   * hashes it already knows and `batches: null`, which `writeArtefacts`
+   * (src/store/artifacts-pg.ts) reads as *set `nav_label_status` to `pending`
+   * and delete this revision's `labels` receipt*. The labels arrive later, from
+   * the `labels` step, in a job nobody is waiting on.
+   *
+   * It is still required, and required for a stronger reason than before: the
+   * store **refuses** a `tree` written with no manifest beside it, so a future
+   * writer of the tree has to say what it did to the labels rather than
+   * remember a convention.
+   * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
+   */
+  labels: PendingLabelsFile;
   blocks: ReturnType<typeof blocksArtefact>;
 }
 
@@ -1995,27 +2087,15 @@ export interface HierarchyRun {
    * distinction is arithmetic rather than tidiness.
    */
   collapsedRungs: number;
-  labelled: number;
+  /* **`labelled` was here and went with the label pass on 2026-09-06.** It
+     counted the tree's nodes carrying a `navLabel`, and after the split that
+     number is **always zero**: `buildTree` in this file sets `navLabel` from the
+     map it is handed, `generateHierarchy` hands it `{}`, and `mergeLabels` then
+     deletes the key wherever the manifest has none. A field that can only ever
+     report one value is a reassurance rather than a measurement, and nothing
+     read it. What a label run produced is `LabelRun.labels` and the `labels`
+     step's own `detail`. */
   internal: number;
-  /**
-   * How many batches the labels were cut into. **Not the same as calls** once a
-   * run can resume: a batch taken from a checkpoint is one of these and cost
-   * nothing. `labelCalls` is the one that answers "what did we pay for", and
-   * the two are reported separately because the first version reported only
-   * this one under a comment saying "model calls" — which would have said three
-   * calls after making two. GPT-5.6-sol, 2026-08-26.
-   */
-  labelBatches: number;
-  /**
-   * **Requests** this run actually made for labels, which is not the batch count
-   * in either direction: a resumed batch costs none, and a batch that was
-   * repaired or re-drawn costs two. It was the number of records until
-   * 2026-08-31 and so said one after making two — see `LabelRun.calls` in
-   * src/labels.ts for why that number in particular has to be right.
-   */
-  labelCalls: number;
-  /** Batches taken from a checkpoint left by an earlier, failed run. */
-  labelsResumed: number;
   /**
    * **Whether the tree itself came out of a checkpoint rather than out of a
    * call.** True means this attempt made no structure call at all.
@@ -2049,27 +2129,23 @@ export interface HierarchyRun {
    * has no symptom at all. docs/reusable/silent-success.md.
    */
   deepenFailed: boolean;
-  /**
-   * Paragraphs left with no nav label — **normally 0, and it is reported at 0
-   * as well as above it.**
-   *
-   * A dropped label is invisible in the product: the leaf simply has no row.
-   * The count is the only trace, so it is on the run, in the log line
-   * (src/pipeline.ts), on the CLI, and in `labels.json`. The blocks themselves
-   * are in that file's `dropped`. See `droppedBudget` in src/labels.ts for what
-   * bounds it per batch and `COVERAGE_FLOOR` — which lives in that file too now
-   * — for what refuses it across the article, on both ways into the stage.
-   */
-  labelsDropped: number;
+  /* **`labelsDropped` was here and is `LabelRun.dropped` alone now.** A
+     paragraph the model would not label is invisible in the product — the leaf
+     simply has no row — so the count still has to be reported somewhere a
+     person will see it; that somewhere is the `labels` step's log line and
+     `detail` (src/pipeline.ts), because this step no longer asks for a label.
+     docs/reusable/silent-success.md. */
   inputTokens: number;
   outputTokens: number;
-  /* From the label pass and the deepening wave. **Not the structure call**,
-     which is one call per article and is deliberately not cached, so there is
-     nothing for it to read — see docs/plans/260826g-prompt-caching.md on why a
-     prefix used once is worth 1.25× and no more. The wave is the other way
-     round: its calls share `EXPAND_SYSTEM` plus the frozen outline, so on a cold
-     cache all of them write and on a resumed article none of them calls at all
-     (src/hierarchy-deepen.ts § `runExpansionWave`, "No warm-up"). */
+  /* **From the deepening wave alone, since the label pass left on 2026-09-06.**
+     Not the structure call, which is one call per article and is deliberately
+     not cached, so there is nothing for it to read — see
+     docs/plans/260826g-prompt-caching.md on why a prefix used once is worth
+     1.25× and no more. The wave is the other way round: its calls share
+     `EXPAND_SYSTEM` plus the frozen outline, so on a cold cache all of them
+     write and on a resumed article none of them calls at all
+     (src/hierarchy-deepen.ts § `runExpansionWave`, "No warm-up"). With the flag
+     off — every reader today — both of these are simply 0. */
   cacheReadTokens: number;
   cacheWriteTokens: number;
   elapsedMs: number;
@@ -2602,27 +2678,47 @@ export async function generateHierarchy(opts: {
     }
   }
 
-  /* Pass two. The tree has to exist first: the batches are cut along its own
-     section boundaries, so that every label a reader compares with another was
-     written in the same call. src/labels.ts says why that is the rule. */
-  /* **And no `mkdir` before it.** There used to be one, because the first batch
-     to land wrote into a directory that might not exist yet and a thrown ENOENT
-     out of the checkpoint would have taken the whole step with it. There is no
-     directory now, and a store that cannot be reached is a miss rather than a
-     throw — src/labels.ts § `keepBatch`. */
-  const labelRun = await generateLabels({
-    tree: structure,
-    blocks,
+  /**
+   * **Pass two used to be here, and it is the `labels` step now** (2026-09-06).
+   *
+   * `generateLabels` was called at this line, over the structure this function
+   * had just built, and it was 79.5–92% of the step's wall clock: one measured
+   * call took 602 s of a 682 s pass, against a job lease that allows 740 s. So
+   * the labels became their own step, run later by a free successor job, and
+   * what this stage writes in their place is the manifest below — the three
+   * hashes it already knows, and `batches: null` for the run that has not
+   * happened.
+   *
+   * Two things moved out with the call and both are named here because their
+   * absence is otherwise invisible:
+   *
+   * - **`checkCoverage`** ran over `parts` a few lines down. It asks whether
+   *   every structural block has a label, which is *false by construction* for
+   *   a tree this stage now hands back, so it belongs to the step that buys the
+   *   labels. `assertEveryBlockLabelled` and `assertInsideCoverageFloor` are
+   *   inside `generateLabels` itself and deferred for free with it.
+   * - **`assertTreeSound` did not move**, and must not: a structure-only tree
+   *   is still either sound or not, and this is the only place that asks.
+   *
+   * `opts.checkpoints` is still used, by the structure call above — see
+   * `structureResumed`.
+   * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
+   */
+  const pending: PendingLabelsFile = {
     slug,
-    /* Each batch's labels are kept here as it lands, so a 429 or a 5xx eight
-       batches into a book costs the one batch rather than the eight — and the
-       retry the queue makes (src/jobs.ts) picks up where this one stopped, on
-       whatever machine it lands on. src/labels.ts § `usableEntry` and
-       `coversExactly` for what has to hold before one is reused. */
-    checkpoints: opts.checkpoints,
-    ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
-    ...(opts.signal ? { signal: opts.signal } : {}),
-  });
+    /* `hashBlocks(blocks)`, the argument, and `storedHash` below asserts it
+       equals a hash of what is actually returned. `generateLabels` computed
+       exactly this and stamped it into the file it wrote; the value has to go
+       on being read off the artefact by the caller (`inputHash`, at the foot of
+       this function), because `assertStampAgrees` compares the two. */
+    sourceHash: hashBlocks(blocks),
+    structureHash: structureHash(structure),
+    structureVersion: structure.version,
+    /* Empty, and `batches: null` beside it is what says *no run produced this*
+       rather than *a run produced nothing*. src/labels.ts § `PendingLabelsFile`. */
+    labels: {},
+    batches: null,
+  };
 
   /**
    * **The three artefacts, assembled once, and every check below asks about
@@ -2635,10 +2731,28 @@ export async function generateHierarchy(opts: {
    * over `tree`, `labels` and `blocks` as three separate variables can see the
    * difference, because it is a fact about what was *returned*.
    *
-   * So the merge reads `labelRun.file.labels`, the labels this object carries,
-   * rather than `labelRun.labels`, which is the same map by construction today
-   * and would be the wrong thing to depend on tomorrow. Everything after this
-   * line reads `parts.*`.
+   * **The merge is `mergeLabels(structure, pending.labels)` since 2026-09-06,
+   * and the map is empty — so this tree carries NO navigation labels at all.**
+   *
+   * That is worth saying flatly, because the obvious guess is wrong and the
+   * stage-2 brief made it. `buildHeadingTree` (src/heading-tree.ts) does mint a
+   * label for every heading for free, and if this function used it a
+   * structure-only tree would arrive with the author's own headings already
+   * labelled. **It does not.** `generateHierarchy` builds its tree with
+   * `buildTree` in this file, which sets `navLabel` from the map it is handed
+   * and from nothing else (see its leaf loop), and `buildHeadingTree` has no
+   * caller outside `evals/`. Verified by reading both, 2026-09-06.
+   *
+   * So the call is not preserving anything, and it is still the right call: the
+   * invariant both writers of this column keep is
+   * `tree === mergeLabels(structure, labels.labels)`, and stating it the same
+   * way in both places is what stops the tree and the manifest describing
+   * different articles. `mergeLabels` *deletes* a leaf's `navLabel` where the
+   * map has none, which is exactly what an empty manifest means.
+   *
+   * What the reader sees is therefore every paragraph row withheld — not blank,
+   * withheld — until the `labels` step runs. That is what
+   * `nav_label_status = 'pending'` is for (src/web/nav-labels.ts, stage 1).
    *
    * `blocksArtefact`, not `{ blocks }`. Stage 3 stamps the sanitiser version
    * into `output/<slug>.blocks.json`; this is the copy the reading view
@@ -2651,9 +2765,9 @@ export async function generateHierarchy(opts: {
    * file. See docs/project/security.md.
    */
   const parts: HierarchyArtefacts = {
-    labels: labelRun.file,
+    labels: pending,
     blocks: blocksArtefact(blocks),
-    tree: mergeLabels(structure, labelRun.file.labels),
+    tree: mergeLabels(structure, pending.labels),
   };
 
   /* **The invariants, on the artefacts that are about to be handed back.** They
@@ -2661,18 +2775,25 @@ export async function generateHierarchy(opts: {
      (src/store/pg-revisions.ts, which collects reasons rather than throwing),
      and nowhere on this path — so a stage-4 regression was invisible in exactly
      the workflow most of this repo's testing goes through. GPT Sol, F5.
-     After `mergeLabels` rather than before `generateLabels`: what this
-     guarantees is a property of the artefact, and checking `structure` instead
-     would leave the merge unchecked while costing the same. It does mean a
-     tree the model got wrong is found after a full label run has been paid
-     for; that is the cheaper of the two mistakes.
+     After `mergeLabels` rather than before it: what this guarantees is a
+     property of the artefact, and checking `structure` instead would leave the
+     merge unchecked while costing the same. Until 2026-09-06 that sentence read
+     "before `generateLabels`", and its other half — that a tree the model got
+     wrong is found only after a full label run has been paid for — has gone
+     with the split: the labels are not bought in this step any more, so this
+     check now runs before a penny of them is spent.
      Over `parts.blocks.blocks`, which is the array the caller stores, not the
      `blocks` argument it was derived from — `blocksArtefact` maps one to one and
      touches only `html`, so the two agree, and asking the question about the
      wrong one of them is precisely the mistake this whole stage of the migration
-     exists to stop. */
+     exists to stop.
+
+     **`checkCoverage` is deliberately NOT here any more.** It asks whether
+     every structural block carries a navigation label, which this stage now
+     guarantees to be false, so it moved to `STEPS.labels.run`
+     (src/pipeline.ts) — after that step's own merge and before anything can be
+     written `ready`. Leaving it here would have failed every ingest. */
   assertTreeSound(parts.blocks.blocks, parts.tree);
-  checkCoverage(parts.labels.labels, parts.tree, parts.blocks.blocks);
 
   /**
    * **The blocks that went in and the blocks that come out hash the same, and
@@ -2772,18 +2893,14 @@ export async function generateHierarchy(opts: {
     droppedHeadings: built.droppedHeadings.length,
     collapsedRungs: built.collapsedRungs.length,
     droppedQuestions: built.droppedQuestions.length,
-    labelled: Object.values(parts.tree.nodes).filter((n) => n.navLabel).length,
     internal: Object.values(parts.tree.nodes).filter((n) => n.children.length > 0).length,
-    labelBatches: labelRun.batches,
-    labelCalls: labelRun.calls,
-    labelsResumed: labelRun.resumed,
     structureResumed,
     deepen,
     deepenFailed,
-    labelsDropped: labelRun.dropped.length,
-    /* **All three passes together.** What this number answers is "what did a
-       tree cost", and a structure figure alone would now understate it by most
-       of the bill.
+    /* **Both remaining passes, and the label pass is no longer one of them.**
+       What this number answers is "what did a tree cost", and until 2026-09-06
+       the label term was most of the bill. It is the `labels` step's now, and
+       an operator adding stage 4 up has to add two steps together.
 
        The deepening term is zero on every run with the flag off, because
        `deepen` is `null` there — so an undeepened run's four figures are
@@ -2792,12 +2909,10 @@ export async function generateHierarchy(opts: {
        cannot recover is a wave that *threw*: `deepenTree` returns nothing to add
        up, and `deepenFailed` beside these says the AI-spend ledger under task
        `hierarchy` is where that attempt's money is. */
-    inputTokens:
-      structureUsage.input_tokens + labelRun.inputTokens + (deepen?.usage.inputTokens ?? 0),
-    outputTokens:
-      structureUsage.output_tokens + labelRun.outputTokens + (deepen?.usage.outputTokens ?? 0),
-    cacheReadTokens: labelRun.cacheReadTokens + (deepen?.usage.cacheReadTokens ?? 0),
-    cacheWriteTokens: labelRun.cacheWriteTokens + (deepen?.usage.cacheWriteTokens ?? 0),
+    inputTokens: structureUsage.input_tokens + (deepen?.usage.inputTokens ?? 0),
+    outputTokens: structureUsage.output_tokens + (deepen?.usage.outputTokens ?? 0),
+    cacheReadTokens: deepen?.usage.cacheReadTokens ?? 0,
+    cacheWriteTokens: deepen?.usage.cacheWriteTokens ?? 0,
     elapsedMs: Date.now() - started,
   };
 }

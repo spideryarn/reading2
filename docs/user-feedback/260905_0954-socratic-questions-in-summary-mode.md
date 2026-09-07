@@ -32,6 +32,34 @@ first validator would have silently thrown it away.
 **One thing worth knowing:** existing articles show no questions until their hierarchy is re-run —
 `npm run hierarchy -- <slug> --force`. Nothing backfills on its own.
 
+## The wording changed on 2026-09-07, and this is where it went
+
+The questions this report shipped were the ones Greg called *"a bit crap"* the same morning: the
+prompt asked for the question *"this node's text answers and its gist does NOT"*, which instructs the
+model to strip out everything the gist carries, so a bare why-question was the correct output.
+`antikythera` still carries ten of them in the wild.
+
+Four rewordings were built into an eval and measured over seven real articles, and **V4** — the shape
+Greg drew himself — shipped as `toc/7`:
+
+> Computational functionalism — why isn't computation sufficient for consciousness? (4 arguments)
+
+Topic first in the author's own term, a question that presupposes where the section lands, and a
+bracketed hint giving the **shape** of the answer and never its content.
+[summaries.md § The shape it has](../project/summaries.md) is the doc;
+[260907d](../plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md) is the work, and
+[260905_1803](260905_1803-only-the-socratic-question.md) is the report it answers.
+
+**The cost, named rather than buried:** these lines are nearly twice as long — a median of 18 words
+against 10 — while Greg's same brief also asked for simpler language and a briefer top-level line.
+The repaired eval could not separate the two wordings, so nothing was tuned to close that gap; what
+it *could* say is that the two differ where he said they would, V4 telling the reader more about what
+is coming and giving away marginally more in doing it.
+
+**The layout argument in this note is untouched by any of that**, and still reads correctly for the
+questions it was written about — see § *The gist stayed for one day* in
+[summaries.md](../project/summaries.md).
+
 [The plan](../plans/260905e-feedback-diagram-text-column-and-socratic-summaries.md) § 1V, which has
 the before-and-after questions in full;
 [summaries.md § The question under the claim](../project/summaries.md#the-question-under-the-claim)

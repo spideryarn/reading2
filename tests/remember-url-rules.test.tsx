@@ -17,7 +17,8 @@
  * The second half is the part a parser test cannot reach. `?remember=` and
  * `?thread=` collide — a Remember conversation cannot be shown while the Quiz
  * half is open — and the rules that resolve it are **navigations**, written in
- * `RememberBand` and `ConversationBand` (src/web/App.tsx) rather than in the
+ * `RememberBand` and `ConversationBand`
+ * (src/web/modes/conversation/ConversationModes.tsx) rather than in the
  * parser. The cross-family review of
  * docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md asked
  * for both, because the rename touches **two** URL registrations — the paired
@@ -119,7 +120,9 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
-const { ConversationBand, RememberBand } = await import("../src/web/App.js");
+const { ConversationBand, RememberBand } = await import(
+  "../src/web/modes/conversation/ConversationModes.js"
+);
 
 let host: HTMLDivElement;
 let root: Root;

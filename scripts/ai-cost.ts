@@ -60,8 +60,10 @@ import { loadEnvLocal } from "../src/env.js";
 import { costStore, totalRows } from "../src/store/ai-calls.js";
 import type { LedgerRead } from "../src/store/contracts.js";
 import {
+  type AccountTally,
   type CredentialTally,
   type RealtimeCoverage,
+  accountsInWindow,
   credentialsInWindow,
   currentUtcMonth,
   realtimeSessionCoverage,
@@ -71,8 +73,10 @@ import { CATEGORY_MEANING, COST_CATEGORIES } from "../src/cost-categories.js";
 import {
   OPENROUTER_CREDIT_FEE,
   type SpendFold,
+  billReport,
   cashNanos,
   foldSpend,
+  partitionByScope,
   spendPerAccount,
   spread,
   totalNanos,
@@ -686,6 +690,135 @@ function money(t: { creditsNanos: number; byokNanos: number; computedNanos: numb
   return cashNanos(t);
 }
 
+
+/**
+ * **The bill split, from rows rather than from SQL** — the ordinary report's
+ * half of `accountsInWindow`.
+ *
+ * Two implementations of the same question, which is normally the thing to
+ * avoid; here it is the lesser of the two evils and worth naming. The
+ * alternative was a second `accountsInWindow` call from a report that already
+ * holds every row, and that is a **later snapshot** of the ledger than the
+ * totals printed above it — a call landing between the two reads makes the page
+ * disagree with itself for a reason no reader could reconstruct. GPT Sol, F12.
+ *
+ * They cannot drift on the part that matters, because **the money and the
+ * unpriced count both come from `totalRows`** — the one definition, held against
+ * the SQL one by `tests/ai-calls-spend-pg.test.ts`. This function only decides
+ * which rows are in which pile.
+ */
+export function tallyAccounts(rows: readonly AiCallRow[]): AccountTally[] {
+  const piles = new Map<string, AiCallRow[]>();
+  for (const row of rows) {
+    const pile = piles.get(row.providerAccount) ?? [];
+    pile.push(row);
+    piles.set(row.providerAccount, pile);
+  }
+  return [...piles.entries()]
+    .map(([account, pile]) => {
+      const money = totalRows(pile);
+      return {
+        account,
+        calls: pile.length,
+        creditsNanos: money.credits,
+        byokNanos: money.upstream,
+        computedNanos: money.computed,
+        unpricedCalls: money.unpriced,
+      };
+    })
+    .sort((a, b) => b.calls - a.calls);
+}
+
+/**
+ * **Which bills this report is a report of, and what the OpenRouter cap does
+ * not reach.**
+ *
+ * ## Why it is here at all
+ *
+ * On 2026-09-06 Greg declined a per-reader spend cap on the paid endpoints,
+ * because the OpenRouter account already carries a global monthly one
+ * (docs/project/ai-gateway.md § What stops a reader spending our money). That
+ * makes a single global ceiling the only control there is — and until
+ * 2026-09-07 this report, the one thing that says what anything costs, never
+ * mentioned `provider_account` at all. It printed one credential line, which
+ * reads as *this is all of it*.
+ *
+ * ## What it must not say
+ *
+ * **Not that anything is safe.** Two separate reasons, and both have to be on
+ * the page or the subtotal becomes a reassurance:
+ *
+ * - The cap is a **monthly account total** and this report answers an arbitrary
+ *   `[since, until)`. It cannot see the cap's amount or the headroom left, so no
+ *   figure here is a distance from a limit.
+ * - Even for OpenRouter the cap does not do what "cap" suggests. It is global,
+ *   so the failure it converts a runaway into is *every reader losing every paid
+ *   feature until the month turns* — a blast radius, not a throttle. That is the
+ *   accepted trade, recorded in ai-gateway.md, and it is not this report's job to
+ *   soften it.
+ *
+ * ## The split is account **and** pocket, never account alone — GPT Sol, F3
+ *
+ * A BYOK row says `provider_account = 'openrouter'` while its
+ * `byok_upstream_nanos` was billed to somebody else's key. So the money outside
+ * the cap is *direct Anthropic and OpenAI, plus OpenRouter's BYOK pocket*, and
+ * an "outside the cap" line that grouped by account alone would be wrong on our
+ * largest non-OpenRouter pocket. The per-account subtotals are printed in full
+ * and the total is named for exactly what it is.
+ */
+function printBills(bills: AccountTally[]): void {
+  if (bills.length === 0) {
+    say("Billed to", "no rows, so no bill to name");
+    return;
+  }
+  const report = billReport(bills);
+  for (const [i, line] of report.lines.entries()) {
+    say(
+      i === 0 ? "Billed to" : "",
+      `${line.account.padEnd(11)} ${line.calls} call(s)  ${line.pockets}` +
+        (line.unpricedCalls > 0 ? `  (${line.unpricedCalls} unpriced)` : ""),
+    );
+  }
+  say("", ...report.caveat);
+}
+
+/**
+ * **The same block, in the ordinary report's shape** — no gutter, one indent.
+ *
+ * `npm run cost` without `--owners` is the path the header advertises first, and
+ * it printed money without ever naming an account until 2026-09-07: Stage 8 wired
+ * the bills into `printCoverage`, which only `--owners` calls, so the claim that
+ * "the report says which bill" was false for the report most people run. GPT
+ * Sol, F6.
+ *
+ * Both callers take their lines from `billReport`, so there is exactly **one**
+ * wording of the caveat. Two would drift, and the thing they would drift about
+ * is what the cap does — which is the one sentence here that has to stay true.
+ *
+ * **The tallies come from the rows this report already has, not from a second
+ * query.** It did call `accountsInWindow` again, and GPT Sol's round-two check
+ * (F12) pointed out that a second read is a **later snapshot**: a call arriving
+ * between the two makes the bill block disagree with every total printed above
+ * it, for no reason a reader could ever work out. The ordinary report holds
+ * every row already, so it can answer this itself — and the arithmetic goes
+ * through `totalRows`, which is the one definition of what a set of rows cost
+ * and of what "unpriced" means. `--owners` keeps the SQL version because it
+ * never fetches rows at all, deliberately.
+ */
+export function printBillsPlain(rows: readonly AiCallRow[]): void {
+  const bills = tallyAccounts(rows);
+  if (bills.length === 0) return;
+  const report = billReport(bills);
+  console.log("\nBilled to");
+  for (const line of report.lines) {
+    console.log(
+      `  ${line.account.padEnd(11)} ${line.calls} call(s)  ${line.pockets}` +
+        (line.unpricedCalls > 0 ? `  (${line.unpricedCalls} unpriced)` : ""),
+    );
+  }
+  for (const line of report.caveat) console.log(`  ${line}`);
+}
+
 /**
  * **The coverage header** — printed before any money, and not a preamble.
  *
@@ -699,11 +832,12 @@ function printCoverage(
   seen: {
     fold: SpendFold;
     credentials: CredentialTally[];
+    bills: AccountTally[];
     realtime: RealtimeCoverage | null;
     accounts: Denominator;
   },
 ): void {
-  const { fold, credentials, realtime, accounts } = seen;
+  const { fold, credentials, bills, realtime, accounts } = seen;
   console.log("\nCoverage — read this before believing any figure below");
   say(
     "Authoritative",
@@ -748,6 +882,8 @@ function printCoverage(
         `${formatNanos(c.creditsNanos)} in credits`,
     );
   }
+
+  printBills(bills);
 
   if (realtime === null) {
     say(
@@ -877,7 +1013,11 @@ function printCategories(fold: SpendFold): void {
  * from.
  */
 function printSpread(fold: SpendFold, population: string[], denominatorIsReal: boolean): number[] {
-  const product = COST_CATEGORIES.filter((c) => c !== "non-product");
+  /* **Every category in this fold**, because the fold handed in has already been
+     narrowed to product *scopes*. It used to be `COST_CATEGORIES.filter(c => c
+     !== "non-product")`, and that negative filter is what let `unknown` into the
+     pricing basis — GPT Sol, R1. `non-product` is empty here by construction. */
+  const product = COST_CATEGORIES;
   console.log(
     `\nPer-account spread — cash, over ${population.length} account(s), zero-spend included` +
       (denominatorIsReal ? "" : "  ** SPENDING OWNERS ONLY — see Denominator **"),
@@ -931,7 +1071,8 @@ function ordinal(n: number): string {
 
 /** Who cost what, by name where the Auth service could supply one. */
 function printOwners(fold: SpendFold, accounts: Denominator, population: string[]): void {
-  const product = COST_CATEGORIES.filter((c) => c !== "non-product");
+  /* Narrowed by scope before it got here — see `printSpread` above and R1. */
+  const product = COST_CATEGORIES;
   console.log("\nBy owner — product spend only, cash");
   const named = [...fold.byOwner.entries()]
     .map(([id, mine]) => {
@@ -1098,16 +1239,17 @@ async function ownersReport(args: Args): Promise<void> {
      ledger. GPT Sol settled the cutoff behind it — **Postgres is authoritative
      and the JSONL history was never imported** — and that is still true; what
      went is the other store it was refusing on behalf of. */
-  const [groups, credentials, realtime] = await Promise.all([
+  const [groups, credentials, bills, realtime] = await Promise.all([
     spendGroupedByOwner(args.since, args.until),
     credentialsInWindow(args.since, args.until),
+    accountsInWindow(args.since, args.until),
     realtimeSessionCoverage(args.since, args.until),
   ]);
   const fold = foldSpend(groups);
   const accounts = await accountDenominator();
 
   console.log(`AI spend by owner — ${args.label}`);
-  printCoverage(args, { fold, credentials, realtime, accounts });
+  printCoverage(args, { fold, credentials, bills, realtime, accounts });
   await reconciliationLine(args);
 
   if (fold.totalCalls === 0) {
@@ -1133,8 +1275,23 @@ async function ownersReport(args: Args): Promise<void> {
      the spread is biased upward by exactly the population a subscription price
      cares most about. Falling back silently would be the worse half of that. */
   const population = accounts.ids.length > 0 ? accounts.ids : [...fold.byOwner.keys()];
-  const allProduct = printSpread(fold, population, accounts.ids.length > 0);
-  printOwners(fold, accounts, population);
+  /* **The pricing basis is chosen by SCOPE, not by category** — the same one
+     definition the ordinary report uses, which is what Stage 6 claimed and did
+     not deliver. `printSpread` and `printOwners` used to take the full fold and
+     subtract `non-product` by name, and that negative filter let **`unknown`**
+     through: a retired scope name, or a job nobody has placed yet, went straight
+     into `ALL PRODUCT` and into the spread a subscription price is read off.
+     GPT Sol reproduced it with `scopeKind: "retired-in-2025"` (R1) — the exact
+     mirror of the F2 defect, in the report next door.
+
+     Scope rather than category, deliberately: a *new job* in request scope is
+     `unknown` and is still a reader's cost, so it belongs in the basis; an
+     unrecognised *scope* does not, and `partitionByScope` puts it in `other`
+     where the ordinary report prints it. The full `fold` stays behind the
+     coverage header and the category table, which have to show everything. */
+  const priced = foldSpend(partitionByScope(groups).product);
+  const allProduct = printSpread(priced, population, accounts.ids.length > 0);
+  printOwners(priced, accounts, population);
   if (args.price !== undefined) printMargin(args.price, allProduct, marginPeriod(args, new Date()));
 
   unmetered();
@@ -1283,12 +1440,32 @@ async function main(): Promise<void> {
     return;
   }
   const read = await costStore.read(args.since, args.until);
-  const { rows } = read;
 
   console.log(`AI spend — ${args.label}`);
   console.log(`Ledger: ${costStore.describe()}`);
   const bytes = await costStore.size();
   if (bytes !== null) console.log(`        ${(bytes / 1024).toFixed(0)} KB`);
+
+  await ledgerReport(args, read);
+}
+
+/**
+ * **The ordinary report**, everything below the two lines naming the store.
+ *
+ * Its own exported function so a test can run **the whole page** against fixture
+ * rows and read what came out. It was inline in `main()`, and GPT Sol's
+ * round-two check (F11) named exactly what that cost: `tests/cost-report.test.ts`
+ * tests the bill builder thoroughly and never reaches a renderer, so *"deleting
+ * `printBills(bills)` or the ordinary `printBillsPlain(rows)` call would still
+ * leave the suite green"* — which is the same deletion mutation the review one
+ * round earlier had asked the tests to catch. A pure builder with no caller is
+ * a page that prints nothing and a suite that says everything is fine.
+ *
+ * It needs no database and no network: `read` is handed in, and `reconcile()`
+ * runs only behind `args.reconcile`.
+ */
+export async function ledgerReport(args: Args, read: LedgerRead): Promise<void> {
+  const { rows } = read;
 
   /* **Before the early return, not after it.** A ledger whose every line is
      damaged has no rows *and* a non-zero count, and the first version returned
@@ -1328,19 +1505,35 @@ async function main(): Promise<void> {
      right way round: a scope can always be excluded from a total, and a row
      that was never written cannot be recovered. GPT Sol, 2026-08-28, on the
      open question Greg has not answered (260827q-ai-cost-tracking.md, question 4). */
-  const product = rows.filter((r) => r.scopeKind !== "eval");
-  const evals = rows.filter((r) => r.scopeKind === "eval");
+  /* ⟨This was `rows.filter((r) => r.scopeKind !== "eval")` until 2026-09-07, so
+     **dev-CLI spend was counted as Product** — $2.85 of 837 calls on the day it
+     was found — while the `--owners` report next door correctly called the same
+     rows non-product. A negative predicate three lines under the paragraph
+     above, which is the argument against it. `partitionByScope` in
+     src/cost-report.ts is now the one definition, enumerated positively and
+     tested against the categoriser so the two cannot drift again. GPT Sol, F2.⟩ */
+  const { product, devCli, evals, other } = partitionByScope(rows);
   /* An empty pocket is not printed as `$0.0000 over 0 call(s)`: a zero with a
      label reads as a measurement, and "we recorded nothing here" is the one
      thing it is not. */
   if (product.length > 0) pocket("Product spend", product);
   else console.log("\nProduct spend:  no calls recorded in this range.");
+  if (devCli.length > 0) pocket("Dev CLI spend", devCli);
   if (evals.length > 0) pocket("Eval spend", evals);
-  if (evals.length > 0 && product.length > 0) {
-    const a = totalRows(product);
-    const b = totalRows(evals);
+  /* A scope this build does not recognise. Named rather than folded, for
+     src/cost-report.ts's reason: either fold is silent and one of them inflates
+     the number a price is set from. */
+  if (other.length > 0) {
+    pocket("UNRECOGNISED SCOPE", other);
+    const names = [...new Set(other.map((r) => r.scopeKind))].sort();
+    console.log(`  scope_kind ${names.join(", ")} — in the unrecognised pocket above, and in`);
+    console.log("  no other. It is NOT in Product, which is what a price is set from. Classify in");
+    console.log("  src/cost-report.ts § partitionByScope, or read this as the noise floor.");
+  }
+  if (rows.length > product.length && product.length > 0) {
+    const all = totalRows(rows);
     console.log(
-      `\nAll recorded:  ${formatNanos(a.credits + a.upstream + a.computed + b.credits + b.upstream + b.computed)} over ${rows.length} call(s)`,
+      `\nAll recorded:  ${formatNanos(all.credits + all.upstream + all.computed)} over ${rows.length} call(s)`,
     );
   }
 
@@ -1371,6 +1564,13 @@ async function main(): Promise<void> {
       `\nPrompt cache: ${cacheRead.toLocaleString()} tokens read, ${cacheWrite.toLocaleString()} written.` +
         "\n  A read that falls to zero is the cache silently switching off — docs/project/prompt-caching.md.",
     );
+
+  /* **Before the unmetered list, not after it.** The two answer the same
+     question from opposite ends — this is money we recorded on a bill the cap
+     cannot see, that is money no seam sees at all — and the recorded half has to
+     come first or the caveat's reference to "every entry under 'no seam can
+     see' below" points at nothing. */
+  printBillsPlain(rows);
 
   unmetered();
   undeclared();

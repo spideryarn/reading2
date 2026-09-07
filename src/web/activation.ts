@@ -237,6 +237,7 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   plain: { kind: "none", reason: "the article and nothing else — there is nothing to generate" },
   hierarchy: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
   outline: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
+  structure: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
   summary: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
 
   /* Nothing exists to fill until the reader has typed. */
@@ -264,6 +265,54 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
     reason: "opens on Recall, which waits on the reader's own words; the Quiz chip arms itself",
   },
 };
+
+/**
+ * **Would opening this mode start work?** One bit, read-only, and the whole of
+ * what anything outside this module is allowed to ask `MODE_TARGET`.
+ *
+ * ## Why it exists
+ *
+ * So the command bar can be **honest about which of its rows spend**. The Dock
+ * discloses by shape — an icon in a fixed place that you reach for, with the
+ * mode's own sentence in the tooltip. The bar replaces that with a typed prefix
+ * and a reflex Enter, and Fable's arbitration on 2026-09-07 is that what the
+ * bar is missing is not a price but exactly this one bit: *does this row start
+ * work*. Each row whose answer is `true` carries a muted trailing `generates`.
+ * docs/plans/260906h-mode-catalog-and-a-command-bar.md § F1, and its § Review
+ * record, which is where GPT Sol's P0 was partly upheld and partly overruled.
+ *
+ * ## Why it is derived rather than written down
+ *
+ * `MODE_TARGET` is already **total** over `Mode`, so mode fifteen has to answer
+ * the money question before it compiles — and this reads that answer instead of
+ * asking for a second one. A hand-maintained list of "the paid ones" beside it
+ * would be a fact stated twice, and the copy that goes stale is always the one
+ * nothing is watching. **Mode fifteen therefore cannot arrive unmarked**, which
+ * is the property, and tests/command-bar.test.tsx holds it.
+ *
+ * ## What it deliberately does NOT say
+ *
+ *  - **How much.** No figure, no range. Readers hold slots rather than paying
+ *    per call, and the Dock button beside this one says nothing either — a bar
+ *    with a price on it and a button without would be *more* disclosed than the
+ *    Dock, which reverses a decision Greg made on 2026-09-06
+ *    (docs/plans/260906b-opening-a-mode-starts-it-generating.md).
+ *  - **Whether the artefact is already there.** So it **over-warns**: open
+ *    Glossary on an article whose glossary was built last week and nothing is
+ *    spent, while the row still said `generates`. That imprecision is recorded
+ *    rather than fixed — the exact answer needs a readiness adapter 260906h is
+ *    deliberately not building, and the Dock *under*-warns in the identical
+ *    case. Both are acceptable for v1.
+ *
+ * `delegated` counts as `true` even though its function can return `null` for a
+ * given press: the row's honest answer is *this may start work*, and the three
+ * Diagram geometries that arm nothing buy an embedding on mount anyway
+ * (§ `activationForDiagram`). A marker that went quiet for those would be wrong
+ * in the direction that costs money.
+ */
+export function modeGenerates(mode: Mode): boolean {
+  return MODE_TARGET[mode].kind !== "none";
+}
 
 /**
  * **Referee's chips that arm something**, which is `MODE_TARGET` one level

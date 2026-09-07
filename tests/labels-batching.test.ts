@@ -651,6 +651,51 @@ describe("mergeLabels", () => {
     expect(leafFor(blocks[1]!.id)?.navLabel).toBeUndefined();
   });
 
+  /**
+   * **The property both writers of the `tree` column rest on**, and since
+   * 2026-09-07 the one `writeArtefacts` refuses a write over.
+   *
+   * `hierarchy` stamps `structureHash(structure)` into its manifest and hands
+   * back `mergeLabels(structure, {})`; the `labels` step stamps the same hash
+   * (through `generateLabels` — pinned above at *records the manifest that lets
+   * a stale complete set be spotted*) and hands back
+   * `mergeLabels(structure, run.file.labels)`. Both therefore claim a hash of
+   * the tree *before* the merge about the tree *after* it, and the claim is only
+   * true because `mergeLabels` touches `navLabel` and `structureHash` does not
+   * hash it. GPT Sol's F2 on stage 2a asked for that to be checked rather than
+   * asserted, and this is the check.
+   */
+  it("leaves structureHash exactly where it was, which is what lets a manifest describe the merged tree", () => {
+    const labels = Object.fromEntries(blocks.map((b) => [b.id, `A label for ${b.id}`]));
+    const before = structureHash(tree);
+    expect(structureHash(mergeLabels(tree, labels))).toBe(before);
+    /* And in the other direction: labels removed again, which is the pending
+       manifest's merge. */
+    expect(structureHash(mergeLabels(mergeLabels(tree, labels), {}))).toBe(before);
+  });
+
+  it("leaves it where it was on a supplemented tree too, which hashes by a different canonical form", () => {
+    /* `structureHash` has two canonical forms: a legacy NUL-joined one, and a
+       JSON one used when any node carries a `treatment` or when a title or gist
+       contains a delimiter. A property proved on one form and not the other is
+       half a property — and the second form is the one every tree written after
+       2026-08-28 with apparatus in it takes. src/source-hash.ts. */
+    const NUL = String.fromCharCode(0);
+    const supplemented: Tree = {
+      ...tree,
+      nodes: Object.fromEntries(
+        Object.entries(tree.nodes).map(([id, node], i) => [
+          id,
+          i === 0
+            ? { ...node, treatment: "supplement" as const, title: `A${NUL}B` }
+            : node,
+        ]),
+      ),
+    };
+    const labels = Object.fromEntries(blocks.map((b) => [b.id, `A label for ${b.id}`]));
+    expect(structureHash(mergeLabels(supplemented, labels))).toBe(structureHash(supplemented));
+  });
+
   it("drops navLabel as a key, not just as a value", () => {
     // A key whose value is `undefined` vanishes when the tree is written to
     // disk but exists in memory, which is how two objects that stringify

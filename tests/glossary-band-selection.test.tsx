@@ -47,7 +47,7 @@ import { gateParam } from "../src/web/params.js";
 
 const { useQueryState } = await import("nuqs");
 
-const { VisitorGlossaryBand } = await import("../src/web/App.js");
+const { VisitorGlossaryBand } = await import("../src/web/modes/glossary/GlossaryMode.js");
 
 function entry(name: string, difficulty: number, centrality: number): PublicGlossaryEntry {
   return {

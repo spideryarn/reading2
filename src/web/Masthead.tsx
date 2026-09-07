@@ -67,7 +67,7 @@ import type { Article, Meta, Visibility } from "../types.js";
    `http(s)` — one test rather than two spellings of it. */
 import { hostOf } from "../urls.js";
 import { Link } from "./Link.js";
-import { SourceLink, webSource } from "./SourceLink.js";
+import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
 import { carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
@@ -245,13 +245,13 @@ export function Masthead({ article, slug, onRenamed }: Props) {
             so we did not send them one". Same stand-in for *is this yours* that
             `SeeTheOriginal` below and `SharingMark` above use, asked once.
 
-            **`meta.source` is the evidence; the absent URL is only the
+            **`cameOffADisk` is the evidence; the absent URL is only the
             occasion.** An owner can hold a *web* article with no URL (a lost
             `meta.json`, a revision published with neither address), and calling
             that an upload is a false sentence about their library. */}
         <OriginLine
           source={source}
-          origin={onRenamed === undefined ? null : meta.source === "pdf" ? "upload" : "unrecorded"}
+          origin={onRenamed === undefined ? null : cameOffADisk(meta) ? "upload" : "unrecorded"}
         />
 
         <p className="facts">

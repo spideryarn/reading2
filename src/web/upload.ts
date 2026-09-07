@@ -1,6 +1,6 @@
 /**
- * Sending a PDF from the browser to the object store, **without it passing
- * through our server**.
+ * Sending a file — a PDF or a web page — from the browser to the object store,
+ * **without it passing through our server**.
  *
  * That is not an optimisation, it is the only thing that works. A Vercel
  * function refuses a request body over 4.5 MB — flat, unraisable, the same on
@@ -25,6 +25,7 @@
  * the one place in the client that uses it, and this paragraph is why.
  */
 
+import { uploadContentType } from "../uploads.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { recordLog } from "./log-buffer.js";
 
@@ -110,8 +111,16 @@ function put(
     xhr.open("PUT", url);
     /* The bucket's allowlist checks this, and it is the *claimed* type — which
        is why the server checks the bytes afterwards. Sending it means a
-       mislabelled file is refused at the door rather than after 50 MB. */
-    xhr.setRequestHeader("Content-Type", "application/pdf");
+       mislabelled file is refused at the door rather than after 50 MB.
+
+       **From `uploadContentType`, not a literal here.** It was
+       `"application/pdf"` for every file until 2026-09-07, which is the single
+       line that would have made an uploaded web page fail at Storage with a 415
+       and a sentence about PDFs (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md).
+       The answer belongs in src/uploads.ts for the reason that module exists:
+       the browser and the server have to agree about what a file is, and the
+       picker that accepted this file used the same function. */
+    xhr.setRequestHeader("Content-Type", uploadContentType(file));
 
     xhr.upload.onprogress = (e) => {
       /* `lengthComputable` is false for a chunked or compressed body, and then
@@ -208,10 +217,13 @@ function uploadFailure(status: number): string {
     return "That file has already been sent. Choose it again to start over. [st-dup]";
   }
   if (status === 413) {
-    return "The file store refused that as too large. A smaller PDF will work. [st-big]";
+    return "The file store refused that as too large. A smaller file will work. [st-big]";
   }
   if (status === 415) {
-    return "The file store would not take that as a PDF. Saving it again from a PDF reader usually produces one it will. [st-type]";
+    return (
+      "The file store would not take that file's type. Saving it again from a PDF reader or a " +
+      "browser usually produces one it will. [st-type]"
+    );
   }
   if (status === 400 || status === 401 || status === 403) {
     return "Permission to send that file had run out. Choose it again — it takes a moment and then works. [st-grant]";
