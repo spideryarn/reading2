@@ -158,35 +158,63 @@ export function stickyOffset(): number {
    * always was, which is why `tests/mobile-chrome.test.ts` poses an inset
    * rather than trusting the machine it runs on.
    */
-  /**
-   * **Where the bar is *going*, not where it is.**
-   *
-   * Everything above is about the answer being a prediction rather than a
-   * measurement, and this is the last case where it was still a measurement:
-   * mid-transition. The bar takes 180ms to travel; `scrollToBlock` calls this
-   * **once** and hands the number to `glide()` as a fixed destination; and
-   * `markOurScroll` stops the bar *reacting* to the jump but cannot stop a
-   * transition already in flight. So a reader who scrolled up — starting the
-   * reveal — and clicked a gist 90ms later got a destination computed against
-   * half a bar and a row that finished underneath the other half. GPT Sol F2,
-   * 2026-09-07.
-   *
-   * **The rect, and deliberately not `data-bars`.** The attribute is not the
-   * same question: the two `:has()` guards in shell.css hold the bar down —
-   * `--bar-hide: 0px` — while the attribute is still set, so a reader in a band
-   * mode, or tabbing along the pills, would have had every jump land under a
-   * bar that is plainly there. Asking the element is what makes those guards
-   * free.
-   *
-   * Mid-*hide* this over-reserves by up to a bar's height, and that is the
-   * right way round to be wrong: an over-reserved target lands a little lower
-   * than it needed to, an under-reserved one lands invisible.
-   *
-   * It agrees with the `max(safeTop, min(height + safeTop, bottom))` it
-   * replaces in every settled state — stuck, not yet stuck, and fully hidden —
-   * so this narrows the function rather than changing its policy.
-   */
-  if (rect.bottom <= safeTop) return safeTop; // fully out of the way
+  return Math.max(safeTop, Math.min(rect.height + safeTop, rect.bottom));
+}
+
+/**
+ * **Where the bar is *going*** — as against `stickyOffset` above, which is
+ * where it is.
+ *
+ * These were one function for a few hours on 2026-09-07 and merging them was a
+ * mistake, so the distinction is worth stating plainly:
+ *
+ * | | asks | who calls it |
+ * |---|---|---|
+ * | `stickyOffset` | how much of the top is covered **now** | `readingLine()` (keynav.ts), the `?at=` tracker (App.tsx), `isBlockOnScreen`, `whereIsBlock` |
+ * | `stickyDestination` | how much will be covered **when a jump lands** | `scrollToBlock`, `scrollByScreen` |
+ *
+ * At rest they return the same number, which is why one function served both
+ * for months. They part company only while the bar is travelling — 180ms, and
+ * only since it started doing that on laptops as well as phones.
+ *
+ * **Why the destination half is needed.** `scrollToBlock` calls this **once**
+ * and hands the number to `glide()` as a fixed target; `markOurScroll` stops
+ * the bar *reacting* to the jump but cannot stop a transition already in
+ * flight. So a reader who scrolled up — starting the reveal — and clicked a
+ * gist 90ms later got a target computed against half a bar, and the row they
+ * asked for finished underneath the other half. GPT Sol F2.
+ *
+ * **Why it must not be given to the others.** They ask where the reader *is*,
+ * and a prediction moves the reading line by up to a bar's height while the
+ * slide runs: at `safeTop` 47 with the bar's bottom at 69 and rows at
+ * [0, 80, 120], the measurement makes the first row current and the prediction
+ * makes it the second — so ↓ during a slide would skip a paragraph. GPT Sol
+ * F8, which is the reason this is a second function rather than a new body for
+ * the first one.
+ *
+ * **`rect.bottom <= 0`, not `<= safeTop`.** A hidden bar is translated by
+ * `--bar-h + --safe-top`, so it comes to rest with its bottom edge at exactly
+ * zero. Coming back, that edge travels 0 → 91 on a 47px inset, and a boundary
+ * at the inset would call the whole first half of the journey "hidden" and
+ * reserve 47 where 91 is needed. Invisible on every machine without a notch,
+ * because there the two boundaries are the same number. GPT Sol F7.
+ *
+ * **The rect, and deliberately not `data-bars`.** The attribute is not the same
+ * question: the two `:has()` guards in shell.css hold the bar down —
+ * `--bar-hide: 0px` — while the attribute is still set, so a reader in a band
+ * mode, or tabbing along the pills, would have had every jump land under a bar
+ * that is plainly there. Asking the element is what makes those guards free.
+ *
+ * Mid-*hide* this over-reserves by up to a bar's height, and that is the right
+ * way round to be wrong: an over-reserved target lands a little lower than it
+ * needed to, an under-reserved one lands invisible.
+ */
+export function stickyDestination(): number {
+  const safeTop = safeAreaInsets().top;
+  const bar = document.querySelector<HTMLElement>(".controls");
+  if (!bar) return safeTop;
+  const rect = bar.getBoundingClientRect();
+  if (rect.bottom <= 0) return safeTop; // gone, and no further to go
   return rect.height + safeTop; // here, or on its way here
 }
 
@@ -440,10 +468,46 @@ export function watchBarVisibility(): () => void {
     pending = requestAnimationFrame(apply);
   };
 
+  /**
+   * **Focus moves the bar too, and nothing else can tell.**
+   *
+   * `:root:has(.controls:focus-within, .mode-band)` in shell.css puts
+   * `--bar-bottom` and `--bar-hide` back **while `data-bars` is still
+   * `"hidden"`** — that is the guard that stops the bar sliding out from under
+   * a keyboard reader tabbing the granularity pills. So focus alone moves the
+   * bar and the table head 44px, twice, and neither end of it changes an
+   * attribute on `<html>`.
+   *
+   * Nothing would have noticed. The fisheye panels take their `top` from the
+   * head and re-measure on `data-bars`, so a reader who tabbed into the pills
+   * got a bar back over panels that stayed where the hidden bar had left them,
+   * until they happened to scroll. GPT Sol F6, 2026-09-07.
+   *
+   * `focusin` / `focusout` rather than the bar's `transitionrun`, which was the
+   * other candidate and looks more general: `transitionrun` does not fire under
+   * `prefers-reduced-motion`, where the bar snaps and the panels still need to
+   * be re-placed. This fires either way.
+   *
+   * **Only while the bar is hidden**, because only then does the guard change
+   * anything. At rest `--bar-bottom` is already its resting value, so
+   * announcing a move would put every panel into a 180ms transition for a bar
+   * that is going nowhere — on every tab through the pills.
+   */
+  const onFocusShift = (e: FocusEvent) => {
+    if (!hidden) return;
+    if (!(e.target instanceof Node)) return;
+    if (!document.querySelector(".controls")?.contains(e.target)) return;
+    startMoving();
+  };
+
   from = window.scrollY;
   window.addEventListener("scroll", onScroll, { passive: true });
+  document.addEventListener("focusin", onFocusShift);
+  document.addEventListener("focusout", onFocusShift);
   return () => {
     window.removeEventListener("scroll", onScroll);
+    document.removeEventListener("focusin", onFocusShift);
+    document.removeEventListener("focusout", onFocusShift);
     if (pending) cancelAnimationFrame(pending);
     show();
   };
@@ -637,7 +701,7 @@ export function scrollToBlock(id: string, behavior: ScrollBehavior = "smooth") {
   // Explicit and clamped rather than scrollIntoView(): we want the row's own
   // top edge, offset to clear the bars, and no surprise when the row sits
   // inside a cell that spans dozens of others.
-  const top = row.getBoundingClientRect().top + window.scrollY - stickyOffset();
+  const top = row.getBoundingClientRect().top + window.scrollY - stickyDestination();
   const max = document.documentElement.scrollHeight - window.innerHeight;
   const target = Math.max(0, Math.min(top, max));
   if (behavior === "smooth" && !reducedMotion()) glide(target);
@@ -704,7 +768,7 @@ export function scrollByScreen(dir: -1 | 1) {
   // to. Two swipes at the end of the article must deliver two screens; measuring
   // the second from a half-finished first delivers about one and a half.
   const from = glideTarget() ?? window.scrollY;
-  const target = screenTarget(from, window.innerHeight, stickyOffset(), dockOffset(), max, dir);
+  const target = screenTarget(from, window.innerHeight, stickyDestination(), dockOffset(), max, dir);
   // Already there — the true end of the article, or the top. No jump, and no
   // pretending we did something. Compared against `from` rather than the live
   // position, so a jump already heading somewhere else is not silently kept:

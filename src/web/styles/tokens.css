@@ -122,9 +122,15 @@
    * one substitution rather than five judgement calls, and the next thing that
    * pins below the bar gets it right by using the obvious token.
    *
-   * It is `--bar-h` everywhere except a small device being scrolled down
-   * through, where § a small device switches it to `0px`. See
-   * docs/plans/260827t-mobile-reading-view.md for why a landscape phone needed the 44px.
+   * It is `--bar-h` except while the bar is out of the way, where
+   * **shell.css § the bar that leaves while you read** switches it to
+   * `--safe-top`. That happens **at every width** since 2026-09-07; until then
+   * it was narrow-window.css § a small device and it happened only on a phone.
+   * See docs/plans/260827t-mobile-reading-view.md for why a landscape phone
+   * needed the 44px first, and
+   * docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md for
+   * why a laptop wanted it too. `--dock-bottom` below is the one that is still
+   * narrow-only.
    *
    * **Deliberately a plain custom property, and deliberately not animated
    * itself.** The first version of this was a `@property`-registered

@@ -130,7 +130,37 @@ It also **cleared the thing I was most worried about**, which is worth recording
 one that would have failed silently: the two `:has()` guards keep their (0,3,0) against the
 attribute rule's (0,2,0) after the move to `shell.css`, and nothing later in the import order
 redefines `--bar-bottom` or `--bar-hide` for the reading root. The later narrow `.controls` rules
-touch padding and overflow only.
+touch padding and overflow only. Round two re-checked the cascade against the built code and found
+no regression: every moved rule stays in `layer(app)`, the guards keep their specificity, and the
+Dock stays gated.
+
+### Round two, on the built code
+
+Refused it on three more established P1s, all of which held up when checked:
+
+| ID | | Where it landed |
+|---|---|---|
+| **F6** | P1 — the `:focus-within` guard moves the bar **while `data-bars` stays `"hidden"`**, so a keyboard reader tabbing into the pills got the bar back over panels that never re-measured, and tabbing out did it again in reverse | `scroll.ts` announces a move on `focusin`/`focusout` inside the bar (only while hidden — at rest the guard changes nothing); `useColumnContext` observes `data-bar-moving` as well as `data-bars` |
+| **F7** | P1 — a hidden bar rests with its bottom edge at **0**, not at `--safe-top`, so `rect.bottom <= safeTop` called the first 47px of every reveal "hidden" and under-reserved. Invisible without a notch, where the two boundaries are the same number | `stickyDestination`'s boundary is `<= 0` |
+| **F8** | P1 — **the one I got wrong.** `stickyOffset` is not only a destination: `readingLine()` (keynav.ts), the `?at=` tracker, `isBlockOnScreen` and `whereIsBlock` all ask where the reader *is*. A prediction moves the reading line by up to a bar's height mid-slide, so ↓ during one could skip a paragraph | the two questions are two functions — see below |
+| F9 | P2 — `bar-motion.test.tsx` stubbed `matchMedia().matches` to `true`, so reintroducing the width gate under any name would still pass | the stub is `false`; every test now exercises the unconditional listener |
+| F10 | P3 — five comments still described the removed gate | `App.tsx`, `tokens.css`, `column-context.css`, `bar-motion.test.tsx`, and 260905g's own table |
+
+**`stickyOffset` and `stickyDestination` are now two functions, and F8 is why.** They return the
+same number in every settled state — which is how one served both for months — and part company only
+while the bar is travelling, which is new. `stickyOffset` measures; `stickyDestination` predicts, and
+is called by exactly `scrollToBlock` and `scrollByScreen`, the two that compute a target once and
+then glide to it.
+
+**One defect of the same class found and deliberately not fixed:** `dockOffset()` has F8's problem at
+the other end — `scrollByScreen` reads it for a destination while it reports current coverage, so a
+screenful step taken while the *bottom* bar is mid-slide is short by up to 52px. It is pre-existing,
+unchanged by this plan, on a bar this plan explicitly leaves alone, and only reachable on a phone.
+Recorded here rather than folded in, because fixing it changes screenful stepping on a surface with
+no test coverage of the interaction and nobody asked for it.
+
+**And one bug this review's own prompt found**, listed under stage 3 above: `transitionend` bubbles
+out of the pills.
 
 ## Stage 1 — the fisheye panels keep step with the bar
 

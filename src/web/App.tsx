@@ -1789,21 +1789,30 @@ function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: str
     };
   }, [sections, rowOf, setAt, layoutKey]);
 
-  /* The controls bar gets out of the way while you read forwards, on a viewport
-     short enough for 44px to matter — scroll.ts § watchBarVisibility, and
-     styles.css § a small device for the half that decides whether it applies.
+  /* The controls bar gets out of the way while you read forwards — scroll.ts
+     § watchBarVisibility, and shell.css § the bar that leaves while you read
+     for what a hidden bar looks like.
+
+     **At every width since 2026-09-07**, where this used to say "on a viewport
+     short enough for 44px to matter". Greg asked for it on a laptop too, and the
+     media query the watcher used to ask went with the gate
+     (docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md).
+     The *dock's* half of the same switch is still narrow-only, which is the one
+     thing about it that is still a small-screen fact.
 
      A second scroll listener rather than a branch inside the one above, and
      deliberately: that one exists to keep `?at=` in step with the reader and
      owns React state, this one touches nothing but a `data-` attribute and
      causes no renders at all.
 
-     They do schedule their own rAF callbacks rather than sharing one, so on a
-     short viewport this is a second frame callback per scroll — said plainly
-     because an earlier version of this comment claimed the pair cost one
-     between them, which was simply false (GPT Sol, 2026-08-27). It is bounded:
-     the watcher attaches only while the short-viewport media query matches, so
-     a laptop installs no listener and pays nothing at all.
+     They do schedule their own rAF callbacks rather than sharing one, so this
+     is a second frame callback per scroll — said plainly because an earlier
+     version of this comment claimed the pair cost one between them, which was
+     simply false (GPT Sol, 2026-08-27). What is no longer true is the sentence
+     that followed it, that a laptop installs no listener and pays nothing:
+     it does now, and performance.md § two things this changes prices it — the
+     listener is passive, coalesced to one callback per painted frame, and its
+     body is arithmetic on three numbers with no DOM read in it.
 
      Mounted with no dependencies because it depends on nothing — it re-reads
      the world every frame it runs. */

@@ -239,8 +239,8 @@
    **A panel slides with the bar, and snaps with everything else.**
 
    Every other thing pinned under the controls bar is moved by CSS — it reads
-   `--bar-bottom` and gets its `transition: top` from narrow-window.css § a
-   small device. A panel is the exception: it is `position: fixed` with a `top`
+   `--bar-bottom` and gets its `transition: top` from shell.css § the bar that
+   leaves while you read. A panel is the exception: it is `position: fixed` with a `top`
    written inline by ContextPanel.tsx from a rect useColumnContext.ts measures
    off the table head. Nothing in CSS moves it, so without a rule here it snaps
    44px while the spine beside it slides — the same defect `td.gist .sticky`
@@ -280,7 +280,8 @@
    would have shipped the worse half of that table. GPT Sol F1, 2026-09-07;
    docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md.
 
-   Its reduced-motion override is in narrow-window.css beside the others, and
+   Its reduced-motion override is in narrow-window.css beside the others (that
+   block is global, not inside the width query), and
    has to carry this selector rather than a bare `.ctx-panel` — see the note
    there about (0,2,0) against (0,1,0). */
 :root[data-bar-moving] .ctx-panel { transition: top 0.18s ease; }

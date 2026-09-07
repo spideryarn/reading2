@@ -21,8 +21,8 @@
  * docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md makes
  * it reachable on every laptop.
  *
- * ## The three things pinned here, and why each one is a test rather than a
- * ## sentence in a comment
+ * ## What is pinned here, and why each one is a test rather than a sentence in
+ * ## a comment
  *
  * 1. **A panel re-samples when `data-bars` changes, with no scroll event at
  *    all.** The reader who stops scrolling on the very frame the bar gives way
@@ -41,10 +41,13 @@
  *    starts never ends: reduced motion, a background tab, or a rule somebody
  *    deletes.
  *
- * 3. **`place()` centres the list on where the panel is going.** It read the
- *    panel's own live rect, which during a slide is an interpolated value, and
- *    nothing re-placed the list when the panel arrived. GPT Sol found it
- *    reviewing the plan, 2026-09-07 (F1).
+ * 3. **A pill's colour fade is not the bar arriving.** `transitionend` bubbles,
+ *    and `.controls` is full of 120ms transitions (pill.ts), so a listener that
+ *    took any of them ended the slide a third of the way through.
+ *
+ * 4. **Focus is a fourth way the bar moves, and `data-bars` cannot describe
+ *    it.** The `:focus-within` guard in shell.css puts the bar back while the
+ *    attribute stays `"hidden"` — see § focus moves the bar. GPT Sol F6.
  *
  * ## Why the rects are stubbed
  *
@@ -72,6 +75,13 @@ let root: Root;
 let stop: (() => void) | undefined;
 
 /**
+ * Set to pose a head position that `data-bars` does **not** predict — the focus
+ * guard's case, where the bar comes back down while the attribute stays
+ * `"hidden"`. `null` means "follow `data-bars`", which is every other case.
+ */
+let barBottomOverride: number | null = null;
+
+/**
  * A table with one gist column, posed so the header's bottom edge answers to
  * `data-bars` the way the stylesheet makes it answer.
  *
@@ -89,7 +99,7 @@ function poseTable(): void {
   th.setAttribute("data-col", "1");
   th.getBoundingClientRect = () => {
     const hidden = document.documentElement.dataset.bars === "hidden";
-    const bottom = hidden ? 0 : BAR_H;
+    const bottom = barBottomOverride ?? (hidden ? 0 : BAR_H);
     return { top: bottom, bottom, left: 0, right: 230, width: 230, height: 0 } as DOMRect;
   };
   tr.append(th);
@@ -135,9 +145,9 @@ function Harness({ seen }: { seen: ColumnRect[] }) {
 
 /* jsdom has neither of these, and both are incidental to what is being tested:
    the hook observes the table for a late image or a font swap (nothing here
-   resizes), and `watchBarVisibility` asks the breakpoint so a large window
-   spends no scroll listener. A query that never matches is the *harder* case
-   for the second test, so this stub cannot flatter it. */
+   resizes), and `watchBarVisibility` no longer asks the breakpoint at all —
+   the stub only exists so a call that has gone does not throw if it comes
+   back. See the `matches: false` note below for why the value matters. */
 beforeEach(() => {
   vi.stubGlobal(
     "ResizeObserver",
@@ -147,12 +157,17 @@ beforeEach(() => {
       disconnect() {}
     },
   );
-  /* `matches: true` so this file is about the attribute rather than about the
-     breakpoint. Stage 2 of the plan removes the query from `watchBarVisibility`
-     altogether; pinning `true` means these tests say the same thing before and
-     after that, instead of passing for a reason that is about to change. */
+  /* **`matches: false`, and that is load-bearing.** `watchBarVisibility` used to
+     hold a copy of § a small device's media query and attach its listener only
+     while it matched; the gate went on 2026-09-07 so the bar could hide on a
+     laptop. Stubbing `true` — which this file did at first — would let anybody
+     reintroduce that gate under any name and still pass every test here, which
+     is the whole regression this change is about. Stubbed `false`, a
+     wide-screen gate fails these functionally rather than by spelling. GPT Sol
+     F9, 2026-09-07. `tests/spine-width.test.ts` keeps the spelling check as
+     well, against a dead constant left sitting there to mislead. */
   vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: true,
+    matches: false,
     media: query,
     addEventListener() {},
     removeEventListener() {},
@@ -169,6 +184,7 @@ afterEach(() => {
   delete document.documentElement.dataset.bars;
   delete document.documentElement.dataset.barMoving;
   document.body.innerHTML = "";
+  barBottomOverride = null;
   vi.useRealTimers();
   vi.unstubAllGlobals();
   /* **`watchBarVisibility` reads `window.scrollY` once, at attach, as its
@@ -198,6 +214,113 @@ describe("a panel re-samples when the bar moves, with nobody scrolling", () => {
     });
 
     expect(seen.at(-1)?.top, "the measurement after the bar left").toBe(0);
+  });
+
+  /**
+   * **And the same for a move that `data-bars` cannot describe.** The focus
+   * guard puts the bar back while the attribute stays `"hidden"` — see § focus
+   * moves the bar below for the four-step sequence — so `data-bar-moving`,
+   * which scroll.ts writes on *every* announced move, is the second signal the
+   * sampler has to watch. Posed here directly rather than through
+   * `watchBarVisibility`, because what is being tested is the observer's filter.
+   */
+  it("takes a fresh measurement from a `data-bar-moving` change alone", async () => {
+    poseTable();
+    document.documentElement.dataset.bars = "hidden";
+    const seen: ColumnRect[] = [];
+    await act(async () => {
+      root.render(createElement(Harness, { seen }));
+    });
+    expect(seen.at(-1)?.top, "hidden at mount").toBe(0);
+
+    /* The guard has started matching: the head is back at 44 and nothing about
+       `data-bars` has changed. Only the announcement can say so. */
+    barBottomOverride = BAR_H;
+    await act(async () => {
+      document.documentElement.dataset.barMoving = "";
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+    });
+
+    expect(seen.at(-1)?.top, "the measurement after focus brought the bar back").toBe(BAR_H);
+  });
+});
+
+/**
+ * **The bar can move without `data-bars` changing, and the panels have to hear
+ * about it.**
+ *
+ * `:root:has(.controls:focus-within, .mode-band)` in shell.css puts
+ * `--bar-bottom` and `--bar-hide` back **while `data-bars` is still `"hidden"`**
+ * — that is the whole point of the guard, so a keyboard reader tabbing the
+ * granularity pills does not lose the control they are standing on. But it
+ * means focus alone moves the bar and the table head 44px, twice, with no
+ * attribute on `<html>` changing at either end:
+ *
+ *   1. scroll down until the bar gives way (`data-bars="hidden"`)
+ *   2. let the backstop clear `data-bar-moving`
+ *   3. Tab into a pill — the guard matches, the bar comes back down
+ *   4. Tab out again — the guard stops matching, the bar leaves
+ *
+ * At (3) and (4) an observer watching only `data-bars` sees nothing, so every
+ * panel stays 44px out of step until the reader happens to scroll. That is the
+ * keyboard reader, in Hierarchy, which is the mode the whole feature is for.
+ * GPT Sol F6, 2026-09-07.
+ *
+ * The fix is in two halves and needs both: scroll.ts announces the move
+ * (`startMoving` on `focusin`/`focusout` inside the bar, so the panels *slide*
+ * rather than snapping), and useColumnContext observes `data-bar-moving` as
+ * well as `data-bars`, so the announcement is also what triggers the
+ * re-measurement.
+ */
+describe("focus moves the bar, and the panels are told", () => {
+  it("announces a move when focus enters and leaves the bar while it is hidden", async () => {
+    vi.useFakeTimers();
+    const bar = poseSilentBar();
+    const pill = document.createElement("button");
+    bar.append(pill);
+    stop = watchBarVisibility();
+
+    Object.defineProperty(window, "scrollY", { value: 1000, configurable: true });
+    window.dispatchEvent(new Event("scroll"));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(document.documentElement.dataset.bars).toBe("hidden");
+
+    // The slide finishes and the attribute goes, as it should.
+    await vi.advanceTimersByTimeAsync(BAR_MOVE_MAX_MS + 50);
+    expect(document.documentElement.dataset.barMoving).toBeUndefined();
+
+    // Tab in. `data-bars` does not change — the guard is a CSS pseudo-class —
+    // but the bar comes back down, so this has to be announced.
+    pill.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(
+      document.documentElement.dataset.barMoving,
+      "focus entering a hidden bar brings it back",
+    ).toBe("");
+    expect(document.documentElement.dataset.bars, "and it is still hidden").toBe("hidden");
+
+    await vi.advanceTimersByTimeAsync(BAR_MOVE_MAX_MS + 50);
+
+    // And tab out, which takes it away again.
+    pill.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    expect(
+      document.documentElement.dataset.barMoving,
+      "focus leaving a hidden bar takes it away again",
+    ).toBe("");
+  });
+
+  it("says nothing when the bar is not hidden, because then focus moves nothing", async () => {
+    vi.useFakeTimers();
+    const bar = poseSilentBar();
+    const pill = document.createElement("button");
+    bar.append(pill);
+    stop = watchBarVisibility();
+
+    /* At rest the guard changes no value — `--bar-bottom` is already
+       `--bar-h + --safe-top`. Announcing a move here would put every panel into
+       a 180ms transition for a bar that is not going anywhere, every time the
+       reader tabbed through the pills. */
+    pill.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(document.documentElement.dataset.barMoving).toBeUndefined();
   });
 });
 

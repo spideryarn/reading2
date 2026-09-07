@@ -187,11 +187,20 @@ export function useColumnContext({
        A `MutationObserver` fires as a microtask after the attribute is written,
        so the sample lands a frame later whatever the order — correct rather
        than probable. tests/bar-motion.test.tsx mutates the attribute with no
-       scroll event at all. */
+       scroll event at all.
+
+       **`data-bar-moving` as well as `data-bars`, and it is not a belt-and-
+       braces second copy of the same signal.** The bar can move while
+       `data-bars` stays `"hidden"`: `:root:has(.controls:focus-within,
+       .mode-band)` in shell.css puts it back for a keyboard reader tabbing the
+       pills, and takes it away again when they tab out — twice, with no
+       attribute here changing at either end. `data-bar-moving` is what
+       scroll.ts writes on *every* announced move, focus included, so it is the
+       one that covers the whole set. GPT Sol F6, 2026-09-07. */
     const bars = new MutationObserver(schedule);
     bars.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["data-bars"],
+      attributeFilter: ["data-bars", "data-bar-moving"],
     });
     measure();
     return () => {
