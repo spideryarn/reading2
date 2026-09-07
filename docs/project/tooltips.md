@@ -73,6 +73,8 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | the wrapper: `<Tooltip content={…}>{trigger}</Tooltip>`, plus `TooltipGroup` and `TipNote` — the latter being the panel's text where the panel is only a sentence, which is most of them outside the reading view |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | `BandCard` — what a spine band actually says |
 | [`src/web/ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) | the other one — see below |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar — the fourteen mode buttons, twice over, and the experimental switch. See [§ The bar](#the-bar-and-the-two-shapes-of-the-same-fourteen) |
+| [`src/mode-catalog.ts`](../../src/mode-catalog.ts) | the words in those fourteen cards, both paragraphs of each — the bar holds none of its own copy |
 | [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage masthead's links — Profile, plus Admin for the administrator — and the one place a tooltip's trigger is not a host element |
 | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | the two things said at the top of an article — where it came from, and who can read it. Both were `title` attributes or a bare sentence until 2026-09-06 and are `ControlTip`s now; the origin one is also the app's only tooltip on a line of *text* rather than on a glyph. Its trigger is the address's own anchor when there is an address, and a plain `<span>` with `cursor: help` and an `sr-only` pair of sentences when there is not — the second of those is the app's one tooltip a keyboard cannot open, which is why its content is duplicated rather than only shown |
 | [`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx) | the line under `/read/public`'s lede — **the app's only `ControlTip` on a link to a *page* rather than on a control**, and the only one whose reader may want nothing from us at all ([public-readable-sharing.md](public-readable-sharing.md)). Greg asked for five claims in it; two of the five were false, so the card carries the idiom's two paragraphs and the page carries the claims |
@@ -170,14 +172,56 @@ set — the second paragraph is where the unguessable fact goes, which is exactl
 invention goes too. The four are listed in
 [260905h](../plans/260905h-rich-tooltips-on-the-shelf-action-buttons.md#four-of-these-were-wrong-in-the-first-draft).
 
+### The bar, and the two shapes of the same fourteen
+
+**The bottom bar joined on 2026-09-07**, on the same ask again — Greg: *"Make sure all the modes in
+the bottom-bar have rich tooltips."* It is the largest customer by count after Referee and the one
+whose cards had existed longest, because the buttons had a card already: a head and **one**
+sentence, which was the mode's `description` and therefore what the label plus a second's thought
+already said. A card can be present and still not be a card
+([260907b](../plans/260907b-rich-tooltips-on-the-dock-modes.md)).
+
+Three things about it are not true of any other set here.
+
+- **The copy is not in the component.** Both paragraphs come from `MODE_CATALOG`
+  ([`src/mode-catalog.ts`](../../src/mode-catalog.ts)), which is a pure module the server can read
+  too, so a fifteenth mode is a compile error until somebody has written both halves. Everywhere
+  else in this file the words sit beside the JSX. [new-mode.md § The card on the
+  button](new-mode.md#the-card-on-the-button) is what a new mode's author is told to do, including
+  the rule that **no card in this bar names a price** — the command bar says `generates` and no
+  figure, and a tooltip on the button beside it must not be more disclosed than the bar is.
+- **The same fourteen modes are drawn by two different components**, and only one of them had a
+  card. On the reading view they are a `role="radiogroup"` segment; on the metadata and tweets pages
+  they are loose `DockLink`s, and those carried a `title` attribute while the segment had a panel.
+  `DockLink`'s hover is now a two-member union rather than a `title: string`, so the arm a link takes
+  is a choice the compiler sees — and the three buttons in the bar that are *not* modes (Comments,
+  Tweets, Metadata) sit visibly in the `title` arm, which is the debt written into the type rather
+  than into a comment.
+- **The visitor's sentence goes above the description**, as `ControlTip`'s `state`. It was a third
+  paragraph while the card had two; with the second paragraph added it would have been third of
+  three, burying the one line saying why the button is drawn dimmed under two about a mode the
+  visitor cannot *use* — they can open it, and what they get is a band explaining the gap, which is
+  why the button is dimmed rather than `aria-disabled`. That widened `state`, which until then had
+  meant *this switch is mid-flight or broken*; what the two share is that somebody who opened the
+  card because the control looked wrong wants that answered before they are told what it is for.
+
+Five of the fourteen second paragraphs were drafted, checked against the source and thrown away for
+being **plausible and false** — the same failure the shelf's row produced four of, and the reason
+this page keeps saying so. All five are named in the plan, and four of them were caught by re-reading
+the set as a group rather than by any check in the diff: each looked right on its own line.
+
 **A `title` attribute is not a small version of this**, and that is the argument for every one of
 them: it waits about a second, cannot be styled, truncates at the OS's idea of a line, and does not
 exist at all on a touch device. `title` attributes are a regression here rather than a shortcut, and
-they are invisible on a laptop because they still show *something* — so three test files assert
+they are invisible on a laptop because they still show *something* — so five test files assert
 their absence as well as the cards' presence
 ([`tests/diagram-panel-hover.test.tsx`](../../tests/diagram-panel-hover.test.tsx),
 [`tests/referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx),
-[`tests/feedback-button-tooltip.test.tsx`](../../tests/feedback-button-tooltip.test.tsx)).
+[`tests/feedback-button-tooltip.test.tsx`](../../tests/feedback-button-tooltip.test.tsx),
+[`tests/shelf-action-tooltips.test.tsx`](../../tests/shelf-action-tooltips.test.tsx),
+[`tests/dock-mode-tooltips.test.tsx`](../../tests/dock-mode-tooltips.test.tsx), the last of which
+checks both arms of the bar because the arm that had the attribute was not the one anybody looked
+at).
 
 **An SVG `<title>` is the same mistake spread over a whole picture**, and it is worse than the
 attribute because there is nothing to aim at: the tooltip is the *whole* drawing, so the sentence
