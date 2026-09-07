@@ -532,6 +532,70 @@ handover either way.
 The other simpler option — **take a cheap non-streaming domain and accept the reorder** — is rejected
 in § *The slice, and the four I rejected*. It would have been a faster night and a weaker claim.
 
+## The code review, and the rail that could have stopped holding
+
+[GPT Sol's review of the whole built change](260907e-referee-joins-the-route-table-code-review-sol.md)
+([prompt](260907e-referee-joins-the-route-table-code-review-prompt.md)):
+
+> **the route move itself is behavior-preserving.** I found no runtime difference in the eight
+> handlers, matchers, capture handling, dispatch order, or stream lifetimes.
+
+Checked item by item on its side: all five regexes character-for-character identical; the eight rows
+prepended above jobs in guard order; every slug capture still `slugPart(captures, 1)` with `part`
+only for criterion ids; `EXPECTED_AUTH_ROUTES` hashing identically; thirteen exported names
+unchanged; the scan test's new regex cutting exactly the scan handler; and **no remaining source
+reader that expects these guards in the chain**.
+
+Two findings, both fixed:
+
+- **P1 — my `requireUser` rail could silently stop checking.** It located the handoff with
+  `source.indexOf("serveAuthenticatedApi(user")`. If that text is ever reformatted or the parameter
+  renamed, `indexOf` returns `-1`, `slice(0, -1)` makes the "handoff" the end of the file, and the
+  ordering assertion passes while checking nothing. I wrote a security rail with a silent-success
+  hole in it, in the same change where I wrote about silent success twice. Now both the gate and the
+  handoff are found as **call nodes inside the `serveApi` declaration**, the test refuses rather than
+  skips if `serveApi` stops being a function declaration, and the "inside `serveApi`" half of its own
+  title is actually asserted. **Mutation 7** proves the fix on exactly Sol's scenario: the gate folded
+  into a reformatted multi-line handoff — which the old version would have passed — now fails with
+  *"expected 6413 to be less than 6412"*.
+- **P2 — comments describing the pre-move arrangement**, and one of them is *operational*: the table
+  docstring said thirteen guards and told the next slice to go above the jobs rows. It now says
+  twenty-one and points above referee. Also corrected: the "fourteen shared matchers" count, which
+  was already stale before tonight and is now **removed rather than re-numbered**, because a count
+  that decays once per commit is a comment that will be wrong more often than right; the contract
+  test's header, which omitted referee and described `assertHandlersAwaited` as preventing a stream
+  from outliving its request — it does not, and mutation 4 measured that, so the header now says so;
+  and this file's own preamble, which still called referee "next".
+
+Sol's one methodological caution is fair and worth carrying: **the normaliser is supporting evidence,
+not proof.** It collapses whitespace without token awareness, so it could in principle erase a
+difference inside a string literal or at an ASI-sensitive newline. It read the raw diff and confirmed
+only the permitted substitutions — that, not the empty diff, is the load-bearing check.
+
+## A second session did this same slice tonight
+
+While this was being built, `worktree-api-dispatch-by-domain` — the session whose plan handed me this
+queue — came back to referee and wrote **`tests/streaming-route-request-lifetime.test.ts`**, which is
+the same instrument as `tests/referee-stream-lifetime.test.ts` for the same route, from the same Sol
+finding. It landed on `dev` at "Stage 4a" while my stages 2 and 3 were in review.
+
+Two people built the prerequisite; nobody built it twice by accident of ignorance — 260907b named it
+publicly and we both read it. **Their test passes unchanged against the moved routes** (verified
+here, 13 files / 616 tests green together), which is itself corroboration: two independently written
+lifetime oracles agree that the move preserved the lifetime.
+
+What to do about it is a judgement for whoever reads this next, and it is deliberately not made
+unilaterally at 20:45:
+
+- The files overlap on criteria POST and are not identical in reach: mine also covers **claims** and
+  **mirror**, and both lock releases; theirs is one route in more depth.
+- The honest resolution is probably to keep one file, fold in whatever the other covers that it does
+  not, and delete the loser — but that is a change to somebody else's committed work, and the rule
+  here is that a conflict is a proposal before it is an edit.
+
+**If you are picking this up:** read both files before merging them, and note that the duplication is
+a coordination failure worth its own line in the next sweep, not a defect in either file.
+
 ## The baseline, so a later red is attributable
 
 Measured on this worktree at `eedae885`, **before any change**, with

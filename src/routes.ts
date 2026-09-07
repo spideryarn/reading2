@@ -6602,8 +6602,11 @@ type AuthRoute = ExactAuthRoute | PatternAuthRoute;
  * **The matchers two rows each share**, named once so there is one place that
  * decides what they match.
  *
- * The chain has fourteen bindings read by two guards apiece, and each is still a
- * single `const`. A table row has no such binding, so the same shape has to be a
+ * The chain still declares bindings read by two guards apiece, and each of those
+ * is a single `const`. (It was fourteen when the table was built; every slice
+ * takes some of them, so the number is not written down here — a count that
+ * decays once per commit is a comment that will be wrong more often than right.)
+ * A table row has no such binding, so the same shape has to be a
  * module-scope constant that both rows name. Spelling a regex out twice would
  * compile, run identically today, and let the copies drift apart tomorrow —
  * tests/authenticated-api-route-contract.test.ts § `names each matcher once` is
@@ -6646,13 +6649,13 @@ const REFEREE_CLAIMS_PATTERN = /^\/api\/referee\/claims\/([\w.%-]+)$/;
  *
  * Because the move is incremental and must reorder nothing. What is here is the
  * **bottom of the chain, taken upward**: billing was its last four guards, jobs
- * and uploads the nine immediately above those, and asking the table after every
- * remaining guard and before the terminal 404 puts each of the thirteen in
- * exactly the position it already had.
+ * and uploads the nine immediately above those, referee the eight above them,
+ * and asking the table after every remaining guard and before the terminal 404
+ * puts each of the twenty-one in exactly the position it already had.
  *
  * **So the rows are in chain order, and prepending is how a domain arrives.**
- * The next slice up goes above the jobs rows, not below them — the table's order
- * *is* the chain's order, continued. Taking the slice contiguously is also what
+ * The next slice up goes above the referee rows, not below them — the table's
+ * order *is* the chain's order, continued. Taking the slice contiguously is also what
  * preserves the one interleave here for free: `/api/uploads` and
  * `/api/uploads/:id` sit *between* `GET /api/jobs` and `POST /api/jobs`, which is
  * why these rows are not grouped by domain name and must not be tidied into it.

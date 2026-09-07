@@ -37,8 +37,9 @@
  *
  * Since stage 3a the dispatch is written two ways. Most of it is still
  * `if (matcher && req.method === "VERB")` in the chain; the bottom of that chain
- * — billing's four routes, and since stage 3b the nine jobs and uploads guards
- * that stood immediately above them — are rows of `AUTH_ROUTES`, a static ordered
+ * — billing's four routes, the nine jobs and uploads guards that stood
+ * immediately above them since stage 3b, and referee's eight above those since
+ * 260907e — are rows of `AUTH_ROUTES`, a static ordered
  * table of closures that `serveAuthenticatedApi` consults after every remaining
  * guard and before its 404. The reader below normalises both into the same
  * `(method, match)` pair, so
@@ -50,11 +51,19 @@
  * The table half brings three properties the chain did not have, and each is
  * checked where it lives rather than assumed: the entries are **literals**, so
  * building the table at import calls nothing (§ `building the table has no
- * effects to have`); the dispatcher **awaits** every handler, so a streaming
- * route cannot outlive the request that is waiting on it (`assertHandlersAwaited`,
- * at module scope); and a `g` or `y` pattern is refused at registration, by
+ * effects to have`); the dispatcher **awaits** every handler
+ * (`assertHandlersAwaited`, at module scope); and a `g` or `y` pattern is refused at registration, by
  * src/routes.ts itself, because a table's regexes are shared across requests
  * where the chain's are rebuilt per request.
+ *
+ * **`assertHandlersAwaited` is not enough on its own, and saying so is the
+ * point.** It reads `dispatchAuthRoute`'s syntax, so it sees whether the
+ * *dispatcher* awaits a handler — not whether a handler launches its own work
+ * and resolves without it. `void withSpendAttribution(…)` in a moved closure
+ * passes this file entirely and ends the request mid-stream with a live-run lock
+ * still held; measured on 260907e, where it turned
+ * tests/referee-stream-lifetime.test.ts red and nothing here. A streaming domain
+ * therefore needs a behavioural lifetime test as well as this one.
  *
  * ## Why a parser, and why it refuses rather than skips
  *
@@ -1945,29 +1954,58 @@ describe("the authenticated API's route contract", () => {
      * identifier, and comments are not nodes.
      */
     it("calls requireUser exactly once, inside serveApi and above the handoff", () => {
-      const source = readFileSync(ROUTES_PATH, "utf8");
-      const calls: number[] = [];
-      walkAst(parseSource(source).program, (node) => {
-        if (node.type !== "CallExpression") return;
-        const callee = node.callee as AstNode | undefined;
-        if (callee?.type === "Identifier" && callee.name === "requireUser") {
-          calls.push(lineOf(node));
-        }
+      const program = parseSource(readFileSync(ROUTES_PATH, "utf8")).program;
+
+      /** Every `name(...)` call under `root`, by line. */
+      const callsTo = (root: unknown, name: string): number[] => {
+        const lines: number[] = [];
+        walkAst(root, (node) => {
+          if (node.type !== "CallExpression") return;
+          const callee = node.callee as AstNode | undefined;
+          if (callee?.type === "Identifier" && callee.name === name) lines.push(lineOf(node));
+        });
+        return lines;
+      };
+
+      let found: AstNode | null = null;
+      walkAst(program, (node) => {
+        if (node.type !== "FunctionDeclaration") return;
+        if ((node.id as AstNode | undefined)?.name === "serveApi") found = node;
       });
+      const serveApi: AstNode | null = found;
+      /* **Refused rather than skipped.** If `serveApi` stops being a function
+         declaration, every assertion below would look at an empty subtree and
+         pass — the failure this whole case exists to prevent. */
+      expect(serveApi, "serveApi is no longer a function declaration in src/routes.ts").not.toBe(
+        null,
+      );
+      if (serveApi === null) return;
+
       expect(
-        calls.length,
+        callsTo(program, "requireUser").length,
         "src/routes.ts must call requireUser exactly once — docs/project/security-map.md § where the defences live names 'the one requireUser call', and two call sites break that claim even if both are correct",
       ).toBe(1);
 
-      /* And in the right place: above the point where the authenticated half is
-         handed the user. A single call that had drifted below the handoff would
-         satisfy the count and guard nothing. */
-      const gate = calls[0] ?? 0;
-      const handoff = source.slice(0, source.indexOf("serveAuthenticatedApi(user")).split("\n")
-        .length;
-      expect(gate, "the requireUser call is not above the serveAuthenticatedApi handoff").toBeLessThan(
-        handoff,
-      );
+      const gate = callsTo(serveApi, "requireUser");
+      expect(gate.length, "the one requireUser call is not inside serveApi").toBe(1);
+
+      /* **The handoff is found as a call node, not as a string.** It used to be
+         `source.indexOf("serveAuthenticatedApi(user")`, which returns `-1` the
+         moment that text is reformatted or the parameter renamed — and `slice(0,
+         -1)` then makes the "handoff" the end of the file, so the ordering
+         assertion passes while checking nothing. A rail that can quietly stop
+         holding is docs/reusable/silent-success.md, and this one guards the gate.
+         GPT Sol's review of the built move, P1. */
+      const handoff = callsTo(serveApi, "serveAuthenticatedApi");
+      expect(
+        handoff.length,
+        "serveApi does not hand off to serveAuthenticatedApi exactly once, so there is nothing to order the gate against",
+      ).toBe(1);
+
+      expect(
+        gate[0],
+        "the requireUser call is not above the serveAuthenticatedApi handoff — a single call below it would satisfy the count and guard nothing",
+      ).toBeLessThan(handoff[0] ?? 0);
     });
 
     it("gives every contract row at least one method and one honest witness", () => {

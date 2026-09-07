@@ -8,7 +8,8 @@
  * `serveAuthenticatedApi`'s `if` chain is being emptied into `AUTH_ROUTES` one
  * contiguous slice at a time
  * (docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md).
- * Referee is the next slice, and it is the first one whose handlers **stream**.
+ * Referee was the next slice, and the first one whose handlers **stream**. It
+ * moved on 2026-09-07; these routes are `AUTH_ROUTES` rows now.
  *
  * A guard in the chain reads `await runX(...); return;` inside a function the
  * caller awaits. A table row reads `handler: async (ctx) => { await runX(...) }`,
@@ -29,9 +30,15 @@
  * docs/reusable/silent-success.md exactly. GPT Sol required a behavioural test
  * before referee moves, and this is it.
  *
- * So these cases run against the routes **as they are today, still in the
- * chain**. Green before the move and green after it is the whole point: a test
- * written after the move could only ever describe what the move did.
+ * **These cases were written and run against the guards while they were still in
+ * the chain**, and not one of them was edited when the guards became rows. Green
+ * before the move and green after it is the whole point: a test written after
+ * the move could only ever describe what the move did.
+ *
+ * Nothing below reads the routes' source or their shape — it goes in through
+ * `handleApi` by method and path — which is why the move needed no edit here,
+ * and why the file goes on being the right place to notice a handler that stops
+ * being awaited.
  *
  * ## The oracle that did not work, and why it is worth writing down
  *
