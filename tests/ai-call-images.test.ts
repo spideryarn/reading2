@@ -285,45 +285,50 @@ describe("the money, which is zero and is not free", () => {
     expect(report.pending).toHaveLength(0);
   });
 
-  it("drops the upstream figure when the response does not say the call was BYOK — a finding, not a blessing", async () => {
-    /* **This pins what happens today; it does not endorse it.**
+  it("records the call as UNPRICED when the response does not say the call was BYOK", async () => {
+    /* **This assertion was the opposite until 2026-09-07, and it said so.**
      *
      * `normaliseByokUpstream` (src/ai-spend.ts) writes `byok_upstream_nanos`
      * only when `is_byok === true`, because that is one of the three conditions
      * in `ai_calls_byok_upstream_only` and a row that fails the CHECK is
      * *rejected* — a call that lands in no ledger at all. It is deliberately
-     * `=== true`, since "we were not told" is not "no".
+     * `=== true`, since "we were not told" is not "no". **That rule is right and
+     * is unchanged.**
      *
-     * The consequence, for a `cost: 0` with a real upstream figure and no
-     * `is_byok`: the upstream number is dropped, `credits_used_nanos` is `0`,
-     * `cost_source` is `provider`, and the row therefore claims the picture was
-     * **free** — with a straight face and a passing CHECK. On the chat wire this
-     * combination has never been observed (OpenRouter reports
-     * `upstream_inference_cost` equal to `cost` on an ordinary call, measured
-     * 2026-08-27), which is why the rule is safe there; on this wire it has
-     * never been looked for.
+     * What changed is what the rest of the row then says. For a `cost: 0` with a
+     * real upstream figure and no `is_byok`, the upstream number is dropped —
+     * and the row used to go on to claim `credits_used_nanos: 0` with
+     * `cost_source: "provider"`, which is the ledger asserting **the provider
+     * settled this call at nothing**. It did not: it reported a real upstream
+     * charge. So the row was a settled zero, every SQL sum counted it as priced,
+     * and the money left with nothing red anywhere.
      *
-     * The right fix is *not* to loosen the condition — that puts the
-     * double-count back and breaks the CHECK. It is to make the discrepancy
-     * visible: warn at the projection when a non-zero upstream figure is being
-     * dropped from a row whose credits are zero.
+     * The old test pinned that and said in its own comment that it did not
+     * endorse it. It named two repairs and rejected both — writing the figure
+     * anyway (breaks the CHECK, loses the row entirely) and guessing `isByok`
+     * (restores the double-count the column exists to prevent). **GPT Sol found
+     * a third on 2026-09-07**: keep dropping the figure, and record the row as
+     * `cost_source: "none"` — *unpriced*, which is exactly what it is. An
+     * unpriced row is counted in the report's "reported no cost, so every total
+     * is short by an unknown amount", which is a true statement. A settled zero
+     * is a false one, and it is false in the direction that flatters us.
      *
-     * **Done, 2026-09-03** — `warnIfPaidLooksFree` in src/ai-spend.ts, and the
-     * test below watches it fire. The row's shape is unchanged, which is why
-     * this characterisation still stands: the ledger still records the call as
-     * free, and now says so out loud instead of only here. */
+     * docs/plans/260902g-cost-tracking-that-can-set-a-price.md § F1. */
     const { rows } = await draw(ASK, {
       body: drawn({
         usage: { ...BYOK_USAGE, is_byok: false },
       }),
     });
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.creditsUsedNanos).toBe(0);
-    expect(rows[0]?.costSource).toBe("provider");
+    /* Not `0`. A zero in this column is a *settled* figure, and nothing settled
+       this call — `ai_calls_one_cost_source` requires both money columns null
+       when the source is `none`, and that is the shape this money actually has. */
+    expect(rows[0]?.creditsUsedNanos).toBeNull();
+    expect(rows[0]?.costSource).toBe("none");
     expect(rows[0]?.byokUpstreamNanos).toBeNull();
     /* The provider *did* tell us; it is the projection that decides not to keep
        it. The evidence is still on the record the collector reports, which is
-       what makes the recommended warning possible at all. */
+       what makes the warning below possible at all. */
     expect(rows[0]?.isByok).toBe(false);
   });
 
@@ -336,17 +341,17 @@ describe("the money, which is zero and is not free", () => {
    * dropped either way. GPT Sol spotted that the characterisation was of a
    * different case, 2026-09-03.
    */
-  it("drops the upstream figure when the response never mentions is_byok at all", async () => {
+  it("records the call as UNPRICED when the response never mentions is_byok at all", async () => {
     const { is_byok: _omitted, ...silent } = BYOK_USAGE;
     const { rows } = await draw(ASK, { body: drawn({ usage: silent }) });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.isByok).toBeNull();
-    expect(rows[0]?.creditsUsedNanos).toBe(0);
-    expect(rows[0]?.costSource).toBe("provider");
+    expect(rows[0]?.creditsUsedNanos).toBeNull();
+    expect(rows[0]?.costSource).toBe("none");
     expect(rows[0]?.byokUpstreamNanos).toBeNull();
   });
 
-  it("says out loud that it is recording a paid plate as a free one", async () => {
+  it("says out loud that it could not price a paid plate", async () => {
     /* The other half of the case above, and the reason it is a separate `it`:
        the row's shape is what the ledger *keeps*, and this is what a person
        gets told. A warning nobody has watched fire is not a warning — it is a
@@ -364,7 +369,7 @@ describe("the money, which is zero and is not free", () => {
 
     expect(warn).toHaveBeenCalledTimes(1);
     const [fields, message] = warn.mock.calls[0] as [Record<string, unknown>, string];
-    expect(message).toMatch(/recorded as free and is not/);
+    expect(message).toMatch(/recorded as unpriced, not as free/);
     /* The number a person needs in order to go and look, and nothing that
        could carry a prompt or a line of the article — src/log-redaction.ts. */
     expect(fields.upstreamCostNanos).toBe(13_237_000);

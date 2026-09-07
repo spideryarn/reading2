@@ -6,7 +6,7 @@ whichever mode is on. The first two are permanent; the band is the surface the m
 [the list is below](#the-modes-in-the-band), and naming them here as well only means one of the two
 goes stale.
 
-**Two of the fourteen modes open no band at all**, and the default is one of them. `plain` is the article
+**Two modes open no band at all**, and the default is one of them. `plain` is the article
 by itself — no band, and no gist columns either — and it is what a bare `/read/<slug>` shows since
 2026-08-31; `hierarchy` is the granularity columns beside the prose, which is what the default used
 to be. So *a mode is open* and *a band is open* are separate questions
@@ -74,6 +74,15 @@ readers never are.
   nested list, deep where you are reading and shallow everywhere else. The plan is the reference:
   there is no `outline.md` yet, and it shares the tree with
   [granularity-zoom.md](granularity-zoom.md) rather than having a structure of its own.
+- **Structure** — the same tree again, as two linked columns: every part on the left, the sections of
+  the one you are in on the right. It is **an instrument rather than an addition**, added as a third
+  structural mode on 2026-09-06 and hidden behind the switch so that Hierarchy, Outline and Structure
+  can be flipped between on one article and compared. There is no `structure.md` yet; the plan is the
+  reference:
+  [260907c](../plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md), and
+  its ancestor [260903b](../plans/260903b-one-structure-mode-hierarchy-and-outline-merged.md) is the
+  design — whose *conclusion*, merging Hierarchy and Outline into one, is deferred pending exactly
+  that comparison.
 - **[glossary.md](glossary.md)** — the terms this piece uses, defined from the piece and underlined
   wherever it uses them. Open it for the two bugs from the previous version it is shaped around.
 - **[summaries.md](summaries.md)** — a sentence on every part of the article, the depth control that
@@ -103,7 +112,7 @@ readers never are.
 
 The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.
-That is twelve of the fourteen; `plain` and `hierarchy` are the two that open no band.
+That is every band mode; `plain` and `hierarchy` are the two that open no band.
 
 ### Marking a passage, and asking about one
 
@@ -184,7 +193,7 @@ The key itself, and the four things the chord refuses to do, are
 - **[reader-profile.md](reader-profile.md)** — two boxes and one string telling the model who is
   reading, where it rides in a prompt, and the microphone that looked broken twice and was not.
 - **[experimental-features.md](experimental-features.md)** — the switch for features that are not
-  finished, on this page and at the end of the bottom bar. Off by default, four modes and four Diagram
+  finished, on this page and at the end of the bottom bar. Off by default, some modes and four Diagram
   pictures behind it, and the rule that hiding a feature never breaks a link to it.
 - **[dictation.md](dictation.md)** — talking into a text box: why it transcribes twice, the one
   microphone a page is allowed, and the three lines that give any box a button.

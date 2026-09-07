@@ -41,6 +41,48 @@ lands instead is the instrument that gets the measurement and the reviewed arith
 it — [Stage 4](#stage-4-the-fit-the-instrument-that-unblocks-it-and-the-arithmetic-that-waits).
 Shipping unverified viewport geometry would be inventing a bug and a fix for it in one motion.
 
+## Where this stands, 2026-09-07
+
+| Stage | State |
+|-------|-------|
+| 1 — the surface, piloted in Search and Chat | **Done**, on `dev` (`8cef3161`). Two review rounds, F15–F24. |
+| 2 step 0 — capture every band before touching it | **Done**, on `dev` (`e4952ecb`), committed on its own so the ordering is provable. |
+| 2 — the remaining eleven bands | **Done and committed** (`af589082`), two review rounds, F25–F33. Merged with `origin/dev` at `285437a8`; the collision below is **resolved**. |
+| 4 step 1 — the diagnostic | **Done**, on `dev` (`2dfa5235`). |
+| 3 — A6, who owns Escape | **Done**, on `dev` (`3f2b37ad`). Two review rounds, eleven findings, all accepted. 30 one-press tests over real components; pairs 12 and 18 renounced with the reasoning written down. |
+| 4 — the fit itself | **Blocked**, and correctly so: it needs a trace from a real iPhone, which no machine here can produce. **A5 is therefore incomplete**, and the fit is not delivered. |
+
+**The collision with A1, and how it was settled.** A1
+([260906c](260906c-separate-article-access-reader-composition-and-mode-controllers.md)) landed while
+stage 2 was being built: every mode controller left `App.tsx` for `src/web/modes/<mode>/`, the reader
+for `src/web/reader/Reader.tsx`, and `App.tsx` went from 5,716 lines to 462. Stage 2 had migrated
+Referee onto `ModeSurface` *in `App.tsx`*, where it no longer lives. The other eleven panels are
+their own files and merged untouched, so the whole collision was Referee.
+
+The first merge was **aborted rather than resolved** —
+[a conflict is a proposal before it is an edit](../reusable/git-resolve-merge-conflicts.md) — and the
+proposal was put to Greg before anything was changed. It was then carried out at `285437a8`, and
+**nothing was discarded on either side**:
+
+- `src/web/App.tsx` takes `origin/dev`'s version **whole**. It is their file and their refactor, and
+  this branch's side of the conflict was the old monolith. The Referee migration moves to
+  `src/web/modes/referee/RefereeMode.tsx`; the `ViewportProbe` mount needed nothing, because A1 had
+  already carried it into `Reader.tsx` intact when they split the file.
+- `tests/referee-band-fits.test.ts` had both sides editing the same two lines, and they turned out to
+  be **complementary**: `dev` changed which *file* the regex reads (`BAND_FILE`,
+  `readerCssNoComments`, a `-1` guard), this branch changed the *pattern* it matches
+  (`feature="gloss referee"` … `</ModeSurface>`). Both are kept.
+  `tests/referee-how-card.test.tsx` auto-merged into the same combination.
+
+Two things are worth recording because they are evidence rather than opinion. **The oracle held**:
+all 63 tests in the five files this stage owns pass after the merge, including the Referee shape read
+through `<App/>`, so it survived both the `ModeSurface` migration and A1's restructuring of the
+reader. And **somebody else maintained the oracle while this branch was away** — its comments were
+re-homed file by file, and a fixture bug of mine was fixed in passing (`importance: 90` and
+`striking: 80` where `score()` in `src/quotes.ts` wants 0–1; it sat there looking plausible because
+nothing downstream read the numbers, and `quoteTier` reads them now). That is the check working in
+the direction it was built for.
+
 ## Design decisions
 
 ### The fit: specified, reviewed, and blocked on a phone
@@ -262,12 +304,18 @@ and `npm run check` green.
 2. **`FeatureBoundary`'s fallback stays raw**, with a test that makes `ModeSurface` throw and asserts
    the feature fallback, the prose and the dock survive while `AppBoundary`'s fallback does not
    appear. That test is what stops a later tidy-up from re-introducing Sol F4.
-3. Delete the replaced markup after checking callers. The five `preview-*.tsx` files hand-copy band
-   markup and are not migrated; they are on the sweep list, not the migration list.
+3. Delete the replaced markup after checking callers. **Two** `preview-*.tsx` files hand-copy band
+   markup and are not migrated — `preview-sketch.tsx` (a raw `<aside>`) and `preview-chat-markdown.tsx`
+   (a raw `<div>`); they are on the sweep list, not the migration list. An earlier count of five was
+   wrong: `preview-colour`, `preview-timeline` and `preview-diagram-wait` mount the *real* panels and
+   only name `.mode-band` in a comment or an override rule, and `preview-illustrated` tests a dialog
+   with no band at all. GPT Sol F29, 2026-09-07. `DesignPage.tsx`'s band is a third exception of the
+   same kind — a specimen on `/design`, not a product mode band.
 
 Done when: every healthy product mode band and `VisitorBand` is emitted by `ModeSurface`;
-`FeatureBoundary` remains **the sole production raw `.mode-band`**, as the circuit breaker; the five
-preview copies remain documented exceptions; migrated variants match their baseline DOM and geometry
+`FeatureBoundary` remains **the sole production raw `.mode-band`**, as the circuit breaker; the two
+preview copies (`preview-sketch`, `preview-chat-markdown`) and the `/design` specimen remain
+documented exceptions; migrated variants match their baseline DOM and geometry
 (by `lastChild.bottom`, not a height sum); and changing the fallback to use `ModeSurface` makes the
 circuit-breaker test fail.
 
@@ -348,10 +396,90 @@ listener that never asks whether anything is in front of it.
 
 | Q | The call |
 |---|----------|
-| **Q1** — when "later" and "topmost" come apart, which wins? | **Topmost.** § Stage 3 above said "the later and visually topmost surface", which conflates two things that pair 6 splits. Topmost is what the reader can see; "later" was only ever a proxy for it. The rule is now: **the surface the reader sees in front owns the press.** |
-| **Q2** — does the Dock drawer keep winning over a tooltip painted above it (pair 12)? | **Yes, and it is written down rather than fixed.** This is the one pair local ownership cannot express — beating a `window`-capture listener needs either registration order, which § A6 forbids, or a global signal, which is the thin end of the manager it also forbids. The only reachable instance is a hover/focus tooltip on the dock bar, which costs nothing to leave standing and closes itself when the pointer moves. Renouncing the requirement is cheaper than the machinery, and **no other pair asks for a manager**. |
+| **Q1** — when "later" and "topmost" come apart, which wins? | **Topmost — but only where the two surfaces actually overlap.** § Stage 3 above said "the later and visually topmost surface", which conflates two things that pair 6 splits. Topmost is what the reader can see; "later" was only ever a proxy for it. The rule is: **the surface the reader sees in front owns the press** — and where nothing is in front, because the two do not share any part of the screen, it is the one the reader just opened. See the amendment below, which was written after the stage was built. |
+| **Q2** — does the Dock drawer keep winning over a tooltip painted above it (pair 12)? | **Yes, and it is written down rather than fixed.** This is the one pair local ownership cannot express — beating a `window`-capture listener needs either registration order, which § A6 forbids, or a global signal, which is the thin end of the manager it also forbids. The only reachable instance is a hover/focus tooltip on the dock bar, which costs nothing to leave standing and closes itself when the pointer moves. Renouncing the requirement is cheaper than the machinery. **A second pair joins it below** — pair 18, for the same reason and by the same reckoning — and **neither asks for a manager**. |
 | **Q3** — how does a native modal silence the JS tiers? | **A target test inside `useEscapeToClose`**, not a new `useNativeModalOpen()` hook. Asking `dialog[open]` is asking *the platform what the platform already owns* — the top layer is the authority, so this reads an existing fact rather than building a parallel registry. Fewer parts touching each other, and the same test goes in the Dock for pair 16. |
 | **Q4** — should an annotation draft survive a close at all? | **Not here. This is a product call and it is Greg's.** The ordering fix below is already authorised and makes the draft survive *these* pairs, because Annotate is never closed by a press that belongs to something in front of it. Making the draft survive a **deliberate** close of Annotate is a different, user-visible change that nobody asked for, and A5's own § *What is out of scope* is explicit that a refactor does not get to decide product quietly. Flagged to Greg, not built. |
+
+#### Two amendments, made after the stage was built and reviewed
+
+Both came out of GPT Sol's review of the built code, 2026-09-07. Neither is a change of mind about
+what A6 asks for; both are places where the answers above turned out to be **under-specified rather
+than wrong**, and the code had already been written one particular way. Recording the reasoning here
+rather than in a comment is the point — a code comment asserting an exception is not the same thing
+as the exception having been decided.
+
+**Q1 is amended: "topmost" only decides between surfaces that overlap.** Sol's reading was literal
+and correct — the inventory puts the gutter disclosure at `z-index: 3` and the three modeless dialogs
+at 70, so a bare "topmost wins" makes pair 6 close the *dialog* and leave the gutter open, and both
+the implementation and its test do the opposite. The amendment, rather than the rewrite:
+
+- **A z-index only compares surfaces that share some of the screen.** The gutter disclosure opens in
+  the prose margin, beside a paragraph; the three dialogs are corner overlays. Nothing is in front of
+  anything, so there is no "topmost" to read, and the number is a fact about painting rather than
+  about attention.
+- **Where nothing overlaps, the surface the reader just opened is the one they are looking at.** The
+  disclosure was opened by a press a moment ago; the dialog may have been sitting there for a minute.
+- **And decisively: the other answer discards a draft.** Closing Annotate — with a half-typed note in
+  it — because the reader pressed Escape over a gutter row they had just opened is precisely the loss
+  A6 exists to end. Between two readings of an ambiguous rule, the one that throws a reader's words
+  away loses.
+
+This needs no machinery: tier order already encodes it, the gutter being T2 and the dialogs T3.
+
+**And the amendment has to be ordered, or it is not a rule.** Sol's second round made the fair
+objection that "topmost, and otherwise the one last opened" leaves *"most recently opened"* and
+*"currently interacting with"* undefined against each other — which is not a quibble, because the
+hover card's 220ms close delay produces exactly that state: focus has moved from the card into a text
+field, the card is **still on screen**, and Escape arrives. So the rule is written as two clauses in
+order, and the first one settles that case:
+
+1. **A surface that is visibly in front owns the press.** Visible is the test, not recency: the card
+   in its close delay is still painted over the page, so it is still what the reader sees in front,
+   and the code claiming the press there is right. This is the clause that decides almost everything.
+2. **Where neither is in front of the other** — because they do not share any screen space at all,
+   like a gutter row in the prose margin and a dialog in the corner — **the one the reader last acted
+   on owns it.**
+
+The 220ms window is therefore **decided rather than overlooked**: Escape closes the card, not the
+field, and the field's own Escape is one further press away. It costs a keystroke and loses nothing,
+where the alternative — teaching the card what has focus elsewhere — is the lifted state § A6
+forbids.
+
+**Pair 18 joins pair 12 as declared rather than fixed.** All of tier T2 are *siblings* on `document`,
+and `stopPropagation` does not stop a sibling — only `stopImmediatePropagation` does, and that
+resolves by **registration order**, which § A6 forbids in as many words. The alternative is a shared
+signal, which is the manager it also forbids. So a tooltip and the search colour picker, or a tooltip
+and a gutter row, still both close on one press.
+
+What was *not* left standing: the prose hover card moved to the **capture** phase during this review
+(for a different reason — see below), which puts it ahead of every T2 sibling as well. Since the card
+is `z-index: 100`, that is Q1 being satisfied rather than dodged, and it removes the card from pair 18
+entirely. What remains is Floating UI against a hand-rolled sibling, and Floating UI's phase is not
+ours to choose.
+
+The cost of leaving it is one extra surface closing, never a draft: **no member of T2 holds editable
+or unsaved reader input.** An earlier wording said "nothing a reader has typed", and that is
+literally false — `ProfilePanel` shows the reader's own profile and reading purpose. But those words
+are saved and read-only, so closing the panel loses nothing, which is the property the renunciation
+actually rests on. GPT Sol, round 2. **That is the line** — pairs 12 and 18 are renounced because
+what they cost is a surface that would have closed itself anyway, and **no pair that can lose words
+is on this list**.
+
+**Also fixed during the review, and not in the build list above:**
+
+- **Pair 3 was not actually fixed by the first attempt, and its test said it was.** `AnnotateDialog`
+  focuses its textarea on mount, and *hovering* a term moves no focus — so the press landed on the
+  textarea's own two-stage Escape (tier T1, ahead of the card on the bubble path), which wiped the
+  draft while leaving the card open. The test had blurred the box first, justified by a comment that
+  is true of a click and false of a hover, which is the pair's whole point: it needs no click. Fixed
+  by moving `useHoverCard`'s listener to `document` **capture**, which is ahead of every React
+  handler; pinned by a test that does not blur, watched red beforehand.
+- **Pair 17**, the same platform fact as pairs 13–15 one tier out: neither the hover card nor the
+  gutter asked whether a native `<dialog>` was open, so a press that the platform was going to spend
+  on the dialog closed one of them too. Both now make the same `dialog[open]` query.
+- **Pair 7**, the masthead rename, which no build item named: `TitleEditor`'s input stopped nothing,
+  so cancelling a rename with any of the three dialogs open closed that too.
 
 #### What gets built, from the inventory
 
@@ -540,3 +668,58 @@ Sol also confirmed, established, that **no remaining band needs an extra wrapper
 Visitor, Summary and Outline omit `head`, Outline uses the existing ref and passthrough, the other
 fixed header rows fit `head`, and the six pinned rows fit `foot`. So the interface is stage-2 ready;
 what stage 2 still owes is the per-band evidence, which is now its step 0.
+
+### Stage 2 code, round 1 — GPT Sol, 2026-09-07
+
+Verdict: **refuse as written**, no P0 or P1, and "the runtime migration itself is correct".
+[The review](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-review-stage2-sol.md) ·
+[the prompt](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-review-stage2-prompt.md).
+
+Sol confirmed, established: all eight fragment sites preserve their prior DOM; **all six footer
+guards are exact conjunctions** of their former outer and inner guards; Debate's portal renders under
+`document.body` so `.dbt-again` stays after `.dbt-scroll`; Outline's ref still reaches the `<aside>`
+and `data-outline-rung` survives; Referee's two regex slices remain equally strong and fail
+non-vacuously; and the circuit-breaker test genuinely exercises the second-throw path. Every finding
+is about the stage's **evidence**, not its behaviour — which is the right place for them to be.
+
+| ID | Finding | Disposition |
+|----|---------|-------------|
+| F25 | Quiz's own trap is not pinned: the oracle always supplies `subMode`, and `tests/quiz-panel.test.tsx` omits it but never looks at `.band-head` — so `head={subMode}` deletes the row with the whole suite green | **Accepted, and the best finding of the round**, because it is the regression this stage's headline fix exists to prevent, left unguarded. `QUIZ_NO_SUBMODE` now pins it. Watched: with `head={subMode}`, that one test goes red and the other 31 stay green — exactly as described. The first attempt used a default parameter and caught *itself*: `mountQuiz(QUIZ, undefined)` selects the default, so it pinned the wrong shape. |
+| F26 | `new-mode.md` turns a migration exception into a universal rule, and would tell a future mode whose header genuinely belongs in one state only to manufacture a blank row in every other | **Accepted.** My wording, and it contradicted the very next rule in the same file. Rewritten as a question rather than an instruction: a row that must persist while its contents come and go takes a fragment; a header that should not exist takes the conditional. Also corrected there — it is four bands that empty *while loading*, plus Diagram's ordinary state, not five loading bands. |
+| F27 | The circuit-breaker test is untracked, and so is the review prompt — so the protection this stage claims would not have shipped | **Accepted, and it is the second time I have misdeclared untracked files to a review** (Sol caught the same thing on the round-2 plan prompt). Both are in this commit. An untracked test protects nothing, and "untracked: nothing" is a claim to check rather than assert. |
+| F28 | Diagram's fragment rationale overclaims: a conditional `head` would not undo the 2026-08-30 fix, because the caveat still builds a `.band-head` whenever it exists — it removes only the *empty* row | **Accepted.** The fragment is still right, for the plainer reason that this stage preserves the DOM the band already had. Corrected in the file. |
+| F29 | The raw-band inventory is stale: two preview files hand-copy band markup, not five, and the oracle's stage-2 describe still says the bands "have not migrated yet" | **Accepted.** `preview-colour`, `preview-timeline` and `preview-diagram-wait` mount the real panels and only name `.mode-band` in a comment or an override; `preview-illustrated` has no band. Corrected in the plan, the describe and `preview-diagram-wait`'s own comment. |
+
+**Three source-reading tests broke on this migration and all three were right to.** `referee-band-fits`
+slices `App.tsx` by regex in two places, and `referee-how-card` anchors on `className="band-head"`,
+which `ModeSurface` now writes instead of `App.tsx`. Each anchor was updated to the new form with the
+reason recorded beside it.
+
+### Stage 2 code, round 2 — GPT Sol, 2026-09-07
+
+Verdict: **refuse as written**, no P0 or P1, "the runtime migration remains correct". Discovery closes
+here — two rounds, then settle.
+[The review](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-review-stage2-sol-2.md) ·
+[the prompt](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-review-stage2-prompt-2.md).
+**All of F30–F33 are accepted**; nothing is overruled. F25, F26 and F28's primary claim were judged
+fixed, and the two `referee-band-fits` slices sound.
+
+| ID | Finding | Disposition |
+|----|---------|-------------|
+| F30 | F27 is **still** unfixed — the circuit-breaker test and both round-1 review files are still untracked, so the protection the stage claims would not ship | **Accepted, and this is the third time.** I asserted in the round-2 prompt that they were "tracked and in the pending commit"; they were not, because I had written the sentence instead of running `git add`. Fixed for real, and verified with `git ls-files` rather than by claim. The lesson is narrow and worth keeping: *a statement about the repository is a command's output, never a recollection.* |
+| F31 | The repaired `referee-how-card` assertion passes with the button deleted — the migration comment I added **inside the slice** contains the words `RefereeHowButton`, and the end anchor is unchecked so a missing `.ref-brief` reads most of the file | **Accepted. The worst finding of the stage, and I introduced it while fixing F29's neighbour.** A repair that makes a test pass on its own prose is worse than the break it replaced. Now asserts `briefAt > bandAt` and searches for `"<RefereeHowButton"`; watched red with the button removed, where the previous version stayed green. |
+| F32 | The F29 inventory correction is incomplete: the acceptance criterion still says "the five preview copies", and the oracle still says nineteen shapes and "the eleven bands the migration has not touched yet" | **Accepted.** Corrected in all three places. A correction that fixes the paragraph and not the checklist eight lines below it is the same class of error as the thing it was correcting. |
+| F33 | Three comments still assert what the code does not do — including **my own justification for duplicating the `referee-band-fits` regex**, which claimed a shared stale slice would pass vacuously; it would not, because `toContain` on an `undefined` match throws | **Accepted, and the middle one is mine twice over**: I wrote the wrong reason for a decision that was right anyway. The duplication makes a failure *local*; it is not what prevents a vacuous pass — the assertions naming real tags are. Also fixed: Quiz's helper pointing at a test that does not guard its case, and Diagram's surviving claim that an `h2` pushes a third child, when that `h2` went on 2026-09-05. |
+
+On the oracle's sufficiency Sol's answer is **reasoned, and I am taking it**: it is enough as the
+standing guard for the `ModeSurface` seam — root, exact class and name, attribute names, wrapper and
+sibling structure, ordered direct children, loose text, header contents — and it is **not** a full-DOM
+oracle. It cannot see descendants below a non-header direct child, attribute values on children, a
+branch no fixture mounts, portals, or geometry. That is the right boundary for what this seam is, and
+`new-mode.md` now says "surface shape" rather than "every band's markup", which was mine and overstated
+it.
+
+Sol also judged, reasoned, that this stage neither complicates nor helps A6, and that **Escape
+ownership must not move into `ModeSurface`** — it cannot know whether a tooltip, a drawer, a native
+dialog or an editor currently owns the press. That matches the inventory's tier model and stage 3
+keeps ownership local.

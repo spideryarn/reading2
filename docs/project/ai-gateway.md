@@ -104,7 +104,7 @@ like**. Only the first collapsed.
 | | speaks | used by | code |
 |---|---|---|---|
 | **Messages** | Anthropic's Messages protocol, via OpenRouter's Anthropic-compatible endpoint (`/api/v1/messages`, which OpenRouter calls the "Anthropic Skin") | the pipeline stages — hierarchy, labels, arc, tweets, glossary, ideas, quotes, timeline, quiz, sketch | [`src/messages-stream.ts`](../../src/messages-stream.ts) |
-| **chat** | OpenAI's chat/completions shape | explain, chat, search, quiz marking, the three referee runs, PDF reading, and `env-proposal` — the one job with no reader at all, `gjd-remote push-env` asking a cheap model to sort a repo's env key *names* ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)) | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **chat** | OpenAI's chat/completions shape | explain, chat, search, quiz marking, **the quiz's hidden verdict** ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else) — one word, judged from the finished mark, shown to nobody), the three referee runs, PDF reading, and `env-proposal` — the one job with no reader at all, `gjd-remote push-env` asking a cheap model to sort a repo's env key *names* ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)) | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **embeddings** | `/api/v1/embeddings` — OpenAI-shaped, different endpoint | turning a paragraph into a vector | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **images** | `/api/v1/images` — `data: [{b64_json}]`, no `choices` anywhere in it | the Illustrated diagram sub-mode | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **transcription** | `/api/v1/audio/transcriptions` — a base64 recording in, `{text}` out, and a `usage` counting **seconds rather than tokens** | dictation, since 2026-09-07 | [`src/ai-call.ts`](../../src/ai-call.ts) |
@@ -368,6 +368,44 @@ Two smaller costs, both live:
   reports.
 - **One account is one rate-limit budget.** A `labels` fan-out and a reader's chat turn now compete.
   Two keys under one account would separate them, and would give two spend limits; not done yet.
+
+## What an article costs to arrive <a id="what-an-article-costs"></a>
+
+**Measured 2026-09-07**, two fresh ingests against the local database, dollars taken from
+`ai_calls.credits_used_nanos` where `cost_source = 'provider'` — OpenRouter's settled figure, which
+[`src/pricing.ts`](../../src/pricing.ts) makes authoritative and against which per-token arithmetic is
+only a cross-check. Model `anthropic/claude-sonnet-5` at `PRODUCTION_EFFORT` `low`, `toc/7`.
+
+| | blocks | words | hierarchy | labels | **total** |
+|---|---:|---:|---|---|---:|
+| *How to Work Hard* | 96 | 3,341 | **$0.0620** — 1 call, 8,962 in / 4,406 out (1,487 thinking) | $0.0437 — 2 calls | **$0.1057** |
+| *How to Do Great Work* | 330 | 11,890 | **$0.1671** — 1 call, 27,076 in / 11,294 out (4,917 thinking) | $0.2144 — 9 calls | **$0.3815** |
+
+**About a tenth of a cent per block**, and close to linear: 3.4× the blocks cost 3.6× the money.
+
+Three things that table is worth reading carefully for.
+
+- **The tree is ONE model call**, whatever the article's size — 96 blocks and 330 blocks each cost
+  exactly one. Both runs recorded `structureResumed: false`, so neither was a cached zero.
+- **`labels` is the bigger half on a long article and the reader does not wait for it.** It is
+  deliberately not in `DEFAULT_INGEST_STEPS` — it was 79.5–92% of the old combined step's wall clock
+  — so the money between pasting a URL and being able to read is the hierarchy row alone:
+  **6 cents for a short essay, 17 for a long one.**
+- **The long article's labels figure includes a failed attempt**, and that is the honest number
+  rather than a blemish on it. The first pass died on `Nav labels: expected [number, string] pairs`
+  after spending $0.1427 and landing 3 of 6 batches; the retry resumed those three, cost $0.0717 and
+  finished. Per-batch checkpointing is what stopped the first attempt being wasted twice.
+
+**These are credits, not cash.** Per § *What it cost* above, the money that actually leaves the bank
+is about **5.5% higher** than any total this app reports, because OpenRouter earns on the fee when
+credits are bought rather than on a per-token markup.
+
+**Everything else is on demand.** `DEFAULT_INGEST_STEPS` is `fetch, extract, blocks, hierarchy,
+assets`, of which only `hierarchy` calls a model. Glossary, quotes, ideas, timeline, quiz, sketch,
+debate, arc and tweets are each a step a reader *goes to*, and none of them is in the price above.
+
+[open-questions.md § Q7](open-questions.md#q7) is what this answers, and
+[billing.md § The quota](billing.md) is what a reader is charged against it — a slot, not a token.
 
 ## Two spellings of one model, and why both survive
 

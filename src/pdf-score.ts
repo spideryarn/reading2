@@ -44,6 +44,11 @@
  */
 
 import { baselineFor, type Pass0, type PdfRecord, RENDERED } from "./pdf.js";
+import {
+  integrityVerdict,
+  structuralFailureMessages,
+  type IntegrityVerdict,
+} from "./pdf-integrity.js";
 
 /**
  * The smoke test, not the gate — and the difference is worth reading before
@@ -186,6 +191,8 @@ export interface Coverage {
 
 export interface Check {
   ok: boolean;
+  /** Publication safety, separate from the prose written for diagnostics. */
+  verdict: IntegrityVerdict;
   coverage: Coverage;
   /**
    * **The whole chunk, scored as one — and this is what the gate reads.**
@@ -822,14 +829,9 @@ export function check(
   const coverage = coverageOf(records, requested, pass);
   const failures: string[] = [];
 
-  for (const page of coverage.missing) failures.push(`No records at all for page ${page}.`);
-  for (const page of coverage.blank) failures.push(`Records for page ${page}, but none with any text in them.`);
-  for (const page of coverage.impossible) {
-    failures.push(`Records claim page ${page}, and the document has ${pass.pages.length} pages.`);
-  }
-  for (const page of coverage.unrequested) {
-    failures.push(`Records claim page ${page}, which this chunk did not ask for.`);
-  }
+  /* Structural failures are added from their typed form below. `coverage`
+     deliberately still reports blank, scanned and reference pages even where
+     their absence is not a reason to refuse the document. */
 
   /* **Per page, because a folio belongs to a page**, and by the time the chunk
      score below has joined four pages into one string there is no way to tell
@@ -867,15 +869,15 @@ export function check(
    * told on the page.
    */
   const where = requested.length === 1 ? `Page ${requested[0]}` : `Pages ${requested.join(", ")}`;
-  const unchecked = options.unchecked ?? [];
+  const unchecked = [...new Set(options.unchecked ?? [])];
   const checkable = requested.filter(
     (page) => baselineFor(pass, page).length > 0 && !unchecked.includes(page),
   );
   if (unchecked.some((page) => requested.includes(page))) {
     notes.push(
       `Page(s) ${unchecked.filter((p) => requested.includes(p)).join(", ")} were not scored: the ` +
-        `model reports them as a reference list at the end of the document, which it transcribes ` +
-        `only partly. Body text on them is unchecked.`,
+        `source text and transcribed records identify a reference list at the document's end, ` +
+        `which models transcribe only partly. Body text on them is unchecked.`,
     );
   }
 
@@ -891,7 +893,7 @@ export function check(
     scoredPages.flatMap(defusedOn),
   );
 
-  if (overall.recall !== null) {
+  if (overall.recall !== null && !pass.isScan) {
     failures.push(...contentFailures(overall, where, thresholds, pages));
     failures.push(...thinPages(records, checkable, pass, thresholds.recall, overall.recall));
     if (overall.unshown.length) {
@@ -900,9 +902,21 @@ export function check(
       );
     }
   }
+  const verdict = integrityVerdict(records, requested, pass, failures);
+  if (verdict.kind === "structural") {
+    failures.unshift(...structuralFailureMessages(verdict.issues, pass));
+  }
 
-
-  return { ok: failures.length === 0, coverage, overall, pages, scored: checkable, failures, notes };
+  return {
+    ok: verdict.kind === "pass",
+    verdict,
+    coverage,
+    overall,
+    pages,
+    scored: checkable,
+    failures,
+    notes,
+  };
 }
 
 /**

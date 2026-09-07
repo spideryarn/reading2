@@ -59,7 +59,10 @@
  *
  *  - `.cmt-dialog` sits bottom-right and would have been half under the bar.
  *  - the "there is more over here" fade ran to `bottom: 0`.
- *  - `.tooltip` was at z-index 80, under the drawer — see the note on Z below.
+ *  - `.tooltip` was at z-index 80, under the drawer at 95. It is 100 now, and
+ *    the reasoning is beside the rule in styles/tooltip.css § `.tooltip-anchor`
+ *    rather than "the note on Z below", which this line pointed at until
+ *    2026-09-07 and which is not in this file.
  *
  * ## Three kinds of button, said out loud
  *
@@ -160,6 +163,7 @@ import {
   BookA,
   Brain,
   ClipboardCheck,
+  Columns2,
   Command,
   Lightbulb,
   ChevronUp,
@@ -567,6 +571,24 @@ const MODES_UI = [
     mode: "outline",
     icon: Focus,
   },
+  /* Third of the three structural views, and it is here so that the comparison
+     it was built for is three adjacent buttons rather than a hunt across the
+     bar — Greg, 2026-09-06: "that way I can flip back and forth to compare".
+
+     **Most readers never see this row**, because the mode is behind the
+     experimental switch (src/mode-catalog.ts § structure), so the bar an
+     ordinary reader gets is unchanged by it: Hierarchy, then Outline, then
+     Summary, exactly as before. `visibleModes` below is what makes that true,
+     and `tests/dock-experimental-modes.test.tsx` is what keeps it true.
+
+     `Columns2` rather than another tree or list glyph: Hierarchy has `ListTree`
+     and Outline has `Focus`, and the thing this mode is *for* is the pair of
+     linked columns rather than the tree all three read.
+     docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md. */
+  {
+    mode: "structure",
+    icon: Columns2,
+  },
   {
     mode: "summary",
     icon: Layers,
@@ -755,7 +777,7 @@ export type ModesMissingFromDock<
 > = T;
 
 /**
- * **Which of the fourteen the bar actually draws.** Two rules, and the second
+ * **Which of them the bar actually draws.** Two rules, and the second
  * is the one that is easy to lose.
  *
  * 1. Every row that is not experimental.
@@ -776,8 +798,8 @@ export type ModesMissingFromDock<
  * is less surprising and costs nothing.
  *
  * **Hidden means hidden from the controls, not unreachable** — `MODES`, the URL
- * parser, `MODE_LABEL`, `POLICY` and the band branch in App.tsx all stay total
- * at thirteen, which is what makes that sentence true.
+ * parser, `MODE_LABEL`, `POLICY` and the band's own switch all stay total, which is
+ * what makes that sentence true.
  * docs/project/experimental-features.md.
  *
  * Exported for tests/dock-experimental-modes.test.tsx, which is the only way to
@@ -1115,12 +1137,12 @@ function useCommandBarChord(
  *
  * **The token is minted here and not in `onMode`**, which is the older half of
  * this and still the reason the arming is not simply part of the query state:
- * `setMode` is a query-state setter, and Back and Forward move it too. Five of
- * the fourteen modes open on an artefact nobody has paid for yet, and this is
+ * `setMode` is a query-state setter, and Back and Forward move it too. Some of
+ * the modes open on an artefact nobody has paid for yet, and this is
  * what tells that panel the difference between a press and a pasted link.
  * src/web/activation.ts.
  *
- * **One call for all fourteen.** Diagram had an `if` of its own at the press
+ * **One call for every mode.** Diagram had an `if` of its own at the press
  * site until 2026-09-06; the table it needed the branch for is now total and
  * executes its own row, so what a surface hands over is what it knows — the
  * picture a Diagram press would land on. activation.ts § `MODE_TARGET`.
@@ -1261,12 +1283,29 @@ export function Dock({
    * `stopPropagation` stops nothing — the dialog closes underneath the dim
    * anyway. Nothing in the app dispatches such an event today, and that is
    * exactly the sort of thing that stays true until it doesn't.
+   *
+   * **The one thing the drawer yields to is the platform.** A `<dialog>` opened
+   * with `showModal()` is in the top layer, above everything the drawer can
+   * reach, and its Escape is the browser's own close request rather than a
+   * listener — so `stopImmediatePropagation` cannot touch it, and with both up
+   * one press closed the dialog the reader was looking at *and* the drawer
+   * behind it (pair 16). Reachable because the bar sits above the scrim at
+   * z-96, so **Feedback** can be pressed with the drawer open. The same query
+   * `useCommandBarChord` above already makes, twice, for the same reason and
+   * with the same caveat about `.show()`; `useEscapeToClose` makes it too, and
+   * carries the full argument for asking the platform rather than keeping a
+   * registry.
+   *
+   * It does not fire for the command bar, which cannot be open over the drawer:
+   * `useCommandBarChord`'s `show()` shuts the drawer on its way in,
+   * deliberately, and says why.
    */
   const onPanel = drawer?.onPanel;
   useEffect(() => {
     if (!open || !onPanel) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (document.querySelector("dialog[open]") !== null) return;
       e.stopImmediatePropagation();
       onPanel(null);
     };
@@ -1476,7 +1515,7 @@ export function Dock({
           <DockModeLinks slug={slug} search={search} modes={visible} marked={marked} />
         )}
 
-        {/* **The other door into the same fourteen**, immediately after them
+        {/* **The other door into the same modes**, immediately after them
             because that is what it is about — and only where there is a band to
             change, which is the same condition the segment itself is under.
 
@@ -1952,7 +1991,7 @@ function DockModes({
 }
 
 /**
- * **The same fourteen modes, off the reading view** — the metadata and tweets
+ * **The same modes, off the reading view** — the metadata and tweets
  * pages, where there is no band to switch, so the segment degrades to loose
  * links back to the article.
  *
@@ -1961,7 +2000,7 @@ function DockModes({
  * passed to it, so Plain's word survived every narrow window on the reading
  * view and vanished on the page you are most likely to be looking for the way
  * back from (GPT Sol); and it carried a `title` attribute while the segment
- * carried a card, so the same fourteen modes explained themselves one way here
+ * carried a card, so the same modes explained themselves one way here
  * and another there. Sitting next to `DockModes` rather than inline in `Dock`
  * is meant to make the pair visible enough that the next change to one is a
  * change to both. tests/dock-mode-tooltips.test.tsx checks the two arms
@@ -1994,7 +2033,7 @@ function DockModeLinks({
           icon={m.icon}
           label={MODE_LABEL[m.mode]}
           /* `dock-mode` says *this is one of the modes* on a page where they are
-             fourteen loose links rather than one segment, so § the bar's fit
+             one loose link per mode rather than one segment, so § the bar's fit
              ladder can take their labels at the mode rung the way it takes the
              segment's. Without it that rung does nothing on the metadata and
              tweets pages, and the bar there skips straight from every label to
@@ -2011,7 +2050,7 @@ function DockModeLinks({
              nothing, where the segment's button calls `armActivationForMode`. So
              a card saying *"opening it runs a model pass"* would be false here —
              arriving at `?mode=glossary` from this link generates nothing
-             (activation.ts § arriving is not a press). Four of the fourteen said
+             (activation.ts § arriving is not a press). Four of them said
              that in first draft; the rule that replaced it is
              src/mode-catalog.ts § `how`, first bullet. GPT Sol, 2026-09-07.
              docs/plans/260907b-rich-tooltips-on-the-dock-modes.md. */
@@ -2311,7 +2350,7 @@ function DockLink({
    * So the `title` arm is a **debt marked in the type**, not a choice. Its
    * three remaining callers are Comments, Tweets and Metadata — the buttons in
    * this bar that are not modes, and which each need their own verified second
-   * sentence before they can move. The fourteen loose mode links took the card
+   * sentence before they can move. The loose mode links took the card
    * arm on 2026-09-07 and the shape is here so the next three can, one at a
    * time, without a fifth prop.
    */
@@ -2323,7 +2362,7 @@ function DockLink({
    * Keep this label on every rung of § the bar's fit ladder — `keepLabel` in
    * `MODES_UI`, which is Plain, the way out.
    *
-   * It only reaches here off the reading view, where the modes are fourteen
+   * It only reaches here off the reading view, where the modes are
    * loose links rather than a segment. Passing it was missed until GPT Sol
    * found it: the word survived every narrow window on the reading view and
    * vanished on the metadata page, which is the page you are *most* likely to

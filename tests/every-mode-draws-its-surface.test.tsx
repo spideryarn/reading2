@@ -391,8 +391,33 @@ const DEBATE: Debate = {
         articleReferenceQuote: "The instrument was built",
         /* The witness is the same string as `articleReferenceQuote` — that is
            how src/debate.ts builds a `named` signal, and a fixture that split
-           them would describe a row the pipeline cannot produce. */
-        identifies: [{ kind: "named", by: "title", witness: "The instrument was built" }],
+           them would describe a row the pipeline cannot produce.
+
+           **The `quoted` signal beside it is what keeps this row on screen.** The
+           identification bar landed on 2026-09-06 and this fixture on the same
+           day, on separate branches; the signal was added on 2026-09-07, when
+           the merge first put the two in one tree and the band came out empty.
+           The bar defaults to `quoted` — measured on the corpus, because a page that
+           merely shares a title may be about a same-named successor — so a
+           `named`-only row is hidden by design, and this fixture drew a band with
+           nothing in it but chrome: exactly the F6 failure this sweep was
+           calibrated against, reached by a real change rather than by a mutation.
+
+           The quote is a genuine run of `PARAGRAPH`, and its block is
+           `spya-bbbbbb` rather than the `h1`, because quotation evidence is taken
+           from prose only (GPT Sol's F1): a title of eight words was otherwise
+           evidence for itself. The two ratios are what `shingleOverlap` returns
+           for one window of a short article. */
+        identifies: [
+          {
+            kind: "quoted",
+            quote: "instrument was built before anybody could say what it would measure",
+            blockId: "spya-bbbbbb",
+            coverage: 0.5,
+            density: 0.2,
+          },
+          { kind: "named", by: "title", witness: "The instrument was built" },
+        ],
       },
     ],
     counts: COUNTS,
@@ -980,6 +1005,8 @@ const SPENDS: Record<Mode, Spend> = {
   hierarchy: { kind: "none", why: "the gist columns come from the tree that is already there" },
   /* The same tree, one nested list. */
   outline: { kind: "none", why: "the nested list is that same tree; no model call" },
+  /* And the same tree a third time, in linked columns. */
+  structure: { kind: "none", why: "the columns are that same tree; no model call" },
   /* And the same gists again, in a band instead of in the columns. */
   summary: { kind: "none", why: "the gists are the tree's own; no artefact behind them" },
   /* The five artefact modes, each arming its own name. */
@@ -1178,6 +1205,30 @@ const DRAWS: Record<Mode, Draws> = {
      the columns beside the prose as well, so a gist would pass over an empty
      band the moment the columns happened to be open. */
   outline: { kind: "band", where: ".mode-band.outln", says: OUTLINE_ROW },
+  /* **The part's title, and it is `OUTLINE_ROW` because the fixture has one
+     depth-1 node and that is its title** — not because this row was copied from
+     the one above. The two modes draw the same word here and the selectors are
+     what tell them apart, which is the scope this table's `where` exists to
+     provide: Outline's list and Structure's column A are the same tree read two
+     ways, so on a one-part fixture they necessarily agree about the word.
+
+     **This row can only ever prove column A**, and that is a limit of the
+     fixture rather than of the table. The tree above has a root and one part and
+     no section, so there is no depth-2 title to name and no reader position that
+     puts column B on screen; a Structure that never rendered its right-hand
+     column would satisfy this row exactly. Widening the fixture would change
+     what Hierarchy, Outline and Summary draw in the same run, so the other half
+     is asserted in a file of its own —
+     tests/structure-panel-draws-both-columns.test.tsx, which mounts the panel on
+     a two-part tree and reads both columns by position. GPT Sol's review of the
+     plan, finding 8.
+
+     Structure draws `aria-hidden` measuring copies of both its columns, exactly
+     as Outline does, so this row depends on `readable()` stripping them — the
+     trap documented on `BAND_SAYS` in tests/public-network-trace.test.tsx. Read
+     raw, a `textContent` assertion here would be satisfied by a panel whose
+     visible columns rendered nothing at all. */
+  structure: { kind: "band", where: ".mode-band.struct", says: OUTLINE_ROW },
   /* The root's own gist, drawn as the band rather than as a column. */
   summary: { kind: "band", where: ".mode-band.summ", says: ROOT_GIST },
   /* An entry's name, which is what a closed row shows — a canary the panel

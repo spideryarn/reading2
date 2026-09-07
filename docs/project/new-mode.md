@@ -65,6 +65,31 @@ Then the residue, which is why this page exists:
   for the modes already in it, and since 2026-09-06
   [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx)
   § `SPENDS` for a new one — an independently written table of what each press buys.*
+- **The band itself**: render it with
+  [`ModeSurface`](../../src/web/ModeSurface.tsx), which owns the `<aside class="mode-band">`, its
+  **required** `aria-label`, the optional `head` and `foot` slots, and nothing else. Do not
+  hand-write the `<aside>` — twelve panels did until 2026-09-07, and the four places that still do
+  are documented exceptions rather than precedents: `FeatureBoundary`'s fallback (a deliberate
+  circuit breaker — read the comment there before you touch it), the `/design` band specimen, and
+  the two demo shells in `preview-sketch.tsx` and `preview-chat-markdown.tsx`.
+  **Decide whether your header row is meant to persist when it has nothing in it**, because
+  `ModeSurface` renders no header element at all for an absent, `null` or boolean `head`:
+  - a row that should **stay put while its contents come and go** — because something below it
+    would otherwise shift, or because it is the only line that cannot wrap — takes an
+    always-present fragment, `head={<>{artefact && <X/>}</>}`;
+  - a header that genuinely **should not exist** in a state takes the conditional directly,
+    `head={artefact && <X/>}`, and no empty row is drawn.
+
+  Five existing bands are in the first camp and it is not obvious from their code: Glossary, Ideas,
+  Quotes and Timeline all empty their header while the artefact loads, and **Diagram's is empty in
+  its ordinary state** — its only header child is a caveat that draws on the projected pictures,
+  while Sketch is the default. Those five were migrated as fragments to keep exactly the row they
+  already had. Do not copy the fragment by reflex; copy the question.
+  [260906f](../plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md).
+  *[`tests/mode-surface-changes-no-markup.test.tsx`](../../tests/mode-surface-changes-no-markup.test.tsx),
+  which pins each band's **surface shape** — its root, its ordered direct children, its header's
+  children — against what it was before the surface existed. Not a full-DOM oracle: it does not see
+  descendants below a direct child, attribute values on children, or a branch no fixture mounts.*
 - **The band's chrome**: the scroller is documented in
   [`styles/mode-band.css`](../../src/web/styles/mode-band.css) § mode band. A `.band-head` title row is **optional, and
   the default is not to have one** — since 2026-09-05 it must not carry the mode's own name, because
@@ -291,6 +316,30 @@ list is the checklist above with a compiler behind it. Measured 2026-09-06, on
 | [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `band()` | the band, or an explicit `null` |
 | [`src/web/reader/passages.ts`](../../src/web/reader/passages.ts) § `selectPassages` | the passage slot, or `NO_FOUND` |
 | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) § `BAND_SAYS` | what a visitor's band says, asserted against the network |
+
+**Re-measured 2026-09-07, adding `structure`: seven source errors and four test errors.** The list
+above is unchanged and still complete for `src/`; what moved is the test half, because two tables
+written since have the same shape and the same purpose:
+
+| Also red | What it is asking for |
+|---|---|
+| [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx) § `SPENDS` **and** § `DRAWS` | two errors, not one — what the press buys, and what the band draws |
+| [`tests/command-bar.test.tsx`](../../tests/command-bar.test.tsx) § `GENERATES` | whether the bar marks the row `generates`, checked against `MODE_TARGET` from the other side |
+
+That is the mechanism working rather than drifting: each new table is an independently written
+`Record<Mode, …>`, so every one of them adds a place a fifteenth mode has to be decided rather than
+defaulted. **The count is the thing to re-measure, never the thing to trust** — it is a fact about
+today's tables, not a rule, which is why it is written with its date each time.
+
+**And four more tests go red that the typecheck cannot see**, because their tables are keyed on
+`string` or written as a `case` list rather than as a `Record<Mode, …>`. Running the suite is the
+only way to find them, so run it before believing the compiler was the whole checklist:
+
+| Also red, without a type error | What it is asking for |
+|---|---|
+| [`tests/visitor-gaps.test.ts`](../../tests/visitor-gaps.test.ts) § `ALWAYS_FREE` **and** the gap walk | two failures — whether a visitor is short of anything, said twice from two directions |
+| [`tests/page-title.test.ts`](../../tests/page-title.test.ts) § `named` | the word the tab says, checked against `MODE_LABEL` from the other side |
+| [`tests/styles-entry-is-imports-only.test.ts`](../../tests/styles-entry-is-imports-only.test.ts) § `MANIFEST` | **where in the cascade the mode's stylesheet loads**, if it has one. The order *is* the cascade, so a new sheet has to say where it goes and what it sits between |
 
 One test also goes red without the typecheck being run at all:
 [`tests/every-mode-says-which-passages-it-marks.test.ts`](../../tests/every-mode-says-which-passages-it-marks.test.ts)

@@ -46,6 +46,7 @@ import { BlockNav, nudgeTo } from "./BlockNav.js";
 import { BlockRef } from "./BlockRef.js";
 import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
+import { ModeSurface } from "./ModeSurface.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
 import type { BlockId } from "../types.js";
 import { useRenderCount } from "./perf.js";
@@ -167,30 +168,47 @@ export function IdeasPanel({
     );
 
   return (
-    <aside className="mode-band gloss ideas" aria-label="Ideas">
-      <div className="band-head">
-        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
-            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-            stays for the count below it. */}
-        {ideas && (
-          <span className="gloss-count">
-            {all.length} {all.length === 1 ? "idea" : "ideas"}
-          </span>
-        )}
-        {/* A label rather than a control, and on the head line rather than in a
-            banner: it is provenance, not a warning. It matters more here than
-            anywhere else it appears — a changed profile does not merely re-pitch
-            these, it changes what "assumed" means. */}
-        {/* Provenance about the owner's own run: `profileHash` never leaves the
-            server, so a visitor sees none of it. src/public-types.ts. */}
-        {ideas && owner && (
-          <WrittenForYou
-            written={owner.profiled}
-            changed={owner.profileChanged}
-            slug={owner.slug}
-          />
-        )}
-      </div>
+    <ModeSurface
+      label="Ideas"
+      feature="gloss ideas"
+      /* **A fragment, so the row survives an absent artefact.** Both children
+          are gated on `ideas`, so the header is empty while the list is coming
+          — and `head={ideas && …}` would hand the surface `null`, which draws
+          no `.band-head` at all and takes a row off the screen. */
+      head={
+        <>
+          {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+              docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+              stays for the count below it. */}
+          {ideas && (
+            <span className="gloss-count">
+              {all.length} {all.length === 1 ? "idea" : "ideas"}
+            </span>
+          )}
+          {/* A label rather than a control, and on the head line rather than in
+              a banner: it is provenance, not a warning. It matters more here
+              than anywhere else it appears — a changed profile does not merely
+              re-pitch these, it changes what "assumed" means. */}
+          {/* Provenance about the owner's own run: `profileHash` never leaves
+              the server, so a visitor sees none of it. src/public-types.ts. */}
+          {ideas && owner && (
+            <WrittenForYou
+              written={owner.profiled}
+              changed={owner.profileChanged}
+              slug={owner.slug}
+            />
+          )}
+        </>
+      }
+      /* Below the list, not above it: this is the thing you reach for after
+          reading them and disagreeing, not before. Pinned under the scroller
+          through `foot`, with the guard it had as a trailing child. */
+      foot={
+        ideas && (owner === null || owner.status === "ready") && owner && !owner.stale && !owner.outdated ? (
+          <div className="ideas-again">{run("Find them again", true)}</div>
+        ) : null
+      }
+    >
 
       {owner?.error && <p className="gloss-error">{owner.error}</p>}
 
@@ -310,15 +328,9 @@ export function IdeasPanel({
               );
             })}
           </div>
-
-          {/* Below the list, not above it: this is the thing you reach for
-              after reading them and disagreeing, not before. */}
-          {owner && !owner.stale && !owner.outdated && (
-            <div className="ideas-again">{run("Find them again", true)}</div>
-          )}
         </>
       )}
-    </aside>
+    </ModeSurface>
   );
 }
 

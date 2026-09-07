@@ -268,6 +268,30 @@ export function buildLineup(
  * - **Being informative is not the same as being useful here.** A line that
  *   answers its own question has told the reader everything and given them no
  *   reason to read. That is the trap anchors 3 and 5 are built out of.
+ *
+ * ## The `demand` axis, added 2026-09-07, and why its absence was a hole
+ *
+ * Every variant's prompt forbids a **lookup** — *"never 'which', 'who', or
+ * anything a single fact settles"* — and until this axis existed, **nothing in
+ * this rubric asked about that**. So the 2026-09-05 run put anchor 2, the
+ * designated lookup, 4th / 2nd / 4th of twelve with a perfect `5,5,5,5,5` and
+ * leakage 1, and the calibration gate failed on it. The obvious reading was that
+ * the anchor was mislabelled; the truer one is that **the judge was being asked
+ * to reject a failure it had never been told to look for**, and a rewritten
+ * anchor alone would have bought a passing gate over a judge still preferring
+ * polished lookups. ⟨GPT Sol, F3 on 260907d — the strongest finding of that
+ * review, and the reason this axis exists rather than only the new anchor.⟩
+ *
+ * **It does not penalise a straight question**, which would undo the first of
+ * the two guarantees above: *"is computation sufficient for consciousness?"* is
+ * yes/no and demands the whole argument, while *"how many arguments are
+ * there?"* is neither and demands nothing. The axis is about what the reader
+ * must **do**, not about the line's grammar or its quality — a well-made
+ * question about exactly the right topic can still score 1.
+ *
+ * **It applies to every arm equally**, which is what separates adding a
+ * criterion from rigging one: the rule it measures is in every variant's own
+ * prompt, including the incumbent's and the pinned pre-V4 control's.
  */
 export const RUBRIC = `You are judging candidate summary lines for the sections of an article, one
 section at a time. For each section you get the prose it covers, then two
@@ -312,6 +336,14 @@ QUESTION axes
   simplicity    plain and readable at a glance
   leakage       how much of the answer it gives away. LOWER IS BETTER:
                 1 = tells you nothing you would have read for, 5 = answers itself
+  demand        does answering it require FOLLOWING the section's argument, or
+                would retrieving one fact or one list from the prose settle it?
+                5 = you have to read the reasoning, 1 = a single lookup answers
+                it. A well-made question about exactly the right topic can still
+                score 1: this is about what the reader must DO, not about how
+                good the line is. A yes/no question is not automatically low —
+                "is computation sufficient for consciousness?" demands the
+                argument; "how many arguments are there?" does not.
   shapeHint     "none" if it makes no claim about the shape of the answer,
                 "true" if it claims a count or kind the prose supports,
                 "false" if it claims one the prose does not support,
@@ -340,7 +372,7 @@ Answer in JSON only, no prose outside it:
                   "ranking": ["<best gist label>", "…"]},
     "questions": {"axes": {"Q1": {"fidelity": 3, "distinctive": 3, "triage": 3,
                                   "orientation": 3, "simplicity": 3,
-                                  "leakage": 2, "shapeHint": "none"}},
+                                  "leakage": 2, "demand": 3, "shapeHint": "none"}},
                   "ranking": ["<best question label>", "…"]},
     "rowForm": "gist" | "question" | "both",
     "why": "<one sentence on what separated the top from the bottom>"

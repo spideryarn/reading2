@@ -243,7 +243,7 @@ describe("an article nobody has written about", () => {
       expect(row.applies.length).toBeGreaterThan(0);
       /* The claim quote really is in the block it names — asserted here rather
          than trusted, because that is the whole content of the rule. */
-      expect(blockText.get(row.blockId)).toContain(row.claimQuote);
+      expect(blockText.get(row.blockId)?.text).toContain(row.claimQuote);
     }
     expect(group.rows[1]?.limits).toBeTruthy();
     /* `limits` is optional and its absence must not be filled in: a mandatory

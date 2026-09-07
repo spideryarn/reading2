@@ -44,8 +44,10 @@
  * structure, titles, gists and questions in **one** long-context response and
  * this asks only for wording over a fixed tree. Nothing here sees an interaction
  * between the new wording and the structure the model proposes in the same
- * breath, and nothing here touches `EXPAND_SYSTEM`, which has no question field
- * at all.
+ * breath, and nothing here touches `EXPAND_SYSTEM`. That prompt gained its own
+ * QUESTIONS block on 2026-09-07 (`expand/4`), carrying V4's rules — so the
+ * cascade is no longer a hole in the product, but it is still a hole in this
+ * harness, and no result from here may be read as covering it.
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -209,7 +211,7 @@ function corpusFor(o: Options) {
  * directory name and the first line of its report.
  */
 function stubGenerator(arm: ArmSpec, silent: readonly string[]): Generator {
-  return async ({ user }) => {
+  return async ({ system, user }) => {
     if (silent.includes(arm.name)) throw new Error(`--stub-silent ${arm.name}: this arm's call was made to fail`);
     /* Only the rows the outline actually asks for — the stub has to obey the
        same instruction the arms do, or it would answer for the context rows and
@@ -219,7 +221,20 @@ function stubGenerator(arm: ArmSpec, silent: readonly string[]): Generator {
     for (const [id, depth] of ids) {
       const entry: { gist: string; question?: string } = { gist: `STUB gist for ${id} from arm ${arm.name}.` };
       if (depth <= 1) {
-        entry.question = arm.questionRule === "trailing-hint"
+        /* **Keyed on the block this arm actually sends**, which is the only
+           thing that stays true as the lineup changes.
+
+           It was `arm.questionRule`, which stopped discriminating the moment V4
+           shipped and production took its patch; the fix for that keyed on
+           `arm.variant === "V4"`, and that was wrong within the hour, because
+           removing the `v4` arm left **no** arm with that variant while five
+           arms carry V4's block through `productionQuestions()`. So `--stub`
+           claimed to exercise the trailing-hint seam and exercised it zero
+           times. ⟨GPT Sol, F12, 2026-09-07.⟩
+
+           Reading the system prompt cannot go stale that way: whichever arm
+           sends the shape, the stub answers in it. */
+        entry.question = system.includes('"<topic> — <question>? (<shape hint>)"')
           ? `STUB topic — what does ${id} argue? (2 reasons)`
           : `STUB topic (2 reasons): why does ${id} argue what it argues?`;
       }
@@ -292,7 +307,7 @@ interface RunFile {
 const CLAIM_LIMITS = [
   "Every arm is a `bakeoff`, the control included: production asks for structure, titles, gists and questions in ONE long-context response, and this asks only for wording over a fixed tree.",
   "Nothing here sees an interaction between the new wording and the structure the model proposes in the same breath — that is what the cheap design buys its cheapness with.",
-  "Nothing here touches `EXPAND_SYSTEM` (src/hierarchy-expand.ts), which has no question field at all, so no result covers the deepening cascade.",
+  "Nothing here touches `EXPAND_SYSTEM` (src/hierarchy-expand.ts), so no result covers the deepening cascade. That prompt gained its own QUESTIONS block on 2026-09-07 (`expand/4`), carrying V4's rules — but nothing in this harness measures it.",
   "A win is a reason to put a variant in front of Greg RENDERED (the plan's stage 2), never a reason to ship it.",
   "Depth-2 gists at two sentences are deferred, not measured: they raise TOKENS_PER_NODE and break evals/hierarchy-structure's baseline.",
 ];
@@ -552,6 +567,12 @@ async function commandJudge(o: Options): Promise<void> {
   console.log(`\nCalibration: ${verdict.passed ? "PASSED" : "FAILED"} over ${verdict.checked} lineup(s)`);
   for (const line of [...verdict.malformed, ...verdict.inversions, ...verdict.unranked]) console.log(`  - ${line}`);
   if (failures.length) console.log(`\n${failures.length} judging call(s) failed.`);
+  /* The same reasoning as at the end of `commandReport`, one command earlier:
+     this is where the gate is actually computed, and a caller that stops after
+     `judge` never reaches `report` to find out. Both commands raise it, because
+     a check satisfied by one of two exits is the shape the coverage guard in
+     `tests/summaries-eval.test.ts` was written after. */
+  if (!verdict.passed) process.exitCode = 1;
 }
 
 /* --------------------------------------------------------------- report --- */
@@ -619,6 +640,43 @@ function shapeFactsTable(runFile: RunFile, cells: readonly Cell[], say: Say): vo
  * floor as a difference of means that cancels, were the two halves of one bad
  * test.
  */
+/**
+ * **The judge's own wobble, printed whatever the gate said.**
+ *
+ * `judgeInstability` re-judges the *same frozen output* under a fresh label
+ * shuffle, so it measures the instrument and not the arms. That makes it the one
+ * number worth having on a run whose gate failed — and until 2026-09-07 it was
+ * inside `rankingSection`, which a failed gate suppresses whole. So the
+ * 2026-09-05 run reported *"the judge is measuring something other than the
+ * door-or-wall criterion"* while saying nothing at all about whether the judge's
+ * ordering was even repeatable, which is the first thing anyone deciding what to
+ * do next would want.
+ *
+ * **It carries no ranking**, deliberately: no arm is named, so this cannot become
+ * a leader by the back door on a run that was not allowed to name one.
+ */
+function instabilitySection(judgedFile: JudgedFile, say: Say): void {
+  say();
+  say(`## Judge instability — reported anyway, because it is about the judge and not the arms`);
+  say();
+  for (const which of ["questions", "gists"] as const) {
+    const instability = judgeInstability(judgedFile.judged, which);
+    say(
+      `- **${which}**: ` +
+        (instability
+          ? `${instability.ranks.toFixed(2)} ranks — how far an arm's MEAN rank moves between ${instability.repeats} repeats. ` +
+            `Per-lineup churn: ${instability.perLineup.toFixed(2)} over ${instability.comparisons} comparisons.`
+          : "not measured — fewer than two repeats"),
+    );
+  }
+  say();
+  say(
+    `A small figure here means the judge orders the real arms consistently, which is **not** the same as ordering them ` +
+      `correctly — that is what the calibration gate above is for, and it did not pass. A large one means the gate failure ` +
+      `may be noise rather than a mislabelled anchor.`,
+  );
+}
+
 function rankingSection(runFile: RunFile, judgedFile: JudgedFile, which: "questions" | "gists", clean: boolean, say: Say): void {
   const ranks = meanRanks(judgedFile.judged, which);
   const floor = generationNoiseFloor(judgedFile.judged, which);
@@ -823,6 +881,15 @@ async function commandReport(o: Options): Promise<void> {
         `**No ranking is reported.** The judge did not put every anchor below every real line, so it is measuring ` +
           `something other than the door-or-wall criterion and its ordering of the real arms says nothing. This is a result, not a failure of the run.`,
       );
+      /* **Judge instability is about the JUDGE, so a failed gate is exactly
+         when it is worth having**, and until 2026-09-07 it went down with the
+         whole ranking section. The 2026-09-05 run therefore reported a gate
+         failure and no measurement at all of whether the judge's ordering of
+         the real arms was even stable — which is the first thing you would want
+         to know before deciding the anchor was at fault. It says nothing about
+         the arms, so printing it here cannot become a ranking by the back
+         door. ⟨GPT Sol, F3.⟩ */
+      instabilitySection(judgedFile, say);
     } else {
       for (const which of ["questions", "gists"] as const) {
         rankingSection(runFile, judgedFile, which, coverage.clean, say);
@@ -841,10 +908,21 @@ async function commandReport(o: Options): Promise<void> {
   say(`## Arms needing a change to production code if they win`);
   say();
   say(runFile.armsNeedingCodeChange.length ? runFile.armsNeedingCodeChange.join(", ") : "(none)");
-  say(`(\`v4\` puts the shape hint after the question mark, which \`questionFor\` would turn into "…? (4 arguments)?" — variants.md § The code change V4 needs.)`);
+  say(`(\`v4\` puts the shape hint after the question mark, and \`questionFor\` used to turn that into "…? (4 arguments)?". It shipped as \`toc/7\` on 2026-09-07 and production now carries the patch — variants.md § The code change V4 needs.)`);
 
   await writeFile(path.join(dir, "results.md"), `${out.join("\n")}\n`, "utf-8");
   if (exitCodeFor(coverage) === 1) process.exitCode = 1;
+  /* **A failed gate is a run that produced no usable ranking, and the shell has
+     to be told.** Until 2026-09-07 it was a printed sentence and nothing else:
+     `commandJudge` never touched `process.exitCode` and this line's only source
+     was coverage, so a wrapper, a cron or a `&&` read *"No ranking is
+     reported"* as success. That is the same category `exitCodeFor` already
+     raises for — *the run cannot name a leader* — so it raises the same code.
+
+     It does **not** mean the run went wrong. `results.md` says in as many words
+     that a gate failure is a result; the exit code says only that there is no
+     answer in the file, which is exactly what a caller needs to branch on. */
+  if (judgedFile && !judgedFile.calibration.passed) process.exitCode = 1;
 }
 
 /* ----------------------------------------------------------------- main --- */

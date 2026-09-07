@@ -85,10 +85,34 @@ experiment and a demo. Explicitly *not* time-in-app or articles-completed
 
 ---
 
-## Q7 — Which model, and how much does a tree cost? <a id="q7"></a>
+## Q7 — Which model, and how much does a tree cost? — **answered 2026-09-07** <a id="q7"></a>
 
-Still unmeasured **for the tree**, but no longer unmeasured for everything. A ~54-minute article is
-on the order of 400 blocks; bottom-up generation is roughly one call per node plus one per leaf batch.
+**Sonnet 5, and about six cents.** Measured on two fresh ingests against the local database, with the
+dollars taken from the ledger rather than from arithmetic —
+[ai-gateway.md § What an article costs to arrive](ai-gateway.md#what-an-article-costs) is the answer
+and the method; the headline is here because eight things link to this anchor.
+
+| | blocks | words | **hierarchy** | labels | total |
+|---|---:|---:|---:|---:|---:|
+| *How to Work Hard* | 96 | 3,341 | **$0.0620** | $0.0437 | $0.1057 |
+| *How to Do Great Work* | 330 | 11,890 | **$0.1671** | $0.2144 | $0.3815 |
+
+About **a tenth of a cent per block**, and close to linear. **The tree is one model call** whatever
+the size, and it is the only paid step in the default ingest — so the money between pasting a URL and
+being able to read is the hierarchy column alone. `labels` is bigger on a long article and the reader
+does not wait for it. These are credits; the bank sees about 5.5% more.
+
+**Two things this question assumed that turned out to be wrong**, which is most of why it stayed open:
+
+- *"bottom-up generation is roughly one call per node plus one per leaf batch"* — no. It is **one
+  long-context call for the whole tree**, and has been since the structure prompt was written. The
+  per-node estimate would have been an order of magnitude out on a long article.
+- *"still unmeasured for the tree"* — it needed no experiment built for it in the end.
+  `src/pipeline.ts` already logged the four token counters per step, and `ai_calls` already held the
+  settled cost, so the answer was two ingests and a query.
+
+The 2026-08-26 caching numbers below are kept because they answer a different question — the
+per-token economics of a *search* pass, and what a warm prefix saves.
 
 What 2026-08-26 established, from `npm run eval:caching` against the live API
 ([evals/results/](../../evals/results/README.md)) — these are *search* calls, not tree generation, so
@@ -104,9 +128,9 @@ the prefix is cached. A tree is more than one pass — the structure call plus a
 section — but the unit price is now known rather than guessed, and
 [prompt-caching.md](prompt-caching.md) means the repeat passes are the cheap ones.
 
-**What is left:** log a real ingest end to end. `src/pipeline.ts` already logs `inputTokens`,
-`outputTokens`, `cacheReadTokens` and `cacheWriteTokens` per step, so the number now falls out of one
-run rather than needing an experiment built for it.
+**Nothing is left** — that was done on 2026-09-07 and is the table at the top of this question.
+[260907d](../plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md) § *Stage 5* has the
+commands, the two slugs, and the labels failure that the long article's figure includes.
 
 ---
 
@@ -185,7 +209,7 @@ has the detail.
 Article figures currently sit on `--figure-sheet` **unconditionally** — every image in the reading
 column gets an off-white ground, because a transparent PNG carrying black ink is otherwise invisible
 on our page ([design-css-overview.md § the light sheet under a
-figure](design-css-overview.md#content-that-cannot-be-read-at-all-the-light-sheet-under-a-figure),
+figure](typography.md#content-that-cannot-be-read-at-all-the-light-sheet-under-a-figure),
 [../plans/260828az-figures-in-the-prose.md](../plans/260828az-figures-in-the-prose.md)). Greg, 2026-08-29:
 
 > Perhaps this could be part of the post-processing that the LLM does after Readability to notice
