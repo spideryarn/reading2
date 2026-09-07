@@ -39,7 +39,7 @@
  * would be machinery for a defect no reader can reach. The asymmetry is the
  * finding, not an omission.
  */
-import { act } from "react";
+import { StrictMode, act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -52,9 +52,24 @@ vi.mock("../src/web/useProfile.js", () => ({
   useHasProfile: () => false,
   useProfile: () => ({ profile: null, loaded: true, save: () => {}, error: null }),
 }));
+/**
+ * A conversation the stand-in already has, so the `thread` arm renders its own
+ * composer. With `threads: []` it renders a still-arriving placeholder instead,
+ * and a test about where the caret goes would have had nowhere for it to go —
+ * which is how the first version of the hand-over test failed, usefully.
+ */
+const EXISTING = {
+  id: "spya-oldthr",
+  kind: "chat" as const,
+  title: "An earlier conversation",
+  createdAt: "2026-08-27T10:00:00.000Z",
+  updatedAt: "2026-08-27T10:00:00.000Z",
+  messages: [],
+};
+
 vi.mock("../src/web/useChat.js", () => ({
   useChat: () => ({
-    threads: [],
+    threads: [EXISTING],
     loaded: true,
     loadFailed: false,
     recovering: new Set<string>(),
@@ -129,6 +144,20 @@ function mount(target: Parameters<typeof ChatDialog>[0]["target"] = DRAFT) {
   );
 }
 
+/**
+ * Close the panel and let the restore land.
+ *
+ * The restore is deferred by one microtask on purpose — see `ChatDialog.tsx`
+ * § deferred, because a cleanup is not proof of an unmount. So a test that
+ * asserted immediately after `unmount()` would be asking before the answer
+ * exists, and would go green again the day the deferral was removed for the
+ * wrong reason.
+ */
+async function close() {
+  act(() => root.unmount());
+  await Promise.resolve();
+}
+
 beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
@@ -142,19 +171,19 @@ afterEach(() => {
 });
 
 describe("closing the chat panel gives the keyboard back", () => {
-  it("returns focus to the control that opened it, when that control is still there", () => {
+  it("returns focus to the control that opened it, when that control is still there", async () => {
     const { more } = article();
     more.focus();
     expect(document.activeElement).toBe(more);
 
     mount();
-    act(() => root.unmount());
+    await close();
 
     expect(document.activeElement).toBe(more);
   });
 
   /** The ordinary path, not the edge case: Help closes the disclosure it lives in. */
-  it("falls back to the passage's own gutter button when the opener has been unmounted", () => {
+  it("falls back to the passage's own gutter button when the opener has been unmounted", async () => {
     const { help, more } = article();
     help.focus();
 
@@ -162,7 +191,7 @@ describe("closing the chat panel gives the keyboard back", () => {
     /* What `BlockGutter`'s help handler does: `setOpen(false)` collapses the
        disclosure and the pressed button goes with it. */
     help.remove();
-    act(() => root.unmount());
+    await close();
 
     expect(document.activeElement).toBe(more);
   });
@@ -174,7 +203,7 @@ describe("closing the chat panel gives the keyboard back", () => {
    * distinction for the same reason, TitleEditor.tsx § the pencil and the input
    * swap.
    */
-  it("leaves focus alone when it had already gone somewhere real", () => {
+  it("leaves focus alone when it had already gone somewhere real", async () => {
     const { help } = article();
     help.focus();
     mount();
@@ -182,7 +211,7 @@ describe("closing the chat panel gives the keyboard back", () => {
     const elsewhere = document.createElement("button");
     document.body.append(elsewhere);
     elsewhere.focus();
-    act(() => root.unmount());
+    await close();
 
     expect(document.activeElement).toBe(elsewhere);
     elsewhere.remove();
@@ -250,5 +279,84 @@ describe("opening an existing conversation", () => {
     mount(THREAD); // same root, same mounted component, new target prop
 
     expect(document.activeElement).not.toBe(host.querySelector(".chat-dialog-close"));
+  });
+
+  /**
+   * **Sending the first question does not cost the reader the caret.** The
+   * draft arm's composer is unmounted by the swap, so before this the reader
+   * pressed Enter and landed on `<body>` with the panel still open in front of
+   * them. Recorded as a known gap first and left alone; GPT Sol's stage-5a
+   * review said that was the wrong call, and it was — moving focus to the
+   * composer's *replacement* preserves an interaction the reader was already in,
+   * rather than applying the "focus every reopened thread" policy that Greg's
+   * 2026-08-26 decision rules out.
+   */
+  it("hands the caret to the thread's own composer when the reader was typing in the draft's", () => {
+    mount(DRAFT);
+    const draftComposer = host.querySelector("textarea");
+    if (!draftComposer) throw new Error("no composer");
+    draftComposer.focus();
+
+    mount(THREAD);
+
+    const after = host.querySelector("textarea");
+    expect(after).not.toBeNull();
+    expect(document.activeElement).toBe(after);
+  });
+
+  /** The condition is "was already typing", not "a swap happened". */
+  it("leaves focus alone across the same swap when the reader was not typing", () => {
+    const { more } = article();
+    mount(DRAFT);
+    more.focus();
+
+    mount(THREAD);
+
+    expect(document.activeElement).toBe(more);
+  });
+});
+
+/**
+ * ## Under StrictMode, which is what the app actually runs
+ *
+ * `main.tsx` wraps the whole reader in `<StrictMode>`, and StrictMode runs every
+ * effect **setup → cleanup → setup** on mount. So the restore cleanup above
+ * fires once while the dialog is still perfectly well mounted, and if that put
+ * focus back on the opener, the composer would be left un-focused for a reader
+ * who had just pressed Help — a regression introduced *by the fix*, invisible to
+ * every test that does not use StrictMode.
+ *
+ * GPT Sol raised it on the stage-5a review. This is the test that says whether
+ * it is real.
+ */
+describe("under StrictMode, which is what the app actually runs", () => {
+  it("still leaves the draft composer holding the keyboard", async () => {
+    const { help } = article();
+    help.focus();
+    act(() =>
+      root.render(
+        createElement(
+          StrictMode,
+          null,
+          createElement(ChatDialog, {
+            slug: "a-piece",
+            at: null,
+            blocks: new Map([[BLOCK, "a science of bumps"]]),
+            target: DRAFT,
+            onJump: () => {},
+            onClose: () => {},
+            onThread: () => {},
+            onOpenFull: () => {},
+            onCreated: () => {},
+            onDropped: () => {},
+          }),
+        ),
+      ),
+    );
+    /* **The await is not decoration.** The restore is deferred by a microtask, so
+       asserting synchronously here would pass whether the fix worked or not —
+       which it did, until a mutation refused to redden and said so. */
+    await Promise.resolve();
+    expect(document.activeElement).toBe(host.querySelector("textarea"));
   });
 });

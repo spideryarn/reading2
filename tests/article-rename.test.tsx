@@ -434,3 +434,52 @@ describe("the masthead's rename seam", () => {
     expect(src).not.toContain("noRename");
   });
 });
+
+/**
+ * ## The editor takes the keyboard when it opens
+ *
+ * **This is a proxy, and saying so is the point.** `TitleEditor` focuses the
+ * rename input with `ref.current?.select()`, and what a reader gets from that
+ * is *focus* — click the pencil, start typing. But focus is exactly the half
+ * jsdom will not show:
+ *
+ * | | jsdom | real Chrome |
+ * | --- | --- | --- |
+ * | `input.select()` moves focus | **no** | **yes** |
+ * | it sets `selectionStart`/`selectionEnd` | yes | yes |
+ *
+ * Measured on this box, 2026-09-07, in system Chrome via Playwright and in
+ * jsdom side by side. So under test the call visibly does *something* while the
+ * one thing it does not do is the thing the component wants, and an assertion
+ * about `document.activeElement` here would be asking about a world the reader
+ * is not in — which is the class
+ * docs/postmortems/260907b-a-test-blurred-away-the-condition-it-existed-to-test.md
+ * names, arriving from the harness rather than from a helper.
+ *
+ * **What is unguarded without this**, established by mutation rather than
+ * suspected: replacing that `select()` with a no-op leaves every other test in
+ * this file green. The feature can be deleted in silence, and a reader would
+ * have to click the pencil and then click again before they could type.
+ *
+ * So this pins the *mechanism* — the call happens, on the right element, on
+ * mount — and the browser fact above is what carries it the rest of the way.
+ * The chain is stated rather than implied, because a proxy nobody labels is how
+ * a test starts meaning less than it appears to.
+ */
+describe("the editor takes the keyboard when it opens", () => {
+  it("selects the whole title on mount, which is what focuses it for a reader", () => {
+    const select = vi.spyOn(HTMLInputElement.prototype, "select");
+    try {
+      mount("The Barn Owl");
+      expect(select).not.toHaveBeenCalled();
+
+      act(() => pencil().click());
+
+      expect(select).toHaveBeenCalledTimes(1);
+      /* On the title box, not on some other input that happened to mount. */
+      expect(select.mock.instances[0]).toBe(input());
+    } finally {
+      select.mockRestore();
+    }
+  });
+});

@@ -107,8 +107,8 @@ export interface SweepFacts {
   /** `entry.branch` without its `refs/heads/` prefix, which is how git's
       porcelain spells it and is not what anyone types on a command line. */
   branch: string | undefined;
-  /** Unix seconds of the later of: HEAD's commit, the branch's reflog top. */
-  lastActivity: number | null;
+  /** The latest of the activity signals, and which one it was. `null` = none read. */
+  lastActivity: Activity | null;
   /** Are we standing in it? */
   current: boolean;
   /**
@@ -169,9 +169,13 @@ export function classifyOne(f: SweepFacts, opts: ClassifyOptions): Verdict {
 
   if (f.lastActivity === null) reasons.push("could not tell when it was last active");
   else {
-    const idleHours = (opts.now - f.lastActivity) / 3600;
+    const idleHours = (opts.now - f.lastActivity.at) / 3600;
     if (idleHours < minIdle) {
-      reasons.push(`active ${describeIdle(idleHours)} ago — under the ${minIdle}h floor`);
+      /* Naming the signal, not just the verdict. "active 1 min ago" was read on
+         eighteen worktrees without suspicion while it meant "we just ran git in
+         here"; "git was last run here 1 min ago" beside a five-day-old HEAD is
+         read as wrong by the first person to see it. */
+      reasons.push(`${f.lastActivity.signal} ${describeIdle(idleHours)} ago — under the ${minIdle}h floor`);
     }
   }
 
@@ -205,44 +209,86 @@ export function shortBranch(ref: string | undefined): string | undefined {
   return ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref;
 }
 
+/** Which signal decided `lastActivity`, so a verdict can name its evidence. */
+export interface Activity {
+  at: number;
+  /** Human-readable, for the keep reason: "HEAD last moved", "git was last run here". */
+  signal: string;
+}
+
 /**
- * When this tree was last touched: the latest of three signals, because each
- * one alone reports a live worktree as long idle.
+ * The reflog **entry's own timestamp**, in unix seconds — `null` if there is none.
  *
- * - **HEAD's commit date** is the obvious one and the weakest. A fast-forward
- *   merge writes no commit, so HEAD's date is the date of whatever trunk commit
- *   it landed on — a week old, in a worktree created a minute ago.
- * - **The branch reflog's top entry** fixes that: it moves when the branch is
- *   created and on every merge, fast-forward included.
- * - **The worktree's git admin dir**, `.git/worktrees/<name>`, is the fallback
- *   for a **detached** worktree, which has no branch and therefore no branch
- *   reflog at all. Without it a detached tree checked out from an old commit is
- *   born looking abandoned — the trap in worktrees.md § Traps, arriving through
- *   the one door the reflog does not cover.
+ * `git log -g --format=%ct` looks like the way to ask this and is not: `%ct` is
+ * the *committer date of the commit the entry points at*. On a worktree created
+ * this second from a month-old commit it returns the month-old date, so it says
+ * nothing about when the worktree was touched, and the branch-reflog signal that
+ * used it duplicated the commit-date signal one line above it. `%gd` with
+ * `--date=unix` prints `HEAD@{1788807113}`, which is the entry's own time.
+ *
+ * Reflogs can be off (`core.logAllRefUpdates=false`) or expired, and both give an
+ * empty string with exit 0 — hence `null` rather than a throw, and `null`
+ * everywhere is a keep.
+ */
+function reflogEntryAt(wt: string, ref: string): number | null {
+  const out = tryGit(["log", "-g", "-1", "--date=unix", "--format=%gd", ref], wt);
+  const at = out === null ? null : /@\{(\d+)\}/.exec(out);
+  if (at?.[1] === undefined) return null;
+  const n = Number.parseInt(at[1], 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * When this tree was last touched: the **latest** of three independent signals,
+ * because each one alone reports a live worktree as long idle, and reporting a
+ * live worktree as idle is the direction that loses work.
+ *
+ * - **The HEAD reflog entry.** The one signal every worktree has, attached or
+ *   detached, and the only one that moves on a fast-forward — a fast-forward
+ *   writes no commit, so a tree created a minute ago can sit on a month-old
+ *   HEAD. It is written when the worktree is created, and on every checkout,
+ *   reset, commit and merge.
+ * - **The branch reflog entry**, when a branch is checked out. Not redundant:
+ *   `git update-ref` from elsewhere can move the checked-out branch without
+ *   touching this worktree's HEAD reflog.
+ * - **The admin directory's mtime**, `.git/worktrees/<name>`. The crude one —
+ *   *somebody ran a git command that took a lock in here* — and kept precisely
+ *   because it is crude and independent. A reflog entry inherits
+ *   `GIT_COMMITTER_DATE`, so it can be backdated by an ordinary backdated
+ *   commit; the mtime cannot. Until 2026-09-07 this signal was worthless for the
+ *   opposite reason: `worktree:check`'s own `git status` stamped it, so every
+ *   tree looked a minute old. That is fixed at its source in worktree-check.ts,
+ *   and what is left over-reports activity now and then, which only ever delays
+ *   a removal.
+ *
+ * **HEAD's commit date is gone.** It is dominated by the HEAD reflog — a commit
+ * made here writes an entry at the same instant, and a commit merged in is
+ * entered at merge time — and it was the signal that made the old fast-forward
+ * test look covered while it could not fail.
  *
  * `null` only when all three fail, which is itself a keep.
  */
-function lastActivityAt(wt: string, branch: string | undefined): number | null {
-  const times: number[] = [];
-  for (const args of [
-    ["log", "-1", "--format=%ct"],
-    ...(branch === undefined ? [] : [["log", "-g", "-1", "--format=%ct", branch]]),
-  ]) {
-    const out = tryGit(args, wt);
-    const n = out === null ? Number.NaN : Number.parseInt(out, 10);
-    if (Number.isFinite(n)) times.push(n);
+function lastActivityAt(wt: string, branch: string | undefined): Activity | null {
+  const seen: Activity[] = [];
+
+  const head = reflogEntryAt(wt, "HEAD");
+  if (head !== null) seen.push({ at: head, signal: "HEAD last moved" });
+
+  if (branch !== undefined) {
+    const onBranch = reflogEntryAt(wt, branch);
+    if (onBranch !== null) seen.push({ at: onBranch, signal: `${branch} last moved` });
   }
 
   const adminDir = tryGit(["rev-parse", "--absolute-git-dir"], wt);
   if (adminDir !== null) {
     try {
-      times.push(Math.floor(statSync(adminDir).mtimeMs / 1000));
+      seen.push({ at: Math.floor(statSync(adminDir).mtimeMs / 1000), signal: "git was last run here" });
     } catch {
       /* Gone or unreadable; the other signals stand, and no signal is a keep. */
     }
   }
 
-  return times.length === 0 ? null : Math.max(...times);
+  return seen.reduce<Activity | null>((best, s) => (best === null || s.at > best.at ? s : best), null);
 }
 
 /**

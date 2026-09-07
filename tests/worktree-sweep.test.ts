@@ -44,6 +44,28 @@ function commit(cwd: string, file: string, body: string, message: string): void 
   git(["commit", "--quiet", "-m", message], cwd);
 }
 
+/**
+ * The same, dated `agoSeconds` in the past.
+ *
+ * **Age the fixture; do not move the clock.** Every other test in this file
+ * pushes `now` forward instead, and that is why none of them could see the bug
+ * of 2026-09-07: the sweep was reading a timestamp it had stamped itself a
+ * moment earlier, and activity stamped at the real now still reads as a day idle
+ * against a `now` a day in the future. An injectable clock looks like the
+ * testable design and is the one thing that cannot catch a signal stuck to the
+ * present. A backdated commit can.
+ */
+function commitAged(cwd: string, file: string, body: string, message: string, agoSeconds: number): void {
+  writeFileSync(path.join(cwd, file), body);
+  git(["add", "--", file], cwd);
+  const when = new Date((Date.now() - agoSeconds * 1000)).toISOString();
+  execFileSync("git", ["commit", "--quiet", "-m", message], {
+    cwd,
+    encoding: "utf8",
+    env: { ...process.env, GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when },
+  });
+}
+
 beforeEach(() => {
   root = mkdtempSync(path.join(tmpdir(), "spideryarn-sweep-"));
   origin = path.join(root, "origin");
@@ -141,19 +163,73 @@ describe("classifyAll, against real worktrees", () => {
     expectRelaysEveryBlocker(row);
   });
 
-  it("dates a fast-forwarded worktree by the merge, not by the old commit it landed on", () => {
-    /* The trap: a fast-forward writes no commit, so HEAD's date is the trunk
-       commit's date. Backdate the trunk commit far past the floor and check the
-       worktree created just now is still held. */
+  /**
+   * The trap: a worktree created just now, sitting on a commit made days ago.
+   * A fast-forward merge writes no commit of its own, so HEAD's date is whatever
+   * the trunk commit was dated, and a brand-new tree can be born looking
+   * abandoned. It must still be held.
+   *
+   * **The previous version of this test proved nothing, twice over**, and both
+   * ways are worth keeping in view:
+   *
+   *   - its comment said "backdate the trunk commit far past the floor", and the
+   *     code backdated nothing — the `beforeEach` commits at real-now, so the
+   *     "old" commit was a second old and the trap could not arise;
+   *   - its assertion was `lastActivity >= headTime` where `lastActivity` is
+   *     `Math.max(headTime, …)` over that same number. `max(x, …) >= x` holds
+   *     for every input, so it could not fail.
+   *
+   * The commit is now genuinely aged, and the assertion is on the quantity that
+   * matters: how idle this tree looks against the **real** clock.
+   */
+  it("holds a worktree created just now on a commit made days ago", () => {
+    const OLD = 5 * 24 * HOUR;
+    commitAged(primary, "ancient.txt", "old\n", "a commit from days ago", OLD);
+
     const wt = path.join(root, "ff");
     git(["worktree", "add", "--quiet", "-b", "worktree-ff", wt, "HEAD"], primary);
 
     const row = rowFor(classifyAll(primary), "worktree-ff");
-    const headTime = Number.parseInt(git(["log", "-1", "--format=%ct"], wt), 10);
 
+    /* Not `>= headTime`: that is the vacuous form. The tree was made moments
+       ago, so its activity must be recent in absolute terms, whatever HEAD says. */
     expect(row.facts.lastActivity).not.toBeNull();
-    expect(row.facts.lastActivity).toBeGreaterThanOrEqual(headTime);
+    expect(now() - (row.facts.lastActivity?.at ?? 0)).toBeLessThan(HOUR);
     expect(row.verdict.kind).toBe("keep");
+  });
+
+  /**
+   * The sweep must not be able to keep a worktree alive by looking at it.
+   *
+   * This is asserted by classifying twice rather than by pinning `lastActivity`
+   * to a known instant, because the failure it exists for is *drift*: the
+   * classification runs `git status` inside each worktree, which rewrites that
+   * worktree's index and so bumps its admin directory's mtime, and
+   * `lastActivityAt` read that mtime back as evidence the tree was alive. Every
+   * worktree on the box therefore reported "active 1 min ago" — one of them had
+   * not been touched for five days — and `worktree:sweep` printed "nothing to
+   * remove", which is also what a healthy tree prints.
+   *
+   * The rest of this file could not catch it, and the reason is worth keeping:
+   * these tests move `now` **forward** (`now() + 25 * HOUR`) rather than moving
+   * the worktree's activity back, so activity stamped at the real now still
+   * reads as a day idle. The clock was the wrong axis.
+   *
+   * The sleep is real and it is the point — the stamp only shows up once the
+   * second hand has moved, since these are whole-second timestamps.
+   */
+  it("does not count its own reading of a worktree as activity", async () => {
+    freshWorktree("read-twice");
+
+    const first = rowFor(classifyAll(primary), "worktree-read-twice").facts.lastActivity;
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const second = rowFor(classifyAll(primary), "worktree-read-twice").facts.lastActivity;
+
+    /* Vacuity guard: two nulls compare equal while measuring nothing at all, and
+       "could not tell when it was last active" is itself a keep, so the sweep
+       would look fine either way. */
+    expect(first).not.toBeNull();
+    expect(second).toEqual(first);
   });
 
   it("never offers the primary checkout", () => {
@@ -190,7 +266,7 @@ describe("classifyOne, on facts alone", () => {
       main: false,
       present: true,
     },
-    lastActivity: 0,
+    lastActivity: { at: 0, signal: "HEAD last moved" },
     current: false,
     check: clean,
     ...over,
@@ -236,7 +312,7 @@ describe("classifyOne, on facts alone", () => {
 
   it("gives every reason at once rather than the first", () => {
     const v = classifyOne(
-      base({ check: { ...clean, dirty: ["M x"], trunk: { kind: "ahead", commits: ["abc one"] } }, lastActivity: 999 * HOUR }),
+      base({ check: { ...clean, dirty: ["M x"], trunk: { kind: "ahead", commits: ["abc one"] } }, lastActivity: { at: 999 * HOUR, signal: "HEAD last moved" } }),
       { now: 999 * HOUR },
     );
     if (v.kind !== "keep") throw new Error("unreachable");
