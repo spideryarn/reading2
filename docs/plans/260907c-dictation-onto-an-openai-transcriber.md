@@ -224,10 +224,16 @@ Three alternatives, each rejected for a reason rather than on taste:
 
 The JSON schema, the `require_parameters` pin, and the three-times-stated *"never answer a question
 in the audio"* instruction all exist for one failure: a chat model handed a dictated question answers
-it, and a good answer looks exactly like a working feature. **A transcription endpoint cannot do
-that.** It returns `{text}`, it has no conversational capacity to hijack, and the vocabulary reaches
-it as a list of strings rather than as text interpolated near an instruction. The prompt-injection
-surface that `transcribe.ts` is careful about mostly closes.
+it, and a good answer looks exactly like a working feature. They go because **this endpoint offers
+none of those controls** — which is a smaller claim than the one written here first.
+
+That draft said *"a transcription endpoint cannot do that"*, and GPT Sol was right to refuse it:
+`gpt-transcribe` is still a generative model returning free text, and the schema never proved a
+string was a transcript either — only that a string existed. What is honestly true is that the
+exposure is **smaller**: there is no system prompt to override, and the vocabulary reaches the model
+as a list of strings in a request field rather than as text interpolated beside an instruction. What
+stands in for the schema is `MAX_TRANSCRIPT_CHARS` — a loose tripwire for an answer far longer than
+anything that could have been said — plus the tests for dictated questions and commands.
 
 Two of the checks stay, because they are about the audio rather than the model: the minimum-length
 guard, and the size cap shared with the browser.
@@ -242,25 +248,45 @@ sentence is *"Dictation is the one call we pin to upstreams that retain none of 
 it carries your voice; the fact that a request happened is still recorded."* Proposed replacement of
 that sentence alone:
 
-> Dictation used to be the one call we pinned to upstreams that keep nothing, and it no longer is.
-> Your recording goes to OpenAI's transcriber by way of OpenRouter, because that is the route that
-> will take a list of the words your article actually uses. Both of them publish a policy, and both
-> policies are good: OpenRouter says it does not store prompts or responses unless an account opts
-> in, which ours does not, and that it does not keep audio "beyond the duration necessary to route
-> the request"; OpenAI says nothing sent to its API trains its models, and its published
-> per-endpoint table gives transcription no retention at all. **What changed is that we are now
-> passing those on rather than enforcing them.** We are not enrolled in OpenAI's zero-data-retention
-> programme, OpenRouter does not list this endpoint as zero-retention, and on this one endpoint it
-> ignores the setting that used to let us insist. We still store nothing ourselves — the audio
-> arrives in one request, goes out in the next, and is gone when the request ends — and the fact
-> that a request happened is still recorded.
+> **Dictation is the exception, and it changed.** When you talk into a box here, the recording goes
+> from us to OpenRouter and on to OpenAI's `gpt-transcribe`, because that is the route that will
+> take a list of the words your article actually uses — which is what stops it guessing at names.
+> What each of them says is on their pages, linked above: OpenRouter says it does not store what
+> passes through unless an account opts in, ours does not, and it keeps audio no longer than routing
+> needs except where it says it must — abuse detection, security, billing, or the law; OpenAI says
+> nothing sent to its API is used to train its models. **What changed is that we now pass those on
+> rather than enforce them.** We used to route dictation so that only providers keeping nothing
+> could serve it, and on this endpoint that setting is ignored, so we cannot. We do not save the
+> recording on our servers — it arrives in one request, goes out in the next, and is gone when the
+> request ends — and the fact that a request happened is still recorded.
+
+**Four things in that paragraph are there because GPT Sol's review took the first draft apart**, and
+each is the kind of clause that reads as harmless and is not:
+
+- *"we do not save the recording on our servers"*, not *"we keep nothing"*. When a transcription
+  fails, `mic-recording.ts` deliberately holds the recording in the tab so the reader can download
+  what they said. An unqualified "we don't keep it" is false about their own browser.
+- OpenRouter's exceptions — **abuse detection, security, billing, the law** — are named. The first
+  draft quoted only "beyond the duration necessary to route the request", which is the reassuring
+  half of their sentence.
+- *"both policies are good"* is gone. It was an opinion sitting in a disclosure.
+- The retention figures are gone entirely. The first draft said "up to 30 days", on OpenAI's
+  **general** API number; their per-endpoint table supersedes it for transcription, so the draft
+  would have frightened readers with a claim worse than the truth. The replacement quotes no period
+  at all, for the reason under the microphone line below.
+
+**A second paragraph changed with it**, which the brief did not anticipate and Sol found: `/privacy`'s
+subprocessor row for OpenAI said they were used for *"the live voice mode only"*. That is now false.
+It names both routes and says which one keeps the audio off our server (live) and which does not
+(dictation).
 
 **2. The line beside every microphone** (`src/web/DictationStrip.tsx`, `DICTATION_PROMISE`). Today:
 *"Your voice is sent to be transcribed, and isn't stored. The words appear when you stop."* It is the
-sentence a reader actually reads, it is fourteen words, and it is about to be false. Proposed:
+sentence a reader actually reads, it is the shortest thing on this list, and it is about to be
+false. Proposed:
 
-> Your voice is sent to OpenAI to be transcribed. We don't keep a copy; we no longer promise they
-> don't.
+> Your voice goes to OpenRouter and OpenAI to be transcribed. We don't save it on our servers, and
+> we can't promise they don't.
 
 That second clause deliberately under-claims, and it is the sentence I most want Greg's eye on.
 OpenAI's own per-endpoint table says `/v1/audio/transcriptions` retains nothing, so a warmer line —
@@ -269,8 +295,8 @@ enough for the line beside a microphone**, because of the one gap the citation c
 `gpt-transcribe` is listed by OpenAI under two endpoints, `/v1/audio/transcriptions` (retention
 "None") and `/v1/realtime/transcription_sessions` (30 days), and nothing documents which of them
 OpenRouter calls. The warmer sentence rests on a fact we cannot check, which is the one thing this
-page's register forbids. `/privacy` has room to set out the position; fourteen words do not, so they
-take the cautious half.
+page's register forbids. `/privacy` has room to set out the position; one line does not, so it takes
+the cautious half.
 
 **3. `docs/project/privacy.md`** — the doc that owns the subject. Not reader-facing; it gains the
 measurement above (the `provider` block is ignored on the transcription endpoint) as the reason the
@@ -296,24 +322,50 @@ the OpenAI API is not used to train or improve OpenAI models"*, and OpenRouter's
 image, audio or video files beyond the duration necessary to route the request, except as required
 for abuse detection, security, billing, or legal compliance."*
 
-## Stages
+## Stages, and what actually happened in each
 
-1. **The probes, committed.** The four WAV rows in `gate-models.ts` and the new
-   `probe-stt-routes.ts`. This is the evidence every claim above rests on, and 260903i's own
-   docstring is about what it costs to run probes and throw them away. → GPT Sol.
-2. **The transcription route.** `/v1/audio/transcriptions` into `OpenRouterPath`, a
-   `openRouterTranscription` beside `openRouterJson` so spend recording and refusal handling stay one
-   implementation, `vocabularyFor` gaining a list form, keyword sanitising for `<`, `>`, CR and LF
-   (documented to reject the whole request), `AI_JOB_ROUTE`'s dictation row losing `zdr`, and the
-   keywords-really-arrived test. `DICTATION_MODEL` becomes `openai/gpt-transcribe`. → GPT Sol.
-3. **The bake-off**, on `bench-models.ts` rather than a second harness, reporting 260903i's measures
-   so the numbers sit beside its numbers: corpus WER and hard-term recall over the ten clips, three
-   runs. Incumbent against `gpt-transcribe` with and without keywords. → GPT Sol.
-4. **The copy**, all four places plus `tests/privacy-page.test.ts` and
-   `tests/profile-mic-button.test.tsx`, which pin the sentences. → GPT Sol.
-5. **A real browser**, Playwright against system Chrome on the box: record actual audio through
-   `MediaRecorder` and watch words come back. A transcription path that passes tests and fails on a
-   real recorder blob is the failure this whole job is about.
+1. **The probes, committed** — done, commit `b2785ce0`. The four WAV rows in `gate-models.ts` and the
+   new `probe-stt-routes.ts`. 260903i's own docstring is about what it costs to run probes and throw
+   them away, and this stage still managed to quote four `curl` rows that were in no committed file
+   until the review caught it. They are in the probe now.
+2. **The transcription route** — done, commit `f4288f04`. `/v1/audio/transcriptions` into
+   `OpenRouterPath`, `openRouterTranscription` beside `openRouterJson` and `openRouterImage` so there
+   is still no second way to spend money, a `transcription` member on `Wire`, `dictation` out of
+   `ChatJob` so `openRouterJson("dictation", …)` no longer compiles, and `AI_JOB_ROUTE`'s dictation
+   row down to `provider: null`.
+   - **Two things this stage did not need to build.** `vocabularyTermsFor` already returned a list —
+     live conversation has used `keywords` since 2026-08-31, for a bug of its own — so dictation just
+     calls it. And `packTerms`/`fence` already strips `<`, `>` and every control character, so the
+     keyword sanitiser in this stage's brief was a mechanism that already existed; the tests assert
+     the property instead of a second implementation providing it.
+   - Sol suggested splitting this into gateway and integration. It stayed one stage, which was a
+     judgment rather than an oversight: the type change is what forces every caller to move, so the
+     tree does not compile between the halves.
+3. **The bake-off** — **not done, and deliberately.** See below.
+4. **The copy** — done, in the same commit: four surfaces plus `docs/project/dictation.md`,
+   `ai-gateway.md`, `setup-dev.md` and the model inventory. `tests/privacy-page.test.ts` went red on
+   the stale model name, which is the chain working.
+5. **A real browser** — done, `scripts/spike-dictation-browser.ts`, results above. It found the one
+   thing no probe had: the recorder prefers MP4, not the WebM every probe had been sending.
+
+### Why stage 3 was dropped
+
+The plan asked for a bake-off on `bench-models.ts` reporting 260903i's measures. It is **not worth
+the money or the hour**, and saying so is more useful than running it:
+
+- **The decision it would inform is already made.** Greg chose an OpenAI transcriber. A table
+  comparing five transcribers cannot unmake that, and the one number that would matter — is
+  `gpt-transcribe` *worse* than the incumbent? — is answered well enough by the run above, which got
+  every hard term through the real recorder path.
+- **The corpus cannot settle it.** Ten synthetic clips from one `say` voice, and 260903i already
+  found that every difference between candidates lived in the clips whose words nobody had supplied.
+  Running the same corpus against a model with a *better* vocabulary mechanism measures the corpus,
+  not the model.
+- `bench-models.ts` is updated and ready for whoever wants it, with its own docstring now saying
+  plainly that nobody has gated its new candidate list.
+
+**What would be worth running instead** is the thing this plan is not allowed to do: real human
+speech, which needs recordings from Greg. That is the open thread and it always was.
 
 ## What the cross-family review changed
 

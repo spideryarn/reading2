@@ -11,6 +11,9 @@ node  evals/dictation/bench-vocabulary.mjs           # Gemini chat, with a vocab
 npm run eval:dictation-vocab                         # which sources, and how much is too much
 npm run eval:dictation-gate                          # which candidates can serve our request at all
 npm run eval:dictation-models                        # and which of those transcribes best
+npx tsx evals/dictation/probe-stt-routes.ts          # OpenRouter against OpenAI direct, and what
+                                                     #   a `provider` block does on this endpoint
+npx tsx scripts/spike-dictation-browser.ts           # a real Chrome MediaRecorder blob, end to end
 node  evals/dictation/make-clips.mjs                 # regenerate the ten clips (needs say + ffmpeg)
 ```
 
@@ -22,12 +25,17 @@ and defaults to three.
 ## Run the gate before the bake-off
 
 `gate-models.ts` is the cheap half of a model comparison, and the reason it is separate is that a
-candidate which cannot be *routed* looks exactly like a candidate having a bad hour. Dictation sends
-`provider: { zdr: true, require_parameters: true }` plus a strict `json_schema` plus webm/opus audio
-(`AI_JOB_ROUTE` in [`src/ai-call.ts`](../../src/ai-call.ts)), and each of those four can leave a
-model with no endpoint. `require_parameters` in particular turns "this upstream does not do
-structured outputs" into a 404, which the harness would otherwise retry five times and record as
-lost. Finding that out in the gate costs a minute; finding it out in the bake-off costs an hour.
+candidate which cannot be *routed* looks exactly like a candidate having a bad hour. Finding that out
+in the gate costs a minute; finding it out in the bake-off costs an hour.
+
+**What the gate sends changed on 2026-09-07**, and the paragraph that used to be here is worth
+keeping as the record of what it sent before: *"Dictation sends `provider: { zdr: true,
+require_parameters: true }` plus a strict `json_schema` plus webm/opus audio, and each of those four
+can leave a model with no endpoint."* All four are gone. Dictation is now a **transcription**
+request — `openai/gpt-transcribe`, no `provider` block at all, and the vocabulary as
+`provider.options.openai.keywords` — so the gate probes that endpoint, and the four-constraint
+diagnosis survives further down the same file as the record of why the chat endpoint was abandoned.
+[260907c](../../docs/plans/260907c-dictation-onto-an-openai-transcriber.md).
 
 It is also where the answer to "should we use OpenAI?" actually lives — see
 [260903i](../../docs/plans/260903i-which-model-transcribes-dictation.md). Both `openai/gpt-audio`

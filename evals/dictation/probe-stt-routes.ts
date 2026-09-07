@@ -3,11 +3,13 @@
  *
  *   npx tsx evals/dictation/probe-stt-routes.ts
  *
- * [`gate-models.ts`](gate-models.ts) probes the *chat* endpoint, because that is
- * where dictation has always gone. This probes `POST /audio/transcriptions`,
- * which is a different door with different rules, and it exists because the
- * research on 2026-09-07 found two facts that between them undo the reason
- * dictation avoided that door in the first place:
+ * [`gate-models.ts`](gate-models.ts) gates the request the app sends and keeps a
+ * record of the *chat* endpoint it used to send it to. This one asks the
+ * questions that are about the **two providers** rather than about the
+ * candidates — whether OpenRouter forwards what OpenAI needs, and what it does
+ * with a routing block — and it exists because the research on 2026-09-07 found
+ * two facts that between them undo the reason dictation avoided
+ * `POST /audio/transcriptions` in the first place:
  *
  * - OpenAI's chat `input_audio.format` is a **closed enum of `wav` and `mp3`**
  *   in their own OpenAPI spec, so no amount of routing gets a browser's webm
