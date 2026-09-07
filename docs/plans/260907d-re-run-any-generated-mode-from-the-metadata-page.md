@@ -621,6 +621,44 @@ Ordered by how much you need them.
 - [ ] Final `npm test` / `npm run typecheck` / `npm run check`. GPT Sol. Commit and
       `git push origin HEAD:dev`.
 
+### Stage 3b — the browser re-check, after F12–F14
+
+The first browser drive was of the code Sol then refused. Three of those fixes change what the
+reader sees, so the browser was driven again on the same article: five of six checks pass, and
+**the sixth fails.** It is recorded here rather than smoothed over, because it is the check that
+was written specifically to prove F14, and it did not.
+
+- ✅ **The nine rows and their labels**, unchanged by the fixes.
+- ✅ **The Debate sentence is the corrected one.** Read out of the DOM: *"…$0.20–0.40 for a
+      completed run on a short article, and more on a long one."* It does not contain `$0.27`
+      anywhere — F12 is closed on the surface a reader actually meets, not only in the source.
+- ✅ **F13 holds where it was raised: at the keyboard.** After the confirm opens,
+      `document.activeElement` is the Yes button — not `BODY` — its `aria-label` is
+      *"Yes, run it — Debate"*, and its `aria-describedby` resolves to exactly the price sentence.
+      One Tab from there reaches Cancel, and Escape closes. Nothing is trapped.
+- ❌ **F14's fix does not cover the case the check was built to find.** With Arc's confirm open in
+      tab 1, a real Arc run was started and finished in tab 2 — queued 17:58:29, done 17:58:34.
+      Tab 1's confirm was **still on screen fifteen seconds later**, and never showed the progress
+      band.
+- ✅ **A clean console** on both tabs, across sign-in, every click and a live run.
+
+**Why it fails, and why it is milder than F14 was.** `obsolete` watches for a job **this tab has
+seen** — `useStepJob`'s `job`, the running one or else the oldest queued one. The poll engine is a
+per-tab singleton at `IDLE_MS = 8000`, stepping up to `BUSY_MS = 1000` only once *it itself* has
+seen a busy job; this Arc run lasted five seconds, so a background tab can poll before the job
+exists and again after it has finished, catching it in neither state. The fix is right about *what*
+to watch and wrong to assume the tab will ever see it.
+
+What F14 was about is a confirm hiding a **live** job — its progress, its Stop button, its stall
+warning. That still cannot happen for any job that outlives one poll, which is every job on this
+page bar a cache-warm Arc. What is left is a stale confirm over a run that has already finished:
+pressing Yes then buys a second run, which is precisely what the button offered to do and what the
+sentence beside it priced. Nobody is charged for something they were not shown.
+
+It is nonetheless wrong, and it is named in § Deferred rather than fixed at the gate, because the
+honest fix is in the poll engine — a finished job should obsolete a confirm just as a running one
+does — and that is nine other callers' machinery on a day this branch is landing.
+
 ## Findings, and what happened to each
 
 Round one, GPT Sol against `bcb7bcd8` —
@@ -754,6 +792,36 @@ Three tests came with them, each watched red first:
   event is its own anti-pattern, so this is left alone deliberately — but it is the same class as
   F13 and worth knowing about.
 
+
+### Round four — the narrow check, and discovery closed
+
+House rules close discovery after round two, with one exception: an established P0 or P1 whose final
+fix was **not** in the round-two snapshot gets a narrowly scoped check *of that fix*. F12, F13 and
+F14 all qualified, so they got one — scoped in the prompt to those three fixes only, with everything
+else named as out of bounds.
+
+**No findings.** *"F12, F13, and F14 all hold; I would accept the candidate."* The reviewer ran
+`tests/metadata-rerun-section.test.tsx` itself — 15 passed, 0 failed — and confirmed each fix
+against the thing it claimed: that the price now quotes Stage 3½ § 1 and that the step really does
+make two sequential search calls; that Yes takes focus and its `aria-describedby` resolves to the
+price sentence, with Cancel the next normal focus target and no trap; and that the derived `asking`
+yields to a queued or running job immediately while the effect clears the obsolete confirm for good,
+with `starting` correctly excluded so our own POST cannot tear the confirm away mid-answer.
+
+**Four rounds and eleven accepted findings for one button.** Worth saying plainly, because the shape
+is the argument for the process rather than against it: the plan review cost `hierarchy` and
+`illustrated` their places before a line was written, and the three code rounds found, in order, a
+confirmation that lied about the price, a Retry that walked round the confirmation entirely, nine
+controls a screen reader could not tell apart, a cost ceiling the cited document had already
+disproven, and a confirm that could hide a running job. Not one of them would have been found by the
+tests as first written — and two of the five were sentences this plan itself had got wrong.
+
+**And then the browser found a twelfth, after the reviewer had accepted.** F14's fix holds exactly
+as described above — and § Stage 3b shows a confirm surviving a run that started and finished in
+another tab, because the tab never *saw* the running job it was watching for. Both statements are
+true: the reviewer checked the logic and the logic is right; the browser checked the poll and the
+poll is slower than a five-second Arc. It is recorded as F17 in § Deferred, at its real severity
+rather than F14's. A reviewer reads the code you give it; only the running thing knows the clock.
 ## Deferred, named rather than inherited
 ### Two cost figures outside this feature that measurement has overtaken
 
@@ -797,6 +865,24 @@ profile — because `StageState.done` only compares the illustration with its Sk
 illustration exists, any plate-generation or plate-storage failure must fail the whole forced step
 before publication. Partial-plate publication stays right for a *first* generation; that distinction
 does not exist in the step today.
+
+### A confirm that outlives a job quicker than one poll (F17, found in the browser)
+
+`obsolete` clears a confirm when this tab sees a job for that step — running, or queued and
+waiting. A tab that has not yet stepped up from `IDLE_MS = 8000` to `BUSY_MS = 1000` can poll either
+side of a five-second run and see it in neither state, so a confirm opened in one tab survives a run started and finished in another —
+measured in § Stage 3b, fifteen seconds and still on screen.
+
+The right fix is one line of *what to watch* rather than a new mechanism: a step whose stamp has
+moved since the confirm opened should obsolete it, exactly as a running job does. That means
+comparing against the stamp captured at `setPending` time, and it belongs with whoever next opens
+`useStepJob` — nine other callers share the engine and none of them has a confirm to invalidate, so
+this is the first surface for which the distinction exists at all.
+
+**Why it is deferred rather than fixed here.** The severity is much lower than F14's: no live job is
+hidden (any job that outlives one poll is still caught), and pressing Yes buys exactly the run the
+button offered at the price the sentence gave. Nobody is charged for something they were not shown —
+they are charged twice for something they asked for twice, in two tabs.
 
 ### A progress test on the requeue budget
 
