@@ -32,6 +32,10 @@ Live pre-commit; base `70040b0b`.
 
 `git diff 70040b0b -- <the tracked paths above>` shows the tracked half.
 
+> **Closed 2026-09-07.** This prompt named a working tree, which is not durable. What it saw is
+> `cb8ffccf`; the fixes for the findings it returned are `b86b6726`, and both are on `dev` via
+> `b12a8fa1`.
+
 **Start with** `src/web/scroll.ts`, `src/web/styles/shell.css` and
 `src/web/styles/column-context.css`. That is where to begin, not the limit of scope.
 

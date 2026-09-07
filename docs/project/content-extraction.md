@@ -56,14 +56,18 @@ they are named by what they *are*, so a manifest cannot point at last week's doc
 The differences that matter to a reader:
 
 - **A PDF costs money to extract.** Readability is free and deterministic; a model reading pages is
-  neither. Every chunk's raw response is checkpointed against the **article**, one row per chunk
+  neither. Every completed chunk that passes its checks is checkpointed against the **article**, one row per chunk
   ([`src/store/checkpoints.ts`](../../src/store/checkpoints.ts)), so a second attempt at a document
-  the first one ran out of time on buys only the chunks it has not got — and re-running after a
-  *renderer* fix is free. A **prompt** change is deliberately not free: the key carries
+  the first one ran out of time on buys only the chunks it has not got. A checkpoint is fully
+  shape-checked and revalidated against the current page-integrity rules before reuse; a defective
+  one is recovered without rebuying its valid neighbours. A recovered chunk is saved only after the
+  final cross-chunk deduplication still leaves every witnessed page present. Re-running after a
+  *renderer* fix is free.
+  A **prompt** change is deliberately not free: the key carries
   `promptFingerprint()`. And `npm run eval:pdf-read` (`npm run pdf` until 2026-09-05) remembers
   nothing between runs at all, because a command
   line has no article to key on and takes `nullCheckpointStore()`.
-- **It is checked, and since 2026-08-30 it no longer fails.** The transcription is scored per page
+- **It is checked, and noisy content disagreements do not fail it.** The transcription is scored per page
   against the PDF's own text layer ([`src/pdf-score.ts`](../../src/pdf-score.ts)). This used to
   `throw`, and the argument for throwing was the point of the whole stage — a model can drop a
   paragraph, summarise one or invent one, and all three read as fluent English. What changed was
@@ -75,11 +79,19 @@ The differences that matter to a reader:
   **The saying-so is the half that is not built.** The *score* is shown — the masthead's source note
   and the metadata page's `Missed` row both report recall and pages checked. The specific complaints
   go to `meta.quality`, and **nothing renders it**, so the sentence in
-  [`src/pdf-read.ts`](../../src/pdf-read.ts) § `runPdfExtract` — "if the reader does not look, nobody
-  looks" — currently describes a reader who cannot. Restoring a gate later means choosing which
-  failures are fatal, and the missing-run check is the one worth it; note that `coverageOf`'s
-  `missing` is *any requested page with no record at all*, so a gate on it as-is would refuse a blank
-  verso or a full-page figure, which is the false-refusal class that stood the old one down.
+  [`src/pdf-read.ts`](../../src/pdf-read.ts) § `runPdfExtract` therefore remains reader-invisible.
+  Structural defects are separate: malformed responses, impossible or descending page labels, and
+  absent substantive records on a text-bearing page trigger context-free single-page recovery. For
+  this presence check, a page needs an independent furniture-free baseline of at least three lexical
+  words, and its records need at least three lexical words in total; hidden records count. This small
+  floor prevents a folio such as `1` from certifying a page of prose without turning isolated maths or
+  publisher furniture into a hard failure. The check is page-local even when the document as a whole
+  is classified as a scan. The server assigns each recovered page from its one-page source body; an
+  unresolved defect refuses the extraction before HTML is returned. Truly blank/no-text-layer pages
+  remain unverified rather than fatal, and scans remain explicitly marked unverified. A partial
+  trailing bibliography is excluded from noisy recall scoring only when the page's own text layer and
+  present transcribed `reference` records independently identify it; a wholly absent bibliography page
+  is recovered or refused, not inferred from year density.
 - **A PDF can be too long, and on the queue's path it is refused in stage 1.** The cap is
   [`src/uploads.ts`](../../src/uploads.ts) § `MAX_PAGES` — a limit on what reading a document is
   allowed to cost, not a technical one — and since 2026-09-04 it is enforced where the bytes first
@@ -157,6 +169,9 @@ The differences that matter to a reader:
   [`src/pdf-read.ts`](../../src/pdf-read.ts) glues it back where pass 0's own lines say so on both
   pages, and declines otherwise — the evidence rules, and the case it deliberately gives up on, are
   in the comment above the function.
+- **A continuation joins only on the same source page or the immediately following one.** The join
+  cursor advances after every joined record, so legitimate three-page continuations work without
+  allowing backwards or cross-gap joins.
 
 The whole of it — the model, the prompt, the chunking, the check, and what it cost to decide — is in
 [../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md).

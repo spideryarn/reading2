@@ -1,5 +1,14 @@
 # Make style ownership visible, and make a new mode fail to compile
 
+**Status: finished and on `dev`, 2026-09-06** (`cac94777`). Both halves built, reviewed twice by
+GPT Sol on the plan and twice on the code, all seventeen findings accepted and fixed, nothing
+overruled. The worktree is removed. Shipping CSS came out **byte-identical** through the split
+(md5 `733c807548da26925bd8b120d7c026ac`, content-hash filename unchanged), and four merges of
+`origin/dev` landed on top of it, each verified by an oracle computed a different way from the
+edits.
+
+What is deliberately **not** done, and why, is in [§ Left undone](#left-undone) at the foot.
+
 Item **A10** of [260905e-main-app-architecture-review.md](260905e-main-app-architecture-review.md)
 § A10 and its stage checklist § *Make style ownership visible*. That stage is the authority; this
 file is how it gets built.
@@ -899,6 +908,50 @@ exported because three docs and two hooks cite it by name; and `Dock.tsx`'s prop
 said the diagram kind is read there *"rather than a `MODE_TARGET` row"*, was made stale by this
 change and is corrected — Diagram now **is** a row, a delegated one that consumes exactly that
 value.
+
+## Left undone
+
+Everything A10's stage asked for is done. These are things the work **found** and deliberately did
+not do, each with what it costs to leave it. None of them blocks anything.
+
+**Found and left, because moving them is a cascade change and this job was an extraction:**
+
+- **Nine sections are not where their name says** — [§ What the split made visible](#what-the-split-made-visible-nine-sections-that-are-not-where-their-name-says)
+  lists them. `footnotes.css` ends with Glossary's tail, `ideas.css`'s second half is the force
+  graph, `dock.css` carries `.logo-home`, and `prose.css § outline` and `outline-mode.css` are two
+  different features sharing a word. Cost of leaving: the sheet name misleads an editor for exactly
+  those nine. Fixing one is a one-file move plus a browser check, and each is independent — good
+  work for somebody with a spare hour, and **not** a batch.
+- **Three `noDescendingSpecificity` findings the linter can no longer see**, because the pairs now
+  straddle a file boundary. This is a real loss of coverage, not three bugs fixed — recorded in
+  [§ What the split costs](#what-the-split-costs-three-lint-findings-the-linter-can-no-longer-see).
+
+**Defects found while looking at something else, none of them A10's ground:**
+
+- `css-tokens.test.ts` has a sheet-order defect of the same family as the ones fixed here.
+- Two `§` anchors cited in docs that have **never** existed in the file they name.
+- Referee's miniature Diagram, and two `/design` geometry defects — product-visible, so
+  [design-css-overview.md](../project/design-css-overview.md) is where a fix argues itself.
+- `src/web/layout.ts` could join `SHARED_WITH_READER` in `tests/eager-client-graph.test.ts`, which
+  would let `DesignPage` import `MODE_MIN` instead of mirroring it as `--mode-w: 288px`. `App.tsx`
+  already loads `layout.ts` eagerly, so it is free.
+
+**Two rule changes that need Greg, because their wording is a rule:**
+
+- The postmortem's recommendation 1 — *paste the guard's red message into the commit before landing
+  it* — is not written into [silent-success.md](../reusable/silent-success.md). That is
+  `docs/reusable/`, which [edit-important-docs.md](../reusable/edit-important-docs.md) routes one
+  approved change at a time.
+- `npm run check:staged-revert` cannot read a merge, and reports every incoming deletion as a
+  staged revert — [§ the guard that cannot read a merge](#npm-run-checkstaged-revert-cannot-read-a-merge-and-says-so-as-four-false-positives).
+  One line in the script fixes it: if `MERGE_HEAD` exists, say which findings are incoming. Left
+  alone because the wording lives in [version-control.md](../project/version-control.md). **This is
+  the one with a sharp edge** — the next agent either trusts a false alarm, or "fixes" it by
+  undoing somebody else's deletions.
+
+**Accepted limitation, not a defect:** the merge oracle proves cascade order, not ownership (F26).
+A rule moved across an adjacent sheet boundary preserves the concatenation. That is the right thing
+to accept: ownership is what the sheet headers are for, and no byte comparison can check it.
 
 ---
 

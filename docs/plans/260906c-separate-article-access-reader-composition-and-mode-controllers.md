@@ -1,13 +1,15 @@
 # Separate article access, reader composition and mode controllers
 
-Status: **stages 1–4 built and committed.** Worktree
-`a1-a3-reader-composition`, branch `worktree-a1-a3-reader-composition`, off `0977d6f6`
-(origin/dev, 2026-09-06).
+Status: **finished and on `dev`** (`55f1423d`, 2026-09-07). Built in worktree
+`a1-a3-reader-composition` off `0977d6f6`, then merged `dev` three times and pushed.
 
-`src/web/App.tsx` has gone **5,920 → 407 lines** and exports exactly `App`. It holds route choice,
+`src/web/App.tsx` has gone **5,920 → 462 lines** and exports exactly `App`. It holds route choice,
 the session subscription and the persistent services, and nothing else. Ten mode controllers are
 under `src/web/modes/`, `Reader` and the position hooks under `src/web/reader/`, and the
 article-access unit under `src/web/article/`.
+
+*(407 at the end of stage 3; 462 after merging `dev`, which had added the changelog route, the
+public-sharing page and the Feedback host/trigger split to the part of `App.tsx` that stays.)*
 
 | Stage | Commit | `App.tsx` after |
 |---|---|---:|
@@ -16,7 +18,11 @@ article-access unit under `src/web/article/`.
 | 2 — Chat and Remember, as one file | `2d82c0e7` | 3,599 |
 | 3 — `Reader`, the position hooks, then the access unit | `f8903313` | **407** |
 | 4a — one passage lifecycle helper for six producers | `14c1d79c` | 407 |
-| 4b — `selectPassages` and the `band()` switch | *(this commit)* | 407 |
+| 4b — `selectPassages` and the `band()` switch | `a1bcc9c8` | 407 |
+| Sol's F21–F24 on the guards, and F1–F3 on 4b | `4ca55f04` | 407 |
+| F24(3): four stale "five effects" claims | `af71e1aa` | 407 |
+| Merge `dev` — 198 commits, 11 conflicts | `65603470` | 463 |
+| Merge `dev` again — 14, then 4, no conflicts | `17e5ee3f`, `74a70b57` | 462 |
 
 This is items **A1** and **A3** of
 [the main app architecture review](260905e-main-app-architecture-review.md#a1-extract-responsibilities-that-already-have-distinct-lifetimes),

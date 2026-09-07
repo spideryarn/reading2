@@ -429,6 +429,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "pdf-damaged": "blocked",
   "ai-pdf-cut-off": "bug",
   "ai-pdf-filtered": "blocked",
+  "ai-pdf-incomplete": "retry",
   /* The two token-budget failures, split from their own diagnostics on
      2026-09-03. `ai-too-long` is arithmetic done before the call and
      `ai-over-room` is the call coming back cut off; both withhold the button,
@@ -1369,6 +1370,19 @@ export function pdfPagesFiltered(pages: readonly number[]): ReaderFacingFailure 
       `document, so there is no transcription of them to build the article from. It decides that ` +
       `on the words it is shown rather than on anything you did, and shown the same pages it will ` +
       `most likely answer the same way. [ai-pdf-filtered]`,
+  };
+}
+
+/** A bounded structural recovery could not establish which source page the records belong to. */
+export function pdfPagesIncomplete(pages: readonly number[]): ReaderFacingFailure {
+  const noun = pages.length === 1 ? "page" : "pages";
+  return {
+    kind: "retry",
+    message:
+      `The AI could not produce a complete, correctly ordered reading of ${noun} ${pages.join(", ")} ` +
+      `of this PDF, even when ${noun === "page" ? "it was" : "they were"} read separately. No ` +
+      `article was built from the incomplete result. Trying again may produce a usable reading. ` +
+      `[ai-pdf-incomplete]`,
   };
 }
 

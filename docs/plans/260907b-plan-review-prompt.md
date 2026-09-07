@@ -18,6 +18,10 @@ Live pre-commit; base `70040b0b`.
 
 (Not durable — I will record the resulting commit SHA in the plan once it lands.)
 
+> **Closed 2026-09-07.** The plan this reviewed landed as `cb8ffccf` (stages 1–3) and `b86b6726`
+> (the round-two fixes), merged to `dev` as `b12a8fa1`. This prompt named a working tree; those
+> three SHAs are what it actually saw.
+
 **Start with the plan itself, then the code it proposes to change:**
 
 - `src/web/scroll.ts` — `SMALL_DEVICE`, `stepBar`, `watchBarVisibility`, `stickyOffset`, `markOurScroll`

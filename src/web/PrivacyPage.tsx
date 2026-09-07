@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "5 September 2026";
+const LAST_UPDATED = "7 September 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -261,11 +261,21 @@ export function PrivacyPage() {
             we asked for. We prefer Anthropic for Claude, but fallbacks are allowed, so the upstream
             can be a cloud host such as AWS rather than the model’s maker.
           </Third>
+          {/* **Two paths now, and they are genuinely different**, which is why
+              this entry stopped saying "the live voice mode only" on
+              2026-09-07. Live conversation is browser-to-OpenAI directly and
+              never touches our server; dictation is server-to-OpenRouter-to-
+              OpenAI and does. Collapsing them would make the strong claim in
+              the first (the audio never reaches us) sound as if it covered the
+              second, which it does not.
+              docs/plans/260907c-dictation-onto-an-openai-transcriber.md. */}
           <Third name="OpenAI" href="https://openai.com/policies/privacy-policy">
-            the live voice mode only, and directly rather than through OpenRouter, because nobody
-            else routes a realtime connection. Your microphone connects straight from your browser
-            to them; the audio never passes through our server. The text of what was said comes back
-            to us and is stored as part of the conversation.
+            your voice, by two different routes. In the live voice mode your microphone connects
+            straight from your browser to them, directly rather than through OpenRouter because
+            nobody else routes a realtime connection; the audio never passes through our server, and
+            the text of what was said comes back to us and is stored as part of the conversation.
+            Dictation is the other route: there the recording goes from us to OpenRouter and on to
+            OpenAI’s transcriber, and the paragraph below says what that means.
           </Third>
           <Third name="Google" href="https://policies.google.com/privacy">
             sign-in, if you choose the Google button.
@@ -283,18 +293,69 @@ export function PrivacyPage() {
         </ul>
         <p>
           {/* **The honest version of the training question.** Everything here
-              is checkable in the code: `zdr: true` is set on dictation and
-              nowhere else (src/ai-call.ts § AI_JOB_ROUTE), so a blanket "no
-              provider retains anything" claim would be false. Saying which one
-              is pinned and linking the rest is the accurate shape.
+              is checkable in the code, and until 2026-09-07 the checkable fact
+              was `zdr: true` on dictation and nowhere else. It is now `zdr` on
+              **nothing** (src/ai-call.ts § AI_JOB_ROUTE), so the sentence that
+              used to end this paragraph has been replaced rather than softened.
               docs/project/ai-gateway.md § A key is not access. */}
           We do not sell your text, and we do not train anything on it. Neither do these providers,
           under the terms we use them on — but that is a setting on our account with OpenRouter as
           much as it is a line in our code, so treat it as a commitment we hold ourselves to rather
           than something the page can prove to you. What each provider keeps, and for how long, is
-          governed by their own policy, and the links above are the authority on it. Dictation is
-          the one call we pin to upstreams that retain none of the content, because it carries your
-          voice; the fact that a request happened is still recorded.
+          governed by their own policy, and the links above are the authority on it.
+        </p>
+        <p>
+          {/* **The paragraph that used to be one sentence, and the one place on
+              this page where we tell a reader something got worse.**
+
+              It said: *"Dictation is the one call we pin to upstreams that
+              retain none of the content, because it carries your voice."* That
+              was true of a Gemini chat model routed with `zdr: true`. Dictation
+              moved to `openai/gpt-transcribe` on 2026-09-07 because it is the
+              one model that takes a list of an article's own words, and
+              **OpenRouter does not apply routing or `zdr` on its transcription
+              endpoint** — an impossible `only: ["anthropic"]` answers 200 with
+              a transcript, and so does `zdr: true` for a model absent from
+              their ZDR list. Not the whole block: `provider.options` *is*
+              forwarded, and is how the vocabulary gets there at all. So the
+              guarantee is not merely unset, it is unreachable from this route;
+              docs/plans/260907c-dictation-onto-an-openai-transcriber.md has the
+              probe.
+
+              Every factual clause below is quoted from a published policy and
+              cited in docs/project/privacy.md § Where a reader's voice goes.
+
+              **"its API customer", not "we".** On this route OpenRouter is
+              OpenAI's API customer and we are OpenRouter's, so a sentence
+              saying *we* have not opted in to OpenAI's training would be
+              describing a setting that is not ours to hold. GPT Sol's third
+              review. The OpenRouter clause above is the one where "ours" is
+              correct, and it is marked as a commitment rather than as something
+              this page can prove.
+              **Do not warm this up.** The temptation is "and they say they keep
+              nothing", which their own per-endpoint table does say — but
+              `gpt-transcribe` is listed under two OpenAI endpoints with
+              different retention, and nothing documents which one OpenRouter
+              calls. That is precisely the unverifiable sentence this page
+              exists not to contain. */}
+          <strong className="tw:text-foreground">Dictation is the exception, and it changed.</strong>{" "}
+          When you talk into a box here, the recording goes from us to OpenRouter and on to OpenAI’s
+          <code className="tw:mx-1">gpt-transcribe</code>, because that is the route that will take a
+          list of the words your article actually uses, which helps it spell names out of the piece
+          you are reading. What each of them says is on their pages, linked above: OpenRouter says it
+          does not store what passes through unless an account opts in — ours is not opted in, and
+          that is a setting we hold ourselves to rather than something this page can prove — and that
+          it keeps audio no longer than routing needs except where it says it must, for abuse
+          detection, security, billing or the law; OpenAI says data sent to its API is not used to
+          train its models by default, unless its API customer opts in.{" "}
+          <strong className="tw:text-foreground">
+            What changed is that we now rely on those policies rather than enforcing a
+            zero-retention route.
+          </strong>{" "}
+          We used to route dictation so that only providers keeping nothing could serve it, and on
+          this endpoint that setting is not applied, so we cannot. We do not save the recording on our
+          servers — it arrives in one request, goes out in the next, and is gone when the request
+          ends — and the fact that a request happened is still recorded.
         </p>
         {/* **The models, spelled out.** A privacy policy that says "an AI
             provider" and stops has told you nothing you could check, so this
@@ -311,7 +372,7 @@ export function PrivacyPage() {
           The default models, as of the date above: <code>claude-sonnet-5</code> for most of the reading
           aids, chat and search; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs;{" "}
           <code>voyage-4</code> to turn passages into the numbers that make search-by-meaning work;{" "}
-          <code>gemini-3.1-flash-lite</code> for dictation; and{" "}
+          <code>gpt-transcribe</code> for dictation; and{" "}
           <code>gpt-realtime-2.1</code> with <code>gpt-live-transcribe</code> for the live voice
           mode.
         </p>

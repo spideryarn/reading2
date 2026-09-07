@@ -300,6 +300,30 @@ describe("things the first draft got wrong", () => {
     expect(out).toContain("forged"); // the words are still the author's
   });
 
+  it("does not let an article forge the quote outline or its priority", () => {
+    /* Since 2026-09-07 a quote is drawn as a stroke whose **thickness is our
+       claim about how much the passage matters** — so a forged `data-quote` is
+       an article printing *"Spideryarn says this is one of the most important
+       lines in the piece"* on a sentence its own author chose, which is a
+       stronger lie than a forged highlight. `data-wash` is here too: it is what
+       says a search hit is present at all, so forging it paints a passage as
+       something the reader's own saved search had found.
+
+       Written as its own test rather than folded into the one above because
+       this list has now forgotten an annotation attribute three times —
+       `data-hit`/`data-hues` in the version-4 bump, `data-dir` in the
+       version-5 one, and these four were missing from the first draft of the
+       change that introduced them. GPT Sol found all three. */
+    const out = sanitizeHtml(
+      `<p><mark class="hit" data-quote="2" data-quote-start="" data-quote-end="" data-wash="">forged</mark></p>`,
+    );
+    for (const attr of ["data-quote", "data-quote-start", "data-quote-end", "data-wash"]) {
+      expect(out, attr).not.toContain(attr);
+    }
+    expect(out).not.toMatch(/\bhit\b/);
+    expect(out).toContain("forged"); // the words are still the author's
+  });
+
   it("does not let an article put a verdict on its own sentence", () => {
     /* `data-dir` is the annotation that draws the `−` / `+` sign after a
        marked phrase (`mark.hit[data-dir]::after`, styles.css), and it is the

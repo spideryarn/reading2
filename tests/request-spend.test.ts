@@ -123,9 +123,9 @@ beforeAll(async () => {
         status: 200,
         headers: new Headers({ "x-generation-id": "gen-dictation-1" }),
         text: async () => JSON.stringify({
-          model: "google/gemini-3.1-flash-lite",
-          choices: [{ message: { content: JSON.stringify({ transcript: "hello there" }) }, finish_reason: "stop" }],
-          usage: { prompt_tokens: 900, completion_tokens: 4, cost: ${COST}, is_byok: false },
+          model: "openai/gpt-transcribe",
+          text: "hello there",
+          usage: { seconds: 3, cost: ${COST} },
         }),
       }),
       /* 2. a success carrying no usage block at all — the failure that
@@ -137,8 +137,8 @@ beforeAll(async () => {
         status: 200,
         headers: new Headers(),
         text: async () => JSON.stringify({
-          model: "google/gemini-3.1-flash-lite",
-          choices: [{ message: { content: JSON.stringify({ transcript: "hello there" }) }, finish_reason: "stop" }],
+          model: "openai/gpt-transcribe",
+          text: "hello there",
         }),
       }),
       /* 3. a refusal. The call happened; the money left before the failure did. */
@@ -228,7 +228,11 @@ describe("the ledger a request leaves behind", () => {
     expect(rows).toHaveLength(3);
     expect(rows.every((r) => r.scope_kind === "request")).toBe(true);
     expect(rows.every((r) => r.purpose === "dictation")).toBe(true);
-    expect(rows.every((r) => r.wire === "chat")).toBe(true);
+    /* `chat` until 2026-09-07. Dictation is the only job on the transcription
+       wire, and the value is spelled out rather than read off `AI_JOB_WIRE`
+       so that a wrong row in that table fails here instead of agreeing with
+       itself. docs/plans/260907c-dictation-onto-an-openai-transcriber.md. */
+    expect(rows.every((r) => r.wire === "transcription")).toBe(true);
   });
 
   it("names an owner on every row, because the column cannot be null", () => {
