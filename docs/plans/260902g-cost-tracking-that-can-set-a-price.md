@@ -1,6 +1,15 @@
 # Cost tracking that can set a price
 
-**Status: planned, not built.** Written 2026-09-02. Reviews share the letter `g`.
+**Status: Stages 1–3 built and on `dev`, 2026-09-02. A second pass on 2026-09-07 re-verified them
+against the tree, found three things left, and GPT Sol's review of that pass found two more** —
+§ Second pass below, where Stages 5–8 are. Stage 4 was always somebody else's. Written 2026-09-02;
+reviews share the letter `g`.
+
+⟨This line said **"planned, not built"** until 2026-09-07, five days after every stage inside it had
+been marked ✅ built. Nothing was wrong except the header, and the header is the only part most
+readers get to: the job was dispatched a second time as greenfield work. A stage that says it landed
+and a status line that says nothing did is not a small inconsistency — it is the plan lying to the
+next agent about the tree, which is the one thing a plan is for.⟩
 
 ## Why now
 
@@ -740,6 +749,182 @@ Sol review:
 - **The ledger's `outcome` field cannot see waste**: it means "the HTTP call completed"
   (`ok | error | aborted`), so a wasted-but-successful call is indistinguishable from a useful
   one. Worth deciding here whether the step/job outcome should be recorded beside spend.
+
+## Second pass, 2026-09-07 — what was verified, and what was actually left
+
+The job was re-dispatched on 2026-09-07 as if nothing had been built, on the strength of the stale
+status header above. The brief was explicit that four days is long enough here for some of a plan's
+"still open" claims to have been fixed, and asked which of the three gaps in § What is already true
+survive. **All three are closed.** Here is how each was checked, so the next reader does not have to
+repeat it.
+
+| The gap, as written 2026-09-02 | State on `dev` at `966513bf`, 2026-09-07 | How it was checked |
+|---|---|---|
+| **1. The ledger has defects that make its numbers wrong** | Closed. `byok_upstream_nanos` is the column name, written on BYOK rows only; `web_searches` is populated; `jobSpend()` goes through `totalRows()`; `UNMETERED_SPEND` exists and prints. | `grep byok_upstream_nanos` over `src/ drizzle/ tests/ scripts/` — 20 files including `drizzle/20260902141103_byok_upstream_nanos.sql`. `grep UNMETERED_SPEND` — `src/spend-declarations.ts:422`, printed at `scripts/ai-cost.ts:605`. |
+| **2. The single most expensive feature writes no rows at all** | Closed *structurally*. `src/live.ts` (1298 lines) meters both halves of a session; `src/web/live/meter.ts` (506) is the browser half; `spideryarn.realtime_sessions` and thirteen realtime columns exist; `src/live.ts` is **no longer in `UNMETERED_SPEND`**. Not closed *empirically* — see the box below. | The migration `drizzle/20260902150952_realtime_sessions_and_usage.sql` is applied; `tests/live-session-routes.test.ts`, `tests/live-meter.test.ts`, `tests/realtime-usage.test.ts`, `tests/store-realtime-sessions.test.ts` all exist and run. |
+| **3. The reporting is developer-shaped rather than pricing-shaped** | Closed. `npm run cost -- --owners --price 20` prints a coverage header, six categories, a per-account median/p95/max over **every** account including zero-spend ones, and a contribution margin that refuses to prorate. | Ran it. Output in § The numbers as they stand below. |
+
+**Defect 0.2 — test rows in the real ledger — is closed by something better than the fix this plan
+proposed.** The plan's answer was to redirect the test harness at the filesystem ledger. That
+filesystem ledger was deleted on 2026-09-05, three days later, which would ordinarily mean the fix
+went with it. It did not regress: `tests/setup/private-db.ts` now mints a database per run, so a
+fixture row is a real row through the adapter that actually deploys, in a database nothing else can
+see — strictly stronger, and `src/store/ai-calls.ts` carries the whole argument. Today's ledger reads
+1,224 calls with no fixture slugs in it, against 4,714-of-4,750 fixture rows on 2026-09-02.
+
+**So the three gaps did not need rebuilding, and were not rebuilt.** What follows is what a second
+pass found instead.
+
+### The numbers as they stand, 2026-09-07
+
+`npm run cost -- --owners --price 20 --month 2026-09`, against the shared local Postgres. Development
+data, not production — but the report itself is what was being checked, not the figures.
+
+```
+All recorded:  $50.0495 over 1224 call(s)
+  Product spend  $21.1886 / 837 calls      Eval spend  $28.8609 / 387 calls
+By category        default-step work $12.16 · on-demand enrichment $4.76
+                   interactive request work $2.31 · non-product $33.33 · voice $0.00
+By job (top)       hierarchy $18.88 · labels $10.74 · pdf $4.19 · arc $2.96
+Live sessions      0 issued, 0 connected, 0 connected and reported nothing
+```
+
+**`labels` and `hierarchy` are two thirds of all product spend** — which is the answer to "which
+features dominate" today, and it is the same answer `src/models.ts § TASK_TIER` already reasons
+about when it calls `labels` *"the biggest bill in the app by a distance"*. Voice is $0.00 because no
+live conversation has ever been held on this box, not because it is cheap.
+
+### The three things left
+
+**A. A reader-facing job can go uncategorised and nothing goes red.** `link-summary` — the hover
+cards on the article's own links, `docs/project/links.md` — is a live, reader-triggered, request-scope
+job, and `src/cost-categories.ts` does not know it. It sits in `UNCLASSIFIED`, all-time:
+
+```
+UNCLASSIFIED — 9 call(s), $0.0030 ledger, 0.0% of the money
+  request / link-summary / —                        9 call(s)  $0.0030
+```
+
+`src/cost-categories.ts` enumerates request-scope jobs *on purpose*, so that a new `AiJob` lands in
+`unknown` rather than being absorbed by the widest `else`, and says so: *"adding an `AiJob` shows up
+in `unknown` on the next report, which is a nuisance that lasts one line of edit and is the entire
+point."* The design is right and it worked — the row is visible. **But the nuisance is only delivered
+to somebody who runs the report and reads it**, and `link-summary` proves that is not enough: it has
+been unclassified since it shipped, in a report nobody was watching. Money is currently trivial
+($0.0030) and that is exactly why it went unnoticed; the mechanism, not the amount, is the finding.
+This is [silent-success.md](../reusable/silent-success.md) — the check exists, agrees, and is not
+read.
+
+**B. The report never says which bill it is a report of.** `grep -n "providerAccount\|provider_account"
+scripts/ai-cost.ts src/cost-report.ts src/store/ai-calls-spend-pg.ts` returns **nothing**. The column
+exists and `src/db/schema.ts:2626` already carries the fact in prose — *"`openai` is live
+conversation … and it is the one **outside the account-level spend cap** set in OpenRouter"* — but no
+report prints it. The coverage header groups by `credential_fingerprint` and prints one line, `Paid
+with 66c3cdfc178e`, which reads as *this is all of it*.
+
+That was nearly true on 2026-09-02 and is not now:
+
+- On **2026-09-06 Greg declined a per-reader spend cap** on the paid endpoints, on the grounds that
+  the OpenRouter account already has a global monthly cap —
+  [ai-gateway.md § What stops a reader spending our money](../project/ai-gateway.md). The remaining
+  control is a single global ceiling.
+- **`OPENAI_API_KEY` is a separate billing account and that ceiling does not cover it.** Live
+  conversation spends there, and the live-mode evals do.
+
+  ⟨This bullet claimed dictation was moving onto that account too. **It is not**, and GPT Sol caught
+  it (F5). [260907c](260907c-dictation-onto-an-openai-transcriber.md) landed on `dev` the same day and
+  moved dictation onto **`openai/gpt-transcribe`**, which is an OpenRouter *model slug* — the account
+  is still OpenRouter and still behind the cap. Only the comparison probe calls OpenAI directly. A
+  model named after a vendor is not a bill from that vendor, and that is a trap worth naming once:
+  `provider_account` is the column that knows, and reading the model id instead is how the wrong
+  account gets attributed.⟩
+
+So the one report that says what things cost does not distinguish the money that is behind the safety
+net from the money that is outside it — while the safety net is now the *only* control. That is a
+visibility gap of exactly the kind this plan exists to close, and it is four lines of SQL and a
+paragraph of print.
+
+**C. The end-to-end proof of Stage 2B still cannot be had on this box, and this pass did not get it.**
+`tests/live-session-routes.test.ts` takes a raw provider event through the browser's own projection,
+over the real HTTP route, into a priced Postgres row, for a spoken turn and a transcription both — so
+the seam is proved. What is unproved is that a *real* OpenAI session emits usage in the shape the
+projection expects, and in particular **which of the two shapes `gpt-live-transcribe` sends**
+(§ Stage 2B). That needs a browser with a microphone and real money.
+
+**Not attempted, deliberately.** There is no audio input device on this box, and the fake-mic flags do
+not work headless. More to the point, an autonomous run is not the place to spend real money on a
+third billing account nobody is watching. It stays outstanding and stays named, which is better than
+a green tick over a thing that did not happen.
+
+### Two facts from 2026-09-06 that this plan predates
+
+- **`OPENAI_API_KEY` is not covered by the OpenRouter cap.** Absorbed as finding B above.
+- **There is no scheduler** — [cron-scheduler.md](../project/cron-scheduler.md) — so a periodic
+  cost-rollup job has nowhere to run. **Nothing needed doing**: `npm run cost` is on-demand and
+  `/admin/users` computes its column on request, so neither wants one. Recorded so the next person
+  does not go looking for the rollup that should exist.
+
+### GPT Sol's review of this second pass, 2026-09-07
+
+[The review](260902g-cost-tracking-second-pass-review-sol.md), against the prompt in
+[…-review-prompt.md](260902g-cost-tracking-second-pass-review-prompt.md). Verdict: **approve after
+these revisions**. It found **two P1s this pass had missed**, which makes the "all three gaps are
+closed" claim above true about the three *named* gaps and too strong as a statement about the
+ledger. Both are now stages of their own. Every finding was checked against the code before being
+accepted; all five stand.
+
+| | | Checked how |
+|---|---|---|
+| **F1** P1 | A paid call can be recorded as **settled $0**. When a provider reports `cost: 0` *and* a real `upstream_inference_cost` *without* `is_byok`, `normaliseByokUpstream` ([src/ai-spend.ts:309](../../src/ai-spend.ts)) drops the upstream figure and the row stores `credits_used_nanos = 0` with `cost_source = 'provider'` — so SQL counts it as priced and the money vanishes silently. | Upheld. The code **already documents this gap**, in `warnIfPaidLooksFree` directly below it: *"Money left, and the ledger says none did."* It chose a warning over a repair, and considered only two repairs — writing the figure anyway (violates the CHECK) or guessing `isByok` (restores the double-count). Sol's is a **third** it did not consider, and it is better than both. |
+| **F2** P1 | Ordinary `npm run cost` calls **CLI spend "Product"**. `const product = rows.filter((r) => r.scopeKind !== "eval")` ([scripts/ai-cost.ts:1331](../../scripts/ai-cost.ts)) excludes `eval` and forgets `cli`, so the two reports disagree about what a product is. | Upheld, from figures already in hand. Today: `Product spend $21.1886 / 837 calls`, and by scope `job_step 427 + request 61 + cli 349 = 837`. **$2.85 of dev-CLI money is inside the number a price would be set against**, while `--owners` correctly calls the same rows non-product. |
+| **F3** P1 | `provider_account` is **not** cap coverage. Direct `anthropic` and `openai` rows are outside the OpenRouter cap, and so is `byok_upstream_nanos` **while its row still says `provider_account = 'openrouter'`** — that money was billed to somebody else's key. An arbitrary window also cannot locate itself against a monthly cap. | Upheld, and it corrects the shape of Stage 8. The BYOK pocket is the part this pass had not thought about at all. |
+| **F4** P2 | `AI_JOB_WIRE` is **transport** inventory, not scope inventory, so a two-valued table would encode the wrong fact. Production `pdf`, `pdf-frontmatter` and `illustrate` run inside job-step collectors and are classified by `step_name` — yet `pdf` sits in the interactive-request allowlist today. | Upheld and adopted: the table becomes four-valued. Confirmed against the ledger — there is not one `request / pdf` row; `pdf` appears as `job_step / pdf / extract` (269), `cli / pdf` (339) and `eval / pdf / extract` (6). Sol also endorsed **compile-time** over a database-row guard, on the ground that a row-shaped guard *"would detect this only after money was spent"*. |
+| **F5** P3 | The claim that dictation was moving onto the direct OpenAI account is **wrong**. | Upheld and corrected above. |
+
+**Not overruled, and nothing outstanding.** Sol explicitly cleared the two judgement calls this pass
+asked about: stages 6–8 are *"not over-building … no dashboard, scheduler, cap machinery, or second
+report is warranted"*, and leaving the live-conversation proof outstanding *"does not block these
+stages"* provided the plan keeps saying so, which § C above does.
+
+### Stages for the second pass
+
+Each ends green and committable, and each gets its own Sol review of the committed code.
+
+**Stage 5 — correct the record.** The status header, this whole section, and F5's correction. No
+code. ✅
+
+**Stage 6 — the two P1s in what the numbers mean.** F1 and F2 together, because they are the same
+kind of defect as the original Tier 0 — a figure that is confidently wrong with nothing red.
+
+- F1: an inconsistent paid-looking-free row is recorded **unpriced** (`cost_source = 'none'`, null
+  credits and null BYOK), not settled-$0. The warning stays. Two tests in
+  `tests/ai-call-images.test.ts` currently assert the old behaviour and must be changed to require an
+  unpriced row — changing a test to assert the opposite is exactly the sort of edit that needs saying
+  out loud, so: **those assertions encoded a known-wrong behaviour that the source comment beside them
+  already called wrong**, and the change is the point of the stage rather than a casualty of it.
+- F2: Product is `request | job_step`; `cli` is printed as its own pocket beside `eval`. The scope
+  partition becomes one named, tested function so the two reports cannot drift again.
+
+**Stage 7 — no reader-facing job goes uncategorised by accident.** F4's four-valued disposition
+table, keyed on `AiJob` so the compiler refuses a new job that nobody has placed: *interactive
+request work*, *step-driven*, *voice*, *no product path*. `link-summary` is placed as interactive,
+which is the one-line fix the report has been asking for since it shipped. Historical and
+eval-overlay combinations still reach `unknown` — the table says what a job is *expected* to do, and
+never overrides what a row actually says.
+
+**Stage 8 — the report says which bill, and what the cap cannot see.** F3's shape, not this pass's:
+per-account recorded subtotals split by the three money pockets, and a fixed note rather than a
+single reassuring "outside-cap total". It must say in its own words that it **cannot see the cap
+amount or the remaining headroom**, that BYOK money sits on an `openrouter` row and was billed
+elsewhere, and that unpriced and unmetered spend is missing from every figure. It must not imply
+that inside-the-cap means safe: [ai-gateway.md](../project/ai-gateway.md) is explicit that the cap
+converts a runaway into *every reader losing every paid feature until the month turns*, which is a
+blast radius rather than a throttle.
+
+**Deliberately not in scope**, restating the brief and § Scope: no cap, quota or throttle (Greg's
+call, twice); no dashboard, charts, billing UI, alerting or forecasting; no scheduler; no second
+report beside `npm run cost`. Stage 4 remains the other plan's.
+
 
 ## See also
 
