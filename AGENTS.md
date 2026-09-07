@@ -96,7 +96,7 @@ listed here; the names under each are files in `docs/project/`.
   `cron-scheduler.md` (there is no scheduler, and what that keeps costing us)
 
 Two of those are worth reading before you touch anything they bear on:
-**[granularity-zoom.md](docs/project/granularity-zoom.md)**, the feature this whole app is for, and
+**[granularity-zoom.md](docs/project/granularity-zoom.md)**, one of the features this app is for, and
 **[block-ids.md](docs/project/block-ids.md)**, the contract everything else depends on — see below.
 
 Docs are cross-linked, so a doc often appears under an entry point other than the one that owns it.

@@ -68,7 +68,22 @@ import {
  * `MODES_UI` before 2026-09-07) and the test asserts the bar draws what the
  * table says, which is what `visibleModes` means.
  */
-const BEHIND_THE_SWITCH: readonly Mode[] = ["timeline", "referee", "remember", "debate"];
+const BEHIND_THE_SWITCH: readonly Mode[] = [
+  "timeline",
+  "referee",
+  "remember",
+  "debate",
+  /* Structure, from 2026-09-07. The second entry here that is about what a mode
+     is *for* rather than about its readiness — Referee being the first — and
+     the reason is that hiding it is half of the decision to build it at all.
+     Greg, 2026-09-06: "I don't know if Structure will be better, so let's build
+     it as a third, and that way I can flip back and forth to compare. It'll be
+     in the 'Experimental Features' section." An ordinary reader's bar is
+     therefore unchanged by a third structural mode, which is what makes adding
+     one defensible when the band is meant to shrink.
+     docs/project/experimental-features.md owns that argument. */
+  "structure",
+];
 
 /**
  * What the bar should draw with the switch off: everything not behind it, plus
