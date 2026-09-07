@@ -917,6 +917,12 @@ The fixture rules that generalise, each of which passed a test against the bug i
   from the tests, the mocks and a 550-call eval.
 - **Spell the expectation out.** `toEqual(THE_CONSTANT.filter(…))` agrees with every value of that
   constant, including a wrong one.
+- **Spell out the value; mint the encoding.** The bullet above is about the *answer*. Its *spelling*
+  is the opposite case: a test that rebuilt a row's DOM id by hand as `` `-${mode}` `` went red in
+  sixteen places when `commandId()` changed shape (2026-09-07), and no rename sweep could have
+  warned it, because it never wrote the string down to be found. Unless the test's job *is* the
+  spelling, take it from the function that owns it —
+  [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx).
 - **Build every fake from one builder.** A hand-built flat error object passed against the exact bug
   it targeted, because it was not shaped like the real thing.
 - **A control that cannot go red is evidence about the test, not the code** — see
