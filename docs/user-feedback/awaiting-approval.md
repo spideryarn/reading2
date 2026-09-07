@@ -48,6 +48,7 @@ says what happened.
 | report | the decision resting with you |
 |---|---|
 | dictation privacy wording (2026-09-07, **already live — shipped unsigned-off**) | **A published zero-data-retention promise about a reader's voice has to go.** Greg chose the switch to an OpenAI transcriber on 2026-09-06 knowing it cost this; what needs your eye is not the decision but the four sentences that replace it, one of which is the line beside every microphone. Measured reason it cannot be kept: OpenRouter does not apply routing on its transcription endpoint, so `zdr: true` there is a flag nobody reads — `only: ["anthropic"]`, which no transcriber can satisfy, returns a transcript anyway. [plan](../plans/260907c-dictation-onto-an-openai-transcriber.md#the-proposed-reader-facing-wording) |
+| the Socratic wording, after the eval was repaired (2026-09-07) | **The eval you asked for now runs, and its first answer leans against the wording you picked.** It named no leader — the two completed repeats had different ones — but the run carried one generation of the **pre-V4** wording against three of V4, and the pre-V4 control ranked ahead of all three, head-to-head in 9, 8 and 11 of 12 lineups. One control generation on one document is directional and **not enough to revert a wording you chose that morning**, so nothing was changed. What is worth your minute is whether to spend on settling it: balanced replicates over several documents, about $0.05 a generation call. [note](260905_1803-only-the-socratic-question.md) · [plan](../plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md) |
 | [2A](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2A) — upload an HTML file (shipped 2026-09-07) | **An uploaded file's name is in its public URL.** `slugFromFilename` mints the article slug from the filename's stem and the slug is in `PublicMeta`, so publishing `confidential-client-acme.html` publishes `confidential-client-acme`. This predates the report by weeks — it has been true of uploaded PDFs since August — and was found only because this work was about to assert the opposite in a comment. Minting an opaque slug for uploads instead would change existing addresses and is a decision about what a URL should look like, so no agent took it. [note](260906_1709-upload-an-html-file-and-a-url-for-a-pdf.md) · [plan](../plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md#a-privacy-question-this-work-did-not-create-and-did-not-fix) |
 
 **Answered 2026-09-06, in one sitting, and this is what happened to each** — kept here briefly
@@ -57,7 +58,13 @@ rather than deleted, because "the file shrank" is only good news if you can see 
 |---|---|---|
 | [1Z](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1Z) — a yellow highlighter for quotes | **Neither option.** Greg proposed a *third* channel: a **border rather than a fill**, with stroke thickness and weight carrying the quote's priority — so search hits fill and quotes outline, and neither has to borrow from the other. Fluorescent yellow with pastel search marks is the named fallback | session `fb1z-quotes-outlined-by-priority`; [note](260905_1754-quotes-marked-in-the-prose.md) |
 | [23](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-23) — the send-button spinner | **No change.** The spinner shipped 2026-09-01, is in production, and a test pins it. A ~300ms minimum visible duration would mean deliberately adding latency to a path that has none, and there is no evidence yet that it is needed | [note](260905_1802-spinner-on-the-send-button.md) |
-| [24](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-24) — which Socratic wording | **Ship V4 now, then repair the eval, then tweak only if it teaches us something.** V4 reproduced Greg's own example almost verbatim; the eval's calibration gate failing is a separate defect and is not allowed to block the wording | session `fb1v-socratic-v4-and-the-eval`; [plan](../plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md) |
+
+**Report 24 came off this list on 2026-09-07**, which is what these rows are for. V4 shipped as
+`toc/7`, the cascade got the same block as `expand/4`, and the eval's calibration gate was repaired
+and passed for the first time. Nothing was tweaked, which was the third of Greg's three instructions
+— **but the repaired eval produced one finding that is now a decision, and it is in the table
+above.** [note](260905_1803-only-the-socratic-question.md) ·
+[plan](../plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md).
 
 **The quiz row (21) came off on 2026-09-07**, which is what these rows are for: the adaptive quiz is
 built and on `dev` — [260907d](../plans/260907d-make-the-quiz-adaptive.md), and the note records the
@@ -69,10 +76,11 @@ options put to Greg. Two of them dissolved a trade-off an agent had accepted as 
 mark by using a channel nobody had thought to use, and the quiz by removing the control rather than
 tuning it. That is the argument for this file existing rather than for agents deciding faster.
 
-## Two things are waiting on Greg
+## Three things are waiting on Greg
 
-The dictation privacy wording, which is already live rather than pending, and the 2A slug question
-above, both added 2026-09-07. Everything this file listed on 2026-09-06 has been
+The dictation privacy wording, which is already live rather than pending; the 2A slug question; and
+whether to spend on settling what the repaired Socratic eval leaned towards. All three added
+2026-09-07. Everything this file listed on 2026-09-06 has been
 answered. The `toc/6` question that stood here —
 whether to re-run the structure stage across the library so existing articles picked up the new gist
 lengths — was answered *"leave it, new articles only"*, and is now recorded where it belongs, in

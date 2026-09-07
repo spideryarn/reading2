@@ -515,34 +515,44 @@ summary left doing nothing — scores 1.50 and is also below. Every real arm sco
 `demand`. **The axis separates exactly what it was added to separate**, and each of the other four
 anchors is still caught by the axis it was designed for.
 
-**No leader is named**, and the numbers say why in a way a gate failure never could:
+**No leader is named** — and the reason is simple and sufficient: **the two completed repeats have
+different leaders**, so this run can never satisfy `separate`'s requirement that one arm lead every
+repeat.
 
-| arm | mean rank (questions) |
-|---|---|
-| `questions-toc6` — the pre-V4 control | **0.83** |
-| `incumbent` — V4, as shipped | 1.42 |
-| `incumbent-repeat` — *the same recipe as `incumbent`* | 2.08 |
-| `v1` | 2.58 |
-| `gists-toc6` | 3.08 |
+| arm | recipe | mean rank (questions) |
+|---|---|---|
+| `questions-toc6` — the pre-V4 control | the toc/6 QUESTIONS block | **0.83** |
+| `incumbent` | **V4** | 1.42 |
+| `incumbent-repeat` | **V4** (identical to `incumbent`) | 2.08 |
+| `v1` | V1 | 2.58 |
+| `gists-toc6` | **V4** (identical to `incumbent`) | 3.08 |
 
-**Read the third row before the first.** `incumbent` and `incumbent-repeat` are the *identical
-recipe* run twice, and they land 0.66 ranks apart — **further apart than V4 and the control**, which
-differ by 0.59. The paired generation noise floor is **1.83 ranks**. So the gap between the wording
-that shipped and the wording it replaced is about a third of the model's own run-to-run wobble on a
-recipe that did not change at all. The leader also flips between the two repeats.
+**The control is ahead of all three V4 samples, and that is directional evidence rather than noise.**
+Three of the five arms are byte-identical recipes — the duplicate-recipe test in
+`tests/summaries-eval.test.ts` says so — so this run carries **one control generation against three
+V4 generations**, and the control ranks above every one of them. Head-to-head it beats them in 9/12,
+8/12 and 11/12 lineups, and its 2.25 mean-rank gap over `gists-toc6` is against the comparator
+`arms.ts` actually registers for it.
 
-That is a **measured** "not separable", which is a different and much better object than the gate
-failure it replaces. The same holds for the gists table, where `incumbent` leads at 1.50 with
-`incumbent-repeat` last at 2.33.
+**This paragraph replaces one that explained that away**, and the correction is GPT Sol's ⟨F21, F22⟩:
 
-**What must not be read into it.** The control ranking nominally first is *not* "the control was
-better all along". The eval refuses to name a leader for two stated reasons, and the gap is well
-inside the noise floor; treating a nominal ordering as a result is precisely what the noise floor
-exists to prevent. What the axes *do* say, and this is interpretable, is that the two wordings differ
-where you would expect: `questions-toc6` scores `leakage 1.00` and `shapeHint: none` on all twelve,
-V4 scores `leakage 2.42` and claims a shape on eight of twelve. V4 tells the reader more about what
-is coming, and gives away a little more in doing it. **That is the trade Greg drew, working as
-drawn.**
+- I wrote that the gap was *"about a third of the model's own wobble"*, comparing 0.59 (a difference
+  of **aggregate mean ranks**) against 1.83 (a **mean absolute paired distance within lineups**).
+  `score.ts` says outright that those are on different sampling scales and that 1.83 is not a
+  separability threshold. The comparison was wrong, and so was every sentence resting on it —
+  including *"a third repeat could not move a factor-of-three margin"*. Gone.
+- I wrote that the nominal lead *"means nothing"*. That explains away more than the run supports.
+
+**So the honest reading, which is the one to act on:** *the run did not license a winner, but all
+three V4 generations trailed the control. Confirm or refute that with balanced generation replicates
+over more documents before changing anything.* One control generation on one document is not enough
+to act on, and it is too much to dismiss.
+
+What the axes add, and this survives whatever the ranking does because it does not come from an
+ordering: `questions-toc6` scores `leakage 1.00` and `shapeHint: none` on all twelve judgements; V4
+scores `leakage 2.42` and claims a shape on eight of twelve. V4 tells the reader more about what is
+coming and gives away a little more in doing it. **That is the trade Greg drew, behaving as drawn** —
+and if the control really is preferred, that trade is the first place to look for why.
 
 ### What it cost
 
@@ -567,9 +577,10 @@ arms over `--doc noema-mythology-of-conscious-ai` is five generation calls again
   — and refused to read it, which is right. But it means a 3-repeat run silently became a 2-repeat
   one, and two is the minimum `judgeInstability` will measure at all. A fourth repeat would be
   cheap insurance.
-- **The conclusion is robust to that loss**: the gap is a third of the noise floor and the leader
-  already flips across the two repeats that did land. A third repeat could not move a factor-of-three
-  margin. Recorded rather than spent on.
+- **The no-leader outcome is robust to that loss**, though not for the reason I first gave: the two
+  repeats that did land already have different leaders, so no third repeat could make one arm lead
+  every repeat. What a third repeat *would* have improved is the control-favouring signal below,
+  which is exactly what the next run should be designed to settle.
 
 ---
 
@@ -603,16 +614,16 @@ candidate edits.
 
 ## Stage 4 — nothing is changed, and here is the evidence for not changing it
 
-**The eval now works and says the arms are not separable.** That is the outcome this stage was told
-to be willing to reach, and reaching it on numbers rather than on a gate failure is the whole
-difference stage 3 bought.
+**The eval now works, and it produced a signal it is not powered to confirm.** That is a real
+outcome, and reaching it on numbers rather than on a gate failure is the whole difference stage 3
+bought.
 
 Against the rule set above, one condition at a time:
 
 - **Coverage clean?** Yes — 60 of 60 lines.
 - **Calibration passed?** Yes, for the first time.
-- **Did `separate` name a leader?** **No.** The leader flips between repeats, and the arm-to-arm gap
-  is 0.59 ranks against a paired generation noise floor of 1.83.
+- **Did `separate` name a leader?** **No.** The two completed repeats have different leaders, so no
+  arm led every repeat.
 
 So no prompt text may ship, and none does. Concretely, the three things stage 4 was allowed to act on
 and what the run actually says about each:
@@ -620,13 +631,14 @@ and what the run actually says about each:
 | the tweak it might have licensed | what the run says |
 |---|---|
 | *"a shorter V4 scores as well"* | **Unanswerable, by construction** — no arm was a shorter V4, and writing one now and shipping it is the move stage 1 refused. It is a candidate arm for a future run, not an edit |
-| *"hint placement matters"* | `v1` (hint before the colon) sits at 2.58 against V4's 1.42 — nominally worse, and well inside the same noise floor. **Not separable either** |
-| *"the control was better all along"* | The control ranks nominally first, **and that is not the same claim.** 0.59 ranks apart, with the same recipe under two names landing 0.66 apart. Reading a nominal order as a result is exactly what the noise floor is there to stop |
+| *"hint placement matters"* | `v1` (hint before the colon) sits at 2.58 against V4's 1.42, and behind the control at 0.83. Nominally worse, on one document, with no leader named. **Not settled** |
+| *"the control was better all along"* | **The nearest thing to a real finding here, and still not enough to act on.** All three V4 generations trailed the single control generation, head-to-head 9/12, 8/12 and 11/12. One control generation on one document is directional, not dispositive |
 
 **So: no change to the prompt, no change to the code, and this paragraph is the deliverable.**
-Inventing a tweak to justify the stage was named as the failure mode before the run, and the run gave
-every opportunity to commit it — a control sitting nominally at the top of the table is a very
-tempting thing to act on.
+Inventing a tweak to justify the stage was named as the failure mode before the run — and note that
+the *other* failure mode nearly happened instead: my first write-up dismissed the control's lead as
+noise, on a comparison of two statistics that are not on the same scale. GPT Sol caught it ⟨F21,
+F22⟩. **Explaining a result away is as much a way of not doing the stage as inventing one.**
 
 ### But two things were learned, and they are worth more than a tweak
 
@@ -641,9 +653,13 @@ tempting thing to act on.
    the article rather than on the sanitiser, and a run that costs $0.25. The next question about this
    prompt can be asked cheaply, which was not true this morning.
 
-**What would change the answer.** A run that could separate these arms needs either many more
-documents — the noise floor is per-lineup and averages down — or an arm that differs more than a
-reading order does. Both are decisions for Greg rather than for this stage.
+**What would settle it, and it is now a specific experiment rather than a wish.** Balanced generation
+replicates — the same number of independent generations per recipe, not one control against three
+accidental V4 twins — over several documents rather than one, with the aggregate-mean uncertainty
+bootstrapped by document and node instead of read off a per-lineup distance. That design would either
+confirm the control's lead or dissolve it, and at $0.049 a generation call it is affordable. **It is
+the thing to run next, and it is a decision for Greg** — because a confirmed result would mean
+reverting a wording he chose this morning.
 
 ---
 
@@ -675,6 +691,48 @@ already built: `src/pipeline.ts` logs `inputTokens`, `outputTokens`, `cacheReadT
   the link**, beside the 2026-08-26 caching numbers already there.
 
 **Last and alone.** It is the only heavy thing in this brief, and the box is shared.
+
+### Stage 5, as run
+
+Two fresh ingests against the local database (`127.0.0.1:54362` — read off the `Target:` line, not
+assumed), both on newly minted slugs so no checkpoint could hand back a cached zero. Both recorded
+`structureResumed: false`; the labels passes recorded `labelCalls` of 2, 5 and 4.
+
+```
+npm run ingest -- https://paulgraham.com/hwh.html          → hwh-spya-ara60g
+npm run ingest -- https://paulgraham.com/greatwork.html    → greatwork-spya-yw4d3t
+npm run labels -- <slug>
+```
+
+| | blocks | words | hierarchy | labels | total |
+|---|---:|---:|---:|---:|---:|
+| *How to Work Hard* | 96 | 3,341 | **$0.0620** (1 call) | $0.0437 (2 calls) | **$0.1057** |
+| *How to Do Great Work* | 330 | 11,890 | **$0.1671** (1 call) | $0.2144 (9 calls) | **$0.3815** |
+
+Dollars from `ai_calls.credits_used_nanos` with `cost_source = 'provider'` — OpenRouter's settled
+figure, which `src/pricing.ts` makes authoritative and against which per-token arithmetic is a
+cross-check only. **That is Sol's F6 taken in full**: a hand-multiplication of the four counters was
+the mistake waiting to be made, and the two providers need opposite cache arithmetic.
+
+**What the run cost in total: $0.4872.** Plus the eval's $0.2471 in stage 3 and the stage-2 pilot's
+one call, this whole night's model spend is under a dollar.
+
+**The labels pass failed once, and the long article's figure includes the failure.** The first attempt
+died on `Nav labels: expected [number, string] pairs` after spending $0.1427 and landing 3 of 6
+batches; the retry resumed those three, cost $0.0717 and finished. Recorded rather than re-run
+clean, because a figure that quietly excludes the retry is not what an article costs. Per-batch
+checkpointing is what stopped the first attempt being paid for twice.
+
+**Two of Q7's own premises were wrong**, which is most of why it stayed open since 2026-08-24:
+its estimate of *"one call per node plus one per leaf batch"* would have been an order of magnitude
+out — the tree is **one long-context call** whatever the size — and *"still unmeasured"* understated
+what was already there, since the counters and the ledger between them needed only two ingests and a
+query.
+
+**Where it is written.** The measurement and the method go in
+[ai-gateway.md § What an article costs to arrive](../project/ai-gateway.md#what-an-article-costs),
+which owns the cost subject; Q7 keeps its anchor and carries the headline table and the link, beside
+the 2026-08-26 caching numbers, which answer a different question and stay.
 
 **Sol's F8, half taken.** It objected that `open-questions.md` is one of the seven entry-point docs
 whose wording needs approval, and that a resolved question should collapse to a stub. The first half
