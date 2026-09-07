@@ -92,7 +92,7 @@ import { deriveLibraryScalars } from "../library-scalars.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { REVISION_PROJECTIONS, ownedSlug, requireSlug } from "./pg.js";
 import { slugIsTaken } from "./slug-is-taken.js";
-import { NO_INPUT_HASH, PIPELINE_RUN } from "./artifacts.js";
+import { NO_INPUT_HASH, PIPELINE_RUN, hierarchyCurrency } from "./artifacts.js";
 import { liveAttempt } from "./job-fence.js";
 
 const logger = log("store");
@@ -1655,36 +1655,66 @@ async function reasonsNotToPublish(
   const hierarchyRun = runs[0];
   const blocksHash = hashBlocks(blocks);
 
-  if (!hierarchyRun) {
-    reasons.push(
-      "there is no record of the hierarchy step running, so nothing can say the tree describes these blocks",
-    );
-  } else if (hierarchyRun.status !== "done") {
-    /* **Before the hash, and instead of it.** `revision_step_runs.status` is
-       `running`, `done` or `error`, and this branch did not exist until
-       2026-08-27: the guard read the row, compared `input_hash` and stopped, so
-       a `hierarchy` that ran and *failed* published as long as the hash beside it
-       matched — and `recordStepRun`, which is what the importer and every CLI
-       run use, does record a real hash at the moment it says `running`.
+  /**
+   * **Asked of `hierarchyCurrency` (src/store/artifacts.ts) since 2026-09-07**,
+   * which `articleMetadata` in src/store/pg.ts also asks — so the metadata page
+   * and the publication gate cannot answer it differently.
+   *
+   * That sentence used to be a comment in pg.ts and nothing else, and the half
+   * it was wrong about is the one below: this guard read the hash and never the
+   * status, so a `hierarchy` run that crashed left a matching hash and published.
+   * docs/postmortems/260827d-toc-status-never-checked.md § What would have
+   * caught the whole class asks for exactly this function, by name.
+   *
+   * The **sentences stay here**, because they are this caller's alone — the
+   * metadata page draws a tick, and only a publication refusal has to tell
+   * somebody what to do next. The `switch` is exhaustive, so a fifth reason
+   * cannot be added to the shared function without landing here.
+   */
+  const currency = hierarchyCurrency(hierarchyRun, blocksHash);
+  if (!currency.current) {
+    /* **The status arms come before the hash one, and that ordering is the
+       fix for 260827d rather than a tidy-up.** `recordStepRun`, which the
+       importer and every CLI run use, records a real hash at the moment it says
+       `running` — so a `hierarchy` that ran and *failed* used to publish, as
+       long as the hash beside it matched.
 
        The fenced path does not: `beginStepRun` writes `NO_INPUT_HASH` on
        purpose, because a step that has not run yet has not been made from
-       anything. So under the pipeline this branch is reached by a row that
-       could not have matched anyway — which makes it more necessary rather than
-       less, since without it the *next* branch would report "the tree was built
-       from different blocks" about a step that never got as far as a tree.
+       anything. So under the pipeline the status arms are reached by a row that
+       could not have matched anyway — which makes them more necessary rather
+       than less, since without them the hash arm would report "the tree was
+       built from different blocks" about a step that never got as far as a
+       tree, and send somebody to re-run the thing that has just told them it
+       failed.
 
-       `else if` rather than a second reason, because the hash cannot be trusted
-       to mean anything here and "the tree was built from different blocks —
-       re-run hierarchy" would send somebody to re-run the thing that has just told us
-       it failed. */
-    reasons.push(
-      `the hierarchy step ${hierarchyRun.status === "running" ? "has not finished" : "ended in error"}, so its tree cannot be trusted to describe these blocks`,
-    );
-  } else if (hierarchyRun.inputHash !== blocksHash) {
-    reasons.push(
-      `the tree was built from different blocks (hierarchy ran against ${hierarchyRun.inputHash}, these blocks are ${blocksHash}) — re-run hierarchy`,
-    );
+       Exhaustive on purpose: a fifth reason cannot be added to
+       `hierarchyCurrency` without the compiler stopping here for a sentence. */
+    switch (currency.why) {
+      case "no-run":
+        reasons.push(
+          "there is no record of the hierarchy step running, so nothing can say the tree describes these blocks",
+        );
+        break;
+      case "unfinished":
+      case "errored":
+        reasons.push(
+          `the hierarchy step ${currency.why === "unfinished" ? "has not finished" : "ended in error"}, so its tree cannot be trusted to describe these blocks`,
+        );
+        break;
+      case "different-blocks":
+        reasons.push(
+          `the tree was built from different blocks (hierarchy ran against ${currency.ranAgainst}, these blocks are ${blocksHash}) — re-run hierarchy`,
+        );
+        break;
+      default: {
+        /* The whole narrowed value, not `.why`: once every arm is covered
+           `currency` is itself `never`, and reading a property off it is an
+           error rather than the exhaustiveness proof it looks like. */
+        const never: never = currency;
+        throw new Error(`unhandled hierarchy currency ${JSON.stringify(never)}`);
+      }
+    }
   }
 
   return { reasons, carriedTreeProblems };

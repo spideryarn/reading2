@@ -135,7 +135,7 @@ import type {
   TweetThread,
   Visibility,
 } from "../types.js";
-import { metaRawSha256, sameStamp } from "./artifacts.js";
+import { hierarchyCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
 import type { ArticleReader, RawSource } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
@@ -2544,8 +2544,22 @@ const rawPgArticleReader: ArticleReader = {
     const isCurrent = (step: StepName): boolean => {
       switch (step) {
         case "hierarchy": {
+          /* No tree and no blocks are this function's own preconditions, not
+             `hierarchyCurrency`'s: it answers "is this run the one that
+             describes these blocks", which is not a question you can ask when
+             there are none. */
           if (!revision.tree || !blocksHash) return false;
-          return byStep.get("hierarchy")?.inputHash === blocksHash;
+          /* **Shared with `reasonsNotToPublish`** (src/store/pg-revisions.ts)
+             since 2026-09-07, and the status half is the point of sharing it:
+             **until `e18ac5f` on 2026-08-27** this call site had it and the
+             publication guard did not, behind a comment three lines from here
+             claiming they agreed. They have agreed since, and nothing said so
+             until they were joined —
+             docs/postmortems/260827d-toc-status-never-checked.md. `done` is
+             still required by the caller below as well, which is belt and
+             braces rather than duplication: this arm is the only one of the
+             fifteen that could answer it, and every other arm relies on it. */
+          return hierarchyCurrency(byStep.get("hierarchy"), blocksHash).current;
         }
         /**
          * **Asked of the run row, like `hierarchy` above and unlike everything

@@ -128,6 +128,14 @@ const literally = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")
  *
  * Reading it out of the declaration rather than assuming it — the whole of the
  * § above.
+ *
+ * **This is a grep, and a grep is not the right instrument.** The eventual home
+ * for it is the checked AST inventory of `serveAuthenticatedApi` that
+ * docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md § Stage 1
+ * builds — one parser that refuses syntax it does not understand, rather than a
+ * regex per test that returns `null` and shrugs. That parser does not exist yet;
+ * until it does, `resolves every artefact kind to a route` below is what stops
+ * this one failing quietly.
  */
 const bindingOf = (kind: string): string | null =>
   new RegExp(`const (\\w+) = ${literally(routePattern(kind))}\\.exec\\(path\\)`).exec(
@@ -139,6 +147,32 @@ const declaredRoutes = Object.keys(SHAPE)
   .map((kind) => ({ kind, binding: bindingOf(kind) }))
   .filter((pair): pair is { kind: string; binding: string } => pair.binding !== null)
   .sort((a, b) => a.kind.localeCompare(b.kind));
+
+/**
+ * **The other side of that derivation, written down**: the kinds `SHAPE` holds
+ * that are pipeline stages rather than things a reader may ask for, so
+ * `bindingOf` is *supposed* to return `null` for them.
+ *
+ * Without this list, a kind falling out of `declaredRoutes` is indistinguishable
+ * from a kind that never belonged there — which is exactly how a Timeline route
+ * went missing for a rename in the § above. `resolves every artefact kind to a
+ * route` asserts the two lists partition `SHAPE` between them, so a route that
+ * stops matching is named here instead of vanishing.
+ *
+ * `assets` is on this list even though `GET /api/asset/:slug/:hash.:ext` exists:
+ * the binding is `asset` and the URL is not `/api/assets/:slug`, so this
+ * derivation cannot see it and is not meant to. See § the asset route below.
+ */
+const ROUTELESS_KINDS = [
+  "assets",
+  "blocks",
+  "extractedHtml",
+  "labels",
+  "meta",
+  "raw",
+  "stampedHtml",
+  "tree",
+];
 
 /** Every artefact kind a reader can fetch on its own, one article at a time. */
 const servedArtefacts = declaredRoutes
@@ -187,6 +221,40 @@ describe("the derivation itself", () => {
      canary that says the scan still reads src/routes.ts. */
   it("finds the artefact routes that are already cached", () => {
     expect(servedArtefacts).toEqual(expect.arrayContaining(["glossary", "ideas", "quotes"]));
+  });
+
+  /**
+   * **Every miss is named, and this is the assertion the canary above cannot
+   * make.** `arrayContaining` is satisfied by a list of exactly those three, so
+   * a scan that had lost seven of the ten would still pass it and `it.each`
+   * below would quietly run seven tests fewer.
+   *
+   * A count would only be a canary too: deleting one route while adding another
+   * leaves the number alone. So the claim is made **both ways** — the kinds
+   * `bindingOf` could *not* resolve are asserted to be exactly the ones that
+   * have no URL, so a kind that stops matching turns up here by name instead of
+   * being `filter`ed out, and a kind that gains a route has to leave here
+   * deliberately.
+   *
+   * Which of the two happened is not something this test can tell you, and the
+   * two are not interchangeable:
+   *
+   * - a route genuinely added or removed — edit `ROUTELESS_KINDS`, and say
+   *   which in the commit; or
+   * - `bindingOf` has stopped parsing src/routes.ts, because the declarations
+   *   were reshaped. That is the failure the § above records happening once
+   *   already, and it is the likelier of the two.
+   *
+   * Do not reach for the first explanation without checking the second.
+   */
+  it("resolves every artefact kind to a route, or names the ones it could not", () => {
+    const unbound = Object.keys(SHAPE)
+      .filter((kind) => bindingOf(kind) === null)
+      .sort((a, b) => a.localeCompare(b));
+    expect(
+      unbound,
+      "an artefact kind changed sides: either a route was genuinely added or removed, or `bindingOf` has stopped matching src/routes.ts and the routes it lost are missing from every test below",
+    ).toEqual(ROUTELESS_KINDS);
   });
 
   /**
