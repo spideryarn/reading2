@@ -84,6 +84,16 @@ Both facts are measured, not read, and re-measuring them is a minute: `npm run
 eval:dictation-gate`. Run it before believing any leaderboard about this feature, and run it again
 if either fact changes.
 
+> **Both facts still hold, and dictation went to OpenAI anyway — through a different door.**
+> On 2026-09-07 it moved to `openai/gpt-transcribe` on **`/v1/audio/transcriptions`**, which takes
+> webm and takes a `keywords` array, so neither the transcode nor the chat endpoint's refusals apply.
+> Greg made the call the paragraph above reserves for him, and the published promise was dropped: the
+> `provider` block, `zdr` included, is *ignored* on that endpoint rather than refused.
+> [260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md) and
+> [privacy.md § Where a reader's voice goes](privacy.md#where-a-readers-voice-goes). **Everything in
+> this section is about the chat endpoint and is kept because it is still true of it** — that is why
+> the transcription endpoint was worth trying at all.
+
 Among what is reachable, `gemini-3.1-flash-lite` stayed — and the finding worth carrying out of that
 plan is not about models at all. **Given its vocabulary, every candidate got every hard term right,
 and the incumbent made no word errors at all.** The differences that first looked like a better ear
@@ -317,9 +327,16 @@ That is over, deliberately, and Greg made the call with the trade put to him in 
 What is true: the recording is held in memory for one request, base64'd into one OpenRouter call,
 never written to disk by us and never logged — the same rule that keeps a reader's question and
 the article's prose out of a log line covers a transcript exactly as well
-([logging.md](logging.md)). The call sends `provider: { zdr: true }`, which restricts routing to
-zero-data-retention providers, so *"your voice is not stored"* is a claim about the whole path
-rather than only about our half of it.
+([logging.md](logging.md)).
+
+**What stopped being true on 2026-09-07 is the second half of that.** The call used to send
+`provider: { zdr: true }`, which restricted routing to zero-data-retention providers, so *"your voice
+is not stored"* was a claim about the whole path rather than only about our half of it. On
+`/v1/audio/transcriptions` that flag is ignored — not refused, ignored, which is worse, because the
+request succeeds and the promise quietly stops being backed by anything. So the claim is now about
+our half only, and the sentence on the button says so.
+[privacy.md § Where a reader's voice goes](privacy.md#where-a-readers-voice-goes) has the probe and
+the two published policies we pass on instead.
 
 One sentence says so, and it lives **on the button** —
 `DICTATION_PROMISE` in [`DictationStrip.tsx`](../../src/web/DictationStrip.tsx), rendered before

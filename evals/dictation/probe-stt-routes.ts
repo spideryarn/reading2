@@ -65,11 +65,17 @@ function hard(text: string): string {
   return `spideryarn=${said(/spideryarn/i)} blockid=${said(/spya-?k3m9qt/i)}`;
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* The two fields any of these answers can carry, and nothing wider: an `any`
+   here drew a lint warning and deserved to, because the shape is known. */
+interface Answer {
+  text?: unknown;
+  error?: { message?: string };
+}
+
 function report(label: string, status: number, ms: number, raw: string) {
-  let json: any;
+  let json: Answer | undefined;
   try {
-    json = JSON.parse(raw);
+    json = JSON.parse(raw) as Answer;
   } catch {
     /* A body that is not JSON is itself the answer; the status carries it. */
   }
@@ -140,4 +146,99 @@ await router("gpt-transcribe, keywords + zdr", "openai/gpt-transcribe", {
 await router("gpt-transcribe, zdr alone", "openai/gpt-transcribe", {
   provider: { zdr: true },
 });
+
+/**
+ * **Is the `provider` block read at all on this endpoint?**
+ *
+ * These four rows were run as throwaway `curl`s on 2026-09-07 and quoted in
+ * [260907c](../../docs/plans/260907c-dictation-onto-an-openai-transcriber.md)
+ * without being committed — which is the precise failure `gate-models.ts`'s own
+ * docstring was written about, and GPT Sol's review of that plan caught it. They
+ * are here now because they carry more weight than any other line in this file:
+ * they are why `/privacy` stopped promising a reader's voice is unstored.
+ *
+ * **Anthropic serves no transcription model**, so `only: ["anthropic"]` is a
+ * request that cannot be satisfied. A 200 with a transcript therefore means the
+ * constraint was not read. OpenRouter documents this for three of the four keys
+ * — *"Routing preferences (`order`, `only`, `ignore`) are not applied to
+ * transcription requests"* — and says nothing about `zdr`, which is why the
+ * `zdr` rows above matter and why this block is the control for them.
+ *
+ * **What these rows do *not* establish**, and the plan now says so: that no ZDR
+ * is obtainable anywhere. OpenAI's own data-controls table lists
+ * `/v1/audio/transcriptions` as ZDR-eligible and retaining nothing, and
+ * OpenRouter has account-level and guardrail-level ZDR settings that a
+ * per-request flag says nothing about. The claim these support is the narrow
+ * one: **we cannot substantiate the promise from a per-request flag on this
+ * route**, which is all a privacy page needs to stop making it.
+ */
+/**
+ * **Does a five-minute recording come back before OpenRouter gives up?**
+ *
+ *   npx tsx evals/dictation/probe-stt-routes.ts --long
+ *
+ * Behind a flag because it uploads about 13 MB and the rest of this file is
+ * pennies and seconds. It answers GPT Sol's second blocker on
+ * [260907c](../../docs/plans/260907c-dictation-onto-an-openai-transcriber.md):
+ * OpenRouter documents a **60-second upstream processing timeout**, the recorder
+ * stops at five minutes (`mic-recording.ts`), and every clip anybody had
+ * measured was 3 or 22 seconds. Extrapolating from 22 seconds to 300 is not
+ * evidence, and the failure it would hide is a reader talking for four minutes
+ * and getting nothing back.
+ *
+ * **A tone, not speech, and that limits what a pass means.** There is no ffmpeg
+ * on this box and no way to synthesise five minutes of talking, so this measures
+ * how the endpoint handles *duration and bytes* and says nothing about how long
+ * it takes to transcribe dense speech. A pass here is necessary and not
+ * sufficient; a failure here is conclusive.
+ */
+async function longAudioProbe() {
+  const seconds = 300;
+  const rate = 16_000;
+  const pcm = Buffer.alloc(rate * seconds * 2);
+  for (let i = 0; i < rate * seconds; i++)
+    pcm.writeInt16LE(Math.round(4000 * Math.sin((2 * Math.PI * 180 * i) / rate)), i * 2);
+  const h = Buffer.alloc(44);
+  h.write("RIFF", 0);
+  h.writeUInt32LE(36 + pcm.length, 4);
+  h.write("WAVE", 8);
+  h.write("fmt ", 12);
+  h.writeUInt32LE(16, 16);
+  h.writeUInt16LE(1, 20);
+  h.writeUInt16LE(1, 22);
+  h.writeUInt32LE(rate, 24);
+  h.writeUInt32LE(rate * 2, 28);
+  h.writeUInt16LE(2, 32);
+  h.writeUInt16LE(16, 34);
+  h.write("data", 36);
+  h.writeUInt32LE(pcm.length, 40);
+  const wav = Buffer.concat([h, pcm]);
+  const b64 = wav.toString("base64");
+  console.log(
+    `\n${seconds}s of tone — ${(wav.length / 1024 / 1024).toFixed(1)} MB raw, ${(b64.length / 1024 / 1024).toFixed(1)} MB base64\n`,
+  );
+  const started = Date.now();
+  const r = await fetch("https://openrouter.ai/api/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${OPENROUTER}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "openai/gpt-transcribe",
+      input_audio: { data: b64, format: "wav" },
+      response_format: "json",
+    }),
+  });
+  report(`${seconds}s wav`, r.status, Date.now() - started, await r.text());
+}
+
+console.log("\nIs the provider block read here at all? (Anthropic serves no transcriber)\n");
+for (const [label, block] of [
+  ['only: ["anthropic"]', { only: ["anthropic"] }],
+  ['zdr + only: ["anthropic"]', { zdr: true, only: ["anthropic"] }],
+  ['order: ["anthropic"], no fallbacks', { order: ["anthropic"], allow_fallbacks: false }],
+  ["zdr + require_parameters", { zdr: true, require_parameters: true }],
+] as const) {
+  await router(label, "openai/gpt-transcribe", { provider: block });
+}
+
+if (process.argv.includes("--long")) await longAudioProbe();
 console.log();

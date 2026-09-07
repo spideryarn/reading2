@@ -247,9 +247,47 @@ export const DECLARATIONS: readonly Declaration[] = [
     account: "openrouter",
     file: "evals/dictation/gate-models.ts",
     job: "dictation",
-    wire: "chat",
+    /* `chat` until 2026-09-07, when dictation moved endpoint. The file still
+       probes chat/completions in its `diagnose` section — that is the permanent
+       record of why `openai/gpt-audio` was unreachable — but the request it
+       *gates* is the production one, and that is now a transcription. */
+    wire: "transcription",
     metered: false,
-    why: "Asks which candidate models can serve the production request at all — `zdr`, `require_parameters`, the JSON schema, webm — before the bake-off spends an hour finding out. Calls `transcribeWith`, so it is through the seam and metered; it opens no collector. docs/plans/260903i-which-model-transcribes-dictation.md.",
+    why: "Asks which candidate models can serve the production request at all, before the bake-off spends an hour finding out. Calls `transcribeWith`, so it is through the seam and metered; it opens no collector. Its `diagnose` half sends raw fetches the app never would, on purpose — that is where the answer to 'why not OpenAI on the chat endpoint?' comes from. docs/plans/260903i-which-model-transcribes-dictation.md and 260907c.",
+  },
+  {
+    /* **The one file in this repo that spends on two accounts in one run, and
+       the comparison is the whole point.**
+       docs/plans/260907c-dictation-onto-an-openai-transcriber.md.
+
+       Greg's brief expected dictation to need `OPENAI_API_KEY` directly,
+       because OpenAI has no zero-data-retention endpoint on OpenRouter. This
+       probe is what established that it does not need to: `openai/gpt-transcribe`
+       reached through OpenRouter takes the same webm and the same `keywords`
+       and produces the same transcript as OpenAI reached directly. **The app
+       therefore stays wholly on OpenRouter and this remains the only file that
+       touches the second account** — which is the reason it is worth keeping and
+       worth declaring, rather than being deleted after one use.
+
+       `account` names OpenAI because that is the notable half — a second
+       billing account, outside the monthly cap on the OpenRouter one
+       (docs/project/ai-gateway.md § What stops a reader spending our money).
+       The same run also calls OpenRouter, and one row cannot say two accounts;
+       it is a handful of cents either way and both are stated here.
+
+       **The seam is wrong for it in the strongest sense: the seam is one of the
+       two things being compared.** `openRouterTranscription` can only send to
+       OpenRouter, so a probe asking whether the gateway forwards a parameter
+       cannot ask it through the gateway. */
+    id: "dictation-probe-stt-routes",
+    kind: "bypass",
+    since: "2026-09-07",
+    account: "openai",
+    file: "evals/dictation/probe-stt-routes.ts",
+    job: "dictation",
+    wire: "transcription",
+    metered: false,
+    why: "Compares OpenAI directly against OpenAI-through-OpenRouter on the transcription endpoint, which no seam can do because the seam is one of the two arms. It is what proved `keywords` is forwarded — read by the transcript changing, since OpenRouter drops unrecognised keys silently — and what proved `zdr` is ignored there, which is why /privacy no longer promises a reader their voice is unstored.",
   },
   {
     id: "dictation-bench-models",
@@ -258,7 +296,9 @@ export const DECLARATIONS: readonly Declaration[] = [
     account: "openrouter",
     file: "evals/dictation/bench-models.ts",
     job: "dictation",
-    wire: "chat",
+    /* `chat` until 2026-09-07; dictation's production request is a
+       transcription now, and this bench sends the production request. */
+    wire: "transcription",
     metered: false,
     why: "The bake-off that kept `gemini-3.1-flash-lite`: holds the shipped vocabulary fixed and varies the model, through `transcribeWith`'s `model` option. Through the seam and metered, no collector opened. docs/plans/260903i-which-model-transcribes-dictation.md.",
   },

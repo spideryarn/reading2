@@ -69,6 +69,12 @@ import {
    rather than re-implemented so this repo has one statement of the PNG magic
    bytes; `assets.ts` imports nothing at all, so this closes no cycle. */
 import { imageDimensions, sniffImage } from "./assets.js";
+/* **The container list, from the file both ends of dictation import.**
+   `dictation-limits.ts` imports nothing at all — that is the whole reason it
+   exists — so this closes no cycle, and taking the type rather than restating
+   it means the gateway cannot be handed a container the browser never
+   validated. */
+import type { AudioFormat } from "./dictation-limits.js";
 import { NOT_CONFIGURED, providerHttpFailure } from "./messages.js";
 /* **A type-only import, and that is load-bearing rather than tidy.** A value
    import here closes a cycle: `models.ts` imports `EMBEDDING_MODEL` from
@@ -272,7 +278,10 @@ export type OpenRouterPath =
   | "/v1/embeddings"
   /* Pictures. `openRouterImage` below is the only thing that sends here, and
      `illustrate` is the only job routed to it. */
-  | "/v1/images";
+  | "/v1/images"
+  /* Voices. `openRouterTranscription` below is the only thing that sends here,
+     and `dictation` is the only job routed to it. */
+  | "/v1/audio/transcriptions";
 
 /**
  * **The jobs whose answer is a picture** — one member, and it is deliberately
@@ -287,8 +296,18 @@ export type OpenRouterPath =
  */
 export type ImageJob = "illustrate";
 
+/**
+ * **The job whose answer is a transcript** — one member, excluded from `ChatJob`
+ * for the same reason `illustrate` is.
+ *
+ * `openRouterTranscription` takes this and nothing else takes it, so the audio
+ * cannot be posted to chat/completions and recorded as a chat call. See the
+ * `dictation` entry at the foot of `ChatJob` for what moved and when.
+ */
+export type TranscriptionJob = "dictation";
+
 /** Every job with a row in `AI_JOB_ROUTE`: everything this file can send. */
-export type RoutedJob = ChatJob | ImageJob;
+export type RoutedJob = ChatJob | ImageJob | TranscriptionJob;
 
 /**
  * Where one job goes, how hard we insist on getting there, and what the ledger
@@ -539,10 +558,34 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { require_parameters: true },
   },
+  /* **The one job with no `provider` block, and it used to be the one job whose
+     `provider` block mattered most.**
+
+     It was `{ zdr: true, require_parameters: true }`, and the comment above
+     called `zdr` load-bearing: it is what let the copy beside the microphone
+     promise a reader's voice was not stored. Dictation moved to
+     `/v1/audio/transcriptions` on 2026-09-07 (docs/plans/260907c-…), and
+     **OpenRouter ignores this block entirely on that endpoint.** Not refuses —
+     ignores:
+
+       provider: {"only":["anthropic"]}        200, with a transcript
+       provider: {"zdr":true}                  200, for a model that is absent
+                                               from GET /api/v1/endpoints/zdr
+
+     Their STT guide says as much of `order`, `only` and `ignore`, and is silent
+     on `zdr`; the second line above is what settles `zdr`, because an enforced
+     flag would 404 there exactly as it does on the chat endpoint. So `null`
+     rather than `{}`: a routing constraint nobody reads is worse than none,
+     because it sits here looking like a guarantee and a reader's privacy page
+     gets written from it. `evals/dictation/probe-stt-routes.ts` re-runs both
+     rows.
+
+     `require_parameters` goes for a plainer reason — there are no parameters
+     left to require. The JSON schema went with the chat endpoint. */
   dictation: {
-    path: "/v1/chat/completions",
-    wire: "chat",
-    provider: { zdr: true, require_parameters: true },
+    path: "/v1/audio/transcriptions",
+    wire: "transcription",
+    provider: null,
   },
   pdf: {
     path: "/v1/chat/completions",
@@ -679,6 +722,17 @@ export type ChatJob = Exclude<
      `openRouterJson("illustrate", …)` a compile error rather than a picture
      recorded as a chat call. */
   | "illustrate"
+  /* **The fourth reason, and it arrived on 2026-09-07: a job that used to be on
+     this wire and left.** `dictation` posted to chat/completions with the audio
+     as an `input_audio` part and a JSON schema around the answer, until
+     `openai/gpt-transcribe` turned out to take both a browser's webm and a
+     `keywords` array — docs/plans/260907c-dictation-onto-an-openai-transcriber.md.
+     It now posts to `/v1/audio/transcriptions`, whose answer is `{text}` with no
+     `choices` and whose `usage` counts seconds rather than tokens, so it is
+     excluded here for `illustrate`'s reason exactly: to make
+     `openRouterJson("dictation", …)` a compile error rather than a transcript
+     read as an empty reply. Its entry point is `openRouterTranscription`. */
+  | "dictation"
 >;
 
 /**
@@ -1680,6 +1734,217 @@ export async function openRouterImage(
     return {
       image: plate.image,
       mediaType: plate.mediaType,
+      answeredBy: meter.answeredBy,
+      generationId: meter.generationId,
+    };
+  } catch (err) {
+    if (outcome === "ok")
+      outcome = abortedBy(err, options?.signal) ? "aborted" : "error";
+    throw err;
+  } finally {
+    meter.finish(outcome);
+  }
+}
+
+/* ----------------------------------------------------------------- voices -- */
+
+/**
+ * **A transcript, on the same gateway and in the third shape this file speaks.**
+ *
+ * `POST /v1/audio/transcriptions` with `openai/gpt-transcribe`, for dictation —
+ * docs/plans/260907c-dictation-onto-an-openai-transcriber.md for why it moved
+ * off chat/completions on 2026-09-07, and [`transcribe.ts`](transcribe.ts) for
+ * everything about *what* gets sent, which is deliberately not decided here.
+ *
+ * It is in this file, beside `openRouterJson` and `openRouterImage`, for the
+ * reason the header gives and `openRouterImage` repeats: what this file is for
+ * is that there is no second way to spend money. One key, one base URL, one
+ * `Meter`, one `finally`. A module of its own that read `OPENROUTER_API_KEY`
+ * and called `fetch` would be the hole this file exists to close, and
+ * `tests/no-undeclared-spend.test.ts` would have had to be told to allow it.
+ *
+ * ## Where it chafes, and what was done about each
+ *
+ * 1. **There is no `choices` array and there are no tokens.** The answer is
+ *    `{ text }` and the `usage` is `{ seconds, cost }`. So it has its own
+ *    request type, its own reader and its own `Wire` — see the `transcription`
+ *    member in [`models.ts`](models.ts) for why a row on this wire must not be
+ *    summed with the chat rows.
+ * 2. **`usage: { include: true }` is not sent**, unlike every chat call. It is
+ *    chat-wire furniture; this endpoint returns a `usage` object unasked, and
+ *    it is the kind of endpoint whose answer to an unmeasured body key is a 400
+ *    rather than a shrug — see `Route.provider` and the `env-proposal`
+ *    write-up.
+ * 3. **The `provider` block is not sent either, and here that is a finding
+ *    rather than a default.** OpenRouter ignores it on this endpoint: a
+ *    `zdr: true` and an impossible `only: ["anthropic"]` both answer 200. The
+ *    `dictation` row in `AI_JOB_ROUTE` carries the measurement and what it cost
+ *    the privacy page.
+ * 4. **`keywords` is not OpenRouter's field, so it goes down the one channel
+ *    they leave open for a provider's own** — `provider.options.openai`. They
+ *    document that *"unrecognized keys are silently dropped"*, which makes this
+ *    the one parameter here that can stop working without anything going red.
+ *    `tests/dictation-keywords.test.ts` is the guard, and it asserts that a
+ *    *transcript changes*, never that a request succeeded.
+ * 5. **The bill is zero, and that is not a bug in this code.** `usage.cost`
+ *    came back `0` for 3 seconds of audio and for 22. `Meter.saw` records what
+ *    it is told, so dictation rows carry no cost; `npm run cost --reconcile`
+ *    still recovers the truth from the account, so the monthly cap and the
+ *    total are unaffected and only the per-job attribution is.
+ */
+
+/** What a caller asks for. Named fields, for `ImageRequest`'s reason exactly. */
+export interface TranscriptionRequest {
+  model: string;
+  /** The recording, base64, already checked against the shared size cap. */
+  audio: string;
+  /** The container, already validated by `isAudioFormat` in dictation-limits.ts. */
+  format: AudioFormat;
+  /**
+   * Spellings the transcriber should expect — *"words or phrases to guide
+   * transcription of the input audio"*, and the reason dictation is on this
+   * model at all.
+   *
+   * **Omitted entirely when empty, never sent as `[]`.** An empty array is a
+   * value nothing has been measured against, and the caller already warns about
+   * the case where it has nothing to say ([`transcribe.ts`](transcribe.ts)).
+   */
+  keywords?: readonly string[];
+}
+
+/** What comes back. `text` is empty for a recording with no speech in it. */
+export interface TranscriptionCall {
+  text: string;
+  answeredBy: string | null;
+  generationId: string | null;
+}
+
+function outgoingTranscription(
+  job: TranscriptionJob,
+  body: TranscriptionRequest,
+): string {
+  const route = routeFor(job);
+  const keywords = body.keywords ?? [];
+  /**
+   * **The routing policy and the vocabulary share one key, so they are merged
+   * rather than spread.**
+   *
+   * The first version of this wrote `...{provider: {options: …}}` and then
+   * `...(route.provider ? {provider: route.provider} : {})`, which is the
+   * ordinary shape everywhere else in this file and is a trap here: both write
+   * `provider`, so the second wins outright. It was harmless only because
+   * `dictation.provider` is `null` — and the day somebody gives that row an
+   * object, **the vocabulary stops being sent and the only symptom is a
+   * slightly worse transcript**. No error, no red test, just "Spiderrion"
+   * coming back again. Found by a subagent reading the two files side by side,
+   * which is the same way GPT Sol found the eval that reimplemented the request
+   * it was measuring.
+   *
+   * `undefined` when there is nothing to say, so the key is absent rather than
+   * `{}` — an empty `provider` is a value nothing has been measured against.
+   */
+  const provider =
+    keywords.length === 0 && !route.provider
+      ? undefined
+      : { ...route.provider, ...(keywords.length === 0 ? {} : { options: { openai: { keywords } } }) };
+  return JSON.stringify({
+    model: body.model,
+    input_audio: { data: body.audio, format: body.format },
+    /* `json` rather than `verbose_json`: the extra field is timestamps nothing
+       here reads, and OpenRouter documents some models rejecting the verbose
+       form outright. */
+    response_format: "json",
+    ...(provider ? { provider } : {}),
+  });
+}
+
+/**
+ * **What the transcriber said**, or our own sentence instead of it.
+ *
+ * Nothing from the body is quoted into what this throws — the rule
+ * [`transcribe.ts`](transcribe.ts) states at length, and it is sharper on this
+ * wire than on any other, because a provider that echoes a request back is
+ * echoing a reader's **voice**.
+ */
+/**
+ * **A `cost: 0` from a paid model means "not priced", not "free".**
+ *
+ * This endpoint answers `usage: {seconds, cost}` and the cost is `0` — at 3
+ * seconds of audio and at 22, measured 2026-09-07 — for a model OpenRouter
+ * lists at $0.0045/minute. `Meter.saw` takes any number it is given as the
+ * provider's settled price, so passing that straight through writes a row
+ * saying the call was free, with `source: "provider"` asserting that the
+ * provider *told* us so. Owner and job totals then understate by exactly the
+ * amount nobody can see, and `npm run cost` reports a confident zero rather
+ * than a gap.
+ *
+ * Dropping the field instead makes the row say `source: "none"` — *the total is
+ * short by an unknown amount and says so*, which is the honest state and one
+ * `ai-spend.ts` already has a vocabulary for. The account-level reconciliation
+ * remains the only way to recover the real figure.
+ *
+ * **Only an exact zero is dropped**, so the day OpenRouter starts pricing these
+ * calls the number is used without anybody having to notice. GPT Sol's plan
+ * review, finding 3.
+ */
+function unpriceZero(usage: unknown): unknown {
+  if (!usage || typeof usage !== "object") return usage;
+  const u = usage as { cost?: unknown };
+  if (u.cost !== 0) return usage;
+  const { cost: _dropped, ...rest } = u;
+  return rest;
+}
+
+function readTranscript(body: unknown): string {
+  const said = (body as { text?: unknown } | null)?.text;
+  if (typeof said !== "string")
+    throw new Error("The transcription service sent something unreadable.");
+  return said;
+}
+
+export async function openRouterTranscription(
+  job: TranscriptionJob,
+  body: TranscriptionRequest,
+  options?: { signal?: AbortSignal; apiKey?: string },
+): Promise<TranscriptionCall> {
+  /* Before the meter — see `prepare`: no attempt, no record. */
+  const key = apiKey(options?.apiKey);
+  const prepared = {
+    key,
+    payload: outgoingTranscription(job, body),
+    url: `${OPENROUTER_BASE}${routeFor(job).path}`,
+  };
+  const meter = new Meter(job, body.model, wireOf(job), keyFingerprint(key));
+  let outcome: SpendRecord["outcome"] = "ok";
+  try {
+    const response = await send(prepared, options?.signal);
+    meter.generationId = generationIdOf(response);
+    /* Read once, before the status is judged: a failed body still has to be
+       consumed or the connection leaks, and reading it twice throws. */
+    const text = await response.text();
+    let json: unknown = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      /* Swallowed and never rethrown. V8 puts a prefix of the offending input
+         into the `SyntaxError`, and the input here is base64 of somebody
+         talking. `readTranscript` throws our own sentence below. */
+    }
+    const record = json as
+      | { usage?: unknown; model?: unknown; provider?: unknown }
+      | null;
+    /* Usage before the status, for the reason `openRouterImage` sets out: a
+       non-2xx carrying a priced `usage` is still a call somebody billed, and
+       nothing about the status makes that number less true. */
+    if (record?.usage) meter.saw(unpriceZero(record.usage));
+    meter.sawModel(record?.model);
+    meter.sawUpstream(record?.provider);
+    if (!response.ok) {
+      outcome = "error";
+      throw new ProviderRefused(response.status, text, response.headers);
+    }
+    return {
+      text: readTranscript(record),
       answeredBy: meter.answeredBy,
       generationId: meter.generationId,
     };

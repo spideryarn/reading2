@@ -318,19 +318,41 @@ export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
  *   spends ~120 reasoning tokens before transcribing and that endpoint answers
  *   `400 Reasoning is mandatory for this endpoint and cannot be disabled`.
  *
- * **OpenAI is absent because it cannot be reached, not because it lost.**
- * `openai/gpt-audio` and `-mini` have no zero-data-retention endpoint on
- * OpenRouter — `zdr` is what lets the button promise a reader's voice is not
- * stored — and their `input_audio` rejects the webm `MediaRecorder` produces
- * while taking a wav in the same request. `npm run eval:dictation-gate`
- * re-checks both and prints the one-constraint-at-a-time diagnosis; run it
- * before believing any leaderboard about this feature.
+ * ## Changed to an OpenAI transcriber, 2026-09-07
  *
- * **Do not add `provider: { order: ["anthropic"] }` to this call.** See the
- * warning under `CAPABLE_MODEL_OPENROUTER`: pointed at a Gemini model that
- * preference is wrong, and wrong quietly.
+ * Greg's call, and the whole of it is in
+ * docs/plans/260907c-dictation-onto-an-openai-transcriber.md. Everything above
+ * remains true of the **chat** endpoint, including that `openai/gpt-audio`
+ * cannot be reached over it — its `input_audio.format` is a closed enum of
+ * `wav` and `mp3` in OpenAI's own schema, so a browser's webm has never had a
+ * way in.
+ *
+ * What changed is that the *other* endpoint turned out not to have the problem
+ * this feature avoided it for. `POST /v1/audio/transcriptions` takes webm, and
+ * `gpt-transcribe` takes a **`keywords` array** — a real biasing parameter,
+ * where 260903i found only a `prompt` field that "answers 200 and changes
+ * nothing". So the sentence that chose a chat model over a transcriber, *the
+ * dedicated route has nowhere to put a vocabulary*, is no longer true, and the
+ * vocabulary is the whole feature.
+ *
+ * Two things are worse and were accepted:
+ *
+ * - **Zero data retention is gone, and cannot be had here.** `zdr: true` is
+ *   *ignored* on the transcription endpoint rather than refused: it answers 200
+ *   for a model absent from OpenRouter's own ZDR list, and so does
+ *   `only: ["anthropic"]`, for a transcript. That is why `AI_JOB_ROUTE` no
+ *   longer sends a `provider` block for this job, and why /privacy no longer
+ *   promises a reader their voice is unstored.
+ * - **The bill comes back as zero.** `usage.cost` is `0` on this endpoint at 3
+ *   seconds and at 22; `npm run cost --reconcile` still gets the truth from the
+ *   account, so the cap holds and the total holds, but the per-row attribution
+ *   for dictation does not.
+ *
+ * `npm run eval:dictation-gate` re-checks the chat endpoint and
+ * `evals/dictation/probe-stt-routes.ts` the transcription one; run them before
+ * believing any leaderboard about this feature.
  */
-export const DICTATION_MODEL = "google/gemini-3.1-flash-lite";
+export const DICTATION_MODEL = "openai/gpt-transcribe";
 
 /** The two tiers a task can be on. */
 export type Tier = "capable" | "quick";
@@ -825,7 +847,25 @@ export const GATEWAY: Provider = "openrouter";
  * the seam, and `AI_JOB_ROUTE` there states this value per route rather than
  * deriving it from the path.
  */
-export type Wire = "messages" | "chat" | "embeddings" | "realtime" | "images";
+export type Wire =
+  | "messages"
+  | "chat"
+  | "embeddings"
+  | "realtime"
+  | "images"
+  /**
+   * **`POST /v1/audio/transcriptions`** — dictation, and nothing else
+   * (2026-09-07).
+   *
+   * Its own value rather than `chat` for the reason the doc above gives about
+   * summing across the column: this wire reports **no tokens at all**. A
+   * transcription's `usage` is `{seconds, cost}`, so every token column on the
+   * row is null, and a `SUM(reported_input_tokens)` that did not read `wire`
+   * would be quietly counting a different population than it thought. It also
+   * reports `cost: 0` — measured at 3 seconds and at 22 — which is a second
+   * reason a row on this wire should not be read like a chat row.
+   */
+  | "transcription";
 
 /**
  * **Which wire each task is on** — and the reason this is a `Record` rather
@@ -892,7 +932,7 @@ export function wireFor(task: Task): Wire {
 export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   ...TASK_WIRE,
   pdf: "chat",
-  dictation: "chat",
+  dictation: "transcription",
   embeddings: "embeddings",
   /* **What an eval would use if it went through the gateway** — and `rescue`,
      the only one that does, posts to chat/completions. The declared bypasses in
@@ -1063,7 +1103,11 @@ export const DISPLAY_NAME: Record<string, string> = {
   "anthropic/claude-sonnet-5": "claude-sonnet-5",
   "openai/gpt-5.6-luna": "gpt-5.6-luna",
   "voyageai/voyage-4": "voyage-4",
-  "google/gemini-3.1-flash-lite": "gemini-3.1-flash-lite",
+  /* `google/gemini-3.1-flash-lite` was here for dictation until 2026-09-07 and
+     went with it — nothing else in the app sends that id, and an inventory that
+     keeps a model nobody calls tells the next reader of /privacy that their text
+     reaches somewhere it does not. docs/plans/260907c-dictation-onto-an-openai-transcriber.md. */
+  "openai/gpt-transcribe": "gpt-transcribe",
 };
 
 /**

@@ -24,6 +24,7 @@ import {
   classifyEnd,
   openRouterJson,
   openRouterStream,
+  openRouterTranscription,
   pathFor,
 } from "../src/ai-call.js";
 import { AI_JOB_WIRE } from "../src/models.js";
@@ -231,6 +232,7 @@ describe("the routing table", () => {
       chat: "/v1/chat/completions",
       embeddings: "/v1/embeddings",
       images: "/v1/images",
+      transcription: "/v1/audio/transcriptions",
     };
     for (const [job, route] of Object.entries(AI_JOB_ROUTE)) {
       const wire = AI_JOB_WIRE[job as keyof typeof AI_JOB_WIRE];
@@ -268,7 +270,10 @@ describe("the routing table", () => {
        first version of this block did — coordinated wrong values pass, and only
        `chat` was ever checked against a real outgoing request. Raised by a GPT
        Sol review. This asserts the bytes, per job. */
-    for (const job of ["chat", "explain", "search", "dictation", "pdf"] as const) {
+    /* `dictation` was in this list until 2026-09-07 and is not a chat job any
+       more — it posts to /v1/audio/transcriptions. Its own policy, which is now
+       *no* provider block, is asserted in the transcription block below. */
+    for (const job of ["chat", "explain", "search", "pdf"] as const) {
       const sent = stubTransport(() => streamed(USAGE_CHUNK, "data: [DONE]\n\n"));
       await collectSpend(async () => {
         for await (const _ of openRouterStream(
@@ -286,18 +291,40 @@ describe("the routing table", () => {
     }
   });
 
-  it("does not pin Anthropic on the three jobs that are not Anthropic's", () => {
+  it("does not pin Anthropic on the jobs that are not Anthropic's", () => {
     /* The bug this prevents is silent: `order: ["anthropic"]` on a Gemini or a
        Voyage model finds no Anthropic upstream, falls through to the real one,
        and answers. The pin does nothing while looking like it did something. */
-    for (const job of ["dictation", "embeddings", "pdf"] as const) {
+    for (const job of ["embeddings", "pdf"] as const) {
       expect(AI_JOB_ROUTE[job].provider?.order, job).toBeUndefined();
-      /* `?.` because `Route.provider` is nullable now — but these three must
-         have a block, and a `null` would satisfy the line above by vacuum. */
+      /* `?.` because `Route.provider` is nullable now — but these two must have
+         a block, and a `null` would satisfy the line above by vacuum. */
       expect(AI_JOB_ROUTE[job].provider, job).not.toBeNull();
     }
-    expect(AI_JOB_ROUTE.dictation.provider?.zdr).toBe(true);
     expect(AI_JOB_ROUTE.pdf.provider?.allow_fallbacks).toBe(false);
+  });
+
+  /**
+   * **Dictation used to be this file's example of a `zdr` job, and it is now the
+   * example of the opposite.**
+   *
+   * The line here asserted `AI_JOB_ROUTE.dictation.provider?.zdr === true`,
+   * which was the code-side half of a promise on `/privacy`. On 2026-09-07
+   * dictation moved to `/v1/audio/transcriptions`, where **OpenRouter ignores
+   * the `provider` block entirely** — an impossible `only: ["anthropic"]`
+   * answers 200 with a transcript
+   * (`evals/dictation/probe-stt-routes.ts`,
+   * docs/plans/260907c-dictation-onto-an-openai-transcriber.md).
+   *
+   * So `null` here is load-bearing rather than incidental, and it is asserted
+   * rather than merely allowed: `{}` would be the obvious thing for somebody to
+   * write, `{ zdr: true }` the tempting thing, and either would put a routing
+   * constraint nobody reads back into the one row a privacy page was written
+   * from.
+   */
+  it("sends no provider block on dictation, because the endpoint ignores it", () => {
+    expect(AI_JOB_ROUTE.dictation.provider).toBeNull();
+    expect(AI_JOB_ROUTE.dictation.path).toBe("/v1/audio/transcriptions");
   });
 
   it("refuses to route a pipeline stage down this wire", () => {
@@ -782,7 +809,7 @@ describe("the non-streamed half", () => {
           usage: { cost: 0.5 },
         }),
       );
-      return openRouterJson("dictation", {
+      return openRouterJson("pdf", {
         model: "google/gemini-3.1-flash-lite",
       });
     });
@@ -790,7 +817,7 @@ describe("the non-streamed half", () => {
       "google/gemini-3.1-flash-lite",
     );
     expect(report.calls).toHaveLength(1);
-    expect(report.calls[0]?.job).toBe("dictation");
+    expect(report.calls[0]?.job).toBe("pdf");
     expect(report.calls[0]?.cost).toEqual({ source: "provider", costNanos: 500_000_000 });
   });
 
@@ -801,7 +828,7 @@ describe("the non-streamed half", () => {
        prefix of what we sent it, and what we sent is a reader's voice. */
     const { result } = await collectSpend(async () => {
       stubJson(200, "SECRET article prose, not JSON");
-      return openRouterJson("dictation", { model: "m" });
+      return openRouterJson("pdf", { model: "m" });
     });
     expect(result.json).toBeNull();
   });
@@ -1053,5 +1080,147 @@ describe("nothing else may talk to OpenRouter", () => {
     /* And that the stripping is real: the endpoint survives it because it is in
        a string literal, while a mention in a comment does not. */
     expect(code(gateway)).not.toContain("Anthropic Skin");
+  });
+});
+
+/**
+ * **The transcription wire** — `openRouterTranscription`, dictation's endpoint
+ * since 2026-09-07 (docs/plans/260907c-dictation-onto-an-openai-transcriber.md).
+ *
+ * These assert the bytes that go out, and one of them is the only automatic
+ * guard on the parameter the whole feature rests on. **They cannot prove that
+ * OpenRouter forwards `keywords` to OpenAI** — that is a fact about somebody
+ * else's gateway, it needs a paid call and a clip, and it lives in
+ * `evals/dictation/probe-stt-routes.ts`, which reads the *transcript* rather
+ * than the status because OpenRouter drops unrecognised keys in silence. What
+ * these prove is the half that can rot here: that we still put the words in the
+ * one place that has ever been forwarded.
+ */
+describe("the transcription wire", () => {
+  /** A 200 from `/v1/audio/transcriptions`, shaped as the real one is. */
+  function transcribed(text: string, usage?: unknown): Response {
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ "x-generation-id": "gen-test-stt" }),
+      text: async () =>
+        JSON.stringify({ text, ...(usage ? { usage } : {}) }),
+    } as unknown as Response;
+  }
+
+  it("posts to the transcription endpoint, not to chat/completions", async () => {
+    const sent = stubTransport(() => transcribed("hello"));
+    await collectSpend(() =>
+      openRouterTranscription("dictation", {
+        model: "openai/gpt-transcribe",
+        audio: "AAAA",
+        format: "webm",
+      }),
+    );
+    expect(sent[0]?.url).toBe(
+      "https://openrouter.ai/api/v1/audio/transcriptions",
+    );
+    expect(sent[0]?.body.input_audio).toEqual({ data: "AAAA", format: "webm" });
+  });
+
+  it("puts the vocabulary where OpenRouter forwards it, and nowhere else", async () => {
+    /* **The shape is the assertion.** `keywords` is not one of the fields
+       OpenRouter normalises on this endpoint, so a top-level `keywords` — the
+       obvious thing to write, and what OpenAI's own API takes — would be
+       dropped without a word and dictation would quietly go back to spelling it
+       "Spiderrion". The nesting is the whole guard. */
+    const sent = stubTransport(() => transcribed("Spideryarn"));
+    await collectSpend(() =>
+      openRouterTranscription("dictation", {
+        model: "openai/gpt-transcribe",
+        audio: "AAAA",
+        format: "webm",
+        keywords: ["Spideryarn", "spya-k3m9qt"],
+      }),
+    );
+    expect(sent[0]?.body.provider).toEqual({
+      options: { openai: { keywords: ["Spideryarn", "spya-k3m9qt"] } },
+    });
+    expect(sent[0]?.body.keywords).toBeUndefined();
+  });
+
+  it("sends no provider block at all when there are no words", async () => {
+    /* Not `{}` and not `{options: {openai: {keywords: []}}}`: an empty array is
+       a value nothing has been measured against, and the `dictation` row in
+       `AI_JOB_ROUTE` deliberately carries `null` because a routing constraint
+       this endpoint ignores would sit there looking like a guarantee. */
+    const sent = stubTransport(() => transcribed(""));
+    await collectSpend(() =>
+      openRouterTranscription("dictation", {
+        model: "openai/gpt-transcribe",
+        audio: "AAAA",
+        format: "webm",
+        keywords: [],
+      }),
+    );
+    expect(sent[0]?.body.provider).toBeUndefined();
+    /* Chat-wire furniture that must not appear on an endpoint whose answer to
+       an unmeasured body key is a 400. */
+    expect(sent[0]?.body.usage).toBeUndefined();
+    expect(sent[0]?.body.max_tokens).toBeUndefined();
+  });
+
+  it("records one spend row, on its own wire and not chat's", async () => {
+    stubTransport(() => transcribed("hello", { seconds: 3, cost: 0 }));
+    const { report } = await collectSpend(() =>
+      openRouterTranscription("dictation", {
+        model: "openai/gpt-transcribe",
+        audio: "AAAA",
+        format: "webm",
+      }),
+    );
+    expect(report.calls).toHaveLength(1);
+    expect(report.calls[0]?.job).toBe("dictation");
+    expect(report.calls[0]?.wire).toBe("transcription");
+  });
+
+  it("throws our own sentence, never the provider's body, when it refuses", async () => {
+    /* The body on this wire can be a reader's voice echoed back. */
+    stubTransport(
+      () =>
+        ({
+          ok: false,
+          status: 400,
+          headers: new Headers(),
+          text: async () => "SECRET base64 of somebody talking",
+        }) as unknown as Response,
+    );
+    await expect(
+      collectSpend(() =>
+        openRouterTranscription("dictation", {
+          model: "openai/gpt-transcribe",
+          audio: "AAAA",
+          format: "webm",
+        }),
+      ),
+    ).rejects.toThrowError(ProviderRefused);
+  });
+
+  it("refuses an answer with no transcript in it rather than returning nothing", async () => {
+    /* A `{}` body read as an empty transcript is the failure that looks exactly
+       like a reader who said nothing — docs/reusable/silent-success.md. */
+    stubTransport(
+      () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          text: async () => JSON.stringify({ nothing: "useful" }),
+        }) as unknown as Response,
+    );
+    await expect(
+      collectSpend(() =>
+        openRouterTranscription("dictation", {
+          model: "openai/gpt-transcribe",
+          audio: "AAAA",
+          format: "webm",
+        }),
+      ),
+    ).rejects.toThrow(/unreadable/);
   });
 });

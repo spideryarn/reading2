@@ -138,8 +138,38 @@ endpoint *"answering 200 and changing nothing"*. Keeping zero data retention the
 up the vocabulary, and the vocabulary is the top of Greg's list and the reason the feature exists.
 That is the trade, and it is the shape of the decision he already took.
 
-**Therefore zero-data-retention is unobtainable for dictation on any OpenAI transcriber, by either
-route, and Greg's decision to rewrite `/privacy` is required rather than optional.**
+**Therefore the promise cannot be substantiated from a per-request flag on this route, and Greg's
+decision to rewrite `/privacy` is required rather than optional.**
+
+That is deliberately narrower than the sentence that stood here first, which said zero data
+retention was *"unobtainable by either route"*. GPT Sol's review refused it, correctly: OpenAI's own
+data-controls table lists `/v1/audio/transcriptions` as **ZDR-eligible and retaining nothing**, and
+OpenRouter has account- and guardrail-level ZDR settings that a per-request flag says nothing about.
+None of that is reachable from where we are — we are not enrolled, and the request-level control is
+ignored — but "we cannot show it" and "it does not exist" are different claims, and a privacy page
+only needs the first. The wording below makes the first claim only.
+
+### Long recordings, which the review was right to ask about
+
+OpenRouter documents a **60-second upstream processing timeout**, the recorder stops at five minutes
+(`mic-recording.ts`), and every clip anybody had measured was 3 or 22 seconds. GPT Sol called that a
+blocker, correctly: extrapolating from 22 seconds to 300 is not evidence, and the failure it would
+hide is a reader talking for four minutes and getting nothing back.
+
+Measured, `probe-stt-routes.ts --long`: **300 seconds of audio, 12.2 MB of base64, `200` in
+8.7 seconds.** Seven times inside the upstream timeout and well inside `transcribe.ts`'s own 90-second
+bound. Two things make that margin bigger than it looks and one makes it smaller:
+
+- The recording we would really send is **smaller than the one tested**. `MAX_AUDIO_BASE64` is 3 MB,
+  so five minutes of webm/opus is about 1.6 MB of base64 — an eighth of what went up here.
+- The clip is a **tone, not speech**, because there is no ffmpeg on this box and no way to synthesise
+  five minutes of talking. Dense speech may take longer to transcribe than silence. So a pass here is
+  necessary and not sufficient, and the honest statement is that duration and payload size are not
+  the constraint — not that no long recording can ever time out.
+
+**No change to the recording limit**, therefore. The simpler v1 the review suggested — lower the cap
+to a demonstrated-safe duration — would cost a reader four of their five minutes to fix a problem the
+measurement does not show.
 
 ## The route, and the simpler options passed over
 
@@ -284,6 +314,81 @@ for abuse detection, security, billing, or legal compliance."*
 5. **A real browser**, Playwright against system Chrome on the box: record actual audio through
    `MediaRecorder` and watch words come back. A transcription path that passes tests and fails on a
    real recorder blob is the failure this whole job is about.
+
+## What the cross-family review changed
+
+GPT Sol reviewed this plan before it was built (2026-09-07). Eight findings; the five that changed
+something:
+
+1. **The ZDR conclusion was overbroad** — "unobtainable by either route" claimed more than the
+   evidence. Narrowed above to "cannot be substantiated from a per-request flag on this route", which
+   is what the privacy copy actually needs. OpenAI's own table makes the endpoint ZDR-*eligible*; we
+   simply cannot reach that from here.
+2. **The plan quoted evidence the committed probe did not contain.** The `only: ["anthropic"]` rows
+   were run as throwaway `curl`s. That is exactly the failure `gate-models.ts`'s docstring exists to
+   record, committed one file away from it. They are in `probe-stt-routes.ts` now and re-run with the
+   rest.
+3. **`usage.cost: 0` would have been recorded as a settled price of zero**, understating every
+   dictation row in the ledger while `source: "provider"` asserted the provider had told us so.
+   `unpriceZero` in ai-call.ts drops an exact zero so the row says `source: "none"` — *short by an
+   unknown amount, and says so* — and starts using the number the day OpenRouter reports one.
+4. **The privacy copy over-claimed in four places**: "we keep nothing" ignored the failed-recording
+   Blob the browser deliberately holds so a reader can download it (now "on our servers"); it omitted
+   OpenRouter's abuse/security/billing/legal exceptions; "both policies are good" was opinion in a
+   disclosure; and the microphone line named OpenAI without naming OpenRouter, which also receives
+   the recording. **And it missed a page entirely** — `/privacy`'s OpenAI row said "the live voice
+   mode only", which this makes false.
+5. **"A transcription endpoint cannot answer a question" was not a safe invariant.** It is still a
+   generative model returning free text; the old schema only ever proved a *string* existed. The
+   comment in transcribe.ts now says the exposure is smaller rather than absent, and
+   `MAX_TRANSCRIPT_CHARS` is the tripwire that replaces the schema.
+
+**One finding I checked and did not act on**, recorded because the next person will wonder: Sol
+suggested the model list on `/privacy` was unpinned and would go stale silently. It is pinned, by two
+tests in a chain — `models.test.ts` holds every `NON_TASK_MODELS` id to `DISPLAY_NAME`, and
+`privacy-page.test.ts` holds every `DISPLAY_NAME` value to the page. It went red the moment the page
+was edited, which is how the stale `gemini-3.1-flash-lite` was caught. A test added to close the
+"gap" was deleted again once the existing chain was read properly.
+
+**The one still-outstanding finding closed itself in the browser stage.** Sol pointed out that
+`mic-recording.ts` prefers MP4 and only falls back to WebM, so the container this plan kept calling
+"the browser's webm" is not the one most readers send — and nothing had measured MP4 against this
+endpoint. The browser run below produced exactly that container and it transcribed correctly, so the
+gap is measured rather than argued. What is still untested is **Safari's** MP4 specifically, which
+carries AAC where Chrome's carried Opus.
+
+## A real browser, which is where two of these claims stopped being theoretical
+
+[`scripts/spike-dictation-browser.ts`](../../scripts/spike-dictation-browser.ts), on the box,
+2026-09-07:
+
+```
+clip decoded by Chrome             8.8s
+MediaRecorder produced             audio/mp4;codecs=opus, 140 KB
+mapped to AudioFormat              m4a
+transcribed in                     1376ms by openai/gpt-transcribe
+  "Add this to Spideryarn please, the granularity zoom is fine but the gist column
+   should follow the block id, which here is spya-k3m9qt."
+hard terms                         both present
+```
+
+**Both hard terms, through the real path**, including the block id — the string that the nineteen
+dedicated transcribers of 2026-08-27 turned into *"Spire k three m nine q t"*, and the reason the
+vocabulary exists at all. The vocabulary here is the `profile` recipe's eleven terms, assembled by
+the app rather than by the script.
+
+Two things this run settled that argument could not:
+
+- **Chrome chose MP4, not WebM.** Every probe up to this point sent `webm`, and this plan said "the
+  browser's webm" a dozen times. The recorder prefers MP4 and got it, `formatOf` mapped it to `m4a`,
+  and the endpoint took it. Had that mapping or that container failed, every test in `tests/` would
+  still have been green — which is the failure Greg's brief named in advance.
+- **There is no microphone on this box, and it did not matter.** Chrome's fake capture device gives
+  `NotFoundError: Requested device not found` in headless, with and without
+  `--use-file-for-fake-audio-capture` (all three variants tried). `getUserMedia` is not what this
+  job put at risk, so the script feeds a `MediaStreamAudioDestinationNode` into the recorder instead
+  and exercises the real encoder with no device at all. The script says so at the top, so nobody
+  reads it as a microphone test.
 
 ## Open questions for Greg
 

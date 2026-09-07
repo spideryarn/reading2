@@ -96,7 +96,7 @@ hand-maintained price table and cache arithmetic that the OpenRouter half did no
 
 Which raised the obvious question — *why are there two halves?*
 
-## One gateway, two wires
+## One gateway, five wires
 
 The word "provider" used to mean two things at once: **who bills us**, and **what the request looks
 like**. Only the first collapsed.
@@ -104,8 +104,10 @@ like**. Only the first collapsed.
 | | speaks | used by | code |
 |---|---|---|---|
 | **Messages** | Anthropic's Messages protocol, via OpenRouter's Anthropic-compatible endpoint (`/api/v1/messages`, which OpenRouter calls the "Anthropic Skin") | the pipeline stages — hierarchy, labels, arc, tweets, glossary, ideas, quotes, timeline, quiz, sketch | [`src/messages-stream.ts`](../../src/messages-stream.ts) |
-| **chat** | OpenAI's chat/completions shape | explain, chat, search, quiz marking, the three referee runs, dictation, PDF reading, and `env-proposal` — the one job with no reader at all, `gjd-remote push-env` asking a cheap model to sort a repo's env key *names* ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)) | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **chat** | OpenAI's chat/completions shape | explain, chat, search, quiz marking, the three referee runs, PDF reading, and `env-proposal` — the one job with no reader at all, `gjd-remote push-env` asking a cheap model to sort a repo's env key *names* ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)) | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **embeddings** | `/api/v1/embeddings` — OpenAI-shaped, different endpoint | turning a paragraph into a vector | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **images** | `/api/v1/images` — `data: [{b64_json}]`, no `choices` anywhere in it | the Illustrated diagram sub-mode | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **transcription** | `/api/v1/audio/transcriptions` — a base64 recording in, `{text}` out, and a `usage` counting **seconds rather than tokens** | dictation, since 2026-09-07 | [`src/ai-call.ts`](../../src/ai-call.ts) |
 
 Two files, and **no third way to spend money**. Each gateway's tests scan `src/` and fail if any
 other file constructs an Anthropic client, opens a message stream, or names an OpenRouter endpoint.
@@ -161,10 +163,21 @@ closes that.
 ### `provider` is a table, not a default
 
 The obvious next step after pinning Anthropic on the Messages wire is to do the same on this one. It
-is **wrong, and wrong silently**: dictation talks to Gemini and needs `zdr`, the PDF reader talks to
-OpenAI and must forbid fallback, embeddings talks to Voyage. On any of those three
+is **wrong, and wrong silently**: the PDF reader talks to OpenAI and must forbid fallback,
+embeddings talks to Voyage, and dictation used to talk to Gemini and need `zdr`. On any of those
 `order: ["anthropic"]` finds no Anthropic upstream, falls through to the real one, and answers — the
 pin does nothing at all while looking like it did something.
+
+**Dictation is now the sharper version of the same lesson, and it is the only row whose `provider` is
+`null`.** It moved to `/v1/audio/transcriptions` on 2026-09-07
+([260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md)), and **OpenRouter ignores the
+`provider` block entirely on that endpoint** — `only: ["anthropic"]` answers 200 with a transcript,
+and so does `zdr: true` for a model absent from their own ZDR list, where the chat endpoint 404s. So
+the danger here is not a pin that quietly does nothing; it is a pin that quietly does nothing **and
+gets quoted on a privacy page**, which is exactly what happened — `zdr` on this row is what
+`/privacy` told readers their voice was protected by. `null` rather than `{}` means "send no block at
+all", and the row carries the measurement so that the next person tempted to add one finds it first.
+[privacy.md § Where a reader's voice goes](privacy.md#where-a-readers-voice-goes).
 
 Leaving each of the six callers to pass its own was the second draft, and Sol rejected that too: a
 field six callers set independently is a field that drifts. So it is `AI_JOB_ROUTE` in

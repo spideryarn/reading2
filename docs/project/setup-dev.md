@@ -308,7 +308,7 @@ drifted a version behind.
 | **quick** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | OpenRouter |
 | **embeddings** | Voyage 4 — `voyageai/voyage-4` | OpenRouter, and not a *tier* — see below |
 | **PDF reader** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | OpenRouter, and not a *tier* either — `PDF_READER_MODEL` |
-| **dictation** | Gemini 3.1 Flash Lite — `google/gemini-3.1-flash-lite` | OpenRouter, and not a tier — `DICTATION_MODEL` |
+| **dictation** | GPT Transcribe — `openai/gpt-transcribe` | OpenRouter's `/v1/audio/transcriptions`, and not a tier — `DICTATION_MODEL`. The one job not on chat/completions; it takes a `keywords` vocabulary, which is why it is there ([260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md)) |
 
 **Every one of those goes through OpenRouter**, since 2026-08-27 and Greg's decision to gate the
 whole app through one vendor. What still varies is not the vendor but the **wire** — which protocol

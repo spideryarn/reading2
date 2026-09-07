@@ -93,8 +93,36 @@ function dictationWords(d: UseDictation): string {
  * at all while a project doc claimed one sat beside every one of them.
  * GPT Sol's code review, 2026-08-27, item 10.
  */
+/**
+ * **It used to end "and isn't stored", and that stopped being true on
+ * 2026-09-07.**
+ *
+ * Dictation moved to `openai/gpt-transcribe`, which cannot be routed with zero
+ * data retention — OpenRouter ignores the flag on its transcription endpoint
+ * rather than refusing it (docs/plans/260907c-dictation-onto-an-openai-transcriber.md).
+ *
+ * Three words in it are load-bearing, and a shorter draft lost two of them to
+ * GPT Sol's review:
+ *
+ * - **"OpenRouter and OpenAI"**, not "OpenAI". Both receive the recording, and
+ *   naming only the far end of the chain misdescribes who has it.
+ * - **"on our servers"**, not "we don't keep a copy". When a transcription
+ *   fails, `mic-recording.ts` deliberately holds the Blob in the tab so the
+ *   reader can download what they said — so an unqualified "we don't keep it"
+ *   is wrong about the reader's own browser.
+ * - **"can't promise they don't"** under-claims on purpose, and a future edit
+ *   will want to warm it up. OpenAI's per-endpoint table gives
+ *   `/v1/audio/transcriptions` no retention at all, so *"and they don't
+ *   either"* is probably true. Probably is not the standard for the line beside
+ *   a button: `gpt-transcribe` is listed under two OpenAI endpoints whose
+ *   retention differs, and nothing documents which of them OpenRouter calls.
+ *
+ * `/privacy` has room to set the position out; this has a line, so it takes the
+ * half we can stand behind. Read docs/project/privacy.md § Where a reader's
+ * voice goes before changing it.
+ */
 const DICTATION_PROMISE =
-  "Your voice is sent to be transcribed, and isn't stored. The words appear when you stop.";
+  "Your voice goes to OpenRouter and OpenAI to be transcribed. We don't save it on our servers, and we can't promise they don't.";
 
 /**
  * **What the button says instead when there is no network**, and why it is not
