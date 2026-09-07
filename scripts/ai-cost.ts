@@ -73,6 +73,7 @@ import { CATEGORY_MEANING, COST_CATEGORIES } from "../src/cost-categories.js";
 import {
   OPENROUTER_CREDIT_FEE,
   type SpendFold,
+  billReport,
   cashNanos,
   foldSpend,
   partitionByScope,
@@ -732,37 +733,42 @@ function printBills(bills: AccountTally[]): void {
     say("Billed to", "no rows, so no bill to name");
     return;
   }
-  for (const b of bills) {
-    const pockets = [
-      `${formatNanos(b.creditsNanos)} credits`,
-      `${formatNanos(b.byokNanos)} BYOK upstream`,
-      `${formatNanos(b.computedNanos)} computed`,
-    ].join(" · ");
+  const report = billReport(bills);
+  for (const [i, line] of report.lines.entries()) {
     say(
-      bills[0] === b ? "Billed to" : "",
-      `${b.account.padEnd(11)} ${b.calls} call(s)  ${pockets}` +
-        (b.unpricedCalls > 0 ? `  (${b.unpricedCalls} unpriced)` : ""),
+      i === 0 ? "Billed to" : "",
+      `${line.account.padEnd(11)} ${line.calls} call(s)  ${line.pockets}` +
+        (line.unpricedCalls > 0 ? `  (${line.unpricedCalls} unpriced)` : ""),
     );
   }
-  /* The three pockets that the OpenRouter ceiling cannot see: everything on
-     another account, plus BYOK money that sits on an `openrouter` row and was
-     charged elsewhere. */
-  const outside = bills.reduce(
-    (sum, b) =>
-      sum + b.byokNanos + (b.account === "openrouter" ? 0 : b.creditsNanos + b.computedNanos),
-    0,
-  );
-  say(
-    "",
-    `${formatNanos(outside)} of the above is RECORDED KNOWN-DOLLAR SPEND OUTSIDE THE CAP —`,
-    "direct Anthropic and OpenAI, plus BYOK money that sits on an openrouter row",
-    "and was billed to somebody else's key. The OpenRouter cap is a global MONTHLY",
-    "account total: this report cannot see its amount or the headroom left, so no",
-    "figure here is a distance from a limit. Unpriced rows and every entry under",
-    "\"no seam can see\" below are missing from it as well. And the cap is not a",
-    "throttle — it is global, so a runaway becomes every reader losing every paid",
-    "feature until the month turns. docs/project/ai-gateway.md.",
-  );
+  say("", ...report.caveat);
+}
+
+/**
+ * **The same block, in the ordinary report's shape** — no gutter, one indent.
+ *
+ * `npm run cost` without `--owners` is the path the header advertises first, and
+ * it printed money without ever naming an account until 2026-09-07: Stage 8 wired
+ * the bills into `printCoverage`, which only `--owners` calls, so the claim that
+ * "the report says which bill" was false for the report most people run. GPT
+ * Sol, F6.
+ *
+ * Both callers take their lines from `billReport`, so there is exactly **one**
+ * wording of the caveat. Two would drift, and the thing they would drift about
+ * is what the cap does — which is the one sentence here that has to stay true.
+ */
+async function printBillsPlain(args: Args): Promise<void> {
+  const bills = await accountsInWindow(args.since, args.until);
+  if (bills.length === 0) return;
+  const report = billReport(bills);
+  console.log("\nBilled to");
+  for (const line of report.lines) {
+    console.log(
+      `  ${line.account.padEnd(11)} ${line.calls} call(s)  ${line.pockets}` +
+        (line.unpricedCalls > 0 ? `  (${line.unpricedCalls} unpriced)` : ""),
+    );
+  }
+  for (const line of report.caveat) console.log(`  ${line}`);
 }
 
 /**
@@ -1490,6 +1496,13 @@ async function main(): Promise<void> {
       `\nPrompt cache: ${cacheRead.toLocaleString()} tokens read, ${cacheWrite.toLocaleString()} written.` +
         "\n  A read that falls to zero is the cache silently switching off — docs/project/prompt-caching.md.",
     );
+
+  /* **Before the unmetered list, not after it.** The two answer the same
+     question from opposite ends — this is money we recorded on a bill the cap
+     cannot see, that is money no seam sees at all — and the recorded half has to
+     come first or the caveat's reference to "every entry under 'no seam can
+     see' below" points at nothing. */
+  await printBillsPlain(args);
 
   unmetered();
   undeclared();

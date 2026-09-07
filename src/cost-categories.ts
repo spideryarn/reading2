@@ -224,18 +224,26 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
 };
 
 /**
- * **Request-scope jobs this classifier recognises**, derived from the table
- * above rather than written twice.
+ * **What this build expects of a job, or `null` if it has never heard of it.**
  *
- * `voice` is not in here: `live_conversation` is request-scope too, and is
- * caught by an earlier branch precisely so it cannot disappear into the
- * category whose figure it would dominate.
+ * The `null` is the whole of the historical case, and it is why the ledger's
+ * `job` column is typed `string` here rather than `AiJob`: `data/_ai-calls`
+ * carries `summarise`, a stage that was split into `hierarchy` and `labels` long
+ * ago and exists in no union. Those rows keep the old step-name treatment;
+ * `costCategoryOf` holds only a job this build knows about to its disposition.
+ *
+ * ⟨There was a derived `INTERACTIVE_REQUEST_JOBS: Set<string>` here until
+ * 2026-09-07. It made `"step-driven"` and `"no product path"` behaviourally
+ * identical — three of the four values were "not in the set" — so the table
+ * read as if it enforced something it did not. GPT Sol, F7: *"Changing `pdf` or
+ * `debate` from step-driven to no-product would still pass the new tests and
+ * leave production behavior unchanged."*⟩
  */
-const INTERACTIVE_REQUEST_JOBS: ReadonlySet<string> = new Set(
-  Object.entries(JOB_DISPOSITION)
-    .filter(([, disposition]) => disposition === "interactive request work")
-    .map(([job]) => job),
-);
+function dispositionOf(job: string): JobDisposition | null {
+  return Object.hasOwn(JOB_DISPOSITION, job)
+    ? JOB_DISPOSITION[job as AiJob]
+    : null;
+}
 
 const DEFAULT_STEPS: ReadonlySet<string> = new Set<string>(DEFAULT_INGEST_STEPS);
 const KNOWN_STEPS: ReadonlySet<string> = new Set<string>(STEP_ORDER);
@@ -256,8 +264,26 @@ const KNOWN_STEPS: ReadonlySet<string> = new Set<string>(STEP_ORDER);
  */
 export function costCategoryOf(facts: CategoryFacts): CostCategory {
   if (facts.scopeKind === "eval" || facts.scopeKind === "cli") return "non-product";
-  if (facts.job === "live_conversation") return "voice";
+  /* `null` for a job no longer in `AiJob` — `summarise`, `summary` and the other
+     names the ledger still holds from before a rename. Those keep the old
+     step-name treatment below; only a job this build actually knows about is
+     held to its disposition. GPT Sol asked for the two to stay separable (F7). */
+  const disposition = dispositionOf(facts.job);
+  /* **Voice before scope.** A live session is recorded in *request* scope
+     (`src/live.ts` § the accounting routes) and would otherwise land in the
+     interactive bucket — the one category whose figure it would dominate, and
+     the one distinction the whole live-metering stage exists to make. Read from
+     the table rather than hard-coded against `live_conversation`, so `"voice"`
+     is a value that does something. */
+  if (disposition === "voice") return "voice";
   if (facts.scopeKind === "job_step") {
+    /* **A job that says it is not step-driven, in step scope, is a mismatch.**
+       Not an error and not a guess: `unknown`, printed, for somebody to look at.
+       Before 2026-09-07 this branch asked only the step name, so an interactive
+       or no-product job appearing here would have been quietly classified by
+       whichever step it named — the table would have been describing something
+       the classifier did not consult. GPT Sol, F7. */
+    if (disposition !== null && disposition !== "step-driven") return "unknown";
     /* The step, not the job. `labels` runs inside the `hierarchy` step and is
        recorded `job: "labels", step_name: "hierarchy"` — asking the job would
        put half of the default ingest in `unknown`. The step name is what says
@@ -267,7 +293,7 @@ export function costCategoryOf(facts: CategoryFacts): CostCategory {
     if (KNOWN_STEPS.has(facts.stepName)) return "on-demand enrichment";
     return "unknown";
   }
-  if (facts.scopeKind === "request" && INTERACTIVE_REQUEST_JOBS.has(facts.job)) {
+  if (facts.scopeKind === "request" && disposition === "interactive request work") {
     return "interactive request work";
   }
   return "unknown";

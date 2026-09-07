@@ -255,6 +255,55 @@ describe("placing every job the app can bill for", () => {
     );
   });
 
+  it("makes each of the four dispositions do something different", () => {
+    /* **The F7 test.** Until 2026-09-07 only `interactive request work` was read;
+       `voice` was hard-coded against the job name and the other two were both
+       just "not in the set". Sol's way of putting it: changing `pdf` or `debate`
+       from step-driven to no-product *"would still pass the new tests and leave
+       production behavior unchanged"* — which makes the table a comment wearing
+       a type. Each value now has an observable consequence. */
+    /* step-driven, in step scope: classified by its step. */
+    expect(costCategoryOf({ scopeKind: "job_step", job: "glossary", stepName: "glossary" })).toBe(
+      "on-demand enrichment",
+    );
+    /* no product path, in the same place: NOT classified by its step. */
+    expect(
+      costCategoryOf({ scopeKind: "job_step", job: "env-proposal", stepName: "glossary" }),
+    ).toBe("unknown");
+    /* interactive, in request scope. */
+    expect(costCategoryOf({ scopeKind: "request", job: "chat", stepName: null })).toBe(
+      "interactive request work",
+    );
+    /* voice, from the table rather than from a hard-coded job name. */
+    expect(costCategoryOf({ scopeKind: "request", job: "live_conversation", stepName: null })).toBe(
+      "voice",
+    );
+  });
+
+  it("calls a job in the wrong scope a mismatch rather than guessing", () => {
+    /* An interactive job recorded as a pipeline step is not something to
+       classify by whichever step it happens to name — it is something to look
+       at. `unknown` is where the report prints it. */
+    expect(costCategoryOf({ scopeKind: "job_step", job: "chat", stepName: "hierarchy" })).toBe(
+      "unknown",
+    );
+    /* And a step-driven job in request scope, which is the mirror. */
+    expect(costCategoryOf({ scopeKind: "request", job: "labels", stepName: null })).toBe("unknown");
+  });
+
+  it("still classifies a RETIRED job by its step, because the table cannot know it", () => {
+    /* `summarise` was split into `hierarchy` and `labels` long ago and is in no
+       union, so `dispositionOf` returns null and the old step-name path runs.
+       Holding a historical row to a table written after it was retired would
+       reclassify the past every time somebody edits the table. */
+    expect(costCategoryOf({ scopeKind: "job_step", job: "summarise", stepName: "hierarchy" })).toBe(
+      "default-step work",
+    );
+    expect(costCategoryOf({ scopeKind: "job_step", job: "summarise", stepName: "summary" })).toBe(
+      "unknown",
+    );
+  });
+
   it("keeps an eval overlay non-product whatever the job is", () => {
     /* An eval that exercises `chat` is recorded `job: "chat"`, and the scope is
        checked before the job for that reason. The disposition table must not

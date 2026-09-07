@@ -14,12 +14,14 @@ import {
   cashNanos,
   foldSpend,
   spendPerAccount,
+  billReport,
+  outsideCapNanos,
   partitionByScope,
   spread,
   totalNanos,
 } from "../src/cost-report.js";
 import { costCategoryOf } from "../src/cost-categories.js";
-import type { SpendGroup } from "../src/store/ai-calls-spend-pg.js";
+import type { AccountTally, SpendGroup } from "../src/store/ai-calls-spend-pg.js";
 
 const ALICE = "cf000000-0000-4000-8000-000000000001";
 const BOB = "cf000000-0000-4000-8000-000000000002";
@@ -281,5 +283,101 @@ describe("partitioning the ledger by whose money it is", () => {
     expect(
       split.product.length + split.devCli.length + split.evals.length + split.other.length,
     ).toBe(rows.length);
+  });
+});
+
+/**
+ * **The bill block** — `billReport` and `outsideCapNanos` in
+ * [src/cost-report.ts](../src/cost-report.ts).
+ *
+ * These tests exist because GPT Sol's Stage 8 review (F8) pointed out that the
+ * Postgres tests proved the *query* and then re-implemented the outside-cap
+ * reducer in the test file. So deleting the call to `printBills`, or returning
+ * zero from its reducer, or dropping the headroom warning altogether, left all
+ * twelve of them green. A reducer written twice is a reducer nothing checks.
+ *
+ * The caveat's wording is asserted here too, and deliberately. It is the only
+ * place the report says what the cap does *not* do, and it is the sentence most
+ * likely to be shortened by somebody tidying up.
+ */
+describe("what the report says about which bill, and about the cap", () => {
+  const bill = (over: Partial<AccountTally> = {}): AccountTally => ({
+    account: "openrouter",
+    calls: 10,
+    creditsNanos: 1_000_000,
+    byokNanos: 0,
+    computedNanos: 0,
+    unpricedCalls: 0,
+    ...over,
+  });
+
+  it("counts OpenRouter's BYOK pocket as outside the cap", () => {
+    /* The whole of F3. The row says `openrouter` and the money went to somebody
+       else's key, so an account filter gets this wrong in the reassuring
+       direction. */
+    expect(outsideCapNanos([bill({ byokNanos: 5_000_000 })])).toBe(5_000_000);
+  });
+
+  it("counts a direct Anthropic or OpenAI bill as outside the cap, in full", () => {
+    expect(
+      outsideCapNanos([
+        bill({ account: "anthropic", creditsNanos: 0, computedNanos: 3_000_000 }),
+        bill({ account: "openai", creditsNanos: 0, computedNanos: 2_000_000 }),
+      ]),
+    ).toBe(5_000_000);
+  });
+
+  it("counts OpenRouter's own credits as INSIDE the cap", () => {
+    /* The other half, and the one that keeps the figure meaningful: if
+       everything were outside the cap the number would say nothing. */
+    expect(outsideCapNanos([bill({ creditsNanos: 9_000_000 })])).toBe(0);
+  });
+
+  it("adds the two kinds together rather than picking one", () => {
+    const total = outsideCapNanos([
+      bill({ creditsNanos: 9_000_000, byokNanos: 5_000_000 }),
+      bill({ account: "openai", creditsNanos: 0, computedNanos: 3_000_000 }),
+    ]);
+    expect(total).toBe(8_000_000);
+  });
+
+  it("says it cannot see the cap's amount or the headroom left", () => {
+    /* Without this sentence the subtotal above reads as a distance from a limit,
+       which is the one thing it is not: the cap is a monthly account total and
+       this report answers an arbitrary window. */
+    const caveat = billReport([bill()]).caveat.join(" ");
+    expect(caveat).toMatch(/cannot see its amount or the headroom left/);
+    expect(caveat).toMatch(/no\s+figure here is a distance from a limit/);
+  });
+
+  it("refuses to let inside-the-cap read as safe", () => {
+    /* docs/project/ai-gateway.md is explicit that the cap is global, so what it
+       converts a runaway into is every reader losing every paid feature until
+       the month turns. That is a blast radius, not a throttle, and the report
+       must not soften it. */
+    const caveat = billReport([bill()]).caveat.join(" ");
+    expect(caveat).toMatch(/not a\s+throttle/);
+    expect(caveat).toMatch(/every reader losing every paid/);
+  });
+
+  it("says what is missing from the figure as well as what is in it", () => {
+    const caveat = billReport([bill()]).caveat.join(" ");
+    expect(caveat).toMatch(/RECORDED KNOWN-DOLLAR SPEND OUTSIDE THE CAP/);
+    expect(caveat).toMatch(/Unpriced rows/);
+    expect(caveat).toMatch(/no seam can see/);
+  });
+
+  it("carries every account's three pockets and its unpriced count into the lines", () => {
+    const report = billReport([
+      bill({ creditsNanos: 1_500_000, byokNanos: 2_500_000, computedNanos: 0, unpricedCalls: 4 }),
+    ]);
+    expect(report.lines).toHaveLength(1);
+    expect(report.lines[0]?.account).toBe("openrouter");
+    expect(report.lines[0]?.unpricedCalls).toBe(4);
+    /* Three pockets on the line, never one summed figure: a reader has to be
+       able to see which part of it the cap covers. */
+    expect(report.lines[0]?.pockets).toMatch(/credits/);
+    expect(report.lines[0]?.pockets).toMatch(/BYOK upstream/);
+    expect(report.lines[0]?.pockets).toMatch(/computed/);
   });
 });

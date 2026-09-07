@@ -1030,8 +1030,11 @@ Billed to    openrouter  1225 call(s)  $45.8884 credits · $4.3276 BYOK upstream
              $4.3276 of the above is RECORDED KNOWN-DOLLAR SPEND OUTSIDE THE CAP — …
 ```
 
-That $4.33 was invisible before this stage, and it is not a rounding error against $18.51 of product
-spend.
+That $4.33 was **not identified as spend outside the cap** before this stage — the money itself was
+never invisible, since BYOK already appeared as *"billed upstream"* in the ordinary report and inside
+the owners report's ledger totals. What did not exist was the statement that it is on a bill the
+OpenRouter ceiling cannot reach. ⟨This paragraph said "invisible", which overclaimed; GPT Sol, F9.⟩
+It is not a rounding error against $18.51 of product spend either way.
 
 **Done:** two new Postgres tests in `tests/ai-calls-spend-pg.test.ts`. The implementation came first
 here, so rather than claim a red-first that did not happen, the assertions were **proved to bite by
@@ -1041,6 +1044,50 @@ The second test also holds the correct outside-cap figure against the naive one
 (`expect(naive).not.toBe(outside)`), which is the F3 shortcut written down so it cannot be
 reintroduced as a simplification. 154 tests green across the seven affected files; `npm run typecheck`
 clean.
+
+### GPT Sol's review of Stages 7 and 8
+
+[The review](260902g-cost-tracking-stage78-review-sol.md) of `c005bd5a` and `d8dcc291`, against
+[this prompt](260902g-cost-tracking-stage78-review-prompt.md). Verdict: **approve after these
+revisions**. Four findings, all four accepted and fixed. **Two of them confirmed suspicions the
+prompt had listed as my own**, which is the argument for writing those down rather than hoping the
+reviewer finds them anyway.
+
+It also settled three things independently, and they are worth keeping: the disputed placements are
+right *against their collectors* rather than merely against the ledger (`debate` and `illustrate`
+step-driven, `embeddings` and `dictation` request-scoped, and **moving `pdf` out of interactive is
+supported by the call graph, not only by the absence of rows** — which retires my second suspicion);
+the outside-cap arithmetic cannot double-count, because `ai_calls_byok_upstream_only` permits a BYOK
+value *only* when `provider_account = 'openrouter'`, so an Anthropic BYOK pocket cannot exist in
+valid data; and the admin spend column and `jobSpend()` should stay cross-bill totals.
+
+**F6 (P1) — Stage 8 only fixed `--owners`.** The bare `npm run cost` — the path the header
+advertises first, and the one most people run — went on reporting money without naming an account.
+So the plan's claim that "the report says which bill" was false for the report most read. Both paths
+now render from one builder. **Not two wordings of the caveat**, on Sol's explicit instruction: two
+would drift, and what they would drift about is what the cap does, which is the one sentence here
+that has to stay true.
+
+**F7 (P2) — the four-valued table was only two-thirds real**, which was my own first suspicion and
+Sol put the test on it: *"Changing `pdf` or `debate` from step-driven to no-product would still pass
+the new tests and leave production behavior unchanged."* Only `interactive request work` was read;
+`voice` was hard-coded against the job name; `step-driven` and `no product path` were both just "not
+in the set". `costCategoryOf` now consults the disposition — voice comes from the table, a
+**mismatched scope** (an interactive job recorded as a step, or a step-driven job in request scope)
+lands in `unknown` rather than being classified by whichever step it named, and `no product path` in
+step scope is not classified by its step at all. Historical jobs are kept separable and still take
+the old step-name path, so editing the table cannot reclassify the past.
+
+**F8 (P2) — the Stage 8 tests proved the query and not the feature.** They re-implemented the
+outside-cap reducer in the test file, so *deleting the call to `printBills`, returning zero from its
+reducer, or dropping the headroom warning entirely would have left all twelve Postgres tests green*.
+A reducer written twice is a reducer nothing checks — and it is the same shape as the defect this
+whole plan keeps finding. `billReport` and `outsideCapNanos` are now pure and in `src/cost-report.ts`,
+with eight tests that need no database, including assertions on **the caveat's actual wording** —
+the sentence most likely to be lost by somebody tidying up. Proved by mutation: dropping the BYOK
+term gives `expected +0 to be 5000000` and `expected 3000000 to be 8000000`.
+
+**F9 (P3)** — "that $4.33 was invisible" overclaimed and is corrected above.
 
 **Deliberately not in scope**, restating the brief and § Scope: no cap, quota or throttle (Greg's
 call, twice); no dashboard, charts, billing UI, alerting or forecasting; no scheduler; no second
