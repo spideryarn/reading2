@@ -86,7 +86,8 @@ ring, so one sentence becomes three boxed pieces, with doubled opacity at the ab
 `box-decoration-break` cannot help: it controls fragments *of one box*, never separate elements.
 
 This is the finding that decides whether the border approach lives, and it is why **Stage 0 exists
-and comes first**. Two candidate answers, to be judged in the browser and not here:
+and comes first**. Two candidate answers were judged in the browser; **the first one won** — see
+§ *Stage 0, round 1*, where it is V3.
 
 - **Caps only at the true ends.** `annotate.ts` already has this exact pattern for comments —
   `data-mark-end` is set on the run where `m.end` falls (`annotate.ts:384`), so a mark spanning
@@ -340,7 +341,8 @@ Data path; no visual change on its own. Seven edits, not six:
    `strength`**.
 5. `annotate.ts:170` — `Mark` gains the field.
 6. `annotate.ts:397` — write `data-quote`, write `data-wash` for marks that want search painting,
-   and compute `--hit-a` over those marks only.
+   and compute `--hit-a` over those marks only. **`mark.hit` gains `background: none`** at the same
+   time, or a quote-only mark falls back to the UA default yellow — see § *Stage 0, round 1*.
 7. **`src/sanitize-policy.ts`** — add `data-quote` and `data-wash` to `FORBID_ATTR`, and bump
    `SANITIZER_VERSION` 5 → 6 because the policy got stricter. Every attribute `annotateHtml` writes
    must be reserved so an article cannot forge app-owned presentation; `data-hues` and `data-dir`
@@ -371,8 +373,111 @@ shared with every other worktree on this box.
 
 ### Stage 4 — the docs
 
-[quotes.md](../project/quotes.md) § *Still slate, not yellow* becomes the record of what was
-decided. `design-css-overview.md` gets the tokens. This doc gets the Stage 0 and Stage 3 findings.
+[quotes.md](../project/quotes.md) § *Still slate, not yellow* becomes § *The stroke*, and records
+what was decided. This doc gets the findings from every round.
+
+**[design-css-overview.md](../project/design-css-overview.md) is deliberately NOT edited**, and it
+should be. It is one of the seven entry points, and CLAUDE.md requires those to be edited one
+approved set at a time with before and after shown — which this run could not do, having nobody to
+ask. What it wants is a line for `--quote-stroke-rgb` / `--quote-stroke-color` beside the other
+colour tokens. Left for Greg rather than slipped in.
+
+## Stage 0, round 1: the gate passes, three sub-designs fail
+
+Judged in Chrome on the box, against markup from the real `annotateHtml`. The splitting is not
+theoretical — measured, one mark in:
+
+| case | `<mark>` elements out |
+|---|---|
+| plain quote | 1 |
+| **quote containing `<em>`** | **3** |
+| **quote containing `<a>`** | **3** |
+| quote ∩ search / comment / glossary term | 3 |
+
+**THE GATE PASSES, with V3 — caps only at the true ends.** The four candidates, on identical markup:
+
+| | split quote reads as one? |
+|---|---|
+| V1 full ring, `clone` | **no** — one sentence becomes three boxes, with a double bar at each seam |
+| V2 full ring, `slice` | **no** — `slice` merges fragments of *one element*; it does nothing across siblings |
+| **V3 rules always, caps at true ends** | **yes** — no gap at the seam, only a 14% antialias dip visible at 4× |
+| V4 no caps at all | yes, trivially — but loses the abutting case and the "quote ends here" signal |
+
+Ranking: **V3 > V4 > V2 > V1**. V3 is the design.
+
+**A real bug found by the harness being wrong.** The probe page painted every quote solid browser
+yellow, because `mark.hit` never resets the UA default `mark { background-color: Mark }` — it gets
+away with it today only by setting a background unconditionally. **Moving the wash to `[data-wash]`
+takes that away and the yellow comes back.** `mark.cmt` and `mark.term` each carry `background:
+none` for exactly this reason; `mark.hit` must too. That is now part of Stage 1, and it is a
+pleasing coincidence that shipping the bug would have produced Greg's fallback by accident.
+
+What else the round settled:
+
+- **The overlap works.** Quote ∩ search: left fragment green rules only, middle green rules over
+  grey wash and blue confidence band, right wash and band only. Two systems, both legible.
+- **Green survives the orange.** The comment underline and the dotted glossary underline stay
+  visible and distinct beside a green rule. Two caveats: the comment's `border-bottom` grows the
+  mark's border box, so the quote's bottom rule steps down 1px where the comment starts; and at
+  tier 2–3 you can end up with three stacked horizontal lines under one word.
+- **No clipping in `pre`.** Its 11.2px padding clears a 3px ring. Any `pre` padding under ~4px would
+  clip it.
+
+And three failures, all now re-probed in round 2:
+
+- **The tiers are not distinguishable.** Blind pairwise, 20 trials: tier 1 vs 2 scored 7/10, tier
+  2 vs 3 scored 6/10 — **13/20 overall, which is chance**, and the answers correlated with slot
+  position rather than with thickness, the standard tell for guessing. The rules render exactly as
+  specified (1/2/3 device px at dsf1, 2/4/6 at dsf2, full-strength colour, no partial alpha), so
+  the mechanism is right and the *perceptual step* is too small. Round 2 asks whether **two** tiers
+  (1px vs 3px) separate.
+- **Density fails the benchmark.** Five quotes in one paragraph read as a form or a table, not as
+  *"a few sentences someone marked"*. But **one quote per paragraph reads very well** — calm and
+  unambiguous. So this is a question about how often quotes fire, which is Sol's point that
+  `MAX_QUOTES = 32` is per *article*: at one per 300 words a viewport usually holds one or two.
+- **The pressed state fails again.** Stroke, 1px page-coloured gap, grey halo comes out as four
+  device rows whose entire distinguishing signal is one grey hairline — *"a slightly thicker ring
+  with a faint fringe, not a different state"*. More pixels of ring is the wrong answer; round 2
+  tries changing its colour instead.
+
+## Stage 0, rounds 2 and 3: the three failures, answered
+
+**Tiers — two, not three.** Blind pairwise, twelve pairs, key withheld until after the answers were
+written: **12/12 at device scale factor 1 and 12/12 at dsf 2** for 1px against 3px, with no position
+bias (the key was 8 upper / 4 lower and a constant "upper" would have scored 8/12, so the floor is
+8, not 6). The judge's note is the useful part: *"in every pair the heavier one was obvious on first
+look… there was no pair where I hesitated"* — a different subjective experience from the 3-tier test
+that scored 13/20. **The finding is narrow and specific: 1-vs-3 is obvious, and everything involving
+the middle tier is marginal.** So `QuoteTier` is `1 | 2` and the widths are 1px and 3px.
+
+**The pressed state — colour, not more pixels.** Four candidates. A white stroke plus a faint wash
+won: two channels change at once, so it survives a fast click. Orange was equally visible and
+**rejected** — it reads as *"this passage is a comment"*, because orange is already the annotation
+colour, and reusing it teaches the reader that one colour means two things. A wash alone was
+weakest: with the stroke untouched a pressed quote looks like an ordinary one. Note the asymmetry
+that decides it — thickness already means priority, so *more thickness* is the one channel that was
+not free to borrow: it would have said "more important" where it meant "you pressed this".
+
+The wash in the pressed state does **not** undo "quotes outline, search fills". It is a button's
+`:active` background — momentary, tied to the row being pointed at, gone when the reader moves on.
+The resting state of every quote on the page is still an outline and nothing else.
+
+**Abutting quotes — inset caps.** Round 1 called the outset version *"detectable but weakly"*.
+Round 3 measured it and it is worse than that: at tier 3 the two facing caps are 3px each across
+5.35px of word space, so they **overlap and fill it completely** — zero background pixels, the two
+quotes welded into one band. *"At reading speed it reads as one quote, full stop."* Inset caps leave
+6px of clean page. The fix is a sign flip and the `inset` keyword in three rules that already exist,
+and it has a second benefit: an outset cap on a quote that begins a line hangs into the left margin
+and breaks the text column's edge, where an inset one cannot.
+
+Its cost, recorded rather than hidden: the cap sits on the first or last 3px inside the mark, so a
+terminal full stop sits on green and reads as slightly swallowed. Inset shadows paint above the
+background and below the text, so no glyph is ever hidden.
+
+**Round 2's Q3 could not be judged at all the first time**, because the specimen was mine and it was
+broken — the abutting markup never got `data-quote`, so nothing was drawn and the whole section was
+blank. Worth recording because the judge caught it rather than reporting a confident opinion about
+an empty page, which is the failure this kind of pass is most prone to.
 
 ## What would make me fall back to the yellow highlighter
 

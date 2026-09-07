@@ -36,7 +36,7 @@
 import { termPattern, termSpans } from "../term-match.js";
 import { PALETTE_SLOTS } from "./hit-colours.js";
 import type { ValenceDirection } from "./valence.js";
-import type { Block, BlockId } from "../types.js";
+import type { Block, BlockId, QuoteTier } from "../types.js";
 import { costOn, leafClock, noteCost } from "./annotation-cost.js";
 
 /**
@@ -220,6 +220,24 @@ interface MarkBase {
    * `MarkValence` above, which is the half of `Mark` that says so.
    */
   slot?: number | null;
+  /**
+   * How heavily to **outline** these words — a quote, and `hit` marks only.
+   *
+   * The counterpart of `strength`, and deliberately exclusive with it: a mark
+   * carrying a tier is drawn as a stroke and wants no wash, a mark carrying a
+   * strength is drawn as a wash and has no stroke. `search-hits.ts § baseMarks`
+   * is where one or the other is chosen, and its comment says what went wrong
+   * while a quote was both.
+   *
+   * Where two quotes cover the same words the **heaviest wins**, on the same
+   * argument `strength` makes. In practice they cannot: `dedupeOverlaps`
+   * (src/quotes.ts) drops any quote whose span clashes with a longer one in the
+   * same block, which is what stops two nested outlines reading as one heavier
+   * mark — a priority neither quote has. The `Math.max` here is the belt to
+   * that brace, because the drawing now depends on a property the artefact
+   * happens to hold rather than one this file enforces.
+   */
+  quoteTier?: QuoteTier;
 }
 
 /** A comment's stored anchor, before it has been matched against the block. */
@@ -396,17 +414,43 @@ function annotate(html: string, marks: readonly Mark[]): string {
       if (terms.length > 0) el.setAttribute("data-term", terms.map((m) => m.id).join(" "));
       if (hits.length > 0) {
         el.setAttribute("data-hit", hits.map((m) => m.id).join(" "));
-        /* The wash intensity, as a custom property the stylesheet multiplies a
-           colour by (styles.css § search mode). Written as a *number* rather
-           than as a colour on purpose: the colour belongs to the design tokens
-           and the confidence belongs to the model, and a component that mixed
-           them here would put a hex value beyond the reach of the theme.
+        /* **Two kinds of hit share this element, and they are painted
+           differently.** A quote carries a tier and is drawn as an outline; a
+           search hit carries a strength and is drawn as a wash. One run can be
+           covered by both, and then it wears both.
 
-           Strongest wins — see `strength` on Mark. `toFixed(3)` because this
-           string goes into an attribute on every marked run of every marked
-           block, and 17 digits of float noise is real bytes for no gain. */
-        const strength = Math.max(...hits.map((m) => clamp(m.strength ?? 1, 0, 1)));
-        const style = [`--hit-a:${strength.toFixed(3)}`];
+           `data-wash` is what says "something here wants the search painting",
+           and it is the switch the stylesheet hangs the wash, the hue band and
+           its bottom padding off. Before it, those were unconditional on
+           `mark.hit` — so a quote arrived wearing a fill, which is the opposite
+           of what a quote is supposed to look like. */
+        const washes = hits.filter((m) => m.quoteTier === undefined);
+        const quoted = hits.filter((m) => m.quoteTier !== undefined);
+        const style: string[] = [];
+        if (washes.length > 0) {
+          el.setAttribute("data-wash", "");
+          /* The wash intensity, as a custom property the stylesheet multiplies a
+             colour by (styles.css § search mode). Written as a *number* rather
+             than as a colour on purpose: the colour belongs to the design tokens
+             and the confidence belongs to the model, and a component that mixed
+             them here would put a hex value beyond the reach of the theme.
+
+             Strongest wins — see `strength` on Mark. `toFixed(3)` because this
+             string goes into an attribute on every marked run of every marked
+             block, and 17 digits of float noise is real bytes for no gain.
+
+             **Over the washing marks only.** While quotes were `strength: 1`
+             hits, a quote lying over a hedged search hit took this maximum to 1
+             and repainted the model's confidence at full — see § baseMarks in
+             search-hits.ts. */
+          const strength = Math.max(...washes.map((m) => clamp(m.strength ?? 1, 0, 1)));
+          style.push(`--hit-a:${strength.toFixed(3)}`);
+        }
+        /* Heaviest wins — see `quoteTier` on Mark, and why it cannot arise. */
+        if (quoted.length > 0) {
+          const tier = Math.max(...quoted.map((m) => m.quoteTier ?? 1));
+          el.setAttribute("data-quote", String(tier));
+        }
         /* And which searches found these words, as one rule each stacked under
            the wash — Greg's call on 2026-08-26, over blending the washes
            together. Blending is prettier for two and turns to mud at three, and
@@ -459,7 +503,13 @@ function annotate(html: string, marks: readonly Mark[]): string {
            is here because *this* is the line that would be silent about it. */
         const usable: number[] = [];
         const valences: string[] = [];
-        for (const m of hits) {
+        /* **`washes`, not `hits`.** A quote has a slot — `resolveQuotes` gives
+           every quote slot 0 so the spine rail packs one lane — but the slot
+           means "one source called Quotes", not "a search whose colour this
+           is". Drawing it as a hue stripe would put a categorical search colour
+           under a passage no search found, and would give the quote a bottom
+           band it then has to pad for. The stripes belong to the wash. */
+        for (const m of washes) {
           /* A valence mark's hue is already resolved (`valenceRgbToken`, via
              `hitMarks`), and its slot is not interpolated into anything — so it
              skips the validation below rather than being subject to it. The
@@ -496,7 +546,29 @@ function annotate(html: string, marks: readonly Mark[]): string {
             style.push(`--h${i}:${token}`);
           }
         }
-        el.setAttribute("style", style.join(";"));
+        /* Only when there is something to say. A quote-only run has no wash and
+           no stripes, and `style=""` on every such mark is bytes for nothing. */
+        if (style.length > 0) el.setAttribute("style", style.join(";"));
+        /* **Where each quote begins and ends, which is what lets an outline
+           survive being split.** A mark becomes one `<mark>` per text node and
+           splits again at every annotation boundary, so one quote containing an
+           `<em>` is three sibling elements — and three closed rings around one
+           sentence read as three separate quotes, which a wash never did.
+
+           So the stylesheet draws the rules above and below on every fragment
+           and the inline end-caps only on the two that carry these, and the
+           outline runs continuously across the joins. Measured in Chrome on
+           2026-09-07: no gap at the seam, only a 14% antialias dip visible at
+           4×. The same pattern, and the same reason, as `data-mark-end` for a
+           comment's asterisk.
+
+           Derived from the mark's own offsets rather than from its position
+           among its siblings, so a quote that starts mid-node is still capped
+           where the quote starts and not where the run does. */
+        for (const m of quoted) {
+          if (m.start === nodeStart + from) el.setAttribute("data-quote-start", "");
+          if (m.end === nodeStart + to) el.setAttribute("data-quote-end", "");
+        }
         /* **The sign, which is what pays for painting a judgement in colour.**
            docs/project/colour-scales.md forbids colour being the only carrier
            of a good/bad judgement, and the prose has no words — so a mark drawn

@@ -43,6 +43,9 @@ import { Circle, LoaderCircle, Search, Settings, TriangleAlert } from "lucide-re
 import { Button } from "@/components/ui/button";
 import { builtButEmpty, providerHttpFailure, UNEXPECTED_FAILURE } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
+/* Type-only, and deliberately so: it is erased at build, so `/design` does not
+   pull the eagerly-loaded annotator into its lazy chunk — see `SPECIMEN_OUT`. */
+import type { Mark } from "./annotate.js";
 import type { Job } from "../types.js";
 
 /**
@@ -1062,6 +1065,109 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <p>And a second one, one unit further down.</p>
         </div>
       </section>
+
+      <section>
+        <h2>Marks in the prose</h2>
+        <p className="design-note">
+          The four things that can be drawn over the author's words, and what happens where they
+          overlap. <strong>Search fills; quotes outline.</strong> A quote's stroke weight is its
+          priority — heavy above the bar's default, light below it — so running your eye down an
+          article finds the passages worth stopping at. Every specimen below is built by the real{" "}
+          <code>annotateHtml</code>, not written out by hand, which is the only way this page can
+          show the case that actually matters: one quote containing an <code>&lt;em&gt;</code>{" "}
+          becomes <em>three</em> sibling marks, and three closed boxes would read as three quotes.
+          If the outlines below have visible seams at the italic words, the end-cap rules have
+          broken.
+        </p>
+        <div className="design-panel">
+          <div className="prose design-sample">
+            {SPECIMEN_MARKS.map((s, i) => (
+              <div key={s.label}>
+                <p className="design-note">{s.label}</p>
+                {/* The real annotator's output, pasted rather than computed —
+                    see `SPECIMEN_OUT`. It is our own markup, from our own
+                    function, over our own fixture string: no article, no user
+                    content, nothing that has been near a network. */}
+                <p dangerouslySetInnerHTML={{ __html: SPECIMEN_OUT[i] ?? "" }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
+
+/**
+ * **The prose-mark specimens, as the real annotator's output pasted in.**
+ *
+ * Written out rather than produced by calling `annotateHtml` here, and the
+ * reason is a bundle boundary rather than taste: `/design` is a lazily-loaded
+ * route, `annotate.ts` is eagerly loaded by the reader, and
+ * `tests/eager-client-graph.test.ts` fails a module that becomes reachable from
+ * both without somebody having decided it should be. Importing the annotator for
+ * six specimens is not that decision.
+ *
+ * **So the copy is checked instead of trusted.** `tests/annotate.test.ts` runs
+ * the same inputs through `annotateHtml` and compares, so these strings cannot
+ * drift from what the reading view actually draws — the same arrangement
+ * `tests/valence.test.ts` uses to stop the direction glyphs drifting from the
+ * stylesheet. If that test fails, regenerate rather than edit by hand.
+ *
+ * They are hand-written markup only in the sense that a photograph is: the
+ * important properties — that one quote containing an `<em>` becomes three
+ * sibling marks, and that only the outer two carry the end-caps — are the
+ * annotator's, not ours.
+ *
+ * docs/project/quotes.md § The stroke; docs/project/design-css-overview.md.
+ */
+export const SPECIMEN_HTML =
+  "<p>He rejects the idea that mind is <em>software</em> running on wet hardware, " +
+  "and says so in the first paragraph.</p>";
+
+/**
+ * The marks each specimen is drawn with, in the rendered-text offset space —
+ * exported so the drift test can rebuild them without restating the offsets.
+ */
+export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
+  {
+    label: "A search hit — a fill, whose depth is the model's confidence",
+    marks: [{ id: "h", start: 25, end: 49, kind: "hit", strength: 0.45, slot: 0 }],
+  },
+  {
+    label: "A quote below the bar — the light stroke",
+    marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteTier: 1 }],
+  },
+  {
+    label: "A quote above the bar — the heavy stroke, and the same three fragments",
+    marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteTier: 2 }],
+  },
+  {
+    label: "Two abutting quotes — the caps are inset so they stay two",
+    marks: [
+      { id: "q1", start: 0, end: 19, kind: "hit", quoteTier: 2 },
+      { id: "q2", start: 19, end: 65, kind: "hit", quoteTier: 1 },
+    ],
+  },
+  {
+    label: "A quote over a search hit — both channels, neither lost",
+    marks: [
+      { id: "h", start: 33, end: 78, kind: "hit", strength: 0.45, slot: 0 },
+      { id: "q", start: 25, end: 65, kind: "hit", quoteTier: 2 },
+    ],
+  },
+  {
+    label: "The quote the reader pressed — a white stroke and a momentary wash",
+    marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteTier: 2, open: true }],
+  },
+];
+
+/** `annotateHtml(SPECIMEN_HTML, marks)` for each of the above, in the same order. */
+export const SPECIMEN_OUT: string[] = [
+  '<p>He rejects the idea that <mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">mind is </mark><em><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">software</mark></em><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)"> running</mark> on wet hardware, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="1" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="1">software</mark></em><mark class="hit" data-hit="q" data-quote="1" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="2">software</mark></em><mark class="hit" data-hit="q" data-quote="2" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p><mark class="hit" data-hit="q1" data-quote="2" data-quote-start="" data-quote-end="">He rejects the idea</mark><mark class="hit" data-hit="q2" data-quote="1" data-quote-start=""> that mind is </mark><em><mark class="hit" data-hit="q2" data-quote="1">software</mark></em><mark class="hit" data-hit="q2" data-quote="1" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="h q" data-wash="" data-quote="2" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">software</mark></em><mark class="hit" data-hit="h q" data-wash="" data-quote="2" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)" data-quote-end=""> running on wet hardware</mark><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">, and says so</mark> in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" data-quote-start="" data-hit-open="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="2" data-hit-open="">software</mark></em><mark class="hit" data-hit="q" data-quote="2" data-quote-end="" data-hit-open=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+];

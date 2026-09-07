@@ -75,6 +75,29 @@
        else entirely. */
     --hit-wash: rgb(var(--hit-wash-rgb));
 
+    /* **The quote outline** — the fourth channel in the prose, and the only one
+       that is a stroke. Search fills, quotes outline: hue means *which search
+       found this*, the wash means *how sure it was*, and neither had room for
+       "and this one is a quote" without taking something away from search.
+       Greg's call, 2026-09-06. docs/project/quotes.md § The stroke.
+
+       **A green, and specifically not the orange.** The obvious choice was
+       `--highlight`, on the belief that the brand orange was unused in the
+       prose marks. It is not: `mark.cmt` and `mark.term` both wear it, so an
+       orange outline round a passage that also carries a comment would merge
+       with the comment's underline and hide the one affordance in the prose
+       that can be clicked. Checked in Chrome, 2026-09-07 — the green sits a
+       device row below the comment's orange and both stay legible.
+
+       Away from the eight categorical search hues too, and from the slate wash,
+       for the reason the wash's own note gives: a mark wearing a colour that
+       already means something is a reader having to learn two meanings for one
+       hue. Held as three numbers because the stroke is drawn at partial alpha. */
+    --quote-stroke-rgb: 122 200 160;
+    /* The alias every triplet here needs — see `--hit-wash` above for the
+       invalid-declaration trap that makes it worth writing out. */
+    --quote-stroke-color: rgb(var(--quote-stroke-rgb) / 0.95);
+
     /* The sheet an article's pictures are printed on, and the one deliberately
        LIGHT surface in a dark-only app.
 
