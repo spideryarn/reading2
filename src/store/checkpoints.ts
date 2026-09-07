@@ -149,21 +149,34 @@
  */
 
 /**
- * Which checkpoint. **Not a `StepName`**: `labels` is not a step — the
- * `revision_step_runs_step` CHECK rejects it, because `labels.json` is one of
- * the `hierarchy` step's outputs — and two different checkpoints sharing one step's
- * name would share a key space for no reason. Closed, and matched by a CHECK on
- * the table, so a typo cannot open a namespace nothing ever reads.
+ * Which checkpoint. **Not a `StepName`, and the reason changed on 2026-09-06
+ * while the answer did not.**
  *
- * **Three of these belong to the same step, and that is the point of the
- * split.** `hierarchy-structure` is stage 4's one big call — the tree —
- * `hierarchy-deepen` is the scoped calls that split a fat section afterwards,
- * and `hierarchy-labels` is the batches that follow both. They were one
- * namespace's worth of work and are three questions: on a 142-page paper the
- * structure call is 508 seconds and about two dollars, the batches are 34 rows,
- * and a run that dies in the batches must not buy the tree again. Adding a
- * namespace is a migration, because the CHECK on the table is the other copy of
- * this list.
+ * This used to read *"`labels` is not a step — the `revision_step_runs_step`
+ * CHECK rejects it, because `labels.json` is one of the `hierarchy` step's
+ * outputs"*. It **is** a step now
+ * ([260906a](../../docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md)),
+ * and this is still not a `StepName`: three of the four names below are
+ * different *calls*, two of them inside one step, so a step's name could never
+ * have addressed them. Closed, and matched by a CHECK on the table, so a typo
+ * cannot open a namespace nothing ever reads.
+ *
+ * **`hierarchy-labels` keeps its name, and that is a decision.** It is the
+ * `labels` step's namespace now, and renaming it to match would have
+ * invalidated every stored row for nothing: `batchFingerprint` (src/labels.ts)
+ * carries no step and no job identity, so every checkpoint written before the
+ * split is still readable after it — provided the key does not move. The name
+ * records which call wrote these rows rather than which step asks for them.
+ *
+ * **Two of these belong to `hierarchy` and one to `labels`, and that is the
+ * point of the split.** `hierarchy-structure` is stage 4's one big call — the
+ * tree — `hierarchy-deepen` is the scoped calls that split a fat section
+ * afterwards, and `hierarchy-labels` is the batches that follow both, now in
+ * their own step and their own claim. They were one namespace's worth of work
+ * and are three questions: on a 142-page paper the structure call is 508
+ * seconds and about two dollars, the batches are 34 rows, and a run that dies
+ * in the batches must not buy the tree again. Adding a namespace is a
+ * migration, because the CHECK on the table is the other copy of this list.
  *
  * **The two copies are checked against each other**, since 2026-09-05, by
  * *"the checkpoints namespace CHECK lists exactly the namespaces the type has"*

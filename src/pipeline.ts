@@ -114,7 +114,7 @@ import {
   STAGE_EFFORT,
 } from "./models.js";
 import { STEP_ORDER } from "./step-order.js";
-import { articleFingerprint } from "./source-hash.js";
+import { articleFingerprint, hashBlocks } from "./source-hash.js";
 import { hashProfile, profileIsStale } from "./profile.js";
 import {
   ARTICLE_HAD_NO_TEXT,
@@ -137,7 +137,8 @@ import {
   sameStamp,
   type StepStamp,
 } from "./store/artifacts.js";
-import { generateHierarchy } from "./hierarchy.js";
+import { checkCoverage, generateHierarchy } from "./hierarchy.js";
+import { LABELS_PROMPT_VERSION, generateLabels, mergeLabels } from "./labels.js";
 import { generateTweets, PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "./tweets.js";
 import type { Block, JobUpload, StepName } from "./types.js";
 import { getDb } from "./db/client.js";
@@ -228,6 +229,20 @@ export const DEFAULT_INGEST_STEPS: StepName[] = [
   "extract",
   "blocks",
   "hierarchy",
+  /* **And deliberately NOT `labels`, which is the whole of the 2026-09-06
+     change and the one line nothing checks.**
+
+     The label pass was inside `hierarchy` and was 79.5–92% of its wall clock —
+     one measured call took 602 s of a 682 s pass against a 740 s claimant
+     deadline. Adding `labels` here would put every second of that back between
+     pasting a URL and being able to read, which is exactly what the split
+     removed. A freshly ingested article shows *"Paragraph labels are still
+     arriving"* until a labels job runs for it (`nav_label_status`, stage 1).
+
+     There is no compiler check and no test that can state a negative usefully,
+     so this comment is the mechanism. If you are adding a step here, ask
+     whether a reader has to wait for it before the article is readable.
+     docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md. */
   /* In the default, unlike the four steps after `arc`: it costs no model call,
      and an article whose images are still hot-linked to the publisher announces
      the reader's IP to that publisher on every single read. That is the privacy
@@ -372,6 +387,25 @@ export function cacheArticleForStep(steps: readonly StepName[], index: number): 
  *
  */
 export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
+  /* **`labels` is deliberately NOT in this set, and that is the opposite call
+     from `arc`'s one row down.**
+
+     Every other name here reads the blocks and the tree and has nothing read
+     what it writes, so the positional cascade would buy a model call for
+     nothing. `labels` fails the second half of that: forcing `hierarchy` re-cuts
+     the tree, and a label written to tell a paragraph apart from *the wrong set
+     of neighbours* is wrong in the one way this stage exists to prevent
+     (src/labels.ts § `structureHash`). Re-running `hierarchy` is precisely what
+     invalidates the labels, so the cascade sweeping them in is the correct
+     answer rather than a wasted call — and the store agrees with it in the
+     stronger place: a forced `hierarchy` writes a pending manifest, which
+     deletes this step's receipt whether or not it was swept in.
+
+     Left out rather than absent by accident: `arc` is in this set because it
+     gained a freshness check of its own and its position stopped being the only
+     signal it had. `labels` has a `stamp` too, and it still belongs in the
+     cascade, because what the cascade encodes here is real — the tree it was
+     written against has moved. */
   /* **`arc` joined on 2026-08-29, the day it got a `stamp`.** The paragraph above
      names the exact condition — "give it a freshness check of its own and it
      belongs here too" — and it now has one, over the blocks, the tree and the
@@ -2261,27 +2295,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              block, so it is its own figure rather than a repair.
              src/hierarchy.ts § `collapseRestatedRungs`. */
           collapsedRungs: run.collapsedRungs,
-          /* The third thing this stage forgives, and the only one with no trace
-             in the product: a paragraph the model would not label twice running
-             is a leaf with no row, which renders as nothing rather than as an
-             error. Logged at zero like the two above, so that an article
-             quietly losing ten labels is a line somebody can see rather than an
-             absence nobody can. src/labels.ts § `droppedBudget`,
+          /* **`labelsDropped`, `labelBatches`, `labelsResumed` and `labelCalls`
+             were here until 2026-09-06** and are on the `labels` step's own log
+             line now. Not dropped: a paragraph the model would not label leaves
+             no trace in the product at all, so the count has to be logged
+             somewhere — it is just that this step no longer asks for a label.
              docs/reusable/silent-success.md. */
-          labelsDropped: run.labelsDropped,
-          /* **What the checkpoints actually bought this run**, at zero as well
-             as above it. `generateLabels` logs `{ asked, found }` at its read,
-             which is what the store returned; these two are what the stage
-             *accepted*, and the gap between them is a batch that was stored and
-             then rejected as not covering the blocks it was asked about — a
-             failure with no other symptom. Neither number was logged at all
-             until 2026-09-04:
-             docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md,
-             recommendation 2. */
-          labelBatches: run.labelBatches,
-          labelsResumed: run.labelsResumed,
-          /* What the label pass actually paid for, beside what it resumed. */
-          labelCalls: run.labelCalls,
           /* **Was the tree bought or replayed?** Until 2026-09-05 this was
              printed only by `src/hierarchy.ts`'s own `main()`, and stage E of
              docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
@@ -2328,12 +2347,26 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * writes. Under one map both halves of that reasoning are gone, and
        * `src/hierarchy.ts` now says so where it used to say the other thing.
        *
-       * **`inputHash` and nothing else.** `STAMP_SOURCE.hierarchy` is `"labels"`, so
-       * whatever is passed here is compared by `assertStampAgrees` against the
-       * labels file's own stamp. `run.inputHash` *is* `labels.sourceHash`, so it
-       * cannot clash; a `promptVersion` beside it would, because the labels file
-       * is `labels/1` and the tree is `toc/2`, and that throw fails every
-       * ingest. Verified against a real artefact rather than reasoned about.
+       * **`inputHash` and nothing else**, and the reason changed shape on
+       * 2026-09-06 without changing the answer.
+       *
+       * It used to be a *clash*: `STAMP_SOURCE.hierarchy` is `"labels"`, so
+       * `assertStampAgrees` compared whatever was passed here against the labels
+       * file's own `version` and `generator` — `labels/2` and a model — and a
+       * `promptVersion` of `toc/3` beside it threw on every ingest.
+       *
+       * This step now writes a `PendingLabelsFile`, which carries **neither**
+       * field (src/labels.ts), so `assertStampAgrees` has nothing to compare a
+       * `promptVersion` against and would no longer throw. It is still
+       * `inputHash` alone, and now for a plainer reason: a stamp is the
+       * provenance of the artefact it is read off, and this step buys no labels
+       * — recording the *tree's* prompt version in a field whose established
+       * meaning is the labels prompt would put a second pass's provenance on
+       * this one's receipt. `structureVersion` inside the manifest is where the
+       * tree's version already lives.
+       *
+       * `run.inputHash` *is* `parts.labels.sourceHash`, read off the artefact
+       * rather than recomputed here.
        *
        * The hash comes back from the stage rather than being `hashBlocks(...)`
        * here, because a second computation of "the blocks hash" is exactly how
@@ -2375,15 +2408,173 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           : run.deepen && run.deepen.targets > 0
             ? `, ${run.deepen.expanded} of ${run.deepen.targets} sections deepened`
             : "";
+      /* **The "N paragraphs unlabelled" clause left with the labels**
+         (2026-09-06). It is on `STEPS.labels`'s `detail` now, which is the card
+         the reader is watching while a label run is going; saying it here would
+         be a sentence about a pass this step did not make, and at this point in
+         an ingest **every** paragraph is unlabelled, which is not news. */
       return {
         parts: run.parts,
         stamp: { inputHash: run.inputHash },
+        detail: `${run.internal} sections over ${run.blocks} blocks${deepened}`,
+      };
+    },
+  },
+
+  /**
+   * Stage 4b — the per-paragraph navigation labels, and **the reason this whole
+   * plan exists.**
+   *
+   * It was the second half of `hierarchy` until 2026-09-06, and it was
+   * 79.5–92% of that step's wall clock: one measured call took 602 s of a 682 s
+   * pass, against a claimant deadline of 740 s. So it is its own step, off
+   * `DEFAULT_INGEST_STEPS`, bought later by a job nobody is watching.
+   * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
+   *
+   * **It produces the tree as well as the manifest**, which no other step here
+   * does with somebody else's artefact. `mergeLabels` writes the labels onto
+   * the leaves, and the merged tree is what the reading view opens — so the two
+   * are one write, or they are a tree describing labels that are not in it.
+   * `writeArtefacts` refuses a `tree` with no manifest beside it for the
+   * mirror-image reason.
+   *
+   * **A `stamp`, and deliberately no `isDone`.** The receipt is what says
+   * whether this step ran — `hasArtefacts` (src/store/artifacts-pg.ts) asks the
+   * asking step's own `revision_step_runs` row before it looks at any artefact,
+   * so an `isDone` would be a second check of a fact the row already carries.
+   * **And the stamp is not the structure-currency check.** That is the receipt
+   * *deletion* in `writeArtefacts`: a re-cut tree can only come from a tree
+   * write, a tree write always carries a manifest, and a pending manifest
+   * deletes this step's row — so a stale tree leaves nothing here to compare
+   * against. What the stamp catches is the one case the deletion cannot see, a
+   * prompt or a model bump with no `hierarchy` run behind it.
+   */
+  labels: {
+    name: "labels",
+    label: "Labelling the paragraphs",
+    /**
+     * **Both, and the tree is not incidental.** This step reads the tree
+     * `hierarchy` cut, merges the labels into its leaves and writes it back, so
+     * `tree` is genuinely one of its outputs. It is also what makes
+     * `writeArtefacts`'s refusal — a `tree` with no `labels` beside it — a rule
+     * every writer of the tree has to keep rather than one step's habit.
+     * tests/labels-step-registration.test.ts pins the pair.
+     */
+    produces: ["labels", "tree"],
+    /**
+     * The blocks these labels were written against, the prompt that wrote them
+     * and the model that ran — the same three `stampOf` reads back off the
+     * manifest's `sourceHash`, `version` and `generator`.
+     *
+     * `null` when the blocks cannot be read, which answers not-current: the
+     * safe way to be wrong here is a model call.
+     */
+    async stamp(ctx, store) {
+      const file = await store.read(ctx.slug, "hierarchy", "blocks");
+      if (!file?.blocks) return null;
+      return {
+        inputHash: hashBlocks(file.blocks),
+        promptVersion: LABELS_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+      };
+    },
+    async run(ctx, store, checkpoints) {
+      /* Stage 4's copy of the blocks, and the tree it cut them into. Both, and
+         from the same step, because the batches are cut along the tree's own
+         section boundaries — a label's job is to tell its paragraph apart from
+         its neighbours, so the model has to see the neighbours. src/labels.ts. */
+      const file = await store.read(ctx.slug, "hierarchy", "blocks");
+      const structure = await store.read(ctx.slug, "hierarchy", "tree");
+      if (!file?.blocks || !structure) {
+        throw stageFailure("ours", {
+          generic: `No tree for "${ctx.slug}" — run the hierarchy step first.`,
+        });
+      }
+      const run = await generateLabels({
+        tree: structure,
+        blocks: file.blocks,
+        slug: ctx.slug,
+        /* **The checkpoint namespace stays `hierarchy-labels`**, and that is the
+           one thing this split must not tidy. `batchFingerprint` carries no step
+           and no job identity, so every checkpoint row written before today
+           survives — but only while the key does not move. Renaming it would
+           invalidate every stored row and buy the next run nothing.
+           src/store/checkpoints.ts. */
+        checkpoints,
+        onProgress: ctx.report,
+        signal: ctx.signal,
+      });
+
+      /* The artefacts, assembled once, with every check below asked of *this*
+         object rather than of the locals it came from — the discipline
+         src/hierarchy.ts § `parts` explains at length, for the same reason: a
+         tree merged from one set of labels and returned beside another is a pair
+         that looks finished and describes two different articles. */
+      const parts = { labels: run.file, tree: mergeLabels(structure, run.file.labels) };
+
+      /* **`checkCoverage` moved here from `generateHierarchy` on 2026-09-06**,
+         and this position is the point of it: after the merge, over the tree
+         about to be written, and before anything can set `nav_label_status` to
+         `ready`. Its two per-batch siblings, `assertEveryBlockLabelled` and
+         `assertInsideCoverageFloor`, are inside `generateLabels` and travelled
+         with it for free. */
+      checkCoverage(parts.labels.labels, parts.tree, file.blocks);
+
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "labels",
+          model: CAPABLE_MODEL,
+          /* The one thing this stage forgives with no trace in the product: a
+             paragraph the model would not label twice running is a leaf with no
+             row, which renders as nothing rather than as an error. Logged at
+             zero, so that an article quietly losing ten labels is a line
+             somebody can see rather than an absence nobody can.
+             src/labels.ts § `droppedBudget`, docs/reusable/silent-success.md. */
+          labelsDropped: run.dropped.length,
+          /* **What the checkpoints actually bought this run**, at zero as well
+             as above it. `generateLabels` logs `{ asked, found }` at its read,
+             which is what the store returned; these are what the stage
+             *accepted*, and the gap between them is a batch that was stored and
+             then rejected as not covering the blocks it was asked about — a
+             failure with no other symptom.
+             docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md. */
+          labelBatches: run.batches,
+          labelsResumed: run.resumed,
+          /* What it actually paid for, beside what it resumed. */
+          labelCalls: run.calls,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          ms: run.elapsedMs,
+          blocks: file.blocks.length,
+        },
+        `labels ${ctx.slug}: ${Object.keys(run.file.labels).length} paragraphs labelled`,
+      );
+
+      return {
+        parts,
+        /* Three values, and all three are read back off the manifest by
+           `stampOf`. `inputHash` comes off the artefact rather than being hashed
+           again here, for the reason src/hierarchy.ts gives at its own
+           `inputHash`: two computations of "the blocks hash" is how the two
+           sides of `assertStampAgrees` come to disagree. */
+        stamp: {
+          inputHash: run.file.sourceHash,
+          promptVersion: run.file.version,
+          model: run.file.generator,
+        },
+        /* **The reader-scale sentence, moved here with the pass it is about.**
+           It was on `hierarchy`'s `detail` until 2026-09-06, where after the
+           split it would have said "every paragraph unlabelled" on every
+           ingest. The operator's numbers stay in the log line above, which is
+           where src/jobs.ts says a step's real numbers belong. */
         detail:
-          `${run.internal} sections over ${run.blocks} blocks` +
-          (run.labelsDropped > 0
-            ? ` (${run.labelsDropped} paragraph${run.labelsDropped === 1 ? "" : "s"} unlabelled)`
-            : "") +
-          deepened,
+          `${Object.keys(run.file.labels).length} paragraphs labelled` +
+          (run.dropped.length > 0
+            ? ` (${run.dropped.length} paragraph${run.dropped.length === 1 ? "" : "s"} unlabelled)`
+            : ""),
       };
     },
   },

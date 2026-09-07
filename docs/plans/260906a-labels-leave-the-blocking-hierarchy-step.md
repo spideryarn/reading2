@@ -339,8 +339,14 @@ Sol's Q7 answer, with its stamp pre-stage deleted for the reason above.
   it ships alone**.
 - **Stage 2 — the split.** `labels` becomes its own step with its own `STEP_BUDGET_MS`, its own
   claim and its own resumable deadline. `generateHierarchy` stops calling `generateLabels` and writes
-  the stamped-but-empty manifest, keeping the author's free heading labels
-  ([`heading-tree.ts`](../../src/heading-tree.ts):157). `checkCoverage` moves out of
+  the **unstamped**-and-empty manifest — see [what the pending manifest carries](#two-steps-one-stamp),
+  which is where this bullet was wrong: it omits `version` and `generator` on purpose, so there is no
+  stamp on it at all. **And it keeps no free heading labels**, which is the other thing this bullet
+  got wrong: `buildHeadingTree` ([`heading-tree.ts`](../../src/heading-tree.ts):157) does mint one per
+  heading and has no caller outside `evals/`; `generateHierarchy` uses `buildTree` in
+  [`hierarchy.ts`](../../src/hierarchy.ts), which labels nothing it is not handed. A
+  structure-only tree carries **no** navigation labels — see `tests/hierarchy-leaves-the-labels.test.ts`.
+  `checkCoverage` moves out of
   `generateHierarchy` into the new runner, after the candidate merged tree and before any `ready`
   write; `assertEveryBlockLabelled` and `assertInsideCoverageFloor` stay inside `generateLabels` and
   defer for free with it. Publication atomically enqueues the free successor job (F10), with **no
@@ -504,6 +510,54 @@ in this plan's scope unless the review says otherwise:
 - **Leave it and raise the deadline.** Rejected: `DEFAULT_JOB_CONCURRENCY = 3` means a step that is
   marginal alone is not marginal under load, and the lease exists to stop a wedged job holding a
   claim for ever.
+
+## What stage 2a landed <a id="stage2a"></a>
+
+Built 2026-09-06. **The step exists and nothing enqueues it yet** — that was the stopping point, on
+purpose: the tree is green and deployable, and the only visible change is that a freshly ingested
+article shows *"Paragraph labels are still arriving"* until somebody runs
+`{ steps: ["labels"] }`. Publication-time enqueueing is stage 2b.
+
+- **`LabelsFile` is a discriminated union** — `PendingLabelsFile` (`batches: null`, no `version`, no
+  `generator`) and `CompletedLabelsFile` (both required, a real `batches`), in
+  [`src/labels.ts`](../../src/labels.ts). The two omitted fields are `?: never`, so the compiler
+  refuses the wrong literal; `tests/labels-file-union.test.ts` is the type-level check and
+  `npm run typecheck` is what reddens it.
+- **`hierarchy` buys no labels.** `generateHierarchy` builds the pending manifest instead of calling
+  `generateLabels`; `checkCoverage` moved to the new step; `assertTreeSound` stayed.
+- **The store learned the rule**, in `writeArtefacts`
+  ([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts)) and keyed on the artefact: a pending
+  manifest sets `pending` **and deletes this revision's `labels` receipt**; a real one sets `ready`;
+  a `tree` with no manifest beside it is refused.
+- **The `labels` step**, after `hierarchy` in `STEP_ORDER`, out of `DEFAULT_INGEST_STEPS` and out of
+  `FORCE_ONLY_WHEN_NAMED`, `produces: ["labels", "tree"]`, a `stamp()` and no `isDone`. The
+  checkpoint namespace stayed `hierarchy-labels`. `npm run labels -- <slug>` is back.
+- **`beginStepRun` clears `prompt_version` and `model`** as well as `input_hash`. Nothing migrated.
+
+### Two things the stage brief had wrong, found by building it <a id="stage2a-corrections"></a>
+
+**The free heading labels do not exist on this path.** The brief said `mergeLabels(structure, {})`
+"keeps the author's own heading labels, minted for free at `heading-tree.ts:157`", and the stage
+bullet above said the same. `buildHeadingTree` really does mint one per heading — and **it has no
+caller outside `evals/`**. `generateHierarchy` uses `buildTree` in
+[`hierarchy.ts`](../../src/hierarchy.ts), which sets `navLabel` from the map it is handed and from
+nothing else, and `mergeLabels` *deletes* the key wherever the map has none. So a structure-only tree
+carries **no** navigation labels at all, and the reader's withheld state covers every paragraph
+rather than the ones between headings. `tests/hierarchy-leaves-the-labels.test.ts` states it both
+ways, including what `buildHeadingTree` would have produced, so the next person to make this guess
+finds the answer rather than the guess.
+
+The merge call stayed anyway, because the invariant worth keeping is
+`tree === mergeLabels(structure, labels.labels)` in **both** writers of that column.
+
+**The receipt deletion's real arm is a re-ingest that re-extracts.** The first version of
+`tests/labels-receipt-invalidation.test.ts` re-cut the tree over the *same* blocks, and removing the
+deletion reddened one case out of seven. `stepIsDone` answered `false` anyway — but for the union's
+reason rather than the deletion's: a pending manifest carries no `version` and no `generator`, so the
+assembled stamp is missing two of the three fields the step declares and `sameStamp` refuses it. The
+deletion's own arm is the *throw*: with a carried row stamped against the old blocks and a fresh
+manifest carrying the new hash, `stampForStep` raises `StampDisagrees` rather than answering. Two
+block sets later, the mutation reddens three cases and the last of them is that throw.
 
 ## Groundwork for stage 2, established before any code <a id="stage2-groundwork"></a>
 

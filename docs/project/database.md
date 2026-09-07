@@ -1273,16 +1273,24 @@ it arrives as `0` and every negative judgement is gone with nothing to see.
 ## Checkpoints — work a failed attempt already paid for
 
 Two stages keep working state that has to **survive their own failure**: `hierarchy` records each
-batch of nav labels as it comes back, and the PDF reader records each transcribed chunk. A 429 eight
+batch of nav labels as it comes back — the `labels` step's since 2026-09-06, though the namespace
+still carries the old owner's name (below) — and the PDF reader records each transcribed chunk. A 429 eight
 batches into a book then costs one batch rather than eight, and these are the expensive calls.
 
 **Four namespaces**, and the list is `CheckpointNamespace` in
 [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts): `pdf-chunk` for a transcribed chunk,
-and three that all belong to the `hierarchy` step — `hierarchy-structure` (the one whole-document
+and three named for the `hierarchy` step — `hierarchy-structure` (the one whole-document
 call for the tree), `hierarchy-deepen` (each scoped call that splits a section too fat to read,
 [`src/hierarchy-deepen.ts`](../../src/hierarchy-deepen.ts)) and `hierarchy-labels` (the nav-label
 batches). They are separate because they are separate questions with separate prices: a run that
-dies in the labels must not buy the tree again. Adding one is a migration, since the CHECK on the
+dies in the labels must not buy the tree again.
+
+**`hierarchy-labels` belongs to the `labels` step since 2026-09-06, and keeps its name on purpose.**
+`batchFingerprint` carries no step and no job identity, so every stored row survived the split
+([260906a](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md)) — but only because the
+namespace did not move. Renaming it to match the new owner would have invalidated every row and
+bought the next run nothing. So the name records where these batches came from rather than who asks
+for them now, and that is the trade. Adding one is a migration, since the CHECK on the
 table is the other copy of the list — and since 2026-09-05 `tests/db-schema.test.ts` inserts a row
 under every name, so the two cannot drift in silence. Before that they could, and the symptom would
 have been a `warn` nobody reads and a bill that goes up.

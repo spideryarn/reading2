@@ -322,7 +322,12 @@ function labelsFor(slug: string, blocks: Block[]): LabelsFile {
     structureHash: "fixture-structure",
     structureVersion: "toc/1",
     labels: Object.fromEntries(blocks.map((b) => [b.id, "A paragraph"])),
-    batches: null,
+    /* `[]`, not `null`. Since 2026-09-06 `batches: null` is a
+       `PendingLabelsFile` — the manifest `hierarchy` writes before the labels
+       step has bought anything — and `writeArtefacts` reads it as an
+       instruction to mark the revision `pending` and delete its `labels`
+       receipt. This fixture is a finished stage 4. src/labels.ts. */
+    batches: [],
   };
 }
 

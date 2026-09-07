@@ -2410,6 +2410,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      about it wants a Supabase service; it wants 300 rows nobody else can see,
      which is what this lane is. `tests/request-spend.test.ts` is the same
      child-plus-private-database arrangement. */
+  /* Stage 2 of the labels split, 2026-09-06. It seeds one article and drives
+     real `beginStep`/`write`/`finishStep` claims over it — writing articles,
+     revisions, block rows, step runs and a job row under one fixed slug — so
+     two concurrent runs would be two walks over one article's line. Everything
+     it does is inside a transaction it rolls back; the article itself is
+     suffixed per run and cleaned up in `afterAll`. */
+  "tests/labels-receipt-invalidation.test.ts": "private-postgres",
   "tests/library-log-volume.test.ts": "private-postgres",
   "tests/list-reconciles-expired.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from a count: one
@@ -2561,6 +2568,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      about. Nothing here reaches GoTrue or the bucket: the owner row is one the
      private clone already seeds, and no article is loaded at all. */
   "tests/second-job-queues.test.ts": "private-postgres",
+  /* Its slug carries a per-run uuid and its block ids are minted, so it
+     collides with nothing; the private lane is still where it belongs, because
+     it inserts an article, a revision and a (rolled-back) job and reads
+     `revision_step_runs` directly. Its ambient owner is a row the private
+     clone already seeds, no article is loaded from the corpus, and nothing
+     goes near GoTrue or the bucket. */
+  "tests/shared-site-run-row-gate.test.ts": "private-postgres",
   "tests/source-store.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the private lane is not optional
      here: six fixed slugs, each of which `lockOrCreateArticle` **creates** the

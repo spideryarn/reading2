@@ -159,7 +159,12 @@ function labelsFor(slug: string, blocks: Block[]): LabelsFile {
     structureHash: "fixture-structure",
     structureVersion: "toc/1",
     labels: Object.fromEntries(blocks.map((b) => [b.id, "A paragraph"])),
-    batches: null,
+    /* `[]`, not `null`, and since 2026-09-06 that is the difference between a
+       `CompletedLabelsFile` and a `PendingLabelsFile` — which `writeArtefacts`
+       reads to decide `nav_label_status` and whether to delete this revision's
+       `labels` receipt. This fixture stands for a finished stage 4, so it says
+       so. src/labels.ts § `PendingLabelsFile`. */
+    batches: [],
   };
 }
 

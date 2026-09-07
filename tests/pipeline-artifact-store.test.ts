@@ -68,6 +68,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { LABELS_PROMPT_VERSION } from "../src/labels.js";
 import { CAPABLE_MODEL, modelFor } from "../src/models.js";
 import { ASSETS_VERSION, assetsInputHash } from "../src/collect-assets.js";
 import {
@@ -317,16 +318,49 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
   store.plant(SLUG, "blocks", "blocks", { blocks: BLOCKS });
   store.plant(SLUG, "hierarchy", "blocks", { blocks: BLOCKS });
   store.plant(SLUG, "hierarchy", "tree", TREE);
-  store.plant(SLUG, "hierarchy", "labels", {
-    version: "labels/1",
+  /**
+   * **A *finished* labels run, and both of the last two fields say so since
+   * 2026-09-06.**
+   *
+   * `batches: []` rather than `null`: `null` is now a `PendingLabelsFile`
+   * (src/labels.ts) — the empty manifest `hierarchy` writes before anything has
+   * been bought — and the store reads it as *set `nav_label_status` to pending
+   * and delete the labels receipt*. This fixture stands for an article whose
+   * labels are done.
+   *
+   * `LABELS_PROMPT_VERSION` rather than the literal `"labels/1"`: the `labels`
+   * step's `stamp()` declares the version it would write today, so a fixture
+   * naming an older one makes the step report itself stale — which is what the
+   * "artefacts or no artefacts" case below caught the moment the step existed.
+   * Imported rather than spelled again, because two copies of one version string
+   * drift and the drift shows up as an artefact that never regenerates.
+   */
+  const finishedLabels = {
+    version: LABELS_PROMPT_VERSION,
     generator: CAPABLE_MODEL,
     slug: SLUG,
     sourceHash: SOURCE_HASH,
     structureHash: "0000000000000000",
     structureVersion: "toc/2",
     labels: { n0000: "A title" },
-    batches: null,
-  });
+    batches: [],
+  };
+  store.plant(SLUG, "hierarchy", "labels", finishedLabels);
+  /**
+   * **The same two values again, under the `labels` step's own name**, because
+   * this store aliases nothing — tests/helpers/memory-artefacts.ts § *One
+   * artefact's address*. In Postgres `hierarchy` and `labels` write the same two
+   * columns (`STORAGE`, src/store/artifacts-pg.ts); here every `(step, kind)` is
+   * its own address, which is the same reason the fixture plants
+   * `blocks`/`blocks` and `hierarchy`/`blocks` separately a few lines up.
+   *
+   * One object, planted twice, rather than two literals: two copies of one
+   * manifest is how a fixture comes to assert its own consistency instead of the
+   * store's — and this store detaches on the way in, so they cannot alias by
+   * accident either.
+   */
+  store.plant(SLUG, "labels", "labels", finishedLabels);
+  store.plant(SLUG, "labels", "tree", TREE);
   /* **No `generator`**, and that is the shape rather than an omission: this
      step makes no model call, so its `stamp` names only `inputHash` and
      `promptVersion`. Adding a `generator` here would be recorded and never

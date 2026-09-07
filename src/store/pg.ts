@@ -88,6 +88,7 @@ import {
   titleFor,
   type LibraryScalars,
 } from "../library-scalars.js";
+import { LABELS_PROMPT_VERSION } from "../labels.js";
 import { log } from "../log.js";
 import { CAPABLE_MODEL, modelFor } from "../models.js";
 import { currentOwnerId } from "../owner.js";
@@ -731,6 +732,18 @@ const REVISION_READ_POLICY: Record<
      the `rawSource` read takes the reference to it rather than the bytes. */
   extractedHtml: {},
   stampedHtml: {},
+  /**
+   * **Still nobody, and it stayed that way when `labels` became a step**
+   * (2026-09-06), which was a real decision rather than an omission.
+   *
+   * The metadata page draws a row for every name in `STEP_ORDER` and asks each
+   * one *"would we write this again today"*, so this step needs an `isCurrent`
+   * arm or it falls to `default: true` and reports every run current for ever.
+   * That arm reads the step's **run row** instead of this column — the three
+   * values it needs are on the row, the runs are already selected, and this
+   * column is one of the largest on the table at a label per paragraph. See
+   * `isCurrent` § `case "labels"`.
+   */
   labels: {},
   /* **The reading view, and only the reading view.** It is not an artefact and
      nothing about it is a freshness question, so `metadata` has no use for it —
@@ -1456,6 +1469,14 @@ const STEP_STORAGE: Record<StepName, string[]> = {
   extract: ["article_revisions.title", "article_revisions.extracted_html"],
   blocks: ["revision_blocks", "block_identities"],
   hierarchy: ["article_revisions.tree", "article_revisions.labels"],
+  /* The same two columns as `hierarchy` above, and that is right rather than a
+     copy-paste: stage 4 writes the tree and an empty manifest, and this step
+     rewrites both with the labels merged in. Two steps over one site is a shape
+     this store already has — `blocks`/`hierarchy` share the block rows
+     (src/store/artifacts-pg.ts § STORAGE) — and what keeps their doneness apart
+     is each step's own run row, pinned by
+     tests/shared-site-run-row-gate.test.ts. */
+  labels: ["article_revisions.labels", "article_revisions.tree"],
   /* The manifest is the column; the bytes it names are objects in the `sources`
      bucket, which is not a table and so is not listed here. */
   assets: ["article_revisions.assets"],
@@ -2521,6 +2542,56 @@ const rawPgArticleReader: ArticleReader = {
         case "hierarchy": {
           if (!revision.tree || !blocksHash) return false;
           return byStep.get("hierarchy")?.inputHash === blocksHash;
+        }
+        /**
+         * **Asked of the run row, like `hierarchy` above and unlike everything
+         * below** — and the reason is this step's own design rather than a
+         * shortcut.
+         *
+         * The three values are on the row because `STEPS.labels.stamp` declares
+         * all three and `recordStamp` writes them there; the artefact carries
+         * the same three, so either would answer. The row wins on two counts:
+         *
+         * - **It is where this step's currency actually lives.** Writing an
+         *   empty manifest *deletes* this revision's `labels` row
+         *   (`writeArtefacts`, src/store/artifacts-pg.ts), and that deletion —
+         *   not any hash — is what makes a re-cut tree invalidate its labels.
+         *   Reading the row means this page answers the same question the
+         *   pipeline does, from the same fact. A missing row is `undefined`
+         *   here and answers not-current, which is right for both of its causes:
+         *   never run, and invalidated by a fresh `hierarchy`.
+         * - **The column is one of the largest on the table** — a label per
+         *   paragraph — and `REVISION_READ_POLICY` exists to keep exactly that
+         *   off a read that does not need it. Granting `labels` to `metadata`
+         *   would put it on every load of that page for the sake of three
+         *   fields that are already selected beside it.
+         *
+         * **Written out rather than left to `default: true`**, the arm that has
+         * caught `ideas`, `sketch` and `timeline` in turn: a missing case makes
+         * every completed run report itself current for ever, on this page
+         * alone, while the pipeline correctly re-runs it.
+         * tests/store-revision-columns.test.ts holds every stamped step to
+         * having an arm.
+         */
+        case "labels": {
+          const run = byStep.get("labels");
+          if (!run || !blocksHash) return false;
+          return sameStamp(
+            {
+              inputHash: run.inputHash,
+              /* Only where the row actually holds one. `null` means *nothing was
+                 recorded*, and `sameStamp` compares with `===`, so a declared
+                 `undefined` and a declared `null` are two different wrong
+                 answers — `stampForStep` reads the same row the same way. */
+              ...(run.promptVersion === null ? {} : { promptVersion: run.promptVersion }),
+              ...(run.model === null ? {} : { model: run.model }),
+            },
+            {
+              inputHash: blocksHash,
+              promptVersion: LABELS_PROMPT_VERSION,
+              model: CAPABLE_MODEL,
+            },
+          );
         }
         /* The same two questions as `hierarchy`, and the same answer — but asked of
            the artefact rather than of the step row, because the manifest

@@ -1176,6 +1176,19 @@ export async function liveJobDraft(
  * been *made from* anything. The real hash arrives with `finishStepRun`. Writing
  * a plausible-looking hash here would make a step that died mid-run look like
  * one that completed against those blocks.
+ *
+ * **And `prompt_version` and `model` are nulled here for exactly the same
+ * reason** — since 2026-09-06, and their absence from this list was a real
+ * fault rather than a narrowing. `values` is what the `onConflictDoUpdate`
+ * below `SET`s, so a field missing from it survives the reopen: a value written
+ * by an older code version stuck for the life of the row, and **three live
+ * revisions carry `labels/1` on the row against `labels/2` in the artefact**
+ * because of it. A running row has no completed provenance yet; claiming one is
+ * the same mistake as the plausible-looking hash above, one column along.
+ * ⟨GPT Sol's F2 on stage 2, the half of it that was taken.⟩
+ *
+ * Those three self-heal on their next `hierarchy` run. Nothing is migrated:
+ * touching real rows is Greg's call, not this function's.
  */
 export async function beginStepRun(
   opts: {
@@ -1193,6 +1206,11 @@ export async function beginStepRun(
     revisionId,
     stepName,
     inputHash: NO_INPUT_HASH,
+    /* Cleared, not left alone — see the note above. `null` rather than absent,
+       so the `onConflictDoUpdate` below actually writes over whatever an earlier
+       run of this row recorded. */
+    promptVersion: null,
+    model: null,
     implementationVersion: opts.implementationVersion ?? PIPELINE_RUN,
     status: "running" as const,
     startedAt: new Date(),
