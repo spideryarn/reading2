@@ -42,17 +42,17 @@ both halves. I want you to check that claim rather than accept it.
 **Proposed:** Keep my `DiagramMode.tsx` mode-controller citation **and** dev's two new stylesheet paths (`styles/diagram.css`, `styles/diagram-drift.css`). Neither side contradicts the other.
 
 ```diff
-<<<<<<< HEAD
+ <<<<<<< HEAD
   [`src/web/DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx), with
   [`src/web/modes/diagram/DiagramMode.tsx`](../../src/web/modes/diagram/DiagramMode.tsx)
   as the mode controller that mounts it,
   `§ diagram mode` and `§ drift and trail` in
   [`src/web/styles.css`](../../src/web/styles.css).
-=======
+ =======
   [`src/web/DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx),
   `§ diagram mode` in [`src/web/styles/diagram.css`](../../src/web/styles/diagram.css) and
   `§ drift and trail` in [`src/web/styles/diagram-drift.css`](../../src/web/styles/diagram-drift.css).
->>>>>>> origin/dev
+ >>>>>>> origin/dev
 ```
 
 
@@ -61,16 +61,16 @@ both halves. I want you to check that claim rather than accept it.
 **Proposed:** Keep my `QuotesMode.tsx` citation (`QuotesBand`, `VisitorQuotesBand`, `useQuotesMode`) and dev's `styles/quotes.css`. **Note dev's side asserts `QuotesBand` is in `App.tsx`, which my side has made false** — so here my half must win outright rather than merge.
 
 ```diff
-<<<<<<< HEAD
+ <<<<<<< HEAD
 [`src/web/search-hits.ts`](../../src/web/search-hits.ts),
 [`src/web/modes/quotes/QuotesMode.tsx`](../../src/web/modes/quotes/QuotesMode.tsx)
 (`QuotesBand`, `VisitorQuotesBand`, `useQuotesMode`), and `§ quotes mode` at the end of
 [`src/web/styles.css`](../../src/web/styles.css). Tests:
-=======
+ =======
 [`src/web/search-hits.ts`](../../src/web/search-hits.ts), `QuotesBand` in
 [`src/web/App.tsx`](../../src/web/App.tsx), and `§ quotes mode` in
 [`src/web/styles/quotes.css`](../../src/web/styles/quotes.css). Tests:
->>>>>>> origin/dev
+ >>>>>>> origin/dev
 ```
 
 
@@ -79,17 +79,17 @@ both halves. I want you to check that claim rather than accept it.
 **Proposed:** Keep my `SummaryMode.tsx` citation and dev's `styles/summary.css`.
 
 ```diff
-<<<<<<< HEAD
+ <<<<<<< HEAD
 [`src/web/modes/summary/SummaryMode.tsx`](../../src/web/modes/summary/SummaryMode.tsx) (the mode
 controller that mounts it), [`buildSummaryTree`](../../src/web/tree.ts) in `src/web/tree.ts` (the
 shape it draws), and `§ summary mode` at the end of
 [`src/web/styles.css`](../../src/web/styles.css). **There is no stage**, no artefact and no route:
 everything on screen arrives inside the article payload.
-=======
+ =======
 [`buildSummaryTree`](../../src/web/tree.ts) in `src/web/tree.ts` (the shape it draws), and
 `§ summary mode` in [`src/web/styles/summary.css`](../../src/web/styles/summary.css). **There is no
 stage**, no artefact and no route: everything on screen arrives inside the article payload.
->>>>>>> origin/dev
+ >>>>>>> origin/dev
 ```
 
 
@@ -98,15 +98,15 @@ stage**, no artefact and no route: everything on screen arrives inside the artic
 **Proposed:** **Union of rows.** This is the table of compiler-checked totals over `Mode`. Mine adds `band()`'s switch and `selectPassages`; dev adds `MODE_TARGET` and `SPENDS`/`DRAWS`, and improves the `BAND_SAYS` row's description. All four rows should stand. This is the one doc conflict where I think there is a *semantic* question underneath — see Q2 below.
 
 ```diff
-<<<<<<< HEAD
+ <<<<<<< HEAD
 | `BAND_SAYS` | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) |
 | `band()`'s `switch` | [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) — **which band the mode opens**, and it is a `switch` with a `never` default rather than a `Record`, because each arm is JSX with its own gates. A mode with no arm is a compile error; a mode that deliberately has no band says `return null` in its own case, as `plain` and `hierarchy` do |
 | `selectPassages` | [`src/web/reader/passages.ts`](../../src/web/reader/passages.ts) — **which passage slot the prose marks, the ring and the rail are drawn from.** Same `never` default. A mode with no passage producer answers `NO_FOUND` explicitly; nine do |
-=======
+ =======
 | `BAND_SAYS` | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) — what a **visitor** is shown |
 | `MODE_TARGET` | [`src/web/activation.ts`](../../src/web/activation.ts) — **whether pressing it spends money.** Total since 2026-09-06, over a tagged union: `fixed` carries the target, `delegated` carries **an arming function** (Diagram, whose target is whatever `?diagram=` says), `none` carries the reason in a sentence. A `delegated` row holding a *name* rather than a function was the first draft and GPT Sol refused it — nothing consumes a string, so a mode could claim delegation with no arming path anywhere |
 | `SPENDS` and `DRAWS` | [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx) — what an **owner's** press buys, and what the band actually draws. Both independently written, never derived from the tables above. `DRAWS` is total over `Mode` with no exclusions — a mode that draws no band says so as a `kind: "none"` row **carrying the positive control**, what is on screen instead. It was keyed `Exclude<Mode, NO_BAND_MODES>` until GPT Sol's F21 on 2026-09-06, and that one list both excused a mode from the table and skipped it at run time, so a mode added to it was checked by nothing |
->>>>>>> origin/dev
+ >>>>>>> origin/dev
 ```
 
 
@@ -115,11 +115,11 @@ stage**, no artefact and no route: everything on screen arrives inside the artic
 **Proposed:** **Take dev's side whole**, then correct one phrase in it: its closing sentence says *"The override is per-call in `App.tsx`"*, and that code is now in `Reader`. Dev's version subsumes the paragraph I edited (it documents a jump-history feature that did not exist when I wrote mine).
 
 ```diff
-<<<<<<< HEAD
+ <<<<<<< HEAD
 The one exception is **clicking a gist to jump**, which pushes. That is a scroll, but it is a
 deliberate act — you flung yourself across the article and may well want that undone. The override is
 per-call in `Reader`, not in the parser.
-=======
+ =======
 The exception is **a deliberate jump**, which pushes. That is a scroll, but you flung yourself
 across the article and may well want it undone. Clicking a gist is the original case; choosing a
 question out of the comments drawer is another, added 2026-09-06
@@ -154,7 +154,7 @@ Nothing about it rides along in a shared link: the record lives on `history.stat
 is why it is not a `?from=` parameter. The stamp is not a parameter and so is not in § The
 parameters; the one place it is written down is
 [`jump-history.ts`](../../src/web/jump-history.ts).
->>>>>>> origin/dev
+ >>>>>>> origin/dev
 ```
 
 
@@ -166,7 +166,7 @@ parameters; the one place it is written down is
 **Proposed:** Keep dev's `readerCssNoComments()` **and** my `src/web/reader/Reader.tsx` read, dropping dev's `app` binding. Both sides made the same class of fix to different halves.
 
 ```diff
-<<<<<<< HEAD
+ <<<<<<< HEAD
 const css = readFileSync(new URL("../src/web/styles.css", import.meta.url), "utf8").replace(
   /\/\*[\s\S]*?\*\//g,
   "",
@@ -176,7 +176,7 @@ const tsx = readFileSync(new URL("../src/web/TableView.tsx", import.meta.url), "
    2026-09-06. Named here so that a subject which moves again fails on the read
    rather than on an assertion against the wrong file. */
 const reader = readFileSync(new URL("../src/web/reader/Reader.tsx", import.meta.url), "utf8");
-=======
+ =======
 /* The reading-view sheets as a set. Named `src/web/styles.css` until
    2026-09-06, when that file became thirty-eight `@import` lines: a rule that
    moves between sheets must go on being found, and one that is *deleted* must
@@ -184,7 +184,7 @@ const reader = readFileSync(new URL("../src/web/reader/Reader.tsx", import.meta.
 const css = readerCssNoComments();
 const tsx = readFileSync("src/web/TableView.tsx", "utf8");
 const app = readFileSync("src/web/App.tsx", "utf8");
->>>>>>> origin/dev
+ >>>>>>> origin/dev
 ```
 
 
@@ -193,16 +193,16 @@ const app = readFileSync("src/web/App.tsx", "utf8");
 **Proposed:** Keep dev's `readerCss()` and my `BAND_FILE`/`BAND_SOURCE` pointing at `src/web/modes/referee/RefereeMode.tsx`; drop dev's `APP` binding.
 
 ```diff
-<<<<<<< HEAD
+ <<<<<<< HEAD
 const CSS = readFileSync("src/web/styles.css", "utf8");
 const BAND_FILE = "src/web/modes/referee/RefereeMode.tsx";
 const BAND_SOURCE = readFileSync(BAND_FILE, "utf8");
-=======
+ =======
 /* The reading-view sheets as a set rather than one path — `src/web/styles.css`
    has held nothing but `@import`s since 2026-09-06. */
 const CSS = readerCss();
 const APP = readFileSync("src/web/App.tsx", "utf8");
->>>>>>> origin/dev
+ >>>>>>> origin/dev
 ```
 
 
@@ -211,19 +211,19 @@ const APP = readFileSync("src/web/App.tsx", "utf8");
 **Proposed:** Keep dev's `readerCssNoComments()` and my `reader` binding; drop dev's `app`.
 
 ```diff
-<<<<<<< HEAD
+ <<<<<<< HEAD
 const css = stripBlockComments(read("../src/web/styles.css"));
 /* The reading view, which left `App.tsx` for src/web/reader/Reader.tsx on
    2026-09-06. The read is what fails if it moves again — an assertion pointed
    at the wrong file would simply stop finding what it is looking for. */
 const reader = stripLineComments(stripBlockComments(read("../src/web/reader/Reader.tsx")));
-=======
+ =======
 /* The reading-view sheets as a set, not one path: since 2026-09-06 a rule can
    move between them without changing, and a test that named the file it used to
    be in would go green over nothing. tests/helpers/stylesheets.ts. */
 const css = readerCssNoComments();
 const app = stripLineComments(stripBlockComments(read("../src/web/App.tsx")));
->>>>>>> origin/dev
+ >>>>>>> origin/dev
 ```
 
 
@@ -232,7 +232,7 @@ const app = stripLineComments(stripBlockComments(read("../src/web/App.tsx")));
 **Proposed:** **Keep both, and this is the one I least want to get wrong.** Dev added a real exemption to the scan (`article: Article` as a parameter annotation, delimiter-sensitive, with a GPT Sol finding behind the delimiter) plus an honest note about what the scan does and does not prove. I moved the subject from `App.tsx` to `src/web/article/access.ts` and added `indexOf` anchor assertions so a rename cannot make the slice silently empty. Dev's docblock + dev's exemption + my `ACCESS` source + my anchor checks.
 
 ```diff
-<<<<<<< HEAD
+ <<<<<<< HEAD
        sanitised — it hands its payload to the doorway. */
     const start = ACCESS.indexOf("async function resolveAccess");
     const end = ACCESS.indexOf("async function findArticle");
@@ -242,7 +242,7 @@ const app = stripLineComments(stripBlockComments(read("../src/web/App.tsx")));
     expect(start, "resolveAccess must exist in src/web/article/access.ts").toBeGreaterThan(-1);
     expect(end, "findArticle must follow it there").toBeGreaterThan(start);
     const doorway = ACCESS.slice(start, end);
-=======
+ =======
        sanitised — it hands its payload to the doorway.
 
        **One exemption, added 2026-09-06**: `article: Article` immediately
@@ -268,7 +268,7 @@ const app = stripLineComments(stripBlockComments(read("../src/web/App.tsx")));
       APP.indexOf("async function resolveAccess"),
       APP.indexOf("async function findArticle"),
     );
->>>>>>> origin/dev
+ >>>>>>> origin/dev
 ```
 
 
@@ -277,12 +277,12 @@ const app = stripLineComments(stripBlockComments(read("../src/web/App.tsx")));
 **Proposed:** Keep my `ts-ast` import, **drop** the `CONTACT_EMAIL` import: dev's commit *'The footer row is links only; the Contact page holds the address'* removed the address from the footer, and the auto-merge already removed the `MAIL` constant that used it. Verified: zero remaining references in the merged file.
 
 ```diff
-<<<<<<< HEAD
+ <<<<<<< HEAD
 import { type AstNode, parseSource, walkAst } from "./helpers/ts-ast.js";
 
 import { CONTACT_EMAIL } from "../src/site-text.js";
-=======
->>>>>>> origin/dev
+ =======
+ >>>>>>> origin/dev
 ```
 
 
