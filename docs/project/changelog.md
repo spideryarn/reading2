@@ -51,7 +51,7 @@ anything. What the page does with those is a display question, not a data one.
 
 ## The file
 
-One append-only NDJSON file, **`docs/changelog/versions.ndjson`**, one line per version, oldest
+One append-only NDJSON file, **`src/web/changelog-versions.ndjson`**, one line per version, oldest
 first. NDJSON because the job only ever appends: a run adds lines to the end and never rewrites what
 is above, so two runs cannot lose each other's work and a diff shows exactly what a run decided.
 

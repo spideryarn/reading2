@@ -1,5 +1,5 @@
 /**
- * **The shape of `docs/changelog/versions.ndjson`, and how to read it.**
+ * **The shape of `src/web/changelog-versions.ndjson`, and how to read it.**
  *
  * The file is the product of the process in
  * [changelog.md](../docs/project/changelog.md). This module is its schema and
