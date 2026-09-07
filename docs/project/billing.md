@@ -575,7 +575,8 @@ one should be read as proposals to take on card-adjacent risk we have deliberate
 
 ## The quota, and the one thing it has to survive
 
-A slot is **one successful new ingest** — a URL added, or a PDF uploaded. Re-running a pipeline
+A slot is **one successful new ingest** — a URL added, or a file uploaded (a PDF, or since
+2026-09-07 a web page). Re-running a pipeline
 step on an article you already have is free. A failed ingest is free. Archiving an article does not
 give the slot back — and archiving is the only removal the interface offers
 ([library.md](library.md#archive-and-undo-is-the-confirmation)).

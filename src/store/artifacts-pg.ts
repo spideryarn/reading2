@@ -311,6 +311,16 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
     excerpt: row.excerpt,
     publishedAt: row.publishedAt,
     note: row.note,
+    /* **The reader's own name for a file they uploaded**, and it is here so that
+       the two `Meta`s agree. `metaFrom` in src/store/pg.ts — the owner-facing
+       read — surfaces `raw_filename` as `Meta.filename`, and this rebuild did
+       not, so a pipeline stage's `Meta` and a reader's `Meta` for the same
+       article disagreed about a field. Nothing downstream asks yet, which is
+       exactly why it was worth fixing now: `cameOffADisk` on a pipeline-read
+       `Meta` would have quietly answered *no*, which is the same shape as the
+       `manifest.origin` bug this change already paid for once.
+       ⟨Sol, 2026-09-07⟩ docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md. */
+    filename: row.rawFilename,
     source: row.source as Meta["source"],
     method: row.extractMethod,
     pages: row.pages,

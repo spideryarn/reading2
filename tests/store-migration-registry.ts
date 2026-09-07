@@ -1575,6 +1575,23 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
      copy" the same question, and `tests/store-jobs-parity.test.ts` already asks
      it of that store. The hazard is abolished by `claimIn`'s single
      `update … where id = $id and status = 'queued'`, not covered elsewhere. */
+  "tests/an-uploaded-html-file-becomes-an-article.test.ts": {
+    category: "database-integration",
+    /* Written on 2026-09-07, so no witness has ever seen it run and the verdict
+       rests on the import graph and this file's own docstring — which is what
+       the field means and all it means. It sits beside its PDF sibling rather
+       than in the *Arrivals* bucket below, because that heading is about files
+       that landed between two witness **runs**, and there has been no run since
+       this one was written. */
+    evidence: "static-only",
+    reason:
+      "The HTML half of the same step, and it exists because the two things that break here break " +
+      "**silently**: an upload path that stored the arrived bytes rather than the decoded string " +
+      "would publish mojibake with nothing raised (the windows-1252 case is the only way that can " +
+      "fail honestly), and a kind decided from the filename rather than the bytes would be wrong " +
+      "in whichever direction nobody tested. Real upload records against the real store, like its " +
+      "PDF sibling. docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md.",
+  },
   "tests/upload-acquire.test.ts": {
     category: "database-integration",
     reason:
@@ -2637,6 +2654,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/upload-records.test.ts": "private-postgres",
   /* Storage, not Postgres — see `an-upload-is-queued-…` above. */
   "tests/upload-acquire.test.ts": "private-postgres",
+  "tests/an-uploaded-html-file-becomes-an-article.test.ts": "private-postgres",
   "tests/uploads-api.test.ts": "private-postgres",
 };
 
@@ -2803,6 +2821,13 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      without one; `seedAuthUser` in `beforeAll`, deleted again in `afterAll`. */
   "tests/upload-acquire.test.ts": {
     "33333333-3333-4333-8333-333333333333": { kind: "seeded" },
+  },
+  /* The HTML sibling of the file above, and its own uuid for the same reason:
+     tests/fixture-ids.test.ts refuses two files sharing one, and vitest runs
+     both against one database. `seedAuthUser` in `beforeAll`, deleted in
+     `afterAll`, because `uploads_owner_fk` refuses a row without it. */
+  "tests/an-uploaded-html-file-becomes-an-article.test.ts": {
+    "33333333-3333-4333-8333-333333333344": { kind: "seeded" },
   },
   /* Stage 3b's own reader. `seedAuthUser` in `beforeAll`, and every row it
      writes — the billing account, the ingest events — hangs off the

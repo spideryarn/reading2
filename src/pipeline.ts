@@ -46,10 +46,14 @@ import {
 import { collectPdfFigures, type PdfFiguresRun } from "./collect-pdf-figures.js";
 import { ReadabilityRefused, TooLittleTextToRead, runExtract } from "./extract.js";
 import {
+  cameFromAnUpload,
+  decodeHtml,
   fetchDocument,
   type RawManifest,
   RawDocumentUnavailable,
   readRawBytes,
+  storedDocumentBytes,
+  uploadedDocumentKind,
   writeRaw,
 } from "./fetch.js";
 import {
@@ -128,7 +132,7 @@ import {
   SOURCE_DOCUMENT_DAMAGED,
   SOURCE_DOCUMENT_GONE,
 } from "./messages.js";
-import { type RejectReason, looksLikePdf, MAX_UPLOAD_BYTES, rejectionFailure, stagingKey } from "./source.js";
+import { type RejectReason, MAX_UPLOAD_BYTES, rejectionFailure, stagingKey } from "./source.js";
 import { readUpload, rejectUpload, settleUpload } from "./upload-records.js";
 import { blobStore, CONTENT_TYPE, storeRawSource } from "./store/blobs.js";
 import {
@@ -1359,9 +1363,11 @@ async function refuseAnOverlongPdf(
  *
  *  1. **`head`** — cheap, and refuses an over-cap object before anything moves.
  *  2. **one `get`**, bounded by the same cap.
- *  3. **`%PDF-`** over the bytes we hold. The bucket's MIME allowlist checked
- *     the type the *uploader claimed*; this checks the actual one, and they are
- *     different questions asked of different parties.
+ *  3. **What the bytes we hold actually are** — `uploadedDocumentKind`, PDF or
+ *     web page or neither. The bucket's MIME allowlist checked the type the
+ *     *uploader claimed*; this checks the actual one, and they are different
+ *     questions asked of different parties. It was a bare `%PDF-` test until
+ *     2026-09-07, when a web page became a legal upload.
  *  4. **our SHA-256 against the browser's**, over that same copy. A mismatch is
  *     a refusal rather than a warning: the thing we are about to spend model
  *     money reading is not the thing the reader chose.
@@ -1423,7 +1429,27 @@ async function acquireUpload(
   if (!bytes) await refuse("missing");
 
   const got = bytes as Uint8Array;
-  if (!looksLikePdf(got)) await refuse("not-a-pdf");
+
+  /* **What is this?** — asked of the bytes, by the same function the URL half
+     asks, and that sharing is the whole design of the 2026-09-07 change
+     (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md). It was
+     `looksLikePdf(got)` when a PDF was the only legal upload.
+
+     The rule itself is `uploadedDocumentKind`'s, in src/fetch.ts beside the
+     `sniffKind` it is built from — two calls that are two different questions,
+     and its header is where they are argued. It is here rather than inline
+     because `npm run ingest -- <file>` has to reach the identical answer, and a
+     CLI that disagreed with the queue about what a file is would be a bug
+     nobody could reproduce through the browser.
+
+     **`??` rather than an `if`**, and it is the type system doing the work
+     `refuse`'s `Promise<never>` was built for. An `if (kind === null) await
+     refuse(…)` compiles and leaves `kind` still `DocumentKind | null` for the
+     next forty lines, so every use of it needs a cast or a second check — and a
+     cast here would be a claim that a refusal happened, which is the one thing
+     nothing downstream could verify. This way the compiler knows. */
+  const kind = uploadedDocumentKind(upload.filename, got) ?? (await refuse("not-a-pdf"));
+
   const sha256 = createHash("sha256").update(got).digest("hex");
   if (sha256 !== record.claimedSha256) await refuse("checksum-mismatch");
 
@@ -1431,8 +1457,32 @@ async function acquireUpload(
      it: three lines further down the record is `verified` and nothing can move
      it again. Not through `refuse` above, because that throws the *static*
      sentence for the reason and the reader wants the page count — the record
-     takes the reason, the job takes the number. See `refuseAnOverlongPdf`. */
-  await refuseAnOverlongPdf(ctx, got, () => rejectUpload(upload.id, "too-many-pages"));
+     takes the reason, the job takes the number. See `refuseAnOverlongPdf`.
+
+     **Inside the PDF branch since 2026-09-07**, where the fetched half has
+     always had it (`if (doc.kind === "pdf")` in the `fetch` step below). It was
+     unconditional here only because every upload was a PDF; a web page has no
+     pages to count, and `MAX_PAGES` is a statement about what transcription
+     costs rather than about how long a document may be. */
+  if (kind === "pdf") {
+    await refuseAnOverlongPdf(ctx, got, () => rejectUpload(upload.id, "too-many-pages"));
+  }
+
+  /* **The decoded string for a web page, the arrived bytes for a PDF** — the
+     rule is `storedDocumentBytes`'s and this calls it rather than restating it,
+     because stage 2 does `new TextDecoder().decode(bytes)` with no encoding
+     branch on the strength of it. An upload path that stored the bytes it
+     received would put a windows-1252 page's curly quotes into the reader's
+     prose as replacement characters, with nothing raised and nothing logged.
+
+     `decodeHtml(got, null)` — `null` rather than `claimed` above, and the
+     difference is real: that argument is a *transport* encoding label, and a
+     filename carries none. Passing `text/html` there would be handing the
+     sniffer a charset claim nobody made. So the encoding comes from the BOM,
+     then the document's own `<meta charset>`, then windows-1252 — which is what
+     a browser does with a file off a disk too. */
+  const decoded = kind === "html" ? decodeHtml(got, null) : null;
+  const storedBytes = storedDocumentBytes({ kind, bytes: got, text: decoded?.text ?? null });
 
   /* Promoted to a name that is a statement about its contents, and create-only.
      `already-there` is the dedup hit — two readers with the same paper — and it
@@ -1447,11 +1497,13 @@ async function acquireUpload(
      while the canonical object stays corrupt. Uploads were the one path still
      doing it the old way after the helper landed, which is the shape a shared
      helper is supposed to prevent. GPT Sol, 2026-08-27. */
-  const { sha256: storedSha256, outcome: promotion } = await storeRawSource(got, "pdf");
+  const { sha256: storedSha256, outcome: promotion } = await storeRawSource(storedBytes, kind);
 
   const manifest: RawManifest = {
-    kind: "pdf",
-    file: "raw.pdf",
+    kind,
+    /* A restatement of `kind` rather than a path — nothing writes this file any
+       more, and `RawManifest.file`'s own header says why the field stays. */
+    file: kind === "pdf" ? "raw.pdf" : "raw.html",
     /* **No URL, and none invented.** `RawManifest` used to require two, which
        is exactly the assumption docs/plans/260826u-pdf-upload-and-storage.md § 5 warned
        would take the time. A `file://` or an `upload://…` here would have read
@@ -1461,8 +1513,13 @@ async function acquireUpload(
     origin: "upload",
     uploadId: upload.id,
     filename: upload.filename,
-    contentType: CONTENT_TYPE.pdf,
-    encoding: null,
+    /* **Ours, not the browser's.** For a fetched document this field is the
+       origin's own header verbatim; an upload has none, and the browser's claim
+       on the PUT is not a header a server sent. So it records the type of the
+       thing we decided it is — which is the same value `storeRawSource` just
+       put the object in the bucket under. */
+    contentType: CONTENT_TYPE[kind],
+    encoding: decoded?.encoding ?? null,
     bytes: got.byteLength,
     sha256,
     /* **The two stored fields, which this path was writing to the bucket and
@@ -1476,9 +1533,14 @@ async function acquireUpload(
 
        For a PDF this equals `sha256` above, because the stored bytes *are* the
        fetched bytes. It is taken from the helper's return anyway rather than
-       assumed, since that is the value the object is actually under. */
+       assumed, since that is the value the object is actually under. **And for
+       a web page it genuinely differs**, since 2026-09-07, for exactly the
+       reason `writeRaw`'s own comment gives: what we store is the decoded
+       string, so anything that arrived in another encoding hashes to something
+       else. Two different questions, and this is the one that names the object.
+       */
     storedSha256,
-    storedBytes: got.byteLength,
+    storedBytes: storedBytes.byteLength,
     fetchedAt: new Date().toISOString(),
   };
 
@@ -1846,7 +1908,24 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          first thing an upload hit, three stages after the last thing that could
          have supplied one. */
       if (manifest.kind !== "pdf") {
-        const url = requireUrl(ctx);
+        /* **And since 2026-09-07 an uploaded *web page* has none either**
+           (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md). So the
+           question is no longer the *kind* but the *origin* — and it is asked
+           through `cameFromAnUpload` rather than of `manifest.origin`, because
+           that field does not survive the store and this line read it wrongly
+           for an afternoon. Its header is the whole story. The answer is
+           `null` rather than a placeholder — a `file://` or an `upload://…`
+           here would read as an address to `meta.url` and to everything that
+           renders it, and not one of them would complain. `requireUrl` is still
+           right for a fetched page: that one *must* have an address and a
+           missing one is our bug, not the reader's.
+
+           What it costs is stated where a reader can act on it: relative hrefs
+           and relative `<img src>` stay relative, so `src/assets.ts` refuses
+           them — cleanly, and by a rule it already had. A document carrying its
+           own `<base href>` resolves correctly with no help from us, because
+           that is what `document.baseURI` is. */
+        const url = cameFromAnUpload(manifest) ? null : requireUrl(ctx);
         /* `TextDecoder`, and no encoding branch: `writeRaw` stores the
            *decoded* string for an HTML page, so these bytes are already UTF-8
            whatever the publisher served. The manifest records the original

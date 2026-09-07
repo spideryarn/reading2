@@ -17,6 +17,8 @@ import {
   formatBytes,
   MAX_PAGES,
   MAX_UPLOAD_BYTES,
+  uploadContentType,
+  uploadKind,
   uploadLimits,
   uploadProblem,
 } from "../src/uploads.js";
@@ -139,5 +141,81 @@ describe("formatBytes", () => {
        and the size refusal — and "up to 50.0 MB" reads as a measurement of
        something rather than a rule. */
     expect(formatBytes(MAX_UPLOAD_BYTES)).toBe("50 MB");
+  });
+});
+
+/**
+ * **What a file claims to be, before anybody has looked at a byte.**
+ *
+ * A second kind became legal on 2026-09-07
+ * (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md), and this file
+ * still had only PDF fixtures — so nothing pinned the new answer at all until a
+ * GPT Sol review pointed at the gap. The cases below are the ones where the type
+ * and the name **disagree**, because agreeing is not where a guess goes wrong.
+ */
+describe("uploadKind", () => {
+  const file = (name: string, type: string) => ({ name, type, size: 1024 });
+
+  it("takes either the type or the name, and is not fussy about case", () => {
+    expect(uploadKind(file("paper.pdf", "application/pdf"))).toBe("pdf");
+    expect(uploadKind(file("saved.html", "text/html"))).toBe("html");
+    expect(uploadKind(file("SAVED.HTM", ""))).toBe("html");
+    expect(uploadKind(file("paper.PDF", ""))).toBe("pdf");
+  });
+
+  /* Browsers report an empty type often enough — a drag from an archive tool, an
+     extension the OS does not know — that requiring one would refuse good files. */
+  it("lets the name decide when the browser volunteered nothing useful", () => {
+    expect(uploadKind(file("saved.html", "application/octet-stream"))).toBe("html");
+  });
+
+  /**
+   * **`text/plain` cuts differently for the two kinds, and that is the point.**
+   *
+   * A web page *is* text, so an OS that does not know `.html` reporting plain
+   * text is saying nothing that contradicts the name. A PDF is binary, so the
+   * same string about a `.pdf` is a contradiction — which the case below this
+   * one has pinned since before a second kind existed. Treating `text/plain` as
+   * simply "vague" would have satisfied the first and broken the second.
+   */
+  it("reads text/plain as a shrug about a web page and a contradiction about a PDF", () => {
+    expect(uploadKind(file("saved.html", "text/plain"))).toBe("html");
+    expect(uploadKind(file("paper.pdf", "text/plain"))).toBeNull();
+  });
+
+  it("lets a type the browser is sure of overrule the name", () => {
+    /* A `.pdf` the browser knows to be an archive is refused here rather than
+       after the transfer. */
+    expect(uploadKind(file("paper.pdf", "application/zip"))).toBeNull();
+    expect(uploadKind(file("saved.html", "image/png"))).toBeNull();
+  });
+
+  it("refuses what is neither", () => {
+    expect(uploadKind(file("notes.txt", "text/plain"))).toBeNull();
+    expect(uploadKind(file("holiday.mp4", "video/mp4"))).toBeNull();
+    expect(uploadKind(file("no-extension", ""))).toBeNull();
+  });
+});
+
+/**
+ * **The label on the browser's PUT**, which the bucket's allowlist checks.
+ *
+ * It was the literal `"application/pdf"` in src/web/upload.ts for every file
+ * until 2026-09-07 — the one line that would have made an uploaded web page fail
+ * at Storage with a 415 nobody could read.
+ */
+describe("uploadContentType", () => {
+  const file = (name: string, type: string) => ({ name, type, size: 1024 });
+
+  it("labels each kind as the bucket's allowlist spells it", () => {
+    expect(uploadContentType(file("saved.html", ""))).toBe("text/html");
+    expect(uploadContentType(file("paper.pdf", ""))).toBe("application/pdf");
+  });
+
+  /* A file `uploadProblem` has already stopped, so there is no PUT to label and
+     the value cannot matter — but it must still be one the bucket would take,
+     rather than an empty string or a throw. */
+  it("falls back to a type the bucket allows for a file that will never be sent", () => {
+    expect(uploadContentType(file("holiday.mp4", "video/mp4"))).toBe("application/pdf");
   });
 });

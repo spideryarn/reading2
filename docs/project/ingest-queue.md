@@ -84,7 +84,7 @@ the progress list.
 | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl` and `isSlug` — what an article gets called, and whether that name is safe |
 | [`src/fetch.ts`](../../src/fetch.ts) | stage 1, somebody else's — [fetching.md](fetching.md) |
 | [`src/web/UploadPicker.tsx`](../../src/web/UploadPicker.tsx) | the file picker, the drop zone and the progress bar — [§ Uploading a PDF](#uploading-a-pdf) |
-| [`src/uploads.ts`](../../src/uploads.ts) | what counts as a PDF worth uploading, and how big is too big |
+| [`src/uploads.ts`](../../src/uploads.ts) | what counts as a file worth uploading — PDF or web page — and how big is too big |
 
 ## Uploading a PDF
 
@@ -93,6 +93,22 @@ an article the same way a pasted URL does. The picker had been sitting there sin
 saying in as many words that there was nowhere to send a file — deliberately, because a disabled
 button or a spinner over a file going nowhere are both
 [the failure this repo keeps writing up](../reusable/silent-success.md). There is somewhere now.
+
+**And an HTML file since 2026-09-07**, which Greg asked for
+([260907b](../plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md)). Everything below is
+unchanged by it — the transfer, the grant, the record's state machine, the caps — because the
+change is not to *how a file arrives* but to *what stage 1 decides it is when it does*. Three
+things are worth knowing:
+
+- **The kind comes off the bytes, through the same `sniffKind` a fetched document goes through.**
+  `uploadedDocumentKind` in [`src/fetch.ts`](../../src/fetch.ts) is the rule and its header is the
+  argument; the filename is treated as a *claim*, exactly the way a server's `Content-Type` is. So
+  a `.html` whose bytes begin `%PDF-` is a PDF and is transcribed as one.
+- **The page cap is a PDF's.** `MAX_PAGES` is about what reading a document by model costs, and a
+  web page is not read by a model at all, so `refuseAnOverlongPdf` sits inside the PDF branch.
+- **An uploaded web page has no URL, and none is invented** —
+  [content-extraction.md](content-extraction.md#stage-2-and-the-document-with-no-address) is where
+  that lands, along with what it costs.
 
 **The bytes never touch our server**, and that is not an optimisation. A Vercel function refuses a
 request body over 4.5 MB — flat, unraisable, the same on Node, Edge and Fluid — and two of the

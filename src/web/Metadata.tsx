@@ -198,7 +198,7 @@ import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam } from "./params.js";
 import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, readHref } from "./router.js";
-import { SourceLink, webSource } from "./SourceLink.js";
+import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -1250,13 +1250,17 @@ function Origin({ meta, slug, owner }: { meta: Meta; slug: string; owner: boolea
       </p>
     );
   }
-  /* **`meta.source` is the evidence, not the absent URL.** A missing `meta.json`
-     is tolerated and a revision may be published with neither
+  /* **`cameOffADisk` is the evidence, not the absent URL.** A missing
+     `meta.json` is tolerated and a revision may be published with neither
      `requested_url` nor `final_url` (src/db/schema.ts), so an owner can hold an
      ordinary web article with no address — and "you uploaded this" is a claim about what
      they did, assembled from a gap in our own files. GPT Sol, 2026-08-30. The
-     other branch says what is actually true: we have no record of one. */
-  const uploaded = meta.source === "pdf";
+     other branch says what is actually true: we have no record of one.
+
+     It was `meta.source === "pdf"` here and in Masthead.tsx until 2026-09-07,
+     when an uploaded web page made that both a wrong answer and a question
+     about the wrong axis. SourceLink.tsx owns it once now. */
+  const uploaded = cameOffADisk(meta);
   /* **We hold an address, and it is not one anybody can follow.** `webSource`
      refuses anything that is not `http(s)`, because an imported article's
      metadata goes straight into the row, so a `javascript:` or `data:` value is
