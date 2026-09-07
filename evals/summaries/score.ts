@@ -29,8 +29,14 @@
  * The plan asks for both because the first was being used as if it covered the
  * second, and it does not: a judge could rank identically-produced arms
  * identically every time and still reorder the real arms on every pass. Both are
- * reported in **ranks**, so an arm-to-arm gap can be compared with them directly,
- * and the separability threshold is the larger of the two.
+ * reported in **ranks**, so an arm-to-arm gap can be compared with them directly.
+ *
+ * **The separability threshold is judge instability alone**, not the larger of
+ * the two. This sentence said "the larger" until 2026-09-07 and the code has
+ * never done that: `separabilityThreshold` returns `instability.ranks`, and the
+ * note above it says why — taking the max of the two was the ad-hoc scalar GPT
+ * Sol objected to. The generation floor is reported beside it and read by a
+ * person.
  *
  * ## The decision rules
  *
@@ -74,7 +80,7 @@ export interface ShapeFacts {
   hasBracketedHint: boolean;
   /** The hint claims a count — a digit or a number word inside the brackets. */
   hintClaimsCount: boolean;
-  /** The hint sits after the `?`, which is V4's shape and the one production mangles. */
+  /** The hint sits after the `?`, which is V4's shape and production's since toc/7. */
   hintAfterQuestionMark: boolean;
   metaNarration: string[];
 }

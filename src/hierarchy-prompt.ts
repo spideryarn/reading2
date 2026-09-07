@@ -56,8 +56,31 @@ import type { Block } from "./types.js";
    paragraphs and does not. The rule is now a ceiling per depth. The stamp moves
    because a tree half-written to the old budget and half to the new is a
    visible defect rather than a stale artefact.
-   docs/plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md. */
-export const PROMPT_VERSION = "toc/6";
+   docs/plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md.
+
+   **`toc/7`, 2026-09-07: the QUESTIONS block became V4.** Greg drew the shape
+   himself — *"Computational functionalism - why isn't computation sufficient
+   for consciousness? (4 arguments)"* — and V4 is the variant that reproduced it
+   almost verbatim, unprompted, on that exact node. The line is now
+   `<topic> — <question>? (<shape hint>)`: the topic in the author's own term,
+   a question that presupposes where the section lands, and a bracketed hint
+   giving the SHAPE of the answer and never its content.
+
+   The block is copied byte-for-byte out of `evals/summaries/variants.md` § V4,
+   and a test asserts it stays that way. The old block is pinned in the same
+   file under *The shipped QUESTIONS block, toc/6* so the eval keeps a control:
+   `evals/summaries/arms.ts` § `incumbent` slices the LIVE system, so from this
+   commit it IS V4 and cannot be the before half of anything.
+
+   The stamp moves because the field's content changed, not its name — a tree
+   half-written under toc/6's *"under 15 words, no shape hint"* rule and half
+   under this one is a visible defect rather than a stale artefact, and the
+   structure checkpoint is keyed on the stamp. Existing articles keep their
+   toc/6 questions until somebody re-runs the stage: new prompts reach new
+   articles only (docs/project/hierarchy.md § prompt versions).
+
+   docs/plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md. */
+export const PROMPT_VERSION = "toc/7";
 
 /**
  * How hard the model thinks before it starts writing.

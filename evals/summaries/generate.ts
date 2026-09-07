@@ -266,8 +266,12 @@ export function parseAnswer(raw: string, requested: readonly RequestedNode[]): P
 }
 
 /**
- * Put every question through this arm's rule — `questionFor` for six of the
- * seven arms, V4's trailing-hint patch for V4.
+ * Put every question through production's `questionFor`.
+ *
+ * It used to say *"for six of the seven arms, V4's trailing-hint patch for V4"*,
+ * and there is no longer any such patch: V4 won, production took it as `toc/7`,
+ * and the reimplementation that let its cost stay visible was deleted the same
+ * day. `arms.ts` § `QuestionRule` is the slot the next one goes in.
  *
  * **A dropped question is recorded, not quietly absent.** Production counts the
  * same event into `droppedQuestions` for the same reason: a line that silently

@@ -192,7 +192,14 @@ QUESTIONS (the root and depth-1 nodes only)
 
 Worked: `Computational functionalism — why isn't computation sufficient for consciousness? (4 arguments)`
 
-### The code change V4 needs, and only V4
+### The code change V4 needs, and only V4 — **landed 2026-09-07**
+
+**V4 won and shipped as `toc/7`, and this patch is in `src/hierarchy.ts` now**, so what follows is
+the record of what was changed rather than a proposal. `arms.ts` § `v4` no longer declares a
+`questionRule` of its own, `armsNeedingCodeChange()` returns nothing, and the harness's
+reimplementation of the rule below was deleted the same day — a copy is worth keeping only while
+there is something for it to differ from.
+[260907d](../../docs/plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md).
 
 Without it the stored value is `…consciousness? (4 arguments)?` — GPT Sol's P1-4, verified.
 In `questionFor` (`src/hierarchy.ts`), replace `if (q.endsWith("?")) return q;` with:
@@ -263,7 +270,7 @@ precisely what its gist-echo check drops.
 | | failure | line |
 |---|---|---|
 | 1 | fabricated count — the child count (6) where the text says four | `Computational functionalism (6 arguments): why isn't computation sufficient for consciousness?` |
-| 2 | neutral lookup question | `Computational functionalism: what four arguments does the section cover?` |
+| 2 | a lookup: one fact settles it and no argument need be followed | `Computational functionalism — how many arguments does the section give against it?` |
 | 3 | answer-leaking question | `Computational functionalism (4 arguments): why do brains-not-computers, life and simulation-not-instantiation defeat it?` |
 | 4 | title-only line | `Consciousness & Computation?` |
 | 5 | the gist with a question mark on it | `Four independent arguments—about brains, alternative computation, biological life, and simulation—undermine the assumption that digital computation alone can produce consciousness?` |
@@ -276,14 +283,61 @@ tempted to rate them *highly*, because they are the most informative lines on th
 it is measuring information rather than the door-or-wall criterion, and it cannot be trusted to rank
 the real arms.
 
+### Anchor 2 was rewritten on 2026-09-07, before the second run and not after the first
+
+**It is the anchor that failed the gate**, fourteen of the fifteen inversions of the 2026-09-05 run,
+placed 4th / 2nd / 4th of twelve with a perfect `5,5,5,5,5` and leakage 1. The line was:
+
+> `Computational functionalism: what four arguments does the section cover?`
+
+and on inspection **it is not a bad line**: the count is right, the topic is named, nothing leaks,
+and a reader can decide from it whether to descend. It was labelled a wall at design time on a theory
+about lookup questions. The judge scored it as a door, and the judge was closer to right.
+
+**Two things had to change together, and only one of them is the anchor.** GPT Sol, reviewing the
+plan to rewrite it (F3, 2026-09-07): the rubric has fidelity, distinctiveness, triage, orientation,
+simplicity, leakage and shape-hint axes and **no criterion for "requires following an argument rather
+than retrieving a fact"** — so the eval was asking the judge to reject a failure it had never been
+told to look for, and any replacement anchor could pass the gate while the judge went on preferring
+polished lookups. `judge.ts` § `RUBRIC` now has a **`demand`** axis, and that is the substantive half
+of this repair.
+
+The new line is faithful, distinctive, simple and low-leakage, and settled by retrieving one number:
+
+> `Computational functionalism — how many arguments does the section give against it?`
+
+Sol's own draft ended `(4 arguments)`. Dropped: a hint that answers the question makes the line
+*answer-leaking* as well, which is anchor 3's defect, and an anchor carrying two defects stops
+measuring either. The prompt permits omitting the hint.
+
+**It is in V4's shape rather than V1's, unlike the other four**, because V4 is what ships since
+`toc/7`: a lookup dressed in the shape production asks for is the realistic failure, and the lineup
+mixes shapes anyway.
+
+**Pre-registered here, before the run:** anchor 2 and anchor 4 must both rank below every real line.
+Anchor 4 matters because it is the *fifteenth* inversion — `anchor-4 ranked above v1` in repeat 1 —
+which the summary "fourteen of fifteen are one anchor" is right about and quietly leaves doing
+nothing. Repairing anchor 2 alone would not have cleared a gate at `MAX_ANCHOR_INVERSIONS = 0`.
+
+**The gate is not touched.** The tolerance is still `0`, still declared before the run. If these two
+still invert, that is a result about the judge and not a reason to edit an anchor a second time.
+
 ---
 
-## One thing left for whoever ships the winner
+## One thing left for whoever ships the winner — **done, 2026-09-07**
 
-Nothing here touches `EXPAND_SYSTEM` in `src/hierarchy-expand.ts`, which has **no question field at
-all** (plan § P1-5). Whichever variant wins needs the same block there, or the deepening cascade
-produces depth-1 rows with no question — which is invisible while the question is a faint second
-line and obvious the moment it becomes the only one.
+Nothing here touches `EXPAND_SYSTEM` in `src/hierarchy-expand.ts`, which had **no question field at
+all** (plan § P1-5). Whichever variant won needed the same block there, or the deepening cascade
+would produce depth-1 rows with no question — invisible while the question was a faint second line,
+and obvious the moment it became the only one.
+
+V4 won, and that block is now in `EXPAND_SYSTEM` as `expand/4`, carrying V4's content rules in the
+expansion prompt's voice. Which sections it applies to is marked **per target** in the request
+(`ASK QUESTION ON CHILDREN` / `OMIT QUESTION`), because one call batches parents at different depths.
+[260907d](../../docs/plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md) § Stage 2.
+
+**This harness still does not measure that path**, and no result from it may be read as covering the
+cascade. That sentence is unchanged and is the reason this section stays rather than being deleted.
 
 ---
 
@@ -393,4 +447,39 @@ GISTS (internal nodes)
 - Keep the article's own words for the things it names — those are the reader's
   handholds — and ordinary words for everything else. A gist is read at a glance
   and has to land first time: plainer than the article, never further from it.
+```
+
+---
+
+## The shipped QUESTIONS block, toc/6
+
+**Copied out of `src/hierarchy.ts` § SYSTEM on 2026-09-07, verbatim, immediately before V4 replaced
+it.** This is the wording every arm in the 2026-09-05 run was measured against, and it is the one
+the plan calls *the diagnosed failure*: `antikythera` carries ten of its questions in the wild and
+they are lookups, yes/no questions and the gist re-asked.
+
+It is pinned here for exactly the reason the shipped GISTS blocks are, and `arms.ts` states the
+reason in full: `incumbent` slices the **live** `SYSTEM`, so from the moment V4 landed, `incumbent`
+**is** V4. Without this copy the eval would have two names for one recipe and no before half at all —
+and could therefore never return the answer *"the control was better all along"*, which is an outcome
+it was deliberately built to be able to give.
+
+The sentence `production-prompt.ts` exports as `THE_DIAGNOSED_SENTENCE` — *"and its gist does NOT"* —
+lives in the second bullet, and this is now its only home.
+
+```
+QUESTIONS (the root and depth-1 nodes only)
+
+- Exactly ONE question on the root and on each depth-1 node. Omit it entirely
+  on deeper nodes.
+- It is the question this node's text answers and its gist does NOT. The reader
+  has the gist beside it; the question is what sends them into the prose for
+  the rest of the answer.
+- It must need the argument to answer, not a fact to look up: "why", "how", or
+  "what follows if" — never "which example", "who said", or anything one
+  sentence settles.
+- Not rhetorical, not yes/no, and never the gist with a question mark on it.
+- The root's question is the one the whole piece exists to answer.
+- Under 15 words, ending in "?". The article's own words for what it names,
+  ordinary words for the rest, exactly as with gists.
 ```

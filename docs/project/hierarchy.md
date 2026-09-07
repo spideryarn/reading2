@@ -1200,6 +1200,14 @@ lines longer, plainer words) turned out to be invisible on everything he had alr
 
 > Leave it, new articles only.
 
+**`toc/7` on 2026-09-07 is the same answer a second time, and the second one is louder**, because
+that bump changed what a Socratic question *looks like* — from a bare *"why does X?"* to
+`<topic> — <question>? (<shape hint>)`, which since report 24 is the only line a Summary row draws.
+So a reader's older articles keep questions in a shape nothing else in the library still writes, and
+**nothing on screen says so**: unlike quotes, quiz, glossary, ideas, timeline and debate, the tree
+has no `outdated` chip to show them, because it has no staleness mechanism at all.
+[summaries.md § The shape it has](summaries.md) is what changed.
+
 **So this is chosen, not merely what happens.** Nothing is broken, nobody is charged for a summary
 they did not ask to be regenerated, and no reader is shown a warning about a line that reads
 perfectly well. The cost is the one that prompted the question: a change you make today is not

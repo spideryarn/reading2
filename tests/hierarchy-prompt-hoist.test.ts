@@ -63,7 +63,7 @@ const BLOCKS: Block[] = [
 
 describe("hoisting the structure prompt's three values", () => {
   it("moved the stamp and the effort without moving either value", () => {
-    expect(PROMPT_VERSION).toBe("toc/6");
+    expect(PROMPT_VERSION).toBe("toc/7");
     expect(PRODUCTION_EFFORT).toBe("low");
   });
 
@@ -98,10 +98,17 @@ describe("hoisting the structure prompt's three values", () => {
    * guards is the same thing it always did: that nobody moves these bytes
    * *without meaning to*. Change the number only alongside a deliberate change
    * to SYSTEM, `renderBlocks` or `EFFORT`, and say which in the message.
+   *
+   * **And it moved again on 2026-09-07**, from `9022c4cb6b7395b1` to the value
+   * below, when the QUESTIONS block became V4 (`toc/7`). Same reasoning: SYSTEM
+   * asks for a differently shaped line, so a checkpoint written under toc/6
+   * must not be resumed onto it — an article part-way through the stage would
+   * otherwise come out with V4 questions on the parts written after the resume
+   * and toc/6 questions on the ones written before, and nothing would say why.
    */
-  it("mints one stable key for the toc/6 structure request", () => {
+  it("mints one stable key for the toc/7 structure request", () => {
     expect(checkpointKey(canonicalStructureRequest(structureRequest(BLOCKS).params))).toBe(
-      "9022c4cb6b7395b1",
+      "8e314a56003e9d89",
     );
   });
 });

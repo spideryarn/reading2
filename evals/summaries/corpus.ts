@@ -77,7 +77,12 @@ export const DEFAULT_CORPUS_ROOT = "output/summaries-corpus";
 
 export interface CorpusEntry {
   slug: string;
-  /** sha256 of `blocks.json` as exported on 2026-09-05. */
+  /**
+   * sha256 of the **blocks array**, canonically re-serialised — not of
+   * `blocks.json`, whose envelope also carries a `sanitizer` number that is
+   * about the sanitiser and not about the article. Re-pinned 2026-09-07 when
+   * that distinction was found the expensive way: see `blocksSha256`.
+   */
   sha256: string;
   /** sha256 of `tree.json` — an INPUT here, not an output. See the header. */
   treeSha256: string;
@@ -101,7 +106,7 @@ export interface CorpusEntry {
 export const CORPUS: readonly CorpusEntry[] = [
   {
     slug: "noema-mythology-of-conscious-ai",
-    sha256: "7f2bf54038356caa82187df1a20ea1199c063ad3859b59b11502cfb48f874c12",
+    sha256: "cc4689064fd3113ace088c49e8da1feeaa69c3707cb1e8164d381decfa4bb821",
     treeSha256: "53d3c7289446c31b229cd8406e7f0ea731d9988907e7e1d21612bf3ecc4e2a5e",
     version: "toc/2",
     blocks: 141,
@@ -122,7 +127,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "antikythera-mechanism-spya-zhxrzm",
-    sha256: "256478f197af70943a3e212b472e7357b7953c99ac398cf925ad53ddd2632232",
+    sha256: "b83deaba79c28a733ed9114396b23447c9c50c682afbc2afcbec45154a2915b3",
     treeSha256: "949cc08bade48c5725534bf2a0116a5d40b9cb664aedd47a5ae25a006fe26549",
     version: "toc/5",
     blocks: 357,
@@ -136,7 +141,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
-    sha256: "e85d229171c217304fce98d53849897e4dca0060aabdea6bac56d279bea1bb47",
+    sha256: "53878bd894e2258dc4aa2d4b9a06528387fb9f3306e72334351963746f687c72",
     treeSha256: "a94e38f9e79990a45dd156886148895ede22177d614b0b5e73478e8d46e66b47",
     version: "toc/2",
     blocks: 244,
@@ -150,7 +155,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "scaling-hypothesis",
-    sha256: "82b1213fe14f628f92b8df8056b6ff91f4bef6955c7a172b2ac8872267265931",
+    sha256: "c5f50e15fc40491b27aadc372545381d5c0c06c51398632354e5148be10b45dd",
     treeSha256: "358fe05ae14b8cc80e45e2d35cb69c4556743a0d4756c9faf0f8100185da5fa1",
     version: "toc/2",
     blocks: 186,
@@ -164,7 +169,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "openai-huggingface",
-    sha256: "8a2d3372c958bafaf7fda86658171d56d203497907215afe5b707e64061be1c7",
+    sha256: "5be2c4050c7cd5a36c0c28309f7ae3304cc2c9a8d697c2c60252c55b4c385990",
     treeSha256: "34fb3d2145bbff2b2ac87c2885630987982d8e9b676683625521ee2e0c7a9405",
     version: "toc/2",
     blocks: 95,
@@ -178,7 +183,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "fowler-phrenology",
-    sha256: "3267df1c3bc3d56d21ff4f99a5e7fad40c2a22a5afc8d5cccb124d9451c9a5de",
+    sha256: "859096e2d11c4c40686f6800bc748f9b8473b9bf7d672c5b9d09c54108f7ad0b",
     treeSha256: "3486985a80a68efbcd5303eefba7118cff3639490066a4769112538fbe3265e8",
     version: "toc/2",
     blocks: 72,
@@ -192,7 +197,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "claudes-constitution-spya-cr8bzk",
-    sha256: "ad579ba230fed242256240bf844cbc67ad4814321442aadc9826229366ac1a3a",
+    sha256: "6e2352975210e89f54e1badda5e19c299fe144524db472c6056bef19aa8fafd3",
     treeSha256: "dc40555f9b24431628683aae884251cb0af98ada4a467e3b8f1b958b2fd98395",
     version: "toc/2",
     blocks: 120,
@@ -207,7 +212,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   /* -------------------------------------------------- out of the default -- */
   {
     slug: "the-mythology-of-conscious-ai-spya-rn5m0q",
-    sha256: "97c9c5c0fce8ec09f77ec0cac1bfdfea6001eda934109445b7eb5ba9a5ec79a0",
+    sha256: "48c6bdd1c33fd9a4191e9e9b60889ae9c2f323e752d9456a9a3f3ae8fc9a8848",
     treeSha256: "c752aaf42d2553f82a992df954d8d9d38669dac0dcfe55ad9e6d7864cc122eca",
     version: "toc/5",
     blocks: 141,
@@ -222,7 +227,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "writes",
-    sha256: "2a5aacf107fbcb2029f7bb61ac0650640570e79c8631fb1b54e11f124b9c50ec",
+    sha256: "e532f3c516122104dd8944a91713b9aae3fb3dc8848b143a15d6983148310119",
     treeSha256: "d02831b1f4606f8a09e1d8e5c046f84e3887c5cb00d80f759683b07da1db710e",
     version: "toc/2",
     blocks: 19,
@@ -236,7 +241,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "m1-kuhn-spya-a2zrjb",
-    sha256: "16a27597dda51b2ff0e4ddf7271202bdfd77c3992cd3c0193fc5b72c495af0ea",
+    sha256: "6dfe79ad131ecebcf80f123c844d40f00cc366cbf71f806e1007f3531e557ba8",
     treeSha256: "4f5d0c275f0b2fd9eb45a504323f3c34c0215ee98f6c79561bf7255787daeafc",
     version: "toc/3",
     blocks: 2046,
@@ -272,6 +277,31 @@ export interface LoadedDocument {
 const sha256 = (b: Buffer): string => createHash("sha256").update(b).digest("hex");
 
 /**
+ * **The blocks, hashed as blocks — not the file they arrived in.**
+ *
+ * `blocks.json` is `{sanitizer, blocks}`, and `sanitizer` is a number about the
+ * *sanitiser*, not about the article. Hashing the whole file therefore made every
+ * document in the corpus drift at once every time `SANITIZER_VERSION` moved,
+ * which is what happened between 2026-09-05 and 2026-09-07: **all seven default
+ * documents reported drift on the same day, none of their trees moved, and every
+ * block count was unchanged.**
+ *
+ * That is worse than a false alarm. The manifest exists so a run can say *"these
+ * are the articles the last one measured"*, and a signal that fires for a reason
+ * unrelated to the articles is one somebody explains away every time — until the
+ * day it means something. Established rather than assumed: the exported blocks
+ * for `noema-mythology-of-conscious-ai` were compared field by field against the
+ * committed fixture cut, and **id, tag, kind, text, words, gistable and html were
+ * identical on all 141**, so nothing about the article had changed.
+ *
+ * `tree.json` is still hashed whole, and deliberately: everything in it —
+ * `version` included, which is the prompt stamp — is about the article.
+ */
+function blocksSha256(blocks: readonly Block[]): string {
+  return createHash("sha256").update(JSON.stringify(blocks)).digest("hex");
+}
+
+/**
  * Read one document off a corpus root and say whether it is the pinned bytes.
  *
  * **Drift is returned, never thrown and never swallowed.** A re-export is
@@ -284,7 +314,9 @@ export async function loadDocument(root: string, entry: CorpusEntry): Promise<Lo
   const blocksRaw = await readFile(path.join(dir, "blocks.json"));
   const treeRaw = await readFile(path.join(dir, "tree.json"));
   const drift: string[] = [];
-  const gotBlocks = sha256(blocksRaw);
+  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(blocksRaw.toString("utf-8"), "blocks.json");
+  const tree = parseJsonFrom<Tree>(treeRaw.toString("utf-8"), "tree.json");
+  const gotBlocks = blocksSha256(blocks);
   const gotTree = sha256(treeRaw);
   if (gotBlocks !== entry.sha256) {
     drift.push(`${entry.slug}/blocks.json is ${gotBlocks.slice(0, 12)}…, manifest says ${entry.sha256.slice(0, 12)}…`);
@@ -292,8 +324,6 @@ export async function loadDocument(root: string, entry: CorpusEntry): Promise<Lo
   if (gotTree !== entry.treeSha256) {
     drift.push(`${entry.slug}/tree.json is ${gotTree.slice(0, 12)}…, manifest says ${entry.treeSha256.slice(0, 12)}…`);
   }
-  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(blocksRaw.toString("utf-8"), "blocks.json");
-  const tree = parseJsonFrom<Tree>(treeRaw.toString("utf-8"), "tree.json");
   const meta = await readFile(path.join(dir, "meta.json"), "utf-8").then(
     (raw) => parseJsonFrom<{ title?: string }>(raw, "meta.json"),
     () => ({ title: undefined }),

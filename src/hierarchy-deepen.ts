@@ -103,6 +103,7 @@ import {
 } from "./hierarchy-cascade.js";
 import {
   EXPANSION_PROMPT_STAMP,
+  asksChildQuestions,
   expansionOverhead,
   expansionRequest,
   parseExpansionAnswer,
@@ -1205,12 +1206,23 @@ export function describeFailure(err: unknown): string {
  * — and carries a `cache_control` marker on it, so on a cold cache all of them
  * pay the 1.25× write premium and none of them reads. src/labels.ts answers that
  * by running its first batch alone and widening afterwards, and this deliberately
- * does not. The arithmetic is why: that prefix is 1,150–1,400 tokens against
- * per-call evidence measured at 14,889 and 76,558, so serialising the first call
- * of a book's wave buys about 1% of the wave's input tokens and costs a whole
- * call's latency — 45 s out of a share of roughly 300. The trade goes the other
- * way for labels, whose batches are small and whose prefix is most of the
- * request. docs/project/prompt-caching.md § The floor.
+ * does not. The arithmetic is why, and two prompt versions have moved it. The
+ * prompt alone is 1,631 estimated tokens now `expand/4` has put a QUESTIONS block
+ * in it — 893 when 1,150–1,400 was the figure, 1,078 at `expand/3` — and
+ * the frozen outline of either book adds about 590 more, so the prefix is roughly
+ * 2,200 rather than the range this used to quote. Against per-call
+ * inputs measured at 14,889 and 76,558 (evals/results/hierarchy-waves-2026-09-04/),
+ * serialising the first call of a book's wave therefore buys about 3% of the
+ * wave's input tokens rather than about 1%, and still costs a whole call's latency
+ * — 45 s out of a share of roughly 300.
+ *
+ * **The answer is still no, with less room than it had**, so the figure is written
+ * down rather than left as "small": a prefix that grows this much again, or a
+ * wave of short calls like the 14,889 one, where the same prefix is nearer 15%, is
+ * what would turn it over. The trade already goes the other way for labels, whose
+ * batches are small and whose prefix is most of the request. Cacheability itself
+ * is not in question and got safer: `EXPAND_SYSTEM` now clears the 1,024-token
+ * floor on its own. docs/project/prompt-caching.md § The floor.
  *
  * ## Stopping on time, cleanly
  *
@@ -1796,8 +1808,19 @@ export interface DeepenRecordsFile {
    * whole story, since in `/2` a refusal killed the run before it could be
    * written down. Refusing the older file is the only reading that is not a
    * quiet zero. docs/reusable/silent-success.md.
+   *
+   * `deepen-records/4`, 2026-09-07: `stats` gained `missingQuestions` — the
+   * children an expansion request marked ASK QUESTION ON CHILDREN and whose
+   * answer came back without one (`expand/4`). **The bump is not bookkeeping
+   * here either.** A `/3` file has no such field, so a reader given one as a
+   * `/4` gets `undefined` where the type promises a `string[]`: either it
+   * crashes on `.length`, or — worse, and the likelier of the two — it reads the
+   * absence as *nothing was missing*, over exactly the runs that were made
+   * before anything asked. The honest reading of an older file is *nobody
+   * asked*, and there is no field to say so, so the file is refused instead.
+   * docs/reusable/silent-success.md.
    */
-  version: "deepen-records/3";
+  version: "deepen-records/4";
   slug: string;
   /** ISO 8601, so files from several runs sort and can be told apart. */
   writtenAt: string;
@@ -1873,7 +1896,7 @@ export async function saveDeepenRecords(
   const dir = process.env[DEEPEN_RECORDS_ENV];
   if (dir === undefined || dir.trim() === "") return;
   const file: DeepenRecordsFile = {
-    version: "deepen-records/3",
+    version: "deepen-records/4",
     slug,
     writtenAt: new Date().toISOString(),
     failed: failure !== undefined,
@@ -2005,6 +2028,31 @@ export interface DeepenStats {
   /** The verdicts the wave collected — **recorded, not obeyed.** See `deepenTree`. */
   verdicts: VerdictTally;
   /**
+   * **Children the request asked a question about and the answer left without
+   * one**, by position — "root > child 2". Normally empty, and empty on every
+   * wave whose targets were all marked OMIT QUESTION, which is most of them.
+   *
+   * **Named rather than counted, and distinct from `BuildReport.droppedQuestions`
+   * on purpose.** *"The model wrote one and the tree discarded it"* and *"the
+   * model wrote none"* are different facts with different fixes — the first is
+   * `questionFor` doing its job or a prompt drifting into unusable lines, the
+   * second is a prompt being ignored — and one number covering both would be
+   * unreadable in the case that matters. It counts only the sections the request
+   * actually marked (src/hierarchy-expand.ts § `asksChildQuestions`): a figure
+   * that also fired on every depth-3 child, where no question was ever asked for,
+   * would be high on every run and read by nobody within a week.
+   *
+   * It is **not** a failure. A missing question is logged and the panel renders;
+   * it never throws, is never redrawn, and is never filled in by a second call.
+   * docs/reusable/silent-success.md, and stage 2 of
+   * docs/plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md.
+   *
+   * **Not zeroed by a withheld wave**, unlike `expanded` and `added` and for
+   * `usage`'s reason: it describes the answers that were bought, not the tree
+   * that was published.
+   */
+  missingQuestions: string[];
+  /**
    * **What this pass paid for**, summed over every draw of every call it made —
    * `NO_EXPANSION_USAGE` where every call was resumed, and where none was made.
    *
@@ -2082,6 +2130,26 @@ function warnUncheckpointed(slug: string, uncheckpointed: number): void {
   );
 }
 
+/**
+ * **A part of the article that will draw a bare gist where its neighbour draws
+ * a question**, said out loud whenever there is one. Silent at zero, which is
+ * every wave whose targets were all marked OMIT QUESTION — most of them.
+ *
+ * A `warn` rather than a throw, and the positions rather than a count: the
+ * article is fine and the reader gets it, but a run in which *every* asked-for
+ * question came back missing is a prompt nobody is obeying, and that has to be
+ * legible from a log line rather than from reading the tree.
+ * `DeepenStats.missingQuestions`.
+ */
+function warnMissingQuestions(slug: string, missing: readonly string[]): void {
+  if (missing.length === 0) return;
+  log("pipeline").warn(
+    { slug, missing: missing.length, at: missing, namespace: DEEPEN_NAMESPACE },
+    "the expansion asked for a question on these parts and the answer carried none; " +
+      "they will draw their gist instead",
+  );
+}
+
 /** A frontier node, and everything needed to ask about it and to attach the answer. */
 interface Candidate {
   target: ExpansionTarget;
@@ -2104,6 +2172,34 @@ interface Candidate {
   record: CandidateRecord;
 }
 
+/**
+ * **The children a question was asked about and not written for**, by position.
+ *
+ * This is the only place that knows both halves. `readExpansion` has the answers
+ * and no depth — `ExpansionTarget` deliberately carries none — and `buildTree`
+ * has the depth but cannot tell a child nobody asked from one that did not
+ * answer. A candidate carries its own ancestor chain, and that same array is
+ * what the request's mark was rendered from (`ancestorsOf` in `deepenTree`), so
+ * the question asked and the absence counted cannot disagree.
+ *
+ * **`undefined` exactly, not blank-or-missing.** A question the model *sent*
+ * that `questionFor` then refused — too deep, or the gist re-asked — is a
+ * **drop**, counted in `report.droppedQuestions` by `buildTree`. Folding the two
+ * together would put a prompt drifting into unusable lines and a prompt nobody
+ * obeys under one unreadable number. `DeepenStats.missingQuestions`.
+ */
+function unansweredQuestions(
+  candidate: Candidate,
+  children: readonly ExpandedChild[],
+): string[] {
+  if (!asksChildQuestions(candidate.ancestors)) return [];
+  return children
+    .map((child, i) =>
+      child.proposed.question === undefined ? `${candidate.target.where} > child ${i + 1}` : null,
+    )
+    .filter((where): where is string => where !== null);
+}
+
 /** A child set that stood up, and the proposal node it belongs under. */
 interface Attachment {
   candidate: Candidate;
@@ -2123,6 +2219,8 @@ interface WaveReading {
   records: CandidateRecord[];
   /** What deriving those answers repaired and dropped. */
   report: BuildReport;
+  /** `DeepenStats.missingQuestions`: asked for, and not answered. */
+  missingQuestions: string[];
 }
 
 function emptyReport(): BuildReport {
@@ -2154,6 +2252,7 @@ function readWaveAnswers(opts: {
   const attachments: Attachment[] = [];
   const records: CandidateRecord[] = [];
   const report = emptyReport();
+  const missingQuestions: string[] = [];
   for (const call of wave.calls) {
     report.repairs.push(...call.reading.report.repairs);
     report.droppedChildren.push(...call.reading.report.droppedChildren);
@@ -2172,6 +2271,7 @@ function readWaveAnswers(opts: {
             `asked about, so there is nothing to attach it to.`,
         );
       }
+      missingQuestions.push(...unansweredQuestions(candidate, answered.children));
       attachments.push({
         candidate,
         children: answered.children.map((c) => c.node),
@@ -2242,7 +2342,7 @@ function readWaveAnswers(opts: {
       };
     }
   }
-  return { attachments, records, report };
+  return { attachments, records, report, missingQuestions };
 }
 
 /**
@@ -2409,6 +2509,8 @@ export async function deepenTree(opts: {
       /* No call was made, so the gate was never asked anything. */
       gate: null,
       verdicts: tallyVerdicts(records),
+      /* Nothing was asked, so nothing went unanswered. */
+      missingQuestions: [],
       usage: NO_EXPANSION_USAGE,
       ...over,
     },
@@ -2538,6 +2640,9 @@ export async function deepenTree(opts: {
         rateLimited: err.partial.rateLimited,
         gate: err.partial.gate,
         verdicts: tallyVerdicts(records),
+        /* What the answers in hand said, exactly as `usage` is what they cost:
+           a wave that died still bought whatever it bought. */
+        missingQuestions: partial.missingQuestions,
         usage: err.partial.usage,
       },
     });
@@ -2588,6 +2693,7 @@ export async function deepenTree(opts: {
     for (const { candidate, children } of attachments) candidate.node.children = children;
   }
   warnUncheckpointed(slug, uncheckpointed);
+  warnMissingQuestions(slug, read.missingQuestions);
   const expanded = partial ? 0 : attachments.length;
   const added = partial ? 0 : attachments.reduce((n, a) => n + a.children.length, 0);
 
@@ -2611,6 +2717,7 @@ export async function deepenTree(opts: {
       rateLimited: wave.rateLimited,
       gate: wave.gate,
       verdicts: tallyVerdicts(records),
+      missingQuestions: read.missingQuestions,
       /* **The wave's own figure, whether or not any of it was published.** See
          `DeepenStats.usage`: `partial` zeroes `expanded` and `added` above, and
          must not zero this. */
