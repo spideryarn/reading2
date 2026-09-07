@@ -1,6 +1,6 @@
 # Share measured geometry — after profiling the scroll and layout reads
 
-Status: **Stages 1 and 2 done; the Stage 1 numbers have been retaken on the corrected harness and the verdict is optimise.** Sol's round-2 review found five P1s: F14 (the probe changed the page), F11, F12, F13 (the harness) and F15 (the decisive site was mutation-blind) are all **fixed**, and the three sessions re-run. **F10 remains open and Stage 3 is still ungated** — the ownership counterfactual is Stage 2c and has not run. Findings and dispositions are in § "Review ledger — round 2" at the foot of this document.
+Status: **CLOSED — deferred with evidence.** Stage 1 convicted the duplicated scan; **Stage 2c's counterfactual then showed the proposed fix does not acquit it**, so Stage 3 was refused under the rule written before the measurement, and Stages 3–5 were never built. What shipped: Stage 2's three read hoists, the geometry instrument, and its harness. What did not: the shared-snapshot service. See § "Stage 2c result" for the numbers and § "Review ledger — round 2" for the five P1s that had to be fixed before those numbers could be trusted.
 Source baseline `cc749e0f1061583f1a8877dc3db5b6c1b2c162e3` (branch `worktree-a8-shared-geometry`).
 
 This is item **A8** of
@@ -895,7 +895,101 @@ that "the cost is the reads, not the flush", which F10 correctly says is not yet
 but they do not decide this: the browser-spike section above already found a pure scroll dirtying no
 layout at all, so a `LayoutCount` that does not move is the expected result rather than a refutation.
 
-### Stage 3 — share one snapshot between two consumers, if Stage 1 convicts
+#### Stage 2c result, 2026-09-07 — **condition 1 passed, condition 2 failed. Stage 3 is refused.**
+
+Arm B built as specified: `useColumnContext` reads the section rows **once**, outside every frame, and
+`measure` reuses that array. `focusRow` is therefore wrong the moment the reader scrolls, which the
+method explicitly permits. Arm B was reverted immediately after measuring; the working tree diff is
+empty.
+
+Same box, same preview build, same pinned 3,000px gesture, `m1-kuhn`, three sessions × two start
+positions.
+
+##### Condition 1 — the reads went. **Passed, exactly as predicted.**
+
+| | arm A | arm B | predicted |
+|---|---:|---:|---:|
+| `columnContext` reads per gesture | 37,260 | **150** | 150 |
+| `columnContext` reads per frame | 1,242 | **5** | 5 |
+| all ten sites, per gesture | 74,766 | **37,441** | ~37,656 |
+
+The spike did what it claims. So everything else it reports may be read.
+
+##### Condition 2 — the time did not go with them. **Failed.**
+
+Pilot ms per **scroll frame**, p50, by session:
+
+| start | arm A | arm B | improvement |
+|---|---|---|---:|
+| from the top | 9.40 / 10.40 / 10.80 | 7.50 / 7.10 / 6.50 | median **3.30** |
+| from the middle | 9.80 / 10.70 / 10.50 | 8.00 / 7.30 / 6.80 | median **3.20** |
+
+**The threshold, fixed in the commit before arm B existed, was 3.83 ms.** The improvement is 3.20–3.30
+ms. Paired run by run, **one of six** clears it (session 3 from the top, 4.30 ms); five do not.
+
+The rule says: *"If 1 holds and 2 does not, Stage 3 is refused and this plan closes as deferred with
+evidence."* It does not hold. **Stage 3 is refused.**
+
+##### Why this is a real answer and not a near miss
+
+Three things make the refusal firmer than the 0.5 ms shortfall makes it look.
+
+**Arm B is an optimistic bound — no correct implementation can do better.** Because its `tops` are
+stale, `focusRow` never changes, so the `same` comparison short-circuits and `setLive` almost never
+fires. A correct shared snapshot must do strictly *more* work than arm B: publish real values, and
+re-render the panels when they move. Arm B is the ceiling on what sharing could buy, and the ceiling
+is inside the noise.
+
+**Removing 99.6% of a hook's layout reads removed about half of its time.** `columnContext` went from
+37,260 reads and 212.5 ms to 150 reads and 90.9–103.9 ms. If the reads were the cost, that residual
+should have collapsed too. Whatever the other ~95 ms is, it is not the section scan — and it is
+untouched by the thing this plan proposed to build.
+
+**Arm B still fires clause 1.** With the duplication *entirely gone*, the pilot's p50 is 6.50–8.00 ms
+(threshold 4) and its p95 is 10.40–18.90 ms (threshold 8). The shared snapshot would not have brought
+the page under the budget that justified proposing it. That is the sharpest fact here: the proposed
+remedy does not fix the condition that convicted the code.
+
+##### What the evidence actually points at
+
+`readingPosition`'s own cost barely moved between arms — 128.0 ms against 117.9–134.4 ms — because its
+reads never changed. It reads 1,238 rectangles every frame and costs about 4.0–4.3 ms per call on its
+own. **That is most of what remains, and sharing cannot touch it**: sharing removes the *second* scan,
+and the first one is the expensive one.
+
+The remedy for a first scan is not to share it but to **stop performing it per frame** — cached
+document-space tops with explicit invalidation, which is the pattern `Spine.tsx` already ships and
+which § "The pattern already ships here" describes. That is a different change from the one this plan
+proposed: larger, with a correctness surface this plan's own two traps are about (fresh measurement
+for an explicit jump; rows redistributing while total height stays equal), and it needs its own
+verdict rather than inheriting this one.
+
+It is written down here as the next thing somebody should weigh, **not** as an approved successor.
+Stage 1 convicted the code; Stage 2c has now shown the proposed fix does not acquit it.
+
+##### What survives
+
+- **Stage 2 stands** — the three hoists were separately justified, cost nothing, and are unaffected by
+  this. So do F14's behaviour fix, F15's seam, and the corrected harness, all of which are about the
+  instrument rather than the pilot.
+- **The instrument stands and is re-runnable**, with its refusals now proven against real data.
+- **`contextPanelPlace` remains the largest single geometry site** and remains a separately scoped
+  follow-up, untouched by any of this.
+
+##### Stage 3, 4 and 5 are not run
+
+Stage 3 was gated on this and the gate refused. Stage 4 proves Stage 3, and Stage 5 decides whether to
+retain what Stage 3 built; with nothing built, neither has anything to do. They are left in this
+document as written, so that a future attempt starts from the design rather than from scratch — and so
+that F2's and F5's requirements are not lost, since both would bind any future version of this work.
+
+### Stage 3 — share one snapshot between two consumers — **NOT BUILT; refused by Stage 2c**
+
+> **This design was never implemented.** Stage 2c's counterfactual showed that removing the duplicated
+> scan buys 3.20–3.30 ms per frame against a 3.83 ms noise floor, and leaves the pilot still over
+> clause 1's budget. The design is kept below because it is the answer to a question somebody will ask
+> again, and because F2's and F5's requirements are written into it and would bind any future attempt.
+> Read it as a proposal that was measured and declined, not as work outstanding.
 
 **Gated on Stage 2c above.** A **pilot**, and the review's standing instruction is to stop if the machinery outweighs the
 duplication.
