@@ -118,6 +118,16 @@ export interface VariantsFile {
    * before/after cannot be built out of the `incumbent` arm alone.
    */
   shippedGists: Map<string, string>;
+  /**
+   * **Shipped QUESTIONS blocks, pinned by prompt version** — `"toc/6"`.
+   *
+   * The exact mirror of `shippedGists`, and it exists for the same reason one
+   * bump later: `productionQuestions()` slices the *live* SYSTEM, which has been
+   * V4 since `toc/7`, so the block V4 replaced has no other home. Without it the
+   * eval has no pre-V4 control and cannot return *"the control was better all
+   * along"*.
+   */
+  shippedQuestions: Map<string, string>;
   anchors: AnchorRow[];
 }
 
@@ -160,6 +170,18 @@ export function readVariants(path: URL = VARIANTS_PATH): VariantsFile {
       );
     }
   }
+  /* The same discovery, for the QUESTIONS axis's before halves. */
+  const shippedQuestions = new Map<string, string>();
+  for (const line of markdown.split("\n")) {
+    const m = /^## The shipped QUESTIONS block, (toc\/\d+)\s*$/.exec(line);
+    if (m) {
+      const version = m[1]!;
+      shippedQuestions.set(
+        version,
+        fencedUnder(markdown, new RegExp(`^The shipped QUESTIONS block, ${version.replace("/", "\\/")}\\s*$`), `the shipped ${version} QUESTIONS block`),
+      );
+    }
+  }
   const anchors = anchorRows(markdown);
 
   if (questions.size < 4) {
@@ -178,10 +200,25 @@ export function readVariants(path: URL = VARIANTS_PATH): VariantsFile {
       throw new Error(`variants.md: the shipped ${version} GISTS block does not begin "GISTS" — it begins ${JSON.stringify(text.slice(0, 40))}`);
     }
   }
+  for (const [version, text] of shippedQuestions) {
+    if (!text.startsWith("QUESTIONS")) {
+      throw new Error(`variants.md: the shipped ${version} QUESTIONS block does not begin "QUESTIONS" — it begins ${JSON.stringify(text.slice(0, 40))}`);
+    }
+  }
+  /* The pre-V4 control has to exist, and it has to be the block V4 replaced.
+     A lenient parse here gives `questions-toc6` no block at all, which
+     `promptBlocksFor` would throw on — but the count is checked anyway, because
+     the day somebody renames the section is the day the eval quietly loses the
+     only arm that can say the control won. */
+  if (!shippedQuestions.has("toc/6")) {
+    throw new Error(
+      `variants.md: no "## The shipped QUESTIONS block, toc/6" section — that block is the pre-V4 control (arms.ts § questions-toc6) and the live SYSTEM has been V4 since toc/7, so nothing else has a copy of it`,
+    );
+  }
   if (anchors.length !== 5) {
     throw new Error(`variants.md: found ${anchors.length} anchor rows, expected 5 — the calibration gate's claim is about all five`);
   }
-  const parsed = { questions, gists, shippedGists, anchors };
+  const parsed = { questions, gists, shippedGists, shippedQuestions, anchors };
   if (path === VARIANTS_PATH) cached = parsed;
   return parsed;
 }

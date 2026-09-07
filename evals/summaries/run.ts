@@ -219,7 +219,11 @@ function stubGenerator(arm: ArmSpec, silent: readonly string[]): Generator {
     for (const [id, depth] of ids) {
       const entry: { gist: string; question?: string } = { gist: `STUB gist for ${id} from arm ${arm.name}.` };
       if (depth <= 1) {
-        entry.question = arm.questionRule === "trailing-hint"
+        /* Keyed on the variant, not on `questionRule`, which stopped
+           discriminating when V4 shipped and production took its patch. The
+           stub still has to emit V4's shape for V4, because that shape is what
+           exercises the trailing-hint clause end to end. */
+        entry.question = arm.variant === "V4"
           ? `STUB topic — what does ${id} argue? (2 reasons)`
           : `STUB topic (2 reasons): why does ${id} argue what it argues?`;
       }
@@ -841,7 +845,7 @@ async function commandReport(o: Options): Promise<void> {
   say(`## Arms needing a change to production code if they win`);
   say();
   say(runFile.armsNeedingCodeChange.length ? runFile.armsNeedingCodeChange.join(", ") : "(none)");
-  say(`(\`v4\` puts the shape hint after the question mark, which \`questionFor\` would turn into "…? (4 arguments)?" — variants.md § The code change V4 needs.)`);
+  say(`(\`v4\` puts the shape hint after the question mark, and \`questionFor\` used to turn that into "…? (4 arguments)?". It shipped as \`toc/7\` on 2026-09-07 and production now carries the patch — variants.md § The code change V4 needs.)`);
 
   await writeFile(path.join(dir, "results.md"), `${out.join("\n")}\n`, "utf-8");
   if (exitCodeFor(coverage) === 1) process.exitCode = 1;

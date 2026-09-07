@@ -192,7 +192,14 @@ QUESTIONS (the root and depth-1 nodes only)
 
 Worked: `Computational functionalism — why isn't computation sufficient for consciousness? (4 arguments)`
 
-### The code change V4 needs, and only V4
+### The code change V4 needs, and only V4 — **landed 2026-09-07**
+
+**V4 won and shipped as `toc/7`, and this patch is in `src/hierarchy.ts` now**, so what follows is
+the record of what was changed rather than a proposal. `arms.ts` § `v4` no longer declares a
+`questionRule` of its own, `armsNeedingCodeChange()` returns nothing, and the harness's
+reimplementation of the rule below was deleted the same day — a copy is worth keeping only while
+there is something for it to differ from.
+[260907d](../../docs/plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md).
 
 Without it the stored value is `…consciousness? (4 arguments)?` — GPT Sol's P1-4, verified.
 In `questionFor` (`src/hierarchy.ts`), replace `if (q.endsWith("?")) return q;` with:
@@ -393,4 +400,39 @@ GISTS (internal nodes)
 - Keep the article's own words for the things it names — those are the reader's
   handholds — and ordinary words for everything else. A gist is read at a glance
   and has to land first time: plainer than the article, never further from it.
+```
+
+---
+
+## The shipped QUESTIONS block, toc/6
+
+**Copied out of `src/hierarchy.ts` § SYSTEM on 2026-09-07, verbatim, immediately before V4 replaced
+it.** This is the wording every arm in the 2026-09-05 run was measured against, and it is the one
+the plan calls *the diagnosed failure*: `antikythera` carries ten of its questions in the wild and
+they are lookups, yes/no questions and the gist re-asked.
+
+It is pinned here for exactly the reason the shipped GISTS blocks are, and `arms.ts` states the
+reason in full: `incumbent` slices the **live** `SYSTEM`, so from the moment V4 landed, `incumbent`
+**is** V4. Without this copy the eval would have two names for one recipe and no before half at all —
+and could therefore never return the answer *"the control was better all along"*, which is an outcome
+it was deliberately built to be able to give.
+
+The sentence `production-prompt.ts` exports as `THE_DIAGNOSED_SENTENCE` — *"and its gist does NOT"* —
+lives in the second bullet, and this is now its only home.
+
+```
+QUESTIONS (the root and depth-1 nodes only)
+
+- Exactly ONE question on the root and on each depth-1 node. Omit it entirely
+  on deeper nodes.
+- It is the question this node's text answers and its gist does NOT. The reader
+  has the gist beside it; the question is what sends them into the prose for
+  the rest of the answer.
+- It must need the argument to answer, not a fact to look up: "why", "how", or
+  "what follows if" — never "which example", "who said", or anything one
+  sentence settles.
+- Not rhetorical, not yes/no, and never the gist with a question mark on it.
+- The root's question is the one the whole piece exists to answer.
+- Under 15 words, ending in "?". The article's own words for what it names,
+  ordinary words for the rest, exactly as with gists.
 ```

@@ -149,16 +149,28 @@ QUESTIONS (the root and depth-1 nodes only)
 
 - Exactly ONE question on the root and on each depth-1 node. Omit it entirely
   on deeper nodes.
-- It is the question this node's text answers and its gist does NOT. The reader
-  has the gist beside it; the question is what sends them into the prose for
-  the rest of the answer.
-- It must need the argument to answer, not a fact to look up: "why", "how", or
-  "what follows if" — never "which example", "who said", or anything one
-  sentence settles.
-- Not rhetorical, not yes/no, and never the gist with a question mark on it.
+- It is the question this node is BUILT to answer — the author's question, not
+  a reader's. A reader must be able to tell from this line alone whether to go
+  in: it carries the same direction as the gist, in a different mood.
+- Shape: "<topic> — <question>? (<shape hint>)" — the topic first, in the
+  author's own term; then the question, ending in "?"; then an optional hint
+  in brackets. Nothing follows the hint.
+- The question presupposes where the section lands. "Why isn't computation
+  sufficient" carries the claim; "is computation sufficient?" hides it. So
+  "why", "how", "what follows if" — never "which", "who", or anything a single
+  fact settles.
+- Where the section does NOT land — it weighs, describes, or leaves the matter
+  open — do not invent a landing. Ask the question it leaves open and let the
+  hint say so: "(two options weighed)", "(no settled answer)".
+- The hint is the SHAPE of the answer, never its content: a count or a kind
+  ("a thought experiment", "two case studies", "a recommendation"). A count
+  only when the section itself counts ("four arguments") or you could list
+  each item from its text. Never count this node's children — that is a
+  different number. Omit the hint when there is no honest shape.
 - The root's question is the one the whole piece exists to answer.
-- Under 15 words, ending in "?". The article's own words for what it names,
-  ordinary words for the rest, exactly as with gists.
+- Not rhetorical, not yes/no, never the gist with a question mark on it.
+- Under 20 words in all. Digits for counts. The article's own words for what it
+  names, ordinary words for the rest, exactly as with gists.
 
 OUTPUT
 
@@ -240,10 +252,19 @@ export interface ModelNode {
 export const MAX_QUESTION_DEPTH = 1;
 
 /** Lower-cased, terminal punctuation and repeated spaces gone — for comparing
-    two sentences on their words alone. */
+    two sentences on their words alone.
+
+    **The bracketed hint comes off BEFORE the terminal punctuation**, and the
+    order is the whole of it. Since `toc/7` a finished line ends
+    `…consciousness? (4 arguments)`, so a gist re-asked in V4's shape is
+    `<gist>? (4 arguments)` — and stripping `[.!?]+$` first finds no terminal
+    mark at all behind the bracket, leaves the bracket on, and lets the one
+    check in this file that means what it says wave the echo through. That is
+    anchor 5 of `evals/summaries/variants.md`, in the shipped shape. */
 function bareWords(s: string): string {
   return s
     .toLowerCase()
+    .replace(/\s*\([^()]*\)\s*$/, "")
     .replace(/[.!?]+$/, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -260,7 +281,19 @@ export function questionFor(mn: ModelNode, depth: number): string | undefined {
   /* The gist, asked again. Two lines saying one thing is the duplication this
      whole feature exists to avoid, so it is dropped rather than drawn. */
   if (mn.gist !== undefined && bareWords(q) === bareWords(mn.gist)) return undefined;
-  if (q.endsWith("?")) return q;
+  /* **A `?` followed by nothing but one short bracketed hint is a finished
+     line**, and since `toc/7` that is the shape the prompt asks for:
+     *"Computational functionalism — why isn't computation sufficient for
+     consciousness? (4 arguments)"*. Without this clause the `endsWith("?")`
+     test it replaces sees a line ending in `)`, falls through to the append
+     below, and stores *"…(4 arguments)?"* — GPT Sol's P1-4, found before a
+     penny was spent and held by `tests/summaries-eval.test.ts`.
+
+     The bound is deliberate. `[^()]{1,40}` is one un-nested bracket of at most
+     forty characters, which is a shape hint and not a second sentence, so a
+     model that ends on a parenthetical paragraph still gets its mark appended
+     visibly rather than silently accepted. */
+  if (/\?(\s*\([^()]{1,40}\))?$/.test(q)) return q;
   /* **Only `!` is stripped, never `.`** — a trailing full stop is as likely to
      belong to an abbreviation as to a sentence, and stripping it turned GPT
      Sol's example *"How did this affect the U.S."* into *"the U.S?"*. So the

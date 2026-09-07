@@ -222,10 +222,52 @@ is the stable half, so the depth is what a link carries.
 >
 > — Greg, 2026-09-05
 
-So under the gist, on the article and on each of its parts, there is now a second line: **one
-question that node's prose answers and its gist does not**. Italic, a step smaller, fainter — a
-different *kind* of line, so the eye scanning for what the article says can skip the column of them
-and the reader looking for a way in finds one on every part.
+So on the article and on each of its parts there is a second field, `TreeNode.question`, and in this
+panel it is **the line the reader sees** — `question ?? gist`, one line per row, since Greg's
+reversal that evening (§ *The gist stayed for one day*).
+
+### The shape it has, since `toc/7`
+
+Greg drew it himself, in the same brief, and the wording that ships is the one that reproduced his
+drawing almost verbatim without being shown it:
+
+> Computational functionalism - why isn't computation sufficient for consciousness? (4 arguments)
+>
+> — Greg, 2026-09-05
+
+So a question is **`<topic> — <question>? (<shape hint>)`**: the topic in the author's own term, a
+question that **presupposes where the section lands** (*"why isn't computation sufficient"* carries
+the claim; *"is computation sufficient?"* hides it), and a bracketed hint giving the **shape** of
+the answer and never its content — a count or a kind, and never this node's child count, which is a
+different number.
+
+Where a section does not land — it weighs, describes, or leaves the matter open — the question is
+not bent into a conclusion it does not reach; the hint says so instead: *"(two options weighed)"*,
+*"(no settled answer)"*.
+
+**This replaced the first wording on 2026-09-07**, and the first wording is why. It asked for the
+question *"this node's text answers and its gist does NOT"* — an instruction to strip out everything
+the gist carried, whose only honest output is a bare why-question. `antikythera` still carries ten
+of them in the wild and they are lookups, yes/no questions and the gist re-asked. Four candidate
+rewordings were built into an eval and measured over seven real articles;
+[`evals/summaries/variants.md`](../../evals/summaries/variants.md) has all four, the axes that
+separate them, and the code change this one needed. **The block that ships is copied byte-for-byte
+out of that file, and a test asserts it stays that way**, so the prompt production sends and the
+prompt the eval measured cannot drift apart.
+
+The cost, named rather than discovered: **these lines are nearly twice as long** — a median of 18
+words against the old 10 — while the same brief also asked for simpler language and a briefer
+top-level line.
+[260907d](../plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md) is where that
+tension sits, unresolved.
+
+#### One line of production code moved with it
+
+The hint follows the question mark, so `questionFor` — which appends a `?` to anything not ending in
+one — would have stored *"…(4 arguments)?"*. It now treats a `?` followed by nothing but one short
+bracketed hint as a finished line, and `bareWords` strips that bracket **before** the terminal
+punctuation so the gist-echo check still catches a gist re-asked in the new shape. Both halves are
+held by `tests/summaries-eval.test.ts`, which used to assert the defect and now asserts the fix.
 
 ### There is no prompt that generates Summary mode, and that is the whole story
 
