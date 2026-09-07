@@ -35,9 +35,16 @@
  *    the page, so it is about the callback the rows were really handed.
  *
  * The rows are found by `data-rerun-step`, the same kind of hook `data-section`
- * already is on this page: nine buttons reading *Run it again* have no
- * accessible name to tell them apart, and asserting on DOM order would pass
- * whatever the list happened to be.
+ * already is on this page, because asserting on DOM order would pass whatever
+ * the list happened to be.
+ *
+ * **That attribute is a test hook and nothing else, and this header said
+ * otherwise until 2026-09-07** — it read *"nine buttons reading Run it again
+ * have no accessible name to tell them apart"*, which described a defect and
+ * then used the hook to work around it in the tests. A cross-family review found
+ * the defect by reading this file (⟨Sol, F11⟩). The last test here is the one
+ * that would have: it asserts on the computed accessible names, which is what a
+ * reader navigating by button list actually gets.
  */
 import { act, createElement } from "react";
 import { NuqsAdapter } from "nuqs/adapters/react";
@@ -115,6 +122,14 @@ const ARTICLE: Article = {
 let ran: Set<StepName>;
 /** Every `POST /api/jobs` body, in order. */
 let posts: unknown[];
+/**
+ * The id of every `POST /api/jobs/:id/retry`, in order.
+ *
+ * A separate list from `posts` on purpose: a confirmed Retry must reach *this*
+ * route and not start a fresh job, and one list of "things that were sent" could
+ * not tell those apart.
+ */
+let retries: string[];
 /** Resolves a held `POST /api/jobs`; set only while `holdPost` is true. */
 let releasePost: (() => void) | undefined;
 let holdPost = false;
@@ -177,6 +192,7 @@ beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   ran = new Set<StepName>(METADATA_RERUN_STEPS);
   posts = [];
+  retries = [];
   releasePost = undefined;
   holdPost = false;
   heldMetadata = [];
@@ -194,6 +210,11 @@ beforeEach(() => {
       const answer = json(metadataBody());
       if (!holdMetadata) return Promise.resolve(answer);
       return new Promise<Response>((go) => heldMetadata.push(() => go(answer)));
+    }
+    const retried = /^\/api\/jobs\/([^/]+)\/retry$/.exec(url);
+    if (retried && method === "POST") {
+      retries.push(retried[1] ?? "");
+      return Promise.resolve(json(madeJob("job-retried", "quotes")));
     }
     if (url === "/api/jobs" && method === "POST") {
       const body = JSON.parse(String(init?.body ?? "{}")) as { steps?: StepName[] };
@@ -424,5 +445,118 @@ describe("the Generate it again section", () => {
     /* And the page ends on what the run wrote, not on what the older read
        carried. */
     expect(button("quiz", "Run it again"), "the stale read won").toBeTruthy();
+  });
+
+  /**
+   * **Debate is two separately metered calls, not one** (src/debate.ts § *Two
+   * groups, two passes, one atomic step*), and it is the dearest press on this
+   * page at up to ~$0.27
+   * (docs/plans/260905f-debate-mode-stage-0-spike-results.md). The generic
+   * *"another model call"* was therefore wrong about the number **and** silent
+   * about the price — a confirmation that understates what it is asking for is
+   * worse than none, because the reader has been told something.
+   *
+   * Asserted as *not the generic sentence* as well as *these words*: a variant
+   * that got added and never wired to the row would pass the second half alone.
+   */
+  it("says two calls and the price on the debate row, not the generic sentence", async () => {
+    await open();
+    await press(button("debate", "Run it again"));
+
+    const text = row("debate")?.textContent ?? "";
+    expect(text, "debate is still getting the generic confirm").not.toContain(
+      "Another model call.",
+    );
+    expect(text).toContain("Two model calls");
+    expect(text).toContain("about $0.27");
+    /* The draft-then-publish clause is the one thing every variant must keep. */
+    expect(text).toContain("only if the run succeeds");
+  });
+
+  /**
+   * **A Retry after a failure buys the forced step again, so it asks first.**
+   *
+   * `retryJob` carries the original force into the new job —
+   * `force: forceForRetry(old.steps)`, src/jobs.ts — and our job forced a paid
+   * step, so a Retry wired straight to `failed.retry` is a one-click re-buy at
+   * the moment a reader is least likely to read. That is the two-click rule with
+   * a hole in it, and it was there until 2026-09-07 ⟨Sol, F10⟩.
+   *
+   * Both halves matter. The first press must post **nothing** — a test that only
+   * checked the second would pass over a Retry that had lost its confirm. The
+   * second must reach `/api/jobs/:id/retry` and **not** `POST /api/jobs`: routing
+   * the confirmed retry into `start` instead would be a different job, dropping
+   * whatever the failed one had done.
+   */
+  it("asks before a Retry, and then retries the job rather than starting a new one", async () => {
+    await open();
+    await press(button("quotes", "Run it again"));
+    await press(button("quotes", "Yes, run it"));
+    expect(posts).toHaveLength(1);
+
+    /* The job the press made, come back failed. No `failureKind`, so
+       `jobWorthRetrying` says yes and the band offers Retry. Two lists because
+       the engine treats the first one it ever sees as a baseline. */
+    await act(async () => jobEngine.receive([]));
+    await act(async () => {
+      jobEngine.receive([
+        { ...madeJob("job-1", "quotes", "error"), error: "The AI service is busy right now." },
+      ]);
+    });
+    await settle();
+    expect(button("quotes", "Retry"), "no Retry offered after a retryable failure").toBeTruthy();
+
+    await press(button("quotes", "Retry"));
+    expect(retries, "Retry went straight to the retry route").toEqual([]);
+    expect(posts, "Retry started a new job").toHaveLength(1);
+    expect(row("quotes")?.textContent).toContain("The result changes only if the run succeeds.");
+
+    await press(button("quotes", "Yes, try again"));
+    expect(retries, "the confirmed retry never reached the retry route").toEqual(["job-1"]);
+    expect(posts, "the confirmed retry started a new job instead").toHaveLength(1);
+  });
+
+  /**
+   * **The accessible name is what tells nine identical buttons apart**, and until
+   * 2026-09-07 nothing did: the mode's name is a sibling `<span>`, which a screen
+   * reader's button list does not read, so the list was eight *Run it again*
+   * controls and an ambiguous *Yes, run it* ⟨Sol, F11⟩.
+   *
+   * Asserted on the name and not on `data-rerun-step`. That attribute is how the
+   * *tests* find a row, and reading it as if it were a distinction the reader
+   * gets is exactly what papered this over.
+   *
+   * **Each name begins with the visible text**, so speech input still matches:
+   * somebody saying "Run it again" must not be told there is no such control.
+   */
+  it("gives every control in a row an accessible name that names the mode", async () => {
+    await open();
+
+    const names = METADATA_RERUN_STEPS.map((step) => {
+      const b = row(step)?.querySelector("button");
+      const name = b?.getAttribute("aria-label") ?? "";
+      expect(name, `no accessible name on the ${step} button`).not.toBe("");
+      /* The words on the button, then what it is about. */
+      expect(name.startsWith(b?.textContent ?? "…"), `${name} does not start with its own text`).toBe(
+        true,
+      );
+      return name;
+    });
+    expect(new Set(names).size, `two rows share a name: ${names.join(", ")}`).toBe(
+      METADATA_RERUN_STEPS.length,
+    );
+
+    /* And the confirm's own two, which are rendered here rather than by
+       JobProgress and are just as indistinguishable without one. */
+    await press(button("ideas", "Run it again"));
+    const confirmNames = [...(row("ideas")?.querySelectorAll("button") ?? [])].map((b) => {
+      const name = b.getAttribute("aria-label") ?? "";
+      expect(name, `no accessible name on ${b.textContent}`).not.toBe("");
+      expect(name.startsWith(b.textContent ?? "…"), `${name} does not start with its own text`).toBe(
+        true,
+      );
+      return name;
+    });
+    expect(confirmNames).toEqual(["Yes, run it — Ideas", "Cancel — Ideas"]);
   });
 });

@@ -726,6 +726,48 @@ downstream of the earliest step named. The pipeline is a chain; invalidating a s
 comes after it, by definition. The alternative is asking every caller to remember a rule the
 pipeline already knows.
 
+### A reader can ask for nine of them again, from the Metadata page
+
+`/read/<slug>/metadata` has a **Generate it again** section: one row per offered step, and pressing
+it posts `{ slug, steps: [step], force: [step] }` — this queue, this route, nothing new. Greg asked
+for it on 2026-09-06, having just declined a library-wide backfill after a prompt change:
+
+> Leave it, new articles only. Although i think there should be a way to re-run any of the generated
+> modes (either within the UI for the mode, or perhaps in the Metadata section) - I realise this is a
+> new piece of work, but it's important, so perhaps fan this out as its own thing
+
+Three things about it are worth knowing here rather than in the component, because they are facts
+about *this* queue.
+
+**It is nine steps and not sixteen, and the list is explicit** —
+[`src/rerun-steps.ts`](../../src/rerun-steps.ts), which carries the reasoning per step. Every member
+is in `FORCE_ONLY_WHEN_NAMED`, so `cascadeForce` cannot sweep anything in behind the press; but
+membership of that set is *not* what qualifies a step for the button, and deriving the list from it
+was refused at review. That constant answers whether the positional cascade may speak for a step. A
+button that spends money needs three other answers: how many metered calls one press buys, whether
+the step refuses without a prerequisite, and whether a "successful" run is safe to publish **over**
+a good artefact. `illustrated` fails the last two — it refuses without a usable Sketch, and a run
+whose every plate failed returns successfully — and is off the list for that.
+
+**It says nothing about staleness, and that is the decision that let it ship.** The placeholder it
+replaced sat unbuilt for three days because nothing on that page could honestly say a stage was out
+of date. A button that offers a re-run and makes no claim about whether you need one needs no such
+answer. See [the plan](../plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md) for
+what saying it would still take, and for why `hierarchy` — the workaround the 2026-09-05 postmortem
+names — is **not** on the list: a forced run publishes a tree with no navigation labels, and the
+free `labels` successor that would restore them is not built.
+
+**Two clicks, not one.** A re-run spends no billing slot — `POST /api/jobs` takes one only for a
+request carrying a `url` ([billing.md](billing.md)) — so the only cost is ours, and there is no
+per-reader spend cap ([ai-gateway.md](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not)).
+The confirm is where the price is said, and it is the same answer `Tweets.tsx` § `Rewrite` reached
+for the same reason. **Four of the nine rows say something of their own**, and each difference is a
+fact about the step rather than decoration: the glossary's, because forcing it **appends** rather
+than replaces; the sketch's, because it is two minutes and about $0.20; and the debate's, because it
+is **two separately metered calls** and the dearest thing on the page. A generic *"another model
+call"* is a true sentence about five of them and a false one about debate, which is the gap a
+cross-family review of the built code walked through.
+
 ### A step is done when *all* its files are there
 
 `extract` makes the HTML **and** the metadata. `hierarchy` makes the tree, the labels manifest

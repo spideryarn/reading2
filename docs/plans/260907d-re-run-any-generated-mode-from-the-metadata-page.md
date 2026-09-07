@@ -293,17 +293,52 @@ The confirm sentence has one job the thread's does not: `Rewrite` can say *"and 
 of date"* because it is standing beside a thread the reader is looking at. Ours stands beside nine
 rows, so it says the two things true of all of them — what it costs, and what it cannot break.
 
-**Two exact variants, and the second is not optional.** ⟨Sol, F6: changing only the glossary
-button's label leaves the *confirmation* lying.⟩
+**Four exact variants, and this section said *two* until 2026-09-07.** ⟨Sol, F6 on the plan; F9 on
+the built code.⟩
 
 > **Default:** Another model call. The result changes only if the run succeeds.
 >
 > **Glossary:** Another model call. New terms are added only if the run succeeds.
+>
+> **Sketch:** Another model call. The result changes only if the run succeeds. It is the slowest one
+> here — about two minutes — and it costs about $0.20.
+>
+> **Debate:** Two model calls, not one: it searches the open web, and it is the dearest thing on
+> this page at up to about $0.27. The result changes only if the run succeeds.
+
+**The gap F9 walked through was this section's own count, and it is worth saying plainly rather than
+just changing the number.** *"Two exact variants"* listed the default and the glossary, with the
+sketch's two numbers held over to a subsection below — and thereby claimed, without ever writing it
+down, that *"Another model call"* was true of the remaining seven. It was wrong about the **number**
+for `debate`, which makes **two separately metered calls**
+(`src/debate.ts` § *Two groups, two passes, one atomic step*; pass B runs only if pass A succeeded,
+so a failure costs one rather than two), and silent about the price: up to ~$0.27, typically
+$0.13–0.20, measured in [260905f](260905f-debate-mode-stage-0-spike-results.md) and named in
+`src/step-order.ts` as *"the second dearest thing in the app"*.
+
+**And § The list, four sections up, already said the first half** — *"`debate` makes two separately
+metered calls"* is there, as the reason the *one press, one model call* claim had to go. One
+section of this document knew and the section writing the reader's sentence did not look at it. A
+confirmation that understates what it is buying is worse than none, because the reader has been told
+something.
+
+**The debate figure is inline in `Metadata.tsx`, not a constant beside `SKETCH_PRICE`.** That leaf
+exists because three surfaces render the sketch's price to a **reader** and must not disagree; this
+number reaches a reader in exactly one place, and the ~$0.27 that appears a dozen times across
+`src/` is prose inside comments that no constant could have collected. Renaming `sketch-cost.ts` and
+sweeping its importers would have bought the appearance of one home rather than one.
 
 *"The result changes only if the run succeeds"* rather than *"what is here now is replaced"*,
 because **replace** is false for the glossary and the confirm is the sentence that has to be true
 for every row it appears under. The clause is the draft-then-publish guarantee (§ What must not
-happen), said where it is worth something rather than left in the database docs.
+happen), said where it is worth something rather than left in the database docs. **All four carry
+that clause**, three of them word for word and the glossary's with its own subject, because what
+changes there is which terms are on the list rather than the list itself.
+
+**The same sentence covers a Retry, and the Yes button's words are what differ** — *Yes, try again*
+against *Yes, run it*. `JobProgress`'s Retry tooltip says *"skipping the stages that already
+worked"*, which is true of an ingest and vacuous here: our job has one step, so a retry of it **is**
+a re-run and forces the same step, at the same price. ⟨Sol, F10 — § Findings.⟩
 
 **The glossary's button says *Find more terms*, not *Run it again*.** Forcing this step **appends** a
 batch of terms rather than replacing the list
@@ -503,6 +538,17 @@ Ordered by how much you need them.
 - ✅ `npm test`, `npm run typecheck` (grep for `✗`, the tail is always `✓`), `npm run lint` on the
       touched files, `npm run check`.
 - ✅ GPT Sol on the built code — weighted higher than the plan review, per AGENTS.md. Commit.
+- ✅ **Refused, three P1s, all three accepted and fixed** — § Round two, on the built code. Three
+      more tests in `tests/metadata-rerun-section.test.tsx`, each watched red by putting the defect
+      back and then taken out again:
+  - the debate row's confirm is **not** the generic sentence, and names two calls and the price —
+    red with the `debate` branch of the ternary removed;
+  - a Retry after a retryable failure **asks**, posts nothing, and only then reaches
+    `POST /api/jobs/:id/retry` — red with the unwrapped `failed` handed back to `JobProgress`, which
+    is exactly the shape F10 reported;
+  - the nine run buttons and the confirm's Yes/Cancel have distinct accessible names that begin with
+    their visible text — red twice, once with `about` withheld from `JobProgress` and once with the
+    two `aria-label`s taken off the confirm.
 
 - 📔 **What the build found that the plan had wrong or had not said:**
   - `busy` does not stop the plain button reappearing — § What the button and the confirm actually
@@ -528,16 +574,45 @@ Ordered by how much you need them.
 
 ### Stage 3 — drive a real browser, and the docs
 
-- [ ] Playwright against system Chrome, in a Sonnet subagent
-      ([browser-control.md](../project/browser-control.md) then
-      [browser-testing.md](../project/browser-testing.md)) — press the button on a real article and
-      watch a mode actually regenerate. Absolute scratchpad paths for screenshots; the agent kills
-      its own dev-server PID.
-- [ ] Remove the `rerun` row from `SOON` and **move its reasoning into this doc and into
-      `Metadata.tsx`'s own docstring** — the insight about staleness must not go with the row.
-- [ ] Docs: a section in [ingest-queue.md](../project/ingest-queue.md) or
-      [reading-view-overview.md](../project/reading-view-overview.md) (decide which owns it; one
-      owner only, `tests/doc-links.test.ts` enforces it), and a line under the entry point.
+- ✅ Playwright against system Chrome, in a Sonnet subagent, on
+      `the-mythology-of-conscious-ai-spya-rn5m0q` at 1280 and 390. **All eight checks passed**, one
+      real `arc` model call spent.
+  - ✅ The section is where the plan put it — between *Your reading* and *Export*, and in the
+    margin's contents list — with no disclosure to open. Nine rows, right labels: *Run it again* on
+    `arc`, *Find more terms* on `glossary`, *Run it* on the seven that have not run.
+  - ✅ The first press asks and starts nothing; Cancel puts the button back. The glossary and
+    sketch rows say their own sentences, the sketch one carrying both numbers.
+  - ✅ **The one that mattered: the page re-read itself without a reload.** After the run, in the
+    same DOM snapshot, *Stored as* changed revision (`207e645b…` → `f2fbf12a…`), the Technical
+    details heading went to *last wrote 1 second ago*, and the `arc` row's stamp went from *ran 2
+    days ago* to *ran 1 second ago*. That is `useOrderedRead` and the shared `refresh` doing the
+    job F7 was raised about, proved from outside rather than argued.
+  - ✅ Zero console errors and zero React warnings across sign-in, every click and the live run.
+  - ✅ 390px: no horizontal overflow (`scrollWidth === clientWidth === 390`). The longest confirm —
+    the sketch row's — stacks rather than cramping: name, then the sentence on its own lines, then
+    the two buttons right-aligned beneath. Checked against the screenshot myself, not only the
+    agent's word.
+  - 📔 Cosmetic only: the button keeps a brief highlight ring just after a run finishes.
+- ✅ Removed the `rerun` row — and `SOON` with it, because that was its only member. The
+      convention itself stays in `Dock.tsx`, which is where this copy came from, so the next dimmed
+      row on this page is three lines from there rather than a thing to reinvent.
+  - ✅ **Its reasoning kept, in the place it stood**, as a comment where the constant was: what
+    the row knew, and which half of it has since gone stale.
+  - ✅ **And the page's own docstring corrected, which was the part worth doing.** § *What it
+    deliberately does not say* claimed the honest thing was to name which stages had run *"until
+    `tree.json` and `arc.json` carry a hash of the blocks they consumed"*. They do — `done` has
+    meant *ran, and would not be re-run today* since the Postgres move. The store can answer; the
+    **page** cannot say, because one boolean carries two facts and renders as a two-state pill.
+    The rule it was protecting is untouched, and the paragraph now says which half moved.
+    - 📔 This is the *"one wrong sentence became three"* shape the repo keeps writing up: the
+      claim was true when written, the store moved under it, and the placeholder it justified went
+      on justifying itself for three days.
+- ✅ Docs: a section in [ingest-queue.md](../project/ingest-queue.md) § *A reader can ask for nine
+      of them again, from the Metadata page*. **That doc rather than
+      [reading-view-overview.md](../project/reading-view-overview.md)**, because it already owns
+      `force`, `FORCE_ONLY_WHEN_NAMED`, freshness and re-running a step — this is a fact about the
+      queue that a page happens to expose. **No new doc**, so no entry-point line is owed and
+      nothing had to be asked of Greg.
 - [ ] Final `npm test` / `npm run typecheck` / `npm run check`. GPT Sol. Commit and
       `git push origin HEAD:dev`.
 
@@ -585,6 +660,32 @@ building the tighter rule by saying it *"would save… the `assets` outline call
 That was already false when the panel buttons were written: every mode step is an un-checkpointed
 paid call. The decision may still be right; **its stated reason is stale.** Deferred below, owned by
 the queue.
+
+**Round two sharpened the size of it, without changing the owner.** Sol's F9 points out that for
+`debate` the exposure is *two* calls per lease window and therefore up to **six** for one press. The
+overrule stands on the same two grounds — it is reachable today from `DebatePanel.tsx:804` with no
+new code, and the budget is queue-wide — but the number in the deferred item below is worth having
+right.
+
+### Round two, on the built code
+
+GPT Sol against `81e4205d` —
+[the review in full](260907d-re-run-any-generated-mode-code-review-sol.md). Verdict: **refuse**,
+three findings, all three P1 established, all three checked against the source and **all three
+accepted**. This is the review AGENTS.md says to weight higher than the plan-stage one, and it
+earned it: none of the three was findable from the plan. F10 is a button the plan never mentions,
+because `JobProgress` draws it and the plan reasoned about the button it drew itself.
+
+| ID | Severity | Disposition | What changed here |
+|---|---|---|---|
+| F9 | P1 established | **accepted** | `RERUN_CONFIRM_DEBATE` — two model calls, the open web, up to about $0.27. § What the button and the confirm actually say now lists **four** variants and says plainly how the count came to be wrong. The figure is inline with a citation rather than a constant beside `SKETCH_PRICE`, for the reason given there. |
+| F10 | P1 established | **accepted**, Sol's shape | `RerunRow` holds `pending: null \| "run" \| "retry"` in place of a boolean `asking`, and hands `JobProgress` a `failed` whose `retry` opens the confirm; the Yes button dispatches to `start({force:true})` or to the original retry. Same sentence for both — a one-step job's retry **is** a re-run and forces the same step — and different Yes words so the reader knows which press they are agreeing to. `JobProgress` keeps its straight-through Retry: nine other callers rely on it, and for a many-stage ingest that is right. |
+| F11 | P1 established | **accepted** | Every actionable control in a row now carries a mode-specific `aria-label` **beginning with its visible text** — `Run it again — Debate` — so speech input still matches. Yes and Cancel are `RerunRow`'s own; Run and Retry take a new **optional** `about` prop on `JobProgress`, so the nine existing callers pass nothing and are unchanged. **Not** a row-level label or `role="group"`: the reported failure mode is button-list navigation, which does not pick either up, so that would have looked like a fix without being one. |
+
+Three tests came with them, each watched red first by putting the defect back — § Stage 2. The one
+worth naming is the accessible-name test: this file's own test header had **described** the missing
+names and then used `data-rerun-step` to work around them, which is how the defect survived the
+build. A test hook read as if it were something the reader gets is a shape worth recognising again.
 
 ## Deferred, named rather than inherited
 
