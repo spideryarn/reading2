@@ -91,6 +91,7 @@ describe("an article", () => {
          that day, and the default is the one that goes unwritten. */
       hierarchy: "Hierarchy",
       outline: "Outline",
+      structure: "Structure",
       summary: "Summary",
       glossary: "Glossary",
       ideas: "Ideas",

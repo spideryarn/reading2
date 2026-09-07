@@ -439,17 +439,25 @@ const SHARED = new Set([
 ]);
 
 /**
- * **The one file the client reaches for entirely outside `src/`.**
+ * **There is no allowlist for reaching outside `src/`, and there was one until
+ * 2026-09-07.**
  *
- * `docs/changelog/versions.ndjson` is committed data, not code: nothing to
- * bundle, only a string Vite inlines through `?raw`, and there is no `src/`
- * leaf to move a copy into — the file *is* the changelog process's own
- * append-only output (docs/project/changelog.md), and ChangelogPage.tsx is
- * its one reader. The exact specifier, not a directory, because a second file
- * reached this way is a decision of its own rather than something this line
- * should wave through.
+ * `OUTSIDE_SRC_ALLOWED` held exactly one specifier —
+ * `../../docs/changelog/versions.ndjson?raw`, the changelog page's 210 KB of
+ * committed data — on the reasoning that data is not code and there was no
+ * `src/` leaf to move it into. Both halves were true and the conclusion still
+ * cost a production deploy, because the rule it was reasoning about is not the
+ * rule that mattered:
+ * docs/postmortems/260907a-an-import-into-a-vercelignored-directory-built-everywhere-except-vercel.md.
+ *
+ * The file now sits beside its one reader as `src/web/changelog-versions.ndjson`,
+ * so its specifier never leaves `src/web` and the sweep below never looks at
+ * it. **That is the point.** The set was also an unchecked hatch on its own
+ * terms — it matched the raw specifier and returned *before* the resolve below,
+ * so a later entry could have walked straight back out of `src/` with this test
+ * still green. Move the file; do not reintroduce the set. The guard for the
+ * wider class is `maskPrunedRoots` in scripts/deploy.ts.
  */
-const OUTSIDE_SRC_ALLOWED = new Set(["../../docs/changelog/versions.ndjson?raw"]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */
 function sourcesUnder(dir: string): string[] {
@@ -577,10 +585,6 @@ describe("the client's imports", () => {
       for (const spec of importsOf(file)) {
         // Only relative imports can escape; a bare specifier is a package.
         if (!spec.startsWith("../")) continue;
-
-        // `docs/changelog/versions.ndjson?raw` — the one exact specifier
-        // allowed entirely outside `src/`. See `OUTSIDE_SRC_ALLOWED`.
-        if (OUTSIDE_SRC_ALLOWED.has(spec)) continue;
 
         /* **Resolved against the importing file, not counted as `../`s.** The
            check used to read one leading `../` as "this leaves src/web", which

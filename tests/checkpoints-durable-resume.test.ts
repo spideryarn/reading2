@@ -108,8 +108,15 @@ const runLock = await takeRunLock("tests/checkpoints-durable-resume.test.ts");
 
 /** The pages an instruction asks to be emitted, ignoring any context page. */
 function askedPages(instruction: string): number[] {
-  const all = [...instruction.matchAll(/\d+/g)].map(Number);
-  return instruction.includes("included only so you can see") ? all.slice(1) : all;
+  const match = instruction.match(/^Transcribe (page|pages) (\d+)(?:–(\d+))? of the attached PDF\./);
+  if (!match) throw new Error(`unexpected fixture instruction: ${instruction}`);
+  const [, form, startText, endText] = match;
+  const start = Number(startText);
+  const end = endText === undefined ? start : Number(endText);
+  if ((form === "page" && endText !== undefined) || (form === "pages" && endText === undefined) || end < start) {
+    throw new Error(`unexpected fixture instruction: ${instruction}`);
+  }
+  return Array.from({ length: end - start + 1 }, (_, offset) => start + offset);
 }
 
 /**

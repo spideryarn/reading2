@@ -338,9 +338,19 @@ Since 2026-08-26 the project is connected to
 [`spideryarn/reading2`](version-control.md), production branch `main`. **A push
 to `main` builds and deploys to production**, with no command to run.
 
-The build machine clones the repo, so what ships is **the commit** — nothing on
-anybody's disk reaches it. That is the point of connecting it: a deploy stops
-depending on whose working tree was current when somebody typed a command.
+The build machine builds from the repo rather than from a disk, so what ships is
+**the commit** — nothing on anybody's laptop reaches it. That is the point of
+connecting it: a deploy stops depending on whose working tree was current when
+somebody typed a command.
+
+**But it is the commit minus `.vercelignore`, and that distinction has already
+cost one deploy.** The build machine does not receive the whole tree: the
+ignore list is applied first, so `docs/`, `tests/`, `evals/`, `data/`,
+`output/`, `example/`, `supabase/` and `scratch-*` are simply not there. A file
+in one of them is present in your editor, present in git, present in a fresh
+clone, and absent exactly where it matters. The `build` gate now builds with
+those directories renamed aside for that reason —
+[260907a](../postmortems/260907a-an-import-into-a-vercelignored-directory-built-everywhere-except-vercel.md).
 
 ### From the working tree — `vercel deploy`
 
