@@ -60,8 +60,15 @@ export const manifestPath = (fixture: string): string =>
 
 /**
  * The structural tags a floor may be declared on: `inventory.mts` § `STRUCTURE`,
- * plus the heading levels, so a floor here and a loss there are the same
- * measurement — **and `p`, which that list does not count.**
+ * plus `h1` and `p`, which that list deliberately does not count.
+ *
+ * A floor here is checked directly by `scorecard.mts`, which counts the tag on
+ * the output itself rather than going through `STRUCTURE` — so the two lists
+ * may differ without anything going unchecked, and `h1` and `p` floors are
+ * enforced even though the probe's summary never mentions them. `STRUCTURE`
+ * says what is worth *reporting* across every page; this says what a page may
+ * *declare* about itself. The reasons `h1` is in one and not the other are on
+ * `STRUCTURE`.
  *
  * `p` is here for one page and the exception is worth stating rather than
  * hiding. `inventory.mts` counts the things a *page* can lose; every page has

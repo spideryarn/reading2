@@ -479,6 +479,15 @@ The rest is not fixed, and the largest of it is not truncation at all:
 **188 fallback images survive**, so the reader sees every formula. What is lost is the machine-readable
 copy. The ACX case has no fallback — those headings are simply gone.)
 
+**That ACX number was challenged on 2026-09-07 and it held.** A reviewer read
+`probe.mts`'s `structure lost: h2 0/6 (0%)` as "none lost" and reported the claim stale. The numbers
+on that line were *kept*, not lost, so it meant the opposite — and re-measuring the fixture directly
+found 141 headings in the source and **19 in the output, all `h5`**, exactly the 19 the inventory
+named. `Part 1: Why don't schools work?` is still absent. Two things were fixed as a result, neither
+of them this paragraph: the probe now writes `h4 0 of 80 kept` so the direction cannot be misread,
+and `STRUCTURE` counts `h4`–`h6`, without which the summary could not see the 80 `h4`s this page
+loses at all.
+
 That matters here more than in most reading apps, because the table of contents and the
 granularity-zoom tree are the same structure, built from headings
 ([granularity-zoom.md](granularity-zoom.md#the-tree)). An article whose headings were dropped at this
