@@ -9,10 +9,10 @@ a two-paragraph `ControlTip` in **both** arms of the bar. `npm test` was 3 red o
 three environmental — two want a build the worktree had never run, the third is the Postgres
 concurrency test, green on its own. Typecheck clean; checked in a browser at 1280px.
 
-**What is deliberately not done**, and it is the only thing left: the bar's three buttons that are
-*not* modes — Comments, Tweets, Metadata — still carry `title` attributes. They now sit visibly in
-the `title` arm of `DockLink`'s `hover` union, so the debt is written into the type rather than into
-a comment. § The simpler option passed over says why they were left.
+**Stage 2 landed the same day**, on Greg's *"follow up with the three non-mode buttons"*: Comments,
+Tweets and Metadata carry cards too now, and the `title` arm of `DockLink`'s `hover` union went with
+them — § Stage 2 at the foot of this file. Two buttons in the bar still take a `title`, `DockHome`
+and `DockCommands`, and neither of them comes through `DockLink`.
 
 The fourteen mode buttons already open a card. What the card says is **one sentence**, and that
 sentence is `MODE_CATALOG[mode].description` — the same words the command bar draws inline beside
@@ -91,9 +91,10 @@ loud, which is Diagram, and there the card points at the empty state rather than
   cheapest way to fill it is exactly the failure. Fold the two halves into one string and the check
   has nothing to compare.
 
-Also passed over: **converting the bar's other three buttons** — Comments, Tweets, Metadata — which
-still carry `title` attributes. They are not modes, Greg asked about modes, and each needs its own
-verified second sentence. Worth doing; not done here, and named here so it is not lost.
+Also passed over at the time: **converting the bar's other three buttons** — Comments, Tweets,
+Metadata — which still carried `title` attributes. They are not modes, Greg asked about modes, and
+each needed its own verified second sentence. Named here so it would not be lost, and it was not:
+Greg asked for them the same day, and § Stage 2 below is what that turned into.
 
 ## The register: about the mode, never about the press
 
@@ -197,7 +198,7 @@ Nothing in the type system, the tests or the linter could see any of them.
 
 Copied from [`tests/shelf-action-tooltips.test.tsx`](../../tests/shelf-action-tooltips.test.tsx),
 including its measured jsdom mechanics — a native `mouseenter` to open, both leave events and two
-`act` blocks to close ([tooltips.md § Two things about testing a card in jsdom](../project/tooltips.md)).
+`act` blocks to close ([tooltips.md § Three things about testing a card in jsdom](../project/tooltips.md)).
 
 - **Every mode in the bar opens exactly one card**, whose head is that mode's `MODE_LABEL`. Exactly
   one, because the panel is portalled to `<body>`: a neighbour's card left open is read here as this
@@ -207,6 +208,131 @@ including its measured jsdom mechanics — a native `mouseenter` to open, both l
   invisible on a laptop because a `title` still shows *something*.
 - **Not the wording.** It is copy, it will be edited, and a test spelling it out is a second copy to
   keep in step — the argument `referee-tooltips.test.tsx` makes at length.
+
+## Stage 2 — the three buttons that are not modes
+
+> Follow up with the three non-mode buttons.
+>
+> — Greg, 2026-09-07
+
+**Comments, Tweets and Metadata**, the last three buttons in the bar wearing a `title` attribute. Six
+sentences, and the interesting part is where they came from rather than what they cost to write.
+
+### Where the copy lives, and why not in `MODE_CATALOG`
+
+`NOT_A_MODE`, in [`Dock.tsx`](../../src/web/Dock.tsx), beside the bar it belongs to. The modes' table
+earns its place by being keyed on `Mode`, so a fifteenth mode is a compile error until both halves
+are written; these three are not modes and never will be, so the same record would be a home chosen
+for its shape rather than for what is in it. Three entries next to their call sites is the smaller
+number of moving parts.
+
+### What each second paragraph says, and where it was checked
+
+| | the unguessable half | checked against |
+|---|---|---|
+| Comments | saving one costs nothing and asks the model nothing; it is pinned to the block id before the quote, so the comment outlives the sentence it marked | [comments.md](../project/comments.md) § What a comment is now, § Anchoring, § Asking the model |
+| Tweets | one model pass per thread, kept until asked again; not part of adding an article; nothing is shortened to fit and the page marks the overrun | [`src/tweets.ts`](../../src/tweets.ts) header and `buildThread`, [`Tweets.tsx`](../../src/web/Tweets.tsx) `over` and `Rewrite` |
+| Metadata | the page generates nothing and makes no model call — every number on it is read off what has already been written | [`Metadata.tsx`](../../src/web/Metadata.tsx), [`PublicPages.tsx`](../../src/web/PublicPages.tsx) |
+
+**Three of those six sentences were wrong in first draft, and all three were wrong the same way as
+stage 1's twelve — inherited from a doc or a header that was itself out of date.** Sol found all
+three; each is checked in the source now and the wrong version is recorded at the call site.
+
+- *"Nothing on it is generated"* (Metadata) — the page opens with the hierarchy's `gist` and
+  `summary` under *In one sentence*, which are model output. `Metadata.tsx`'s own header says the
+  sentence I copied, and it is stale or at best ambiguous. The true claim is about the *page*, not
+  its contents: opening it spends nothing.
+- *"Written once and then kept"* (Tweets) — a thread has a deliberate `Rewrite`, which the page
+  itself calls *"Another model call"*. The empty state upstairs has the same drift.
+- *"Kept exactly as written"* (Tweets) — `buildThread` trims each post. Whitespace only, so a wording
+  defect rather than a product one; the load-bearing claim is that nothing is **shortened to fit**,
+  and that is what the sentence says now.
+- *"Each mark … survives"* (Comments) — the visible underline is the one part that does **not**
+  survive: `resolveMark` returns `null` when the quote is gone. The saved comment does, and its
+  gutter bookmark does while its block is still there. "Mark" is the reader's word for the underline,
+  so the sentence promised the exception.
+
+**Which is the same lesson twice in one day, and worth naming.** Both stages went wrong by writing
+from a doc rather than from the code the doc describes. A project doc is a claim about the code as of
+the day somebody wrote it, and reader-facing copy inherits its staleness silently.
+
+**And a fifth, on the second pass, which is subtler than the other four**: the repaired Comments
+sentence read *"pinned to the permanent id, **so** the comment survives"* — the right two facts with
+a false mechanism welded between them. Stage 3 carries a block id over by matching the new block to
+an old one **by its text** ([block-ids.md § Surviving stage 2](../project/block-ids.md)), so a block
+whose words changed can be re-minted; the id is not what saves the comment. It survives because it is
+stored against the article rather than a revision. The sentence now states both facts and the
+outcome, and claims no mechanism between them. Getting the facts right and the causation wrong is a
+failure the group re-read would not have caught either — it reads as true.
+
+The register rule from stage 1 did the work again, and Tweets is where it would have gone wrong.
+Pressing that link **does** arm a run — `armActivationForTweets` — so *"pressing this writes the
+thread"* is the sentence that wants writing. It is false on three of the four surfaces the string is
+drawn on: the link arms only for the owner, only from the reading view's own bar, and only when they
+are not already on the thread. The artefact-shaped sentence carries the same fact everywhere.
+
+### The find: a button still saying a sentence the drawer retired
+
+Comments is **two** buttons — a `DockTab` on the reading view, a `DockLink` back to it everywhere
+else — and its visitor copy was stale. On 2026-09-04 a shared link started carrying the owner's
+comments ([260904c](260904c-more-modes-on-a-shared-link.md) § Stage 3) and the drawer dropped its
+*comments belong to whoever added this article* notice that day. The button kept it. A visitor was
+told the comments were not for them, above a list of the comments.
+
+Both arms read one string now, and it says the true thing: they are the owner's, you can read them,
+only they can add one. **Nothing would have caught this.** Both strings were individually
+well-formed, no test compared them, and the button is on a page the person editing the drawer had no
+reason to open — the same shape as the *"Your comments"* heading over *"Comments belong to whoever
+added this article"* that a browser pass found on 2026-08-28.
+
+Left behind deliberately: `COMMENTS_GAP` and the `readers-own` variant in
+[`visitor.ts`](../../src/web/visitor.ts) are the source of that retired sentence, and
+`tests/visitor-gaps.test.ts` is now their only consumer. Retiring a `VisitorGap` variant touches
+three files and a total switch; it is a clean small change and it is not this one.
+
+### A harness fact, and a wrong diagnosis of it worth keeping
+
+Hovering the same bar button twice in one test opened no card the second time. Three probes said the
+same thing — an identical re-render between the hovers, a prop-changing one, and no render at all,
+all failing identically — so it was written up as **a control opens its card once per mount**, and
+remounted around.
+
+That was the symptom. Sol found the cause: `FloatingDelayGroup` waits its `timeoutMs` (400ms here)
+after a close before clearing the current group member, and the timer starts at the close *render*,
+so `cardFor`'s two 300ms waits do not outlast it. The second hover reopens instantly — the group is
+in its instant phase — and the stale timer's close lands in the same `act`, so the card opens and
+shuts inside one block. A third wait fixes it properly; `remount` is gone.
+
+**Three failing probes agreeing with each other is not a mechanism.** All three shared the one thing
+that mattered and none of them varied it, so they could only ever have confirmed each other. The
+note is in [tooltips.md § Three things about testing a card in jsdom](../project/tooltips.md).
+
+### The test that went red instead of quiet
+
+[`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) had a case
+asserting the visitor's Comments link does not say *"Your comments"* — read off its `title`
+attribute, which this change deleted. It failed, loudly, because `expect(null).not.toContain(…)`
+throws rather than passing. Had the assertion been shaped a shade differently it would have gone on
+passing for ever while checking nothing, which is
+[silent-success.md](../reusable/silent-success.md)'s whole subject.
+
+It now holds the two things only that file can see — these are the real visitor pages rendered
+through the app — namely that the link carries no `title` at all, and that nothing visible on the
+page claims the marks are the reader's. The visitor's own sentence is checked where the hover
+machinery lives, in **both** arms of the bar: Sol pointed out the first draft of the new tests
+covered only the `DockTab` arm, and the drawerless arm takes its footing from a different prop
+(`isVisitor`, not `own`) — which is exactly the seam both previous Comments copy bugs slipped
+through.
+
+### What is still not done
+
+`DockHome` and `DockCommands` carry `title` attributes. Neither goes through `DockLink`, so neither
+was in the union that emptied, and neither is one of the three Greg named. Same argument as before:
+worth doing, each needs its own verified sentence, named here so it is not lost.
+
+`Metadata.tsx`'s header sentence — *"Nothing here is generated and nothing here is a model call"* —
+is the stale one this change inherited from. It should be corrected where it lives; that is somebody
+else's file this week and a one-line fix when it is not.
 
 ---
 
