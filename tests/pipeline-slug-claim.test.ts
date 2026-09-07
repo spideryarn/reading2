@@ -57,11 +57,8 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /**
- * **Postgres, and set before anything imports src/pipeline.ts.**
- *
- * `STORE` is a module-load constant, so a `beforeAll` here would be read after
- * the branch it is meant to choose. Every import of the code under test below
- * is therefore dynamic.
+ * **`STORE` was a module-load constant**, so the store had to be pinned above
+ * the imports below. The flag went on 2026-09-06.
  */
 
 import { closeDb, getDb } from "../src/db/client.js";

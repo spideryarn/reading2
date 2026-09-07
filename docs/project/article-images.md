@@ -34,9 +34,80 @@ are the first kind to flow through them.
   because an `<img>` cannot carry a bearer token, a visitor because a `src` nobody checked is a
   broken rectangle when the answer is a 404. The file's header has the trade that buys and its cost.
 
-**What is switched on is PDF figures and nothing else.** Greg's sequencing, 2026-09-06: build the
-mechanism generic, land it PDF-only, prove it, then flip the article's own images on — which is stage
-E, and is one addition to `rehost.ts` rather than a route.
+**Both halves are switched on since 2026-09-06.** Greg's sequencing was: build the mechanism
+generic, land it PDF-only, prove it, then flip the article's own images on. That last step was one
+addition to `rehost.ts` and no change to a route at all — `storedAssetFor` already searched both
+collections.
+
+### The two draws, and why an image is blank for a moment
+
+A PDF figure and a web image are not the same job, and the difference decides the shape of the whole
+delivery path:
+
+| | a PDF figure | an article's own image |
+|---|---|---|
+| in the stored html | an empty `<figure>` and a caption | a working `<img src>` at the publisher |
+| what the reader gets | an `<img>` **inserted** | the `src` **replaced** |
+| if we cannot | a caption on its own | the publisher's URL, exactly as before |
+
+So a web image always has somewhere to fall back to and a PDF figure never does — and the rewrite
+still cannot wait for the bytes, for two reasons that pull opposite ways:
+
+- **A stored image's publisher URL must not reach the DOM while our copy is on its way.** Render
+  the block and swap our copy in a moment later and the browser has already fetched from the
+  publisher: the reader has been counted, invisibly, on every read, with the feature reporting
+  success. The plan says it in bold — *"Do not render the publisher URL while a stored asset is
+  resolving."* It is deliberately a rule about *that window only*: a `failed` entry, an entry the
+  step never looked at, and an image whose fetch we gave up on all go back to the publisher's URL,
+  because the alternative is taking a working picture off the page.
+- **And the prose must not wait for the pictures.** Measured on the local corpus 2026-09-06, the
+  worst article we hold carries **102 stored images totalling 7.04 MB**, above and below the fold
+  alike; the median article carries 3 and 0.16 MB. Blocking on the first turns *the prose appears*
+  into *the prose appears once every image has downloaded*.
+
+`rehostImages` therefore hands back **two articles**: one to draw at once, with the PDF figures in it
+and every image we hold a copy of stripped of its `src`, `srcset`, `sizes` and sibling `<source>`;
+and a promise of the same article with the copies in. `useArticleAccess`
+([`src/web/App.tsx`](../../src/web/App.tsx)) draws the first and replaces it with the second — an
+ordinary state transition, because an `src` written imperatively into the live DOM would be erased
+the next time `TableView` re-rendered that block. GPT Sol, 2026-09-06.
+
+**A load owns its fetches and its object URLs, and the claim is made synchronously in the effect.**
+It used to be claimed inside `rehostImages` — which runs only *after* the article payload has come
+back, so whose turn it was got decided by which HTTP request finished last: a slow article returning
+after the reader had moved on would revoke the object URLs of the article now on screen and abort its
+fetches, blanking it. `ArticleLoad` in [`src/web/rehost.ts`](../../src/web/rehost.ts) has the
+sequence written out. The effect's cleanup releases it, which is also the only thing that frees a
+load the reader abandoned for the shelf, for an unshared article, or for a payload that never came.
+
+The costs, named rather than discovered: **an image we hold is blank between the two draws** — a few
+hundred milliseconds on the corpus — and the publisher's `width`/`height` are left on the element
+precisely so the browser can still reserve the box. `IMAGE_WAIT_MS` bounds it at 15 s, which is not a
+first-paint budget but the point at which we stop believing a fetch of ours will land and let the
+publisher's URL back; without it one hung connection would leave every image on the article blank for
+the rest of the read, because there is a single second draw rather than one per picture.
+Delivering that second draw in batches is the fix if a slow image ever holds up the fast ones.
+
+A deadline on the *first* draw was written and thrown away: at the deadline it would have put the
+publisher's URL back into markup the reader was about to see, which is the sentence in bold above,
+done deliberately.
+
+**The figures do have a clock, and it is a different kind of thing.** `FIGURE_WAIT_MS` is not a
+budget on latency but a ceiling on a hang: the figures *are* awaited before the first draw, so until
+2026-09-07 one `/api/asset/…` that never answered meant the article never appeared at all — a blank
+page rather than a blank picture, on a document we hold in full. Past the ceiling a figure is
+caption-only, which is a state this feature already had, so the bound added no new reader-facing
+words. Nothing healthy comes near it: the bytes come from our own bucket at a ~348 ms median, and
+the largest figure in the corpus is 0.76 MB.
+
+**And the guarantee is conditional on our own end working.** An image of ours that fails or times
+out falls back to the publisher's URL, because the second draw is rebuilt from the original html —
+so a manifest saying `stored` over a bucket that has lost the objects hands every reader straight
+back to the CDN, with nothing reporting a failure. Measured on 2026-09-07: one article in the local
+corpus had 102 of 102 `stored` and none of the objects, and every asset request answered 500. It
+turned out to be a seeded fixture rather than anything this box ingested — every other article's
+objects were present — but it is the shape the privacy claim fails in, and
+[security.md](security.md) now says so.
 
 ## Why host them rather than hot-link
 
@@ -77,7 +148,8 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
   density descriptors, media queries and `<picture>` are in play (GPT Sol, 2026-08-29). At render
   `srcset`, `sizes` and any sibling `<source>` are **removed**, because a browser given a rewritten
   `src` and an untouched `srcset` prefers the `srcset` and goes on hot-linking while the page looks
-  fixed.
+  fixed. The removals are the same on both draws, in one loop, so the four lines that actually close
+  the leak cannot drift apart between two copies of them.
 - **The format is earned from the bytes, never claimed by the URL or the `Content-Type`.**
   Publishers serve PNGs as `application/octet-stream` and bot walls serve HTML as `image/jpeg`.
   `sniffImage` decides, and the name we store *is* a claim about the contents — see

@@ -1,0 +1,374 @@
+/* footnotes.css — the article's footnote apparatus: the marker in the prose,
+   the notes at the foot, and a note as it appears in the hover card.
+   notes-view.ts, docs/plans/260828o-footnotes.md.
+
+   **The last third of this file is not footnotes.** From `.gloss-where`
+   onwards it is the glossary entry's tail — where the piece uses a term, the
+   panel's foot and its buttons, and the *Look up a term* box. It sat here in
+   the original stylesheet and was cut with its neighbours rather than moved.
+   The rest of Glossary is glossary.css, two files earlier. */
+
+/* ------------------------------------------------------- footnotes ------
+   The apparatus, dressed as apparatus. src/web/notes-view.ts, and
+   docs/plans/260828o-footnotes.md § What the reader sees.
+
+   A marker is **chrome inside prose** — a superscript that says "there is a
+   note here", not a word of the author's sentence — so it takes the UI face and
+   the faint ink, and it drops the article's link colour and underline. It has
+   to be visibly pressable all the same, so the hover and focus states are the
+   loudest thing about it: a reader who cannot tell a marker from a power will
+   never find out what a hover does. Stage 2 already wraps every one of them in
+   a `<sup>`, whatever the publisher wrote, so the size is not set here.
+
+   The padding is a touch target as much as a look: the hit area of `1` at
+   0.75em is a few pixels square, and a finger cannot be asked to find it. */
+.prose a[data-spya-note-ref] {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 0.1em 0.25em;
+  margin: 0 0.05em;
+  border-radius: 3px;
+  /* The finger's target is bigger than the ink, without moving any line. */
+  box-decoration-break: clone;
+}
+.prose a[data-spya-note-ref]:hover,
+.prose a[data-spya-note-ref]:focus-visible,
+/* Written by the hover card onto the words a finger has opened it against —
+   see TAP_ATTR in useHoverCard.ts. A touch screen has no hover to show which
+   marker is armed for a second tap. */
+.prose a[data-spya-note-ref][data-hover-tap] {
+  color: var(--highlight-ink);
+  background: var(--highlight-wash);
+}
+.prose a[data-spya-note-ref]:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 1px;
+}
+
+/* ---- the notes at the foot of the article ----
+   **The apparatus has to look like apparatus**, and until 2026-09-04 it did
+   not: a note is `role: "footnote"`, `treatment: "supplement"` and `gistable`
+   like any paragraph, so the spine and the outline dressed it as a supplement
+   and the reading column dressed it as body prose. A reader who tapped a marker
+   on an iPad landed at the foot of a gwern piece among nine unnumbered
+   paragraphs with no rule above them and nothing to say what they were.
+   SPIDERYARN-READING2-14; TableView.tsx emits both classes.
+
+   `.note` is every block of the region; `.note-open` is its first, and it is
+   the only one that draws the boundary — stage 2 gathers every note into one
+   container at the end of the document (src/notes.ts), so the run really is
+   contiguous and one rule across the top is honest about where it starts. */
+td.text.note {
+  /* `background-color`, not the `background` shorthand: `td.text.has-hit[data-hues]`
+     paints the search bar down the left of a matched paragraph as a
+     `background-image`, and the shorthand resets that to `none`. A hit inside a
+     footnote is still a hit — the spine already says so (§ the spine's parts) —
+     and this rule is later in the file, so it would have won. */
+  background-color: var(--muted);
+}
+td.text.note .prose {
+  /* The room the number sits in, taken from the note rather than from the
+     column, so the notes align with each other and not with the prose above.
+     Logical, as the callout's is, so an RTL article keeps the number on the
+     side its text starts from. */
+  padding-inline-start: 2.4rem;
+  font-size: 0.95rem;
+  color: var(--ink-soft);
+  /* **And the notes are the one place that opts out of § text's centring**, so
+     the apparatus stays together. Two elements are drawn against this cell's
+     left edge — `.notes-head` and `.note-num` below — and both are absolutely
+     positioned, so they can only move by an offset computed in *their* font;
+     they set 0.8rem/600 for the look of a label, which makes `65ch` mean
+     something 90px different there than it does in the prose. Left where they
+     are, a centred note would strand its own number 200px out in a wide band
+     mode: worse than a supplementary block that keeps the left edge it has
+     always had. GPT Sol found it, 2026-09-04.
+
+     The clean fix is a length resolved once and inherited — `@property` with
+     `syntax: "<length>"` — and **this build cannot have one**: see the note
+     beside `--bar-bottom` in § tokens for the day a registered property was
+     silently replaced by its `initial-value` in the served stylesheet. */
+  margin-inline: 0;
+}
+/* The gutter comes back with it, or the reader's icons would be centred beside
+   a note that is not. § the gutter. */
+td.text.note .blk-gutter { left: var(--blk-gutter-x); }
+/* A note's body is an `<li>` (src/notes.ts § What "canonical" means here), and
+   stage 3 hands each one to its own row — so the browser draws a list marker for
+   a list that is not there. Harmless until this change, and now a bullet sitting
+   beside the number that replaced it. Scoped to the notes, because an ordinary
+   list in the article is a list and keeps its bullets. */
+td.text.note .prose > li {
+  list-style: none;
+}
+td.text.note-open {
+  border-top: 1px solid var(--rule);
+  /* Room above for the heading, which is drawn in it. `--note-num-top` follows,
+     so the number stays level with the note's first line either way. */
+  --note-num-top: calc(var(--block-pad) * 3.4);
+  padding-top: var(--note-num-top);
+}
+/* Only when the source wrote no heading of its own — Wikipedia's `References`
+   is already there and a second one under it would be ours arguing with it. */
+.notes-head {
+  position: absolute;
+  top: var(--block-pad);
+  inset-inline-start: var(--text-pad-l);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+/* **The number, taken from the marker the reader tapped** — `1`, `[5]`, `†` —
+   and not from a CSS counter, so what is printed here is character-for-character
+   what they pressed. notes-view.ts § Note.label says why counting would drift. */
+.note-num {
+  position: absolute;
+  top: var(--note-num-top, var(--block-pad));
+  inset-inline-start: var(--text-pad-l);
+  width: 2rem;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.55;
+  color: var(--ink-faint);
+  /* Decoration for the eye: it must not join a selection dragged across the
+     note, or copying a footnote would copy our number into the reader's quote. */
+  user-select: none;
+}
+
+/* The way back, at the note. Plural, and by a lot: one Wikipedia note in this
+   corpus is cited thirteen times and carries thirteen of these in a row. They
+   are the note's own text — stage 2 stamps the author's element rather than
+   replacing it, because rewriting a note's words costs the block its id — so
+   this is dress and nothing more.
+
+   **Dress it as a control, though.** Gwern's is a bare `↩︎` in faint ink with
+   three pixels of padding, at the end of 126 words of note; the reader who
+   asked for "a way back" was looking straight at one and did not see it. So it
+   is a pill with a border, and on a coarse pointer it is 44px tall — the same
+   number the bottom bar's buttons answer to (§ a coarse pointer). */
+.prose a[data-spya-note-back] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.9rem;
+  font-family: var(--font-ui);
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 0.15em 0.45em;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  /* It is the last thing in the note, and a pill sitting flush against the
+     final word reads as part of the sentence. */
+  margin-inline-start: 0.35em;
+  vertical-align: middle;
+}
+.prose a[data-spya-note-back]:hover,
+.prose a[data-spya-note-back]:focus-visible {
+  color: var(--highlight-ink);
+  border-color: var(--highlight);
+}
+/* **The one the reader actually came by.** Thirteen identical arrows and no way
+   to tell which is yours is the failure this whole half of the feature exists
+   to avoid — src/web/notes-view.ts § markReturnPath.
+
+   It is also the only one that says what it does in words. Thirteen pills each
+   reading "back to your place" would be noise; exactly one of them can be the
+   reader's, and that one is worth spelling out. */
+.prose a[data-spya-note-back][data-came-from] {
+  color: var(--highlight-ink);
+  background: var(--highlight-wash);
+  border-color: var(--highlight);
+  outline: 1px solid var(--highlight);
+}
+.prose a[data-spya-note-back][data-came-from]::after {
+  content: " back to your place";
+  font-size: 0.78rem;
+  margin-inline-start: 0.3em;
+}
+/* A finger has no hover and cannot aim at a glyph. 44px is Apple's number and
+   the one the bottom bar already answers to; `pointer: coarse` rather than
+   `any-pointer`, because a size rule must not give an iPad with a trackpad —
+   or a laptop with a touchscreen — finger-sized chrome it will never touch.
+   docs/project/touch.md § How big a thing has to be to press it. */
+@media (pointer: coarse) {
+  .prose a[data-spya-note-back] {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 0.7em;
+  }
+}
+
+/* ---- the note, in the hover card ----
+   Wider than the ordinary card, because a whole footnote in a 21rem column is a
+   very tall very narrow object, and the point of the preview is that a reader
+   can take it in without going anywhere. Set in the reading face: this is the
+   author's prose, not our chrome, and the card's own labels are the chrome
+   around it. */
+/* `min(...)`, not a flat 27rem. The base `.tooltip` rule carries
+   `calc(100vw - 1.75rem)` and this override dropped it, so on a 390px phone the
+   note card was laid out 432px wide and hung 12px past the right edge, scrolling
+   the page sideways. Measured in a 390x740 frame, 2026-08-28. A wider card is
+   the intent; a card wider than the screen is not. */
+.tooltip.prose-card.has-note { max-width: min(27rem, calc(100vw - 1.75rem)); }
+.note-preview {
+  /* A long note scrolls rather than being cut. `contain` so the scroll does not
+     run on into the article underneath once the note ends. */
+  max-height: 16rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-family: var(--font-reading);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.note-preview .note-part + .note-part { margin-top: 0.45rem; }
+/* A note that contains a list arrives as several blocks — gwern's longest is
+   eight — and the ones after the first really are list items. Indented rather
+   than bulleted, because the bullet would be ours and the indent is the shape
+   the author already wrote. */
+.note-preview .note-part[data-tag="li"] + .note-part[data-tag="li"] {
+  padding-left: 0.7rem;
+  border-left: 1px solid var(--rule);
+}
+.note-preview p { margin: 0 0 0.4rem; }
+.note-preview p:last-child { margin-bottom: 0; }
+.note-preview a {
+  color: var(--highlight-ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  overflow-wrap: break-word;
+}
+.note-preview img { max-width: 100%; height: auto; }
+.note-preview blockquote {
+  margin: 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--rule-strong);
+  font-style: italic;
+}
+.note-preview pre { max-width: 100%; overflow-x: auto; font-family: var(--font-mono); font-size: 0.85em; }
+.note-preview code { font-family: var(--font-mono); font-size: 0.9em; }
+
+/* Where the piece uses it. The ids are `BlockRef`s, so they are real links —
+   right-click gives you a URL to the paragraph, and left-click jumps. */
+.gloss-where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+.gloss-where-label { color: var(--ink-faint); }
+.gloss-where .block-ref {
+  padding: 0 0.28rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 0.4rem;
+  background: var(--surface-raised);
+  font-size: 0.72em;
+}
+.gloss-where .block-ref:hover { border-color: var(--highlight); color: var(--highlight-ink); }
+
+/* An entry the article does not actually use in those words. Said rather than
+   hidden — it is the alias instruction not landing, and it is the one signal
+   this panel gives about the quality of what the model returned. */
+.gloss-nowhere { color: var(--ink-faint); font-style: italic; }
+
+/* ---- the foot ---- */
+
+.gloss-foot {
+  padding: 0.5rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+.gloss-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.gloss-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+.gloss-btn:hover { border-color: var(--highlight); color: var(--ink); }
+.gloss-btn:disabled { opacity: 0.45; cursor: default; }
+.gloss-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.gloss-btn.primary { color: var(--ink); border-color: var(--highlight); }
+
+/* `.gloss-btn.danger` was here, and `.gloss-confirm` above it. Both belonged to
+   the foot's *Start again* — the one destructive thing this band could do — and
+   went with it on 2026-09-05. `Foot` in GlossaryPanel.tsx says why. */
+
+/* `.gloss-spin` was here. The panel uses `.cmt-spinner` now, which is the one
+   recipe docs/project/icons.md describes — 0.7s rather than 1s, and it pulses
+   under prefers-reduced-motion instead of freezing, which this one did. */
+
+/* **Look up a term** — the box above the list, its answer and its refusals.
+   docs/project/glossary.md § Looking a term up.
+
+   Ruled off below rather than boxed, and sharing `.srch-box`'s padding and
+   `.srch-input`'s field so the two search-shaped things in this app look like
+   one idea. It does not reuse those class names: the search band owns them and
+   a shared class across two modes is how one mode's tweak silently redraws
+   another. */
+.gloss-ask {
+  padding: 0.5rem 0.7rem 0.55rem;
+  border-bottom: 1px solid var(--rule);
+}
+.gloss-ask-row { display: flex; align-items: center; gap: 0.35rem; }
+.gloss-ask-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.gloss-ask-input:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.gloss-ask-input::placeholder { color: var(--ink-faint); }
+/* The browser's own clear affordance is kept here, unlike the search band's —
+   there is no Escape handler on this box, so removing it would leave a reader
+   with a full field and no one-press way to empty it. */
+.gloss-ask-hint {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.81rem;
+  line-height: 1.35;
+}
+/* The refusal and the way out of it, on their own lines: the sentence is three
+   or four lines in an 18rem band, and a button beside it would be unreadable. */
+.gloss-ask-failed { margin-top: 0.35rem; }
+.gloss-ask-failed .gloss-error { margin: 0 0 0.4rem; }
+.gloss-ask-answer { margin-top: 0.45rem; }
+/* The article's own words, and where they are. `strong` rather than a quote
+   mark, because the passage is the model's subject and not a citation. */
+.gloss-ask-found {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+.gloss-ask-found strong { font-weight: 600; }
+
+/* `.gloss-provenance` was here — the `generator · version · N passes` line under
+   the foot's buttons, gone on 2026-09-05 with the line itself. `Foot` in
+   GlossaryPanel.tsx says why the pass count stopped being worth the row. */
+

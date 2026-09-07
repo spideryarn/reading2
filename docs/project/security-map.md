@@ -88,6 +88,7 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/slug.ts`](../../src/slug.ts) | what a slug may be — two rules, one per question (mint? read?) |
 | [`src/auth.ts`](../../src/auth.ts) | the gate: `requireUser`, and `isAllowed` |
 | [`src/store/pg.ts`](../../src/store/pg.ts) | `ownedSlug()` — keeps one reader's shelf out of another's |
+| [`src/asset-delivery.ts`](../../src/asset-delivery.ts) | `storedAssetFor()` — **the storage key is rebuilt from this article's own manifest entry, never from the caller's string.** The bucket is content-addressed and shared by every article and every reader, so a route that concatenated a caller's hash into a key would be an arbitrary-object read. A hash absent from this article's manifest is a 404 **even for its owner**. Both `GET /api/asset/…` and its public twin go through it. See below |
 | [`src/fetch.ts`](../../src/fetch.ts) | scheme allowlist, `isBlockedAddress`, redirect limit, size cap |
 | [`src/ingest.ts`](../../src/ingest.ts) | `normaliseUrl` — refuses literal private and loopback hosts before queueing |
 | [`src/chat-tools.ts`](../../src/chat-tools.ts) | `isSlug` on the model's slug, URL-length cap on the model's URL |
@@ -182,6 +183,28 @@ listing's exact order, so `limit` bounds the database's work and not only the re
 
 It also refuses to work at all on the filesystem store — `requirePostgres()` answers 501 — so a
 misconfigured dev server cannot serve a half-implemented public path.
+
+#### And since 2026-09-06 there is a third ownerless read, which hands back bytes
+
+`GET /api/public/asset/:slug/:hash.:ext` serves the pictures a shared article came with —
+its own images and, on a paper, the figures recovered from the PDF
+([article-images.md](article-images.md#delivery-and-what-is-actually-switched-on)). It is the first
+thing in this namespace that answers with **bytes from a bucket** rather than a projection of a row,
+so the allowlist-DTO discipline above has nothing to say about it and a different rule carries the
+weight:
+
+- **The key is rebuilt from the manifest entry**, per the `src/asset-delivery.ts` row above. The
+  bucket is content-addressed and shared, so the caller's hash is used to *look up* and never to
+  *build*. Without that rule, a visitor naming any hash they had ever seen would read the object.
+- **`null` is the same 404 as an article nobody shared.** A visitor who names a real hash belonging
+  to somebody's private article must not be able to tell it from a hash of nothing — content
+  addressing puts both in one bucket, and which of the two it is, is exactly the fact worth hiding.
+- **Un-sharing takes effect on the next request**, because the visibility question is re-asked per
+  request and `serveApi` has already set `no-store` across the namespace. The owner's twin caches
+  `private, max-age=31536000, immutable` instead; the objects are content-addressed, so the two
+  answers are the same bytes under different rules about who may keep them.
+  `tests/asset-route.test.ts` fetches one slug, un-shares it and fetches again, which is the shape a
+  memoised public projection would have quietly broken.
 
 #### And since 2026-09-04 there is a page over it, which holds one defence
 

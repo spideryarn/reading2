@@ -1,0 +1,174 @@
+/* lightbox.css — one figure, table or code block as big as the window allows
+   (Lightbox.tsx), opened by the ⤢ that zoomable.ts puts on them. A native
+   `<dialog>`, so it carries no z-index at all — the banner below says why that
+   is the point rather than an omission. */
+
+/* ------------------------------------------------------------- lightbox --
+   One figure, as big as the window will allow — Lightbox.tsx, opened by the ⤢
+   the reading column puts on every picture, table and code block
+   (zoomable.ts). Greg asked for it, 2026-08-28: "a nearly-full-screen
+   panel/overlay that's easy to dismiss."
+
+   **It is a native `<dialog>`, and that is why there is no z-index here.** A
+   dialog opened with `showModal()` is promoted to the browser's *top layer*, so
+   it paints above the spine (45), the mode band, the dock (96), the search
+   colour picker (99) and the tooltip (100) without being a number that has to
+   agree with any of them. design-css-overview.md § What is not written down yet
+   calls the z-index budget the most likely thing here to break next; this adds
+   nothing to it. The reasoning behind choosing the platform's modal over the
+   three hand-rolled `role="dialog"` panels this app already has is in the
+   header of Lightbox.tsx.
+
+   **`[open]` is load-bearing on the display rule.** The UA stylesheet hides a
+   closed dialog with `dialog:not([open]) { display: none }`, and this file is
+   inside `@layer app` — which beats the UA sheet. A bare `.lightbox { display:
+   flex }` would therefore show the panel permanently, in the middle of the
+   article, from the moment the page loads. Nothing would error. */
+.lightbox {
+  /* The <dialog> box IS the click target for dismissing: it fills the viewport,
+     the panel sits inside it, and Lightbox.tsx closes when `event.target` is
+     the dialog itself. So it has no look of its own — everything visible below
+     is the panel. */
+  /* `inset: 0` rather than `100vw` / `100dvh`. A <dialog> is `position: fixed`
+     already, so the four zeroes fill the viewport EXACTLY — where `100vw`
+     includes the width a vertical scrollbar has taken, which would put the panel
+     a few pixels off centre and hang the right edge outside the window. The two
+     `none`s are undoing the UA's own `max-width: calc(100% - 6px - 2em)`. */
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  /* Both halves of the scroll lock, and the second is here rather than only on
+     `.lightbox-content` because a wheel or a finger that starts on the BACKDROP
+     — or on the panel's padding, or on the close-button row — never touches the
+     content scroller at all, and chains straight through to the article behind.
+     `overflow: hidden` still makes this a scroll container, which is what
+     `overscroll-behavior` needs to act on. GPT Sol, 2026-08-28. */
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+.lightbox[open] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* A LITERAL COLOUR, not var(--page), and it is not laziness. `::backdrop` did
+   not inherit from its originating element for most of the time this feature's
+   browsers have been shipping, so a custom property resolves to nothing there
+   on anything older — and an invalid `background` is not an error, it is no
+   dim at all. The value is the page's own near-black at 88%. */
+.lightbox::backdrop {
+  background: rgb(10 10 10 / 0.88);
+  backdrop-filter: blur(2px);
+}
+
+.lightbox-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* Nearly full screen, capped so a figure does not stretch across a 34" monitor
+     into something nobody can read the far side of. */
+  width: min(96vw, 1600px);
+  max-height: 92dvh;
+  padding: 0.6rem 0.75rem 0.75rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.8);
+}
+
+/* Its own row above the figure rather than floating over its corner: the figure
+   is the whole point of this panel and a control sitting on top of it would
+   cover the one thing the reader opened it to see. */
+.lightbox-close {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-bottom: 0.4rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.lightbox-close:hover { color: var(--highlight); border-color: var(--rule-strong); }
+.lightbox-close:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: 2px;
+}
+
+/* The figure itself. `min-height: 0` is what lets a flex child scroll rather
+   than push its parent past `max-height` — without it the panel grows and the
+   overflow never happens.
+
+   `overscroll-behavior: contain` is the whole of the scroll lock. A modal
+   `<dialog>` does not stop the page behind it scrolling, and the case that
+   actually happens is a trackpad flick that reaches the end of a tall figure
+   and chains into the article. Locking `body` was rejected: this view writes
+   the reading position from the scroll (`?at=`), so an overflow change that
+   clamped `scrollTop` would move the reader's place in the article as a side
+   effect of looking at a picture. */
+.lightbox-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+/* `.prose` caps itself at the reading measure. A figure is not prose and the
+   whole point here is width, so the cap comes off — and with the class kept, a
+   table still gets the article's own table styling rather than a second
+   description of it living in this section. */
+.lightbox .prose { max-width: none; }
+
+/* Now the panel scrolls, the table need not. `display: block` on a .prose table
+   is what gives it its own scrollbar in the column (§ content that cannot
+   reflow); here that would be a scrollbar inside a scrollbar. */
+.lightbox .prose table {
+  display: table;
+  overflow: visible;
+  font-size: 1rem;
+}
+.lightbox .prose pre {
+  overflow: visible;
+  font-size: 0.95rem;
+}
+
+/* **`width: auto` beats the article's own `width="423"`.** An HTML `width`
+   attribute is a presentational hint — it sets CSS `width`, not merely a ratio
+   (design-css-overview.md § The other half of the same hole, where the missing
+   half of that pair stretched every screenshot on the landing page by 1.95x).
+   Wolfram's tables are declared at 423px and the files behind them are 854px
+   wide, so without this line "view larger" would show the identical picture at
+   the identical size, and look exactly like a feature that does nothing.
+
+   No upscaling past the file's own pixels: a 232px equation blown up to 1600
+   is a blurrier version of a thing the reader could already almost read. */
+.lightbox-content img {
+  display: block;
+  margin: 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  /* The panel's 92dvh less its chrome — the close row and the padding. Stated
+     rather than inherited because a `max-height: 100%` inside a scroll
+     container resolves against the scrolled content, not the box. */
+  max-height: calc(92dvh - 4rem);
+}
+.lightbox-content figcaption { max-width: none; text-align: center; }
+
+@keyframes lightbox-in {
+  from { opacity: 0; transform: scale(0.985); }
+}
+.lightbox[open] .lightbox-panel { animation: lightbox-in 120ms ease-out; }
+

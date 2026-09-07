@@ -21,8 +21,8 @@ Code: [`src/search.ts`](../../src/search.ts) (the model call),
 [`src/routes.ts`](../../src/routes.ts) § search,
 [`src/web/SearchPanel.tsx`](../../src/web/SearchPanel.tsx),
 [`src/web/search-hits.ts`](../../src/web/search-hits.ts),
-[`src/web/useSearch.ts`](../../src/web/useSearch.ts), and `§ search mode` at the end of
-[`src/web/styles.css`](../../src/web/styles.css).
+[`src/web/useSearch.ts`](../../src/web/useSearch.ts), and `§ search mode` in
+[`src/web/styles/search.css`](../../src/web/styles/search.css).
 
 ```
  ┌──────────────┬──────────────────────────┬───────────────────────────────────┐
@@ -575,7 +575,7 @@ neither of these two is destructive, and both are one press from being undone: a
 wrong searches until you press the right thing. The pixels still matter, so the box keeps padding of
 its own rather than sharing the row's. [`SearchPanel.tsx`](../../src/web/SearchPanel.tsx) § Four
 targets on a row, and `.srch-saved-tick` / `.srch-saved-body` in
-[`styles.css`](../../src/web/styles.css).
+[`styles/search.css`](../../src/web/styles/search.css).
 
 **The honest cost, measured** in the browser at the narrowest band (`MODE_MIN`, 288px): the box's
 target is **26 × 46px** and the row button's is **183 × 46px**, with a 3px gap between them, so the

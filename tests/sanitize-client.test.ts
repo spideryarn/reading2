@@ -206,13 +206,33 @@ describe("the ingress is wired up", () => {
        on its own, from `const article = sanitizeArticle(…)`) is the only form
        allowed; `article: <anything>` is a second source and fails here. The
        exception is the raw two-step below it, which is deliberately not
-       sanitised — it hands its payload to the doorway. */
+       sanitised — it hands its payload to the doorway.
+
+       **One exemption, added 2026-09-06**: `article: Article` immediately
+       followed by `)` or `,` — a parameter annotation and nothing else. Stage E
+       gave `resolveAccess` two answers to build, the first draw and the one
+       with the article's own images in it, and the thing that builds both takes
+       an `(article: Article)` parameter. A declaration cannot be a source of an
+       unsanitised payload, where every other right-hand side can.
+
+       **The delimiter is load-bearing and the first draft did not have it.**
+       Exempting the bare word let `{ article: Article }` and
+       `{ article: Article as Article }` through as value expressions — GPT Sol
+       found it. `article: found.article` still fails, which is the assignment
+       this test exists for.
+
+       **And be honest about what this proves.** It is a wiring check, not a
+       data-flow proof: `const article = found.article; return { …, article }`
+       has always passed it, because the shorthand is matched by shape and not by
+       origin. An AST check would be the real thing. The scan's value is that a
+       *deletion* or a *rename* — the two ways this has actually broken, twice —
+       cannot be silent. */
     const doorway = APP.slice(
       APP.indexOf("async function resolveAccess"),
       APP.indexOf("async function findArticle"),
     );
     expect(doorway).toContain("sanitizeArticle(");
-    expect(doorway).not.toMatch(/article:\s*(?!article\b)\S/);
+    expect(doorway).not.toMatch(/article:\s*(?!article\b|Article[,)])\S/);
   });
 
   it("the client never imports the jsdom-bound sanitiser", () => {

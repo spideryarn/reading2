@@ -56,7 +56,8 @@ listed here; the names under each are files in `docs/project/`.
   `quiz.md` (the other half: the article asks, you answer) ·
   `links.md` (hover cards on the article's own hyperlinks) · `tooltips.md` · `keyboard.md` ·
   `touch.md` · `url-state.md` · `library.md` (the shelf) ·
-  `public-shelf.md` (the other one: `/read/public`, for strangers) · `page-titles.md` ·
+  `public-shelf.md` (the other one: `/read/public`, for strangers) ·
+  `public-readable-sharing.md` (what we tell the author of a republished article) · `page-titles.md` ·
   `reader-profile.md` · `experimental-features.md` (the switch on /profile) ·
   `dictation.md` (talking into a text box) ·
   `copy.md` (reader-facing failure messages) ·
@@ -89,7 +90,8 @@ listed here; the names under each are files in `docs/project/`.
   `feedback-reports.md` (and what an agent does with one afterwards) ·
   `hetzner-remote-server-box.md` (the always-on box, and `gjd-remote`) ·
   `changelog.md` (turning deploys into the public `/changelog`) ·
-  `worktrees.md` (one tree per agent, and how to start one)
+  `worktrees.md` (one tree per agent, and how to start one) ·
+  `cron-scheduler.md` (there is no scheduler, and what that keeps costing us)
 
 Two of those are worth reading before you touch anything they bear on:
 **[granularity-zoom.md](docs/project/granularity-zoom.md)**, the feature this whole app is for, and
@@ -333,10 +335,9 @@ nothing else has a copy of.
 ### Writing code
 
 - **The store is Postgres and Supabase Storage, and there is only one.** The filesystem store and
-  `SPIDERYARN_STORE` are gone as of 2026-09-05; setting the flag now throws
-  ([`src/store/live.ts`](src/store/live.ts)) rather than being ignored. **That includes your
-  laptop**: the suite needs a database rather than a flag. A feature exercised only on files was a
-  feature that shipped broken, which happened once and is why the second store went.
+  `SPIDERYARN_STORE` are gone — the store on 2026-09-05, the flag on 2026-09-06. **That includes
+  your laptop**: the suite needs a database rather than a flag. A feature exercised only on files
+  was a feature that shipped broken, which happened once and is why the second store went.
   [database.md](docs/project/database.md); the move is
   [260831b-finish-the-database-move.md](docs/plans/260831b-finish-the-database-move.md) and its
   finish is

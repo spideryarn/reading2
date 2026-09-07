@@ -5,7 +5,7 @@
  * `data/<slug>/` back to disk, and a revision row holds a *reference* to the
  * source document rather than the document — so the bytes come from wherever
  * `blobStore()` points. That choice is made by the presence of two credentials
- * and nothing else (src/store/blobs.ts § Why selection does not read
+ * and nothing else (src/store/blobs.ts § Why selection never read
  * `SPIDERYARN_STORE`), and `blobStore()` falls back to `data/_blobs/` silently
  * when either is missing.
  *
@@ -41,7 +41,8 @@
  * script. Every name this test depends on is set explicitly, in both
  * directions, and `""` is how "absent" is spelled — `configured()` and the
  * `?.trim()` checks read it as absent, and unlike `delete` it survives
- * `.env.local`. tests/store-selection.test.ts's cousin problem.
+ * `.env.local`. The same problem the deleted `tests/store-selection.test.ts`
+ * had about the store flag, which is why `src/env.ts` keeps that snapshot.
  *
  * No database is needed and none is reached: all three refusals fire before the
  * first query.

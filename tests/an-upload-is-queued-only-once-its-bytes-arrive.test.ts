@@ -41,7 +41,7 @@
  *
  * The blob store here is the **Supabase** one, against the local stack:
  * importing `src/routes.js` loads `.env.local`, and `blobStore()` follows the
- * credentials rather than `SPIDERYARN_STORE` (src/store/blobs.ts). So `land()`
+ * credentials (src/store/blobs.ts). So `land()`
  * below writes a real object to the real `sources` bucket and the gate reads it
  * back over HTTP, which is the adapter production uses. Worth knowing before
  * changing anything here: these tests need the local Supabase up.

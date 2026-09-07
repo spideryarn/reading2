@@ -44,7 +44,7 @@
 import type { MouseEvent } from "react";
 import { ID_PREFIX } from "../ids.js";
 import type { BlockId } from "../types.js";
-import { addressWithout, navigate } from "./router.js";
+import { addressAt, addressWithout, navigate } from "./router.js";
 
 /** `spya-k3m9qt` → `k3m9qt`. Anything not ours is shown untouched. */
 export function shortBlockId(id: BlockId): string {
@@ -101,7 +101,11 @@ export function blockHref(
   id: BlockId,
   linkBase = addressWithout(location.pathname + location.search, "at"),
 ): string {
-  return `${linkBase}${linkBase.includes("?") ? "&" : "?"}at=${encodeURIComponent(id)}`;
+  /* The writing of it moved to router.ts on 2026-09-06, unchanged, because the
+     jump transaction has to put exactly this address into the history entry the
+     reader is leaving — the place they go Back to and the link to that place
+     must be the same string. router.ts § addressAt. */
+  return addressAt(linkBase, id);
 }
 
 /**

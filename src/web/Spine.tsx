@@ -105,10 +105,12 @@ import type { BlockMatch } from "./search-hits.js";
 import type { BlockId } from "../types.js";
 import {
   bandMatchCounts,
+  jumpOriginMark,
   laneOrder,
   spineMarks,
   type Row,
 } from "./spine-marks.js";
+import { useJumpOrigin } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 import { NO_GEOMETRY_CLOCK, noteGeometry, parentGeometryClock } from "./geometry-cost.js";
@@ -638,6 +640,59 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
    */
   const hereHitId = hereHit && hereHit.metrics === metrics ? hereHit.id : null;
 
+  /**
+   * **The band to fill as *you are here* — the current section, when there is
+   * one worth drawing.**
+   *
+   * Greg, 2026-09-06, on an article whose single part holds 95% of the rows:
+   *
+   * > The Spine only really highlights in orange the current top-level section,
+   * > so basically the Spine is almost completely orange when I'm reading the
+   * > main section.
+   *
+   * `.spine-part.active` is not wrong on that shape, it is uninformative — it
+   * says *you are in the 95% of the article that is the article*. Three of the
+   * thirteen trees in `data/` have a part over half the document, so this is a
+   * shape rather than a pathology. The answer is to draw the level below, which
+   * this component has computed since 2026-08-28 and until now showed only to a
+   * screen reader. docs/plans/260906g-spine-concentric-depth-highlight.md.
+   *
+   * **It costs no extra render**, which is what makes it a `find` here rather
+   * than a project: `hereHit` is already state and already transitions on
+   * exactly these boundaries, so this runs inside renders that were happening
+   * anyway. Not a `useMemo` — memoising would only skip an `O(hits)` scan of a
+   * few dozen entries during a render that has already been paid for.
+   *
+   * **`parent` is the test, and it is the one that cannot drift.** A band gets
+   * a `parent` from `childBands` and none from the L1 fallback `measure` uses
+   * for a childless part, so the field already *is* "am I a real section". The
+   * plan originally proposed asking whether the id also appears in `metrics.l1`;
+   * that works, but it is a second scan inferring what `measure` already
+   * recorded. GPT Sol, 2026-09-06.
+   *
+   * **`total > 1`, and that is not defensive.** Children partition their
+   * parent, so a part with exactly one child is covered by it exactly —
+   * permitted by `tree-invariants.ts` for a leaf ("no child may cover its
+   * parent's whole range — unless it is a leaf") and already present in
+   * `tests/spine-card.test.tsx`'s fixture. Ringing it would paint a second fill
+   * at the part's own geometry, which nobody would report as a bug: it just
+   * looks like a slightly darker band.
+   *
+   * A **supplement** falls out of the same test rather than needing its own.
+   * `buildOutline` gives one `children: []` unconditionally, so `measure`
+   * always makes it an L1 fallback, so it has no `parent` and gets no ring. The
+   * first draft of the plan specified a dimmed supplement ring; it could never
+   * have rendered.
+   *
+   * Null outside the article, because `hereHitId` is — the scroll effect gives
+   * it no fallback to the first or last band on purpose.
+   */
+  const hereBand =
+    metrics && hereHitId !== null
+      ? metrics.hits.find((b) => b.entry.node.id === hereHitId)
+      : undefined;
+  const hereRing = hereBand?.parent && hereBand.parent.total > 1 ? hereBand : null;
+
   const docHeight = metrics?.docHeight ?? 1;
   const pct = useCallback(
     (v: number) => `${(v / docHeight) * 100}%`,
@@ -659,6 +714,40 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
   const marks = useMemo(
     () => (metrics ? spineMarks(metrics.rows, matches, lanes) : []),
     [metrics, matches, lanes],
+  );
+
+  /**
+   * **Where the reader jumped from**, while there is a way back to it.
+   *
+   * Subscribed here rather than threaded down as a prop, which is the same call
+   * `ReturnChip` makes and for the same two reasons. The stamp is a store over
+   * `history.state` (router.ts § `useJumpOrigin`), so reading it where it is
+   * drawn keeps `App` out of a re-render it has no use for; and the mark and
+   * the chip are then **one fact with two views** rather than two things kept
+   * in step — the × that strips the stamp takes both away without either
+   * knowing the other exists.
+   *
+   * `matches` is a prop because it is derived from search state that lives up
+   * there. This is not.
+   *
+   * **It does not put the rail back on the scroll path**, which is the thing
+   * this component is careful about: `jumpOriginSnapshot` caches the object it
+   * returns, so the `?at=` replace the scroll spy makes about once a second
+   * fires the store's listener and changes nothing. What re-renders the rail is
+   * a change in the *effective stamp* — typically a jump, a Back or Forward, a
+   * push that strips it, or a dismissal — which is a few times a minute at most.
+   *
+   * **Only while the chip is up, and never the other way round** — the same
+   * `readStamp` is behind both. Two cases draw no mark, and they are not the
+   * same case: an origin of `{ kind: "top" }`, where the **chip remains** and
+   * says "back to the beginning" in words because there is no block to mark
+   * (GPT Sol F8); and a stamp this page cannot resolve, where **both** go.
+   * spine-marks.ts § `jumpOriginMark` owns all three rules.
+   */
+  const jumpOrigin = useJumpOrigin();
+  const from = useMemo(
+    () => (metrics ? jumpOriginMark(metrics.rows, jumpOrigin) : null),
+    [metrics, jumpOrigin],
   );
 
   /**
@@ -702,10 +791,21 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
       className="spine"
       aria-label="Article outline"
       /* The whole rail is one keyboard-navigation zone, meaning L1: it draws
-         parts as bands and marks the current one, so ↑ / ↓ over it step part by
-         part. Its click targets are L2 — finer than its
-         bands, because a 1px tick is unhittable — but that is a pointing
-         concession, not what the rail is *about*. See keynav.ts. */
+         parts as bands, so ↑ / ↓ over it step part by part. See keynav.ts.
+
+         **This is now a decision rather than the obvious reading, and it was
+         re-taken on 2026-09-06.** It used to say the L2 click targets were "a
+         pointing concession, not what the rail is *about*", on the grounds
+         that a 1px tick is unhittable. That argument is spent: since the rail
+         started filling the current section (`hereRing` below), L2 is not just
+         where a click lands, it is the strongest fill on the rail.
+
+         It stays L1 anyway. The rail still *shows* the whole part structure and
+         a reader stepping through it is navigating the article's parts; making
+         ↑ / ↓ step section by section would turn a seven-press traverse into a
+         fifty-press one, which is the opposite of what a bird's-eye rail is
+         for. Revisit it as its own change if anybody asks for it — do not
+         change it as a side-effect of a visual one. GPT Sol, 2026-09-06. */
       data-nav-depth={1}
     >
       <div className="spine-track">
@@ -729,6 +829,66 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
           );
         })}
 
+        {/* **The section you are in**, filled — see `hereRing` above for why
+            the part alone was not enough and when this is deliberately absent.
+
+            **Its position in this list is the whole of its correctness**, and
+            nothing about getting it wrong looks wrong. The rail is one stacking
+            context of absolutely-positioned siblings with no `z-index` between
+            them, so tree order is paint order, and this element has to sit:
+
+            - *after* the parts, or the band it marks paints over it;
+            - *before* the L2 ticks, or it hides the hairline that marks its own
+              top edge — and the hairlines are what make it read as *one of
+              these sections* rather than as a brighter smear;
+            - *before* the search marks, which is the one that would have cost
+              somebody an afternoon. The tempting version of this feature is
+              `.spine-hit[aria-current="location"] { background: … }` — the
+              geometry and the state are both already there and it needs no new
+              element. It is wrong: the hit targets render below, *over* the
+              marks, so a fill on one would hide the search hits inside the
+              section the reader is actually reading. The 14% hover wash gets
+              away with it by being faint and momentary; a permanent fill would
+              not. `tests/spine-here.test.ts` asserts this order, because jsdom
+              cannot see paint and a screenshot only shows it during a search.
+
+            `aria-hidden`, and deliberately: the button underneath already
+            carries `aria-current="location"`, which is the standard way to say
+            *this one, of these, is where you are*. This element is the same
+            fact made visible, and saying it twice is worse than saying it
+            once. Nothing here should announce on a section crossing — that
+            fires throughout an ordinary scroll. */}
+        {hereRing && (
+          <div
+            className="spine-here"
+            aria-hidden="true"
+            /* **`--here-top` rather than `top`.** The 2px floor in the
+               stylesheet grows the box *downward* from a fixed `top`, and the
+               final L2 of an article starts at very nearly 100% — so the floor
+               grows straight out of `.spine { overflow: hidden }` and is
+               clipped away, dropping the *you are here* exactly at the end of
+               the piece. Not hypothetical: two of the thirteen trees in
+               `data/` (`scaling-hypothesis`, `fowler-phrenology`) end in a
+               section worth 0.12% of the article, against the ~0.22% that two
+               pixels of a rail cost. GPT Sol found it, 2026-09-06.
+
+               So the top is clamped inward, and the clamp has to live in CSS:
+               written here as `calc(min(<top>, 100% - 2px))` it would be
+               parsed by jsdom's CSSOM into `calc(min(3000% * , - 2px))`, and
+               every assertion in `tests/spine-here.test.ts` would read that
+               mangled string and agree with itself while the browser did
+               something else. A custom property is stored verbatim, so the
+               number stays checkable in jsdom and the clamp sits in the
+               stylesheet beside the floor it corrects. */
+            style={
+              {
+                "--here-top": pct(hereRing.top),
+                height: pct(hereRing.height),
+              } as CSSProperties
+            }
+          />
+        )}
+
         {/* Subdivision is always drawn, so the shape of the article is visible
             even where there is no room for a word of it. */}
         {metrics.l2.map((b) => (
@@ -738,6 +898,53 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
             style={{ top: pct(b.top) }}
           />
         ))}
+
+        {/* **Where the reader jumped from**, while the chip offering the way
+            back is up — Stage C of
+            docs/plans/260906g-back-to-where-you-jumped-from.md. The chip names
+            the place in words; this answers *how far did I come?*, which is the
+            question a label cannot.
+
+            **One mark, and not a trail.** Greg asked for previous locations
+            fading over time; the rail's own rule is that it acquires marks when
+            the reader asks for them and at no other time, and a decaying trail
+            is ambient information with no action attached and a legend to
+            learn. This is tied to a button the reader can press, and it goes
+            when that button goes.
+
+            **Its position in this list is as load-bearing as `.spine-here`'s**,
+            and for the same reason: no z-index between these siblings, so tree
+            order is paint order. After the hairlines, or a 3px mark reads as
+            one of them; before the search marks, or it hides the hit in the
+            very paragraph the reader jumped from — invisible until somebody is
+            searching, which is the case tests/spine-jump-origin.test.ts pins.
+
+            **It is not in `.spine-matches`, and that is the whole of "takes no
+            lane".** Lanes are packed by `laneOrder`, so a mark that joined that
+            container would have to be given a track out of the same 10px
+            gutter and every search would shift sideways to make room.
+
+            `aria-hidden`: the chip is a button carrying this sentence in words
+            and in the tab order, so a second announcement — on an element the
+            reader cannot press — would only be in the way.
+
+            `--from-top` rather than `top`, exactly as `.spine-here` does it:
+            the stylesheet clamps the number so the 3px floor cannot grow out of
+            `.spine { overflow: hidden }` for a jump made from the last rows of
+            the article, and a `calc(min(…))` written here would be mangled by
+            jsdom's CSSOM into a string every test would agree with. */}
+        {from && (
+          <div
+            className="spine-from"
+            aria-hidden="true"
+            style={
+              {
+                "--from-top": pct(from.top),
+                height: pct(from.height),
+              } as CSSProperties
+            }
+          />
+        )}
 
         {/* Where the searches matched — Greg, 2026-08-26. One lane per search
             down the right-hand edge, each mark as tall as the paragraph it
@@ -766,9 +973,20 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
               <div
                 key={m.key}
                 className="spine-match"
+                /* `--match-top` rather than `top`, for the reason `.spine-here`
+                   and `.spine-from` do it: the stylesheet clamps the number so
+                   the 3px floor cannot grow out of `.spine { overflow: hidden }`
+                   for a hit in the article's last block. Found in a browser on
+                   an article whose final block is a short citation — the mark
+                   was drawn at `top: 798.9, bottom: 801.9` against a rail ending
+                   at 800, so two thirds of it was outside. GPT Sol F31 has the
+                   precise statement: what the overflow removes is the *floor*,
+                   cutting the box back to the row's own proportional height, so
+                   a short enough final block loses its mark entirely and a
+                   slightly taller one is left as a sliver. 2026-09-06. */
                 style={
                   {
-                    top: pct(m.top),
+                    "--match-top": pct(m.top),
                     height: pct(m.height),
                     "--lane": m.lane,
                     "--h": m.rgb,

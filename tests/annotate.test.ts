@@ -10,9 +10,7 @@
  * See docs/project/comments.md § Anchoring.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { readerCss } from "./helpers/stylesheets.js";
 import {
   annotateHtml,
   BAR_HUES,
@@ -565,15 +563,31 @@ describe("annotateHtml — the colours of the searches that found the words", ()
        paints nothing at all — the whole mark vanishes rather than losing its
        ninth stripe. Nothing in TypeScript can see that, so it is checked
        against the stylesheet here rather than left to a comment. */
-    const css = readFileSync(
-      path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src/web/styles.css"),
-      "utf8",
-    );
+    /* The reading-view sheets as a set — `src/web/styles.css` has been the list
+       of `@import`s since 2026-09-06, and these rules live in one of the files
+       it names. tests/helpers/stylesheets.ts. */
+    const css = readerCss();
+    /* **Through the rule opener, and this is the load-bearing part.** The
+       pattern stopped at `]` until 2026-09-06, so it matched a selector that
+       could never draw anything: GPT Sol appended `.never` to all eight and
+       every test in this file stayed green. `\s*\{` is what makes a match mean
+       "a rule that fires on `data-hues="N"`" rather than "those characters
+       appear somewhere". */
     const counts = [
-      ...css.matchAll(/td\.text\.has-hit\[data-hues="(\d+)"\]/g),
+      ...css.matchAll(/td\.text\.has-hit\[data-hues="(\d+)"\]\s*\{/g),
     ].map((m) => Number(m[1]));
-    expect(counts.length).toBeGreaterThan(0);
-    expect(Math.max(...counts)).toBe(BAR_HUES);
+    /* **Every rung, not the highest one.** The check was `Math.max(...) ===
+       BAR_HUES`, which is satisfied by a stylesheet holding nothing but rule 8 —
+       Sol deleted rules 1 through 7 and all fifty tests here passed, while a
+       paragraph with two or three hits painted no bar at all. The gradient's
+       stops are written out per count, so a missing count is a missing rule, and
+       a missing rule paints nothing rather than degrading. Sorted unique values
+       against the whole range says that. */
+    expect(
+      [...new Set(counts)].sort((a, b) => a - b),
+      'the `td.text.has-hit[data-hues="N"]` rules no longer cover 1..BAR_HUES — a count with ' +
+        "no rule behind it paints NO bar, so the whole mark vanishes rather than losing a stripe",
+    ).toEqual(Array.from({ length: BAR_HUES }, (_, i) => i + 1));
   });
 
   it("paints a hue only a reader could have chosen", () => {

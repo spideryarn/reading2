@@ -47,13 +47,20 @@
  * file reads whatever is under the pointer — so the spine, which is not part of
  * the table at all, joins in by adding one attribute. See NAV_DEPTH_ATTR below.
  *
+ * **It also owns the DOM half of a jump** — `measureOrigin` and `beginJump`,
+ * below — because a jump starts from the same measurement a keypress does, and
+ * the two must not disagree about which item the reader is in. The half that is
+ * pure, and the reason the split runs where it does, is jump-history.ts.
+ *
  * Related: docs/project/keyboard.md (the intent and the trade-offs),
  * position.ts (the same "which item am I in" arithmetic, for `?at=`),
- * scroll.ts (the one way anything scrolls to a block).
+ * scroll.ts (the one way anything scrolls to a block),
+ * jump-history.ts (what a jump leaves on the history entry it pushes).
  */
 import { useEffect, useRef, useState } from "react";
-import type { Block } from "../types.js";
+import type { Block, BlockId } from "../types.js";
 import { geometryCostOn, leafGeometryClock, noteGeometry } from "./geometry-cost.js";
+import { armJump, clearArmedJump, type JumpOrigin } from "./jump-history.js";
 import { activeSectionIndex } from "./position.js";
 import { SCROLL_MS, scrollToBlock, stickyOffset } from "./scroll.js";
 import { navigableItems, type Cell, type Geometry } from "./tree.js";
@@ -225,11 +232,143 @@ export function nextAim(
 export function measureRow(): number {
   const counting = geometryCostOn();
   const t0 = leafGeometryClock();
-  const rows = document.querySelectorAll<HTMLElement>("tbody tr[data-block]");
-  const tops = Array.from(rows, (r) => r.getBoundingClientRect().top);
-  const row = activeSectionIndex(tops, stickyOffset() + 1);
-  if (counting) noteGeometry("measureRow", t0, rows.length);
+  /* `rowTops()` is the read; `readingLine()`'s `stickyOffset` is charged to its
+     own leaf, so the count here is exactly the row count. Taking it from `tops`
+     rather than re-querying keeps the number derived from what was actually
+     read — the hand-maintained constant Sol's F15 warns about is one fewer. */
+  const tops = rowTops();
+  const row = activeSectionIndex(tops, readingLine());
+  if (counting) noteGeometry("measureRow", t0, tops.length);
   return row;
+}
+
+/** Every article row's distance from the top of the viewport, in order. */
+function rowTops(): number[] {
+  const rows = document.querySelectorAll<HTMLElement>("tbody tr[data-block]");
+  return Array.from(rows, (r) => r.getBoundingClientRect().top);
+}
+
+/**
+ * The line a row has to cross to count as the one being read — the sticky
+ * chrome's lower edge, and one pixel past it so that a row resting exactly on
+ * the edge counts as arrived.
+ */
+function readingLine(): number {
+  return stickyOffset() + 1;
+}
+
+/* --------------------------------------------------------------- a jump -- */
+
+/**
+ * **Where the reader is standing, right now, measured rather than read.**
+ *
+ * Not `?at=`, and that is the finding this whole stage turns on. `?at=` is a
+ * deliberately lossy record of the reading position, in three ways that all
+ * make it the wrong thing to stamp (GPT Sol F1, 2026-09-06):
+ *
+ *  - it is **absent at the top of the article** (position.ts § positionToWrite,
+ *    `if (atTop) return { at: null }`);
+ *  - after a fine-grained jump it **deliberately holds the old fine block**
+ *    while the reader scrolls around inside that block's section, so it can
+ *    name block 12 while the reader is at block 15;
+ *  - a scroll write is **queued behind a 300ms debounce** (params.ts §
+ *    atParam), and a jump's `throttle(0)` *cancels* that queued write rather
+ *    than flushing it, so the value in the address can be older still.
+ *
+ * `measureRow()` above asks the layout instead, over every `tr[data-block]`
+ * rather than only the section rows — the same measurement the arrow keys and
+ * the swipe stepper already move by, so a jump and a keypress cannot disagree
+ * about which item the reader is in. That is why this pair lives here rather
+ * than in jump-history.ts, which router.ts imports and which therefore has to
+ * stay clear of the reading view's layout code (see that file's header).
+ *
+ * ## "Am I at the top" is a layout question, not a scroll-offset one
+ *
+ * The first cut asked `window.scrollY <= stickyOffset()`, copying the test
+ * `positionToWrite` uses (App.tsx). That is wrong here, and not narrowly: the
+ * masthead and the controls scroll away *above* the first row, so there is a
+ * band several hundred pixels deep in which the reader has scrolled past the
+ * offset and yet no article row has reached the reading line. `measureRow()`
+ * clamps to row 0 throughout it, so a jump made from anywhere in that band
+ * recorded the first block, and Back then put that paragraph under the chrome
+ * with the masthead gone — which is F8 again, inside the window F8's own fix
+ * left open. GPT Sol F13, 2026-09-06.
+ *
+ * So the question is put to the rows: **has the first one crossed the line?**
+ * That is the same fact `measureRow` reads one array later, so the two cannot
+ * drift apart. `positionToWrite` still asks it the old way, and is left alone:
+ * a lagging `?at=` in that band writes a block the reader can see, which is
+ * what that parameter is for, while a *jump origin* is a promise to put them
+ * back exactly.
+ */
+export function measureOrigin(blocks: Block[]): JumpOrigin {
+  const tops = rowTops();
+  const first = tops[0];
+  /* No rows at all — an empty article, or a mode not drawing the table — or
+     every row still below the line. Either way no block is under the reader,
+     and `top` is what lets Back restore the actual top of the page rather than
+     scrolling the first paragraph under the chrome. */
+  if (first === undefined || first > readingLine()) return { kind: "top" };
+  const block = blocks[activeSectionIndex(tops, readingLine())];
+  /* More rows drawn than blocks handed in. Not reachable today, and a wrong
+     block is worse than an honest "the beginning". */
+  return block === undefined ? { kind: "top" } : { kind: "block", blockId: block.id };
+}
+
+/**
+ * **Start a jump: measure where the reader is, arm it, move them.**
+ *
+ * Returns whether anything happened, so the caller knows whether to record the
+ * destination as the position it has already synced.
+ *
+ * `push` is the one address write, and it is the *destination* only —
+ * `setAt(target, { history: "push", limitUrlUpdates: throttle(0) })` in
+ * App.tsx, unchanged from before this stage. The predecessor's `?at=` is
+ * rewritten by the wrapper that intercepts this very push, not by a second
+ * setter here. **Two `setAt` calls in one tick would not be a transaction**:
+ * nuqs stores pending updates in a `Map` keyed by parameter name, so the
+ * second overwrites the first and the predecessor rewrite would simply never
+ * happen, silently (nuqs/dist/debounce-*.js § ThrottledQueue.push). GPT Sol
+ * F11, 2026-09-06.
+ *
+ * ## Why the whole jump is abandoned when you are already there
+ *
+ * A jump to the block you are standing on should not cost a press of Back. It
+ * must also not cost a *scroll*: the history write and `scrollToBlock` used to
+ * be independent statements, so suppressing only the push would leave the
+ * movement — and a tall paragraph can be crossing the reading line while its
+ * top is far above the viewport, so "the same block" and "no movement" are not
+ * the same statement. Search deliberately calls `onJump` even when its result
+ * is already on screen (App.tsx), which makes that reachable, and the reader
+ * would be moved with no chip and no way back.
+ *
+ * **The visible consequence, which is deliberate: clicking a search result for
+ * the paragraph you are already reading now does nothing at all.** Accepted by
+ * the team lead on 2026-09-06 rather than papered over — do not "fix" it by
+ * putting the scroll back, because that reintroduces an irreversible move.
+ * Making that motion reversible needs a finer origin than a block id, which is
+ * a design, not a patch. GPT Sol F10.
+ */
+export function beginJump(
+  blocks: Block[],
+  target: BlockId,
+  push: (id: BlockId) => void,
+): boolean {
+  clearArmedJump();
+  const origin = measureOrigin(blocks);
+  if (origin.kind === "block" && origin.blockId === target) return false;
+  /* `from` is the whole address, not just the path: it is what lets the wrapper
+     tell this jump's push from one made after the reader has been somewhere
+     else and come back. jump-history.ts § `from`. */
+  armJump({
+    pathname: location.pathname,
+    from: location.pathname + location.search,
+    origin,
+    target,
+  });
+  push(target);
+  scrollToBlock(target);
+  return true;
 }
 
 /** Typing somewhere? Then the arrows are the caret's, not ours. */

@@ -12,7 +12,7 @@
  *
  * ## Why it is here rather than in `pg.ts`
  *
- * Because `pg.ts` imports `src/api.ts`, which reaches `glossary.ts` and
+ * Because `pg.ts` imports `glossary.ts` and
  * `arc.ts`. The AI ledger needs this predicate and is itself reached from the
  * pipeline stages, so importing it from `pg.ts` closed an import cycle that
  * `npm run cycles` gates on — and made a CLI stage run impossible to account

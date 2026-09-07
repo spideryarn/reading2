@@ -336,7 +336,7 @@ one column meant a rename could land in two of them and look correct.
 Greg, 2026-09-05: *"I'm even wondering if we can get rid of the row of column-header-labels in
 Hierarchy mode … to save on vertical space."* It went — as a row. **The `<thead>` is still there**,
 one `<th>` per column, `height: 0`, no padding, no border, its label in an `.sr-only` span
-(`--head-h` in [styles.css](../../src/web/styles.css) § tokens). Deleting it was the first draft of
+(`--head-h` in [styles/tokens.css](../../src/web/styles/tokens.css) § tokens). Deleting it was the first draft of
 this change and GPT Sol refused the plan over it, correctly: three things read that row and none of
 them reads a pixel of it.
 

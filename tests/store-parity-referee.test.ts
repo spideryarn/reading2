@@ -22,8 +22,7 @@
  * `SPIDERYARN_STORE=postgres` — the configuration production has run since
  * 2026-08-27 — every claims operation returned a 501 and the sub-mode did not
  * exist for anybody but a developer on a laptop. Every test passed throughout,
- * because `SPIDERYARN_STORE` unset means `files`
- * ([`src/store/live.ts`](../src/store/live.ts)) and so every test, every local
+ * because `SPIDERYARN_STORE` unset meant `files`, and so every test, every local
  * run and the browser pass all exercised the configuration that is not deployed.
  * docs/postmortems/260901e-claims-shipped-filesystem-only-and-returned-501-in-production.md,
  * and stage 2 of docs/plans/260901f-referee-mode-on-the-database-and-the-parity-that-would-have-caught-it.md.

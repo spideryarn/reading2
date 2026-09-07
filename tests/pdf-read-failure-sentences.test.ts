@@ -38,6 +38,7 @@ const HOISTED = vi.hoisted(() => {
 
 import { readerFailureOf } from "../src/job-failure.js";
 import { worthRetrying } from "../src/messages.js";
+import { sanitise } from "../src/monitoring-scrub.js";
 import { pdfUnreadableReason } from "../src/pdf.js";
 import {
   knownNativeFinish,
@@ -118,6 +119,81 @@ describe("a chunk too big to send", () => {
     expect(reader.message).toMatch(/\bMB\b/);
     expect(reader.message).not.toContain("[jb-step-no]");
     expect(reader.kind).toBe("blocked");
+  });
+});
+
+/**
+ * **The step that cannot call a model, offering to call one again.**
+ *
+ * `openRouterReader` reads the key first thing and threw a bare
+ * `new Error("OPENROUTER_API_KEY is not set — see docs/project/setup-dev.md.")`
+ * until 2026-09-07. A bare `Error` declares no kind, so `failureKindOf` answers
+ * `undefined`, `readerFailureOf` falls back to `retry`, and the reader is shown
+ * *"trying again is worth a go"* under a Retry button that starts a PDF read
+ * which cannot reach a provider. It is the same defect as the publication
+ * refusal this file's sibling change is about — a permanent misconfiguration
+ * flowing into the retryable path — in a different file, and GPT Sol found it
+ * reviewing docs/plans/260907a-publish-refusal-reason-kinds-permanent-vs-transient.md.
+ *
+ * `NOT_CONFIGURED` (src/messages.ts) is the sentence, `ours` is the kind, and
+ * the variable name and the docs path stay in the log where somebody can act on
+ * them. Watched red: `kind` came back `retry` and the code was `jb-step-again`.
+ */
+describe("a chunk sent with no API key at all", () => {
+  const had = process.env.OPENROUTER_API_KEY;
+  afterEach(() => {
+    if (had === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = had;
+  });
+
+  it("does not offer another go at a call it cannot make", async () => {
+    delete process.env.OPENROUTER_API_KEY;
+    const err = await threw(() => openRouterReader().read(new Uint8Array(8), "read this"));
+
+    const reader = readerFailureOf(err, LABEL);
+    expect(reader.kind).toBe("ours");
+    expect(codeOf(reader.message)).toBe("ai-not-set-up");
+    expect(worthRetrying(reader.message)).toBe(false);
+  });
+
+  it("keeps the variable name and the docs path in the log, not on the card", async () => {
+    delete process.env.OPENROUTER_API_KEY;
+    const err = await threw(() => openRouterReader().read(new Uint8Array(8), "read this"));
+
+    /* Two audiences, two sentences — src/messages.ts § `NOT_CONFIGURED`. The
+       diagnostic is free to name the variable; the reader's half must not. */
+    expect((err as Error).message).toContain("OPENROUTER_API_KEY");
+    expect((err as Error).message).toContain("docs/project/setup-dev.md");
+    const reader = readerFailureOf(err, LABEL);
+    expect(reader.message).not.toContain("OPENROUTER_API_KEY");
+    expect(reader.message).not.toContain("docs/project");
+  });
+
+  /**
+   * **The `{ authored }` claim, driven rather than described.**
+   *
+   * ⟨Sol, 2026-09-07⟩ The two cases above stay green under
+   * `stageFailure(NOT_CONFIGURED, "OPENROUTER…")` — the bare-string form — because
+   * the kind, the reader's sentence and the diagnostic text are all identical
+   * under it. The one thing that changes is that `sanitise` withholds the
+   * diagnostic from Sentry, so *"this app has no key"* arrives as a bare
+   * `Error` with a stack and nothing to read. A comment claiming the monitoring
+   * path is covered, over two tests that cannot see it, is the shape this
+   * codebase keeps getting caught by.
+   *
+   * `{ authored }` is honest here and that is what makes the assertion safe to
+   * want: every character of the diagnostic is ours, the variable name and the
+   * docs path included, and nothing is interpolated from a provider, a document
+   * or a reader.
+   */
+  it("sends the diagnostic to Sentry, because we wrote every character of it", async () => {
+    delete process.env.OPENROUTER_API_KEY;
+    const err = await threw(() => openRouterReader().read(new Uint8Array(8), "read this"));
+
+    const scrubbed = sanitise(err);
+    expect(scrubbed.withheld, "the authored diagnostic was withheld").toBe(false);
+    expect(scrubbed.error.message).toContain("OPENROUTER_API_KEY");
+    expect(codeOf(scrubbed.error.message)).toBe("ai-not-set-up");
   });
 });
 

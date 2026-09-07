@@ -1,100 +1,115 @@
-Verdict: **request changes / refuse approval**. Established P1s F1, F2, and F3 block the plan as written. I reviewed the final observed candidate contents with SHA-256 `e137b05a…e5b9aee`; no files were changed.
+Verdict: **refuse the plan as written**. F1, F2, and F4 are established P1 contract violations. The overall direction is good, but the extraction map and verification recipe are not yet strong enough to support its “provably unchanged” claim.
 
-### F1 — P1 — established: the decisive timer can attribute layout to the wrong cause
+### F1 — P1 — established: the proposed ownership map requires non-contiguous moves
 
-(a) The plan calls time inside the samplers “geometry’s attributable share” and makes it decisive ([candidate](/home/greg/code/spideryarn2/.claude/worktrees/a8-shared-geometry/docs/plans/260906d-share-measured-geometry-after-profiling-scroll-and-layout-reads.md:220)). But this repository already records the exact failure: forced layout was charged to whichever function happened to perform the first read after another subsystem dirtied the DOM; moving that read would move the apparent cost without removing it ([performance.md](/home/greg/code/spideryarn2/.claude/worktrees/a8-shared-geometry/docs/project/performance.md:726)).
+(a) [`styles/overlays.css`](</home/greg/code/spideryarn2/.claude/worktrees/a10-style-ownership/docs/plans/260906d-make-style-ownership-visible-and-a-new-mode-fail-to-compile.md:145>) claims ownership of “lightbox, floating panels, dialogs”, but those occur at widely separated positions in `styles.css`: floating chat at 9375, annotation at 9408, diagram dialogs at 11172/11603, lightbox at 13028, and feedback at 14591. One file cannot contain those while remaining a single contiguous range.
 
-That enables both wrong verdicts:
+The A5 collision note has the same problem: shared mode-band rules begin around 4046, while composers occur later with substantial feature-specific rules between them. Following the ownership descriptions literally violates A10’s prohibition on gathering prefix- or feature-related rules.
 
-- false optimise: a section sampler inherits layout caused by a React/CSS write, although sharing its scan would not remove the layout needed for paint;
-- false defer: an earlier uninstrumented read pays the flush, leaving both candidate scans looking cheap.
+(b) Replace the extraction-map preamble and the `overlays.css` row with:
 
-Inclusive self-timers observe the stall, but do not establish ownership or preventability.
+> **One output file owns exactly one contiguous top-level interval of the old file.** Semantic ownership does not permit gathering sections that recur later. A repeated family stays beside its original neighbours and receives another order-qualified file if necessary. In particular, floating panels, diagram dialogs, the lightbox and feedback remain in their respective contiguous slices; there is no gathered `overlays.css`.
+>
+> Before the first cut, commit an ordered manifest giving every slice’s old start and end byte offsets and destination. Every old byte must belong to exactly one slice and the manifest order is the import order.
 
-(b) Replace the “two numbers” paragraph and amend Stage 1 instrumentation with:
+### F2 — P1 — established: the stacking-rule instruction is impossible without moving rules
 
-> Every gesture reports end-to-end time, non-overlapping sampler JavaScript time, and browser `Layout`/`RecalculateStyle` events from a Chrome performance trace. A synchronous layout is reported under the read that triggered it, but is not called attributable to that reader: the trace must also identify the dirtying write. Stage 3 is authorised only where the trace or a perf-only counterfactual demonstrates that removing or ordering the duplicated section-top scan removes browser work while destinations remain identical. Inclusive parent and leaf buckets are never summed.
+(a) The plan says all z-index declarations “stay in `tokens-and-shell.css`”, then says anything found elsewhere stays in the byte stream. There are currently **31** `z-index:` declarations distributed through the entire stylesheet, including spine, tooltip, dock, mode band, dialogs, search, profile, timeline, feedback and site sections. Moving them into the first file would require splitting declarations from selectors or relocating whole rules; leaving them in place contradicts the promised single home.
 
-### F2 — P1 — established: required delayed image/font/viewport tests are absent
+That directly conflicts with both “verbatim contiguous slices” and A10’s “cascade must not move” contract.
 
-(a) The authoritative checklist explicitly requires testing delayed image, font, and viewport changes ([parent checklist](/home/greg/code/spideryarn2/.claude/worktrees/a8-shared-geometry/docs/plans/260905e-main-app-architecture-review.md:701)). Stage 3 names those invalidations, but Stage 4 only requires an equal-total-height row mutation, hidden/visible transitions, layout/article changes, and interruption ([candidate](/home/greg/code/spideryarn2/.claude/worktrees/a8-shared-geometry/docs/plans/260906d-share-measured-geometry-after-profiling-scroll-and-layout-reads.md:389)). An implementation can therefore satisfy the plan while never proving three checklist cases.
+(b) Replace the first non-negotiable rule with:
 
-(b) Add this exact Stage 4 item:
+> **Extraction does not consolidate declarations.** The global geometry definitions already in the opening token/shell interval remain there; responsive redefinitions and every existing `z-index` declaration remain in their original contiguous slice. The single home for the cross-feature stacking contract is `design-css-overview.md` § *The stacking order*, which points to the physical declarations. Turning the numbers into shared tokens or physically consolidating them is a separate cascade-changing refactor and is out of scope.
 
-> Drive the real measurement seam through a delayed article-image load, `onFontsChanged`, and viewport resize/movement, as separate tests. In each case move section rows after the initial snapshot, assert that the URL and fisheye destinations match a fresh DOM measurement, count exactly the expected remeasurement, and prove every listener and observer is removed on unmount and article replacement.
+### F3 — P1 — reasoned: byte-preserving moves do not preserve stylesheet-relative URLs
 
-### F3 — P1 — established: Stage 2 does not honestly run “whichever way”
+(a) CSS relative URLs resolve against the stylesheet containing them, not the original entry point. Moving bytes one directory deeper can therefore change their meaning even when concatenation and order are identical. [CSS Values § Relative URLs](https://www.w3.org/TR/css-values-4/#relative-urls) defines that behavior.
 
-(a) The governing instruction says that if the reads are immaterial, close the stage as deferred ([parent checklist](/home/greg/code/spideryarn2/.claude/worktrees/a8-shared-geometry/docs/plans/260905e-main-app-architecture-review.md:699)). The plan instead always proceeds to production changes and says they add no machinery ([candidate](/home/greg/code/spideryarn2/.claude/worktrees/a8-shared-geometry/docs/plans/260906d-share-measured-geometry-after-profiling-scroll-and-layout-reads.md:350)).
+The present concrete case is [`@import "../../styles/tokens.css"`](</home/greg/code/spideryarn2/.claude/worktrees/a10-style-ownership/src/web/styles.css:27>). If moved verbatim into `src/web/styles/tokens-and-shell.css`, it resolves toward `src/styles/tokens.css`, not the existing top-level file. Losing those tokens would visibly damage nearly every surface.
 
-The two local hoists are mechanical, but caching `safeAreaInsets` is not: it changes when the value is observed and necessarily introduces cache invalidation. The plan itself acknowledges that mobile toolbar movement may invalidate it during scrolling. This directly contradicts both “nothing built unless the profile convicts” and “adds nothing to maintain.”
+It can safely remain in the import-only `styles.css`, but the plan does not say so.
 
-(b) Replace the Stage 2 opening and cache step with:
+(b) Replace “Every cut is a byte-for-byte contiguous range” with:
 
-> Stage 2 is reached only if Stage 1 optimises. If Stage 1 defers, record the duplicate-call counts and close the job without production changes. Steps 1 and 2 are local hoists. Safe-area caching is a separate conditional substage, reached only if the post-hoist profile independently convicts `safeAreaInsets`; it must first establish and test every invalidation event, and is dropped if scroll itself must invalidate it.
+> **Every cut is a contiguous range, subject only to declared URL rebasing.** Inventory every `@import`, `url()` and other stylesheet-relative reference before cutting. Keep the existing `@import "../../styles/tokens.css"` in `styles.css` at the same ordinal position. If any relative reference moves, rewrite it so its resolved absolute target is unchanged, record that rewrite in the slice manifest, and make the concatenation check reject every other byte difference.
 
-### F4 — P1 — reasoned: unrelated buckets can authorise the wrong pilot
+### F4 — P1 — established: `tailwindcss.compile()` is not the production CSS pipeline
 
-(a) The decision combines every instrumented sampler, including `DiagramPanel`’s all-block scan, `ContextPanel.place`, `Spine`, and bar work. Stage 3 changes only the duplicated section-top scans in `useReadingPosition` and `useColumnContext`.
+(a) The plan calls a direct `tailwindcss.compile()` result “the actual cascade the browser receives”. The application instead builds through `@tailwindcss/vite` in [`vite.config.ts`](</home/greg/code/spideryarn2/.claude/worktrees/a10-style-ownership/vite.config.ts:345>). That plugin uses Vite’s resolver, enables URL rewriting, scans actual candidates and runs build-only optimization. Vite itself inlines imports and rebases URLs between imported files. [Vite documents both behaviours](https://vite.dev/guide/features.html#import-inlining-and-rebasing).
 
-Thus `DiagramPanel` or `ContextPanel` can cross the threshold while both pilot consumers are cheap, causing an observer service to be built that does not touch the cost that convicted. The source confirms that `useReaderRow` measures every block each scroll frame ([DiagramPanel.tsx](/home/greg/code/spideryarn2/.claude/worktrees/a8-shared-geometry/src/web/DiagramPanel.tsx:580)).
+Consequently, a direct-compiler diff can be empty while the production resolver, URL rewriter or optimizer produces different output. Stage 2 also omits `npm run build`, despite the authoritative acceptance contract saying builds matter for CSS changes.
 
-(b) Replace “across the instrumented geometry samplers combined” with:
+The before-output’s persistence is unspecified too; without an immutable pre-cut artifact, “before/after diff” can silently become two post-cut compilations.
 
-> Stage 1 records two verdicts. The A8 pilot verdict uses only the non-overlapping cost of the duplicated section-top scans in `useReadingPosition` and `useColumnContext` while both are active. Every other site is diagnostic and cannot authorise Stage 3. If another site convicts, record a separately scoped follow-up; A8 still defers unless its two-consumer duplication convicts.
+(b) Replace the compiled-output and Stage 2 completion wording with:
 
-Including `DiagramPanel` in the census is useful, not scope creep; allowing it to decide this pilot is the error.
+> **Capture two immutable baselines before the first cut**, labelled with the source SHA: the core Tailwind compilation for diagnosis, and the CSS emitted by `npm run build:client`, which exercises `@tailwindcss/vite`, Vite resolution, URL rebasing and production optimization. Refuse comparison if either baseline is missing or was produced from the post-cut SHA.
+>
+> After extraction, require both comparisons to be equivalent, run `npm run build`, and run the browser pass against the built preview. The direct `compile()` result is supporting evidence; only the Vite build artifact is called the CSS the production browser receives.
 
-### F5 — P1 — reasoned: “selected result” is too narrow for URL correctness
+### F5 — P1 — reasoned: a fifteenth artefact mode can still be activation-half-wired
 
-(a) Distinct focus lines and fresh jump reads are stated correctly. The remaining hole is notification semantics. `positionToWrite` depends on more than the active section: `atTop`, the held fine-grained block, the current section partition, and `glideTarget()` ([position.ts](/home/greg/code/spideryarn2/.claude/worktrees/a8-shared-geometry/src/web/position.ts:170)).
+(a) Suppose the fifteenth mode is `research`, backed by a generated artefact. Its author can add `research: null` to the proposed total `MODE_TARGET`, fill the existing label/policy/dock/presentation rows, and stop. Typecheck passes without:
 
-If “selected result” means active section ID, the service can suppress the exact notification needed when:
+- adding an `AutoRunTarget`;
+- arming the Dock press;
+- calling `useAutoRun`;
+- adding a positive case to `modes-that-start-themselves.test.tsx`.
 
-- a real gesture cancels a glide without crossing another section;
-- the reader reaches the article top while still in the first section;
-- a new layout changes which section contains the held paragraph without changing the currently selected section ID.
+That existing test explicitly covers the modes already named, not future modes. The proposed one-row mutation proves only that a current positive case remains covered.
 
-The current hook evaluates those inputs on each scheduled scroll sample ([App.tsx](/home/greg/code/spideryarn2/.claude/worktrees/a8-shared-geometry/src/web/App.tsx:1546)).
+The nullable map also misrepresents Diagram: it does start work, but dynamically through `armActivationForDiagram`; `null` conflates “free/no activation” with “activation delegated elsewhere”.
 
-(b) Replace Stage 3 item 2 with:
+(b) Replace Stage 4 item 1 and its activation mutation with:
 
-> `useReadingPosition` and `useColumnContext` share only the measured section tops. Each evaluates its complete consumer decision independently on every scroll sample and explicit invalidation. The URL selector receives current `scrollY`, sticky line, `glideTarget()`, held URL value, and section generation; glide cancellation schedules it even when the active section is unchanged. The fisheye independently selects against its 40% focus line. Suppress only equal final consumer outputs, not equal active-section indices.
+> **Activation is a total tagged decision, not `target | null`:**
+>
+> `Record<Mode, { kind: "fixed"; target: AutoRunTarget } | { kind: "delegated"; owner: string } | { kind: "none"; reason: string }>`
+>
+> Fixed modes arm their target through this table. Diagram and modes whose sub-view owns activation use `delegated`, naming that seam; genuinely free or reader-input-first modes use `none`.
+>
+> Add an independently written total activation expectation to `modes-that-start-themselves.test.tsx`. Drive every mode through the real Dock/shell; require the expected POST for fixed modes, dedicated positive coverage for delegated modes, and no POST for deliberate `none` modes. Mutation-check a fixed row, a delegated arm and a newly added fixture mode.
 
-### F6 — P1 — reasoned: the decision rule can confidently miss visible jank
+### F6 — P1 — reasoned: the presentation expectation type permits the omission it is meant to catch
 
-(a) Median sampler time structurally ignores sparse bad frames. For example, one 20ms forced layout every fifth frame yields a comfortable median; it may also produce zero `longtask` entries because those start at 50ms, a limitation already documented in [`perf.ts`](/home/greg/code/spideryarn2/.claude/worktrees/a8-shared-geometry/src/web/perf.ts:1). Dropped frames are reported but never affect the verdict. The scroll workload also lacks a fixed distance, delta cadence, duration, and mode matrix, so repetitions need not be comparable.
+(a) `Record<Mode, { band: string | null; says: string | null }>` permits both:
 
-The fixed 4ms/8ms promises are not derived from the measured refresh or workload baseline.
+```ts
+research: { band: ".mode-band.research", says: null }
+research: { band: null, says: null }
+```
 
-(b) Replace the three numeric clauses with:
+The first passes over an empty band shell; the second passes over an entirely omitted controller. Comments do not make those states impossible.
 
-> Before revealing the geometry buckets, record the actual refresh cadence and an uninstrumented fixed-scroll baseline on each viewport, then amend this document with the numeric decision budgets. The harness fixes scroll distance, delta sequence, cadence, start position, enabled mode, and settling frames. Report p50, p95 and maximum frame intervals and sampler times. A run with excess missed-refresh intervals or a conspicuous maximum is investigated and may not defer merely because its median and `longtask` count are low. Until the baseline-derived budgets and fixed workload are recorded, Stage 1 may conclude only “inconclusive,” never optimise or defer.
+Even a non-null string can be vacuous if read through raw `textContent`. The existing [`BAND_SAYS` explanation](</home/greg/code/spideryarn2/.claude/worktrees/a10-style-ownership/tests/public-network-trace.test.tsx:826>) records the concrete precedent: Outline’s visible list could be deleted while five `aria-hidden` measuring copies retained the expected text.
 
-### F7 — P2 — reasoned: the available heavy shape control is not used
+(b) Replace Stage 4 item 2 with:
 
-(a) The corpus survey says `m1-kuhn` is unusually wide and shallow, while `evaldeepen` allegedly has 1,166 sections over a deeper 2,569-block tree. Yet the plan measures only `m1-kuhn` and a 51-section control. A verdict produced only by the nearly one-section-per-two-block tree is explicitly called weaker, but the rule treats it identically.
+> Define `NO_BAND_MODES = ["plain", "hierarchy"] as const`. The independently written band table is total over `Exclude<Mode, typeof NO_BAND_MODES[number]>` and every row requires `{ where: string; says: string }`; neither field is nullable or empty. A genuinely new bandless mode requires a deliberate edit to `NO_BAND_MODES`.
+>
+> Use a non-empty fixture for every real controller and assert a body literal unique to that fixture, scoped to the exact band. Read only accessible content, excluding `[hidden]`, `[aria-hidden="true"]` and screen-reader/measurement copies. Mutation-check by deleting the visible body while leaving the band wrapper, heading and hidden measuring copies intact; the test must go red.
+>
+> Plain must assert readable article prose and no band. Hierarchy must assert a real gist-column value and no band.
 
-I could verify the source-side counting/cadence premises, but not these database-derived corpus counts.
+### F7 — P2 — established: presentation is not currently “nothing”
 
-(b) Replace the workload instruction with:
+(a) [`new-mode.md`](</home/greg/code/spideryarn2/.claude/worktrees/a10-style-ownership/docs/project/new-mode.md:29>) already lists `BAND_SAYS` among the total, compiler-checked tables. Adding a fifteenth `Mode` already makes that test file fail typecheck. What is absent is **owner/controller presentation coverage**, not a presentation compile tripwire altogether.
 
-> Measure both surveyed heavy articles—`m1-kuhn` as the wide/shallow case and `evaldeepen` as the deeper shape control—plus `replication-crisis` as the ordinary-size control. Defer requires both heavy shapes below budget. A conviction on only one heavy shape is labelled workload-specific and may authorise only the two-consumer pilot, whose retention still depends on Stage 4’s payback rule.
+This matters because the plan otherwise risks claiming a new compile guarantee while only adding runtime coverage for the owner branch.
 
-### F8 — P2 — reasoned: `ContextPanel`’s forced-reflow count is asserted before measurement
+(b) Replace the Stage 4 table row and documentation instruction with:
 
-(a) Source proves that `place` reads geometry and then writes `scrollTop` ([ContextPanel.tsx](/home/greg/code/spideryarn2/.claude/worktrees/a8-shared-geometry/src/web/ContextPanel.tsx:151)). It does not prove that each panel’s `scrollTop` write dirties layout or that the next panel forces another reflow. The plan nevertheless states “a forced reflow per panel per frame” as established fact.
+> | Presentation | Visitor `BAND_SAYS` is already total; owner/controller presentation is untested | **compile tripwire exists; owner behaviour missing** |
+>
+> Update `new-mode.md` to distinguish the existing visitor-presentation total from the new owner/controller surface test. Do not describe presentation as newly compiler-checked; describe the deliverable as making the existing compile decision exercise the real owner controller.
 
-(b) Replace that sentence with:
+### F8 — P2 — established: the `no-raw-nul-bytes` migration target is stale
 
-> This is a candidate read/write interleave. Source establishes the order, but not that each `scrollTop` write dirties layout or that the next panel flushes it. Stage 1’s browser trace must establish the number and ownership of any resulting layout events.
+(a) [`tests/no-raw-nul-bytes.test.ts`](</home/greg/code/spideryarn2/.claude/worktrees/a10-style-ownership/tests/no-raw-nul-bytes.test.ts:76>) no longer has a hard-coded file list. It derives all tracked and unignored files from Git. `src/web/styles.css` appears only in its coverage witnesses. Migrating it to a stylesheet helper would narrow a deliberately repository-wide test, while the stated completion condition “no test … naming `styles.css` as a path” would encourage removing a legitimate witness.
 
-### F9 — P2 — established: the pilot has no precommitted retain/revert rule
+(b) Replace that part of Stage 1 with:
 
-(a) Stage 4 requires merely “a reduction,” while Stage 5 allows an unpaying pilot to be “reverted or left as the whole change.” Any positive movement can therefore be declared sufficient after the result is known, despite the observer’s maintenance cost.
+> Do not migrate `no-raw-nul-bytes.test.ts` to the stylesheet helper; it remains Git-derived and repository-wide. Update its witnesses to retain `src/web/styles.css` as the import-only entry and add one extracted child stylesheet. Stage 1 is complete when no semantic CSS test reads only `styles.css` expecting all rules to be physically present.
 
-(b) Replace Stage 5 with:
-
-> Retain the pilot only if the same-session A/B removes the predicted duplicated reads, preserves every destination, has no listener/observer leak, and improves the baseline-derived Stage 4 metric outside its recorded run-to-run range. Otherwise revert the pilot. Extend beyond two consumers only under a separately measured verdict.
-
-Source census notes: I confirmed the two section scans, the second `useColumnContext` call site in Outline, duplicate `stickyOffset` and `innerHeight` reads, `DiagramPanel`’s all-row per-frame scan, and the `ContextPanel` read/write sequence. I did not run a test: the unresolved evidence is browser trace and local-corpus evidence, neither of which the permitted isolated test could establish.
+The nested-layer concern is resolved: the current Tailwind 4.3.3 probe did preserve `layer(app)` through four levels. The test-file compile concern is also resolved: this repo’s `npm run typecheck` wrapper explicitly covers every `.ts`/`.tsx`, including tests. No repository files were changed.

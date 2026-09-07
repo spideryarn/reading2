@@ -396,8 +396,12 @@ rendered row and section counts are asserted nonzero before any timing is believ
 
 GPT Sol, 2026-09-06, `gpt-5.6-sol` at high effort, against the plan before any code existed. Verdict:
 **request changes** — established P1s F1, F2 and F3 blocked the plan as written. The review itself is
-[260906d-plan-review-sol.md](260906d-plan-review-sol.md) and the prompt is
-[260906d-plan-review-prompt.md](260906d-plan-review-prompt.md).
+[260906d-share-measured-geometry-plan-review-sol.md](260906d-share-measured-geometry-plan-review-sol.md)
+and the prompt is
+[260906d-share-measured-geometry-plan-review-prompt.md](260906d-share-measured-geometry-plan-review-prompt.md).
+(Both were called `260906d-plan-review-*` until the merge of 2026-09-07, when they collided add/add
+with A10's identically-named pair. A10's were already on `dev` and referenced from two other docs, so
+theirs kept the path and these took the `<plan-slug>-review-*` name the rest of `docs/plans/` uses.)
 
 **All nine findings accepted; none overruled.** Two of them (F1, F5) were changes this plan needed
 rather than polish, and F5 in particular closed a correctness hole the plan's own wording had opened.

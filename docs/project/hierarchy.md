@@ -1131,6 +1131,35 @@ Structural failures exit non-zero; editorial ones (label lengths, a title ending
 gistable leaf with no label) print as warnings and do not fail the run. The check is cheap and it is
 the only thing standing between a plausible-looking sidebar and one that silently drops a paragraph.
 
+## A new prompt reaches new articles only, and that is the decision <a id="prompt-versions"></a>
+
+**Nothing backfills the tree.** [`src/pipeline.ts`](../../src/pipeline.ts) imports only
+`generateHierarchy` from [`src/hierarchy.ts`](../../src/hierarchy.ts) and no version constant; the
+tree has no `outdated` mechanism of the kind glossary, quotes and ideas each have; and the
+tree-version chip came off the reading view on 2026-09-05. So when the prompt changes, an article
+already on somebody's shelf keeps the gists it was built with, silently and indefinitely.
+
+That was put to Greg on 2026-09-06, after the `toc/6` gist-length change (coarse lines shorter, fine
+lines longer, plainer words) turned out to be invisible on everything he had already read:
+
+> Leave it, new articles only.
+
+**So this is chosen, not merely what happens.** Nothing is broken, nobody is charged for a summary
+they did not ask to be regenerated, and no reader is shown a warning about a line that reads
+perfectly well. The cost is the one that prompted the question: a change you make today is not
+visible on the articles you know best, so it is hard to judge whether it was an improvement.
+
+The escape is per-article rather than library-wide, and it is being built —
+**re-run the stage from the article's metadata page**. Greg, in the same breath:
+
+> there should be a way to re-run any of the generated modes (either within the UI for the mode, or
+> perhaps in the Metadata section)
+
+Note what that does *not* need. The re-run was blocked for days on being able to say *honestly* that
+a stage is stale, which needs the artefacts to record what they were built from — an open gap named
+in [ingest-queue.md](ingest-queue.md). A button that regenerates and claims nothing about staleness
+needs none of it, and declining the backfill is what made that the right shape.
+
 ## Worked example: the derived sidebar
 
 `example/` holds a 34-block slice of the test article. Its `blocks.json` is **real** stage-3 output;

@@ -93,7 +93,7 @@ looks wrong.
   is not.
 - **Colour comes from `currentColor`**, so state is a CSS colour change on the parent and never a
   prop. See `.cmt-search.on` / `.cmt-search.off` in
-  [`src/web/styles.css`](../../src/web/styles.css).
+  [`src/web/styles/annotations.css`](../../src/web/styles/annotations.css).
 - **Reach for a named `-off` variant first, but check it at the size you'll use it.** Lucide has
   `GlobeOff`, `EyeOff`, `WifiOff` and so on. The `-off` icons are drawn for 24px: they knock the
   base icon into arc *fragments* around the slash, and below roughly 16px those fragments smear into
@@ -163,7 +163,8 @@ Non-negotiable, and the interesting half is that **it must not simply stop**:
 A frozen `LoaderCircle` is a broken circle sitting next to some text — it reads as a glitch, not as
 patience. Swap the animation, don't remove it. The tooltips do the same thing for the same reason
 ([tooltips.md](tooltips.md)), and the rule for the whole client is in
-[`src/web/styles.css`](../../src/web/styles.css): anything that moves needs an answer for someone who
+[`src/web/tailwind.css`](../../src/web/tailwind.css) and the narrower blocks under
+[`src/web/styles/`](../../src/web/styles/): anything that moves needs an answer for someone who
 has asked for less movement.
 
 ### Checking it actually spins
@@ -182,7 +183,7 @@ a.currentTime = 175;                       // a quarter of 0.7s
 getComputedStyle(svg).transform;           // → matrix(0, 1, -1, 0, 0, 0), i.e. 90°
 ```
 
-The worked example is `.cmt-spinner` in [`src/web/styles.css`](../../src/web/styles.css), used twice
+The worked example is `.cmt-spinner` in [`src/web/styles/annotations.css`](../../src/web/styles/annotations.css), used twice
 in [`src/web/CommentDialog.tsx`](../../src/web/CommentDialog.tsx) — once at 13px while an
 explanation is being written, once at 10px in the footer counting the ones still in flight
 ([comments.md](comments.md)).
