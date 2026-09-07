@@ -362,6 +362,59 @@ The same applies to `RadioGroup`, `Tabs`, `Menubar` and `NavigationMenu`. **Chec
 behaviour before adopting any of them**, and prefer the ungrouped primitive where the grouping only
 buys focus management we do not need.
 
+## Tab, and the surfaces it walks through
+
+**Almost nothing in this app traps Tab, and that is the design rather than an omission.** Of the
+seventeen overlay surfaces a reader can open, twelve have no focus trap — every one that is not a
+native `<dialog>` — and for ten of those it is correct. `aria-modal` appears nowhere in the app as an
+attribute, and `inert` is used nowhere in the UI. Both absences are deliberate and argued at the
+surfaces themselves.
+
+So there are two kinds of surface, and which kind a thing is decides everything about its keyboard:
+
+| | **Modal** | **Modeless** |
+| --- | --- | --- |
+| what it is | a native `<dialog>` opened with `showModal()` | an `<aside role="dialog">`, a popover, an in-flow disclosure |
+| Tab | trapped inside it, **by the platform** | walks straight through, on purpose |
+| the article behind | inert, by the platform | fully live |
+| who closes it | the platform, on Escape | our own handler, in a fixed tier order |
+| when it closes | the platform restores focus | **we** put focus back, or the reader loses their place |
+| examples | the Lightbox, Feedback, the Command bar, the two full-screen pictures | the Comment, Chat and Annotate panels, the Dock drawer, the gutter disclosure, the hover cards |
+
+**Modeless is the default here, and the reason is the reading.** The Comment panel dodges out of the
+way while you drag out a new selection, because asking about several passages at once is the point;
+a trap would fight that. Trapping a surface is therefore a product decision, not a tidy-up.
+
+**What a modeless surface owes in exchange for not trapping** is the one thing the platform is doing
+for the modal ones, and it is where the defects were:
+
+- **If it takes focus when it opens, it must give it back when it closes.** Otherwise it unmounts the
+  element the reader is standing on, focus falls to `<body>`, and their next Tab starts again from
+  the top of the article. Invisible with a mouse, which is why three surfaces shipped without it.
+- **Give it back only if focus went nowhere.** A reader who has already clicked something real must
+  be left there. The test is `activeElement === null || activeElement === document.body`, written
+  once in `TitleEditor.tsx` and copied since.
+- **Name a destination for when the opener has gone.** Often it has: the gutter's Help button closes
+  its own disclosure before opening a chat, so the control that opened the panel is never there when
+  the panel closes.
+
+A surface that takes no focus at all owes nothing — the hover cards and the tooltips are in that
+class, and "no restore" is right for them.
+
+The inventory of all seventeen, and what each one does, is
+[the focus inventory](../plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-focus-inventory.md).
+**Escape is a separate question with a separate answer** — five tiers in a fixed dispatch order, a
+surface's tier being the whole of its authority, because nothing anywhere reads a z-index or another
+surface's state:
+[the escape inventory](../plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-escape-inventory.md).
+
+**One caveat for anyone testing this: jsdom has no Tab.** It implements no sequential focus
+navigation, no `showModal`, and no `inert` — all three of the mechanisms a trap is built from — and
+`input.select()` does not move focus there as it does in a browser. A jsdom test claiming to prove a
+trap is asserting the behaviour of a fake. `tests/tab-traversal-in-chrome.test.ts` drives a real
+Chrome for the two cases above; `tests/the-dock-drawer-is-not-a-modal.test.tsx` tests the two
+mechanisms a trap would *need*, which is what jsdom can honestly do.
+
 ## Where this leaves an older sketch
 
 [granularity-zoom.md § Interaction](granularity-zoom.md#interaction) originally gave ← / → to *zoom

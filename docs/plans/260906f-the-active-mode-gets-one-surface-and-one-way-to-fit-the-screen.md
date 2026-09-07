@@ -735,11 +735,41 @@ completing Stage 5 is not."* That is right, and it is the F13 move I would other
    `isConnected`, and name a fallback for the case where the control that opened it has gone.
    **Every close route**, not only the button.
 
-   **These two need a *captured, dynamic* opener, and that is what makes them different from step 5
-   below.** The control that opened Annotate is a selection in the prose; the one that opened a chat
-   draft may be a gutter chip that is gone by the time the dialog is. Chat has a second case of its
-   own: focused content is unmounted when the `draft` arm becomes the `thread` arm, **before** the
-   dialog closes at all, so "restore on unmount" does not cover it.
+   **Built for Chat; deliberately NOT built for Annotate, and that is a finding rather than an
+   omission.** Sol's F42 named both. Annotate is reachable only through `onMouseUp` after a drag
+   across the prose (`TableView.tsx`), and **a drag across non-focusable text has already blurred
+   whatever was focused** — measured in real Chrome, 2026-09-07: a focused button loses focus to
+   `BODY` during the drag. So Annotate opens from `<body>` and returns to `<body>`, losing nothing.
+   There is no keyboard route in at all. Adding a restore there would be machinery for a defect no
+   reader can reach.
+
+   **Chat is different, and more urgent than the inventory made it sound.** Its opener is the block
+   gutter's Help button, whose handler calls `setOpen(false)` **before** `onHelp(id)` — so the
+   disclosure collapses and takes the pressed button with it, and `isConnected` is false on *every*
+   ordinary path rather than on an edge case. The fallback is therefore what actually runs, and it is
+   the passage's own `.blk-more`: there is **no Chat button in the dock** to fall back to (its labels
+   are Commands, Comments, Metadata, Tweets, Spideryarn; Chat is a mode in the radiogroup), and
+   falling back to a mode switch would put the reader somewhere they had never been.
+
+   **Two bugs in the fix, both found by its own tests rather than by reading it**, and both worth
+   recording because neither is visible in the source:
+
+   - The guard "has focus fallen to `<body>`?" never fires, because **React runs the cleanup before
+     it detaches the subtree** — the composer is still the active element at that moment. The
+     question has to be *"was the focus I am about to destroy inside this panel?"*.
+   - **Child effects run before parent effects**, so a parent effect asking `document.activeElement`
+     on mount gets *the composer*, which has already focused itself — not the control the reader
+     pressed. It recorded the panel as its own opener. The opener is now captured during the first
+     render, before any of that. `CommentDialog` never hit either, because it takes focus in the same
+     effect that records the opener, so the read happens first by construction.
+
+   **Still unfixed, and written down instead:** Chat loses focused content when the `draft` arm
+   becomes the `thread` arm — the composer is unmounted by the swap, before the dialog closes at all,
+   so focus falls to `<body>` the moment the reader's first question is sent. Sol noticed the same
+   thing. The right destination is the thread's own composer, and choosing it changes what happens
+   after you press Enter, which is a product question rather than a focus repair. A test pins the
+   half that *is* this stage's business — that the close control does not steal the caret on that
+   swap — and its comment says the rest.
 5. **Surface 17: `RefereeHowCard`.** Missed by the first inventory because it is in flow — and as
    Sol's F41 says, being in flow removes the *trap* requirement, not the *return-focus* one. Its
    Close button is the focused element and `how.show(false)` unmounts it, so a keyboard reader who
@@ -783,10 +813,18 @@ completing Stage 5 is not."* That is right, and it is the F13 move I would other
 
    **This step is a focus-restore fix, not a focus-on-open one**, and confusing the two is what makes
    `{1}` look right.
-7. **Write the modal/modeless contract down** where a reader of the code meets it — the tier table
-   in [keyboard.md](../project/keyboard.md) gained Escape's order in stage 3 and this is its
-   sibling. Not a new rule: a statement of the one the code already follows, so the next surface has
-   something to be consistent with instead of a precedent to guess at.
+7. **Write the modal/modeless contract down** where a reader of the code meets it —
+   [keyboard.md § Tab, and the surfaces it walks through](../project/keyboard.md). Not a new rule: a
+   statement of the one the code already follows, so the next surface has something to be consistent
+   with instead of a precedent to guess at. It says what a modeless surface owes *in exchange for*
+   not trapping, which is the thing the three defects in this stage all failed to do, and it carries
+   the jsdom caveat so the next person does not write a trap test that asserts a fake.
+
+   **An earlier draft of this step said keyboard.md "gained Escape's order in stage 3". It did
+   not** — stage 3 put the tier order in the escape inventory and left the reader-facing doc alone,
+   and the sentence was written from memory rather than from the file. Found while checking that an
+   anchor this step wanted to link to existed; it did not either. Both corrected, and the section now
+   links to the escape inventory rather than to a heading nobody wrote.
 8. **A real-Chrome traversal check** for one native modal and one modeless surface, on the
    `mark-sign-in-chrome` pattern. Sol's F45 offered an alternative ending — declare it unreliable
    and record a manual pass instead — and **that escape hatch is closed, because the feasibility was
