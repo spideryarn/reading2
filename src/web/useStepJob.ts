@@ -34,14 +34,23 @@
  *
  * ## Who uses it
  *
- * **Nine, and this line said four until 2026-09-01 and eight until 2026-09-03**
- * — it named `useGlossary`, `useIdeas`, `useSummaries` and `src/web/Tweets.tsx`,
- * and `useSummaries` no longer exists. The list now is `useArc`, `useGlossary`,
- * `useIdeas`, `useIllustrated`, `useQuotes`, `useQuiz`, `useSketch`,
- * `useTimeline` and `src/web/Tweets.tsx`. Called out rather than quietly
- * corrected, twice now, because it is the same species of stale comment that
- * cost a day in 2026-08-27's CPU work: a quantity a file asserts and nothing
- * measures is a perfectly good reason to believe something false.
+ * **Ten, and this line said four until 2026-09-01, eight until 2026-09-03 and
+ * nine until 2026-09-07** — it named `useGlossary`, `useIdeas`, `useSummaries`
+ * and `src/web/Tweets.tsx`, and `useSummaries` no longer exists. The list now is
+ * `useArc`, `useGlossary`, `useIdeas`, `useIllustrated`, `useQuotes`, `useQuiz`,
+ * `useSketch`, `useTimeline`, `src/web/Tweets.tsx` and — since 2026-09-07 —
+ * `RerunRow` in `src/web/Metadata.tsx`. Called out rather than quietly
+ * corrected, three times now, because it is the same species of stale comment
+ * that cost a day in 2026-08-27's CPU work: a quantity a file asserts and
+ * nothing measures is a perfectly good reason to believe something false.
+ *
+ * **The tenth is nine mounts rather than one**, and it is the first caller that
+ * is not a mode's own panel: the Metadata page's *Generate it again* section
+ * puts a row per offered step on screen at once
+ * (docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md).
+ * A component per row rather than a loop of hooks, for the ordinary reason —
+ * and the nine subscriptions cost nine `useSyncExternalStore` subscriptions to
+ * one shared engine, not nine polls.
  *
  * The thread page came last, a day after the other three, because it had a
  * hundred lines of another session's uncommitted work in it on the day this was
@@ -84,10 +93,18 @@ interface StepRun<S extends StepName> {
    * Run it even though the step thinks its artefact is current.
    *
    * Turned into `force: [step]` — the step **named** — and never a positional
-   * or blanket force. **Every one of the nine steps this hook is used for is in
-   * `FORCE_ONLY_WHEN_NAMED`** (src/pipeline.ts); the two lists are the same nine
-   * names, checked on 2026-09-03, and it is not a coincidence — a step a reading
-   * surface offers a button for is a step that knows whether it is current.
+   * or blanket force. **Every step this hook is used for is in
+   * `FORCE_ONLY_WHEN_NAMED`** (src/pipeline.ts), and it is not a coincidence — a
+   * step a surface offers a button for is a step that knows whether it is
+   * current.
+   *
+   * The two lists were the same nine names when this was checked on 2026-09-03,
+   * and they are the same **ten** since 2026-09-07: the Metadata page's
+   * *Generate it again* rows brought `debate` in, which had been the one member
+   * of that set no surface ran through here. `METADATA_RERUN_STEPS`
+   * (src/rerun-steps.ts) is nine of those ten — `illustrated` is deliberately
+   * not offered there — and `tests/metadata-rerun-steps.test.ts` pins the
+   * membership rather than leaving it to this paragraph.
    * Being in that set means the force-cascade is not allowed to speak for them:
    * unnamed is unforced, silently, and the reader would watch a job start, run
    * and change nothing. (This said *"all four … `glossary`, `summary`, `ideas`,

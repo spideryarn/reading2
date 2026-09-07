@@ -305,7 +305,10 @@ worth knowing from here:
   own wrapper, and a wrapper of one heading plus one link scores to Readability as navigation — so
   `wiki_transformer.html` was reaching the reader with 19 of its 47 section headings. Taking the edit
   links out recovers all 47, and every MediaWiki article ingested before this had a hierarchy built
-  on a quarter of its headings.
+  on a quarter of its headings. **Those articles are not being repaired.** Greg decided on
+  2026-09-07 not to re-extract the shelf, so an article imported before this keeps the outline it
+  came in with until its reader re-imports it — the fix is forward-only, and if somebody asks why an
+  old Wikipedia page has almost no sections, this is why.
 - **What went is recorded as counts per selector, and nothing more.** They ride on `ExtractResult`
   and reach the log; they are deliberately **not** on `Meta`, which is persisted as columns
   ([database.md](database.md)), so the audit line stage D will show is a migration that waits for the
@@ -475,6 +478,15 @@ The rest is not fixed, and the largest of it is not truncation at all:
 (Wikipedia is the gentler of those two: the `<math>` is inside `style="display: none"` and the
 **188 fallback images survive**, so the reader sees every formula. What is lost is the machine-readable
 copy. The ACX case has no fallback — those headings are simply gone.)
+
+**That ACX number was challenged on 2026-09-07 and it held.** A reviewer read
+`probe.mts`'s `structure lost: h2 0/6 (0%)` as "none lost" and reported the claim stale. The numbers
+on that line were *kept*, not lost, so it meant the opposite — and re-measuring the fixture directly
+found 141 headings in the source and **19 in the output, all `h5`**, exactly the 19 the inventory
+named. `Part 1: Why don't schools work?` is still absent. Two things were fixed as a result, neither
+of them this paragraph: the probe now writes `h4 0 of 80 kept` so the direction cannot be misread,
+and `STRUCTURE` counts `h4`–`h6`, without which the summary could not see the 80 `h4`s this page
+loses at all.
 
 That matters here more than in most reading apps, because the table of contents and the
 granularity-zoom tree are the same structure, built from headings
