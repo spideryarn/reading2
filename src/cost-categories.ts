@@ -53,6 +53,7 @@
  * gate and agrees.
  */
 
+import type { AiJob } from "./models.js";
 import { DEFAULT_INGEST_STEPS, STEP_ORDER } from "./pipeline.js";
 
 /**
@@ -82,9 +83,14 @@ export const CATEGORY_MEANING: Record<CostCategory, string> = {
   "on-demand enrichment":
     "pipeline steps that are off the default — glossary, quotes, ideas, timeline, " +
     "quiz, sketch, tweets, arc. Somebody asked for each of these.",
+  /* ⟨This said "…dictation, embeddings, PDF transcription" until 2026-09-07.
+     PDF transcription was never in it: `pdf` runs inside the `extract` step and
+     every one of its rows is `job_step`. The prose asserted a row shape the
+     ledger has never held — GPT Sol, F4. The list now comes from
+     `JOB_DISPOSITION` below, which is the thing that decides.⟩ */
   "interactive request work":
     "recognised jobs recorded in request scope: chat, explain, meaning search, " +
-    "referee, quiz marking, dictation, embeddings, PDF transcription.",
+    "link hover cards, referee, quiz marking, dictation, embeddings.",
   voice: "live conversation — the realtime model and the separate transcriber.",
   "non-product": "eval and dev-CLI scope. Ours, not a reader's. Kept out of the per-owner spread.",
   unknown:
@@ -109,33 +115,127 @@ export interface CategoryFacts {
 }
 
 /**
- * **Request-scope jobs this classifier recognises**, enumerated rather than
- * inferred.
+ * **What each job is expected to do, decided one job at a time.**
  *
- * The tempting shape is `if (scopeKind === "request") return "interactive …"`,
- * and it is wrong for the reason the header gives: a new job would be swallowed
- * silently by the category with the widest mouth. Listing them means adding an
- * `AiJob` shows up in `unknown` on the next report, which is a nuisance that
- * lasts one line of edit and is the entire point.
+ * ## Why this is a `Record<AiJob, …>` and not a `Set<string>`
  *
- * `pdf` and `embeddings` sit here despite not being "text and search" in the
- * reading sense — a PDF transcription happens when somebody uploads one, and
- * embeddings are written so that meaning search can run. Both are request-scoped
- * reader-triggered work, which is what the category is actually named for.
+ * It was a `Set` of the request-scope jobs, enumerated rather than inferred, so
+ * that a new `AiJob` would reach `unknown` and be *visible* instead of being
+ * swallowed by the widest `else`. The comment called that "a nuisance that lasts
+ * one line of edit and is the entire point", and the design was right.
+ *
+ * **The delivery was not.** A `Set` you forgot to add to fails by printing a
+ * line in a report, and that line only reaches somebody who runs `npm run cost`
+ * and reads the `UNCLASSIFIED` block. `link-summary` — the hover cards on the
+ * article's own links, docs/project/links.md, a live reader-facing feature —
+ * sat in `unknown` from the day it shipped: 9 calls, $0.0030, found on
+ * 2026-09-07. Trivial money, which is exactly why nobody looked at it, and the
+ * mechanism rather than the amount is the point. The check existed, agreed with
+ * itself, and was not read — docs/reusable/silent-success.md.
+ *
+ * A `Record<AiJob, …>` moves the same nuisance one step earlier, to a **compile
+ * error in front of the person adding the job**, which is the only reader who is
+ * certain to be looking. `MODEL_ENV_VAR` in [models.ts](models.ts) is the
+ * precedent and says it in these words: *"`null` rather than a missing key, so
+ * adding a `Task` is a compile error here too — 'this one has no override'
+ * should be a decision somebody made rather than a line nobody wrote."*
+ *
+ * ## Four values, not two — GPT Sol, F4, 2026-09-07
+ *
+ * The obvious shape is a boolean: is this request-scope or not. It encodes the
+ * wrong fact. `AI_JOB_WIRE` is **transport** inventory — which API shape a job
+ * speaks — and says nothing about which collector is open when it runs. `pdf`,
+ * `pdf-frontmatter` and `illustrate` all run *inside* pipeline steps and are
+ * classified by `step_name`; `pdf` was in the interactive-request set anyway,
+ * and there is not one `request / pdf` row in the ledger to justify it.
+ *
+ * ## This says what a job is *expected* to do. It never overrides a row.
+ *
+ * A disposition is a claim about the code, and `costCategoryOf` still decides
+ * from the three columns the row actually carries. A `step-driven` job that
+ * turns up in request scope lands in `unknown` and gets printed — which is the
+ * design working, not a gap in it. Eval overlays are checked before the job for
+ * the same reason: an eval that exercises `chat` is recorded `job: "chat"`.
  */
-const INTERACTIVE_REQUEST_JOBS: ReadonlySet<string> = new Set([
-  "chat",
-  "explain",
-  "search",
-  "quiz-mark",
-  "referee-mirror",
-  "referee-criteria",
-  "referee-claims",
-  "referee-candidates",
-  "dictation",
-  "embeddings",
-  "pdf",
-]);
+export type JobDisposition =
+  /** A reader waits on it, in request scope. Its own category. */
+  | "interactive request work"
+  /** It runs inside a pipeline step; `step_name` says which, and decides. */
+  | "step-driven"
+  /** Live conversation — request scope, but priced and reported apart. */
+  | "voice"
+  /** Ours. A dev CLI or an eval, and no path a reader can reach. */
+  | "no product path";
+
+export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
+  /* The pipeline tasks. `labels` runs inside the `hierarchy` step, so the job
+     and the step differ — which is why the classifier reads the step. */
+  hierarchy: "step-driven",
+  labels: "step-driven",
+  arc: "step-driven",
+  tweets: "step-driven",
+  glossary: "step-driven",
+  ideas: "step-driven",
+  quotes: "step-driven",
+  sketch: "step-driven",
+  timeline: "step-driven",
+  illustrated: "step-driven",
+  quiz: "step-driven",
+  debate: "step-driven",
+  /* Three tasks a reader waits on with the page open. */
+  explain: "interactive request work",
+  chat: "interactive request work",
+  search: "interactive request work",
+  /* **The fix this table was written for.** Hover a link in the article and this
+     says how it stands to the piece being read — docs/project/links.md. It is
+     request-scope, reader-triggered, and was in no category at all. */
+  "link-summary": "interactive request work",
+  /* Marking an answer the reader just typed. */
+  "quiz-mark": "interactive request work",
+  /* The four referee stages. A peer reviewer is waiting on each —
+     docs/project/referee-mode.md. */
+  "referee-mirror": "interactive request work",
+  "referee-criteria": "interactive request work",
+  "referee-claims": "interactive request work",
+  "referee-candidates": "interactive request work",
+  /* Talking into a text box. Request scope, and on OpenRouter despite the model
+     being called `openai/gpt-transcribe` — a model named after a vendor is not a
+     bill from that vendor. docs/project/dictation.md. */
+  dictation: "interactive request work",
+  /* Written so meaning search can run. Reader-triggered, request scope. */
+  embeddings: "interactive request work",
+  /* **Step-driven, though it reads as interactive.** A PDF is transcribed by the
+     `extract` step; `job_step / pdf / extract` is 269 rows in the dev ledger and
+     `request / pdf` is none. `pdf` was in the interactive set until 2026-09-07
+     and the category's own prose claimed "PDF transcription" for it, which was
+     never true of a single row. GPT Sol, F4. */
+  pdf: "step-driven",
+  "pdf-frontmatter": "step-driven",
+  /* The Illustrated sub-mode's plate, bought inside the `illustrated` step. */
+  illustrate: "step-driven",
+  /* Both halves of a live session, told apart by `requested_model`. Priced on
+     two rate cards and reported apart from everything else, because one spoken
+     minute can cost most of an article's ingest. */
+  live_conversation: "voice",
+  /* `gjd-remote push-env`'s key-name classifier — a developer at a terminal. */
+  "env-proposal": "no product path",
+  /* A bake-off. Recorded in `eval` scope, which is checked first anyway. */
+  eval: "no product path",
+};
+
+/**
+ * **Request-scope jobs this classifier recognises**, derived from the table
+ * above rather than written twice.
+ *
+ * `voice` is not in here: `live_conversation` is request-scope too, and is
+ * caught by an earlier branch precisely so it cannot disappear into the
+ * category whose figure it would dominate.
+ */
+const INTERACTIVE_REQUEST_JOBS: ReadonlySet<string> = new Set(
+  Object.entries(JOB_DISPOSITION)
+    .filter(([, disposition]) => disposition === "interactive request work")
+    .map(([job]) => job),
+);
 
 const DEFAULT_STEPS: ReadonlySet<string> = new Set<string>(DEFAULT_INGEST_STEPS);
 const KNOWN_STEPS: ReadonlySet<string> = new Set<string>(STEP_ORDER);

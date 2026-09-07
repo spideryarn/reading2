@@ -14,9 +14,11 @@ import { describe, expect, it } from "vitest";
 import {
   COST_CATEGORIES,
   type CostCategory,
+  JOB_DISPOSITION,
   assertCategoriesCoverRows,
   costCategoryOf,
 } from "../src/cost-categories.js";
+import { AI_JOB_WIRE } from "../src/models.js";
 
 describe("classifying one row", () => {
   it("calls a default pipeline step default-step work, by its STEP not its job", () => {
@@ -172,5 +174,94 @@ describe("the category list itself", () => {
     for (const name of COST_CATEGORIES) {
       expect(name).not.toMatch(/upload|rerun|initial|first/i);
     }
+  });
+});
+
+/**
+ * **Every `AiJob` has to be placed by hand** — `JOB_DISPOSITION` in
+ * [src/cost-categories.ts](../src/cost-categories.ts).
+ *
+ * The classifier already enumerated request-scope jobs rather than catching
+ * them, precisely so that a new `AiJob` would land in `unknown` instead of
+ * being absorbed by the widest `else`, and its comment called that *"a nuisance
+ * that lasts one line of edit and is the entire point."*
+ *
+ * The design was right and the delivery was not. The nuisance is only delivered
+ * to somebody who runs `npm run cost` and reads the `UNCLASSIFIED` block —
+ * and `link-summary`, a live reader-facing feature (docs/project/links.md),
+ * sat there unclassified from the day it shipped, at $0.0030 across 9 calls.
+ * Trivial money, which is exactly why nobody looked. The check existed, agreed,
+ * and was not read: docs/reusable/silent-success.md.
+ *
+ * So the table below is `Record<AiJob, …>`, and the guard is the **compiler** —
+ * adding a job without placing it is a build error, delivered to the person who
+ * added it. GPT Sol's F4, 2026-09-07, made it four-valued rather than a
+ * yes/no: `AI_JOB_WIRE` is transport inventory, not scope inventory, and a
+ * binary split would have encoded the wrong fact about `pdf`, `pdf-frontmatter`
+ * and `illustrate`, which run inside pipeline steps and are classified by their
+ * step name.
+ */
+describe("placing every job the app can bill for", () => {
+  it("classifies link-summary as interactive request work, which it did not until 2026-09-07", () => {
+    /* The one-line fix the report had been asking for since the feature
+       shipped. `npm run cost -- --owners --all` printed exactly this row under
+       UNCLASSIFIED: `request / link-summary / —  9 call(s)  $0.0030`. */
+    expect(costCategoryOf({ scopeKind: "request", job: "link-summary", stepName: null })).toBe(
+      "interactive request work",
+    );
+  });
+
+  it("places every job in AI_JOB_WIRE, so a new one cannot arrive unplaced", () => {
+    /* The compiler already refuses an unplaced job — this is the runtime half,
+       and it earns its place by catching what the compiler cannot: a widening
+       cast, or a job added to AI_JOB_WIRE through a spread that TypeScript
+       accepts structurally. The two tables are independent statements about the
+       same set and must agree. */
+    const wired = Object.keys(AI_JOB_WIRE).sort();
+    const placed = Object.keys(JOB_DISPOSITION).sort();
+    expect(placed).toEqual(wired);
+  });
+
+  it("agrees with the classifier about which jobs are interactive", () => {
+    /* The table is the source and `costCategoryOf` is the consumer; a job marked
+       interactive that the classifier does not recognise would be a table nobody
+       reads. Checked in both directions on purpose. */
+    for (const [job, disposition] of Object.entries(JOB_DISPOSITION)) {
+      const category = costCategoryOf({ scopeKind: "request", job, stepName: null });
+      if (disposition === "interactive request work") {
+        expect(category).toBe("interactive request work");
+      } else if (disposition === "voice") {
+        expect(category).toBe("voice");
+      } else {
+        /* Step-driven and no-product jobs are not *expected* in request scope.
+           If one turns up there anyway the row is visible rather than absorbed,
+           which is the whole design — the table says what a job is expected to
+           do and never overrides what a row actually says. */
+        expect(category).toBe("unknown");
+      }
+    }
+  });
+
+  it("still sends a step-driven job to its step's category when it runs as a step", () => {
+    /* The other half of the sentence above. `pdf` is step-driven, and a real
+       `job_step / pdf / extract` row — 269 of them in the dev ledger — is
+       default-step work because `extract` is in DEFAULT_INGEST_STEPS. The
+       disposition table must not have taken that over. */
+    expect(costCategoryOf({ scopeKind: "job_step", job: "pdf", stepName: "extract" })).toBe(
+      "default-step work",
+    );
+    expect(costCategoryOf({ scopeKind: "job_step", job: "illustrate", stepName: "illustrated" })).toBe(
+      "on-demand enrichment",
+    );
+  });
+
+  it("keeps an eval overlay non-product whatever the job is", () => {
+    /* An eval that exercises `chat` is recorded `job: "chat"`, and the scope is
+       checked before the job for that reason. The disposition table must not
+       have moved that check. */
+    expect(costCategoryOf({ scopeKind: "eval", job: "chat", stepName: null })).toBe("non-product");
+    expect(costCategoryOf({ scopeKind: "eval", job: "link-summary", stepName: null })).toBe(
+      "non-product",
+    );
   });
 });

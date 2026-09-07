@@ -935,12 +935,35 @@ nothing red.
 `cost-ledger-shortfall`, `annotation-cost`, `cost-eval`, `request-spend`, `job-spend-fields` — 296
 tests green. `npm run typecheck` clean.
 
-**Stage 7 — no reader-facing job goes uncategorised by accident.** F4's four-valued disposition
-table, keyed on `AiJob` so the compiler refuses a new job that nobody has placed: *interactive
-request work*, *step-driven*, *voice*, *no product path*. `link-summary` is placed as interactive,
-which is the one-line fix the report has been asking for since it shipped. Historical and
-eval-overlay combinations still reach `unknown` — the table says what a job is *expected* to do, and
-never overrides what a row actually says.
+**Stage 7 — no reader-facing job goes uncategorised by accident. ✅ Built, 2026-09-07.** F4's
+four-valued disposition table, `JOB_DISPOSITION: Record<AiJob, …>`, so the **compiler** refuses a new
+job that nobody has placed: *interactive request work*, *step-driven*, *voice*, *no product path*.
+`link-summary` is placed as interactive, which is the one-line fix the report had been asking for
+since the feature shipped. Historical and eval-overlay combinations still reach `unknown` — the table
+says what a job is *expected* to do and never overrides what a row actually says, and a test holds
+both halves of that sentence.
+
+The precedent for the shape is in this repo already, and says it better than a new argument would:
+`MODEL_ENV_VAR` in [models.ts](../../src/models.ts) — *"`null` rather than a missing key, so adding a
+`Task` is a compile error here too — 'this one has no override' should be a decision somebody made
+rather than a line nobody wrote."*
+
+**Two things the table corrected on the way, both of which had been asserted and were never true:**
+
+- `pdf` was in the interactive-request set, and `CATEGORY_MEANING` advertised *"PDF transcription"*
+  as interactive work. There is not one `request / pdf` row in the ledger and never has been —
+  `job_step / pdf / extract` is 269 rows. The prose described a row shape that does not exist.
+- Sol's reason for four values rather than a boolean is the general form of that:
+  **`AI_JOB_WIRE` is transport inventory, not scope inventory.** Which API shape a job speaks says
+  nothing about which collector is open when it runs.
+
+**Measured after:** `npm run cost -- --owners --all` prints **no `UNCLASSIFIED` block at all** — it
+had 9 calls in it before — and *interactive request work* goes 52 → 61 calls, which is those 9 rows
+arriving in the category they belong to.
+
+**Done:** 20 tests in `tests/cost-categories.test.ts`, five of them new and three watched red first.
+`npm run cycles` green — the new `import type { AiJob }` adds no edge that `pipeline.ts` did not
+already carry.
 
 **Stage 8 — the report says which bill, and what the cap cannot see.** F3's shape, not this pass's:
 per-account recorded subtotals split by the three money pockets, and a fixed note rather than a
