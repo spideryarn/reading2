@@ -405,100 +405,30 @@
    `@property` version of this that could not survive the build. */
 /* spine-width-check: GIST_MIN + PROSE_MIN + SPINE_W - 1 */
 @media (max-height: 620px), (max-width: 731px) {
+  /* **The top bar's half of this switch left on 2026-09-07** — `--bar-bottom`,
+     `--bar-hide`, the `transition: top` list and the two "keep the bar" guards
+     are all in shell.css § the bar that leaves while you read now, because the
+     bar hides at every width and this query is the wrong home for a rule that
+     is not about a narrow window. What is left here is the *bottom* bar, which
+     deliberately did not come along.
+
+     Greg, 2026-09-07: *"can we make it so that it's invisible most of the time
+     except when we scroll (a bit like we already do on mobile to save real
+     estate)?"*
+     docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md. */
   :root[data-bars="hidden"] {
-    /* **`var(--safe-top)`, not `0px`.** This is the y the table head parks at
-       once the bar has gone, and in the installed app y=0 is under the clock —
-       so `0px` would put the column headings behind the time on the one kind of
-       device this whole query exists for, and look perfect everywhere else.
-       At rest `--bar-bottom` is `--bar-h + --safe-top`; hidden it falls to the
-       inset and no further. */
-    --bar-bottom: var(--safe-top);
-    /* The bar's own travel, which is NOT the change in `--bar-bottom` — see
-       `--bar-hide` in § tokens for the 44px of chrome that would otherwise be
-       left drawn behind the clock. */
-    --bar-hide: calc(-1 * (var(--bar-h) + var(--safe-top)));
     /* The bottom bar joins the same switch, which it never did before
        2026-08-28 — it cost 40px at every scroll position and § below shrank it
        to 2.2rem to claw some back, which is the wrong direction for a bar you
        have to hit with a thumb. Now it leaves entirely while you read, and can
        afford to be 52px tall when it is there (§ a coarse pointer).
-       docs/plans/260828av-mobile-screen-real-estate.md § 3. */
+       docs/plans/260828av-mobile-screen-real-estate.md § 3.
+
+       **And it is still only here**, which is the one asymmetry in that plan
+       and is deliberate: the Dock names the mode, is the way home and is the
+       way out of every mode, and it joined this switch because 124px of a
+       390px viewport was desperate. A laptop has the room. */
     --dock-bottom: 0px;
-  }
-  /* Each consumer animates its own ordinary property. `top` is animatable on a
-     sticky or fixed element, and there are only ever four of these on screen at
-     once, so the layout cost of the 180ms is not worth avoiding.
-
-     Scoped like the rule that makes these sticky in the first place (§ the head
-     with no row) — bare, this handed the shelf's and an article's own header
-     cells a `transition: top` written for chrome that slides under a bar they
-     do not have. */
-  :where(table.zoom > thead) > tr > th,
-  td.gist .sticky,
-  .spine,
-  .mode-band,
-  .reader:has(table.zoom.overflowing)::after {
-    transition: top 0.18s ease;
-  }
-
-  /* `td.gist .sticky` is in that list because it was missed first time and
-     snapped while everything around it slid — GPT Sol, 2026-08-27. One thing it
-     does **not** cover: the column-context panels are positioned by JS
-     (useColumnContext.ts), which samples on scroll, so for up to 180ms after the
-     bar moves a panel can sit up to 44px out of step. In practice the bar only
-     ever moves *because* the reader is scrolling, so another sample is moments
-     away; it is a transient, not a resting state. If it ever looks wrong,
-     the fix is to re-sample on `transitionend` rather than to drop the slide. */
-  /* **Never hide a bar somebody is using.** A keyboard reader tabbing along the
-     granularity pills scrolls the page as focus moves, and without this the
-     control they are on slides off the top mid-tab — focus lands somewhere
-     invisible and the page looks broken.
-
-     `:root:has(…)` rather than the obvious `.controls:focus-within`, and the
-     difference is the whole rule: `--bar-bottom` is an inherited property that
-     only `:root` ever sets, and the table head reads it too. Declared on the
-     bar itself it would bring the bar back down on top of a header still parked
-     at the top of the viewport. Whatever moves this has to move both, so it has
-     to be set where both inherit from. Specificity (0,3,0) beats the attribute
-     rule above whichever order they end up in. */
-  /**
-   * **And `.mode-band`, since 2026-08-31** — the bars stay while a mode is open.
-   * This is the fix for a real complaint rather than a tidy-up:
-   *
-   * > on mobile I did find that I sometimes struggled to get back to the main
-   * > text (e.g. within the Search mode when the keyboard was open)
-   * >
-   * > — Greg, 2026-08-31
-   *
-   * Measured at 390 × 740 with a real wheel event: one scroll down in Search
-   * mode took `.controls` to `y: -44` and `.dock` to `y: 740`, so **both** exits
-   * left the screen at once — the close button at the top and the dock's mode
-   * buttons at the bottom. The keyboard then covers roughly the bottom 300px
-   * anyway, because index.html deliberately does not set
-   * `interactive-widget=resizes-content` (see `.cmt-dialog` for why), so a fixed
-   * bar at the foot of the layout viewport is behind it. Between them there was
-   * no way out of the mode that did not start with scrolling back up.
-   *
-   * **And hiding the bars was buying nothing in this state.** § a narrow window
-   * makes the band cover the whole article on a phone, so the 44px this query
-   * reclaims is 44px of something already behind a panel. The reader was paying
-   * the only price the rule has — chrome that is not where they left it — for a
-   * benefit that does not exist here.
-   *
-   * **In the guard rather than as a `:not()` on the rule above**, and that is
-   * the specificity argument the sibling guard below sets out at length:
-   * `:root[data-bars="hidden"]:not(:has(.mode-band))` would be (0,3,0), a tie
-   * with these guards, decided by source order — the exact fragility GPT Sol
-   * caught here on 2026-08-28. Adding an argument to a `:has()` changes nothing,
-   * because `:has()` takes its *most specific* argument and `.controls:focus-within`
-   * is still it. This list is the list of reasons the bars must stay, and this
-   * is another one. docs/plans/plain-mode-and-the-way-out.md § 1.
-   */
-  :root:has(.controls:focus-within, .mode-band) {
-    --bar-bottom: calc(var(--bar-h) + var(--safe-top));
-    /* Both, or the bar a keyboard reader is standing in stays off the top of
-       the screen while everything under it politely moves down to make room. */
-    --bar-hide: 0px;
   }
   /* The same guard for the bottom bar, and it needs two conditions rather than
      one. `:focus-within` is the keyboard half — a reader tabbing along thirteen
@@ -546,7 +476,13 @@
     --dock-bottom: var(--dock-space);
   }
 
-  /* **And when a mode opens, both bars arrive rather than slide.**
+  /* **And when a mode opens, the dock arrives rather than slides.**
+
+     **`.controls` left this rule on 2026-09-07** and is in shell.css § the bar
+     that leaves while you read, with the top bar's half of everything else.
+     What is below is the dock's half, and it is still only here because the
+     dock still only hides here. The measurement in the middle was taken of
+     both, so it is kept whole rather than halved.
 
      The two guards above bring the bars back the instant `.mode-band` exists.
      The band is `position: fixed` and takes its final bounds on the same frame;
@@ -572,7 +508,6 @@
 
      GPT Sol found the ordering reviewing the first fix, 2026-09-03, and
      predicted it from the CSS alone. */
-  :root:has(.mode-band) .controls,
   :root:has(.mode-band) .dock {
     transition: none;
   }
@@ -728,12 +663,25 @@
   .controls,
   .dock,
   .install-hint,
-  /* Scoped for the reason § the head with no row gives — this is the reduced-motion
-     half of the transition it turns off, so the two selectors have to match. */
-  :where(table.zoom > thead) > tr > th,
   td.gist .sticky,
   .spine,
-  .mode-band {
+  .mode-band,
+  /* **The overflow fade was missing from this list and is not missing from the
+     one it mirrors** — it is `position: fixed` at `top: var(--bar-bottom)` and
+     it draws the trailing edge of an overflowing table (table.css § overflow),
+     so it is as visible as the spine beside it. A pre-existing omission rather
+     than a new one, found by GPT Sol reviewing the plan that took this rule to
+     every width (F3, 2026-09-07): while only a phone hid its bars it was one
+     unwanted 180ms slide on a narrow screen; on a laptop it is one on every
+     scroll direction change, for a reader who asked for none. */
+  .reader:has(table.zoom.overflowing)::after,
+  /* **At the same specificity as the rule it overrides**, which is why this is
+     not a bare `.ctx-panel`: § the panels and the measuring stick writes
+     `:root[data-bar-moving] .ctx-panel`, (0,2,0), and a bare class is (0,1,0) —
+     it would lose whatever the source order, and the symptom is a reader who
+     asked for less motion getting the slide anyway. `:where()` is no help here
+     either; it would zero the very specificity being matched. */
+  :root[data-bar-moving] .ctx-panel {
     transition: none;
   }
 }

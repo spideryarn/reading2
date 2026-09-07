@@ -473,6 +473,144 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   transition: transform 0.18s ease;
 }
 
+/* ------------------------------- § the bar that leaves while you read ------
+   **The bar gets out of the way while you read forwards and comes back the
+   moment you scroll back — at every width, since 2026-09-07.**
+
+   > The Hierarchy mode has a top bar. Can we make it so that it's invisible
+   > most of the time except when we scroll (a bit like we already do on mobile
+   > to save real estate)?
+   >
+   > — Greg, 2026-09-07
+
+   The direction is watched in scroll.ts § watchBarVisibility, which sets
+   `data-bars` on the root element and re-renders nothing — performance.md is
+   why a React state here would have been the expensive way to do it.
+
+   **This block lived in narrow-window.css § a small device until 2026-09-07**,
+   inside `@media (max-height: 620px), (max-width: 731px)`, and it moved here
+   rather than losing its query in place: it is a fact about `.controls`, which
+   this file owns, and leaving it in the phone file would have said it was about
+   a narrow window when it is not any more. **The bottom bar did not come with
+   it** — `--dock-bottom` is still in that query, and the reason is written
+   there. docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md.
+
+   > [!WARNING]
+   > **The two guards below have to keep their specificity, and if they lose it
+   > nothing will say so.** They win over `:root[data-bars="hidden"]` by being
+   > (0,3,0) against (0,2,0) — `:has()` takes its *most specific* argument — and
+   > NOT by source order. That mattered less while both lived in the same block
+   > near the end of the import order; this file is imported **second**, so a
+   > guard degraded to a tie would now lose rather than win. The symptom is a
+   > bar that slides out from under a keyboard reader mid-tab, which no test we
+   > have can see. GPT Sol caught a version of exactly this tie on 2026-08-28. */
+:root[data-bars="hidden"] {
+  /* **`var(--safe-top)`, not `0px`.** This is the y the table head parks at
+     once the bar has gone, and in the installed app y=0 is under the clock — so
+     `0px` would put the column headings behind the time on a phone and look
+     perfect everywhere else. At rest `--bar-bottom` is `--bar-h + --safe-top`;
+     hidden it falls to the inset and no further. */
+  --bar-bottom: var(--safe-top);
+  /* The bar's own travel, which is NOT the change in `--bar-bottom` — see
+     `--bar-hide` in § tokens for the 44px of chrome that would otherwise be
+     left drawn behind the clock. */
+  --bar-hide: calc(-1 * (var(--bar-h) + var(--safe-top)));
+}
+
+/* Each consumer animates its own ordinary property. `top` is animatable on a
+   sticky or fixed element, and there are only ever a handful of these on screen
+   at once, so the layout cost of the 180ms is not worth avoiding.
+
+   Scoped like the rule that makes these sticky in the first place (table.css
+   § the head with no row) — bare, this handed the shelf's and an article's own
+   header cells a `transition: top` written for chrome that slides under a bar
+   they do not have.
+
+   `td.gist .sticky` is in the list because it was missed first time and snapped
+   while everything around it slid — GPT Sol, 2026-08-27.
+
+   **Two things are deliberately NOT in it**, and the pair is the whole of
+   column-context.css § the panels and the measuring stick:
+
+    - `:where(table.zoom > thead) > tr > th` **was** here and went on 2026-09-07.
+      Animating it was never visible — since 2026-09-05 that row is `height: 0`
+      with its labels in `.sr-only` spans — and it was actively harmful, because
+      useColumnContext.ts derives every fisheye panel's `top` from
+      `th.getBoundingClientRect().bottom`. While the measuring stick travelled,
+      every panel chased a number that had not arrived.
+    - `.ctx-panel` is not here either, but for the opposite reason: it needs the
+      slide and must not have it at any other time. Its `top` also changes on
+      ordinary scrolling, so its transition is scoped to `[data-bar-moving]`. */
+td.gist .sticky,
+.spine,
+.mode-band,
+.reader:has(table.zoom.overflowing)::after {
+  transition: top 0.18s ease;
+}
+
+/* **Never hide a bar somebody is using.** A keyboard reader tabbing along the
+   granularity pills scrolls the page as focus moves, and without this the
+   control they are on slides off the top mid-tab — focus lands somewhere
+   invisible and the page looks broken. That is Hierarchy, which is the mode
+   this whole rule was extended to laptops for.
+
+   `:root:has(…)` rather than the obvious `.controls:focus-within`, and the
+   difference is the whole rule: `--bar-bottom` is an inherited property that
+   only `:root` ever sets, and the table head reads it too. Declared on the bar
+   itself it would bring the bar back down on top of a header still parked at
+   the top of the viewport. Whatever moves this has to move both, so it has to
+   be set where both inherit from.
+
+   **And `.mode-band`, since 2026-08-31** — the bars stay while a mode is open.
+   The fix for a real complaint rather than a tidy-up:
+
+   > on mobile I did find that I sometimes struggled to get back to the main
+   > text (e.g. within the Search mode when the keyboard was open)
+   >
+   > — Greg, 2026-08-31
+
+   Measured at 390 × 740 with a real wheel event: one scroll down in Search mode
+   took `.controls` to `y: -44` and `.dock` to `y: 740`, so **both** exits left
+   the screen at once. Between them there was no way out of the mode that did
+   not start with scrolling back up.
+
+   **Kept when this came to laptops, and the reasoning is different there.** On a
+   phone the argument was that § a narrow window makes the band cover the whole
+   article anyway, so the 44px was 44px of something already behind a panel. On a
+   laptop neither half of that holds — but the bar is *empty* in a band mode (its
+   only content is Hierarchy's pills), so dropping the guard would slide a band
+   and every sticky gist to reclaim a blank strip. Reclaiming that strip properly
+   means not drawing it, which is
+   docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md
+   stage 3. So the rule reads: **the bar hides in Plain and Hierarchy, and stands
+   still wherever a band is anchored to it.**
+
+   **In the guard rather than as a `:not()` on the rule above.**
+   `:root[data-bars="hidden"]:not(:has(.mode-band))` would be (0,3,0), a tie with
+   this, decided by source order — the exact fragility GPT Sol caught on
+   2026-08-28. Adding an argument to a `:has()` changes nothing, because `:has()`
+   takes its most specific argument and `.controls:focus-within` is still it.
+   docs/plans/plain-mode-and-the-way-out.md § 1. */
+:root:has(.controls:focus-within, .mode-band) {
+  --bar-bottom: calc(var(--bar-h) + var(--safe-top));
+  /* Both, or the bar a keyboard reader is standing in stays off the top of the
+     screen while everything under it politely moves down to make room. */
+  --bar-hide: 0px;
+}
+
+/* **And when a mode opens, the bar arrives rather than slides.** The guard above
+   brings it back the instant `.mode-band` exists; the band is `position: fixed`
+   and takes its final bounds on the same frame, so for the 180ms the bar spends
+   travelling the band is the right size with nothing above it and the article is
+   painted at the top of the screen. A slide is how a bar announces that it is
+   getting out of the way; a bar coming back because the reader opened a panel is
+   not announcing anything. Nothing else here transitions on `.mode-band`, so
+   this only ever fires on that switch. The dock's twin is in narrow-window.css,
+   where the dock's half of the switch lives. GPT Sol, 2026-09-03. */
+:root:has(.mode-band) .controls {
+  transition: none;
+}
+
 /* **There is no `.controls button` rule at all, and that is not an oversight.**
    The granularity pills used to be styled from here, by a `.controls button`
    block plus `:hover` and `.on`. They are shadcn `Toggle`s now, carrying the

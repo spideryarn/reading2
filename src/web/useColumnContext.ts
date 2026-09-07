@@ -170,11 +170,35 @@ export function useColumnContext({
     // every panel and used to need a window resize to be noticed.
     const ro = table ? new ResizeObserver(schedule) : null;
     if (table && ro) ro.observe(table);
+    /* **And the bar leaving is a third way the answer changes**, since
+       2026-09-07 — the one that is not a scroll even though a scroll caused it.
+       `--bar-bottom` falls, the sticky head moves up to meet it, and every
+       panel's `top` is that head's bottom edge.
+
+       It cannot be left to the scroll listener above. `apply()` in scroll.ts
+       and `measure()` here are both `requestAnimationFrame` callbacks in the
+       same frame, and which runs first is whichever effect registered first —
+       so half the time this would sample the pre-flip position and, for a
+       reader who **stopped scrolling on that very frame**, nothing would ever
+       sample again. That is the only case where the 180ms transient becomes a
+       resting state, and it is the case narrow-window.css § a small device
+       predicted in a comment in 2026-08-27.
+
+       A `MutationObserver` fires as a microtask after the attribute is written,
+       so the sample lands a frame later whatever the order — correct rather
+       than probable. tests/bar-motion.test.tsx mutates the attribute with no
+       scroll event at all. */
+    const bars = new MutationObserver(schedule);
+    bars.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-bars"],
+    });
     measure();
     return () => {
       window.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
       ro?.disconnect();
+      bars.disconnect();
       probe.remove();
       if (frame) cancelAnimationFrame(frame);
     };

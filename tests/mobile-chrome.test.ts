@@ -168,6 +168,46 @@ describe("stickyOffset with a status bar", () => {
     expect(stickyOffset()).toBe(SAFE_TOP); // 47, not 0
   });
 
+  /**
+   * **A bar that is halfway back reserves the room it is going to need.**
+   *
+   * `stickyOffset` returned the bar's *current* coverage, and that is only the
+   * right answer at rest. `scrollToBlock` calls this **once** and hands the
+   * number to `glide()` as a fixed destination; `markOurScroll` then stops the
+   * bar reacting to the jump, but it cannot stop a CSS transition that is
+   * already running. So a reader who scrolls up — starting the 180ms reveal —
+   * and clicks a gist 90ms later got a target placed under a bar on its way
+   * back to covering it, and the row they asked for finished underneath the
+   * chrome.
+   *
+   * Both directions are posed because they are not symmetrical. Mid-*reveal*
+   * the new answer is exactly right. Mid-*hide* it over-reserves by up to a
+   * bar's height, and that is the deliberate way round: an over-reserved target
+   * lands a little lower than it needed to, an under-reserved one lands
+   * invisible.
+   *
+   * GPT Sol F2, reviewing
+   * docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md,
+   * which extends this animation from phones to every laptop.
+   */
+  it("reserves the whole bar while the bar is still travelling", () => {
+    // Halfway through the reveal: 22 of 44 drawn, and climbing.
+    poseBar(SAFE_TOP + BAR_H / 2, SAFE_TOP);
+    expect(stickyOffset()).toBe(SAFE_TOP + BAR_H); // not 69
+
+    // Halfway through the hide: 22 of 44 drawn, and falling.
+    document.body.innerHTML = "";
+    poseBar(SAFE_TOP + BAR_H / 2, SAFE_TOP);
+    expect(stickyOffset()).toBe(SAFE_TOP + BAR_H);
+
+    /* And a sliver still showing is still "the bar is there". The boundary is
+       the inset, not zero, for the same reason the floor is: `.reader::before`
+       paints that strip whatever the bar is doing. */
+    document.body.innerHTML = "";
+    poseBar(SAFE_TOP + 1, SAFE_TOP);
+    expect(stickyOffset()).toBe(SAFE_TOP + BAR_H);
+  });
+
   it("is unchanged on a machine with no status bar", () => {
     // The control: every case collapses to the bar and nothing else.
     poseBar(BAR_H, 0);
