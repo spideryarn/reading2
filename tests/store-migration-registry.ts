@@ -2510,6 +2510,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/pg-session-real-step.test.ts": "private-postgres",
   "tests/pipeline-slug-claim.test.ts": "private-postgres",
   "tests/plans-match-tiers.test.ts": "private-postgres",
+  /* Stage 2b of 260906a: publication queues the free `labels` job. Postgres
+     throughout — it publishes real revisions, claims a real job and inserts a
+     real `ingest_events` row to prove the successor never settles one. */
+  "tests/publication-enqueues-the-labels-successor.test.ts": "private-postgres",
   /* The lane's own negative control, and it has to be *in* the lane to be one:
      it asks Postgres which database this worker landed in after a
      `vi.resetModules()`, which is a question only a worker with a minted

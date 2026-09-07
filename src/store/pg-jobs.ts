@@ -73,10 +73,13 @@ import { READ_COMMITTED } from "./isolation.js";
 import { leaseIsOver, liveAttempt } from "./job-fence.js";
 import { RELEASED, releaseReservations, settleReservation } from "./pg-billing.js";
 import { jobs, queueState } from "../db/schema.js";
+import { mintId } from "../ids.js";
 import { INTERRUPTED } from "../messages.js";
 import type { FailureKind } from "../messages.js";
-import type { Job, JobStatus, JobStep, OwnerId } from "../types.js";
+import { stepLabel } from "../pipeline.js";
+import type { Job, JobStatus, JobStep, OwnerId, StepName } from "../types.js";
 import {
+  workKeyFor,
   type ClaimOutcome,
   type ClaimRefusal,
   type EnqueueOutcome,
@@ -213,6 +216,88 @@ export async function ingestProvenanceOf(
     .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner)))
     .limit(1);
   return row;
+}
+
+/**
+ * Queue a follow-up job **on the caller's transaction**, so that whatever made
+ * it necessary and the job that answers it become true together.
+ *
+ * ## Why this is not `enqueueOrGet`
+ *
+ * `tryEnqueue` below opens `const db = getDb()` and inserts on the pool. A
+ * publication that enqueued through it would commit the pointer and the job
+ * separately, and the gap between them is an article that says its labels are
+ * still arriving with nothing anywhere queued to make them.
+ *
+ * The `Executor = Db | Tx` doctrine above is drawn around job *transitions*, and
+ * `enqueueOrGet` is pointedly not on that list. The recorded reason is that it
+ * takes a **second pooled connection** while `DATABASE_POOL_MAX` is 5 — which is
+ * an argument against calling it while holding the billing lock, and **not** an
+ * argument against inserting on an executor you already hold. So this is a
+ * thirty-line insert rather than `tx` threaded through `enqueue`'s three
+ * hundred. Written down because the next reader will otherwise "fix" it.
+ *
+ * ## It spends no quota, and that is by omission rather than by a guard
+ *
+ * There is no `ingestEventId` here and there is no parameter for one. The only
+ * durable fact that makes a job chargeable is `jobs.ingest_event_id`
+ * (src/db/schema.ts § `ingest_events`), written by `tryEnqueue` from the ticket
+ * `withIngestSlot` hands it at the route — and `settleReservation`
+ * (src/store/pg-billing.ts) returns on its first line when there is none. So a
+ * successor settles nothing on every ending, and the only two ways to charge one
+ * by accident are to route it through a request body carrying a `url`, or to
+ * copy a parent's `ingestEventId` onto it. Neither is reachable from this
+ * signature. tests/publication-enqueues-the-labels-successor.test.ts names both.
+ *
+ * ## The shape, and why each field is what it is
+ *
+ * `reservesName: false` and `urlKey: null`, so the row sits outside
+ * `jobs_reserved_slug` and `jobs_active_source` and simply queues behind
+ * whatever is already on this article. No `profile`: the steps a successor runs
+ * take none, and putting one on would give identical work distinct work keys.
+ * No `url`: the job is about an article, not an address, and `enqueue`'s
+ * `urlForSlug` normalisation is exactly the thing that makes `Job.url` useless
+ * for telling free work from paid.
+ *
+ * `onConflictDoNothing`, so a second publication for one article collapses onto
+ * the successor already queued rather than erroring — `jobs_active_work` is
+ * `(owner_id, slug, work_key)` over the active statuses, and that dedupe is the
+ * behaviour we want rather than one we tolerate.
+ *
+ * Returns the job id when a row was inserted, and `null` when one was already
+ * there. Nothing here drives it: `pump` is a no-op under `VERCEL` and could not
+ * be called from inside a transaction anyway. The browser's `jobEngine` drives
+ * every queued job the signed-in owner has, from any page —
+ * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md § Who actually
+ * runs the successor.
+ */
+export async function enqueueSuccessorIn(
+  tx: Tx,
+  successor: { ownerId: OwnerId; slug: string; steps: StepName[] },
+): Promise<string | null> {
+  const { ownerId, slug, steps } = successor;
+  const id = mintId();
+  const inserted = await tx
+    .insert(jobs)
+    .values({
+      id,
+      ownerId,
+      slug,
+      steps: steps.map((name) => ({ name, label: stepLabel(name, false), status: "pending" })),
+      status: "queued",
+      /* **The canonical builder, not a second hashing of the same question.**
+         `sameWork` (src/jobs.ts) is the prose specification it satisfies, and
+         `tests/jobs.test.ts` holds the two together. No profile, no upload and
+         no URL, so this is a constant per step list — which is precisely what
+         makes the conflict below collapse two publications onto one job. */
+      workKey: workKeyFor(steps, new Set()),
+      reservesName: false,
+      urlKey: null,
+      ingestEventId: null,
+    })
+    .onConflictDoNothing()
+    .returning({ id: jobs.id });
+  return inserted[0]?.id ?? null;
 }
 
 /** One insert-or-look. `null` means the holder finished in between; ask again. */

@@ -48,10 +48,59 @@
  * See docs/plans/260827h-durable-queue-and-uploads.md.
  */
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
+import { urlKey } from "../ingest.js";
 import type { FailureKind } from "../messages.js";
-import type { Job, JobStatus, JobStep, OwnerId } from "../types.js";
+import type { Job, JobStatus, JobStep, JobUpload, OwnerId, StepName } from "../types.js";
+
+/**
+ * A fingerprint of exactly what `sameWork` compares, computed once.
+ *
+ * **Immutable, which `job.steps` is not.** Statuses move as a job runs, so a
+ * key derived from the record on each comparison would answer differently at
+ * the end of a job than at the start — and the question being asked is *is this
+ * the same request*, which does not change because a step finished.
+ *
+ * It has to hash the same five things `sameWork` reads and nothing else, or
+ * there are two rules for one question and they drift. `tests/jobs.test.ts`
+ * holds them together: for a set of jobs, the two must agree every time.
+ *
+ * **Here rather than beside `sameWork` in src/jobs.ts, since 2026-09-07, and
+ * the move was forced rather than tidy.** `enqueueSuccessorIn`
+ * (src/store/pg-jobs.ts) has to mint a `work_key` from inside a publication's
+ * transaction, and src/jobs.ts takes the Postgres job store at module scope
+ * (`const store: JobStore = pgJobStore`) — so a store file importing back from
+ * it is a cycle whose failure mode is a TDZ `ReferenceError` on whichever entry
+ * point happens to load the store first, not a compile error. This file is a
+ * leaf; `EnqueueTicket` below is what carries the key; and `src/ingest.ts`
+ * (for `urlKey`) imports nothing but `src/ids.ts`. `sameWork` — the prose
+ * specification this hash has to satisfy — stays where it is, and
+ * `tests/jobs.test.ts` is still what holds the two together over a grid.
+ */
+export function workKeyFor(
+  names: StepName[],
+  forced: Set<StepName>,
+  profile?: string,
+  upload?: JobUpload,
+  url?: string,
+): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        steps: names.map((n) => [n, forced.has(n)]),
+        upload: upload?.id ?? "",
+        profile: profile ?? "",
+        /* **`urlKey`, not the URL.** `http://x.test/p` and `https://x.test/p/`
+           are one article — src/ingest.ts is the only thing in this codebase
+           that gets to decide that — so hashing the raw string would make two
+           spellings of one address two pieces of work, and the dedup this key
+           exists for would stop working for the commonest case of all. */
+        source: url ? urlKey(url) : "",
+      }),
+    )
+    .digest("hex");
+}
 
 /**
  * Why a claim did not happen. Each of these is a different thing for the client

@@ -2131,7 +2131,7 @@ the first forced name and looks only at what follows. Nor could it be swept in
 from further back: **both** steps are in `FORCE_ONLY_WHEN_NAMED`. So the Sketch
 half is unforced whatever that button does, and `stepIsDone` is the only thing
 deciding it. What unforced buys is on the painting half instead — `work_key`
-hashes `force` (`workKeyFor`, [`src/jobs.ts`](../../src/jobs.ts)), so a forced
+hashes `force` (`workKeyFor`, [`src/store/jobs.ts`](../../src/store/jobs.ts)), so a forced
 press and an unforced one are two keys and two $0.27–$0.40 jobs where the queue
 would otherwise collapse them into one. GPT Sol, reviewing stages 2–3.
 

@@ -1155,6 +1155,36 @@ parameters, and a provider's carries its own words.
 *`Too many articles already called "x"` is a different sentence and stays.* It is the retry budget
 running out inside slug allocation, which is a fault rather than a queue state.
 
+### One job in the app was asked for by nobody
+
+Since 2026-09-07 a **publication can queue a job**. When a revision reaches the shelf saying
+`nav_label_status = 'pending'` — a freshly ingested article, whose paragraph labels are no longer
+part of `hierarchy` ([hierarchy.md](hierarchy.md#two-passes)) — `publishRevisionIn`
+([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) queues a `{ steps: ["labels"] }` job
+for the article's owner **on the publication's own transaction**, through `enqueueSuccessorIn`
+([`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts)).
+
+Four things about it are worth knowing before touching this area, because it is the first time the
+queue has had a row that no HTTP request produced:
+
+- **It is not `enqueueOrGet`.** That opens a second pooled connection, which is exactly what
+  `DATABASE_POOL_MAX = 5` and the billing lock made a rule against — but the rule is about *calling
+  it while holding a lock*, not about inserting on an executor you already hold. `enqueueSuccessorIn`
+  is thirty lines on the caller's `tx`, so the pointer and the job commit together or neither does.
+- **It spends no quota slot**, by omission —
+  [billing.md](billing.md#which-requests-spend-a-slot-and-why-the-wall-is-at-the-routes).
+- **`onConflictDoNothing` is the dedupe we want.** A second publication for one article collapses
+  onto the successor already queued, via `jobs_active_work`. In production that is always the right
+  answer, because `jobs_one_running_per_slug` means a publication cannot happen while a successor is
+  *running* — a publication comes from a running job on that same slug. A standalone
+  `publishRevision` from a script can break that assumption; it would leave the newer revision
+  waiting on a job that no longer describes it.
+- **Nothing on the server drives it.** `pump` is a no-op under `VERCEL` and is only ever called from
+  `enqueue`. What runs the successor is the browser: `jobEngine` drives every queued job the
+  signed-in owner has, from any page. An owner who never signs in again leaves it queued for ever —
+  measured, with the three cases, in
+  [the plan](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md#who-drives).
+
 **No queue positions, and that is Greg's call.** A waiting job shows as waiting, in the card it
 already has — `displayJob` says *Waiting to continue.* beside a Stop button. The reason a job is
 waiting is **logged** at the claim rather than carried to the client, which is where *"why did this

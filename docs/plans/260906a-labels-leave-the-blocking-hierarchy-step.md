@@ -350,7 +350,8 @@ Sol's Q7 answer, with its stamp pre-stage deleted for the reason above.
   `generateHierarchy` into the new runner, after the candidate merged tree and before any `ready`
   write; `assertEveryBlockLabelled` and `assertInsideCoverageFloor` stay inside `generateLabels` and
   defer for free with it. Publication atomically enqueues the free successor job (F10), with **no
-  `ingest_event_id` and no second slot** (F9). Legacy articles get `labels` receipts so the scheduler
+  `ingest_event_id` and no second slot** (F9) — that half is stage 2b, [below](#stage2b), and the
+  step itself is [stage 2a](#stage2a). Legacy articles get `labels` receipts so the scheduler
   does not re-buy every one of them (F4). **`mergeLabels` keeps replacement semantics** — it
   correctly removes stale labels after a structure change, and A′ never legitimately hands it a
   partial map (F7).
@@ -657,6 +658,63 @@ unremarked. The narrowing the note warns about therefore happens **today**, and 
 because not one of those suites asks the manifest anything but its stamp. The sentence now says no
 `src/` reader opens the directory and names the helper that does, since the point of the note is that
 the next person can trust it.
+
+## What stage 2b landed <a id="stage2b"></a>
+
+Built 2026-09-07. **The successor exists and the loop closes**: an article ingested today publishes
+`pending`, queues a free `labels` job in the same transaction, and the browser drives it.
+
+- **The enqueue is in `publishRevisionIn`** ([`pg-revisions.ts`](../../src/store/pg-revisions.ts)),
+  after the pointer moves, on any publication whose revision says `pending` — so `pg-glossary.ts`,
+  standalone `publishRevision` and a script all get it, not only the pipeline. Its `=== "pending"`
+  rather than `!== "ready"` is a decision: a revision whose labels already **failed** does not
+  silently re-buy the job.
+- **`enqueueSuccessorIn(tx, …)`** ([`pg-jobs.ts`](../../src/store/pg-jobs.ts)), thirty lines on the
+  caller's transaction. `steps: ["labels"]`, `queued`, `reservesName: false`, `urlKey: null`, **no
+  `ingestEventId`, no `profile`, no `url`**, `workKey` from the canonical `workKeyFor`, and
+  `onConflictDoNothing` so two publications for one article are one successor. `PublishRevisionResult`
+  gained `successorJobId`, which `logPublication` prints and nothing decides on.
+- **`workKeyFor` moved from [`jobs.ts`](../../src/jobs.ts) to
+  [`store/jobs.ts`](../../src/store/jobs.ts)**, and the move was forced. `src/jobs.ts` binds
+  `const store: JobStore = pgJobStore` at module scope, so a store file importing back from it is a
+  cycle whose failure mode is a TDZ `ReferenceError` on whichever entry point loads the store first —
+  not a compile error. `sameWork` stays where it is; `tests/jobs.test.ts` still holds the two
+  together.
+- **The `publish` projection gained `navLabelStatus`** ([`pg.ts`](../../src/store/pg.ts)), in
+  `REVISION_PROJECTIONS` and in the column policy above it. The projection is a named list precisely
+  so this had to be decided rather than inherited.
+- **Failure: `markNavLabelsFailedIn`** ([`pg-revisions.ts`](../../src/store/pg-revisions.ts)), called
+  from `settleIn`'s failing branch when `unfinished === "labels"` and the ending is `error`. It marks
+  the draft's **base**, not the discarded draft, and only while the base is still current and still
+  `pending`. Stage 1 built `failed`; this is what writes it.
+- **Nothing drives the successor from the server**, deliberately — see
+  [Who actually runs the successor](#who-drives). `pump` is only ever called by `enqueue`, and
+  reaching it from `pg-revisions.ts` would be the same cycle as `workKeyFor`.
+
+### Three things the brief had wrong, found by building it <a id="stage2b-corrections"></a>
+
+**The accident's symptom is not *"Too many articles already called X"*.** The groundwork above says
+copying the parent's `ingestEventId` surfaces that way, because
+`jobs_ingest_event_unique` sends `enqueue`'s allocation loop round twenty times. That is true of
+`enqueue`; it is **not** true of `enqueueSuccessorIn`, which has no loop and an
+`onConflictDoNothing`. Measured by writing the accident: the insert is swallowed and **no successor
+exists at all** — the article keeps saying *"Paragraph labels are still arriving"* for ever, with
+nothing logged and nothing thrown. Safe, silent, and worse to diagnose than the sentence the
+groundwork predicted. Both accidental-charge cases go red on it.
+
+**`drive()`/`pump` has no outside to stay outside of.** The brief says it *"stays outside the
+transaction"*, which reads as though a caller would call it. No caller can: `pump` lives in
+`src/jobs.ts` and every publication path is in `src/store/`. So the successor is driven by the
+browser and by nothing else, which is what [§ who-drives](#who-drives) already measured — but it
+means `npm run add` on a laptop leaves the labels queued rather than running them.
+
+**`onConflictDoNothing` is right, and the reasoning behind it is narrower than it looks.** A second
+publication collapsing onto a queued successor is correct because a *queued* successor will pick up
+whatever the article is serving when it finally claims. It is only correct at all because
+`jobs_one_running_per_slug` means a publication cannot land while a successor is **running** — a
+publication comes from a running job on the same slug. A standalone `publishRevision` from a script
+sidesteps that, and would leave the newer revision waiting on a job whose base has moved. Narrow, and
+written down rather than closed.
 
 ## Groundwork for stage 2, established before any code <a id="stage2-groundwork"></a>
 

@@ -87,13 +87,14 @@ import {
 import { currentOwnerId } from "../owner.js";
 import { hashBlocks } from "../source-hash.js";
 import { checkTree } from "../tree-invariants.js";
-import type { Block, StepName, Tree } from "../types.js";
+import type { Block, OwnerId, StepName, Tree } from "../types.js";
 import { deriveLibraryScalars } from "../library-scalars.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { REVISION_PROJECTIONS, ownedSlug, requireSlug } from "./pg.js";
 import { slugIsTaken } from "./slug-is-taken.js";
 import { NO_INPUT_HASH, PIPELINE_RUN, hierarchyCurrency } from "./artifacts.js";
 import { liveAttempt } from "./job-fence.js";
+import { enqueueSuccessorIn } from "./pg-jobs.js";
 
 const logger = log("store");
 
@@ -1767,6 +1768,15 @@ export interface PublishRevisionResult {
    * says them out loud after the commit; nothing else reads them.
    */
   readonly carriedTreeProblems: readonly string[];
+  /**
+   * The free `labels` job this publication queued, if it queued one.
+   *
+   * `null` covers both of the ordinary answers — the revision published `ready`,
+   * so there was nothing to make; or a successor for this article was already
+   * queued and this publication collapsed onto it. `logPublication` prints it;
+   * nothing decides anything on it. See `publishRevisionIn`.
+   */
+  readonly successorJobId: string | null;
 }
 
 /** What `reasonsNotToPublish` decided: what refuses, and what merely worries. */
@@ -2027,7 +2037,50 @@ export async function publishRevisionIn(
     .set({ currentRevisionId: revisionId })
     .where(eq(articles.id, article.id));
 
-  return { revisionId, previousRevisionId: article.currentRevisionId, scalars, carriedTreeProblems };
+  /**
+   * **A revision that publishes `pending` buys the job that finishes it — here,
+   * in the transaction that published it.**
+   *
+   * `hierarchy` stopped calling `generateLabels` in stage 2a
+   * (docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md), so an
+   * article now reaches the shelf saying *"Paragraph labels are still
+   * arriving"*. This is what makes that sentence temporary. Inside the
+   * transaction, so the pointer and the successor become true together: a
+   * publication that committed with nothing queued would leave that sentence up
+   * for ever, and nothing on the server reaps a queued row to notice.
+   *
+   * **In the primitive rather than in `pgStoreSession.settleIn`, and this file
+   * has already made that argument once** — the lineage check above lived in
+   * that caller until 2026-09-01, and *a guard that lives in one caller is a
+   * guard the next caller forgets*. The rule is about the revision, not about
+   * the pipeline: any publication whose result is `pending` needs the job,
+   * including `pg-glossary.ts`'s and standalone `publishRevision`'s. GPT Sol's
+   * stated rule for this stage.
+   *
+   * **`=== "pending"` rather than `!== "ready"`**, so `failed` does not buy a job
+   * on every publication of an article whose labels have already been tried and
+   * lost. Re-running them is a step re-run the reader asks for.
+   *
+   * Nothing is driven from here — see `enqueueSuccessorIn`, and § *Who actually
+   * runs the successor* in the plan: the browser's `jobEngine` drives every
+   * queued job the signed-in owner has, from any page.
+   */
+  const successorJobId =
+    draft.navLabelStatus === "pending"
+      ? await enqueueSuccessorIn(tx, {
+          ownerId: article.ownerId as OwnerId,
+          slug,
+          steps: ["labels"],
+        })
+      : null;
+
+  return {
+    revisionId,
+    previousRevisionId: article.currentRevisionId,
+    scalars,
+    carriedTreeProblems,
+    successorJobId,
+  };
 }
 
 /**
@@ -2048,6 +2101,10 @@ export function logPublication(
       previous: published.previousRevisionId,
       blocks: published.scalars.blockCount,
       words: published.scalars.wordCount,
+      /* Absent on almost every publication. Present means this revision reached
+         the shelf without its paragraph labels and bought the free job that
+         finishes them — see `publishRevisionIn`. */
+      ...(published.successorJobId ? { successorJobId: published.successorJobId } : {}),
     },
     "revision published",
   );
@@ -2152,6 +2209,84 @@ export async function failRevisionIn(
   if (opts.job) await fenceJob(tx, opts.job.id, opts.job.attemptId, null);
 
   return { changed: result.rowCount };
+}
+
+/**
+ * A `labels` job died; say so on **the revision it was working from**, and only
+ * while that is still what readers are being served.
+ *
+ * ## Which revision, and why it is not the obvious one
+ *
+ * A failing job fails its **candidate draft** (`failRevisionIn` above), and that
+ * draft is thrown away. The revision carrying `nav_label_status = 'pending'` —
+ * the one on the shelf, saying *"Paragraph labels are still arriving"* — is the
+ * draft's **base**, and nothing touches it on the failing path. So a successor
+ * that fails leaves the sentence up for ever unless something writes `failed`
+ * onto the base, which is what this is. Stage 1 built the `failed` state and its
+ * reader-facing sentence; until now nothing wrote it.
+ *
+ * ## Only while the base is current
+ *
+ * Two reads under the article lock this takes: the draft's
+ * `based_on_revision_id`, written once by `beginDraftIn` and never changed, and
+ * `articles.current_revision_id`. If they differ, something published while this
+ * job ran — and that newer revision has its own labels story and its own
+ * successor. Writing `failed` onto whatever is current would tell a reader that
+ * a publication they can see went wrong because a job about an older one did.
+ * GPT Sol, F4 of the design review.
+ *
+ * ## And only over `pending`
+ *
+ * The `WHERE` carries it, so a base that is already `ready` — a labels re-run
+ * asked for by hand against an article that has its labels — is not
+ * downgraded by a failure, and a base already `failed` does not move.
+ *
+ * Returns the revision it moved, or `null`. **`null` is an ordinary answer** on
+ * every one of the cases above, which is why it is not a throw: the caller wants
+ * to know whether there is a line to log, not whether something went wrong.
+ */
+export async function markNavLabelsFailedIn(
+  tx: Tx,
+  slug: string,
+  draftRevisionId: string,
+): Promise<string | null> {
+  requireSlug(slug);
+  /* Taken here whether or not the caller holds it, for the reason
+     `publishRevisionIn` gives: this is a function that must not depend on the
+     caller having remembered. Re-locking a row this transaction already has is
+     free. */
+  const article = await lockArticle(tx, slug);
+  if (!article) return null;
+
+  const [draft] = await tx
+    .select({ basedOnRevisionId: articleRevisions.basedOnRevisionId })
+    .from(articleRevisions)
+    .where(eq(articleRevisions.id, draftRevisionId))
+    .limit(1);
+  const base = draft?.basedOnRevisionId;
+  /* `null` is a first ingest — copied from nothing, so there is no earlier
+     revision wearing the `pending` sentence and nothing to correct. */
+  if (!base || base !== article.currentRevisionId) return null;
+
+  const result = await tx
+    .update(articleRevisions)
+    .set({ navLabelStatus: "failed" })
+    .where(
+      and(eq(articleRevisions.id, base), eq(articleRevisions.navLabelStatus, "pending")),
+    );
+  return result.rowCount === 1 ? base : null;
+}
+
+/**
+ * The line `markNavLabelsFailedIn` prints — **after** its caller's commit, for
+ * the reason `publishRevisionIn` gives at length: a `logger` call inside a
+ * transaction announces something a later statement may roll back.
+ */
+export function logNavLabelsFailed(slug: string, revisionId: string): void {
+  logger.warn(
+    { slug, revisionId },
+    "the paragraph labels failed; the published revision now says so",
+  );
 }
 
 /**

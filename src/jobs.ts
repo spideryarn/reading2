@@ -41,7 +41,6 @@
  * docs/plans/260827h-durable-queue-and-uploads.md for the review that took the first
  * version of this apart.
  */
-import { createHash } from "node:crypto";
 import {
   type SpendReport,
   collectSpend,
@@ -71,6 +70,7 @@ import {
   DraftGoneError,
   mintAttempt,
   StaleAttemptError,
+  workKeyFor,
   type ExpirySettlement,
   type JobEnding,
   type JobStore,
@@ -3368,42 +3368,10 @@ function handBackToARetry(holder: Job, owner: OwnerId, drive: (id: string) => vo
   return holder;
 }
 
-/**
- * A fingerprint of exactly what `sameWork` compares, computed once.
- *
- * **Immutable, which `job.steps` is not.** Statuses move as a job runs, so a
- * key derived from the record on each comparison would answer differently at
- * the end of a job than at the start — and the question being asked is *is this
- * the same request*, which does not change because a step finished.
- *
- * It has to hash the same five things `sameWork` reads and nothing else, or
- * there are two rules for one question and they drift. `tests/jobs.test.ts`
- * holds them together: for a set of jobs, the two must agree every time.
- */
-export function workKeyFor(
-  names: StepName[],
-  forced: Set<StepName>,
-  profile?: string,
-  upload?: JobUpload,
-  url?: string,
-): string {
-  return createHash("sha256")
-    .update(
-      JSON.stringify({
-        steps: names.map((n) => [n, forced.has(n)]),
-        upload: upload?.id ?? "",
-        profile: profile ?? "",
-        /* **`urlKey`, not the URL.** `http://x.test/p` and `https://x.test/p/`
-           are one article — src/ingest.ts is the only thing in this codebase
-           that gets to decide that — so hashing the raw string would make two
-           spellings of one address two pieces of work, and the dedup this key
-           exists for would stop working for the commonest case of all. */
-        source: url ? urlKey(url) : "",
-      }),
-    )
-    .digest("hex");
-}
-
+/* `workKeyFor` used to be here, beside `sameWork`, and moved to
+   src/store/jobs.ts on 2026-09-07 so that `enqueueSuccessorIn` could reach it
+   without a cycle. The reason is written where it landed; it is still exported
+   and still the only hashing of this question. */
 
 /**
  * The same steps, forced the same way, steered the same way — the only case a
