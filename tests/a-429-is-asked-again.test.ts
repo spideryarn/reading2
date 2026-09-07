@@ -53,7 +53,15 @@ afterEach(() => {
 
 /** One page of transcription, in the shape `parseRecords` accepts. */
 const TRANSCRIPTION = JSON.stringify({
-  records: [{ page: 1, type: "paragraph", text: "A page of prose." }],
+  records: [
+    {
+      page: 1,
+      type: "paragraph",
+      text: "A page of prose.",
+      continues: false,
+      uncertain: false,
+    },
+  ],
 });
 
 function anAnswer(): Response {

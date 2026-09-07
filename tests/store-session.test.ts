@@ -81,7 +81,11 @@ function labelsSaying(label: string): LabelsFile {
     structureHash: "0".repeat(16),
     structureVersion: "toc/2",
     labels: { n0000: label },
-    batches: null,
+    /* `[]`, not `null`: a `batches: null` manifest is a *pending* one since
+       2026-09-06, and `writeArtefacts` would mark the revision `pending` and
+       delete its `labels` receipt. This fixture is a finished label run.
+       src/labels.ts § `PendingLabelsFile`. */
+    batches: [],
   };
 }
 

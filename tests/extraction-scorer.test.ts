@@ -77,6 +77,7 @@ import {
   SHIPPED_ARM,
   armNamed,
   preparedSourceHtml,
+  withoutTheCapabilityFloor,
 } from "../evals/extraction/arms.mjs";
 import { SCORABLE_FIXTURES } from "../evals/extraction/corpus.mjs";
 /**
@@ -646,7 +647,12 @@ const REGION_CHARS: Record<string, number> = {
   "negative-controls": 3760,
   "arxiv-abs": 1007,
   "shakespeare-hamlet": 7299,
-  "python-docs-itertools": 29949,
+  /* 29,949 until 2026-09-06, when stage 2 began deleting Sphinx's 24 permalink
+     anchors before the source is stamped (src/furniture.ts). The 24 pilcrows
+     were inside the declared region, so the region is 24 characters smaller —
+     which is the first time one of these numbers has moved for a reason inside
+     stage 2, and the reason the paragraph below no longer says they cannot. */
+  "python-docs-itertools": 29925,
   "pg-greatwork": 54900,
   "plos-biology": 23330,
 };
@@ -758,8 +764,16 @@ describe("the degenerate arms — each has to lose, and the test names where", (
        * flatters the pipeline exactly as a floor copied from the damaged output
        * did, and which nothing else would notice, because a bigger region makes
        * every number *worse* rather than obviously wrong. So the numbers are
-       * assertions. They depend on the fixture's bytes and the selectors and on
-       * nothing stage 2 does, so they are stable across the rest of this plan.
+       * assertions.
+       *
+       * **They depend on the fixture's bytes, the selectors — and on whatever
+       * `prepareDocument` does**, which this comment denied until 2026-09-06.
+       * The region is measured against the *prepared* source, so a stage-2 pass
+       * that deletes something inside a declared region moves the number: C4a's
+       * furniture removal took 24 Sphinx pilcrows out of `python-docs-itertools`
+       * and the pin moved with them. That is the pin working, not a reason to
+       * stop pinning: a region that changed for a reason nobody could name would
+       * look exactly the same.
        */
       expect(card.article.regionChars, `${fixture}: ${card.article.basis}`).toBe(
         REGION_CHARS[fixture],
@@ -1918,7 +1932,18 @@ describe("the degenerate arms — each has to lose, and the test names where", (
        * not a test.
        */
       const { raw, url, manifest, prepared } = fixtureBytes("pmc-article");
-      const dropped = armNamed("drop-every-short-block").run(raw, url, { manifest, url });
+      /* **The floor is held open for this one call, and only this one.** Stage
+         2 refuses `pmc-article` since 2026-09-06 — 130 characters, below
+         Readability's own threshold (src/extract.ts § `capabilityFloor`) — so
+         the shipped candidate is empty and the arm has nothing to flatten. That
+         is right for the corpus and wrong for this oracle, which asks what the
+         SCORER can see rather than what we publish, and would otherwise become
+         an assertion about the empty string with nothing to say so.
+         `withoutTheCapabilityFloor` (evals/extraction/arms.mts) has no other
+         caller. */
+      const dropped = withoutTheCapabilityFloor(() =>
+        armNamed("drop-every-short-block").run(raw, url, { manifest, url }),
+      );
       expect(
         dropped.html.includes("if you are not automatically redirected"),
         "the arm no longer makes the flattening this test is about",

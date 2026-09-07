@@ -26,7 +26,7 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
-/* **The store's reader, not `src/api.ts`'s.** That one is the *filesystem*
+/* **The store's reader, not `src/api.ts`'s.** That one was the *filesystem*
    reader, and this file used it at both `/session` and `/tool` while its
    vocabulary and its tools went to Postgres seams — so a slug that exists only
    in the database could not start a live session, and a stale `data/<slug>/`

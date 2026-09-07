@@ -96,7 +96,7 @@ hand-maintained price table and cache arithmetic that the OpenRouter half did no
 
 Which raised the obvious question — *why are there two halves?*
 
-## One gateway, two wires
+## One gateway, five wires
 
 The word "provider" used to mean two things at once: **who bills us**, and **what the request looks
 like**. Only the first collapsed.
@@ -104,8 +104,10 @@ like**. Only the first collapsed.
 | | speaks | used by | code |
 |---|---|---|---|
 | **Messages** | Anthropic's Messages protocol, via OpenRouter's Anthropic-compatible endpoint (`/api/v1/messages`, which OpenRouter calls the "Anthropic Skin") | the pipeline stages — hierarchy, labels, arc, tweets, glossary, ideas, quotes, timeline, quiz, sketch | [`src/messages-stream.ts`](../../src/messages-stream.ts) |
-| **chat** | OpenAI's chat/completions shape | explain, chat, search, quiz marking, the three referee runs, dictation, PDF reading, and `env-proposal` — the one job with no reader at all, `gjd-remote push-env` asking a cheap model to sort a repo's env key *names* ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)) | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **chat** | OpenAI's chat/completions shape | explain, chat, search, quiz marking, **the quiz's hidden verdict** ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else) — one word, judged from the finished mark, shown to nobody), the three referee runs, PDF reading, and `env-proposal` — the one job with no reader at all, `gjd-remote push-env` asking a cheap model to sort a repo's env key *names* ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)) | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **embeddings** | `/api/v1/embeddings` — OpenAI-shaped, different endpoint | turning a paragraph into a vector | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **images** | `/api/v1/images` — `data: [{b64_json}]`, no `choices` anywhere in it | the Illustrated diagram sub-mode | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **transcription** | `/api/v1/audio/transcriptions` — a base64 recording in, `{text}` out, and a `usage` counting **seconds rather than tokens** | dictation, since 2026-09-07 | [`src/ai-call.ts`](../../src/ai-call.ts) |
 
 Two files, and **no third way to spend money**. Each gateway's tests scan `src/` and fail if any
 other file constructs an Anthropic client, opens a message stream, or names an OpenRouter endpoint.
@@ -161,10 +163,25 @@ closes that.
 ### `provider` is a table, not a default
 
 The obvious next step after pinning Anthropic on the Messages wire is to do the same on this one. It
-is **wrong, and wrong silently**: dictation talks to Gemini and needs `zdr`, the PDF reader talks to
-OpenAI and must forbid fallback, embeddings talks to Voyage. On any of those three
+is **wrong, and wrong silently**: the PDF reader talks to OpenAI and must forbid fallback,
+embeddings talks to Voyage, and dictation used to talk to Gemini and need `zdr`. On any of those
 `order: ["anthropic"]` finds no Anthropic upstream, falls through to the real one, and answers — the
 pin does nothing at all while looking like it did something.
+
+**Dictation is now the sharper version of the same lesson, and it is the only row whose `provider` is
+`null`.** It moved to `/v1/audio/transcriptions` on 2026-09-07
+([260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md)), and **OpenRouter does not
+apply routing preferences or `zdr` on that endpoint** — `only: ["anthropic"]` answers 200 with a
+transcript, and so does `zdr: true` for a model absent from their own ZDR list, where the chat
+endpoint 404s. **Not "the block is ignored", which is the tempting shorthand and is false**:
+`provider.options` on the very same request *is* forwarded, and is how the vocabulary reaches the
+model as `provider.options.openai.keywords`. One half of the block does something and the other half
+silently does not, which is worse than either. So
+the danger here is not a pin that quietly does nothing; it is a pin that quietly does nothing **and
+gets quoted on a privacy page**, which is exactly what happened — `zdr` on this row is what
+`/privacy` told readers their voice was protected by. `null` rather than `{}` means "send no block at
+all", and the row carries the measurement so that the next person tempted to add one finds it first.
+[privacy.md § Where a reader's voice goes](privacy.md#where-a-readers-voice-goes).
 
 Leaving each of the six callers to pass its own was the second draft, and Sol rejected that too: a
 field six callers set independently is a field that drifts. So it is `AI_JOB_ROUTE` in
@@ -351,6 +368,44 @@ Two smaller costs, both live:
   reports.
 - **One account is one rate-limit budget.** A `labels` fan-out and a reader's chat turn now compete.
   Two keys under one account would separate them, and would give two spend limits; not done yet.
+
+## What an article costs to arrive <a id="what-an-article-costs"></a>
+
+**Measured 2026-09-07**, two fresh ingests against the local database, dollars taken from
+`ai_calls.credits_used_nanos` where `cost_source = 'provider'` — OpenRouter's settled figure, which
+[`src/pricing.ts`](../../src/pricing.ts) makes authoritative and against which per-token arithmetic is
+only a cross-check. Model `anthropic/claude-sonnet-5` at `PRODUCTION_EFFORT` `low`, `toc/7`.
+
+| | blocks | words | hierarchy | labels | **total** |
+|---|---:|---:|---|---|---:|
+| *How to Work Hard* | 96 | 3,341 | **$0.0620** — 1 call, 8,962 in / 4,406 out (1,487 thinking) | $0.0437 — 2 calls | **$0.1057** |
+| *How to Do Great Work* | 330 | 11,890 | **$0.1671** — 1 call, 27,076 in / 11,294 out (4,917 thinking) | $0.2144 — 9 calls | **$0.3815** |
+
+**About a tenth of a cent per block**, and close to linear: 3.4× the blocks cost 3.6× the money.
+
+Three things that table is worth reading carefully for.
+
+- **The tree is ONE model call**, whatever the article's size — 96 blocks and 330 blocks each cost
+  exactly one. Both runs recorded `structureResumed: false`, so neither was a cached zero.
+- **`labels` is the bigger half on a long article and the reader does not wait for it.** It is
+  deliberately not in `DEFAULT_INGEST_STEPS` — it was 79.5–92% of the old combined step's wall clock
+  — so the money between pasting a URL and being able to read is the hierarchy row alone:
+  **6 cents for a short essay, 17 for a long one.**
+- **The long article's labels figure includes a failed attempt**, and that is the honest number
+  rather than a blemish on it. The first pass died on `Nav labels: expected [number, string] pairs`
+  after spending $0.1427 and landing 3 of 6 batches; the retry resumed those three, cost $0.0717 and
+  finished. Per-batch checkpointing is what stopped the first attempt being wasted twice.
+
+**These are credits, not cash.** Per § *What it cost* above, the money that actually leaves the bank
+is about **5.5% higher** than any total this app reports, because OpenRouter earns on the fee when
+credits are bought rather than on a per-token markup.
+
+**Everything else is on demand.** `DEFAULT_INGEST_STEPS` is `fetch, extract, blocks, hierarchy,
+assets`, of which only `hierarchy` calls a model. Glossary, quotes, ideas, timeline, quiz, sketch,
+debate, arc and tweets are each a step a reader *goes to*, and none of them is in the price above.
+
+[open-questions.md § Q7](open-questions.md#q7) is what this answers, and
+[billing.md § The quota](billing.md) is what a reader is charged against it — a slot, not a token.
 
 ## Two spellings of one model, and why both survive
 
@@ -841,6 +896,39 @@ Three things about it are worth knowing before you touch this file's claims:
   that makes it bite. So realtime does not go through `collectSpend` at all: it has its own durable
   lifecycle in `spideryarn.realtime_sessions`, and `acceptRealtimeUsage` builds the row and hands it
   straight to `costStore`.
+
+## What stops a reader spending our money, and what does not
+
+**The cap is on the OpenRouter account, and it is monthly and global.** Greg, 2026-09-06, asked
+whether to build a per-reader cap on the endpoints a signed-in account can call repeatedly for
+money — the glossary lookup and "ask the web" pair, and the explain path:
+
+> We already have a global monthly spend cap at the OpenRouter level, so we don't need to build one
+> for now.
+
+So the answer is **no per-reader cap**, deliberately, and this section exists so the next person to
+notice the gap finds the decision instead of re-proposing the work. It was proposed on 2026-09-06
+([260906i](../plans/260906i-sweep-for-missed-work-across-feedback-reports-worktrees-and-sessions.md)),
+a session was dispatched to plan it, and it was stood down on this answer.
+
+**What the account cap does and does not buy**, stated plainly because the two are easy to conflate:
+
+- It **does** stop the catastrophic case. A script hammering `/api/glossary/:slug/ask` cannot run up
+  an unbounded bill; it runs up a bounded one and then everything stops.
+- It **does not** stop one account exhausting the month for everybody. The cap is global, so the
+  failure it converts a runaway into is *every reader loses every paid feature until the month
+  turns* — not *the runaway is throttled*. That is the accepted trade, not an oversight.
+- It **does not** cover `OPENAI_API_KEY`, which is a separate billing account — see the entry above
+  in § The three calls allowed round the outside.
+
+The machinery to build a per-reader cap already exists if this is ever revisited:
+[`src/link-summary.ts`](../../src/link-summary.ts) has a per-owner limiter with a day cap and a
+global fuse, and [`src/routes.ts`](../../src/routes.ts) already turns a `limited` answer into a 429
+with a `Retry-After` and a bracketed code for the feedback endpoint. It would be copied rather than
+invented. Note that all three files are on
+[security-map.md § Where the defences physically live](security-map.md#where-the-defences-physically-live),
+so it is not work an unattended run may do
+([feedback-reports.md](feedback-reports.md#a-report-is-unfiltered-input)).
 
 ## The one thing still open
 

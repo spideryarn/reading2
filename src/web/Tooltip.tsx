@@ -286,10 +286,21 @@ export function Tooltip({
  * `state` is the exception to *what it is, then how it works*: where the control
  * is a switch that can be mid-flight or broken, what it is doing **right now**
  * goes above the description, because a reader who opened the card because the
- * button would not move should not have to read two paragraphs first. The bar's
- * experimental switch is the only caller (Dock.tsx § the switch itself), and it
- * is never the only carrier — the button draws a warning marker, and the same
- * sentence is in an `sr-only` span it points `aria-describedby` at.
+ * button would not move should not have to read two paragraphs first.
+ *
+ * Three callers, and the second generalised it. The bar's **experimental
+ * switch** (Dock.tsx § the switch itself), where it is never the only carrier —
+ * the button draws a warning marker, and the same sentence is in an `sr-only`
+ * span it points `aria-describedby` at. From 2026-09-07, the bar's **mode
+ * buttons**, where it holds the sentence a *visitor* gets about a mode they
+ * cannot have (`markedModes`, visitor.ts). And, later the same day, the bar's
+ * **Comments button**, where it says the marks are the owner's and a visitor
+ * may read them but add none (`NOT_A_MODE`, Dock.tsx).
+ *
+ * Neither of the last two is mid-flight and neither is broken, which is the
+ * widening. What all three share is that a reader opening this card wants to
+ * know why the control looks the way it does before they want to know what it
+ * is for.
  */
 export function ControlTip({
   head,

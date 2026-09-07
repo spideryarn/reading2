@@ -75,7 +75,12 @@ import {
   type JobEnding,
   type JobStore,
 } from "./store/jobs.js";
-import { failureKindOf, jobWorthRetrying, readerFailureOf } from "./job-failure.js";
+import {
+  failureKindOf,
+  jobWorthRetrying,
+  readerFailureOf,
+  undeclaredBlocked,
+} from "./job-failure.js";
 import { slugWithShortId, urlKey } from "./ingest.js";
 import { errorFields, log, type Log, since } from "./log.js";
 import { captureFailure } from "./monitoring.js";
@@ -97,7 +102,12 @@ import {
   stepLabel,
   urlForSlug,
 } from "./pipeline.js";
-import { INTERRUPTED, STEP_STOPPED, type FailureKind } from "./messages.js";
+import {
+  INTERRUPTED,
+  type FailureKind,
+  type ReaderFacingFailure,
+  STEP_STOPPED,
+} from "./messages.js";
 import type { Job, JobStep, JobUpload, StepName } from "./types.js";
 
 /* `JobStatus` and `StepStatus` were on this line too and nothing imported them
@@ -574,6 +584,28 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      number: greater than what the worst measured PDF `extract` leaves behind,
      and less than the claimant's own deadline. */
   hierarchy: 700_000,
+  /* **MEASURED** 2026-09-06, from the runs that motivated the split: the label
+     pass is 79.5–92% of what `hierarchy` used to cost, and the worst whole pass
+     recorded is **682 s**, of which one call was 602 s.
+     docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
+
+     **This is a ceiling, for `extract`'s and `hierarchy`'s reason**, and the
+     same 700 s: as much of the window as can be reserved without the step
+     becoming unstartable. The claimant's deadline is `LEASE_MS -
+     DEADLINE_MARGIN_MS` = 740 s, so a budget at or over that never fits and the
+     job would sit `queued` for ever.
+
+     **And it is very nearly decorative, which is worth saying rather than
+     leaving to be discovered.** This table is consulted only for the step
+     *after* one has finished (`advanceJobWith`'s loop, below), and a `labels`
+     job is one step — the free successor a publication enqueues. Its first
+     runnable step always starts ungated, so it always gets the whole 740 s
+     whatever number is written here. What this row actually governs is the
+     other shape: a job that names `hierarchy` and `labels` together, where 700 s
+     is what makes the claim hand back after the tree rather than start a label
+     pass on a remnant of the window. Round up anyway, for the reason this
+     table's header gives. */
+  labels: 700_000,
   /* Its own wall-clock cap rather than a measurement — `ASSETS_BUDGET_MS` in
      src/collect-assets.ts, which the step enforces on itself. Measured cost on
      the corpus's worst article (10 images) is 7.1s; the cap is there for a
@@ -1160,6 +1192,7 @@ async function runStep(
      */
     const stopping = ranOutOfTime ? INTERRUPTED : STEP_STOPPED;
     const reader = stopped ? stopping : readerFailureOf(err, step.label);
+    if (!stopped) noteUndeclaredBlocked(jlog, err, reader, step.label);
     step.status = "error";
     /* **The reader's sentence on both fields, and it has to be both.** The band
        renders `job.error` and the shelf card renders `step.error`
@@ -1192,6 +1225,46 @@ async function runStep(
     delete job.cancelling;
     return { outcome: "failed" };
   }
+}
+
+/**
+ * **Say out loud when a `blocked` step gave the reader no way out.**
+ *
+ * The condition is `undeclaredBlocked` in src/job-failure.ts, which shares
+ * `declaredFailure` with `readerFailureOf` so the log line and the sentence on
+ * the card cannot disagree about the same error. This function is only the
+ * destination — docs/project/logging.md's rule is that a request path logs
+ * through src/log.ts, and src/job-failure.ts is in the client bundle and may
+ * not import it.
+ *
+ * **`warn`, not `error`.** Nothing is broken: the step refused correctly and
+ * the reader was told, badly. It is a copy defect for whoever is running this
+ * to go and fix, and an `error` line would put it beside the failures that
+ * cost money.
+ *
+ * **The label, the kind, and nothing off the error.** A step's diagnostic is
+ * free text and is exactly where a provider's body or a stretch of the article
+ * turns up (`stageFailure` § the detail goes on verbatim); `msg` is also the
+ * one place `redact` in src/log.ts cannot reach. So the line carries two
+ * strings that are both ours. `tests/a-blocked-step-that-named-no-way-out.test.ts`
+ * pins that with a sentinel.
+ *
+ * **Exported for that test**, which drives it with a recording `Log`. The
+ * alternative was a child process with `LOG_LEVEL` set — what
+ * tests/stop-details.test.ts pays for a bigger question — and this line is not
+ * worth it.
+ */
+export function noteUndeclaredBlocked(
+  jlog: Log,
+  err: unknown,
+  reader: ReaderFacingFailure,
+  step: string,
+): void {
+  if (!undeclaredBlocked(err, reader)) return;
+  jlog.warn(
+    { step, kind: reader.kind },
+    "a blocked step gave the reader no way out — it needs a sentence of its own",
+  );
 }
 
 /**
@@ -1820,10 +1893,8 @@ export type StepRegistry = { [K in StepName]: PipelineStep<K> };
 /**
  * The session one claim runs on, and **the one place a finished job publishes.**
  *
- * Two stores, one seam. Which one a claim gets is decided here and nowhere else,
- * on the live flag and nothing else — `SPIDERYARN_STORE` unset is a laptop and
- * gets the filesystem session it has always had; `postgres` gets a session over
- * this claim's own draft revision, whose `commit` is one transaction.
+ * One store, one seam. Every claim gets a session over its own draft revision,
+ * whose `commit` is one transaction.
  *
  * ## The Postgres side
  *

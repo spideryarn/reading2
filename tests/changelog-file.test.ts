@@ -3,7 +3,7 @@
  * so when it doesn't.**
  *
  * Two halves, and they need each other. The first parses
- * `docs/changelog/versions.ndjson` and asserts zero problems — that file is
+ * `src/web/changelog-versions.ndjson` and asserts zero problems — that file is
  * public claims about the product, written by three models and appended to by a
  * script, and [`ChangelogPage.tsx`](../src/web/ChangelogPage.tsx) renders around
  * a bad line rather than blanking. **That tolerance is exactly what would let an
@@ -29,7 +29,7 @@ import { LAUNCH_VERSION, REPO_URL, parseChangelog } from "../src/changelog.js";
 import { parseRoute } from "../src/web/router.js";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FILE = path.join(REPO, "docs/changelog/versions.ndjson");
+const FILE = path.join(REPO, "src/web/changelog-versions.ndjson");
 
 /**
  * Floors taken from the 2026-09-06 retrospective run, which wrote 68 versions

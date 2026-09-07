@@ -608,19 +608,19 @@ both would apply to any future schema change here.
 
 ### Stage: Separate article access, reader composition and mode controllers
 
-- [ ] Move `ArticleAccess`/`resolveAccess`/`useArticleAccess`/article-view composition as one unit,
+- [x] Move `ArticleAccess`/`resolveAccess`/`useArticleAccess`/article-view composition as one unit,
   preserving identity fences and the shared article fetch across reading/metadata/tweets.
-- [ ] Move `Reader` and its position hook, leaving `App` as route/session composition. Keep
+- [x] Move `Reader` and its position hook, leaving `App` as route/session composition. Keep
   `useJobSession` above all route returns and loading/error boundaries that replace pages.
-- [ ] Move Timeline, Quotes, Glossary, Search and Referee controllers in small batches. Keep the
+- [x] Move Timeline, Quotes, Glossary, Search and Referee controllers in small batches. Keep the
   current access union and data hooks. Move shared helpers only after identifying their callers.
-- [ ] Extract Chat/Remember last as the counterexample: preserve draft, send-new URL update,
+- [x] Extract Chat/Remember last as the counterexample: preserve draft, send-new URL update,
   anchored conversations, detached operation handling and live-conversation lifecycle.
-- [ ] Replace mode dispatch with an exhaustive switch and add the narrow passage lifecycle/paired
+- [x] Replace mode dispatch with an exhaustive switch and add the narrow passage lifecycle/paired
   selection from A3. Retain separate slots unless a tested single-owner alternative is simpler.
-- [ ] Sweep tests/docs/imports for each old exported band name and filename. Remove temporary
+- [x] Sweep tests/docs/imports for each old exported band name and filename. Remove temporary
   re-exports after the caller census is empty. Assert feature files cannot import `App.tsx`.
-- [ ] Update [new-mode](../project/new-mode.md), [web-client](../project/web-client.md),
+- [x] Update [new-mode](../project/new-mode.md), [web-client](../project/web-client.md),
   [URL state](../project/url-state.md) and feature signposts. Acceptance: adding a fixture mode
   makes all required policy decisions visible, and leaves article access/position code untouched.
 
@@ -639,30 +639,86 @@ both would apply to any future schema change here.
 
 ### Stage: Make the common mode surface fit and behave consistently
 
-- [ ] Write failing checks for any reproduced keyboard/focus/scroll defect before changing it.
-  Otherwise capture a behaviour baseline rather than inventing a bug the test pretends to fix.
-- [ ] Pilot `ModeSurface` in Search and Chat, keeping header/body/footer roles explicit. Match
-  current desktop dimensions and current covering-band behaviour; share visible-viewport fit.
+- [x] Write failing checks for any reproduced keyboard/focus/scroll defect before changing it.
+  Otherwise capture a behaviour baseline rather than inventing a bug the test pretends to fix. —
+  **the baseline, since no defect was reproduced**: `tests/mode-surface-changes-no-markup.test.tsx`
+  pins the rendered shape of all twelve bands, and it was committed **before** anything was migrated
+  (`e4952ecb`, deliberately on its own so the ordering is provable from history). It caught two
+  wrong guesses at markup and, more usefully, that **five bands ship an empty `.band-head`** —
+  Diagram's in its ordinary state — which the obvious migration would have deleted silently with the
+  whole suite green. **No mobile defect has been claimed**: this box cannot produce the iPhone trace
+  that would justify one, which is what the last box below waits on.
+- [x] Pilot `ModeSurface` in Search and Chat, keeping header/body/footer roles explicit. Match
+  current desktop dimensions and current covering-band behaviour; share visible-viewport fit. —
+  piloted in both (`8cef3161`), then the remaining ten migrated, so all twelve product bands are one
+  component. Dimensions and covering-band behaviour are unchanged, and the oracle above is what says
+  so. **`ModeSurface` owns only the container** — label, `head`/`foot` slots, class — and knows
+  nothing about jobs, `Found`, statuses or model output. The **visible-viewport fit is deliberately
+  not shared yet**; see the last box.
 - [ ] Verify narrow portrait, landscape/notch, keyboard open/closed, pinch/viewport pan, large text,
-  long labels and touch selection. No footer/composer or close control may be unreachable.
+  long labels and touch selection. No footer/composer or close control may be unreachable. —
+  **blocked, and correctly so.** No machine here has an iPhone with a keyboard, and A5 is explicit
+  that the device chooses the arithmetic. What exists instead is the instrument that would settle it:
+  `?probe=1` renders `src/web/ViewportProbe.tsx`, which uses `ModeSurface` itself rather than copied
+  markup and retains timestamped, copyable samples on every visual-viewport `resize` and `scroll`
+  (`2dfa5235`). **Until a trace arrives, no viewport-fit arithmetic is chosen and A5 is incomplete.**
 - [ ] Check true modals separately from modeless annotations. Tab, Shift-Tab, Escape, click-away
-  and return focus must follow the declared contract, including nested help/lightbox/tooltips.
+  and return focus must follow the declared contract, including nested help/lightbox/tooltips. —
+  **the Escape half is built; Tab, Shift-Tab and click-away are not audited.**
+  [The escape inventory](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-escape-inventory.md)
+  is 16 surfaces and 18 reachable pairs, and its organising finding is that Escape is **tiers in a
+  fixed order**, a surface's tier being the whole of its authority because nothing anywhere reads a
+  z-index or another surface's state. One press now closes one surface, with `tests/one-escape-closes-one-surface.test.tsx`
+  holding 30 of them over real components — where before, nine test files mentioned Escape and
+  **every one painted a single surface**. Two pairs are **renounced rather than fixed** (12 and 18),
+  because reaching them needs registration-order ownership, which § A6 forbids; the limit on that is
+  written down — no surface that can lose a reader's unsaved words is on the list. The focus/restore
+  half was A2's and is done. **Still open**: Tab and Shift-Tab order, and click-away, across the
+  nested help/lightbox/tooltip cases — Escape was the half with a reproduced loss behind it.
 - [ ] Migrate remaining surfaces in batches, including visitor/empty/error variants. Delete the
-  replaced geometry rules after checking all callers, retaining feature-specific scrolling.
+  replaced geometry rules after checking all callers, retaining feature-specific scrolling. —
+  **migration done, deletion not.** All twelve bands are migrated, visitor and empty variants
+  included, with four documented raw exceptions: `FeatureBoundary`'s fallback is a **circuit
+  breaker** (a fallback rendering `ModeSurface` would re-invoke the component that had just thrown,
+  and the second throw replaces the whole reader — `tests/the-band-fallback-must-not-use-modesurface.test.tsx`
+  mocks it to throw and watches the article's own text survive), the `/design` band is a specimen,
+  and two preview shells are demos. **No geometry rule has been deleted**, because which rules are
+  replaced is decided by the box above.
 - [ ] Update [touch](../project/touch.md), [tooltips](../project/tooltips.md),
   [reading-view-overview](../project/reading-view-overview.md) and [design CSS](../project/design-css-overview.md).
-  Any changed rule wording follows the important-doc process; signpost moves do not need approval.
+  Any changed rule wording follows the important-doc process; signpost moves do not need approval. —
+  **not done, and there is now a fifth destination**: `design-css-overview.md` was split on
+  2026-09-07 and the reading view's own narrow-window arithmetic lives in
+  [narrow-windows.md](../project/narrow-windows.md). [new-mode.md](../project/new-mode.md) has been
+  updated (render the band with `ModeSurface`; decide whether the header row should *persist* or
+  *not exist*), but the four above wait on the fit being settled — writing down an arithmetic no
+  device has chosen is how a doc starts lying.
 
 ### Stage: Make style ownership visible
 
-- [ ] Extract contiguous CSS sections in original order, keeping `@layer app` and one entry point.
-  Use separate commits from selector changes or visual adjustments.
-- [ ] Compare computed dimensions/positions and screenshots for Plain, Hierarchy, Outline,
-  two different bands, a modeless annotation, a true modal, visitor chrome and the shelf.
-- [ ] Preserve semantic classes used by geometry, selection and tests. Search their consumers
+**Done, 2026-09-06** — [260906d](260906d-make-style-ownership-visible-and-a-new-mode-fail-to-compile.md).
+15,489 lines became 37 sheets in cascade order, and the shipping CSS came out **byte-identical**
+(md5 `733c807548da26925bd8b120d7c026ac`, content-hash filename unchanged). The second half landed
+too: `MODE_TARGET` is a total tagged union, and a new mode now fails to compile at its
+presentation, visitor policy, label and activation.
+
+- [x] Extract contiguous CSS sections in original order, keeping `@layer app` and one entry point.
+  Use separate commits from selector changes or visual adjustments. — **nothing renamed and no
+  selector touched**; the cut points were all proved to be at brace depth 0 outside comments, a
+  check byte-concatenation cannot make.
+- [x] Compare computed dimensions/positions and screenshots for Plain, Hierarchy, Outline,
+  two different bands, a modeless annotation, a true modal, visitor chrome and the shelf. — 10
+  surfaces × 2 widths: **0 computed-style differences**, pixel diffs 0.00–0.24%. The one flagged
+  rect resolved by arithmetic: both states sum to exactly 792.00, so only content height moved.
+- [x] Preserve semantic classes used by geometry, selection and tests. Search their consumers
   before moving/renaming anything; shared stacking/token rules get a single owner.
-- [ ] Add representative real surfaces to `/design`; update the style map and remove stale
+- [x] Add representative real surfaces to `/design`; update the style map and remove stale
   inventories. Acceptance: the same cascade with files that tell an editor where a rule belongs.
+
+What it cost, recorded rather than glossed: three `noDescendingSpecificity` findings the linter can
+no longer see across file boundaries, and **nine sections that are not where their name says** —
+found by reading each sheet against its banner, and left in place, because moving them is a cascade
+change and this job was an extraction.
 
 ### Stage: Optimise annotation inputs, if measurements warrant it
 
@@ -696,7 +752,7 @@ implying the sluggishness is fixed.
 
 ### Stage: Consolidate geometry only after the preceding baseline
 
-- [ ] Profile the actual scroll/layout reads after A7. If they are not material, close this stage
+- [x] Profile the actual scroll/layout reads after A7. If they are not material, close this stage
   as deferred with evidence; a new observer service has a real maintenance cost.
 - [ ] Share the smallest read snapshot between two existing consumers. Preserve distinct focus
   calculations and fresh explicit jumps; test delayed image/font/viewport changes.

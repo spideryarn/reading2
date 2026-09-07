@@ -2,7 +2,7 @@
  * **A slug that is about to reach a query, or a 400** — and a leaf, so anything
  * can use it.
  *
- * The same guard `src/api.ts` keeps on the filesystem side, and the reason it is
+ * The same guard `src/api.ts` kept on the filesystem side, and the reason it is
  * a shared function rather than a line in each store is written out in
  * [`tests/store-slug-guard.test.ts`](../../tests/store-slug-guard.test.ts): six
  * modules each grew their own copy of the lookup, five called this and one did
@@ -15,7 +15,7 @@
  *
  * The same reason [`owned-slug.ts`](owned-slug.ts) and
  * [`isolation.ts`](isolation.ts) are their own files: `pg.ts` imports
- * `src/api.ts`, which reaches `glossary.ts` and `arc.ts`, so anything importing
+ * `glossary.ts` and `arc.ts`, so anything importing
  * `pg.ts` inherits the whole read layer and risks an import cycle —
  * and `npm run cycles` is a gate, not advice. This file imports `isSlug` from
  * `src/ingest.ts` and nothing else.
@@ -26,7 +26,7 @@
 
 import { isSlug } from "../ingest.js";
 
-/** A slug that is about to reach a query, or a 400 — the same guard src/api.ts keeps. */
+/** A slug that is about to reach a query, or a 400. */
 export function requireSlug(slug: string): void {
   if (isSlug(slug)) return;
   throw Object.assign(new Error(`Not a slug: ${JSON.stringify(slug)}`), { status: 400 });

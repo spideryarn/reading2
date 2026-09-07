@@ -95,9 +95,11 @@ Code: [`src/glossary.ts`](../../src/glossary.ts) (stage 5d — the model call, t
 occurrence pass), [`src/term-match.ts`](../../src/term-match.ts) (the matching rule, shared),
 [`src/store/pg.ts`](../../src/store/pg.ts) § `loadGlossary`, [`src/routes.ts`](../../src/routes.ts),
 [`src/web/GlossaryPanel.tsx`](../../src/web/GlossaryPanel.tsx),
+[`src/web/modes/glossary/GlossaryMode.tsx`](../../src/web/modes/glossary/GlossaryMode.tsx)
+(`GlossaryBand`, `VisitorGlossaryBand`, `useGlossaryMode`),
 [`src/web/useGlossary.ts`](../../src/web/useGlossary.ts),
-[`src/web/annotate.ts`](../../src/web/annotate.ts) § `termMarks`, and `§ glossary mode` at the end of
-[`src/web/styles.css`](../../src/web/styles.css). Tests:
+[`src/web/annotate.ts`](../../src/web/annotate.ts) § `termMarks`, and `§ glossary mode` in
+[`src/web/styles/glossary.css`](../../src/web/styles/glossary.css). Tests:
 [`tests/glossary.test.ts`](../../tests/glossary.test.ts).
 
 ## Where it lives, and why that cost nothing
@@ -120,7 +122,8 @@ was built:
 So the glossary is the third implementation of the slot described in
 [260826a-chat-mode.md](../plans/260826a-chat-mode.md), and it needed **no new layout arithmetic at all**. `fitView`
 in [`layout.ts`](../../src/web/layout.ts) already knew about the slot rather than about chat; the
-whole change there was one line in [`App.tsx`](../../src/web/App.tsx) — `chatting` became
+whole change there was one line in `App.tsx` (in
+[`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) since 2026-09-06) — `chatting` became
 `mode !== "hierarchy"` (`toc` until the mode was renamed on 2026-08-29). That is the evidence that the reframing was right, and it is worth recording
 because the reframing looked at the time like extra ceremony for one feature.
 
@@ -212,7 +215,7 @@ and in the export.
 do the same for Quotes (and any other modes as needed)"*: the quotes panel's foot
 ([`src/web/QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx) § `Foot`) and the dashed chip in the
 reading view's controls that held the tree's version
-([`src/web/App.tsx`](../../src/web/App.tsx)). Those were the only three. Two survivors, both
+([`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx)). Those were the only three. Two survivors, both
 deliberate: [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) § `StageRow`, which is where an
 owner is *meant* to look, and the thread page's *"Written by …"*
 ([`src/web/Tweets.tsx`](../../src/web/Tweets.tsx)), which sits on a page of its own, carries when and
@@ -322,7 +325,7 @@ opened. Four things follow, and three of them are the interesting part:
 
 - **The line got quieter.** A wash behind one pressed term is a highlight; the same wash behind every
   term in the piece is a mottled paragraph the reader cannot turn off. The standing mark is the
-  dotted rule alone (`mark.term` in [`styles.css`](../../src/web/styles.css)); the wash moved to the
+  dotted rule alone (`mark.term` in [`styles/annotations.css`](../../src/web/styles/annotations.css)); the wash moved to the
   pressed one.
 - **Being selected had to stop meaning "having a mark"**, because everything has one now. It means a
   *different* mark — `mark.term[data-open]`, which is exactly what the open comment and the pressed

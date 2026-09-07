@@ -29,6 +29,7 @@ import { jsdom } from "./jsdom-lazy.js";
 import { Readability } from "@mozilla/readability";
 import { escapeHtml } from "./html.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
+import { type FurnitureRemovals, removePlatformFurniture } from "./furniture.js";
 import { canonicaliseNotes, type NoteStats } from "./notes.js";
 /* The namespace and its scrub — src/reserved.ts is the only file allowed to
    name one of these attributes. See `stampSourceIds`. */
@@ -165,6 +166,18 @@ export interface ExtractResult {
   notes: NoteStats;
   /** What the callout pass found — see src/callouts.ts. */
   callouts: CalloutStats;
+  /**
+   * **How much platform chrome stage 2 deleted, per selector** — the audit line
+   * for the one thing this pipeline removes (src/furniture.ts).
+   *
+   * It rides here rather than on `Meta` for a reason worth stating: `Meta` is
+   * persisted as *columns* on `article_revisions` (src/store/pg.ts §
+   * `metaFrom`, src/store/artifacts-pg.ts § `metaColumns`), so putting it there
+   * is a migration, two mapping functions and the export round-trip — for a
+   * field whose only reader, stage D's audit line, does not exist yet. Stage D
+   * is where that trade stops being premature.
+   */
+  removed: FurnitureRemovals;
 }
 
 /**
@@ -343,11 +356,24 @@ const CJK_SEGMENT_BREAK = new RegExp(`(?<=[${CJK}])[^\\S\\n]*\\n\\s*(?=[${CJK}])
  * `article` is `null` when Readability declines the page — the caller decides
  * whether that is an error (`runExtract`: yes) or a row in a table (an eval:
  * no). It is deliberately not thrown from here.
+ *
+ * `refusal` is the same arrangement for the capability floor below: non-null
+ * means *this is too little text to build anything from*, `article` is whatever
+ * Readability handed back anyway, and it is the caller's business what to do
+ * about it.
  */
 export function readArticle(
   html: string,
-  url: string,
-): { article: ReturnType<Readability["parse"]>; notes: NoteStats; callouts: CalloutStats } {
+  /** `null` for a document with no address — see `sourceDom`. */
+  url: string | null,
+): {
+  article: ReturnType<Readability["parse"]>;
+  refusal: TooLittleTextToRead | null;
+  notes: NoteStats;
+  callouts: CalloutStats;
+  /** What `removePlatformFurniture` deleted, per selector — see src/furniture.ts. */
+  removed: FurnitureRemovals;
+} {
   /* **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
      JSDOM's default forwards its own errors straight to `console`, and one of
      them quotes the page: a malformed `@import` produces `Could not parse CSS
@@ -366,8 +392,102 @@ export function readArticle(
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
   const dom = sourceDom(html, url);
-  const { notes, callouts } = prepareDocument(dom.window.document);
-  return { article: new Readability(dom.window.document).parse(), notes, callouts };
+  const { notes, callouts, removed } = prepareDocument(dom.window.document);
+  const article = new Readability(dom.window.document).parse();
+  return { article, refusal: capabilityFloor(article), notes, callouts, removed };
+}
+
+/**
+ * **Readability's own threshold, and the number is the library's rather than
+ * ours** — `DEFAULT_CHAR_THRESHOLD`, 500, in
+ * node_modules/@mozilla/readability/Readability.js.
+ *
+ * Below it Readability has already concluded the parse *failed*: it pushes the
+ * pass onto `_attempts`, drops a flag and tries again, and when it runs out of
+ * flags it hands back **the longest of its failures** rather than nothing at
+ * all. So a short return is all but always a parse the library disowned rather
+ * than a short article — see `visibleLength` for the one hair's-breadth case
+ * where that "all but" is doing work — and stage 2 published it anyway. `medium_about.html` became an
+ * article titled "Medium" with 185 characters in it, and a published article
+ * spends a paying reader's slot where a failed ingest is free
+ * (src/store/pg-session.ts § the settlement: `done` charges, every other ending
+ * releases).
+ *
+ * **Do not tune this to the corpus.** Measured across all 36 fixtures on
+ * 2026-09-06, the two walls are 130 (`pmc_article`) and 185 (`medium_about`),
+ * the shortest genuine page is 1,798 (`arxiv_abs`) and the next 3,901
+ * (`mkdocs_tabs`); nothing lies in between. That is 2.7× headroom over the
+ * tallest wall and 3.6× under the shortest real page, and it is evidence that
+ * the library's number is safe here rather than a reason to move it.
+ * `tests/extract-capability-floor.test.ts` pins it from **above** as well as
+ * below, because tightening it is the mistake with no symptom.
+ *
+ * docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md § C1a.
+ */
+export const MIN_ARTICLE_CHARS = 500;
+
+/**
+ * **Readability's own measure, computed the same way** — `_getInnerText(el,
+ * true)`, which is `textContent.trim()` with runs of whitespace collapsed
+ * (Readability.js § `REGEXPS.normalize`).
+ *
+ * `article.length` is *not* it: that is the raw `textContent.length`, which on
+ * `arxiv_abs` is 2,321 against 1,798 of text a reader would see. Collapsing is
+ * what makes the number in the reader's sentence a number about what they were
+ * looking at.
+ *
+ * **The same formula, on a slightly later document — and that is deliberate but
+ * it is not an identity.** Readability takes its own reading *before*
+ * `_postProcessContent`, which then runs `_simplifyNestedElements` and drops
+ * empty `DIV`/`SECTION` wrappers; removing one removes whitespace, so the text
+ * we measure can be a character or two shorter than the length the library
+ * compared. GPT Sol reproduced the boundary case: a page the library measured at
+ * exactly 500 and accepted, returning 499 here and refused. So this is **not**
+ * "we never override Readability" to the character — within a hair of the
+ * threshold the two can disagree, and we refuse.
+ *
+ * That is the right way round and worth stating rather than fixing: the question
+ * this floor asks is *is there enough text in the article we would publish*, and
+ * the post-processed document is that article. Reading the library's private
+ * decision instead would mean subclassing it to catch `_attempts`, which is a
+ * lot of coupling to move an edge case by one character. GPT Sol, 2026-09-06.
+ */
+function visibleLength(text: string | null | undefined): number {
+  return (text ?? "").trim().replace(/\s{2,}/g, " ").length;
+}
+
+/**
+ * **The capability floor** — the one shared decision, called by both read paths.
+ *
+ * It is a helper rather than a line in each of them, and that is the whole
+ * design: `readArticle` and `readArticleWithProvenance` are separate entry
+ * points that do not call each other, `runExtract` uses the first and the eval
+ * harness's `shippedOf` (evals/extraction/arms.mts) uses the second directly.
+ * Put this in `runExtract`'s catch or in src/pipeline.ts and production looks
+ * correct while `Candidate.refused` stays permanently false and the harness's
+ * `notAnArticle` support proves nothing — Sol P1-C03 arriving as a concrete
+ * seam, and the exact silent success docs/reusable/silent-success.md describes.
+ *
+ * **It decides nothing about any piece of content**, which is why it is allowed
+ * where the plan forbids shape rules. Every failed shape rule in this project
+ * decided what some text *was* — junk, marker, nav — and a wrong decision
+ * silently deleted a real article's words. This one says only that the whole
+ * page has too little text for this product to build anything from, which is
+ * equally true of a genuine 300-character page, and that is the point. Fable,
+ * 2026-09-06, quoted in the plan.
+ *
+ * **Not a bot-wall detector.** That is C1, a registry of conclusive markup, and
+ * this knows nothing about *what* the page is.
+ */
+function capabilityFloor(
+  article: { textContent: string | null | undefined } | null,
+): TooLittleTextToRead | null {
+  /* Readability declining outright is `ReadabilityRefused`'s branch, not this
+     one: two different findings deserve two different sentences, and a floor
+     that also answered for `null` would swallow it. */
+  if (!article) return null;
+  const chars = visibleLength(article.textContent);
+  return chars < MIN_ARTICLE_CHARS ? new TooLittleTextToRead(chars) : null;
 }
 
 /**
@@ -392,9 +512,27 @@ export function readArticle(
  * the same class, and the first one where the leak was a dependency's rather
  * than ours. See docs/project/logging.md.
  */
-function sourceDom(html: string, url: string): InstanceType<ReturnType<typeof jsdom>["JSDOM"]> {
+function sourceDom(
+  html: string,
+  /**
+   * **The base relative links resolve against, or `null` for a document that
+   * has no address** — an uploaded HTML file, since 2026-09-07
+   * (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md).
+   *
+   * Omitting the option is not the same as passing something harmless. `""`
+   * throws `TypeError: Invalid URL` out of the JSDOM constructor, where nothing
+   * here would catch it; `"about:blank"` is what JSDOM defaults to anyway, so
+   * spelling it here would only look like a decision. What omission buys is
+   * that `document.baseURI` stays `about:blank`, `new URL(relative, base)`
+   * throws inside Readability's own `toAbsoluteURI`, and the relative URI is
+   * left exactly as the document wrote it — which `src/assets.ts` already knows
+   * how to refuse. And a document carrying `<base href="…">` resolves properly
+   * with no help from us, because that element *is* the document's base URL.
+   */
+  url: string | null,
+): InstanceType<ReturnType<typeof jsdom>["JSDOM"]> {
   const { JSDOM, VirtualConsole } = jsdom();
-  return new JSDOM(html, { url, virtualConsole: new VirtualConsole() });
+  return new JSDOM(html, { ...(url === null ? {} : { url }), virtualConsole: new VirtualConsole() });
 }
 
 /**
@@ -407,7 +545,11 @@ function sourceDom(html: string, url: string): InstanceType<ReturnType<typeof js
  * `readArticleWithProvenance` below is a third caller and would have been a
  * third chance to get it wrong.
  */
-function prepareDocument(doc: Document): { notes: NoteStats; callouts: CalloutStats } {
+function prepareDocument(doc: Document): {
+  notes: NoteStats;
+  callouts: CalloutStats;
+  removed: FurnitureRemovals;
+} {
   unhideCollapsedSections(doc);
   /* **The PDF figure marker, scrubbed on the one path a stranger's markup
      arrives by.** Nothing on this path ever *writes* one — only `renderHtml`
@@ -421,6 +563,24 @@ function prepareDocument(doc: Document): { notes: NoteStats; callouts: CalloutSt
      PDF's sha256 and a web article has no raw PDF and therefore no `pdfFigures`
      entry to match. This is belt to that braces, and it is one line. */
   scrubReserved(doc, [RESERVED_ATTRS.pdfFigure]);
+  /* **The one step that deletes something because of what the publisher called
+     it** — other things here remove elements, but only this one does it as a
+     policy about furniture. What it may delete, and why that licence is narrow
+     enough to spend, is on `removePlatformFurniture` (src/furniture.ts). It is
+     not a general furniture pass: everything else stays and waits for stage D.
+
+     First of the three recognisers **by preference, not by need.** The
+     preference is that `a.headerlink` is a fragment anchor and `ul.reflinks`
+     holds them, which is the shape `canonicaliseNotes` starts from, and there
+     is nothing to be gained by offering it PLOS's button strips and Sphinx's
+     pilcrows to consider — though the note pass goes on to require a marker
+     label and a publisher topology neither would satisfy (src/notes.ts). So
+     this was measured rather than argued: run last instead of first, over every
+     fixture this pass touches plus `acx_footnotes` and `tufte` — the two the
+     note pass does most to — the removal counts, the `NoteStats`, the
+     `CalloutStats` and Readability's output HTML are byte-identical on all
+     nine. 2026-09-06. */
+  const removed = removePlatformFurniture(doc);
   /* Before Readability, and it has to be: Readability's `keepClasses: false`
      takes the identifying classes off, and the sanitiser downstream of it
      deletes the `<label>`/`<input>` that Tufte's sidenotes are made of. By stage
@@ -431,7 +591,7 @@ function prepareDocument(doc: Document): { notes: NoteStats; callouts: CalloutSt
      neither reads what the other writes — so it is simply the later arrival.
      src/callouts.ts. */
   const callouts = canonicaliseCallouts(doc);
-  return { notes, callouts };
+  return { notes, callouts, removed };
 }
 
 /**
@@ -560,8 +720,26 @@ export function readArticleWithProvenance(
   url: string,
 ): {
   article: ReturnType<Readability<Element>["parse"]>;
+  /**
+   * **The capability floor's verdict, the same one the shipping path gets** —
+   * `capabilityFloor` is called here as well as in `readArticle` because the two
+   * are separate entry points and neither calls the other. Without this the
+   * harness's `Candidate.refused` is permanently false on the very pages the
+   * floor exists for, and `notAnArticle` scores a refusal that never happens.
+   */
+  refusal: TooLittleTextToRead | null;
   notes: NoteStats;
   callouts: CalloutStats;
+  /**
+   * What `removePlatformFurniture` deleted, per selector.
+   *
+   * **Removed before the source is stamped**, which is the fact the gates rest
+   * on: `prepareDocument` runs first, so a deleted control is absent from the
+   * stamped source *and* from Readability's output, and the order and
+   * provenance gates never see a hole. Confirmed by running the corpus rather
+   * than assumed — C4a, 2026-09-06.
+   */
+  removed: FurnitureRemovals;
   /** The stamped source, as Readability was handed it and before it pruned anything. */
   source: Document;
   /**
@@ -583,7 +761,7 @@ export function readArticleWithProvenance(
   stampedElements: number;
 } {
   const prepared = sourceDom(html, url);
-  const { notes, callouts } = prepareDocument(prepared.window.document);
+  const { notes, callouts, removed } = prepareDocument(prepared.window.document);
   const stampedElements = stampSourceIds(prepared.window.document);
   const sourceHtml = prepared.window.document.documentElement.outerHTML;
   const forReadability = sourceDom(prepared.serialize(), url);
@@ -592,8 +770,10 @@ export function readArticleWithProvenance(
   }).parse();
   return {
     article,
+    refusal: capabilityFloor(article),
     notes,
     callouts,
+    removed,
     source: prepared.window.document,
     sourceHtml,
     stampedElements,
@@ -684,6 +864,43 @@ export class ReadabilityRefused extends Error {
 }
 
 /**
+ * **There is too little text on this page to build anything from** — the
+ * capability floor's refusal, and a different finding from the one above.
+ *
+ * `ReadabilityRefused` is *the library found no article at all*. This is *the
+ * library found something, disowned it, and handed back its longest failure
+ * anyway* — see `MIN_ARTICLE_CHARS`. Two branches, two sentences, two codes,
+ * because a code names a branch and whoever is helping a reader should be able
+ * to tell them apart from four characters.
+ *
+ * **Its own type rather than a reworded message**, and `ReadabilityRefused`'s
+ * docstring above is why: the pipeline classified that one by matching
+ * `/^Readability could not parse this page\./` against `err.message` until
+ * 2026-09-03, which rots the day somebody rewords the sentence and — being a
+ * prefix — could never prove that the whole of a matching message came from
+ * here. `instanceof` says it in the type system and says it exactly.
+ *
+ * `chars` is on the error rather than only in its message for the same reason:
+ * src/pipeline.ts puts the count in the reader's sentence, and parsing a number
+ * back out of prose is the shape this file has already paid for once.
+ *
+ * The message is for the log. What the reader is shown is
+ * `pageHadTooLittleText` in src/messages.ts, which says none of this.
+ */
+export class TooLittleTextToRead extends Error {
+  /** Readability's own measure of the page — see `visibleLength`. */
+  readonly chars: number;
+  constructor(chars: number) {
+    super(
+      `Readability returned ${chars} characters, below its own ${MIN_ARTICLE_CHARS}-character ` +
+        "threshold, so it had already concluded this parse failed.",
+    );
+    this.name = "TooLittleTextToRead";
+    this.chars = chars;
+  }
+}
+
+/**
  * Stage 2 over already-fetched HTML — **and it writes nothing.**
  *
  * It took `outFile` and `dataDir` until 2026-08-31 and wrote the page and
@@ -702,7 +919,19 @@ export class ReadabilityRefused extends Error {
  */
 export async function runExtract(opts: {
   html: string;
-  url: string;
+  /**
+   * **`null` for a document the reader uploaded**, which has no address at all —
+   * docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md.
+   *
+   * It is used for exactly two things and they want the same answer: as the
+   * base relative links resolve against (`sourceDom`), and as `meta.url`. A
+   * placeholder would have been wrong in both — a fake base silently resolves
+   * relative links to an origin nobody named, and a fake `meta.url` reads as an
+   * address to the masthead, the metadata page and every dedup check. Absent is
+   * what `Meta.url` already allows, because an uploaded PDF has been arriving
+   * without one since 2026-08-27.
+   */
+  url: string | null;
   slug: string;
 }): Promise<ExtractResult> {
   const { slug } = opts;
@@ -724,13 +953,21 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const { article, notes, callouts } = readArticle(opts.html, opts.url);
+  const { article, refusal, notes, callouts, removed } = readArticle(opts.html, opts.url);
   if (!article) {
     throw new ReadabilityRefused();
   }
+  /* **The caller that decides the floor is an error**, which is what
+     `readArticle`'s header means by handing the verdict back rather than
+     throwing it. An eval wants the row; this is the path that publishes, and
+     publishing 185 characters of somebody's 404 page as an article is what
+     spends a reader's slot on nothing. */
+  if (refusal) {
+    throw refusal;
+  }
 
   /* The metadata is the article's identity — the only place the source URL, the
-     byline and the fetch date survive past this stage (src/api.ts reads it).
+     byline and the fetch date survive past this stage (src/store/pg.ts reads it).
      Rebuilt on every run: re-extracting is how you refresh a page, and the
      fetch date should follow. */
   /* Readability has been handing `publishedTime` back all along and this stage
@@ -747,7 +984,11 @@ export async function runExtract(opts: {
     ...(byline ? { byline } : {}),
     ...(article.siteName ? { siteName: article.siteName } : {}),
     ...(article.lang ? { lang: article.lang } : {}),
-    url: opts.url,
+    /* **Spread rather than assigned**, since 2026-09-07, for the same reason
+       every optional field above is: `url: undefined` and no `url` key are
+       different artefacts, and the round-trip test compares them. An uploaded
+       document has no address and must not carry one. */
+    ...(opts.url === null ? {} : { url: opts.url }),
     fetchedAt: new Date().toISOString(),
     ...(publishedAt ? { publishedAt } : {}),
     ...(article.excerpt ? { excerpt: article.excerpt } : {}),
@@ -761,6 +1002,7 @@ export async function runExtract(opts: {
     excerpt: article.excerpt ?? null,
     notes,
     callouts,
+    removed,
   };
 }
 

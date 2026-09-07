@@ -5,7 +5,7 @@
  * `data/<slug>/` back to disk, and a revision row holds a *reference* to the
  * source document rather than the document — so the bytes come from wherever
  * `blobStore()` points. That choice is made by the presence of two credentials
- * and nothing else (src/store/blobs.ts § Why selection does not read
+ * and nothing else (src/store/blobs.ts § Why selection never read
  * `SPIDERYARN_STORE`), and `blobStore()` falls back to `data/_blobs/` silently
  * when either is missing.
  *

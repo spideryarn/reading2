@@ -308,7 +308,7 @@ drifted a version behind.
 | **quick** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | OpenRouter |
 | **embeddings** | Voyage 4 — `voyageai/voyage-4` | OpenRouter, and not a *tier* — see below |
 | **PDF reader** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | OpenRouter, and not a *tier* either — `PDF_READER_MODEL` |
-| **dictation** | Gemini 3.1 Flash Lite — `google/gemini-3.1-flash-lite` | OpenRouter, and not a tier — `DICTATION_MODEL` |
+| **dictation** | GPT Transcribe — `openai/gpt-transcribe` | OpenRouter's `/v1/audio/transcriptions`, and not a tier — `DICTATION_MODEL`. The one job not on chat/completions; it takes a `keywords` vocabulary, which is why it is there ([260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md)) |
 
 **Every one of those goes through OpenRouter**, since 2026-08-27 and Greg's decision to gate the
 whole app through one vendor. What still varies is not the vendor but the **wire** — which protocol
@@ -407,13 +407,16 @@ project's own articles. It lives in [`src/embeddings.ts`](../../src/embeddings.t
 ([diagram.md](diagram.md)); [260826n-semantic-search.md](../plans/260826n-semantic-search.md) is the other planned
 caller.
 
-**Every job is on the capable tier except one.** The quick tier is about a tenth the price, and
-`link-summary` — how a hovered link's destination stands to the piece being read
-([links.md](links.md#and-what-it-has-to-do-with-the-piece-in-your-hands)) — was **written for it**
-rather than moved onto it, on 2026-09-05. That distinction is the whole of the policy: a new job may
-be born on the quick tier by judgment, and **moving an existing one still means running an eval under
-[`evals/`](../../evals/README.md) first and writing down what it cost**. Greg, 2026-08-26 — *"use
-your judgment about which tasks to use for which (default to capable-model for now)."*
+**Every job is on the capable tier except two.** The quick tier is about a tenth the price, and both
+of its jobs were **written for it** rather than moved onto it: `link-summary` — how a hovered link's
+destination stands to the piece being read
+([links.md](links.md#and-what-it-has-to-do-with-the-piece-in-your-hands)) — on 2026-09-05, and
+`quiz-verdict` — whether the reader got a question right, judged from the finished mark and shown to
+nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — on 2026-09-07.
+That distinction is the whole of the policy: a new job may be born on the quick tier by judgment, and
+**moving an existing one still means running an eval under [`evals/`](../../evals/README.md) first
+and writing down what it cost**. Greg, 2026-08-26 — *"use your judgment about which tasks to use for
+which (default to capable-model for now)."*
 
 What that one job measured, which is all this repository knows about the tier: $0.00015 a call, 2–5
 seconds, and **no reasoning tokens reported at all** at `effort: "low"` — the 1,024-token floor the
@@ -478,7 +481,8 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_REFEREE_CRITERIA_MODEL` | Criteria, one of a referee's own questions run over the paper |
 | `SPIDERYARN_REFEREE_CLAIMS_MODEL` | Claims, pulling what the paper claims about itself |
 | `SPIDERYARN_REFEREE_CANDIDATES_MODEL` | Candidates, the editor's conversation about who could review the paper |
-| `SPIDERYARN_LINK_SUMMARY_MODEL` | how a hovered link's destination stands to the piece being read — **the one job on the quick tier**, so this is the variable for asking whether the cheap model is good enough |
+| `SPIDERYARN_LINK_SUMMARY_MODEL` | how a hovered link's destination stands to the piece being read — one of the **two jobs on the quick tier**, so this is a variable for asking whether the cheap model is good enough |
+| `SPIDERYARN_QUIZ_VERDICT_MODEL` | whether the reader got a quiz question right, judged from the finished mark and shown to nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — the other quick-tier job. `evals/quiz.ts` prints the verdict beside a hand label on all eight marking cases, so this is the variable for asking the same question with evidence |
 | `SPIDERYARN_PIPELINE_EFFORT` | all three article-reading stages' effort at once |
 
 `MODEL_ENV_VAR` in [`src/models.ts`](../../src/models.ts) is the list this table copies, and the
@@ -542,8 +546,9 @@ knowing here:
   gave three new revisions and **one distinct id set**, measured 2026-09-05.
 - **`--force` re-runs the step; it does not buy a fresh answer.** These runs share the article's
   `checkpoints` rows, which is what makes a killed run cheap to repeat — and it means a forced
-  `hierarchy` on an unchanged article replays the structure and labels it already paid for. Two
-  consecutive forced runs, measured 2026-09-05: two model calls, then **zero**. Changing what a
+  `hierarchy` on an unchanged article replays the structure call it already paid for, and a forced
+  `labels` replays the batches. Two consecutive forced `hierarchy` runs, measured 2026-09-05 while
+  the two were still one step: two model calls, then **zero**. Changing what a
   `force` means to a checkpoint is a queue-wide question, not a CLI one — the browser's Refresh does
   the same thing.
 - **Naming one step runs one step.** `--force` cascades over the steps *in that job*, which for a
@@ -558,7 +563,8 @@ knowing here:
 | `npm run ingest -- <file.pdf>` | the same, entered through an upload | Mints an upload record, puts the bytes, **claims** it, enqueues and notes the slug — `queueAnUpload`'s order (`src/routes.ts`), and the claim is the move that fails silently: without it the article is perfect and the record stays `pending` with no verified size. `--force` is refused here and only here: every upload mints a fresh slug, so two runs of one file are two articles |
 | `npm run extract -- <slug> [--force]` | 2, Readability over the stored document ([content-extraction.md](content-extraction.md)) | |
 | `npm run blocks -- <slug> [--force]` | 3, split into blocks and mint stable ids ([block-ids.md](block-ids.md)) | Freshness is structural: the stored HTML is re-split and compared block for block ([architecture.md § Conventions](architecture.md#conventions)) |
-| `npm run hierarchy -- <slug> [--force]` | 4, the tree **and** its nav labels ([hierarchy.md](hierarchy.md)). Two model passes — the structure in one call, the labels in parallel batches — but one step, and nothing is written until both finish | **`npm run labels` is retired.** There is no `labels` step and adding one would be a pipeline redesign to keep a debugging command: stage 4 produces structure, gists, blocks and labels as one typed atomic result. **What that command was for has no replacement**: the plan expected `--force` here to be the re-labelling route, and measurement on 2026-09-05 says it is not — a forced re-run replays the structure and the label batches out of the article's checkpoints and buys nothing. Judging a label-prompt change is `npm run eval:hierarchy`; making `force` mean something to a checkpoint is a queue-wide decision |
+| `npm run hierarchy -- <slug> [--force]` | 4, the tree and an **empty** labels manifest ([hierarchy.md](hierarchy.md)). One model pass since 2026-09-06 — the structure — and the labels are the row below | Writing a pending manifest **deletes this revision's `labels` receipt**, so running this always makes the labels step runnable again. A forced re-run still replays the structure out of the article's checkpoints and buys nothing new (measured 2026-09-05); judging a *structure*-prompt change is `npm run eval:hierarchy-structure` |
+| `npm run labels -- <slug> [--force]` | 4b, the `navLabel` on every paragraph, in parallel batches ([hierarchy.md § Why they are two steps](hierarchy.md#two-steps)) | **Back since 2026-09-06**, and this row said the opposite until then: *"`npm run labels` is retired. There is no `labels` step and adding one would be a pipeline redesign to keep a debugging command."* It is a step now, so the command is one line of `package.json` rather than a redesign. What has **not** changed is what `--force` buys: the batches come back out of the article's checkpoints, so a forced re-run on an unchanged tree costs nothing and answers the same. Judging a label-prompt change is still `npm run eval:hierarchy`; making `force` mean something to a checkpoint is a queue-wide decision |
 | `npm run pdf:pass0 -- <file.pdf>` | 2, what a PDF says for free: pages, words, scan or not, running headers. No model, no network | prints; writes nothing |
 | `npm run eval:pdf-read -- <file.pdf> [slug]` | **not a stage runner** — the PDF extraction-quality tool, and it was `npm run pdf` until 2026-09-05 | It prints the pages, the chunk plan and the per-chunk recall table ([`src/pdf-score.ts`](../../src/pdf-score.ts)), which is where the numbers in [evals/pdf/README.md](../../evals/pdf/README.md) come from; the queue's `detail` for that step is the title and nothing else. It writes `output/<slug>.html` and `data/<slug>/meta.json` **for a person to look at**, not as store artefacts. Ingesting a PDF is `npm run ingest -- <file.pdf>`. Nothing is remembered between runs: the chunk checkpoints are rows keyed on an `articles` row this command does not have ([database.md § Checkpoints](database.md#checkpoints-work-a-failed-attempt-already-paid-for)) |
 | `npm run hierarchy:flatten -- …` | 4, tree → the flat sidebar rows ([hierarchy.md](hierarchy.md)) | — |

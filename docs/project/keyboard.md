@@ -178,7 +178,7 @@ and the header row gave up its height, both in
 ← / →, so the aim moved onto the one surface left — the column itself.
 
 **The mechanism, and every part of it is a thing that was got wrong first**
-([styles.css § the aimed column](../../src/web/styles.css), `tests/aimed-column.test.ts`):
+([styles/table.css § the aimed column](../../src/web/styles/table.css), `tests/aimed-column.test.ts`):
 
 - **One `data-aim` attribute on `.reader`**, never a class on the cells: a deep article renders
   thousands of `<td>`s and `memo(TableView)` is what keeps a pointer move cheap. It went on `.reader`
@@ -274,7 +274,8 @@ too, which is the point of them all going through one function.
 
 ### A keypress writes no URL of its own
 
-It scrolls, and the reading-position listener in [`App.tsx`](../../src/web/App.tsx) notices and
+It scrolls, and the reading-position listener in
+[`reader/useReadingPosition.ts`](../../src/web/reader/useReadingPosition.ts) notices and
 updates `?at=` exactly as it would for a wheel. So there is no second answer to "does this push a
 history entry?" — a stride you take twenty times must not cost twenty presses of Back, which is
 [the rule position already follows](url-state.md#position-replaces-history-deliberate-acts-push).
@@ -282,6 +283,45 @@ history entry?" — a stride you take twenty times must not cost twenty presses 
 Note the consequence, which is the existing cost of storing position as a section and not new here:
 stepping paragraph-by-paragraph inside one section doesn't change the URL, so a reload puts you at
 the top of that section ([url-state.md](url-state.md#the-unit-is-a-section-not-a-position)).
+
+## The one chord that is not an arrow
+
+**⌘-K on a Mac, Ctrl-K everywhere else, opens the command bar** — type a mode's name or one of its
+nicknames, press Enter, and you are in it. What that bar is, and what it deliberately cannot do, is
+[reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar); this section
+is only the key.
+
+It obeys three of the rules above, and it is worth saying which, because they are the rules and not
+a coincidence:
+
+- **Auto-repeat is ignored** ([§ auto-repeat](#auto-repeat-is-ignored)). Holding the chord would
+  otherwise reopen the bar every few milliseconds under whatever you had already typed.
+- **It does not fire while focus is in an input, a textarea, a select or anything contenteditable**,
+  which is the same list the arrows respect — and it matters more here, because ⌘-K is a
+  text-editing chord in several editors.
+- **`preventDefault()` only when the press is claimed.** Firefox focuses the address bar on ⌘-K; a
+  listener that suppressed that without opening anything would be a chord that quietly breaks a
+  browser feature.
+
+Two more rules are its own, and both are about what else is on screen:
+
+- **The Dock drawer is closed first.** That drawer has a **capture-phase** `window` Escape handler
+  which calls `stopImmediatePropagation` ([`Dock.tsx`](../../src/web/Dock.tsx) § Escape closes the
+  drawer), so with both open one Escape would shut the drawer nobody can see and the bar in front of
+  you would never hear the key.
+- **It does not open over another native modal.** The Feedback dialog, the Lightbox and the comment
+  dialogs are all `<dialog>`s opened with `showModal()`, and two of those stack in the top layer
+  with focus trapped in the newer one.
+
+**Inside the bar the arrows are the bar's**, which is the one place in the app they are not the
+article's — ↑ / ↓ move the selection and clamp at both ends. That is not an exception to this file's
+rule so much as the rule's own escape hatch, [§ a widget that already handled the key keeps
+it](#a-widget-that-already-handled-the-key-keeps-it): the bar is a modal dialog, the article is
+inert behind it, and there is nothing to step through.
+
+The chord was verified free before it was taken — a grep of `src/web/` and `tests/` for
+`metaKey`/`ctrlKey` with `"k"` returned nothing, 2026-09-06. On a phone there is no chord at all,
+which is why the bar also has a button in the Dock.
 
 ## What we gave up
 

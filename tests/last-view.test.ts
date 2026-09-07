@@ -218,7 +218,8 @@ describe("the two lists cover every parameter the client writes", () => {
       /* **`useQueryStates` too, and finding it is the reason this test exists.**
          The plural form takes an object of name → parser, so a parameter reached
          only that way is invisible to the singular pattern above — `?remember=`
-         and `?thread=` are set through one of them in App.tsx. Both happened
+         and `?thread=` are set through one of them in
+         modes/conversation/ConversationModes.tsx. Both happened
          already to be in the lists, so this caught no live bug; it closes the
          hole a future one would arrive through. Matched to the closing `})` on
          its own line, which is what prettier gives every call in this repo. */

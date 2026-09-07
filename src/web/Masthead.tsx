@@ -67,7 +67,7 @@ import type { Article, Meta, Visibility } from "../types.js";
    `http(s)` — one test rather than two spellings of it. */
 import { hostOf } from "../urls.js";
 import { Link } from "./Link.js";
-import { SourceLink, webSource } from "./SourceLink.js";
+import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
 import { carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
@@ -79,10 +79,10 @@ interface Props {
    * **The address, not `meta.slug`.**
    *
    * They are usually the same and once in a while they are not, which is the
-   * whole reason this prop exists: an address with no article of its own is
-   * answered with the committed fixture, meta.json and all, so `/read/anything`
+   * whole reason this prop exists: an address with no article of its own was
+   * answered with the committed fixture until 2026-08-30, so `/read/anything`
    * hands this component a `meta.slug` of `noema-mythology-of-conscious-ai`
-   * (src/api.ts § loadArticle, example/meta.json). Renaming through that would
+   * (example/meta.json). Renaming through that would
    * have PATCHed the real Noema article's shelf row while appearing to rename
    * the thing on screen. GPT Sol, 2026-08-27.
    *
@@ -245,13 +245,13 @@ export function Masthead({ article, slug, onRenamed }: Props) {
             so we did not send them one". Same stand-in for *is this yours* that
             `SeeTheOriginal` below and `SharingMark` above use, asked once.
 
-            **`meta.source` is the evidence; the absent URL is only the
+            **`cameOffADisk` is the evidence; the absent URL is only the
             occasion.** An owner can hold a *web* article with no URL (a lost
             `meta.json`, a revision published with neither address), and calling
             that an upload is a false sentence about their library. */}
         <OriginLine
           source={source}
-          origin={onRenamed === undefined ? null : meta.source === "pdf" ? "upload" : "unrecorded"}
+          origin={onRenamed === undefined ? null : cameOffADisk(meta) ? "upload" : "unrecorded"}
         />
 
         <p className="facts">
@@ -378,8 +378,8 @@ export function Masthead({ article, slug, onRenamed }: Props) {
  *
  * That was the first version's inference and it is false, which GPT Sol found by
  * reading the two paths that produce an owner's `Meta` rather than the one that
- * produces most of them. A missing `meta.json` is **explicitly tolerated**
- * (src/api.ts), and a revision may be published with no URL at all —
+ * produces most of them. A missing `meta.json` is **explicitly tolerated**,
+ * and a revision may be published with no URL at all —
  * `requested_url` and `final_url` are both nullable (src/db/schema.ts), which is
  * what `src/store/import.ts` relied on before it was deleted on 2026-09-01 and
  * what publication relies on still. Either gives an owner a perfectly ordinary web
@@ -407,7 +407,7 @@ function OriginLine({
    * `null` is a visitor, for the reason in the header. `"upload"` is a PDF, and
    * is the only case with an actual explanation. `"unrecorded"` is an owner's
    * article that is *not* a PDF and still has no address, which is a real state
-   * — src/api.ts tolerates a missing `meta.json` on purpose, and a revision may
+   * — a missing `meta.json` is tolerated on purpose, and a revision may
    * be published with neither `requested_url` nor `final_url`
    * (src/db/schema.ts). It gets its own words rather than borrowing the upload's,
    * because "you uploaded this" is a claim about what the reader did.

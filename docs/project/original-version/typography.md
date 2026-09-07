@@ -26,7 +26,7 @@ Checked against the repo itself:
 So the reading surface was **sans**, and the serif below is a recommendation that was never taken.
 Greg's call on 2026-08-25 was to follow what they did rather than what they wrote — this app is now
 sans throughout the reading surface too, and the reasoning is in
-[../design-css-overview.md § Typography](../design-css-overview.md#typography).
+[../typography.md](../typography.md).
 
 **The lesson is not about fonts.** A document that says "✓ Implemented" is a claim about code, and
 it is the one kind of claim in a doc that can be checked mechanically and almost never is. Two
@@ -138,7 +138,7 @@ Three of these are directly usable here and cost almost nothing: **shorter measu
 last one matches a rule we already hold for other reasons — wide content scrolls inside its own
 container, never the page.
 
-*All three taken, 2026-08-25* (`styles.css` § text), with one deliberate deviation: their
+*All three taken, 2026-08-25* ([`styles/prose.css`](../../../src/web/styles/prose.css) § text), with one deliberate deviation: their
 blockquote leading of 1.3 was written for Georgia and is too tight for a sans on a dark ground,
 where lines close up visually as well as metrically. Ours is 1.45 — same intent, right number for
 the face. The `overflow-x` one turned out to be a live bug rather than a refinement: this view

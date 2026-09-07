@@ -1,0 +1,210 @@
+/* chat-actions.css — chat rules that arrived after the rest: what an empty
+   conversation offers, the cited-block hover card, and everything a reader does
+   to a turn *after* it has arrived — copy, retry, edit, stop, jump to latest.
+   ChatPanel.tsx.
+
+   **They sit eight files away from the rest of chat in mode-band.css, and they
+   stay there.** Gathering them beside it changes source order, which is a
+   cascade change rather than a tidy-up: the built CSS has to come out identical
+   byte for byte, or it is not the same page. ../styles.css is the load order. */
+
+/* ------------------------------------ chat: suggestions and cited blocks --
+   Two additions from 2026-08-26: what an empty conversation offers, and what a
+   citation chip shows on hover. See ChatPanel.tsx § SUGGESTIONS and CitedBlock,
+   and docs/plans/260826a-chat-mode.md. */
+
+.chat-suggest ul {
+  margin: 0.7rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  /* A column, not wrapped chips. The band is ~25rem at its widest and these are
+     sentences, not tags — wrapped, they break mid-question and read as a bag of
+     fragments rather than a list of things to ask. */
+  gap: 0.3rem;
+}
+.chat-suggest-btn {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.91rem;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background-color 0.12s;
+}
+.chat-suggest-btn:hover {
+  border-color: var(--highlight);
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
+/* The hit area a citation tooltip anchors to. `inline-flex` so the anchor is
+   exactly the chip and not a full-width line box — a tooltip hung off a line
+   box points at whitespace. */
+.cite-hit { display: inline-flex; }
+
+/* The card itself: the paragraph the chip points at, so a claim can be checked
+   without leaving the sentence you are reading. */
+.tooltip.tip-cite { max-width: 26rem; }
+.tip-cite-head {
+  /* `--font-id`, the token tokens.css reserves for "block ids, and only block
+     ids" — this is one, and BlockRef beside it uses the same. */
+  font-family: var(--font-id);
+  font-size: 0.83rem;
+  color: var(--ink-faint);
+  margin-bottom: 0.3rem;
+}
+.tip-cite-text {
+  margin: 0;
+  /* The reading face, because this IS the article — set in the UI font it would
+     read as a description of the paragraph rather than as the paragraph. */
+  font-family: var(--font-reading);
+  font-size: 0.94rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.tip-cite-empty {
+  margin: 0;
+  font-size: 0.91rem;
+  font-style: italic;
+  color: var(--ink-faint);
+}
+.tip-cite-go {
+  margin-top: 0.45rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+  color: var(--ink-faint);
+}
+
+/* --------------------------------------------- § chat actions and stopping ---
+   Copy, retry, edit, stop, and jump-to-latest. Everything a reader does to a
+   turn *after* it has arrived. See ChatPanel.tsx and docs/plans/260826a-chat-mode.md.
+
+   The governing constraint is width: this band is around 400px and the answers
+   in it are prose. So the controls are hover-revealed rather than permanent —
+   five always-on icons per turn would turn a conversation into a toolbar with
+   text between the rows. */
+
+.chat-actions {
+  display: flex;
+  gap: 0.15rem;
+  margin-top: 0.25rem;
+  /* Hidden by opacity rather than `display: none`, so the row still takes its
+     height. Otherwise every turn grows by 22px the moment the pointer touches
+     it, and a hover near the bottom of a streaming answer makes the whole
+     conversation jump under the reader. */
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.chat-turn:hover .chat-actions,
+/* Keyboard reach: without this the buttons are tabbable but invisible, which is
+   worse than not having them. `:focus-within` is what makes the hover-reveal
+   pattern usable without a pointer at all. */
+.chat-turn:focus-within .chat-actions {
+  opacity: 1;
+}
+@media (hover: none) {
+  /* Nothing to hover with. A touch reader would otherwise have no way to reach
+     any of this. */
+  .chat-actions { opacity: 1; }
+}
+
+/* `edited`, beside the reader's own question. Quiet — it is a footnote about
+   the conversation, not part of what they asked. */
+.chat-edited {
+  margin-left: 0.4rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.81rem;
+  font-style: italic;
+}
+
+/* Deliberately NOT `.chat-failed`'s colour. A stopped answer is a `done` one —
+   see the `stopped` field in src/types.ts — and dressing it as a failure would
+   apologise for a button the reader pressed on purpose. */
+.chat-stopped {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+}
+
+.chat-turn.you.editing { background: var(--surface-raised); }
+.chat-edit-box {
+  display: block;
+  width: 100%;
+  min-height: 3.5rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.94rem;
+  line-height: 1.4;
+  resize: vertical;
+}
+.chat-edit-box:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+
+/* The count of what an edit will throw away. The only warning there is, so it
+   is the one thing in the editing box that is not quiet. */
+.chat-discard-warning {
+  margin: 0.35rem 0 0;
+  color: var(--highlight-ink);
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+}
+
+.chat-send.stop {
+  border-color: var(--highlight);
+  color: var(--highlight-ink);
+}
+
+/* Jump to the latest. Outside the scroller — see ChatPanel.tsx — so it is
+   positioned against the panel and sits just above the composer. */
+.chat-to-bottom {
+  position: absolute;
+  bottom: 3.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  /* Opaque, not translucent: it sits over prose, and text behind text at this
+     size is unreadable rather than subtle. */
+  background: var(--surface-raised);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  cursor: pointer;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 0.14);
+}
+.chat-to-bottom:hover { color: var(--ink); border-color: var(--highlight); }
+
+/* Text for screen readers only.
+   The standard clip-rect recipe rather than `display: none` or `visibility:
+   hidden`, both of which take the element out of the accessibility tree — which
+   would make an `aria-live` region announce nothing at all, silently, which is
+   the whole failure mode this app keeps a document about. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+

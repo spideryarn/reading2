@@ -56,14 +56,18 @@ they are named by what they *are*, so a manifest cannot point at last week's doc
 The differences that matter to a reader:
 
 - **A PDF costs money to extract.** Readability is free and deterministic; a model reading pages is
-  neither. Every chunk's raw response is checkpointed against the **article**, one row per chunk
+  neither. Every completed chunk that passes its checks is checkpointed against the **article**, one row per chunk
   ([`src/store/checkpoints.ts`](../../src/store/checkpoints.ts)), so a second attempt at a document
-  the first one ran out of time on buys only the chunks it has not got — and re-running after a
-  *renderer* fix is free. A **prompt** change is deliberately not free: the key carries
+  the first one ran out of time on buys only the chunks it has not got. A checkpoint is fully
+  shape-checked and revalidated against the current page-integrity rules before reuse; a defective
+  one is recovered without rebuying its valid neighbours. A recovered chunk is saved only after the
+  final cross-chunk deduplication still leaves every witnessed page present. Re-running after a
+  *renderer* fix is free.
+  A **prompt** change is deliberately not free: the key carries
   `promptFingerprint()`. And `npm run eval:pdf-read` (`npm run pdf` until 2026-09-05) remembers
   nothing between runs at all, because a command
   line has no article to key on and takes `nullCheckpointStore()`.
-- **It is checked, and since 2026-08-30 it no longer fails.** The transcription is scored per page
+- **It is checked, and noisy content disagreements do not fail it.** The transcription is scored per page
   against the PDF's own text layer ([`src/pdf-score.ts`](../../src/pdf-score.ts)). This used to
   `throw`, and the argument for throwing was the point of the whole stage — a model can drop a
   paragraph, summarise one or invent one, and all three read as fluent English. What changed was
@@ -75,11 +79,19 @@ The differences that matter to a reader:
   **The saying-so is the half that is not built.** The *score* is shown — the masthead's source note
   and the metadata page's `Missed` row both report recall and pages checked. The specific complaints
   go to `meta.quality`, and **nothing renders it**, so the sentence in
-  [`src/pdf-read.ts`](../../src/pdf-read.ts) § `runPdfExtract` — "if the reader does not look, nobody
-  looks" — currently describes a reader who cannot. Restoring a gate later means choosing which
-  failures are fatal, and the missing-run check is the one worth it; note that `coverageOf`'s
-  `missing` is *any requested page with no record at all*, so a gate on it as-is would refuse a blank
-  verso or a full-page figure, which is the false-refusal class that stood the old one down.
+  [`src/pdf-read.ts`](../../src/pdf-read.ts) § `runPdfExtract` therefore remains reader-invisible.
+  Structural defects are separate: malformed responses, impossible or descending page labels, and
+  absent substantive records on a text-bearing page trigger context-free single-page recovery. For
+  this presence check, a page needs an independent furniture-free baseline of at least three lexical
+  words, and its records need at least three lexical words in total; hidden records count. This small
+  floor prevents a folio such as `1` from certifying a page of prose without turning isolated maths or
+  publisher furniture into a hard failure. The check is page-local even when the document as a whole
+  is classified as a scan. The server assigns each recovered page from its one-page source body; an
+  unresolved defect refuses the extraction before HTML is returned. Truly blank/no-text-layer pages
+  remain unverified rather than fatal, and scans remain explicitly marked unverified. A partial
+  trailing bibliography is excluded from noisy recall scoring only when the page's own text layer and
+  present transcribed `reference` records independently identify it; a wholly absent bibliography page
+  is recovered or refused, not inferred from year density.
 - **A PDF can be too long, and on the queue's path it is refused in stage 1.** The cap is
   [`src/uploads.ts`](../../src/uploads.ts) § `MAX_PAGES` — a limit on what reading a document is
   allowed to cost, not a technical one — and since 2026-09-04 it is enforced where the bytes first
@@ -132,12 +144,34 @@ The differences that matter to a reader:
   ([ingest-queue.md](ingest-queue.md)) — and the chunks the first attempt finished are read back
   rather than re-bought.
 - **A scan cannot be checked at all**, has no text layer to check against, and says so on the page.
+- **A figure leaves this stage as a caption and a marker, and the picture is fetched two stages
+  later.** `renderHtml` writes `<figure data-spya-pdf-figure="<ref>"><figcaption>…</figcaption></figure>`
+  and no `<img>` — because the model **cannot hand back the raster**, and because a final `/api/…`
+  URL written here would be *stripped* by the sanitiser in stage 3, which deliberately removes any
+  `src` resolving to our own API. (It does *see* the picture: the whole native PDF goes up as a
+  `file` part, embedded images and all. What it returns is text in a fixed record shape, so a
+  caption is the most a figure can come back as. An earlier draft of this bullet said the model
+  never sees the raster, which is a different and false claim — GPT Sol, 2026-09-07.) The marker is an opaque ref folding in the raw PDF's sha256, the page,
+  the figure's ordinal on that page and a digest of the caption, so it fails closed against a
+  document that has since changed; [`src/reserved.ts`](../../src/reserved.ts) is the one file
+  allowed to name it. Stage 4.5 reopens the PDF, extracts what it can and writes the outcome into
+  the manifest; the reading view turns marker plus manifest into an `<img>` after sanitising, and
+  puts a muted line under the caption when nothing was recovered.
+  [article-images.md](article-images.md) owns all of that. Until 2026-09-06 a PDF figure was a
+  caption and a blank space, on purpose and by v1's design, which Greg reasonably read as a bug —
+  [260906a](../plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md).
+- **A figure with no caption produces no element at all.** `renderHtml` returns early on empty text,
+  before it builds the `<figure>` — so there is no block to mark and no picture to recover. Worth
+  knowing before assuming every image in the PDF has somewhere to land.
 - **A word broken by a page break is mended from the text layer, not by a second model call.** The
   chunks are read in parallel and none of them sees over its own edge, so `dis-` / `patcher` arrives
   as two records and used to render as "dis patcher". `mendSeamHyphens` in
   [`src/pdf-read.ts`](../../src/pdf-read.ts) glues it back where pass 0's own lines say so on both
   pages, and declines otherwise — the evidence rules, and the case it deliberately gives up on, are
   in the comment above the function.
+- **A continuation joins only on the same source page or the immediately following one.** The join
+  cursor advances after every joined record, so legitimate three-page continuations work without
+  allowing backwards or cross-gap joins.
 
 The whole of it — the model, the prompt, the chunking, the check, and what it cost to decide — is in
 [../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md).
@@ -152,9 +186,133 @@ for relative links, which a PDF has not got. Asking for it up here made a missin
 thing an upload hit, three stages after the last thing that could have supplied one. The upload path
 is [ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf).
 
+## Stage 2 and the document with no address
+
+**Since 2026-09-07 the uploaded document can be a web page**, and moving `requireUrl` inside the
+HTML branch was not enough, because that is the branch it now arrives in
+([260907b](../plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md)). So the question the
+`extract` step asks is no longer *what kind is this* but *where did it come from*:
+
+```ts
+const url = cameFromAnUpload(manifest) ? null : requireUrl(ctx);
+```
+
+**And not `manifest.origin`, which is the field you would reach for.** It is set by `acquireUpload`
+and is **absent from every manifest read back**: `readRaw` in
+[`src/store/artifacts-pg.ts`](../../src/store/artifacts-pg.ts) rebuilds a manifest from columns,
+there is no `origin` column, and that adapter deliberately declines to invent one. This line was
+written as `manifest.origin === "upload"` first, passed every unit test, and failed on the first
+real upload — the tests asserted the manifest the step *returns* and the pipeline reads the one the
+store *keeps*. `cameFromAnUpload` ([`src/fetch.ts`](../../src/fetch.ts)) asks `filename` instead,
+which is the `raw_filename` column and does survive.
+
+`requireUrl` is still right for a fetched page — that one *must* have an address, and a missing one
+is our bug rather than the reader's. What is new is `null`, and it is `null` rather than a
+placeholder for the reason [fetching.md](fetching.md#not-everything-gets-fetched-rawmanifest-has-an-origin)
+already gives about `RawManifest`: a `file://` or an `upload://…` **reads as an address** to
+everything downstream — `meta.url`, the masthead, the metadata page, the dedup checks — and not one
+of them would have complained. `runExtract` therefore takes `url: string | null`, which omits
+JSDOM's `url` option and omits `meta.url`. `Meta.url` has been optional since uploads existed.
+
+**What it costs, said plainly rather than discovered.** `url` was doing exactly two jobs, and the
+one that matters here is being the base that relative links and relative `<img src>` resolve
+against. With no base they stay relative, so:
+
+- the prose is unaffected, which is what this app is for;
+- **relative images are dropped**, cleanly and by a rule that was already there —
+  [`src/assets.ts`](../../src/assets.ts) refuses a non-absolute URL and its own comment already
+  named this case, *"a relative URL after stage 2 means Readability had no base to resolve it
+  against"*;
+- relative hyperlinks in the prose go nowhere.
+
+So the class of article that comes out badly is **a saved page whose figures are all relative
+paths** — text intact, figures gone. That is named here rather than half-supported.
+
+**One case works for free, and it is the document's own doing.** A file carrying
+`<base href="https://…">` resolves correctly with no help from us, because that element *is* the
+document's base URL and `document.baseURI` is what Readability resolves against. Recovering an
+address from `<link rel="canonical">` would cover more saved pages and is **deliberately not
+done**: that URL would come out of untrusted file contents and flow into stage 4.5's image
+fetching, which is a security question worth answering on its own rather than as a rider.
+
 One thing it does **not** yet buy, and should: `fetchDocument` reports the URL it *ended up* at
 after redirects, and this stage still hands Readability the URL that was typed. Where those differ,
 relative links resolve against the wrong origin.
+
+## The two ways this stage refuses
+
+Neither of them publishes anything, and both end the job `error` — which **releases** the reader's
+slot rather than spending it, since only `done` charges
+([`src/store/pg-session.ts`](../../src/store/pg-session.ts), [billing.md](billing.md)).
+
+- **`ReadabilityRefused`** — the library looked at the page and found no article at all. The reader
+  gets `PAGE_HAS_NO_ARTICLE`, `[jb-no-article]`.
+- **`TooLittleTextToRead`** — the **capability floor**, since 2026-09-06. Readability *did* return
+  something, having already concluded its own parse failed: below `DEFAULT_CHAR_THRESHOLD` (500
+  characters of collapsed text) it pushes each pass onto `_attempts`, drops a flag, tries again, and
+  when it runs out of flags hands back the longest of its failures. Stage 2 used to publish that.
+  `medium_about.html` became an article titled *"Medium"* with 185 characters in it, and it spent a
+  paying reader's slot. The floor is us **not overriding the library's own verdict**; the reader gets
+  `pageHadTooLittleText`, `[jb-too-little-text]`, with the count in the sentence.
+
+**It decides nothing about what the page is** — no markup is read and no wall is diagnosed, so it
+fires on a genuinely tiny real page too, and the message says *usually*. Recognising a bot wall by
+its own markup is a separate registry that has not been built yet
+([260904e § C1](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md)).
+
+**It is prospective, and that is a boundary rather than an oversight.** The floor is a rule inside
+stage 2, and stage 2 does not run when its artefact is already there: `stepIsDone` derives what is
+finished from the artefacts, and an unforced job skips a step that has one. So an article published
+from a short page before 2026-09-06 stays published and stays readable, its slot stays spent, and a
+job that skips extraction can still settle `done` without the floor ever being consulted. Nothing
+audits or refunds what was charged before the rule existed. What a **forced** re-extraction of such
+an article does is refuse — leaving the reader on the revision they were already on, since a draft
+that fails is never published ([`scripts/stage.ts`](../../scripts/stage.ts)). Making the floor
+retrospective would mean invalidating extractions on a policy version, which is a schema-shaped
+change and is not this one. GPT Sol, reviewing C1a.
+
+**The floor lives in a helper both read paths call** (`capabilityFloor` in
+[`src/extract.ts`](../../src/extract.ts)), because `readArticle` and `readArticleWithProvenance` are
+separate entry points and the eval harness uses the second one directly. In `runExtract`'s catch it
+would have been correct in production and permanently invisible to the corpus.
+
+## The one thing this pipeline deletes
+
+Since 2026-09-06 stage 2 deletes some of the publisher's own chrome before Readability sees the
+page. Other things here remove elements too — the note pass, Readability, the sanitiser — but
+[`src/furniture.ts`](../../src/furniture.ts) is the only place that deletes something **because of
+what the publisher called it**. The class is narrow on purpose — **platform-generated controls beside content, recognised by the
+platform's own selector, that contain no block-level descendants** — and there are four of them:
+MediaWiki's `span.mw-editsection` and `.mw-empty-elt`, Sphinx's `a.headerlink`, PLOS's
+`ul.reflinks`. `.ambox`, `.navbox`, sidebars and maintenance banners **stay**: those say something
+about the piece, and a reader may want them.
+
+**That "contains no block-level descendants" clause is a floor and not a proof**, and the module
+says so: it asks about *descendants*, so it never sees the matched element's own tag or its own
+text, and `td`, `th` and `li` cannot be added to it. **Eleven page shapes got an author's words past
+it** — two found by walking the corpus, eight across two GPT Sol reviews, one by us — and each is now
+a named test beside the narrowing that stops it. The claim the module makes is therefore *no shape
+anybody has constructed gets through, and every one that did is pinned*, **not** that deletion is
+structurally impossible: `ul.reflinks` is the entry where markup runs out, since a *View Article*
+button and a citation whose every word is inside its link are the same thing to a parser.
+
+Greg's decision, the licence it spends, the guards and where they stop, and the measured effect are
+on `removePlatformFurniture` and in
+[260904e § C4](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md). Two things
+worth knowing from here:
+
+- **The largest effect was not the chrome.** Parsoid puts MediaWiki's edit link inside the heading's
+  own wrapper, and a wrapper of one heading plus one link scores to Readability as navigation — so
+  `wiki_transformer.html` was reaching the reader with 19 of its 47 section headings. Taking the edit
+  links out recovers all 47, and every MediaWiki article ingested before this had a hierarchy built
+  on a quarter of its headings. **Those articles are not being repaired.** Greg decided on
+  2026-09-07 not to re-extract the shelf, so an article imported before this keeps the outline it
+  came in with until its reader re-imports it — the fix is forward-only, and if somebody asks why an
+  old Wikipedia page has almost no sections, this is why.
+- **What went is recorded as counts per selector, and nothing more.** They ride on `ExtractResult`
+  and reach the log; they are deliberately **not** on `Meta`, which is persisted as columns
+  ([database.md](database.md)), so the audit line stage D will show is a migration that waits for the
+  reader who needs it.
 
 ## The publisher's furniture, and the title it stole
 
@@ -320,6 +478,15 @@ The rest is not fixed, and the largest of it is not truncation at all:
 (Wikipedia is the gentler of those two: the `<math>` is inside `style="display: none"` and the
 **188 fallback images survive**, so the reader sees every formula. What is lost is the machine-readable
 copy. The ACX case has no fallback — those headings are simply gone.)
+
+**That ACX number was challenged on 2026-09-07 and it held.** A reviewer read
+`probe.mts`'s `structure lost: h2 0/6 (0%)` as "none lost" and reported the claim stale. The numbers
+on that line were *kept*, not lost, so it meant the opposite — and re-measuring the fixture directly
+found 141 headings in the source and **19 in the output, all `h5`**, exactly the 19 the inventory
+named. `Part 1: Why don't schools work?` is still absent. Two things were fixed as a result, neither
+of them this paragraph: the probe now writes `h4 0 of 80 kept` so the direction cannot be misread,
+and `STRUCTURE` counts `h4`–`h6`, without which the summary could not see the 80 `h4`s this page
+loses at all.
 
 That matters here more than in most reading apps, because the table of contents and the
 granularity-zoom tree are the same structure, built from headings

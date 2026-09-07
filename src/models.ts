@@ -272,10 +272,21 @@ export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
  * PDF reader is not: a tier is a judgment about how much reasoning a job needs,
  * and this one needs none — it needs ears and a vocabulary list.
  *
- * A *chat* model rather than one of OpenRouter's nineteen dedicated
- * speech-to-text models, and that is the whole finding of
- * docs/plans/260827x-dictation-two-pass.md. Measured on 2026-08-27, one 22-second
- * sample, three runs each:
+ * **It is `openai/gpt-transcribe` on `/v1/audio/transcriptions`, since
+ * 2026-09-07**, with the vocabulary in a `keywords` array. Everything between
+ * here and § *Changed to an OpenAI transcriber* below is the history of how it
+ * got there, and every claim in it is written in the past tense on purpose —
+ * that section is the current state and this is the record of two earlier
+ * answers to the same question. The short version of why it moved: the sentence
+ * that ruled the dedicated transcribers out stopped being true when
+ * `gpt-transcribe` grew a real biasing parameter.
+ *
+ * ---
+ *
+ * **2026-08-27 — a *chat* model rather than one of OpenRouter's nineteen
+ * dedicated speech-to-text models**, which was the whole finding of
+ * docs/plans/260827x-dictation-two-pass.md. Measured on one 22-second sample,
+ * three runs each:
  *
  * | | latency | word errors |
  * |---|---|---|
@@ -287,16 +298,18 @@ export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
  * Every dedicated model got `Spideryarn` and the block id `spya-k3m9qt` wrong.
  * This one, *told what the words might be*, got them right every run.
  *
- * **The dedicated endpoint ignores the parameter OpenAI uses for that**:
- * `POST /api/v1/audio/transcriptions` accepts `prompt`, returns 200, and
- * changes nothing — verified by sending a field called
+ * **The dedicated endpoint ignored the parameter OpenAI used for that**, and
+ * this is the claim that eventually expired:
+ * `POST /api/v1/audio/transcriptions` accepted `prompt`, returned 200, and
+ * changed nothing — verified by sending a field called
  * `wibble_not_a_real_field` and getting the same 200.
  * docs/reusable/silent-success.md, with a status code on it. That is the
  * precise claim and it used to be written here as the broader one, that a
  * dedicated transcriber "cannot be told" its vocabulary at all — which a GPT
  * Sol review on 2026-09-03 pointed out is false: Deepgram's `keyterm` and
  * Groq's own `prompt` live under `provider.options` and were never tried. That
- * route is open and unmeasured; see the plan below.
+ * route was open and unmeasured; it was measured on 2026-09-07 and it is the
+ * route this job now takes. See § Changed to an OpenAI transcriber.
  *
  * ## Re-opened and kept, 2026-09-03
  *
@@ -318,19 +331,42 @@ export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
  *   spends ~120 reasoning tokens before transcribing and that endpoint answers
  *   `400 Reasoning is mandatory for this endpoint and cannot be disabled`.
  *
- * **OpenAI is absent because it cannot be reached, not because it lost.**
- * `openai/gpt-audio` and `-mini` have no zero-data-retention endpoint on
- * OpenRouter — `zdr` is what lets the button promise a reader's voice is not
- * stored — and their `input_audio` rejects the webm `MediaRecorder` produces
- * while taking a wav in the same request. `npm run eval:dictation-gate`
- * re-checks both and prints the one-constraint-at-a-time diagnosis; run it
- * before believing any leaderboard about this feature.
+ * ## Changed to an OpenAI transcriber, 2026-09-07
  *
- * **Do not add `provider: { order: ["anthropic"] }` to this call.** See the
- * warning under `CAPABLE_MODEL_OPENROUTER`: pointed at a Gemini model that
- * preference is wrong, and wrong quietly.
+ * Greg's call, and the whole of it is in
+ * docs/plans/260907c-dictation-onto-an-openai-transcriber.md. Everything above
+ * remains true of the **chat** endpoint, including that `openai/gpt-audio`
+ * cannot be reached over it — its `input_audio.format` is a closed enum of
+ * `wav` and `mp3` in OpenAI's own schema, so a browser's webm has never had a
+ * way in.
+ *
+ * What changed is that the *other* endpoint turned out not to have the problem
+ * this feature avoided it for. `POST /v1/audio/transcriptions` takes webm, and
+ * `gpt-transcribe` takes a **`keywords` array** — a real biasing parameter,
+ * where 260903i found only a `prompt` field that "answers 200 and changes
+ * nothing". So the sentence that chose a chat model over a transcriber, *the
+ * dedicated route has nowhere to put a vocabulary*, is no longer true, and the
+ * vocabulary is the whole feature.
+ *
+ * Two things are worse and were accepted:
+ *
+ * - **Zero data retention is gone, and cannot be had here.** `zdr: true` is
+ *   *ignored* on the transcription endpoint rather than refused: it answers 200
+ *   for a model absent from OpenRouter's own ZDR list, and so does
+ *   `only: ["anthropic"]`, for a transcript. That is why `AI_JOB_ROUTE` no
+ *   longer sends a `provider` block for this job, and why /privacy no longer
+ *   promises a reader their voice is unstored.
+ * - **The bill comes back as zero.** `usage.cost` is `0` on this endpoint at 3
+ *   seconds and at 22. The cap is at OpenRouter and holds regardless; our own
+ *   ledger records these rows as *unpriced* rather than free, and
+ *   `npm run cost --reconcile` can show the account-level gap but cannot
+ *   attribute it back to a request.
+ *
+ * `npm run eval:dictation-gate` re-checks the chat endpoint and
+ * `evals/dictation/probe-stt-routes.ts` the transcription one; run them before
+ * believing any leaderboard about this feature.
  */
-export const DICTATION_MODEL = "google/gemini-3.1-flash-lite";
+export const DICTATION_MODEL = "openai/gpt-transcribe";
 
 /** The two tiers a task can be on. */
 export type Tier = "capable" | "quick";
@@ -391,6 +427,20 @@ export type Task =
      because it is already there would attribute every mark to Explain in the
      cost report, quietly and for ever. GPT Sol's finding 9. */
   | "quiz-mark"
+  /* **Did the reader get it right?** — the hidden half of the adaptive quiz,
+     docs/plans/260907d-make-the-quiz-adaptive.md. It reads the question, the
+     reader's answer and the mark that was just written for them, and answers in
+     one word that nobody is ever shown; the ladder steps on it.
+
+     Its own job rather than a mode of `quiz-mark`, for the reason this list
+     keeps giving: a call billed under another job's name is spend nobody can
+     find later. Sharper here than usual, because this one fires *once per
+     answer, beside* a `quiz-mark` call — folded together, the mark's cost per
+     answer would silently include a second call on a different tier.
+
+     Quick tier, and it can be: it never sees the article. The mark it reads has
+     already done the comparing, with citations. */
+  | "quiz-verdict"
   | "search"
   /* The model reading a referee's own notes rather than the paper —
      docs/plans/260831an-referee-mode-for-peer-reviewers.md § 3. It is the only
@@ -674,6 +724,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   explain: "capable",
   chat: "capable",
   "quiz-mark": "capable",
+  "quiz-verdict": "quick",
   search: "capable",
   "referee-mirror": "capable",
   /* Capable, like search — this reads a whole paper and answers with quoted
@@ -825,7 +876,27 @@ export const GATEWAY: Provider = "openrouter";
  * the seam, and `AI_JOB_ROUTE` there states this value per route rather than
  * deriving it from the path.
  */
-export type Wire = "messages" | "chat" | "embeddings" | "realtime" | "images";
+export type Wire =
+  | "messages"
+  | "chat"
+  | "embeddings"
+  | "realtime"
+  | "images"
+  /**
+   * **`POST /v1/audio/transcriptions`** — dictation, and nothing else
+   * (2026-09-07).
+   *
+   * Its own value rather than `chat` for the reason the doc above gives about
+   * summing across the column: the model we transcribe with reports **no tokens
+   * at all** (`gpt-transcribe`, measured at 3 seconds of audio and at 22; the
+   * protocol allows optional ones under different names, and `WireUsage` reads
+   * those too). So every token column on such a row is null, and a
+   * `SUM(reported_input_tokens)` that did not read `wire` would be quietly
+   * counting a different population than it thought. It also reports `cost: 0`
+   * on both calls anybody has measured, which is a second reason a row on this
+   * wire should not be read like a chat row.
+   */
+  | "transcription";
 
 /**
  * **Which wire each task is on** — and the reason this is a `Record` rather
@@ -857,6 +928,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   explain: "chat",
   chat: "chat",
   "quiz-mark": "chat",
+  "quiz-verdict": "chat",
   search: "chat",
   "referee-mirror": "chat",
   "referee-criteria": "chat",
@@ -892,7 +964,7 @@ export function wireFor(task: Task): Wire {
 export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   ...TASK_WIRE,
   pdf: "chat",
-  dictation: "chat",
+  dictation: "transcription",
   embeddings: "embeddings",
   /* **What an eval would use if it went through the gateway** — and `rescue`,
      the only one that does, posts to chat/completions. The declared bypasses in
@@ -953,6 +1025,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",
+  "quiz-verdict": "SPIDERYARN_QUIZ_VERDICT_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
   /* It has one because comparing two models on the same cached transcriptions is
      exactly what `evals/pdf/titles.mts` does, and a code change to run an arm
@@ -968,10 +1041,11 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      until there is a rate to compare. A code change to run an arm would make
      the arm and the shipped path different things. */
   debate: "SPIDERYARN_DEBATE_MODEL",
-  /* It has one because it is the app's only quick-tier task, so "is the cheap
-     model good enough for this" is a question somebody will want to answer by
-     running the real feature against a capable model for an evening rather than
-     by editing the tier table and rebuilding. */
+  /* It has one because "is the cheap model good enough for this" is a question
+     somebody will want to answer by running the real feature against a capable
+     model for an evening rather than by editing the tier table and rebuilding.
+     The same goes for `quiz-verdict` above, the other quick-tier task — it was
+     the only one until 2026-09-07. */
   "link-summary": "SPIDERYARN_LINK_SUMMARY_MODEL",
 };
 
@@ -1063,7 +1137,11 @@ export const DISPLAY_NAME: Record<string, string> = {
   "anthropic/claude-sonnet-5": "claude-sonnet-5",
   "openai/gpt-5.6-luna": "gpt-5.6-luna",
   "voyageai/voyage-4": "voyage-4",
-  "google/gemini-3.1-flash-lite": "gemini-3.1-flash-lite",
+  /* `google/gemini-3.1-flash-lite` was here for dictation until 2026-09-07 and
+     went with it — nothing else in the app sends that id, and an inventory that
+     keeps a model nobody calls tells the next reader of /privacy that their text
+     reaches somewhere it does not. docs/plans/260907c-dictation-onto-an-openai-transcriber.md. */
+  "openai/gpt-transcribe": "gpt-transcribe",
 };
 
 /**

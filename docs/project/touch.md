@@ -305,7 +305,7 @@ repeating, is in [260826f-ipad-touch-scrolling.md](../research/260826f-ipad-touc
 > — Greg, 2026-08-28
 
 The bottom bar's buttons are **52px tall and at least 40px wide on a coarse pointer**, up from
-roughly 35 × 30. `styles.css` § **a coarse pointer** — and three things about it are worth carrying
+roughly 35 × 30. [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css) § **a coarse pointer** — and three things about it are worth carrying
 to anything else that has to be pressed with a thumb:
 
 - **`pointer: coarse`, not `any-pointer: coarse`.** Everything else in this file keys on
@@ -317,6 +317,14 @@ to anything else that has to be pressed with a thumb:
   used since [260827t-mobile-reading-view.md](../plans/260827t-mobile-reading-view.md). Before that, 12px of bar was
   12px of article at every scroll position, and the same query was *shrinking* the bar on a landscape
   phone for exactly that reason.
+
+  **The switch is shared; the *rules* are not, since 2026-09-07.** The top bar hides at every width
+  now — [260907b](../plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md), and so
+  hiding it stopped being a touch fact — and this bottom bar deliberately did not go with it.
+  `--dock-bottom: 0px` is still inside § a small device, because the Dock names the mode, is the way
+  home and is the way out of every mode, and it joined the switch here only because 124px of a 390px
+  viewport was desperate. So the one attribute now drives two rules with two different scopes, which
+  is the thing to know before changing either.
 - **Eleven buttons do not fit a 390px row at a size worth pressing**, and the row scrolls sideways
   rather than pretending otherwise. Greg chose that over hiding three of them behind a `⋯`. What it
   costs is that Tweets and Metadata are off the right-hand edge on an iPhone until you discover the
@@ -394,8 +402,8 @@ large, fragile, iOS-only thing, and the reader's real need is to reach the butto
 ## One banner, once, when both will not fit
 
 Past a crossover the mode band stops taking room from the article and is laid **over** it instead —
-`bandCoversProse` in [`src/web/layout.ts`](../../src/web/layout.ts), and styles.css § a band with no
-room. That is the design ([reading-view-overview.md](reading-view-overview.md)), and from the outside
+`bandCoversProse` in [`src/web/layout.ts`](../../src/web/layout.ts), and
+[`styles/narrow-window.css`](../../src/web/styles/narrow-window.css) § a band with no room. That is the design ([reading-view-overview.md](reading-view-overview.md)), and from the outside
 it reads as the text having disappeared.
 
 > it's really designed for larger screens. It's possible to use it, but it can really only show

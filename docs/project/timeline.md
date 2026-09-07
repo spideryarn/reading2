@@ -149,7 +149,7 @@ it does not change when something happened.
 | [`src/timeline.ts`](../../src/timeline.ts) | the stage: the prompt, the call, the validation, the counters |
 | [`src/web/TimelinePanel.tsx`](../../src/web/TimelinePanel.tsx) | the panel, and the pure functions that turn an interval into words |
 | [`src/web/useTimeline.ts`](../../src/web/useTimeline.ts) | the read, the staleness, and the one verb |
-| `TimelineBand` in [`src/web/App.tsx`](../../src/web/App.tsx) | `?event=`, and the resolved passages it pushes up to the prose |
+| [`src/web/modes/timeline/TimelineMode.tsx`](../../src/web/modes/timeline/TimelineMode.tsx) | `TimelineBand`, its visitor twin and `useTimelineMode`: `?event=`, and the resolved passages it pushes up to the prose |
 | `STEPS.timeline` in [`src/pipeline.ts`](../../src/pipeline.ts) | the stage as the pipeline runs it — its `stamp`, and the counters it logs |
 | `loadTimeline` in [`src/store/pg.ts`](../../src/store/pg.ts) | `GET /api/timeline/:slug` |
 

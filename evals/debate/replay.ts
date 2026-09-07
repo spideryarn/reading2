@@ -36,6 +36,7 @@ import type {
   DebateProviderResponse,
 } from "../../src/debate-journal.js";
 import { whereSearchCountCameFrom, type Usage } from "../../src/openrouter-stream.js";
+import type { ArticleBlockText } from "../../src/shingles.js";
 import type { ClaimDebateRow, DebateGroup, DirectDebateRow } from "../../src/types.js";
 
 /** The half of a chat completion a replay reads. Structural, so a journal from an older run still parses. */
@@ -71,7 +72,7 @@ export type ReplayedAttempt =
  */
 export function replayJournal(
   events: readonly DebateJournalEvent[],
-  opts: { blockText?: ReadonlyMap<string, string> } = {},
+  opts: { blockText?: ReadonlyMap<string, ArticleBlockText> } = {},
 ): ReplayedAttempt[] {
   const starts = new Map<string, DebateAttemptStarted>();
   const responses = new Map<string, DebateProviderResponse>();
@@ -100,7 +101,7 @@ export function replayJournal(
 function replayOne(
   start: DebateAttemptStarted,
   response: DebateProviderResponse | undefined,
-  blockText: ReadonlyMap<string, string> | undefined,
+  blockText: ReadonlyMap<string, ArticleBlockText> | undefined,
 ): ReplayedAttempt {
   const skip = (why: string): ReplayedAttempt => ({
     ok: false,

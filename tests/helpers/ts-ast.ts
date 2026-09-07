@@ -83,3 +83,121 @@ const SKIP_KEYS = new Set([
 export function lineOf(node: AstNode): number {
   return (node.loc as { start?: { line?: number } } | undefined)?.start?.line ?? 0;
 }
+
+/**
+ * **A dynamic `import()` whose specifier is not a string literal**, which every
+ * guard that walks an import graph has to refuse rather than skip.
+ *
+ * `import(expr)` is a real edge — it executes a module — but the walker cannot
+ * say *which* module, so a graph built past one is a graph with a hole in it,
+ * and the hole is exactly the shape somebody reaches for when the literal will
+ * not pass. GPT Sol demonstrated it on 2026-09-06 (F21): two lines in
+ * `src/web/modes/ideas/IdeasMode.tsx` —
+ *
+ * ```ts
+ * const target = "../../App.js";
+ * void import(target);
+ * ```
+ *
+ * — left all three assertions in `tests/reader-import-direction.test.ts` green,
+ * the eager-graph guard green and Vite's build happy, while the acceptance
+ * criterion for the whole refactor ("a feature module may not import the
+ * composition above it") was being broken on the line above. Every one of those
+ * guards collected string-literal specifiers only, so a computed one was
+ * invisible rather than rejected.
+ *
+ * So: **fail closed**. A guard that cannot see where an edge lands must go red,
+ * not quiet — docs/reusable/silent-success.md. Resolving one properly is not
+ * possible in general (the value can come from anywhere), and pretending
+ * otherwise is what the old behaviour did.
+ *
+ * There is no allowlist and there should not need to be: a repo-wide scan on
+ * 2026-09-06 found exactly **one** non-literal dynamic import in 1,369 source
+ * files — `tests/store-guarded.test.ts`, iterating a table of store modules,
+ * which no import-graph guard scans. If a legitimate one ever appears inside a
+ * scanned tree, name it in an explicit allowlist at that guard with the reason
+ * beside it, rather than softening this.
+ *
+ * A template literal with no substitutions (`` import(`./x.js`) ``) *is*
+ * statically known and is accepted, with its cooked value; anything else — an
+ * identifier, a concatenation, a template with a hole, a conditional — is not.
+ */
+export interface UntraceableImport {
+  /** 1-based, so the message names a line somebody can open. */
+  line: number;
+  /** The babel node type of the argument, e.g. `Identifier`. */
+  argType: string;
+}
+
+/**
+ * The specifier of a dynamic `import()`, as a static string, or a refusal.
+ *
+ * `null` when `n` is not a dynamic import at all. Babel gives `import(…)` as an
+ * `ImportExpression` on this version and as a `CallExpression` with an `Import`
+ * callee on others, so both are read — the same two spellings the graph guards
+ * already handle.
+ */
+export function dynamicImportSpec(
+  n: AstNode,
+): { spec: string } | { spec: null; argType: string } | null {
+  let arg: unknown;
+  if (n.type === "ImportExpression") arg = n.source;
+  else if (n.type === "CallExpression" && (n.callee as AstNode | undefined)?.type === "Import")
+    arg = (n.arguments as unknown[] | undefined)?.[0];
+  else return null;
+  if (!arg || typeof arg !== "object") return { spec: null, argType: "missing" };
+  const node = arg as AstNode;
+  if (node.type === "StringLiteral" && typeof node.value === "string") return { spec: node.value };
+  if (node.type === "TemplateLiteral") {
+    const quasis = (node.quasis ?? []) as AstNode[];
+    const expressions = (node.expressions ?? []) as unknown[];
+    const cooked = (quasis[0]?.value as { cooked?: unknown } | undefined)?.cooked;
+    if (quasis.length === 1 && expressions.length === 0 && typeof cooked === "string") {
+      return { spec: cooked };
+    }
+  }
+  return { spec: null, argType: String(node.type) };
+}
+
+/** Every dynamic `import()` under `node` whose specifier cannot be named. */
+export function untraceableDynamicImports(node: unknown): UntraceableImport[] {
+  const found: UntraceableImport[] = [];
+  walkAst(node, (n) => {
+    const dyn = dynamicImportSpec(n);
+    if (dyn && dyn.spec === null) found.push({ line: lineOf(n), argType: dyn.argType });
+  });
+  return found;
+}
+
+/**
+ * Throw if any dynamic `import()` under `node` has a specifier this cannot name.
+ *
+ * `guard` is the file the reader has to go and teach, so the message says where
+ * the decision lives rather than only what went wrong.
+ */
+export function refuseUntraceableImports(node: unknown, relPath: string, guard: string): void {
+  const found = untraceableDynamicImports(node);
+  if (found.length === 0) return;
+  const where = found.map((f) => `${relPath}:${f.line} (import(<${f.argType}>))`).join("\n  ");
+  throw new Error(
+    `Dynamic import() with a specifier that is not a string literal:\n  ${where}\n` +
+      `${guard} builds an import graph from the source, and it cannot see where that ` +
+      "edge lands — so it refuses the file rather than reporting a graph nobody read. " +
+      "Write the specifier as a literal, or add an explicit, commented allowlist entry " +
+      "in that guard saying why this one is safe.",
+  );
+}
+
+/** The same refusal, for a caller that has the text rather than an AST. */
+export function refuseUntraceableImportsInSource(
+  source: string,
+  relPath: string,
+  guard: string,
+): void {
+  /* A cheap pre-filter: parsing every file in a repo-wide sweep costs more than
+     the check is worth, and `import` followed by `(` — across whitespace and
+     newlines both — is a superset of every dynamic import there is. It
+     over-matches into comments and strings, which only costs a parse. */
+  if (!/\bimport\s*\(/.test(source)) return;
+  refuseUntraceableImports(parseSource(source).program, relPath, guard);
+}

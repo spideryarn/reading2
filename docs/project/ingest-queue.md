@@ -84,7 +84,7 @@ the progress list.
 | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl` and `isSlug` — what an article gets called, and whether that name is safe |
 | [`src/fetch.ts`](../../src/fetch.ts) | stage 1, somebody else's — [fetching.md](fetching.md) |
 | [`src/web/UploadPicker.tsx`](../../src/web/UploadPicker.tsx) | the file picker, the drop zone and the progress bar — [§ Uploading a PDF](#uploading-a-pdf) |
-| [`src/uploads.ts`](../../src/uploads.ts) | what counts as a PDF worth uploading, and how big is too big |
+| [`src/uploads.ts`](../../src/uploads.ts) | what counts as a file worth uploading — PDF or web page — and how big is too big |
 
 ## Uploading a PDF
 
@@ -93,6 +93,22 @@ an article the same way a pasted URL does. The picker had been sitting there sin
 saying in as many words that there was nowhere to send a file — deliberately, because a disabled
 button or a spinner over a file going nowhere are both
 [the failure this repo keeps writing up](../reusable/silent-success.md). There is somewhere now.
+
+**And an HTML file since 2026-09-07**, which Greg asked for
+([260907b](../plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md)). Everything below is
+unchanged by it — the transfer, the grant, the record's state machine, the caps — because the
+change is not to *how a file arrives* but to *what stage 1 decides it is when it does*. Three
+things are worth knowing:
+
+- **The kind comes off the bytes, through the same `sniffKind` a fetched document goes through.**
+  `uploadedDocumentKind` in [`src/fetch.ts`](../../src/fetch.ts) is the rule and its header is the
+  argument; the filename is treated as a *claim*, exactly the way a server's `Content-Type` is. So
+  a `.html` whose bytes begin `%PDF-` is a PDF and is transcribed as one.
+- **The page cap is a PDF's.** `MAX_PAGES` is about what reading a document by model costs, and a
+  web page is not read by a model at all, so `refuseAnOverlongPdf` sits inside the PDF branch.
+- **An uploaded web page has no URL, and none is invented** —
+  [content-extraction.md](content-extraction.md#stage-2-and-the-document-with-no-address) is where
+  that lands, along with what it costs.
 
 **The bytes never touch our server**, and that is not an optimisation. A Vercel function refuses a
 request body over 4.5 MB — flat, unraisable, the same on Node, Edge and Fluid — and two of the
@@ -579,13 +595,18 @@ machine, which is a real loss and a small one — this reads published articles.
 
 ## The pipeline is a list, not a function
 
-Six steps, in [`src/pipeline.ts`](../../src/pipeline.ts):
+The steps, in [`src/step-order.ts`](../../src/step-order.ts) — **which is the authority; there are
+sixteen and this is the front of the list**, kept short because what it is illustrating is the shape
+rather than the roster:
 
 ```
   fetch     Fetching the page              → data/<slug>/raw.html
   extract   Extracting the article         → output/<slug>.html, data/<slug>/meta.json
   blocks    Splitting into blocks          → output/<slug>.blocks.json   (and the sanitiser)
-  hierarchy Building the table of contents → data/<slug>/tree.json, data/<slug>/blocks.json
+  hierarchy Building the table of contents → data/<slug>/tree.json, data/<slug>/blocks.json,
+                                             data/<slug>/labels.json (EMPTY — see `labels`)
+  labels    Labelling the paragraphs       → data/<slug>/labels.json, data/<slug>/tree.json
+                                             (never on a plain add)
   arc       Writing the arc                → data/<slug>/arc.json
   tweets    Writing the thread             → data/<slug>/tweets.json     (never on a plain add)
 ```
@@ -596,10 +617,16 @@ Greg asked for more than "add this URL" — re-run one stage after a prompt chan
 from source, and *"potentially it'll be used in other ways too"* (2026-08-25). All of those are the
 same machinery given a different sub-list, and none of them needed a special case.
 
-- **Add** — every step in `DEFAULT_INGEST_STEPS`, which is the first five.
+- **Add** — every step in `DEFAULT_INGEST_STEPS`, which is `fetch`, `extract`, `blocks`,
+  `hierarchy`, `assets`. **Not a prefix of `STEP_ORDER` since 2026-09-06**: `labels` sits between
+  `hierarchy` and `assets` in the order and is deliberately skipped here, so pasting a URL does not
+  wait on it ([hierarchy.md § Why they are two steps](hierarchy.md#two-steps)).
 - **Re-run a stage** — `{ slug, steps: ["arc"], force: ["arc"] }`.
 - **Refresh from source** — the default steps, with `force: ["fetch"]`.
 - **Write the thread** — `{ slug, steps: ["tweets"] }`, which is the button on the tweets page.
+- **Buy the paragraph labels** — `{ slug, steps: ["labels"] }`, and nothing else. That is the whole
+  shape of the successor job an ingest leaves behind, and `unrunnableStepPlan` is checked against it
+  by name in `tests/jobs.test.ts`.
 
 ### `STEP_ORDER` is not the default list
 
@@ -699,13 +726,61 @@ downstream of the earliest step named. The pipeline is a chain; invalidating a s
 comes after it, by definition. The alternative is asking every caller to remember a rule the
 pipeline already knows.
 
+### A reader can ask for nine of them again, from the Metadata page
+
+`/read/<slug>/metadata` has a **Generate it again** section: one row per offered step, and pressing
+it posts `{ slug, steps: [step], force: [step] }` — this queue, this route, nothing new. Greg asked
+for it on 2026-09-06, having just declined a library-wide backfill after a prompt change:
+
+> Leave it, new articles only. Although i think there should be a way to re-run any of the generated
+> modes (either within the UI for the mode, or perhaps in the Metadata section) - I realise this is a
+> new piece of work, but it's important, so perhaps fan this out as its own thing
+
+Three things about it are worth knowing here rather than in the component, because they are facts
+about *this* queue.
+
+**It is nine steps and not sixteen, and the list is explicit** —
+[`src/rerun-steps.ts`](../../src/rerun-steps.ts), which carries the reasoning per step. Every member
+is in `FORCE_ONLY_WHEN_NAMED`, so `cascadeForce` cannot sweep anything in behind the press; but
+membership of that set is *not* what qualifies a step for the button, and deriving the list from it
+was refused at review. That constant answers whether the positional cascade may speak for a step. A
+button that spends money needs three other answers: how many metered calls one press buys, whether
+the step refuses without a prerequisite, and whether a "successful" run is safe to publish **over**
+a good artefact. `illustrated` fails the last two — it refuses without a usable Sketch, and a run
+whose every plate failed returns successfully — and is off the list for that.
+
+**It says nothing about staleness, and that is the decision that let it ship.** The placeholder it
+replaced sat unbuilt for three days because nothing on that page could honestly say a stage was out
+of date. A button that offers a re-run and makes no claim about whether you need one needs no such
+answer. See [the plan](../plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md) for
+what saying it would still take, and for why `hierarchy` — the workaround the 2026-09-05 postmortem
+names — is **not** on the list: a forced run publishes a tree with no navigation labels, and the
+free `labels` successor that would restore them is not built.
+
+**Two clicks, not one.** A re-run spends no billing slot — `POST /api/jobs` takes one only for a
+request carrying a `url` ([billing.md](billing.md)) — so the only cost is ours, and there is no
+per-reader spend cap ([ai-gateway.md](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not)).
+The confirm is where the price is said, and it is the same answer `Tweets.tsx` § `Rewrite` reached
+for the same reason. **Three of the nine rows say something of their own** and the other six take the
+default, and each difference is a fact about the step rather than decoration: the glossary's, because
+forcing it **appends** rather than replaces; the sketch's, because it is two minutes and about $0.20;
+and the debate's, because it is **two separately metered calls** and the dearest thing on the page. A
+generic *"another model call"* is a true sentence about those six and a false one about debate, which
+is the gap a cross-family review of the built code walked through.
+
 ### A step is done when *all* its files are there
 
-`extract` makes the HTML **and** the metadata. `hierarchy` makes the tree, the labels **and** its
-copy of the blocks. Each step declares a `produces` list rather than a single artefact, and counts
-as done only when every one of them is readable — because a crash between two writes would
+`extract` makes the HTML **and** the metadata. `hierarchy` makes the tree, the labels manifest
+**and** its copy of the blocks; `labels` makes the manifest again, filled in, and the tree again with
+the labels merged into it. Each step declares a `produces` list rather than a single artefact, and
+counts as done only when every one of them is readable — because a crash between two writes would
 otherwise leave a step reporting itself finished with half its output, and the stage after it
 consuming the missing half.
+
+**Two steps writing one column is fine and is not new**: `blocks` and `hierarchy` have both called
+the block rows theirs since the Postgres move. What keeps their doneness apart is that `hasArtefacts`
+asks the *asking step's own* `revision_step_runs` row before it looks at an artefact, so one step's
+write never makes another step done ([`tests/shared-site-run-row-gate.test.ts`](../../tests/shared-site-run-row-gate.test.ts)).
 
 (It declared an `outputs` list of repository paths beside `produces` until 2026-09-05, and the pair
 existed so the swap to kinds could be checked against the old declaration. The paths went with the
@@ -1278,10 +1353,16 @@ claimant that is **still here**, has reached its own 740s deadline part-way thro
 unwound cleanly. It used to end the job terminal `error` with a Retry button the reader had to press
 — on a process that could perfectly well have handed the job back.
 
-That is routine rather than rare on a long PDF. A 142-page paper's `hierarchy` step needs **658–778s
-on its own** against a 740s deadline, before `extract` has taken any of the same window;
-`llm-survey` died exactly this way on 2026-09-04 (extract 353s, then `hierarchy` cut off at 380s
-having already paid for its structure call).
+That is routine rather than rare on a long PDF. A 142-page paper's stage 4 needed **658–778s on its
+own** against a 740s deadline, before `extract` had taken any of the same window; `llm-survey` died
+exactly this way on 2026-09-04 (extract 353s, then it was cut off at 380s having already paid for its
+structure call).
+
+**Those numbers are two steps' now.** 79.5–92% of that figure was the label pass, which left the
+blocking step on 2026-09-06 and takes its own claim and its own 740s
+([260906a](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md)). The cooperative pause
+below is what makes either of them survivable, and it is not made unnecessary by the split: the
+structure call alone was 508s on that paper.
 
 So `walkClaim` now asks the store for a **capped cooperative pause** — `pauseForDeadline`,
 [`src/store/jobs.ts`](../../src/store/jobs.ts) — which is the mid-step twin of `transitionAfter`'s
@@ -1422,7 +1503,10 @@ than a shared path — see [block-ids.md § The freshness guard](block-ids.md#th
    newer `stamp`, which hands the store four values and lets one `sameStamp` do the comparing.
    `tree.json` and `arc.json` carry no hash at all, so `hierarchy` and `arc` are still presence-only, and
    `arc` still needs the force-cascade to notice that its tree moved. `labels.json` *does* carry
-   one, which is what `hierarchy`'s stamp is read from today even though nothing yet compares it.
+   one, and since 2026-09-06 something **does** compare it: the `labels` step declares a `stamp()` of
+   the blocks hash, its prompt version and its model, and `stepIsDone` checks it. What keeps that
+   step honest across a *re-cut tree* is not the stamp but the receipt deletion in `writeArtefacts`
+   ([hierarchy.md § Why they are two steps](hierarchy.md#two-steps)).
 2. **Atomic artefact writes across a step's whole set.** `hierarchy` and `labels` write temp-then-rename,
    and the store's `write` does too; the other stages still write in place, and none of it makes the
    *pair* `extract` produces atomic. Only a database transaction prevents that.
@@ -1530,6 +1614,17 @@ identical artefact again. That is what separates the two lists:
 | a PDF that will not open — locked with a password, or damaged past parsing | |
 | a source document whose stored bytes are damaged — it is content-addressed, so a re-fetch lands on the same bad bytes | |
 | an answer truncated at `max_tokens` — *see below* | |
+| a publication refused over the draft's own blocks, tree or `hierarchy` run — `[jb-publish-refused]` | a publication refused because the article moved on underneath the draft — `[jb-publish-moved]` |
+| a step that needs a model with no API key configured — `[ai-not-set-up]` | |
+
+**The publication is a door of its own, and it said nothing about itself until 2026-09-07.**
+`PublishRefused` ([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) is the last gate
+before a draft becomes the article, and it carried a list of free-text reasons and no kind — so
+every refusal fell through to `retry`, whichever it was. It now takes a `RefusalKind` at each throw
+site, and that is the whole of the publication row above — the tree and the hash are artefacts a
+retry reads straight back, while a base that moved is fixed by exactly the next attempt. What it
+cost to have those two confused, four times in thirteen minutes on one article, is
+[260905f](../postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md).
 
 Model-output validation failures are in the right-hand column on purpose. The next call is a fresh
 draw, and the whole reason those checks are loud is that the model does occasionally get it right on

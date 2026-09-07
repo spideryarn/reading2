@@ -27,7 +27,7 @@ how we were doing fonts in the previous version."* We are now on Geist Sans and 
 self-hosted via `@fontsource-variable/*` rather than through Next's font pipeline, with Courier kept
 for block ids and Trebuchet still scoped to the wordmark. See [typography.md](typography.md) for
 what the check actually found, and
-[../design-css-overview.md § Typography](../design-css-overview.md#typography) for where it landed.
+[../typography.md](../typography.md) for where it landed.
 
 ## Icons
 
@@ -164,8 +164,8 @@ their operating system for less motion has asked for it from us too.
 *Adopted, 2026-08-25*, near enough verbatim, at the foot of
 [`tailwind.css`](../../../src/web/tailwind.css) in `@layer base` — named, so anything in `app` or
 `utilities` still wins on layer order and the `!important` is what carries it past them.
-`scroll-behavior: auto` is added to their four declarations. The four narrower blocks in
-`styles.css` stay: this one flattens durations, and they turn off the things that are *wrong* when
+`scroll-behavior: auto` is added to their four declarations. The narrower blocks under
+[`src/web/styles/`](../../../src/web/styles/) stay: this one flattens durations, and they turn off the things that are *wrong* when
 reduced rather than merely fast — a tooltip's transform, the context panel's scrolling.
 
 ## The shadcn migration doc

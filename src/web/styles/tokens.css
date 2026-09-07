@@ -1,0 +1,306 @@
+/* tokens.css — the semantic layer the rest of these files are written in:
+   --ink-*, --panel, --rule, --highlight, and the geometry tokens the bars, the
+   band and the dock all read (--bar-h, --mode-w, the --dock-* and --safe-*
+   family). It ends with the `* { box-sizing: border-box }` reset.
+
+   **Not the same file as `styles/tokens.css` at the repo root**, which is
+   imported one line above this one in ../styles.css and holds the brand
+   palette. That file defines --foreground, --primary and the shadcn surface
+   names; this one turns them into the words the reading view uses. Two files,
+   one name — worth knowing before you go looking for a colour.
+
+   First in the order, because everything below reads what it defines. */
+
+/* ---------------------------------------------------------------- tokens --
+   A thin semantic layer over the brand tokens, so the rules below read in
+   terms of the reading view rather than in terms of shadcn surface names.
+   NOTE: tokens.css defines --accent as a raised dark *surface* (shadcn's
+   meaning). The brand orange is --spideryarn-orange / --primary. Anything here
+   that means "the orange" says --highlight, so the two never get confused.  */
+:root {
+  /* On a dark page the greys run the other way: soft/faint means *darker*, not
+     lighter, so these lightnesses descend from --ink rather than ascending. */
+  --ink: var(--foreground);
+  --ink-soft: oklch(0.78 0 0);
+  --ink-faint: var(--muted-foreground);
+
+  --page: var(--background);
+  --panel: var(--sidebar);
+  /* Floats above everything: the tooltip panel. Lighter again than --panel,
+     which is itself lighter than --page — on a dark ground, up is forward. */
+  --surface-raised: oklch(0.26 0 0);
+  --rule: var(--border);
+  --rule-strong: oklch(0.36 0 0);
+
+  --highlight: var(--spideryarn-orange);
+  /* The orange tinted *into* the page rather than into white — a lit patch, not a
+     pale one. Any "mix the orange with black to darken it" from the light palette
+     has become "mix it with white to lift it"; see --highlight-ink.
+
+     MIX IN OKLAB, NOT OKLCH. --page is written `oklch(0.145 0 0)`: a hue that is
+     explicitly *specified* as 0, not missing. Polar interpolation therefore
+     interpolates it, dragging the result from the orange's 58.6° round to 11.7°
+     — a wash that is quietly pink rather than warm. --highlight-ink escapes only
+     by accident: mixing with the `white` keyword gives an achromatic colour whose
+     hue is *missing*, and a missing hue is carried over instead of interpolated.
+     oklab has no hue channel to interpolate, so it cannot go wrong this way, and
+     it stays right however someone else chooses to write --page.
+     Diagnosed by spideryarn2-c1, 2026-08-25. */
+  --highlight-wash: color-mix(in oklab, var(--spideryarn-orange) 20%, var(--page));
+  --highlight-ink: color-mix(in oklab, var(--spideryarn-orange) 85%, white);
+
+  /* **A conversation's mark, and it is a different HUE from a comment's rather
+     than a different alpha** — the rule docs/project/search.md sets out for its
+     own wash, for the reason it gives: two artefacts told apart by strength
+     read as the same thing seen more or less clearly. A comment is the orange;
+     a chat is a cool blue, which is as far from it as the palette goes while
+     staying legible on a near-black ground.
+
+     `oklch` directly rather than a mix, and mixed `in oklab` where it is mixed
+     at all: `--page` is written with an explicit hue of 0, so polar
+     interpolation drags anything mixed with it round towards pink. The long
+     note on --highlight-wash above has the diagnosis. */
+  --chat-mark: oklch(0.72 0.12 235);
+  --chat-mark-wash: color-mix(in oklab, var(--chat-mark) 18%, var(--page));
+
+  /* Left-edge tints that distinguish the granularity columns at a glance.
+     One hue family, so the columns read as one system rather than as a rainbow —
+     but the ramp runs down BOTH lightness and chroma, coarse to fine. The
+     previous pair separated on chroma alone (L 0.705 vs 0.680, a difference of
+     nothing) and these are painted 3px wide, where small-field colour
+     discrimination is at its worst and chroma is the least reliable channel of
+     the three. Lightness is what survives a 3px field. */
+  --depth-0: oklch(0.82 0.155 58);
+  --depth-1: oklch(0.68 0.120 52);
+  --depth-2: oklch(0.55 0.080 46);
+  --depth-3: oklch(0.44 0.045 40);
+
+  /**
+   * ------------------------------------------------------------ safe areas --
+   *
+   * **The four edges the screen has and the window does not.** `index.html`
+   * carries `viewport-fit=cover`, so the document is laid out across the whole
+   * physical screen — under the notch, under the home indicator, and (in the
+   * installed app, which asks for `black-translucent`) under the clock. These
+   * are how much of each edge is spoken for, and every piece of fixed or sticky
+   * chrome adds the one that faces it. The article itself does not: prose
+   * running behind a rounded corner for a few pixels is what `cover` is for.
+   *
+   * **They are not only about the installed app.** In an ordinary Safari or
+   * Chrome tab on an iPhone, `cover` also opens up the notch in landscape
+   * (`--safe-left` / `--safe-right`) and the home indicator in portrait
+   * (`--safe-bottom`); only `--safe-top` is reliably zero there, because the
+   * browser's own strip is already sitting in it. So the left, right and bottom
+   * terms below earn their place for every reader, and the top one earns it for
+   * whoever installs.
+   *
+   * **Every one of them is `0px` on every machine we develop on**, which is the
+   * hazard: a rule with a mis-typed `env()` name falls back to the same `0px`
+   * and looks perfect. There is nothing to see until it is on the phone. To
+   * check one, set the token to `40px` here and watch the chrome move — a rule
+   * that cannot be made to move that way will not move on the device either.
+   * docs/plans/260828av-mobile-screen-real-estate.md § How we will know.
+   *
+   * The fallback second argument is not decoration: a browser that knows
+   * `env()` but not a given keyword resolves to it, and one that knows neither
+   * drops the whole declaration — which is why these are read through `var()`
+   * in a `calc()` everywhere rather than written inline.
+   */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  --bar-h: 2.75rem; /* .controls */
+  /**
+   * **The y where the controls bar ends**, and the one name for what five
+   * separate rules were each spelling `var(--bar-h)`: the table head, the mode
+   * band, the spine, the overflow fade and a gist cell's sticky box all pin
+   * *underneath the controls bar*, and the bar itself derives its own `top`
+   * from it. A bar that moved without them would leave a 44px band of article
+   * sliding along above a row of pinned chrome, so they have to move together —
+   * one substitution rather than five judgement calls, and the next thing that
+   * pins below the bar gets it right by using the obvious token.
+   *
+   * It is `--bar-h` except while the bar is out of the way, where
+   * **shell.css § the bar that leaves while you read** switches it to
+   * `--safe-top`. That happens **at every width** since 2026-09-07; until then
+   * it was narrow-window.css § a small device and it happened only on a phone.
+   * See docs/plans/260827t-mobile-reading-view.md for why a landscape phone
+   * needed the 44px first, and
+   * docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md for
+   * why a laptop wanted it too. `--dock-bottom` below is the one that is still
+   * narrow-only.
+   *
+   * **Deliberately a plain custom property, and deliberately not animated
+   * itself.** The first version of this was a `@property`-registered
+   * `--bar-shift`, on the reasoning that only a *registered* custom property
+   * interpolates and the bar and the header therefore had to share one animated
+   * value. That reasoning is correct about CSS and wrong about this build:
+   * Vite's CSS transform **drops the `@property` rule and statically replaces
+   * every `var()` reference to it with its `initial-value`**. The result was
+   * `transform: translateY(0px)` and `top: calc(2.75rem + 0px)` baked into the
+   * served stylesheet — a bar that could never move, from a stylesheet that
+   * looked exactly right in the editor and reported no error anywhere. Setting
+   * the property by hand in the console did nothing either, which is the tell:
+   * a control property set the same way read back fine.
+   *
+   * What replaces it needs no registration at all. This token switches value,
+   * and each *consumer* transitions its own ordinary animatable property —
+   * `transform` on the bar, `top` on everything pinned under it. They still
+   * move as one thing, because they are all driven by the same switch.
+   *
+   * **It measures from the top of the SCREEN, not of the window**, which is the
+   * `--safe-top` term below. That keeps every consumer of this token — the
+   * table head, the sticky gists, the spine, the band, the fade — correct with
+   * no edit of their own, which is the whole reason to spend a token on it.
+   * The two rules that *set* it carry the term explicitly instead: `.controls`
+   * subtracts it back out of its transform (§ shell), and § a small device's
+   * hidden state falls to `var(--safe-top)` rather than to `0px`.
+   */
+  --bar-bottom: calc(var(--bar-h) + var(--safe-top));
+  /**
+   * **How far the controls bar itself is pushed up**, which stopped being the
+   * same question as `--bar-bottom` the day `--safe-top` entered it.
+   *
+   * `.controls` used to derive its transform from `--bar-bottom` alone, and
+   * that worked while the bar rested at `top: 0`: the token fell from `44px` to
+   * `0px` and the bar rose by exactly its own height. It rests at
+   * `top: var(--safe-top)` now, so the same arithmetic hides it by `--bar-h`
+   * and leaves it sitting *inside the status bar strip* — 44px of granularity
+   * pills drawn behind a translucent clock, directly above a table head that
+   * has already moved up to meet it. At `--safe-top: 0` it is invisible, which
+   * is to say: on every machine this can be looked at.
+   *
+   * So the bar gets its own switch. Two tokens rather than one because they are
+   * two facts — where things *under* the bar pin, and how far the bar has gone
+   * — that happened to be the same number until they weren't. Both are set
+   * together in § a small device, and `.controls` still transitions its own
+   * ordinary `transform`, so nothing here needs `@property` (see the note above
+   * for why it could not have it).
+   */
+  --bar-hide: 0px;
+  /* The wordmark fixed in the top-left corner — HomeLogo.tsx.
+
+     **It sizes one control and reserves nothing, since 2026-09-06.** It used to
+     be read by three rules — the logo's own width, and the left padding the
+     masthead and the controls bar held so a narrow window could not paint the
+     article's title underneath the wordmark — and the comment here warned that
+     changing it without the other two was how a control ended up on top of the
+     one thing the page is for. Both bars are on the reading view, the reading
+     view draws `.dock-home` in the bottom bar instead (Dock.tsx), and there is
+     nothing left in that corner to hold the title clear of. What is left is
+     `.logo-home`'s own `width`, on the pages that still draw it, and the
+     narrower value § a narrow window gives it when the word goes.
+     docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md
+     § Stage 2.
+
+     **Kept rather than inlined, and the alternative is real**: `width: 8.5rem`
+     on `.logo-home` and `width: 2.6rem` in the query would be two declarations
+     where this is three, with no indirection at all. It loses because the
+     shrink is *one* decision about *two* controls — the wordmark and the
+     Feedback button give up their words in the same breath, for the same reason
+     — and this is the one place that is said, in one `:root` block under one
+     comment. Inlined, its two halves would sit in two different blocks of the
+     same media query nearly three thousand lines apart, each beside the
+     `display: none` it follows from, with nothing left saying they are the same
+     decision. */
+  --logo-w: 8.5rem;
+  /* Its mirror image in the other corner — FeedbackButton.tsx, and the same
+     story: the button's own width and nothing else, now that neither bar
+     reserves a right-hand gutter for a trigger that is in the Dock. See the
+     note above, which carries the whole of it including why both stayed
+     tokens. */
+  --feedback-w: 7.5rem;
+  /* **The table head's height, and it is zero on purpose since 2026-09-05.**
+     Greg: *"I'm even wondering if we can get rid of the row of
+     column-header-labels in Hierarchy mode … to save on vertical space"* — so
+     the row went, and the element stayed. It is still doing three jobs that
+     have nothing to do with being visible: the fisheye panels take every
+     column's rectangle from `thead th[data-col]` (useColumnContext.ts), a
+     `<th scope="col">` is what names a column for a screen reader, and the
+     head's sticky `top` is what a panel's `bottom` resolves to. Deleting it
+     would have emptied Hierarchy's Parts and Sections columns outright — the
+     gist cell under a panel deliberately draws nothing (TableView.tsx).
+
+     **Changed here rather than on `thead th` alone**, because `td.gist .sticky`
+     positions itself at `--bar-bottom + --head-h` (§ table): moving the token
+     keeps that consumer right for free, where a rule on the head would have
+     left every gist floating a head's height below the bar. Three consumers
+     and no more — this line, the head's own `height`, and that one.
+
+     `0px` and not `0`: it goes into a `calc()` sum with a length, and a
+     unitless zero there makes the whole declaration invalid.
+     docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 3. */
+  --head-h: 0px;
+  /* The bottom bar — Dock.tsx. Read by the comment dialog and the overflow
+     fade, both of which have to stop above it, so it is a token rather than a
+     number written out three times. */
+  --dock-h: 2.5rem;
+  /**
+   * **The room the bar occupies at rest**, which is its own height plus
+   * whatever the home indicator has already claimed. Anything that must clear
+   * the bar *permanently* reads this: `.reader`'s bottom padding, and the two
+   * dialogs.
+   */
+  --dock-space: calc(var(--dock-h) + var(--safe-bottom));
+  /**
+   * **The room it occupies right now**, which is `0px` while it is slid away —
+   * the bottom-edge twin of `--bar-bottom`, and the same shape for the same
+   * reason. § a small device switches it; the bar itself turns the difference
+   * into a `translateY`, and anything pinned *above* the bar (the mode band,
+   * the overflow fade) reads it directly so no strip of article shows through
+   * where the bar used to be.
+   *
+   * **`.reader` deliberately does NOT read this.** Tying the document's height
+   * to a value that changes while you scroll is how you get a page that grows
+   * and shrinks under the finger scrolling it.
+   */
+  --dock-bottom: var(--dock-space);
+  /**
+   * **How much room the install hint is taking, and `0px` unless it is there.**
+   *
+   * The hint is `position: fixed` above the bar, so without a reservation it
+   * simply covers whatever is under it: the last lines of the article, and —
+   * the one that actually costs a reader something — the bottom of every open
+   * mode panel, where the last glossary term or search hit becomes unreachable.
+   * A `.mode-band` that stops at the bar is not enough when there is a sentence
+   * sitting on top of the bar. GPT Sol, second pass, 2026-08-28.
+   *
+   * Set by `:root:has(.install-hint)` below, so it costs nothing on the page
+   * where the strip is not rendered — which is every page, for every reader who
+   * is not on an uninstalled iPhone or has dismissed it once.
+   *
+   * **The strip is given this as a fixed `height` rather than measured**, and
+   * that is the trade: a reserved height has to be a number, and a number and a
+   * wrapping sentence can disagree. 3.5rem holds two lines of 0.75rem text at
+   * 1.4 plus its padding with room to spare, and the copy is two lines at
+   * 390px. If the sentence is ever rewritten longer, this is the number that
+   * has to move with it.
+   */
+  --hint-h: 0px;
+
+  /**
+   * **How much room the way-back chip takes at the bottom left**, and 0 when
+   * there is no chip — `--hint-h`'s arrangement, for the same reason: only the
+   * thing that is drawn knows whether it is drawn, and only a variable can tell
+   * the rest of the furniture.
+   *
+   * It exists so the offline strip can stand above the chip rather than over
+   * it. **Room, not height**, and the difference cost a browser check: the
+   * chip's own `bottom` stands it 0.75rem off the edge below, so a strip given
+   * only the chip's 2.5rem still clipped the top 7px of the button — measured
+   * at both 390px and 1280px, since it is arithmetic rather than a wrapping
+   * artefact. Counting the gap here rather than in the strip's rule keeps the
+   * no-chip case exactly as it was.
+   *
+   * The number is a constant because the chip is deliberately one truncating
+   * line — 2rem of button, `.install-hint-close`'s floor, plus its own padding
+   * and border — so unlike the strip it cannot grow when the window narrows.
+   * Set beside the chip's own rule, below.
+   */
+  --return-chip-h: 0px;
+}
+
+* { box-sizing: border-box; }
+

@@ -292,7 +292,8 @@ succeed:
 - **Six job pollers on the reading view.** This one was mine, it was wrong, and the code's own
   comments agreed with me — [`useJobs.ts`](../../src/web/useJobs.ts) still said "the reading view
   has one for the thread panel, one for the glossary and one for summaries". It has none. The bands
-  are mutually exclusive (`mode === …` in [`App.tsx`](../../src/web/App.tsx)) and the default mode
+  are mutually exclusive (`mode === …` in
+  [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx)) and the default mode
   opens no band at all — `toc` when this was written, `hierarchy` after the 2026-08-29 rename, and
   `plain` since 2026-08-31. A stale comment is a fine reason to believe something false.
 
@@ -552,7 +553,8 @@ worth keeping so it is not re-derived:
 - **Supabase refresh cannot spin.** The installed ticker is 30 seconds with exponential backoff and
   a 60-second cooldown, and a refused localhost request throws before the `401` branch in
   `lib/api.ts`, so it never reaches `refreshSession()`.
-- **The rAF loops are event-driven, not self-arming.** `App.tsx` schedules only from scroll;
+- **The rAF loops are event-driven, not self-arming.** `useReadingPosition` schedules only from
+  scroll;
   `useColumnContext` from scroll, resize and a `ResizeObserver`, and it equality-checks before
   calling `setLive`. Spine and DiagramPanel likewise.
 - **The SSE hooks do not restart on failure.** `readEvents` blocks on `reader.read()`. Their missing
@@ -731,20 +733,31 @@ which is item 1 below, addressed as a side effect.
   DOM mutations during a scroll named the real cause in one step, and `18,734 / 551 = 34.0` is what
   turned a suspicious number into a mechanism.
 
+  **That exoneration was spent on 2026-09-07**, which is the use a measurement like this is for.
+  `watchBarVisibility` used to attach its scroll listener only on a small device, on the argument
+  that a laptop should not pay for an attribute no rule there read — and the argument cited this
+  page. When the bar started hiding at every width
+  ([260907b](../plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md)) the gate went,
+  and the reason it was safe to go is the paragraph above: the listener is passive, coalesced into
+  one `requestAnimationFrame` per painted frame, and its body is `stepBar` — arithmetic on three
+  numbers with no DOM read in it. The 36% was never its own. The page also already installs a scroll
+  listener at every width for the fisheye panels ([`useColumnContext.ts`](../../src/web/useColumnContext.ts)),
+  and *that* one measures rects.
+
 ## Scrolling re-rendered the whole reading view, 2026-09-04
 
 The day after, and the same shape one level up: nothing was rebuilding the DOM any more, but
 `TableView` and `Spine` were still being **reconciled 87 and 150 times per scroll** because
 `useReadingPosition` writes `?at=` as sections pass the reading line and that re-renders `Reader`.
 None of `TableView`'s 29 props depends on `at`. Both are now `memo`ised — the first two `memo`s in
-`src/web` — and four inline arrows at the call site in `App.tsx` became `useCallback`s so the memo
+`src/web` — and four inline arrows at the call site in `Reader` became `useCallback`s so the memo
 could hold. [260904a](../plans/260904a-more-scroll-cpu-wins.md).
 
 **And one prop left on 2026-09-05, which is the same lesson from the other end.** `navDepth` — the
 column ← / → are aimed at — changed on every movement of the pointer, so moving the mouse across the
 table reconciled all of it to change one underline in the header row. The header row has no height
 now, the aim is drawn by tinting the column, and that is `data-aim` on `.reader` plus a rule in
-`styles.css` — one attribute write, no render.
+[`styles/table.css`](../../src/web/styles/table.css) — one attribute write, no render.
 [keyboard.md § The aim is visible before you press anything](keyboard.md#the-aim-is-visible-before-you-press-anything).
 **A `memo` is only as good as the props that reach it**, and a prop that changes with the pointer is
 the cheapest kind to notice and the easiest to leave in place.
@@ -915,7 +928,8 @@ fixed here because it is another stage's file:
    this entry was stale for a while before anyone noticed** — found 2026-09-04 while surveying for
    [260904a](../plans/260904a-more-scroll-cpu-wins.md). The `?? []` became `?? NO_TERMS`, a module
    constant in [`reader-capability.ts`](../../src/web/reader-capability.ts) § `NO_TERMS`, when the
-   reader-capability work landed; [`App.tsx`](../../src/web/App.tsx) § `terms` carries a comment
+   reader-capability work landed; [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `terms`
+   carries a comment
    saying why. The memo below it — whose own comment records a GPT Sol measurement of **44–135ms**
    on a 400-block, 60-term article — has a stable dependency now.
 
@@ -1218,7 +1232,8 @@ Said plainly, because the fixes above are all real and none of them has been sho
 - **Scrolling is measurably expensive and only half-addressed.** 603ms of blocking work across 27
   seconds of scrolling, in three long tasks. The diagram fix above removes one cause;
   [`Spine.tsx`](../../src/web/Spine.tsx) still sets state on every animation frame during a scroll
-  and reconciles its whole rail, and `useReadingPosition` in `App.tsx` reads every section's
+  and reconciles its whole rail, and
+  [`reader/useReadingPosition.ts`](../../src/web/reader/useReadingPosition.ts) reads every section's
   rectangle per frame. Neither explains motionless idle CPU, so neither was done first.
 - **Client streams are not cancelled when their owner unmounts.** `useSearch` and `useComments` call
   `readEvents` with no abort signal, so switching modes mid-stream can leave the browser receiving

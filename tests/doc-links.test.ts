@@ -602,7 +602,7 @@ describe("evergreen docs cite code by symbol, not by line", () => {
       symbolCitationsIn(doc, s).map((c) => [describeTarget(c.target), c.symbol]);
     expect(symbols("(`src/blocks.ts` § `nonsuch`, and styles.css § `.tooltip-anchor`)")).toEqual([
       ["src/blocks.ts", "nonsuch"],
-      // `styles.css` is how summaries.md writes it; the prefix is filled in.
+      // A doc may write a bare `styles.css`; the `src/web/` prefix is filled in.
       ["src/web/styles.css", ".tooltip-anchor"],
     ]);
     // The linked form, which is how most of the corpus writes it. The target
@@ -618,7 +618,7 @@ describe("evergreen docs cite code by symbol, not by line", () => {
     expect(holds("src/source-hash.ts", "hashBlocks")).toBe(true);
     expect(holds("src/source-hash.ts", "hashBlock")).toBe(false); // a prefix is not the symbol
     expect(holds("src/blocks.ts", "Bloc")).toBe(false); // nor is it inside a longer one
-    expect(holds("src/web/styles.css", ".tooltip-anchor")).toBe(true); // selectors match as written
+    expect(holds("src/web/styles/tooltip.css", ".tooltip-anchor")).toBe(true); // selectors match as written
   });
 
   it("never cite a line number", () => {

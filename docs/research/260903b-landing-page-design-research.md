@@ -94,7 +94,7 @@ brand specifically:
 
 - **Keep prose narrow, let the page shell go wider.** The 65ch-ish measure in
   `LandingPage.tsx`/`FeaturesPage.tsx` is right for the *paragraphs* — it's the same number
-  [design-css-overview.md § Typography](../project/design-css-overview.md#typography) already
+  [typography.md](../project/typography.md) already
   settled on for the reading column. What's worth widening is the outer container and the
   screenshot treatment: let a `Shot` sit beside its caption in a two-column row on wide screens
   (image ~55%, text ~45%, alternating sides down the page) rather than every shot stacked full-width
@@ -116,7 +116,7 @@ brand specifically:
 Copy-pasteable, no new dependency. Written as plain CSS; adapt literal values to `tw:` arbitrary
 utilities per [design-css-overview.md](../project/design-css-overview.md) — chrome-level, one-off
 adjustments are Tailwind's job, and anything reused across sections should be a semantic class in
-`styles.css` rather than a repeated utility string, per that doc's rule of thumb.
+`src/web/styles/site.css` rather than a repeated utility string, per that doc's rule of thumb.
 
 ### 1. A single hero glow, reserved for one moment
 

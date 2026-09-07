@@ -45,7 +45,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Dock } from "../src/web/Dock.js";
 import { EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
-import { RefereeViews } from "../src/web/App.js";
+import { RefereeViews } from "../src/web/modes/referee/RefereeMode.js";
 import type { Mode } from "../src/web/params.js";
 import { REFEREE_VIEWS, type RefereeView } from "../src/web/referee-views.js";
 

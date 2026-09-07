@@ -21,27 +21,68 @@ deliberately not taken by an agent, written into the report's note and therefore
 somebody goes and reads it. That is the same failure this file exists to prevent, so they are listed
 here too.
 
-None of them blocks anything. Each is a few minutes of attention, and each has a note that already
-sets out the options and their cost.
+Each is a few minutes of attention, and each has a note that already sets out the options and their
+cost. **One of them was written as a deploy blocker and the deploy went out anyway** — the first row
+says what happened.
 
-| arrived | report | the decision | written up in |
-|---|---|---|---|
-| 2026-09-05 | [1Z](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1Z) | **A yellow highlighter for quote marks?** A quote mark *is* a search hit by design, and the hue channel already means "which search found it". Yellow costs either borrowing that channel or adding a second way to draw a marked passage. | [note](260905_1754-quotes-marked-in-the-prose.md) |
-| 2026-09-05 | [21](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-21) | **The quiz slider — and the first of its three questions is fatal rather than awkward.** The centrality × easiness blend was proposed and killed on review: hard-central and easy-peripheral both sum to 6, so the tie-break opens with the hardest question, which is the complaint the report starts with. | [note](260905_1800-quiz-questions-too-hard.md) |
-| 2026-09-05 | [23](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-23) | **Was anything actually wrong?** The spinner shipped 2026-09-01 and is in production. If one that flashes for 80ms reads as no spinner, the fix is a ~300ms minimum — deliberate added latency on a path that currently has none. | [note](260905_1802-spinner-on-the-send-button.md) |
-| 2026-09-05 | [24](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-24) | **Which Socratic question wording, if any.** The eval's calibration gate failed, so it reports **no ranking** and nothing shipped. V4 reproduced Greg's own example almost word for word — and the variants that hit his shape are the longest lines on the page, against a brief that also asked for simpler language. | [plan § the lines themselves](../plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md) |
+> **⚠ The dictation privacy wording shipped before it was signed off, and it is live now.**
+> 2026-09-07: dictation moved onto an OpenAI transcriber, which cannot be routed with zero data
+> retention, so the sentence `/privacy` and every microphone had carried — *"your voice … isn't
+> stored"* — stopped being true. New wording was written in the same commit (`b088b24a`, 14:03) and
+> this line was added asking that nobody deploy until Greg had read it. **A deploy went out at
+> 17:37 regardless**: production serves `c0fb04a4` (`/api/health`), which contains both the new
+> transcriber and the new sentence. Checked by the feedback-reports loop, 2026-09-07 17:20.
+>
+> **The good half:** what shipped is the *corrected* wording, not the false one — *"Your voice goes
+> to OpenRouter and OpenAI to be transcribed. We don't save it on our servers; they may keep it
+> under their own policies."* No false promise is live. Greg's read is now a review of live copy
+> rather than a gate before it, and the four sentences are still quoted on their own, out of the
+> diff, in
+> [260907c § The proposed reader-facing wording](../plans/260907c-dictation-onto-an-openai-transcriber.md#the-proposed-reader-facing-wording).
+>
+> **The half worth fixing:** a "do not deploy" sentence in this file is not a gate. Nothing reads it
+> — not `npm run deploy`, not the deploy loop — so it stopped a deploy for exactly as long as a
+> human happened to be looking. If reader-facing copy is ever to be gated on a person, the gate has
+> to live somewhere the deploy path executes.
 
-## One item that is nobody's report, and is still Greg's call
+| report | the decision resting with you |
+|---|---|
+| dictation privacy wording (2026-09-07, **already live — shipped unsigned-off**) | **A published zero-data-retention promise about a reader's voice has to go.** Greg chose the switch to an OpenAI transcriber on 2026-09-06 knowing it cost this; what needs your eye is not the decision but the four sentences that replace it, one of which is the line beside every microphone. Measured reason it cannot be kept: OpenRouter does not apply routing on its transcription endpoint, so `zdr: true` there is a flag nobody reads — `only: ["anthropic"]`, which no transcriber can satisfy, returns a transcript anyway. [plan](../plans/260907c-dictation-onto-an-openai-transcriber.md#the-proposed-reader-facing-wording) |
+| the Socratic wording, after the eval was repaired (2026-09-07) | **The eval you asked for now runs, and its first answer leans against the wording you picked.** It named no leader — the two completed repeats had different ones — but the run carried one generation of the **pre-V4** wording against three of V4, and the pre-V4 control ranked ahead of all three, head-to-head in 9, 8 and 11 of 12 lineups. One control generation on one document is directional and **not enough to revert a wording you chose that morning**, so nothing was changed. What is worth your minute is whether to spend on settling it: balanced replicates over several documents, about $0.05 a generation call. [note](260905_1803-only-the-socratic-question.md) · [plan](../plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md) |
+| [2A](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-2A) — upload an HTML file (shipped 2026-09-07) | **An uploaded file's name is in its public URL.** `slugFromFilename` mints the article slug from the filename's stem and the slug is in `PublicMeta`, so publishing `confidential-client-acme.html` publishes `confidential-client-acme`. This predates the report by weeks — it has been true of uploaded PDFs since August — and was found only because this work was about to assert the opposite in a comment. Minting an opaque slug for uploads instead would change existing addresses and is a decision about what a URL should look like, so no agent took it. [note](260906_1709-upload-an-html-file-and-a-url-for-a-pdf.md) · [plan](../plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md#a-privacy-question-this-work-did-not-create-and-did-not-fix) |
 
-**Do we re-run the structure stage across the library to pick up `toc/6`?**
+**Answered 2026-09-06, in one sitting, and this is what happened to each** — kept here briefly
+rather than deleted, because "the file shrank" is only good news if you can see what it shrank into:
 
-The gist length changes (2026-09-06 — coarse lines shorter, fine lines longer, plainer words) reach
-**new articles only**. Verified rather than assumed: [`src/pipeline.ts`](../../src/pipeline.ts)
-imports only `generateHierarchy` from [`src/hierarchy.ts`](../../src/hierarchy.ts) and no version
-constant; the tree has no `outdated` mechanism of the kind glossary, quotes and ideas each have; and
-the tree-version chip came off the reading view on 2026-09-05. So an existing article keeps its
-`toc/5` gists silently and indefinitely, and the only route is *re-run a stage* on the metadata page.
+| report | the decision | what followed |
+|---|---|---|
+| [1Z](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-1Z) — a yellow highlighter for quotes | **Neither option.** Greg proposed a *third* channel: a **border rather than a fill**, with stroke thickness and weight carrying the quote's priority — so search hits fill and quotes outline, and neither has to borrow from the other. Fluorescent yellow with pastel search marks is the named fallback | session `fb1z-quotes-outlined-by-priority`; [note](260905_1754-quotes-marked-in-the-prose.md) |
+| [23](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-23) — the send-button spinner | **No change.** The spinner shipped 2026-09-01, is in production, and a test pins it. A ~300ms minimum visible duration would mean deliberately adding latency to a path that has none, and there is no evidence yet that it is needed | [note](260905_1802-spinner-on-the-send-button.md) |
 
-That is the right default — nothing is broken, nothing is charged, and nobody is shown a warning
-about a summary that reads perfectly well. But it does mean **the change Greg asked for is not
-visible on anything he has already read** until somebody decides to spend the calls.
+**Report 24 came off this list on 2026-09-07**, which is what these rows are for. V4 shipped as
+`toc/7`, the cascade got the same block as `expand/4`, and the eval's calibration gate was repaired
+and passed for the first time. Nothing was tweaked, which was the third of Greg's three instructions
+— **but the repaired eval produced one finding that is now a decision, and it is in the table
+above.** [note](260905_1803-only-the-socratic-question.md) ·
+[plan](../plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md).
+
+**The quiz row (21) came off on 2026-09-07**, which is what these rows are for: the adaptive quiz is
+built and on `dev` — [260907d](../plans/260907d-make-the-quiz-adaptive.md), and the note records the
+decision and its reasoning
+([260905_1800](260905_1800-quiz-questions-too-hard.md#what-greg-decided)).
+
+**The thing worth noticing about that sitting:** three of the four answers were **not** one of the
+options put to Greg. Two of them dissolved a trade-off an agent had accepted as fixed — the quote
+mark by using a channel nobody had thought to use, and the quiz by removing the control rather than
+tuning it. That is the argument for this file existing rather than for agents deciding faster.
+
+## Three things are waiting on Greg
+
+The dictation privacy wording, which is already live rather than pending; the 2A slug question; and
+whether to spend on settling what the repaired Socratic eval leaned towards. All three added
+2026-09-07. Everything this file listed on 2026-09-06 has been
+answered. The `toc/6` question that stood here —
+whether to re-run the structure stage across the library so existing articles picked up the new gist
+lengths — was answered *"leave it, new articles only"*, and is now recorded where it belongs, in
+[hierarchy.md § A new prompt reaches new articles only](../project/hierarchy.md#prompt-versions),
+together with the re-run control that came out of the same answer.

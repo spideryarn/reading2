@@ -12,8 +12,9 @@
  * answers from one call, so they cannot drift.
  *
  * It lives in `lib/` rather than in `Library.tsx` because it is about lists
- * rather than about the shelf: the cards view and `/admin`'s table have the same
- * problem, and neither would want to copy the arithmetic. It is deliberately
+ * rather than about tables — which is what made capping the cards view later the
+ * same day one changed argument rather than a second implementation, and `/admin`'s
+ * list of accounts has the same problem waiting. It is deliberately
  * **not** in `DataTable.tsx` — see
  * docs/plans/260906g-the-shelf-table-is-ugly-because-the-reading-view-s-css-leaks-into-it.md
  * § Stage 3 on why the cap is the caller's policy and not the table's.

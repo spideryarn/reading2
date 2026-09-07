@@ -2,8 +2,8 @@
  * **The isolation level every store transaction asks for, in one place.**
  *
  * A leaf on purpose: it imports nothing, so `pg-jobs.ts` and `pg-visibility.ts`
- * can have it without inheriting the read layer that `pg.ts` drags in behind
- * `src/api.ts`. That is the same reason `ownedSlug` moved to
+ * can have it without inheriting the read layer that `pg.ts` drags in.
+ * That is the same reason `ownedSlug` moved to
  * [owned-slug.ts](owned-slug.ts) — see the note in [pg.ts](pg.ts).
  *
  * ## Why a transaction has to say this rather than inherit it

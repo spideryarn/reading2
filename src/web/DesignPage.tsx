@@ -38,10 +38,14 @@
  * cascade actually produced.
  */
 import { useEffect, useState } from "react";
-import { Circle, LoaderCircle, Search, Settings } from "lucide-react";
+import type { ReactNode } from "react";
+import { Circle, LoaderCircle, Search, Settings, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { providerHttpFailure } from "../messages.js";
+import { builtButEmpty, providerHttpFailure, UNEXPECTED_FAILURE } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
+/* Type-only, and deliberately so: it is erased at build, so `/design` does not
+   pull the eagerly-loaded annotator into its lazy chunk — see `SPECIMEN_OUT`. */
+import type { Mark } from "./annotate.js";
 import type { Job } from "../types.js";
 
 /**
@@ -148,6 +152,85 @@ import { Link } from "./Link.js";
 import { PILL } from "./pill.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { LIBRARY_HREF } from "./router.js";
+
+/**
+ * The real run button, with only the state under test varying.
+ *
+ * Every band below draws `JobProgress` itself rather than something shaped like
+ * it, so a change to that component shows up here — but the eleven props it
+ * takes would otherwise be eleven lines per band and the one that differs would
+ * be lost in them. Everything not named here is the inert version of itself:
+ * the callbacks do nothing because there is no queue behind this page.
+ */
+function RunButton({ label, job = null }: { label: string; job?: Job | null }) {
+  return (
+    <JobProgress
+      job={job}
+      failed={null}
+      stalled={false}
+      onRun={async () => {}}
+      onCancel={() => {}}
+      label={label}
+      step="glossary"
+      icon={<Search size={13} />}
+      runningLabel="Finding…"
+    />
+  );
+}
+
+/**
+ * One state of the shared band, drawn in a band the app's own width.
+ *
+ * **`.mode-band` is `position: fixed` and stays that way**, which is the whole
+ * difficulty and the whole point. Giving it `position: static` for this page —
+ * which is what `preview-chat-markdown.tsx` does, and reasonably, since it is a
+ * throwaway checking one scroller — would mean the band's height, its
+ * `min-height: 0` and the `flex: 1` on its scroller all stop applying, and the
+ * page would be showing a shape the app never draws. So `.design-band` becomes
+ * a **containing block for fixed descendants** instead (CSS containment;
+ * design-page.css says how), and every declaration in `.mode-band` resolves
+ * exactly as it ships.
+ *
+ * `--mode-w` is set there too, and in px rather than `rem`, because px is the
+ * unit the band's width is arithmetic in — shell.css § `--spine-w` for what
+ * happens when a rail is stated in `rem` against a number in px.
+ */
+function BandCase({
+  state,
+  real,
+  note,
+  head,
+  children,
+}: {
+  /** The name a reader of this page would use. */
+  state: string;
+  /** The name the code uses, which is not always the same one. */
+  real: string;
+  note: string;
+  /**
+   * What sits in `.band-head`. Absent for the states with nothing to say there
+   * — which is faithful: the panels render the row unconditionally and its
+   * children conditionally, so an empty head with its own rule under it is what
+   * a reader actually sees while a band is loading.
+   */
+  head?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <figure className="design-band-case">
+      <figcaption>
+        {state} · <code className="design-token">{real}</code>
+      </figcaption>
+      <div className="design-band">
+        <aside className="mode-band gloss" aria-label={state}>
+          <div className="band-head">{head}</div>
+          {children}
+        </aside>
+      </div>
+      <p className="design-note">{note}</p>
+    </figure>
+  );
+}
 
 /** Every colour token, in the groups they are reasoned about in. */
 const SWATCHES: { group: string; names: string[] }[] = [
@@ -357,6 +440,36 @@ export function DesignPage() {
 
   const measured = useMeasured(ALL_COLOUR_TOKENS);
   const page = measured["--page"]?.rgb ?? null;
+
+  /**
+   * The page at a reader's larger default font size.
+   *
+   * **On `<html>`, because there is nowhere else to put it.** `rem` is
+   * root-relative by definition, so a subtree cannot be given a root of its own
+   * and a `font-size` on a wrapper would move the `em`s and leave every `rem`
+   * where it was — which is to say it would move almost nothing here and look
+   * like a working control. The whole document moves instead, which is exactly
+   * what a reader who sets 20px in their browser gets.
+   *
+   * What it is for: **`rem` grows and `px` does not**, and this app mixes them
+   * on purpose in places where the pixel is the honest unit (shell.css §
+   * `--spine-w`, the gutter's `max()` against WCAG's 24px). Anywhere a height
+   * in one meets a height in the other, the agreement recorded in
+   * design-css-overview.md § Controls is an agreement at a 16px root only.
+   *
+   * Restored on unmount, or leaving `/design` would leave the whole app at
+   * 20px with nothing on screen to say why.
+   */
+  const [bigRoot, setBigRoot] = useState(false);
+  useEffect(() => {
+    if (!bigRoot) return;
+    const html = document.documentElement;
+    const was = html.style.fontSize;
+    html.style.fontSize = "20px";
+    return () => {
+      html.style.fontSize = was;
+    };
+  }, [bigRoot]);
 
   return (
     <main className="design">
@@ -700,6 +813,175 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
         </p>
       </section>
 
+      {/* ---- the band every mode shares -------------------------------- */}
+      <section>
+        <h2>Shared mode surfaces</h2>
+        <p className="design-note">
+          The chrome every mode's panel sits in, in each of the states it has. Most of them are
+          states nobody can screenshot in the app: the band is <em>loading</em> for a few hundred
+          milliseconds, <em>running</em> only while a model call is in flight, and <em>stale</em>{" "}
+          only for a reader whose article moved under a list they had already built. Same argument
+          as the section above, one level out — that was the button, this is the band it sits in.
+        </p>
+        <p className="design-note">
+          <strong>The names are the app's, not a vocabulary invented for this page.</strong>{" "}
+          <code className="design-token">ArtefactStatus</code> in{" "}
+          <code className="design-token">src/web/useAutoRun.ts</code> is{" "}
+          <code className="design-token">loading | none | ready | error</code>, and every read hook
+          reports it — so <em>missing</em> is <code className="design-token">none</code> and{" "}
+          <em>success</em> is <code className="design-token">ready</code>. <em>Stale</em> is not a
+          status at all but a flag beside a <code className="design-token">ready</code> one, and it
+          has a twin — <code className="design-token">outdated</code>, for{" "}
+          <em>the article is the same and we would write these differently now</em>. And{" "}
+          <em>running</em> is a job on screen, which is{" "}
+          <code className="design-token">JobProgress</code>'s business rather than the status's.
+        </p>
+        <p className="design-note">
+          The shell is <code className="design-token">.mode-band</code> and the title row is{" "}
+          <code className="design-token">.band-head</code> (mode-band.css); the state bodies are the{" "}
+          <code className="design-token">.gloss-*</code> base classes that Ideas, Timeline, Debate,
+          Quiz and Referee reuse beside their own, and whose position in the import order is
+          load-bearing (glossary.css says why). <strong>Nothing here filters, scores, orders or
+          attributes anything</strong> — that belongs to each feature and stays there; a design page
+          drawing a fake glossary list would be showing its own drawing rather than the app's. Every
+          band is at <code className="design-token">MODE_MIN</code>, the narrow end of what the
+          layout will give it, because that is the width all of this has to survive.
+        </p>
+        <div className="design-row">
+          <Toggle className={PILL} pressed={bigRoot} onPressedChange={setBigRoot}>
+            Root font 20px
+          </Toggle>
+          <span className="design-note design-note-inline">
+            The whole page moves, and that is the control working rather than overreaching — a root
+            font size has no smaller scope. `rem` grows and `px` does not, so the control heights in{" "}
+            <code className="design-token">design-css-overview.md § Controls</code> — 28px for a
+            chip, 32px for <code className="design-token">size="sm"</code>, 36px for the default —
+            are an agreement at a 16px root, and this is where you find out whether they still line
+            up beside something stated in pixels.
+          </span>
+        </div>
+        <div className="design-bands">
+          <BandCase
+            state="loading"
+            real='status: "loading"'
+            note="One quiet line, under a head row that is already drawn and still empty. There is
+                  no count yet because there is nothing to count."
+          >
+            <p className="gloss-quiet">Looking for a glossary…</p>
+          </BandCase>
+
+          <BandCase
+            state="missing"
+            real='status: "none"'
+            note="The offer, the honest sentence about what it costs, and the real run button —
+                  JobProgress with no job and no failure."
+          >
+            <div className="gloss-empty">
+              <p>Nobody has found the terms for this one yet.</p>
+              <p className="gloss-hint">
+                One model call over the whole article, and it takes tens of seconds. Found once and
+                kept — you will not be asked again unless the article changes.
+              </p>
+              <div className="gloss-run">
+                <RunButton label="Find the terms" />
+              </div>
+            </div>
+          </BandCase>
+
+          <BandCase
+            state="running"
+            real="a Job on screen"
+            note="The same box with the same component in it: the button is gone, and what replaces
+                  it is the step's own label, the clock and Stop, with the progress detail on a line
+                  of its own."
+          >
+            <div className="gloss-empty">
+              <p>Nobody has found the terms for this one yet.</p>
+              <div className="gloss-run">
+                <RunButton label="Find the terms" job={DESIGN_JOB.running} />
+              </div>
+            </div>
+          </BandCase>
+
+          <BandCase
+            state="error"
+            real='status: "error"'
+            note="A read that failed, which is not a run that failed. This one is the GET, and it
+                  sits above whatever the band still has; a run's failure is drawn by JobProgress
+                  instead, in the section above. Real copy out of src/messages.ts, so it wraps at
+                  the width it will really wrap at."
+          >
+            <p className="gloss-error">{UNEXPECTED_FAILURE.message}</p>
+          </BandCase>
+
+          <BandCase
+            state="stale"
+            real='stale, beside status: "ready"'
+            head={<span className="gloss-count">24 terms</span>}
+            note="A banner on its own raised ground rather than a strip across the top, with the run
+                  button inside it. The triangle is the only orange on this surface."
+          >
+            <div className="gloss-stale">
+              <p>
+                <TriangleAlert size={13} />
+                These terms describe an older version of the article.
+              </p>
+              <div className="gloss-run">
+                <RunButton label="Find them again" />
+              </div>
+            </div>
+          </BandCase>
+
+          <BandCase
+            state="success"
+            real='status: "ready"'
+            head={<span className="gloss-count">24 terms</span>}
+            note="The head carries a count and the body is the scroller — flex: 1, min-height: 0,
+                  overflow-y: auto. That geometry is shared; what goes inside it is the feature's,
+                  and is deliberately not drawn here."
+          >
+            <div className="gloss-list">
+              <p className="gloss-quiet">
+                The feature's own list goes here. Its filtering, its scoring, its chronology and its
+                provenance are not chrome, and are not on this page.
+              </p>
+            </div>
+          </BandCase>
+
+          <BandCase
+            state="built, and empty"
+            real='status: "ready", nothing in it'
+            head={<span className="gloss-count">0 terms</span>}
+            note="The state absence cannot express — a run that happened and came back with
+                  nothing. One sentence for it, shared: builtButEmpty in src/messages.ts, which
+                  three panels call."
+          >
+            <p className="gloss-quiet">{builtButEmpty("A glossary")}</p>
+          </BandCase>
+
+          <BandCase
+            state="a long label"
+            real="the stress case"
+            head={
+              <h2>
+                Why the second half of that sentence is the part everybody forgets, and what it costs
+              </h2>
+            }
+            note="Two different answers in one band, and only one of them was decided. The head cuts
+                  to a single line with an ellipsis, which .band-head h2 sets on purpose for Chat's
+                  thread titles. The button does not: shadcn's Button is whitespace-nowrap and
+                  shrink-0, so a long label overflows the band instead of wrapping — clipped here by
+                  the cell, and in the app it runs out over the article."
+          >
+            <div className="gloss-empty">
+              <div className="gloss-run">
+                <RunButton label="Find the terms again, using your reader profile" />
+              </div>
+            </div>
+          </BandCase>
+        </div>
+      </section>
+
       <section>
         <h2>Toggles</h2>
         <p className="design-note">
@@ -783,6 +1065,125 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <p>And a second one, one unit further down.</p>
         </div>
       </section>
+
+      <section>
+        <h2>Marks in the prose</h2>
+        <p className="design-note">
+          The four things that can be drawn over the author's words, and what happens where they
+          overlap. <strong>Search fills; quotes outline.</strong> A quote's stroke weight is its
+          priority — heavy above the bar's default, light below it — so running your eye down an
+          article finds the passages worth stopping at. Every specimen below is built by the real{" "}
+          <code>annotateHtml</code>, not written out by hand, which is the only way this page can
+          show the case that actually matters: one quote containing an <code>&lt;em&gt;</code>{" "}
+          becomes <em>three</em> sibling marks, and three closed boxes would read as three quotes.
+          If the outlines below have visible seams at the italic words, the end-cap rules have
+          broken.
+        </p>
+        <div className="design-panel">
+          <div className="prose design-sample">
+            {SPECIMEN_MARKS.map((s, i) => (
+              <div key={s.label}>
+                <p className="design-note">{s.label}</p>
+                {/* The real annotator's output, pasted rather than computed —
+                    see `SPECIMEN_OUT`. It is our own markup, from our own
+                    function, over our own fixture string: no article, no user
+                    content, nothing that has been near a network.
+
+                    **A `div`, because the specimen is already a whole `<p>`.**
+                    This was a `<p>`, which makes `<p><p>…</p></p>` — the parser
+                    closes the outer one and the result is a sibling with
+                    different spacing from every other paragraph on the page,
+                    which on a page whose whole job is showing what the reader
+                    sees is the worst place to have it. GPT Sol, 2026-09-07. */}
+                <div dangerouslySetInnerHTML={{ __html: SPECIMEN_OUT[i] ?? "" }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
+
+/**
+ * **The prose-mark specimens, as the real annotator's output pasted in.**
+ *
+ * Written out rather than produced by calling `annotateHtml` here, and the
+ * reason is a bundle boundary rather than taste: `/design` is a lazily-loaded
+ * route, `annotate.ts` is eagerly loaded by the reader, and
+ * `tests/eager-client-graph.test.ts` fails a module that becomes reachable from
+ * both without somebody having decided it should be. Importing the annotator for
+ * six specimens is not that decision.
+ *
+ * **So the copy is checked instead of trusted.** `tests/annotate.test.ts` runs
+ * the same inputs through `annotateHtml` and compares, so these strings cannot
+ * drift from what the reading view actually draws — the same arrangement
+ * `tests/valence.test.ts` uses to stop the direction glyphs drifting from the
+ * stylesheet. If that test fails, regenerate rather than edit by hand.
+ *
+ * They are hand-written markup only in the sense that a photograph is: the
+ * important properties — that one quote containing an `<em>` becomes three
+ * sibling marks, and that only the outer two carry the end-caps — are the
+ * annotator's, not ours.
+ *
+ * docs/project/quotes.md § The stroke; docs/project/design-css-overview.md.
+ */
+export const SPECIMEN_HTML =
+  "<p>He rejects the idea that mind is <em>software</em> running on wet hardware, " +
+  "and says so in the first paragraph.</p>";
+
+/**
+ * The marks each specimen is drawn with, in the rendered-text offset space —
+ * exported so the drift test can rebuild them without restating the offsets.
+ */
+export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
+  {
+    label: "A search hit — a fill, whose depth is the model's confidence",
+    marks: [{ id: "h", start: 25, end: 49, kind: "hit", strength: 0.45, slot: 0 }],
+  },
+  {
+    label: "A quote below the bar — the light stroke",
+    marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteTier: 1 }],
+  },
+  {
+    label: "A quote above the bar — the heavy stroke, and the same three fragments",
+    marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteTier: 2 }],
+  },
+  {
+    label: "Two abutting quotes — the caps are inset so they stay two",
+    marks: [
+      { id: "q1", start: 0, end: 19, kind: "hit", quoteTier: 2 },
+      { id: "q2", start: 19, end: 65, kind: "hit", quoteTier: 1 },
+    ],
+  },
+  {
+    /* **This label used to say "both channels, neither lost", and the page was
+       visibly disproving it.** The fragments that also carry `data-wash` get
+       `padding-bottom: 2px` to make room for the hue band, so they are 2px
+       taller and the quote's bottom rule steps down where the search hit begins
+       and back up where it ends. Named here rather than quietly claimed
+       otherwise — /design exists to show what the reader gets, so a specimen
+       advertising a property it does not have is the worst thing on it.
+       Not reachable in the reading view today (one mode's marks at a time);
+       260907c § The step where a quote crosses a search hit. */
+    label: "A quote over a search hit — both channels drawn, but see the 2px step in the lower rule",
+    marks: [
+      { id: "h", start: 33, end: 78, kind: "hit", strength: 0.45, slot: 0 },
+      { id: "q", start: 25, end: 65, kind: "hit", quoteTier: 2 },
+    ],
+  },
+  {
+    label: "The quote the reader pressed — a white stroke and a momentary wash",
+    marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteTier: 2, open: true }],
+  },
+];
+
+/** `annotateHtml(SPECIMEN_HTML, marks)` for each of the above, in the same order. */
+export const SPECIMEN_OUT: string[] = [
+  '<p>He rejects the idea that <mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">mind is </mark><em><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">software</mark></em><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)"> running</mark> on wet hardware, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="1" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="1">software</mark></em><mark class="hit" data-hit="q" data-quote="1" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="2">software</mark></em><mark class="hit" data-hit="q" data-quote="2" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p><mark class="hit" data-hit="q1" data-quote="2" data-quote-start="" data-quote-end="">He rejects the idea</mark><mark class="hit" data-hit="q2" data-quote="1" data-quote-start=""> that mind is </mark><em><mark class="hit" data-hit="q2" data-quote="1">software</mark></em><mark class="hit" data-hit="q2" data-quote="1" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="h q" data-wash="" data-quote="2" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">software</mark></em><mark class="hit" data-hit="h q" data-wash="" data-quote="2" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)" data-quote-end=""> running on wet hardware</mark><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">, and says so</mark> in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" data-quote-start="" data-hit-open="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="2" data-hit-open="">software</mark></em><mark class="hit" data-hit="q" data-quote="2" data-quote-end="" data-hit-open=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+];

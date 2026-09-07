@@ -17,7 +17,7 @@
  *    is the single biggest source of near-miss parity failures.
  * 2. **Errors carry a status.** `src/routes.ts` turns `status: 404` into a 404;
  *    an untagged throw becomes a 500. So "no such article" must be tagged here
- *    exactly as it is in src/api.ts, or a missing article starts reporting as a
+ *    exactly as it was in src/api.ts, or a missing article starts reporting as a
  *    server fault.
  * 3. **Staleness is computed at read time, never stored.** A flag written when
  *    the artefact was generated is right up until the moment it matters.
@@ -88,6 +88,7 @@ import {
   titleFor,
   type LibraryScalars,
 } from "../library-scalars.js";
+import { LABELS_PROMPT_VERSION } from "../labels.js";
 import { log } from "../log.js";
 import { CAPABLE_MODEL, modelFor } from "../models.js";
 import { currentOwnerId } from "../owner.js";
@@ -134,7 +135,7 @@ import type {
   TweetThread,
   Visibility,
 } from "../types.js";
-import { metaRawSha256, sameStamp } from "./artifacts.js";
+import { hierarchyCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
 import type { ArticleReader, RawSource } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
@@ -142,15 +143,15 @@ import { postgresBlobStore } from "./blobs.js";
 import { readRawDocument } from "./raw-document.js";
 import { pgReaderStore } from "./pg-reader.js";
 
-/** A 404 shaped exactly like src/api.ts's, so routes.ts cannot tell them apart. */
+/** A 404 shaped exactly like the filesystem store's, so routes.ts could not tell them apart. */
 export function notFound(slug: string): Error {
   return Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
 }
 
 /* **Moved to a leaf, and re-exported from here so nothing else changed** — the
    same move, for the same reason, as `ownedSlug` below. `pg.ts` imports
-   `src/api.ts`, so a store file that wanted only this guard would inherit the
-   whole read layer; [require-slug.ts](require-slug.ts) imports `isSlug` and
+   the read layer, so a store file that wanted only this guard would inherit the
+   whole of it; [require-slug.ts](require-slug.ts) imports `isSlug` and
    nothing else. It has a dozen callers here, so it is re-exported rather than
    re-imported at each of them. */
 export { requireSlug } from "./require-slug.js";
@@ -196,7 +197,7 @@ export function shelfFrom(article: typeof articles.$inferSelect): ShelfState {
  * they do not own. A 403 would confirm it exists.
  */
 /* **Moved to a leaf, and re-exported from here so nothing else changed.**
-   `pg.ts` imports `src/api.ts`, so anything importing this file inherits the
+   `pg.ts` imports the read layer, so anything importing this file inherits the
    whole read layer — which closed an import cycle the moment the AI ledger
    needed the predicate. [owned-slug.ts](owned-slug.ts) imports the schema and
    the owner and nothing else. It also takes an optional owner now, for a caller
@@ -731,6 +732,18 @@ const REVISION_READ_POLICY: Record<
      the `rawSource` read takes the reference to it rather than the bytes. */
   extractedHtml: {},
   stampedHtml: {},
+  /**
+   * **Still nobody, and it stayed that way when `labels` became a step**
+   * (2026-09-06), which was a real decision rather than an omission.
+   *
+   * The metadata page draws a row for every name in `STEP_ORDER` and asks each
+   * one *"would we write this again today"*, so this step needs an `isCurrent`
+   * arm or it falls to `default: true` and reports every run current for ever.
+   * That arm reads the step's **run row** instead of this column — the three
+   * values it needs are on the row, the runs are already selected, and this
+   * column is one of the largest on the table at a label per paragraph. See
+   * `isCurrent` § `case "labels"`.
+   */
   labels: {},
   /* **The reading view, and only the reading view.** It is not an artefact and
      nothing about it is a freshness question, so `metadata` has no use for it —
@@ -766,8 +779,20 @@ const REVISION_READ_POLICY: Record<
   /* **The grant this map's own note predicted.** It said `rawFilename` is
      reader-facing — *"it is what an uploaded PDF should download as"* — and
      *"will want a grant here the day something serves it, which is exactly what
-     this map is for"*. `GET /api/source/:slug` is that day, 2026-08-31. */
-  rawFilename: { rawSource: "value" },
+     this map is for"*. `GET /api/source/:slug` is that day, 2026-08-31.
+
+     **Two more grants on 2026-09-07, and for a second reason entirely.** The
+     column's own comment in src/db/schema.ts says `origin` "is derivable from
+     the two URLs being null" — which was never quite true, because a fetched
+     revision may be published with neither. What *is* true is that this column
+     is non-null exactly when the document came off a reader's disk, and that
+     became the question the masthead and the metadata page had to ask when an
+     uploaded document stopped always being a PDF (`cameOffADisk` in
+     src/web/SourceLink.tsx; docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md).
+     So it joins `META_COLUMNS`, and the two reads that build a `Meta` take it.
+     Not `public`: a filename is a string the reader chose, and publishing a
+     document is not publishing what they called it. */
+  rawFilename: { rawSource: "value", article: "value", library: "value" },
   /* **The library's cached scalars, and the library now reads them.**
      They are written by `deriveLibraryScalars` (src/library-scalars.ts) inside
      the same transaction that writes the blocks and the tree they describe —
@@ -800,6 +825,7 @@ const META_COLUMNS = {
   finalUrl: articleRevisions.finalUrl,
   fetchedAt: articleRevisions.fetchedAt,
   rawSha256: articleRevisions.rawSha256,
+  rawFilename: articleRevisions.rawFilename,
   source: articleRevisions.source,
   extractMethod: articleRevisions.extractMethod,
   pages: articleRevisions.pages,
@@ -1214,7 +1240,7 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
       : { context: { id: row.contextId, type: row.contextType as "callout" } }),
   }));
 
-  /* The same guard src/api.ts puts on the filesystem reader, because there are
+  /* The same guard src/api.ts put on the filesystem reader, because there were
      two `loadArticle`s and guarding one of them passes every test — the fs half
      is genuinely protected, the suite is green, and the store that is in the
      middle of *replacing* the filesystem serves old HTML unchecked.
@@ -1353,8 +1379,8 @@ export async function sourceHashFor(
 /**
  * Rebuild `Meta` from the revision's columns.
  *
- * The fallback matters: `src/api.ts` invents a title from the article's own
- * first `h1` when `meta.json` is absent, and keeps the slug only as a last
+ * The fallback matters: `src/api.ts` invented a title from the article's own
+ * first `h1` when `meta.json` was absent, and kept the slug only as a last
  * resort. An imported article with no `meta.json` has `title` null, so without
  * the same fallback here the reading view would show a slug where the
  * filesystem showed a heading — a visible, silent divergence.
@@ -1407,6 +1433,11 @@ function metaFrom(
        the whole content of this field. src/db/schema.ts § `publishedAt`. */
     ...(revision.publishedAt === null ? {} : { publishedAt: revision.publishedAt }),
     ...(revision.note === null ? {} : { note: revision.note }),
+    /* **Non-null exactly when the document came off the reader's own disk**, so
+       it is what the masthead and the metadata page ask instead of
+       `source === "pdf"` — which is the media kind and stopped being a proxy
+       for *uploaded* on 2026-09-07. `Meta.filename` says the rest. */
+    ...(revision.rawFilename === null ? {} : { filename: revision.rawFilename }),
     /* PDF provenance, so the spread pattern above is load-bearing here too:
        `source: null` in `meta.json` is not the same artefact as no `source`
        key, and the round-trip test compares them. docs/plans/260826c-pdf-ingestion.md.
@@ -1446,7 +1477,11 @@ function metaFrom(
  * is. Exhaustive over `StepName` means adding a step to the pipeline fails the
  * typecheck here instead. Found in a review of the built seam, 2026-08-26.
  */
-const STEP_STORAGE: Record<StepName, string[]> = {
+/* **Exported for tests/labels-step-registration.test.ts alone**, which asks that
+   every step producing `tree` lists both columns here. The compiler asks for a
+   row; it cannot ask that the row names the right site, and a row naming the
+   wrong one is a metadata page confidently pointing at the wrong column. */
+export const STEP_STORAGE: Record<StepName, string[]> = {
   /* The fetched document's facts — `RAW_COLUMNS` in src/store/artifacts-pg.ts —
      of which `raw_source_sha256` names the object holding the bytes. That object
      is in the `sources` bucket, which is not a table; `raw_sources` is the row
@@ -1456,6 +1491,14 @@ const STEP_STORAGE: Record<StepName, string[]> = {
   extract: ["article_revisions.title", "article_revisions.extracted_html"],
   blocks: ["revision_blocks", "block_identities"],
   hierarchy: ["article_revisions.tree", "article_revisions.labels"],
+  /* The same two columns as `hierarchy` above, and that is right rather than a
+     copy-paste: stage 4 writes the tree and an empty manifest, and this step
+     rewrites both with the labels merged in. Two steps over one site is a shape
+     this store already has — `blocks`/`hierarchy` share the block rows
+     (src/store/artifacts-pg.ts § STORAGE) — and what keeps their doneness apart
+     is each step's own run row, pinned by
+     tests/shared-site-run-row-gate.test.ts. */
+  labels: ["article_revisions.labels", "article_revisions.tree"],
   /* The manifest is the column; the bytes it names are objects in the `sources`
      bucket, which is not a table and so is not listed here. */
   assets: ["article_revisions.assets"],
@@ -1861,7 +1904,7 @@ export function listArticlesQuery(
     .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
     /* `is null` / `is not null`, never `= null`. The archived half is asked
        for by name so that both halves come out of this one query and cannot
-       disagree about what an article is — the same reason src/api.ts filters
+       disagree about what an article is — the same reason src/api.ts filtered
        after its walk rather than skipping during it. */
     .where(
       and(
@@ -2292,7 +2335,7 @@ const rawPgArticleReader: ArticleReader = {
     const blocks = await blocksFor(found.revision.id);
     const tree = found.revision.tree;
     // A revision with no tree is not a readable article — the same bar
-    // src/api.ts sets by requiring both blocks.json and tree.json.
+    // src/api.ts set by requiring both blocks.json and tree.json.
     if (!tree || !blocks.length) throw notFound(slug);
 
     const arc = found.revision.arc;
@@ -2330,7 +2373,7 @@ const rawPgArticleReader: ArticleReader = {
          mark has three states and one of them is *we could not say*, which is
          what the filesystem store's absence means. `describeArticle` keeps the
          key only when it says `public` because the shelf has no private twin
-         to draw (src/api.ts); this one draws a lock.
+         to draw (src/library-scalars.ts); this one draws a lock.
 
          The cast is the same boundary `articleMetadata` and `listArticles`
          cross: a `text` column with a CHECK on it (`articles_visibility`,
@@ -2519,8 +2562,72 @@ const rawPgArticleReader: ArticleReader = {
     const isCurrent = (step: StepName): boolean => {
       switch (step) {
         case "hierarchy": {
+          /* No tree and no blocks are this function's own preconditions, not
+             `hierarchyCurrency`'s: it answers "is this run the one that
+             describes these blocks", which is not a question you can ask when
+             there are none. */
           if (!revision.tree || !blocksHash) return false;
-          return byStep.get("hierarchy")?.inputHash === blocksHash;
+          /* **Shared with `reasonsNotToPublish`** (src/store/pg-revisions.ts)
+             since 2026-09-07, and the status half is the point of sharing it:
+             **until `e18ac5f` on 2026-08-27** this call site had it and the
+             publication guard did not, behind a comment three lines from here
+             claiming they agreed. They have agreed since, and nothing said so
+             until they were joined —
+             docs/postmortems/260827d-toc-status-never-checked.md. `done` is
+             still required by the caller below as well, which is belt and
+             braces rather than duplication: this arm is the only one of the
+             fifteen that could answer it, and every other arm relies on it. */
+          return hierarchyCurrency(byStep.get("hierarchy"), blocksHash).current;
+        }
+        /**
+         * **Asked of the run row, like `hierarchy` above and unlike everything
+         * below** — and the reason is this step's own design rather than a
+         * shortcut.
+         *
+         * The three values are on the row because `STEPS.labels.stamp` declares
+         * all three and `recordStamp` writes them there; the artefact carries
+         * the same three, so either would answer. The row wins on two counts:
+         *
+         * - **It is where this step's currency actually lives.** Writing an
+         *   empty manifest *deletes* this revision's `labels` row
+         *   (`writeArtefacts`, src/store/artifacts-pg.ts), and that deletion —
+         *   not any hash — is what makes a re-cut tree invalidate its labels.
+         *   Reading the row means this page answers the same question the
+         *   pipeline does, from the same fact. A missing row is `undefined`
+         *   here and answers not-current, which is right for both of its causes:
+         *   never run, and invalidated by a fresh `hierarchy`.
+         * - **The column is one of the largest on the table** — a label per
+         *   paragraph — and `REVISION_READ_POLICY` exists to keep exactly that
+         *   off a read that does not need it. Granting `labels` to `metadata`
+         *   would put it on every load of that page for the sake of three
+         *   fields that are already selected beside it.
+         *
+         * **Written out rather than left to `default: true`**, the arm that has
+         * caught `ideas`, `sketch` and `timeline` in turn: a missing case makes
+         * every completed run report itself current for ever, on this page
+         * alone, while the pipeline correctly re-runs it.
+         * tests/store-revision-columns.test.ts holds every stamped step to
+         * having an arm.
+         */
+        case "labels": {
+          const run = byStep.get("labels");
+          if (!run || !blocksHash) return false;
+          return sameStamp(
+            {
+              inputHash: run.inputHash,
+              /* Only where the row actually holds one. `null` means *nothing was
+                 recorded*, and `sameStamp` compares with `===`, so a declared
+                 `undefined` and a declared `null` are two different wrong
+                 answers — `stampForStep` reads the same row the same way. */
+              ...(run.promptVersion === null ? {} : { promptVersion: run.promptVersion }),
+              ...(run.model === null ? {} : { model: run.model }),
+            },
+            {
+              inputHash: blocksHash,
+              promptVersion: LABELS_PROMPT_VERSION,
+              model: CAPABLE_MODEL,
+            },
+          );
         }
         /* The same two questions as `hierarchy`, and the same answer — but asked of
            the artefact rather than of the step row, because the manifest
@@ -2829,7 +2936,7 @@ const rawPgArticleReader: ArticleReader = {
     }
     const glossaryTree = found.revision.tree as Tree | null;
     const glossaryMeta = metaFingerprintOf(found.revision);
-    /* Lookups are attached HERE, at the read seam, exactly as src/api.ts does
+    /* Lookups are attached HERE, at the read seam, exactly as src/api.ts did
        it — not stored on the entry. Forgetting this would not fail; it would
        quietly drop every "checked on the web" answer from the panel while the
        glossary itself looked perfectly correct.

@@ -28,16 +28,21 @@ in `converse` — [referee-mode.md § 4](referee-mode.md).)
 
 Code: [`src/quiz.ts`](../../src/quiz.ts) (the stage, the prompt, the validation, the sort),
 [`src/quiz-mark.ts`](../../src/quiz-mark.ts) (the marking prompt and its stream),
+[`src/web/quiz-ladder.ts`](../../src/web/quiz-ladder.ts) (which question comes next, and it never sorts),
+[`src/quiz-verdict.ts`](../../src/quiz-verdict.ts) (whether they got it right, asked in private),
 [`src/routes.ts`](../../src/routes.ts) § `/api/quiz/:slug` (the GET) and `/api/quiz/:slug/mark` (the POST),
 [`src/web/useQuiz.ts`](../../src/web/useQuiz.ts),
 [`src/web/QuizPanel.tsx`](../../src/web/QuizPanel.tsx),
-[`src/web/App.tsx`](../../src/web/App.tsx) § `RememberBand`, `QuizSubBand`.
+[`src/web/modes/conversation/ConversationModes.tsx`](../../src/web/modes/conversation/ConversationModes.tsx)
+§ `RememberBand`, `QuizSubBand`.
 Types: [`src/types.ts`](../../src/types.ts) § `QuizQuestion`, `QuizEvidence`, `Quiz`, `QuizDropped`.
 Tests: [`quiz.test.ts`](../../tests/quiz.test.ts),
 [`quiz-panel.test.tsx`](../../tests/quiz-panel.test.tsx),
 [`quiz-mark-route.test.ts`](../../tests/quiz-mark-route.test.ts),
 [`quiz-mark-stream.test.tsx`](../../tests/quiz-mark-stream.test.tsx),
-[`quiz-step-registration.test.ts`](../../tests/quiz-step-registration.test.ts).
+[`quiz-step-registration.test.ts`](../../tests/quiz-step-registration.test.ts),
+[`quiz-ladder.test.ts`](../../tests/quiz-ladder.test.ts),
+[`quiz-verdict.test.ts`](../../tests/quiz-verdict.test.ts).
 Eval: [`evals/quiz.ts`](../../evals/quiz.ts) — **read this before editing either prompt.**
 The plan, the spike and two cross-family reviews:
 [260831al](../plans/260831al-review-quiz-sub-mode.md) and
@@ -55,8 +60,12 @@ So the sort is lexicographic and the two judgements never mix:
 
 **band** (`easy` → `medium` → `hard`), then **value** descending, then **document position** of the
 first evidence block. [`orderQuestions`](../../src/quiz.ts) is the one place it happens, against the
-whole batch, once. The panel never re-sorts — a second opinion about the same list is two lists that
-drift.
+whole batch, once.
+
+**The panel never re-sorts**, and since 2026-09-07 that rule is stated more precisely than it used to
+be, because the quiz went adaptive and the old wording would have been quietly false. See
+[The order the reader meets them in](#the-order-the-reader-meets-them-in-is-not-the-order-they-are-in)
+below.
 
 **`ease` became a three-valued `band` after a spike measured the alternative.** Asked for a 1–5
 integer on a real article, the model never left 2–4 across 24 questions, and `value` never went
@@ -103,17 +112,93 @@ One run each side of the edit, same article, same model —
 questions at value 4-or-5 went from 5 of 11 to **9 of 12**. Two runs is not a measurement, and
 `evals/quiz.ts` says why the counts are a prompt to look rather than a verdict.
 
-**The ordering control Greg asked for in the same report is not built**, and the three decisions it
-collides with are written up as questions for him in
-[260905g](../plans/260905g-mark-every-visible-quote-and-make-the-quiz-start-easier.md#three-questions-for-greg-and-one-decision).
-The short version: a blended `ease + value` score was proposed and killed on review because it leads
-with the hardest question; the panel deliberately shows neither `band` nor `value`, and the
-glossary's condition for keeping model scores is that the number you sorted by is on every row; and
-the quiz sorts on the server, once.
+**The ordering control Greg asked for in the same report was declined on 2026-09-06**, in favour of
+an adaptive quiz — see [It adapts, since 2026-09-07](#it-adapts-since-2026-09-07) below. The three
+decisions it collided with are written up in
+[260905g](../plans/260905g-mark-every-visible-quote-and-make-the-quiz-start-easier.md#three-questions-for-greg-and-one-decision):
+a blended `ease + value` score was proposed and killed on review because it leads with the hardest
+question; the panel deliberately shows neither `band` nor `value`, and the glossary's condition for
+keeping model scores is that the number you sorted by is on every row; and the quiz sorts on the
+server, once. **Adaptive answers all three by not being a control** — there is no knob, so there is
+no number that would have to be printed to justify one.
 
 It was a proportion — `min(3, floor(n / 4))` — until a production build failed on 2026-09-03 having
 paid for nine good questions carrying one `hard`, and the number is gone rather than retuned:
 [260903c](../plans/260903c-fix-quiz-build-band-spread-failure-and-lost-quiz-answers.md).
+
+## It adapts, since 2026-09-07
+
+**Get one right and the next is harder; get one wrong and the next is easier.** Greg chose this on
+2026-09-06 over the difficulty slider he had originally asked for, and the reason it is the better
+answer is that *it is not a control*: the reader never learns what `band` or `value` mean, and never
+has to tune anything to get a quiz pitched at them. The plan, the edges and the measurements are
+[260907d](../plans/260907d-make-the-quiz-adaptive.md);
+[`src/web/quiz-ladder.ts`](../../src/web/quiz-ladder.ts) is the rule.
+
+**Nothing on screen says it is happening**, and that is a hard rule rather than a preference. No
+"here's a harder one", no pips, no level, no change to the "Question 3 of 12" line — for the reason
+this file already gives about `band`: quoting a difficulty at a reader hands them a token with
+nothing behind it, and it changes how they answer. `quiz-panel.test.tsx` asserts that the words
+`easy`, `medium`, `hard`, `harder`, `easier`, `difficulty` and `level` never reach the page.
+
+**The ladder is a nine-cell table, not a model.** From the band of the question just answered: one
+band harder if right, one easier if wrong, and stay put if we could not tell — bounded at both ends,
+with every row naming all three bands so the search always terminates. There is no stored "current
+difficulty": the target derives from the question actually on screen, so a hidden rung and the
+visible question cannot drift apart, and picking a question by hand needs no special case. No
+item-response theory, no calibration, no scoring.
+
+### The order the reader meets them in is not the order they are in
+
+An adaptive walk plainly changes the order the questions arrive in, so the old rule — *the panel never
+re-sorts, because a second opinion about the same list is two lists that drift* — is **amended rather
+than reinterpreted**. A cross-family review called the first draft's attempt to argue that selection
+is not ordering *"sophistry"*, and it was right.
+
+> The server remains the sole authority for the static ranking. Adaptive traversal may change the
+> cross-band encounter order, but it must preserve the server's relative order **within** every band,
+> and the client must never sort.
+
+That is a real constraint and it is tested. It keeps what the original rule protected — there is
+exactly one opinion about which `hard` question is the best `hard` question, and it is
+`orderQuestions`' — while being honest that the bands now arrive in an order the server did not
+choose. In practice the client scans the server's array front to back for the first unseen question in
+a band, which is why no comparator exists on the client at all. *Show all twelve* still lists the
+batch in the server's order, untouched; the consequence is that a reader who opens it part-way
+through finds their ticks scattered down it rather than gathered at the top.
+
+### Whether the reader got it right is asked somewhere else
+
+The mark [may not say how the reader did](#what-a-mark-says-and-what-it-may-not), and the ladder has
+to know. So the judgement is made by a **separate, small call that reads the finished mark** —
+[`src/quiz-verdict.ts`](../../src/quiz-verdict.ts) — and its one-word answer rides the terminal `done`
+frame. It is never rendered, never logged and never stored.
+
+**`QUIZ_MARK_SYSTEM` is deliberately untouched by this.** The obvious design was to have the marking
+prompt emit a hidden verdict of its own, one call instead of two; it was rejected because that prompt
+spends two pages separating confirmation from grading, and making grading its opening framing task
+risks the tone on *every* answer — a regression that eight noisy eval cases could never prove either
+way. A missed adaptive move is invisible and harmless; a worse mark is visible every time. The
+classifier never sees the article, either, which is why it can be quick tier: the mark it reads has
+already done the comparing, with citations.
+
+**Absence is a designed outcome, not an error path.** The classifier failing, timing out, returning
+anything unrecognised, or declining an ill-posed question all arrive as no verdict, which means *hold
+the band* — and it can never break a mark, which is complete before the verdict is asked for.
+
+**That is a small blast radius, not a zero one**, and the difference is worth keeping straight. An
+*absent* verdict repeats the level, unless that band is exhausted, in which case the search moves on
+anyway. A *wrong* verdict is a real mis-step: the measured `illPosed` case comes back `right` and
+steps the reader up after a question the article never settled. Neither is visible to the reader,
+which is the argument for keeping the ladder's moves small and its failure quiet rather than for
+pretending it cannot be wrong.
+
+**What it does not do:** it does not end the quiz after a run of wrong answers. Ending someone's quiz
+because they are getting things wrong is a verdict about the reader delivered by a machine — the thing
+[remember-mode.md](remember-mode.md) and the marking rules refuse — and "we stopped because you were
+struggling" would be the loudest possible leak of the difficulty being hidden. The cost is that a
+struggling reader who exhausts every easier question is eventually handed a hard one; that is
+exhaustion, and the plan calls it that rather than calling it adaptation.
 
 ## A reference answer is not an answer key
 
@@ -211,7 +296,18 @@ not merely the writing of frames, and gets no `done` at all.
 [url-state.md](url-state.md) has the parameter and its defined collision with `?thread=`.
 
 - **One question at a time**, with *Show all twelve* underneath. Picking from the list closes it
-  again, so the band goes back to one question and a box.
+  again, so the band goes back to one question and a box. **Picking by hand moves nothing** — the
+  reader reached past the ladder, so the ladder learns nothing from the reach. Answering the question
+  they picked moves it **only if they were at the end of their path when they answered**: a reader
+  who has gone *back* and answered something is retracing, and Next takes them onward through the
+  path they already walked rather than inserting a new question into the middle of it.
+- **Next waits while a mark is still arriving.** The verdict is judged from the finished mark, so it
+  lands with the last frame rather than the last word — and a Next pressed in that window would
+  select with no verdict and quietly turn adaptation off. Previous and the list stay live, so a
+  reader who does not want to wait can still leave, which aborts the mark as it always did.
+- **Previous walks the order the reader met the questions in**, not the array. One consequence is
+  named in [260907d](../plans/260907d-make-the-quiz-adaptive.md) rather than left to be found: after
+  A → B → C → Previous to B → pick D, Previous from D goes to C.
 - **Which question is open is deliberately not in the URL.** The rule `?at=` and `?thread=` serve is
   that a shared link lands you where the link-maker was; here what a link would frame is an answer
   that does not survive a reload anyway. It arrives with stored attempts, which is what would make
@@ -237,7 +333,10 @@ not merely the writing of frames, and gets no `done` at all.
 ## What is deliberately not here
 
 - **Attempts are not stored.** A reload starts fresh. `batchId` is the shape that keeps the door
-  open; nothing else about v1 assumes statelessness.
+  open; nothing else about v1 assumes statelessness. **The adaptive walk did not change this**: the
+  path, the position in it and the hidden verdict are React state and die with the attempt, and the
+  verdict is not written to a log either — a per-answer right/wrong on a log line is a stored grade
+  wearing a different hat, and [privacy.md](privacy.md) makes a public promise about it.
 - **No reader profile in the stamp**, so no `profileChanged` on the response. Adding one later needs
   no migration — it would be a field on the JSON.
 - **Not scoped to `?at=`.** Whole article, every time.

@@ -202,7 +202,8 @@ in the mode's own ramp rather than in the words "red" and "green".
 
 **Where the reader has commented on a phrase a criterion also marked**, the mark prints both the
 sign and the comment's `✳`, from one higher-specificity rule
-([`src/web/styles.css`](../../src/web/styles.css)). An element has one `::after`, and the two rules
+([`src/web/styles/annotations.css`](../../src/web/styles/annotations.css) § a comment and a sign on
+one mark). An element has one `::after`, and the two rules
 had equal specificity until 2026-09-02, so ours won and the reader's own marker silently
 disappeared. The cascade is the only place that is visible, so
 [`tests/mark-sign-in-chrome.test.ts`](../../tests/mark-sign-in-chrome.test.ts) reads the computed
@@ -638,7 +639,7 @@ Where the cards are, and the one thing each says that the label cannot:
 
 | Control | The half a press would not tell you |
 |---|---|
-| the four sub-mode chips ([`App.tsx`](../../src/web/App.tsx) § `RefereeViews`) | Criteria never scores; Claims asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Candidates reaches a search engine and checks no conflicts |
+| the four sub-mode chips ([`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `RefereeViews`) | Criteria never scores; Claims asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Candidates reaches a search engine and checks no conflicts |
 | the three kind chips | `KIND_NOTE` — the same string the panel prints under the selected kind, so the two kinds a referee has *not* pressed explain themselves too |
 | the preset chips | they replace the whole form: text, kind and both poles |
 | *Run this criterion*, *Pull the paper's claims*, *Try again* | one model call over the whole paper, at full price, nothing resumed |
@@ -746,7 +747,7 @@ that cannot be reached is not an explanation.
   emits no pointer and no focus events, so nothing opens a card on one — and the referee who wants to
   know what the button costs, or why it is dead, is standing in front of exactly that. It carries
   `aria-disabled` now, so it stays hoverable, focusable and announced as unavailable, with
-  `.crit-run[aria-disabled="true"]` in [`styles.css`](../../src/web/styles.css) doing what `:disabled`
+  `.crit-run[aria-disabled="true"]` in [`styles/referee.css`](../../src/web/styles/referee.css) doing what `:disabled`
   used to. **`aria-disabled` does not stop an activation**, so the inertness stays where it already
   was: the form's `onSubmit` returns on an incomplete criterion, which catches the click, the Enter
   and the Space alike.
@@ -851,7 +852,8 @@ Each is meant to be a test rather than an intention, whichever sub-mode eventual
    hands back — the **raw source**, never the extracted blocks, because extraction throws hidden
    text away with everything else it does not keep. The panel is
    [`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx), drawn by
-   [`RefereeBand`](../../src/web/App.tsx) above the sub-mode chips rather than as a fifth chip: rule
+   [`RefereeBand`](../../src/web/modes/referee/RefereeMode.tsx) above the sub-mode chips rather than
+   as a fifth chip: rule
    5 says *before anything else*, and a chip is one more thing a referee can fail to press. The band
    opens at once and the answer lands when it lands ([`useSourceScan`](../../src/web/useSourceScan.ts)),
    because a scan is hundreds of milliseconds on a short paper and about nine seconds on a 1.3 MB
@@ -934,7 +936,8 @@ So there are three sentences, in three places, and the **tense is the whole poin
   sent. `tests/direct-add-says-the-text-has-gone.test.tsx` asserts both the sentence and the
   asymmetry, so that making the three disclosures "consistent" goes red.
 - **Past tense, inside Referee mode itself** — `REFEREE_TEXT_ALREADY_SENT`
-  (`src/messages.ts`), shown by `RefereeBand` ([`src/web/App.tsx`](../../src/web/App.tsx)), and
+  (`src/messages.ts`), shown by `RefereeBand`
+  ([`src/web/modes/referee/RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx)), and
   **collapsed since 2026-09-02** at Greg's asking. The *fact* is the label on the control —
   `REFEREE_TEXT_ALREADY_SENT_SHORT`, which is the long sentence's own opening clause — so shutting
   the box hides the venues and the audience, never that the text has gone; and `noticeOpen` is a
@@ -968,7 +971,7 @@ shorter than about 1400px. Every test was green throughout, because jsdom has no
 
 The fix is a `.ref-brief` wrapper around the notice and the scan, capped at 40% of the band with its
 own scroll, and a `min-height` floor under `.ref-panel` so it is no longer the one child flexbox is
-willing to squeeze — [`src/web/styles.css`](../../src/web/styles.css) § *referee mode* carries the
+willing to squeeze — [`src/web/styles/referee.css`](../../src/web/styles/referee.css) § *referee mode* carries the
 measurements and the two fixes that were passed over. A referee still meets the whole
 confidentiality notice without scrolling at 1280 × 720; below the notice, the scan is one scroll
 away behind a trailing fade, and the panel keeps 294px. Verified across four sub-modes at seven

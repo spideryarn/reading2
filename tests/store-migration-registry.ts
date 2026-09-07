@@ -75,10 +75,12 @@
  *   [`src/store/ai-calls.ts`](../src/store/ai-calls.ts) returned `fsCostStore`
  *   whenever `NODE_ENV === "test"`, whatever the flag said, so any suite driving
  *   a request through `handleApi` wrote ledger rows to a file. **Stage C removed
- *   that line and nothing else about the selection**, so the mechanism now
- *   reaches only the files that leave `SPIDERYARN_STORE` unset and take
- *   `fsCostStore` from the `files` branch — which survives until stage F. The
- *   twenty-two that pin the flag record into the run's private database instead,
+ *   that line and nothing else about the selection**, so the mechanism then
+ *   reached only the files that left `SPIDERYARN_STORE` unset and took
+ *   `fsCostStore` from the `files` branch. **That branch went with stage F on
+ *   2026-09-05 and the flag itself on 2026-09-06, so the mechanism reaches
+ *   nothing at all now.** The twenty-two that pinned the flag recorded into the
+ *   run's private database instead,
  *   and for them this mechanism is history rather than outstanding work; the
  *   entries are left saying so rather than rewritten one by one.
  * - **`step-context-paths`** — `runStep` in [`src/jobs.ts`](../src/jobs.ts)
@@ -990,6 +992,28 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "may only leave this map once `store-migration-witness.json` is re-run at the end of stage " +
       "B, so the reason says the work is done rather than the verdict being re-labelled.",
   },
+  /**
+   * **A new arrival, 2026-09-07**, and it arrived by gaining an import rather
+   * than by being written: the stage 2a review's F1 was that `copyArtefacts`
+   * cannot carry an article whose labels are still pending, and the case that
+   * reproduces it calls `copyArtefacts` — which is the only name left in
+   * `TARGETS`. `evidence: "static-only"` for the reason the four link-preview
+   * entries above give: the file is newer than the stored `touched` map, and
+   * re-running witness 2 is what upgrades it.
+   */
+  "tests/labels-receipt-invalidation.test.ts": {
+    category: "database-integration",
+    evidence: "static-only",
+    reason:
+      "Born on Postgres and could not be anywhere else: its subject is what one transaction does " +
+      "to `article_revisions.nav_label_status` and a `revision_step_runs` row when a labels " +
+      "manifest lands beside a tree — `writeArtefacts`'s receipt deletion, its two refusals, and " +
+      "the `stepIsDone` answers that follow. It drives `beginStep`/`write`/`finishStep` through " +
+      "`pgArtifactsIn` inside a real claim, and rolls the transaction back. `copyArtefacts` is " +
+      "reached by one describe block, which copies into that same Postgres store; there is no " +
+      "filesystem side of any of this to have migrated from. " +
+      "docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md#stage2a-review.",
+  },
   "tests/load-article-serialisation.test.ts": {
     category: "database-integration",
     reason:
@@ -1527,6 +1551,21 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "was chosen by the flag, so five of its seven cases went red the moment the flag went. The " +
       "article is `scratchArticleInPg` now instead of a copied `example/` directory.",
   },
+  "tests/streaming-route-request-lifetime.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "**Written 2026-09-07, after the witness ran**, which is why the evidence is static: it is " +
+      "on this list only because `scratchArticleInPg` reaches the fixture loader, and it names no " +
+      "condemned module of its own. Its subject is a request's *lifetime* rather than a store — " +
+      "`POST /api/referee/criteria/:slug` driven through `handleApi` with the model call paused, " +
+      "so that the response, the `refereeing` lock and the caller's promise can each be asked " +
+      "whether they are still where the guard left them. It needs Postgres because its whole " +
+      "oracle is whether the GET's sweep buries a backdated `pending` row, which is the only way " +
+      "a caller can see that lock at all. Stage 4a of " +
+      "docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md.",
+  },
   "tests/term-lookup.test.ts": {
     category: "database-integration",
     reason:
@@ -1536,9 +1575,9 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "store: the flag is pinned before any import and one corpus article is seeded under a " +
       "throwaway slug with an extra glossary entry the text never matches. **One assertion was " +
       "dropped rather than translated**: `lookUpTerm('example', …)` rejecting with " +
-      "`/built-in example/` exercised `assertWritable`, which `index.ts` supplies only when the " +
-      "store is not Postgres, because the 403 exists to protect a committed directory Postgres " +
-      "does not have — the file's header records the drop, and the 404-for-an-unknown-slug half " +
+      "`/built-in example/` exercised `assertWritable`, which `index.ts` supplied only when the " +
+      "store was not Postgres, because the 403 existed to protect a committed directory Postgres " +
+      "never had (the dependency itself went on 2026-09-06) — the file's header records the drop, and the 404-for-an-unknown-slug half " +
       "is kept in a case of its own. Mutation watched red: `entries` emptied in " +
       "`pgArticleReader.loadGlossary`. The category is left alone deliberately — a converted file " +
       "may only leave this map once `store-migration-witness.json` is re-run at the end of stage " +
@@ -1573,6 +1612,23 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
      copy" the same question, and `tests/store-jobs-parity.test.ts` already asks
      it of that store. The hazard is abolished by `claimIn`'s single
      `update … where id = $id and status = 'queued'`, not covered elsewhere. */
+  "tests/an-uploaded-html-file-becomes-an-article.test.ts": {
+    category: "database-integration",
+    /* Written on 2026-09-07, so no witness has ever seen it run and the verdict
+       rests on the import graph and this file's own docstring — which is what
+       the field means and all it means. It sits beside its PDF sibling rather
+       than in the *Arrivals* bucket below, because that heading is about files
+       that landed between two witness **runs**, and there has been no run since
+       this one was written. */
+    evidence: "static-only",
+    reason:
+      "The HTML half of the same step, and it exists because the two things that break here break " +
+      "**silently**: an upload path that stored the arrived bytes rather than the decoded string " +
+      "would publish mojibake with nothing raised (the windows-1252 case is the only way that can " +
+      "fail honestly), and a kind decided from the filename rather than the bytes would be wrong " +
+      "in whichever direction nobody tested. Real upload records against the real store, like its " +
+      "PDF sibling. docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md.",
+  },
   "tests/upload-acquire.test.ts": {
     category: "database-integration",
     reason:
@@ -2416,6 +2472,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      about it wants a Supabase service; it wants 300 rows nobody else can see,
      which is what this lane is. `tests/request-spend.test.ts` is the same
      child-plus-private-database arrangement. */
+  /* Stage 2 of the labels split, 2026-09-06. It seeds one article and drives
+     real `beginStep`/`write`/`finishStep` claims over it — writing articles,
+     revisions, block rows, step runs and a job row under one fixed slug — so
+     two concurrent runs would be two walks over one article's line. Everything
+     it does is inside a transaction it rolls back; the article itself is
+     suffixed per run and cleaned up in `afterAll`. */
+  "tests/labels-receipt-invalidation.test.ts": "private-postgres",
   "tests/library-log-volume.test.ts": "private-postgres",
   "tests/list-reconciles-expired.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from a count: one
@@ -2512,6 +2575,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      because it inherits both `DATABASE_URL` and `SPIDERYARN_ENV_PINNED`. */
   "tests/request-spend.test.ts": "private-postgres",
   "tests/remember-route.test.ts": "private-postgres",
+  /* The guarantee the Metadata page's "Generate it again" control sells: a
+     re-run that fails leaves the reader on the artefact they already had
+     (docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md).
+     It publishes a revision, fails a draft over it, and reads back through
+     `loadQuotes` — the reader's own path — so there is no honest version of it
+     without a database. */
+  "tests/rerun-failure-keeps-the-old-artefact.test.ts": "private-postgres",
   /* Landed 2026-09-04 with the reservation of `/read/public`
      (docs/plans/260904b-pricing-page-and-public-showcase.md § Stage 3a). Two of
      its three enforcers are pure functions and need nothing; the third is
@@ -2567,6 +2637,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      about. Nothing here reaches GoTrue or the bucket: the owner row is one the
      private clone already seeds, and no article is loaded at all. */
   "tests/second-job-queues.test.ts": "private-postgres",
+  /* Its slug carries a per-run uuid and its block ids are minted, so it
+     collides with nothing; the private lane is still where it belongs, because
+     it inserts an article, a revision and a (rolled-back) job and reads
+     `revision_step_runs` directly. Its ambient owner is a row the private
+     clone already seeds, no article is loaded from the corpus, and nothing
+     goes near GoTrue or the bucket. */
+  "tests/shared-site-run-row-gate.test.ts": "private-postgres",
   "tests/source-store.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the private lane is not optional
      here: six fixed slugs, each of which `lockOrCreateArticle` **creates** the
@@ -2616,6 +2693,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      the flag was unset, and it is `pgChatStore`/`pgSearchStore` now. */
   "tests/store-wiring.test.ts": "private-postgres",
   "tests/store-writes-land-in-postgres.test.ts": "private-postgres",
+  /* Landed 2026-09-07 with stage 4a of
+     docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md. It
+     drives `POST /api/referee/criteria/:slug` through `handleApi` with the
+     model call paused, and its whole oracle is a `pending` row a sweep may or
+     may not bury — so it needs a database, and it needs one nobody else is
+     sweeping. */
+  "tests/streaming-route-request-lifetime.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. It seeds one corpus article under a
      throwaway slug with an extra glossary entry the text never matches, and
      then asks `lookUpTerm` — built by `src/store/index.ts` out of whichever
@@ -2643,6 +2727,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/upload-records.test.ts": "private-postgres",
   /* Storage, not Postgres — see `an-upload-is-queued-…` above. */
   "tests/upload-acquire.test.ts": "private-postgres",
+  "tests/an-uploaded-html-file-becomes-an-article.test.ts": "private-postgres",
   "tests/uploads-api.test.ts": "private-postgres",
 };
 
@@ -2809,6 +2894,13 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      without one; `seedAuthUser` in `beforeAll`, deleted again in `afterAll`. */
   "tests/upload-acquire.test.ts": {
     "33333333-3333-4333-8333-333333333333": { kind: "seeded" },
+  },
+  /* The HTML sibling of the file above, and its own uuid for the same reason:
+     tests/fixture-ids.test.ts refuses two files sharing one, and vitest runs
+     both against one database. `seedAuthUser` in `beforeAll`, deleted in
+     `afterAll`, because `uploads_owner_fk` refuses a row without it. */
+  "tests/an-uploaded-html-file-becomes-an-article.test.ts": {
+    "33333333-3333-4333-8333-333333333344": { kind: "seeded" },
   },
   /* Stage 3b's own reader. `seedAuthUser` in `beforeAll`, and every row it
      writes — the billing account, the ingest events — hangs off the

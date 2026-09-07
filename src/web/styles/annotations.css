@@ -1,0 +1,1125 @@
+/* annotations.css — the two halves of a comment: the `<mark>` left in the prose
+   and the floating panel that answers. CommentDialog.tsx, annotate.ts,
+   docs/project/comments.md.
+
+   The marks are the reason this file cannot be split by component. A merged
+   `<mark>` carries every class that applies at once, so several rules here
+   exist only to settle what happens when a comment, a search hit and a
+   criterion all land on the same run of text. */
+
+/* ---------------------------------------------------------------- comments --
+   Selecting prose asks the model to explain it; the answer arrives in a
+   floating dialog. See docs/project/comments.md.
+
+   Two pieces here: the mark left in the prose, and the panel. There is
+   deliberately **no column** — nothing that changes the width of anything —
+   because the whole reason this is a dialog is that the granularity table's
+   layout arithmetic (layout.ts) stays untouched.
+
+   Since 2026-08-31 there is a third piece, and it is worth being exact about
+   why it does not break that rule: a comment also draws a `Bookmark` in the
+   prose gutter (§ the gutter, `.blk-cmt`). The gutter is one 24px slot — 2.2rem
+   of the cell's padding — that exists whether or not anything is in it, so a
+   comment costs the layout no *width*, which is the property this paragraph was
+   protecting rather than the absence of a gutter as such. It does now take a
+   slot from the controls under it, which is a different thing and is § the
+   gutter's business: the mark leads the column, so a note can push the "?"
+   behind the "…" on a short row. **And since 2026-09-05 it costs nothing vertically either**: the
+   bookmark moved into the gutter's first row, so a comment no longer floors its
+   row (§ the gutter). For one day it did, by 24px. The marker is there because the underline
+   cannot be: a comment whose quoted words were edited away resolves to nothing
+   and draws no mark at all. GPT Sol flagged this sentence going stale.  */
+
+/* The persistent artefact in the text. An underline rather than a fill: a wash
+   behind the words is what `td.gist.active` and the browser's own selection
+   already mean, and three overlapping meanings of "orange background" is one
+   too many. The words themselves must not change colour — this is the verbatim
+   column, and recolouring the author's prose to advertise our annotation is the
+   small version of the thing vision.md § Principles refuses. */
+mark.cmt {
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  border-bottom: 1px solid color-mix(in oklab, var(--highlight) 55%, transparent);
+  transition: background 0.12s, border-color 0.12s;
+}
+mark.cmt:hover {
+  background: color-mix(in oklab, var(--highlight) 10%, transparent);
+  border-bottom-color: var(--highlight);
+}
+/* The one whose dialog is open, so the panel and the passage are visibly the
+   same thing when the reader has scrolled and lost track. */
+mark.cmt[data-cmt-open] {
+  background: var(--highlight-wash);
+  border-bottom-color: var(--highlight);
+}
+
+/* The marker proper. On the final run only (annotate.ts sets data-mark-end), so
+   a mark broken across an <em> still shows exactly one asterisk. */
+mark.cmt[data-mark-end]::after {
+  content: "✳";
+  font-family: var(--font-ui);
+  font-size: 0.6em;
+  line-height: 1;
+  vertical-align: super;
+  margin-left: 0.15em;
+  color: var(--highlight);
+}
+
+/* A glossary term's occurrences. **Standing, since 2026-08-26**, and the
+   comment here used to say the opposite at length.
+
+   It said the marks were transient by design: the version this was borrowed
+   from underlined every term in every article always, which is the prose
+   acquiring marks on the model's initiative rather than the reader's, so ours
+   appeared when a term was pressed and went when it was unpressed. Greg
+   reversed it — *"Glossary entries should always be underlined in the verbatim
+   text column, even outside Glossary mode, and hover should show a rich
+   tooltip"* — and the principle moved rather than lost: what arrives on the
+   reader's initiative is now the **card** (ProseHoverCard.tsx). The line is just a
+   line.
+
+   Which is why the line got quieter. A 7% wash behind one pressed term is a
+   highlight; the same wash behind every term in the piece is a mottled
+   paragraph, and the reader cannot turn it off. So the standing mark is the
+   dotted rule alone, at a weight meant to be legible when looked for and
+   ignorable when not, and the wash moved to `[data-term-open]` below.
+
+   A dotted underline where a comment gets a solid one, and no marker glyph: a
+   comment is an artefact you made and can open, a term occurrence is neither.
+   Same rule as `mark.cmt` about the words themselves — the author's prose does
+   not change colour to advertise our annotation. */
+mark.term {
+  background: none;
+  color: inherit;
+  border-bottom: 1px dotted color-mix(in oklab, var(--highlight) 45%, transparent);
+  /* The card is the whole point of the mark now, so the pointer should say
+     there is something here before the 320ms delay is up. `help` rather than
+     `pointer`: a click does nothing, and a pointer cursor promising one is the
+     small lie that makes people click twice. */
+  cursor: help;
+  transition: background 0.12s, border-color 0.12s;
+}
+mark.term:hover {
+  background: color-mix(in oklab, var(--highlight) 7%, transparent);
+  border-bottom-color: color-mix(in oklab, var(--highlight) 75%, transparent);
+}
+/* The term pressed in the glossary panel, of the many drawn. Being selected
+   cannot mean *having* a mark any more, so it means a heavier one — the same
+   job `mark.cmt[data-cmt-open]` and `mark.hit[data-hit-open]` do, and for the same
+   reason: after a jump, the row in the panel and the words in the prose have to
+   be visibly the same thing. */
+mark.term[data-term-open] {
+  background: var(--highlight-wash);
+  border-bottom-color: var(--highlight);
+}
+/* The words a finger has opened a card against — useHoverCard.ts § TAP_ATTR.
+   On a touch screen the first tap reveals and the second one goes to the
+   glossary, so there has to be something saying *which* words are armed for
+   that second tap; two underlined phrases in one line are otherwise
+   indistinguishable once the card is up. The card's arrow points at them, and
+   an arrow is a poor answer at a line's end where `shift` has moved it.
+
+   Deliberately the same weight as `[data-term-open]` and deliberately not the
+   same attribute: that one means "the entry pressed in the glossary panel", and
+   one name for two states would make a tapped word look selected in a mode the
+   reader is not in. `:hover` cannot do this job either — iOS makes it sticky,
+   so it would survive the card being dismissed. */
+mark.term[data-hover-tap] {
+  background: var(--highlight-wash);
+  border-bottom-color: var(--highlight);
+}
+/* A comment and a term over the same words are ONE <mark> carrying both
+   classes (annotate.ts § MarkKind), so this is not a hypothetical pairing. The
+   comment wins the border, because it is the one you can click and the dotted
+   line would make it look inert. */
+mark.cmt.term {
+  border-bottom-style: solid;
+}
+
+/* A search hit. **The one mark whose intensity means something** — `--hit-a` is
+   set per run by annotate.ts from the model's confidence, so a passage the
+   model was sure about is visibly heavier than one it was hedging on. A binary
+   highlight would hide the model's uncertainty, which is the opposite of what
+   vision.md § Principles asks for.
+
+   A fill rather than an underline, and a *different hue* from everything else
+   on this page. Both are deliberate and both come from
+   docs/project/original-version/highlighting.md: a fill because the extent is
+   the information here (a comment says "there is a note", a hit says "this much
+   of it matches"), and a different hue because a comment, a glossary term and a
+   hit can all cover the same sentence, at which point three meanings separated
+   only by opacity is one hue too few.
+
+   The words themselves still do not change colour. Same rule as `mark.cmt` and
+   `mark.term`: this is the verbatim column, and recolouring the author's prose
+   to advertise our annotation is the small version of the thing vision.md
+   refuses. */
+mark.hit {
+  /* **`background: none`, and it is load-bearing rather than tidy.** The UA
+     sheet paints every `<mark>` a solid yellow (`background-color: Mark`), and
+     this rule used to override it by accident — it set a background
+     unconditionally. Since the wash moved to `[data-wash]` below, a quote-only
+     mark sets none, and without this line the browser's yellow comes back:
+     every quote in the article drawn as a highlighter pen, which is precisely
+     the treatment this change exists to replace. Found by a probe page that
+     rendered exactly that, 2026-09-07. `mark.cmt` and `mark.term` each carry the
+     same line for the same reason. */
+  background: none;
+  color: inherit;
+  border-radius: 2px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* **The wash, and everything that hangs off it, is the SEARCH half of `hit`.**
+   Until 2026-09-07 these were unconditional on `mark.hit`, which was fine while
+   every hit was a search hit. Quotes are hits too — they share the machinery so
+   the rail packs one lane and the pressed ring works — so a quote arrived
+   wearing a fill, and "the boundary but not the fill" was impossible to build
+   on top of it.
+
+   `data-wash` is written by annotate.ts when at least one mark covering the run
+   actually wants search painting. The tier and the wash are independent: a
+   passage that is both a quote and a search hit carries both attributes and
+   draws both, which is the case the two channels were split for. */
+mark.hit[data-wash] {
+  /* The default, overridden per mark by the inline `--hit-a` annotate.ts sets.
+     Declared here so a mark with no strength is a *full* one rather than an
+     invisible one — the failure of a missing custom property should be a mark
+     you can see, not a mark you cannot. */
+  --hit-a: 1;
+  /* The wash carries confidence and NOTHING ELSE, and it is a deliberately
+     low-chroma slate so that it can never be mistaken for one of the eight
+     categorical hues below. Greg's call, 2026-08-26, when the choice was put to
+     him as "blend the washes" against "stack the rules": the mixture of two
+     translucent washes is a colour that is not in the palette, so a reader
+     cannot look it up, and a third layer takes it to mud while eating the
+     text's contrast. Splitting the two channels — confidence into the wash,
+     identity into the rules — is what makes it true that adding a fifth
+     overlapping search cannot make the words underneath it any harder to read
+     than one does. */
+  background-color: rgb(var(--hit-wash-rgb) / calc(var(--hit-a) * 0.3));
+  /* Room for the rules, taken out of the **leading** rather than out of the
+     layout: padding on an inline box grows its background downward without
+     changing the line box, so switching a search on cannot reflow the article.
+     A `border-bottom` or a margin would; a `box-shadow` would escape the box
+     and land on the line below. */
+  --hue-band: 2px;
+  padding-bottom: var(--hue-band);
+  /* **Insurance, not a fix — and this comment used to claim otherwise.**
+     It said `slice` (the initial value) would draw a bottom-anchored stripe
+     once, at the foot of the last line, leaving the first line of a wrapped
+     phrase bare. A GPT Sol review disputed it and a browser pass settled it:
+     in Chrome, `slice` and `clone` render this mark *pixel-identically*,
+     wrapped or not — 12 differing pixels out of 42,780 across the line
+     boundary, which is antialiasing. Both measured 2026-08-26.
+
+     The reason is the interesting part, because it says what would change
+     that. The stripe is positioned with `background-size: 100% <band>` and
+     `background-position: 0 100%` — **percentages, resolved against each
+     fragment's own box.** `slice` only differs from `clone` where a
+     declaration reaches for the *unwrapped* box: absolute background sizes,
+     the inline-start/end padding, the true corners a border-radius rounds.
+     This one never does, so the two modes have nothing to disagree about.
+
+     So `clone` stays, because it costs nothing and it is the mode this rule
+     is written as though it were in — and because the day somebody replaces
+     that `100%` with a pixel width, `slice` starts mattering and the bug is
+     conditional on a line break, which is the kind that hides. Untested in
+     Safari and Firefox, where `box-decoration-break` has a history of
+     diverging; that is the other reason to keep it rather than tidy it away.
+
+     It is declared on `mark.hit` above rather than here, so that it applies to
+     a quote-only mark too — and § quote strokes below overrides it to `slice`
+     for quotes, which is the one place the two modes genuinely differ. */
+}
+
+/* ------------------------------------------------------- quote strokes ----
+   **A quote is drawn as an outline; a search hit is drawn as a fill.** The one
+   channel nothing else in the prose was using, so quotes got their own visual
+   language without taking anything away from search — Greg's call, 2026-09-06,
+   deciding a question quotes.md had carried as open. docs/project/quotes.md
+   § The stroke, and the plan is 260907c.
+
+   **`box-shadow`, not `border`, and not `outline`.** A border costs inline
+   width on every fragment, and with quotes on a slider the prose would shift on
+   every drag of the bar; `outline` is the focus ring, and borrowing it for a
+   permanent decoration collides with the one indicator a keyboard reader
+   depends on. A zero-blur `box-shadow` reserves no space at all — measured in
+   Chrome on 2026-09-07, the paragraph height, line count, fragment widths and
+   the x of the first character after the mark are identical to three decimal
+   places with the ring on and off. That is the property this whole treatment
+   rests on. It is also the repo's existing idiom for a stroke that must not
+   reflow — `td.text.has-hit` draws the paragraph rail the same way.
+
+   **Four edges, four offset shadows.** Each is the mark's own box translated by
+   the stroke width, so the visible part is a band of exactly that width on one
+   side. Written separately rather than as a single spread ring because the
+   inline caps have to be switchable per fragment — which is the next paragraph,
+   and the reason this design works at all.
+
+   **The caps are the hard-won part.** `annotateHtml` emits one `<mark>` per text
+   node and splits again at every annotation boundary, so ONE quote containing an
+   `<em>` is three sibling elements. A wash hides that completely; four closed
+   rings do not — one sentence reads as three separate quotes. So the rules above
+   and below are drawn on **every** fragment and the inline caps only on the two
+   carrying `data-quote-start` / `data-quote-end`, and the outline runs
+   continuously across the joins. Measured: no gap at the seam, only a 14%
+   antialias dip visible at 4×. `box-decoration-break` cannot do this job — it
+   governs fragments of one box, never separate elements.
+
+   **`slice`, overriding the `clone` above.** Within a single element that wraps,
+   `slice` is what draws the caps at the true ends only rather than on every
+   line — the same rule at the smaller scale.
+
+   **What that costs a mark that is ALSO a search hit is measured, not
+   reasoned.** `clone` and `slice` were found pixel-identical for the hue band
+   on 2026-08-26 — but that was in Chrome, on one fixture, and the *explanation*
+   offered for it at the time (percentages resolve per fragment, so the two
+   modes have nothing to disagree about) is contrary to the spec, which says
+   `slice` uses the unbroken box's geometry and then slices it
+   (CSS Fragmentation §5.4). GPT Sol, 2026-09-07. So the honest statement is the
+   observation and not the theory: **in this Chrome, on a wrapped quote that is
+   also a hit, the band renders the same either way; in Firefox and Safari it is
+   untested.** If a wrapped quote-over-search ever looks wrong there, this line
+   is the first suspect. It is not reachable in the reader today — one mode's
+   marks are on the page at a time — which is why it is recorded rather than
+   engineered around. */
+mark.hit[data-quote] {
+  --quote-stroke-width: 1px;
+  --quote-edge-top: 0 calc(-1 * var(--quote-stroke-width)) 0 0 var(--quote-stroke-color);
+  --quote-edge-bottom: 0 var(--quote-stroke-width) 0 0 var(--quote-stroke-color);
+  /* **Inset**, so two abutting quotes stay two. Drawn outside, the facing caps
+     of adjacent quotes overlap and weld the word space shut into one solid
+     column — measured 2026-09-07: two 3px caps across 5.35px of space, leaving
+     zero background pixels, so the pair reads as a single long quote. Inset
+     leaves 6px of clean page between them. It also stops a quote that begins a
+     line hanging its cap into the left margin and breaking the column edge. */
+  --quote-edge-start: inset var(--quote-stroke-width) 0 0 0 var(--quote-stroke-color);
+  --quote-edge-end: inset calc(-1 * var(--quote-stroke-width)) 0 0 0 var(--quote-stroke-color);
+  box-shadow: var(--quote-edge-top), var(--quote-edge-bottom);
+  -webkit-box-decoration-break: slice;
+  box-decoration-break: slice;
+}
+/* **`data-quote-start` is a logical end, and a shadow offset is a physical
+   one.** `box-shadow` has no logical form, so in a right-to-left block the
+   quote's first fragment would draw its cap on the *left* — which is where that
+   fragment abuts the rest of the quote, not where the quote begins. A quote
+   split across an `<em>` would then be capped on its two internal seams and
+   left open at both ends: exactly inside out. A single-fragment quote hides it
+   completely, because it carries both caps and looks right either way, which is
+   what makes this the kind of bug that survives a browser pass.
+
+   Untested in a real RTL article — this repo has none — so it is written from
+   the geometry rather than from a screenshot, and a specimen is the thing to
+   add if an RTL piece ever arrives. GPT Sol, 2026-09-07. */
+mark.hit[data-quote]:dir(rtl) {
+  --quote-edge-start: inset calc(-1 * var(--quote-stroke-width)) 0 0 0 var(--quote-stroke-color);
+  --quote-edge-end: inset var(--quote-stroke-width) 0 0 0 var(--quote-stroke-color);
+}
+/* The heavy tier. Two tiers and not three: blind pairwise, three at 1/2/3px
+   scored 13/20 — chance — while 1px against 3px scored 12/12 at both device
+   scale factors. Everything involving a middle tier is what fails. See
+   `QuoteTier` in src/types.ts for the numbers and the reasoning. */
+mark.hit[data-quote="2"] {
+  --quote-stroke-width: 3px;
+}
+mark.hit[data-quote][data-quote-start] {
+  box-shadow: var(--quote-edge-top), var(--quote-edge-bottom), var(--quote-edge-start);
+}
+mark.hit[data-quote][data-quote-end] {
+  box-shadow: var(--quote-edge-top), var(--quote-edge-bottom), var(--quote-edge-end);
+}
+mark.hit[data-quote][data-quote-start][data-quote-end] {
+  box-shadow: var(--quote-edge-top), var(--quote-edge-bottom), var(--quote-edge-start),
+    var(--quote-edge-end);
+}
+
+/* ------------------------------------------------------- stacked hues ----
+   Which searches found these words, as one coloured rule each under the wash.
+   `--h0` … `--h3` are set inline by annotate.ts and hold *palette references*
+   (`var(--cat-3-rgb)`), never colours — the slot belongs to the search and the
+   hue belongs to styles/colourscales.css, and neither half should be able to
+   change the other. See docs/project/colour-scales.md.
+
+   **One gradient with hard stops, not one layer per stripe.** Four background
+   layers would need four matching `background-position` values and a
+   `background-size` that divides correctly, which is four numbers per rule that
+   have to agree; a single `linear-gradient` with hard stops is one declaration
+   whose stops are the only thing that changes. It also cannot half-paint: a
+   mistyped stop shifts a boundary, where a mistyped position drops a stripe
+   entirely and leaves a colour that simply is not drawn.
+
+   The band grows with the count and then stops. Two searches over one phrase is
+   common enough to want room for; growing without limit would push the rules
+   into the line below. So the band caps at **6px** and the stripes inside it get
+   thinner instead — 2px each at three, 1px each at six, which is the last width
+   that is still a mark rather than a suggestion. `HUE_STRIPES` in annotate.ts is
+   six for that reason and no other; it was four, on the strength of an
+   arithmetic claim that turned out to be false (a GPT Sol review, 2026-08-26,
+   did the division: six stripes in 6px are 1px, not sub-pixel).
+
+   **The bar down the left of the paragraph is capped separately, and far
+   higher**, because it has the paragraph's whole height to divide rather than
+   a few pixels of leading. It shows all eight. Two different amounts of room,
+   so two different caps — conflating them was throwing away provenance in the
+   one place there was no need to.
+
+   The band is repeated on the confidence chip in the panel and on the bar down
+   the left of the paragraph, from the same `--h*` properties, so the three
+   places a search's colour appears cannot disagree. */
+mark.hit[data-hues] {
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 100% var(--hue-band);
+}
+mark.hit[data-hues="1"] {
+  background-image: linear-gradient(rgb(var(--h0)), rgb(var(--h0)));
+}
+mark.hit[data-hues="2"] {
+  --hue-band: 4px;
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 50.0%,
+    rgb(var(--h1)) 50.0%
+  );
+}
+mark.hit[data-hues="3"] {
+  --hue-band: 6px;
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 33.33%,
+    rgb(var(--h1)) 33.33% 66.67%,
+    rgb(var(--h2)) 66.67%
+  );
+}
+mark.hit[data-hues="4"] {
+  --hue-band: 6px;
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 25.0%,
+    rgb(var(--h1)) 25.0% 50.0%,
+    rgb(var(--h2)) 50.0% 75.0%,
+    rgb(var(--h3)) 75.0%
+  );
+}
+mark.hit[data-hues="5"] {
+  --hue-band: 6px;
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 20.0%,
+    rgb(var(--h1)) 20.0% 40.0%,
+    rgb(var(--h2)) 40.0% 60.0%,
+    rgb(var(--h3)) 60.0% 80.0%,
+    rgb(var(--h4)) 80.0%
+  );
+}
+mark.hit[data-hues="6"] {
+  --hue-band: 6px;
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 16.67%,
+    rgb(var(--h1)) 16.67% 33.33%,
+    rgb(var(--h2)) 33.33% 50.0%,
+    rgb(var(--h3)) 50.0% 66.67%,
+    rgb(var(--h4)) 66.67% 83.33%,
+    rgb(var(--h5)) 83.33%
+  );
+}
+/* A literal match has no saved search behind it and therefore no colour of its
+   own, so it wears the one fixed search hue — which is what every hit wore
+   before the palette existed. Written as its own rule rather than as a
+   fallback value on `--h0`, so that the words matcher does not depend on a
+   custom property resolving to something sensible when it is absent.
+
+   **`[data-wash]` is doing real work in this selector**, not just matching the
+   rules around it. A quote has no `data-hues` either — quotes contribute no hue
+   stripe, because their slot means "one source called Quotes" rather than "a
+   search whose colour this is" — so a bare `:not([data-hues])` would give every
+   quote in the article the fixed search-blue band under it, which is a search's
+   colour on a passage no search found. */
+mark.hit[data-wash]:not([data-hues]) {
+  background-image: linear-gradient(var(--hit), var(--hit));
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 100% var(--hue-band);
+}
+/* ------------------------------------------------------- the direction ----
+   **A mark painted by valence carries a sign, and this is it.** `−` counts
+   against, `+` counts for, `·` counts neither way, `±` where two results point
+   opposite ways over one phrase and both stripes are drawn.
+
+   The stripes above say *which way* in colour, and colour-scales.md is blunt
+   that colour may never be the only carrier of a good/bad judgement. The panel
+   row meets that four times over — rank, direction in words, the referee's own
+   pole label, the signed number — but none of those is beside the mark. This
+   is. A minus sign is self-describing where a hue is not, and it survives
+   greyscale, deuteranopia and protanopia intact, which is the whole point of
+   it.
+
+   **Generated content, never text**, which is the one thing that made this
+   safe to build at all: it cannot be copied out of the article with the
+   author's sentence, and it cannot reach the block's rendered-text offsets —
+   the offset space every mark, comment anchor and block id resolves against
+   (docs/project/block-ids.md).
+
+   A real minus sign, U+2212, matching `signedValence` in src/web/valence.ts
+   rather than a hyphen.
+
+   **The alt text says the direction in words** — `content: "−" / "counts
+   against"`. It was empty for a day, on the argument that a stray minus
+   announced inside the author's sentence is worse than silence; GPT Sol's
+   finding 4 is that this makes the carrier inaudible to the one reader who most
+   needs a carrier that is not a colour, and it is right. The panel row is not a
+   substitute, because a screen-reader user reading the prose has not been
+   through the panel. The words are the ones `directionWords` produces in
+   src/web/valence.ts — criterion-neutral, so a mark drawn by two criteria at
+   once is not announced in one of their pole labels — and tests/valence.test.ts
+   reads this file off disk and compares the two, so the copy here cannot drift.
+   The plain declaration above each is the fallback for a browser that does not
+   parse the alt-text syntax: it drops that line and keeps this one, so the sign
+   is never lost, only unannounced. */
+mark.hit[data-dir]::after {
+  content: "−";
+  content: "−" / "counts against";
+  font-size: 0.7em;
+  /* `line-height: 0` with `vertical-align: super` raises the glyph without
+     growing the line box, so switching a criterion on cannot reflow the
+     article — the same rule the stripes follow by living in the leading. */
+  vertical-align: super;
+  line-height: 0;
+  padding-left: 0.05em;
+  color: var(--ink);
+  opacity: 0.75;
+  font-variant-numeric: normal;
+}
+mark.hit[data-dir="for"]::after {
+  content: "+";
+  content: "+" / "counts for";
+}
+mark.hit[data-dir="neither"]::after {
+  content: "·";
+  content: "·" / "counts neither way";
+}
+mark.hit[data-dir="mixed"]::after {
+  content: "±";
+  content: "±" / "counts both ways";
+}
+
+/* ------------------------------------ a comment and a sign on one mark ----
+   **An element has one `::after`, and two rules above wanted it.** A merged
+   `<mark>` carries every class that applies (src/web/annotate.ts), so a passage
+   the reader has commented on *and* a criterion has marked is
+   `class="cmt hit"` with both `data-mark-end` and `data-dir` — and
+   `mark.hit[data-dir]::after` is later in this file at equal specificity, so it
+   won and the reader's own `✳` silently disappeared. Their annotation, erased
+   by ours, on exactly the passages they cared enough to write on. GPT Sol's
+   finding 2.
+
+   The fix is one `::after` printing **both** glyphs, at a specificity that
+   beats both of the rules it replaces. The alternative — a real element inside
+   the mark to carry the second glyph — was refused outright: a text node inside
+   a mark moves the block's rendered-text offset space, which
+   docs/project/block-ids.md says is the one contract nothing may disturb.
+
+   **The sign first, then the asterisk**, so the sign sits where it does on
+   every other mark and the comment's marker stays outermost, where it is on
+   every other comment.
+
+   One element takes one colour, so the pair is drawn in the comment's
+   `--highlight` rather than in the sign's neutral ink. That is the right way
+   round: the `✳`'s colour is what ties it to the underline you can click,
+   while the sign's colour is decoration by design — its *glyph* is the carrier,
+   which is the whole reason it is a glyph. The alt text keeps the direction
+   words; the `✳` has never had an accessible name of its own. */
+mark.cmt.hit[data-mark-end][data-dir]::after {
+  content: "−✳";
+  content: "−✳" / "counts against";
+  color: var(--highlight);
+  opacity: 1;
+}
+mark.cmt.hit[data-mark-end][data-dir="for"]::after {
+  content: "+✳";
+  content: "+✳" / "counts for";
+}
+mark.cmt.hit[data-mark-end][data-dir="neither"]::after {
+  content: "·✳";
+  content: "·✳" / "counts neither way";
+}
+mark.cmt.hit[data-mark-end][data-dir="mixed"]::after {
+  content: "±✳";
+  content: "±✳" / "counts both ways";
+}
+
+/* The one the reader pressed in the panel, so the list and the passage are
+   visibly the same thing after a jump. Same job `mark.cmt[data-cmt-open]` does.
+   One attribute per kind, so an overlap cannot draw somebody else's mark as
+   pressed — annotate.ts says what that used to do.
+   The ring is in the neutral wash colour rather than in any of the hues: it
+   means *this is the row you pressed*, which is a different fact from which
+   search found it, and a ring that borrowed a hue would be a fourth thing
+   wearing a colour that already means something. */
+mark.hit[data-wash][data-hit-open] {
+  background-color: rgb(var(--hit-wash-rgb) / calc(var(--hit-a) * 0.55));
+  box-shadow: 0 0 0 1px rgb(var(--hit-wash-rgb) / 0.8);
+}
+/* **A pressed quote changes colour rather than getting thicker**, and that took
+   three attempts to get right. The first two added pixels to the ring — a
+   stroke, a 1px gap, then a halo — and both failed the only test that matters:
+   at device scale factor 1 the entire distinguishing signal came out as a single
+   grey hairline, so a pressed quote read as *a slightly thicker, dirtier ring*
+   rather than as a different state. Worse, since thickness already means
+   priority, more thickness is the one channel that was not free to borrow: it
+   would have said "more important" where it meant "you pressed this".
+
+   So: the stroke goes white and a faint wash appears inside it. Two channels
+   change at once, which is what makes it unmissable on a fast click or under a
+   finger. White rather than the annotation orange — orange was just as visible
+   and read as *"this passage is a comment"*, teaching the reader that one colour
+   means two unrelated things.
+
+   **The wash here does not undo "quotes outline, search fills".** It is a
+   button's `:active` background: momentary, tied to the one row the reader is
+   pointing at, gone when they move on. The resting state of every quote on the
+   page is still an outline and nothing else. Judged in Chrome, 2026-09-07. */
+mark.hit[data-quote][data-hit-open] {
+  --quote-stroke-color: #ffffff;
+  background-color: rgb(var(--quote-stroke-rgb) / 0.18);
+}
+/* A comment over a hit keeps its underline: it is the one you can click, and
+   losing the affordance to a wash would make it look inert. Same call
+   `mark.cmt.term` makes, for the same reason. */
+mark.cmt.hit {
+  border-bottom-color: var(--highlight);
+}
+
+/* The bar down the left of a matched paragraph — findable while scrolling past
+   at speed, which a wash behind one phrase is not.
+
+   **Scaled harder than the fill** (×1.5, clamped), which is the one piece of
+   the borrowed implementation worth copying verbatim: *a wash faint enough to
+   keep text readable is too faint to notice; the border carries the signal, the
+   fill carries the extent.*
+
+   An inset shadow rather than a `border-left`, because a border changes the
+   cell's width and every marked paragraph would then jump sideways as you type
+   in words mode. A shadow paints inside the box the layout already has. */
+td.text.has-hit {
+  --hit-a: 1;
+  box-shadow: inset 3px 0 0 rgb(var(--hit-rgb) / calc(min(1, var(--hit-a) * 1.5)));
+}
+/* Divided into the colours of the searches that matched **anywhere in the
+   paragraph** — which is a coarser question than the rules under each phrase
+   answer, deliberately: this is the mark you catch while scrolling, so it says
+   "one of yours is in here" rather than "this clause". `blockHues` in
+   search-hits.ts is where the two scopes are set out.
+
+   All eight, because this bar is as tall as the paragraph and has the room —
+   unlike the stripes under a phrase, which share a few pixels of leading and
+   cap at six.
+
+   A background rather than the inset shadow above, because a shadow cannot be
+   divided into segments. The shadow stays for the literal matcher, which has no
+   colours; the two never apply at once, because the two matchers never do. */
+td.text.has-hit[data-hues] {
+  box-shadow: none;
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  background-size: 3px 100%;
+}
+td.text.has-hit[data-hues="1"] {
+  background-image: linear-gradient(rgb(var(--h0)), rgb(var(--h0)));
+}
+td.text.has-hit[data-hues="2"] {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 50.0%,
+    rgb(var(--h1)) 50.0%
+  );
+}
+td.text.has-hit[data-hues="3"] {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 33.33%,
+    rgb(var(--h1)) 33.33% 66.67%,
+    rgb(var(--h2)) 66.67%
+  );
+}
+td.text.has-hit[data-hues="4"] {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 25.0%,
+    rgb(var(--h1)) 25.0% 50.0%,
+    rgb(var(--h2)) 50.0% 75.0%,
+    rgb(var(--h3)) 75.0%
+  );
+}
+td.text.has-hit[data-hues="5"] {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 20.0%,
+    rgb(var(--h1)) 20.0% 40.0%,
+    rgb(var(--h2)) 40.0% 60.0%,
+    rgb(var(--h3)) 60.0% 80.0%,
+    rgb(var(--h4)) 80.0%
+  );
+}
+td.text.has-hit[data-hues="6"] {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 16.67%,
+    rgb(var(--h1)) 16.67% 33.33%,
+    rgb(var(--h2)) 33.33% 50.0%,
+    rgb(var(--h3)) 50.0% 66.67%,
+    rgb(var(--h4)) 66.67% 83.33%,
+    rgb(var(--h5)) 83.33%
+  );
+}
+td.text.has-hit[data-hues="7"] {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 14.29%,
+    rgb(var(--h1)) 14.29% 28.57%,
+    rgb(var(--h2)) 28.57% 42.86%,
+    rgb(var(--h3)) 42.86% 57.14%,
+    rgb(var(--h4)) 57.14% 71.43%,
+    rgb(var(--h5)) 71.43% 85.71%,
+    rgb(var(--h6)) 85.71%
+  );
+}
+td.text.has-hit[data-hues="8"] {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 12.5%,
+    rgb(var(--h1)) 12.5% 25.0%,
+    rgb(var(--h2)) 25.0% 37.5%,
+    rgb(var(--h3)) 37.5% 50.0%,
+    rgb(var(--h4)) 50.0% 62.5%,
+    rgb(var(--h5)) 62.5% 75.0%,
+    rgb(var(--h6)) 75.0% 87.5%,
+    rgb(var(--h7)) 87.5%
+  );
+}
+
+.cmt-dialog {
+  position: fixed;
+  /* `--safe-right`: these are `position: fixed` against the physical screen,
+     so in landscape the gutter alone leaves them inside the notch. */
+  right: calc(1.25rem + var(--safe-right));
+  /* Clear of the bottom bar. Written in terms of --dock-h rather than as a
+     bigger number so that changing the bar's height cannot leave the dialog
+     half underneath it — the failure would be a few pixels of the delete button
+     going unclickable, which reads as a dead button rather than as a layout
+     bug. */
+  /* Plus `--kb-inset`: how much of the layout viewport the soft keyboard is
+     covering, measured from `window.visualViewport` and set on the element by
+     CommentDialog.tsx. `0px` everywhere there is no keyboard and on every
+     browser that has no `visualViewport`, so this reads as the line above it
+     did until 2026-09-04. useVisualViewport.ts says why the meta tag alone
+     cannot do it. */
+  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem + var(--kb-inset, 0px));
+  width: min(24rem, calc(100vw - 2.5rem));
+  /* **`dvh`, not `vh`, and the difference only exists on a phone.** `100vh` is
+     the *large* viewport: the height the page would have with the browser's own
+     retractable chrome hidden. On a phone that chrome is on screen most of the
+     time, so `vh` routinely overstates the room by the height of an address
+     bar. `dvh` tracks the viewport as it currently is. Same change on
+     `.chat-dialog`, which has the same shape.
+
+     **The keyboard is a second problem and `dvh` does not solve it on iOS.**
+     With the default viewport policy the keyboard resizes only the *visual*
+     viewport, and every viewport unit — `dvh` included — stays tied to the
+     layout viewport, so this `max-height` went on believing it had a whole
+     screen. `interactive-widget=resizes-content` (index.html) asks the browser
+     to shrink the layout viewport instead; Chromium does, and **WebKit does not
+     reliably** — so `--kb-inset` above and here is the part that works on both,
+     and it is subtracted rather than trusted to `dvh`. Both together are still
+     unverified on a real phone. */
+  max-height: min(
+    34rem,
+    calc(100dvh - var(--kb-inset, 0px) - 8rem - var(--dock-space) - var(--hint-h))
+  );
+  display: flex;
+  flex-direction: column;
+  /* **Not `auto`, and this is half of why the ✕ used to move.** The whole box
+     scrolling meant the header was content, so once an answer passed
+     `max-height` the header — and the close button in it — scrolled away out of
+     the top. Only `.cmt-body` scrolls now. See `.cmt-dialog.busy` below for the
+     other half. */
+  overflow: hidden;
+  padding: 0.9rem 1.1rem 0.8rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  font-family: var(--font-ui);
+  /* Above everything structural — the sticky bars (≤40) and the spine (45) —
+     but BELOW the tooltip layer (.tooltip-anchor, 100 — it said 80 here until
+     2026-09-07, which had been wrong since the drawer arrived at 95 and
+     tooltip.css raised the layer over it; the relation this comment describes
+     is unchanged).
+     
+     It was 90 first, on the reasoning that a hover should never cover something
+     the reader deliberately opened. That was wrong, and visibly so: the panel
+     has a tooltip of its own on the web-search badge, and at 90 it buried it.
+     A tooltip is dismissed the instant the pointer moves, so it cannot obstruct
+     anything — the transient layer belongs on top. */
+  z-index: 70;
+}
+
+/* **The other half.** The box is pinned by its BOTTOM edge, so a box whose
+   height follows its content grows upward: every paragraph the model writes
+   pushes the header one line further up the screen. Holding the height constant
+   while an answer arrives is what stops that.
+
+   Only while it arrives — a permanently constant height would put a two-line
+   explanation in a 34rem box. The relax-to-fit happens when the answer settles,
+   by which point the reader is not aiming at a button. */
+/* The same arithmetic as `max-height` above, `--kb-inset` included — a fixed
+   height that forgot the keyboard would put the box back under it for exactly
+   as long as an answer takes to arrive. */
+.cmt-dialog.busy {
+  height: min(
+    34rem,
+    calc(100dvh - var(--kb-inset, 0px) - 8rem - var(--dock-space) - var(--hint-h))
+  );
+}
+
+/* The one part that scrolls. `min-height: 0` is load-bearing and silent: a flex
+   item's default `min-height: auto` refuses to shrink below its content, so
+   without it this grows past the parent's `max-height` and nothing scrolls at
+   all — the exact bug, restored, with a stylesheet that looks right. */
+.cmt-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.cmt-dialog header,
+.cmt-dialog footer,
+.cmt-dialog .cmt-followup { flex: 0 0 auto; }
+
+.cmt-dialog header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.cmt-dialog-label {
+  font-size: 0.77rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.cmt-close {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0 0.15rem;
+  line-height: 1;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.cmt-close:hover { color: var(--highlight); }
+
+/* The reader's own words, in the reading face, because they are the author's
+   words — the only text in this panel that is. */
+.cmt-quote {
+  margin: 0.55rem 0 0.75rem;
+  padding-left: 0.7rem;
+  border-left: 2px solid var(--highlight);
+  font-family: var(--font-reading);
+  font-size: 0.98rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.cmt-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0 0.6rem;
+  font-size: 0.88rem;
+  color: var(--ink-faint);
+}
+/* Lucide's `LoaderCircle` — a single open arc — turned by a CSS keyframe. The
+   recipe, and why it isn't the bordered-div trick any more, is in
+   docs/project/icons.md#the-loading-spinner. Size comes from the `size` prop at
+   the call site, so there is nothing here to keep in sync with it. */
+.cmt-spinner {
+  flex: none;
+  color: var(--highlight);
+  animation: cmt-spin 0.7s linear infinite;
+}
+@keyframes cmt-spin { to { transform: rotate(360deg); } }
+/* A spinner that cannot spin still has to say "working", so it pulses instead
+   of freezing into what looks like a rendering artefact. */
+@media (prefers-reduced-motion: reduce) {
+  .cmt-spinner { animation: cmt-pulse 1.4s ease-in-out infinite; }
+  @keyframes cmt-pulse { 50% { opacity: 0.25; } }
+}
+
+.cmt-answer p {
+  margin: 0 0 0.7rem;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.cmt-answer p:last-child { margin-bottom: 0.3rem; }
+
+/* The answer that is being replaced, while a deeper search runs.
+   Dimmed rather than removed: the reader asked for something better than this,
+   not for nothing, and a panel that empties itself for twenty seconds has taken
+   away the thing they were reading. It comes back at full strength if the
+   re-ask fails — see `send` in useComments.ts. */
+.cmt-answer.stale p { color: var(--ink-faint); }
+
+/* The caret at the end of an explanation still arriving. Same recipe and the
+   same reason as `.chat-cursor`: a long pause between tokens should read as
+   "still coming" rather than as "finished, oddly". Not a shared class, because
+   the two live in panels with different type sizes and the caret has to match
+   the line it sits on. */
+.cmt-cursor {
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.85em;
+  margin-left: 0.1rem;
+  background: var(--highlight);
+  vertical-align: text-bottom;
+  animation: chat-blink 1s steps(2, start) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cmt-cursor { animation: none; opacity: 0.6; }
+}
+
+/* The follow-up box. Sits between the answer and the footer, so the footer
+   stays a row of small controls and the header keeps its prev/next. Typing in
+   it leaves for chat rather than growing a transcript in here — Greg's call,
+   see src/web/chat-handoff.ts. */
+.cmt-followup {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+.cmt-followup input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.32rem 0.5rem;
+  /* The same border, ground and focus ring as `.chat-input`, deliberately: this
+     box and that one take the same kind of thing, and the reader arriving in
+     chat should find the sentence they started in a box that looks like the one
+     they started it in. `--surface` and `--focus` do not exist — an earlier
+     draft of this rule invented both, and an undefined custom property is not
+     an error, it just silently does nothing. */
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.88rem;
+}
+.cmt-followup input::placeholder { color: var(--ink-faint); }
+.cmt-followup input:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.cmt-followup button { font-size: 0.81rem; white-space: nowrap; }
+.cmt-followup button:disabled { opacity: 0.4; cursor: default; }
+
+/* The reader's own words on a comment, edited in place — CommentDialog's
+   `CommentBody`. Above the answer rather than below it: whose panel this is
+   shows in the order. Borrowing `.cmt-followup input`'s ground and focus ring
+   on purpose, because both boxes take the same kind of thing. */
+.cmt-note {
+  display: block;
+  width: 100%;
+  margin: 0.55rem 0 0.6rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  /* Grows with what is written, rather than scrolling a two-line window. */
+  field-sizing: content;
+  min-height: 2.6rem;
+  resize: vertical;
+}
+.cmt-note::placeholder { color: var(--ink-faint); }
+.cmt-note:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.cmt-open-thread {
+  display: block;
+  margin: 0 0 0.6rem;
+  font-size: 0.81rem;
+}
+
+.cmt-error {
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+.cmt-error p {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.81rem;
+  line-height: 1.4;
+  color: var(--destructive);
+  overflow-wrap: anywhere;
+}
+
+.cmt-sources {
+  margin-top: 0.35rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--rule);
+}
+.cmt-sources-label {
+  font-size: 0.74rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 0.35rem;
+}
+.cmt-sources ol {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.cmt-sources li { font-size: 0.84rem; line-height: 1.35; }
+.cmt-sources a { color: var(--highlight-ink); }
+.cmt-host {
+  display: block;
+  font-size: 0.77rem;
+  color: var(--ink-faint);
+}
+
+.cmt-dialog footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.77rem;
+  color: var(--ink-faint);
+}
+/* Delete stays hard right; everything else in the footer packs to the left, in
+   the order it is written. `auto` on this one is what does it — see the note
+   further down about why the hover colour is a separate rule. */
+.cmt-delete { margin-left: auto; }
+.cmt-deepen { white-space: nowrap; }
+
+.cmt-transport-error {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--destructive);
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* `.linky` is a shape, not a shared class: the `.controls` one and this one are
+   two independent rules that happen to agree about underlines. Neither inherits
+   a button reset from anywhere — there isn't one — so each states its own in
+   full, and styling one does nothing to the other. */
+.cmt-dialog button.linky {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.cmt-dialog button.linky:hover { color: var(--highlight); }
+
+/* Delete is the one button here that destroys something, so it hovers red.
+   This used to be written as `.cmt-delete:hover` next to the rule that puts it
+   at the end of the footer, and it never worked: that selector scores 0-2-0,
+   the general link hover just above scores 0-3-1, and the more specific one
+   wins no matter which is written first. So the only button in the panel that
+   should have warned you hovered the same friendly orange as the rest.
+   Spelled out at 0-4-1 here, next to the rule it has to beat. */
+.cmt-dialog button.linky.cmt-delete:hover { color: var(--destructive); }
+
+/* Focus, for the buttons in this panel. They keep the browser's own ring —
+   nothing sets `outline: none` on them, and preflight is not imported — but
+   the app has its own focus convention in two other places (.spine-hit above,
+   .cmt-search below), and a third, browser-blue one inside the panel is a
+   split rather than an addition. Covers close, both arrows, retry and delete. */
+.cmt-dialog button:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: 2px;
+}
+
+/* Stepping between comments, and the web-search badge — comments.md.
+   Several questions can be in flight at once, so the panel is a way of moving
+   between them rather than a view of one. */
+
+.cmt-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-left: auto;
+  margin-right: 0.15rem;
+}
+.cmt-nav button {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0 0.15rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.cmt-nav button:hover:not(:disabled) { color: var(--highlight); }
+/* Disabled rather than wrapped: the arrows stop at the ends, and a live arrow
+   that goes nowhere reads as "there is more this way" when there isn't. */
+.cmt-nav button:disabled { color: var(--ink-faint); opacity: 0.35; cursor: default; }
+.cmt-count {
+  font-size: 0.77rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  min-width: 2.5rem;
+  text-align: center;
+}
+
+/* The globe. Two states, and the un-searched one is drawn rather than omitted:
+   the model chooses per question, so "didn't search" is a fact about this
+   answer, not an absence of information. `Globe` / `GlobeOff` from Lucide, both
+   inheriting `currentColor`, so the two states are a colour change here. */
+.cmt-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  cursor: default;
+  border-radius: 3px;
+}
+.cmt-search:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; }
+.cmt-search.on { color: var(--highlight); }
+.cmt-search.off { color: var(--ink-faint); opacity: 0.65; }
+.cmt-search svg { display: block; }
+.cmt-search-n { font-size: 0.74rem; font-variant-numeric: tabular-nums; }
+.tooltip.tip-search { max-width: 17rem; font-size: 0.85rem; line-height: 1.45; }
+.tooltip.tip-search strong { color: var(--highlight-ink); font-weight: 600; }
+
+/* Work happening somewhere the reader isn't looking. */
+.cmt-inflight {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--ink-faint);
+}
+
+/* While a new selection is being dragged, the panel steps aside — it is pinned
+   over the prose column, which is exactly where the next sentence is. */
+.cmt-dialog { transition: opacity 0.1s; }
+.cmt-dialog.dodging { opacity: 0.1; pointer-events: none; }
+

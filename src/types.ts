@@ -1010,6 +1010,27 @@ export interface Quote {
 }
 
 /**
+ * How heavily a quote is outlined in the prose — **two levels, and the number of
+ * levels is the finding, not an accident.**
+ *
+ * `1` is the light stroke, `2` the heavy one. The stylesheet owns the widths
+ * (1px and 3px, styles/annotations.css § quote strokes); this is an ordinal so
+ * that the design values stay in the design layer, exactly as `data-hues` keeps
+ * a count here and the colours next door.
+ *
+ * **Why not three.** A blind pairwise test on the box, 2026-09-07, scored three
+ * tiers at 1/2/3px at **13/20 — chance** — and the tester's answers correlated
+ * with slot position rather than with thickness, which is the standard tell for
+ * guessing. Two tiers at 1px and 3px scored **12/12 at both device scale
+ * factors**, with no hesitation on any pair. Everything involving a middle tier
+ * is what fails: 1-vs-2 and 2-vs-3 are each marginal, while 1-vs-3 is obvious.
+ * So a third level would be a ranking the reader cannot see, which is worse than
+ * no ranking at all.
+ * docs/plans/260907c-quotes-drawn-as-a-stroke-in-the-prose-with-weight-carrying-priority.md
+ */
+export type QuoteTier = 1 | 2;
+
+/**
  * What was thrown away, and why. **Every one of these is invisible from
  * outside** — a dropped quote looks exactly like a line the model chose not to
  * offer — which is the whole reason they are counted and logged.
@@ -1241,6 +1262,38 @@ export interface Meta {
   excerpt?: string;
   note?: string;
 
+  /**
+   * **The reader's own name for a file they uploaded** — `raw_filename`, which
+   * stage 1 writes from `RawManifest.filename` and which is null for everything
+   * that was fetched.
+   *
+   * So its presence is the honest answer to *did this come off your disk?*, and
+   * that question stopped being answerable by `source === "pdf"` on 2026-09-07,
+   * when a web page became a legal upload
+   * (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md). `source` is the
+   * **media kind**; conflating the two axes is the thing src/source.ts's own
+   * header warns against, and the masthead and the metadata page were both
+   * doing it because until that day it happened to be true.
+   *
+   * **Owner-facing only.** It is not in `PublicMeta` and must not be — the
+   * public SQL projection does not select it and `publicMeta` is a hand-built
+   * allowlist, so it is withheld twice.
+   *
+   * **But do not read that as "nobody else can see what they called it."** The
+   * *stem* of the filename is already public for a published article, and has
+   * been since uploads existed: `slugFromFilename` (src/ingest.ts) mints the
+   * article's slug from it, and the slug is in `PublicMeta`. So
+   * `confidential-client-acme.html` becomes `/read/confidential-client-acme-spya-…`.
+   * What this field withholds is the exact string — the extension, the case, the
+   * punctuation, anything the kebabing dropped — and that is worth withholding,
+   * but it is a smaller claim than it first looks. ⟨Sol, 2026-09-07, who caught
+   * an earlier version of this comment claiming the larger one.⟩ The slug
+   * exposure predates this work and is Greg's call, not an agent's:
+   * docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md § A privacy question
+   * this work did not create and did not fix.
+   */
+  filename?: string;
+
   /* ---- PDFs only. Absent on everything Readability extracted. ---- */
 
   /** What this article was made from. Absent means a web page. */
@@ -1445,8 +1498,8 @@ export interface Article {
    * (src/assets.ts), written by the `assets` step.
    *
    * **A required key holding `Assets | undefined`, not an optional one**, and
-   * the difference is the whole reason it is written this way. There are two
-   * places that build an `Article` — the filesystem loader (src/api.ts) and the
+   * the difference is the whole reason it is written this way. There were two
+   * places that built an `Article` — the filesystem loader (src/api.ts) and the
    * Postgres projection (src/store/pg.ts) — and with `assets?:` an omission in
    * either would typecheck perfectly while the reader went on hot-linking every
    * image to the publisher: the feature reporting success by doing nothing,
@@ -1764,7 +1817,7 @@ export interface StageState {
    * the repo. So it is shown as "ran 3 days ago" with the exact stamp on hover,
    * and nothing anywhere compares two of these to decide anything. The
    * staleness question is still answered by `sourceHash` or not at all —
-   * `articleMetadata` in src/api.ts § What this deliberately does not answer.
+   * `articleMetadata` in src/store/pg.ts.
    *
    * Deliberately computed over the outputs that **exist**, whatever `done`
    * says, so a stage that wrote half of what it owes still says when it did it.
@@ -2316,7 +2369,16 @@ export interface Comment {
  * docs/project/glossary.md.
  */
 export type StepName =
-  | "fetch" | "extract" | "blocks" | "hierarchy" | "assets" | "arc" | "tweets" | "glossary"
+  | "fetch" | "extract" | "blocks" | "hierarchy"
+  /* The per-paragraph navigation labels, which left the `hierarchy` step on
+     2026-09-06 because they were 79.5–92% of its wall clock and one measured
+     call took 602s of a 682s pass — past what the job lease allows.
+     `hierarchy` now writes a `PendingLabelsFile` (src/labels.ts) and this step
+     writes the real one, later, in a free successor job. **It is deliberately
+     NOT in `DEFAULT_INGEST_STEPS`**, which is the whole of the change.
+     docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md. */
+  | "labels"
+  | "assets" | "arc" | "tweets" | "glossary"
   /* The lines worth keeping, in the article's own words — docs/project/quotes.md.
      Beside `glossary` because the two send byte-identical article bytes at the
      same effort and share one cached prefix. */
@@ -2892,7 +2954,7 @@ export interface ThreadSummary {
    * prompt. A pasted `?mode=toc&thread=<a Remember thread>` would therefore
    * continue a Remember conversation as a chat. The overlay is gated on this
    * instead. See
-   * src/web/App.tsx § overlay, and GPT Sol's review of
+   * src/web/reader/Reader.tsx § overlay, and GPT Sol's review of
    * docs/plans/260827ah-review-mode.md, finding 7.
    */
   kind: ThreadKind;
@@ -3221,6 +3283,28 @@ export type TimelineFound = TimelineResponse;
  * | `hard` | a move the argument makes across several passages, which the reader has to reconstruct |
  */
 export type QuizBand = "easy" | "medium" | "hard";
+
+/**
+ * **Whether the reader got a question right — judged in private, shown to
+ * nobody.**
+ *
+ * The adaptive ladder steps on this: right, and the next question is harder;
+ * wrong, and it is easier (src/web/quiz-ladder.ts).
+ * [`src/quiz-verdict.ts`](quiz-verdict.ts) produces it by reading the finished
+ * mark, and it rides the terminal `done` frame.
+ *
+ * **Two values and an absence, not three.** Greg's rule is binary, and a
+ * `partly` in the middle would absorb most short-answer responses and leave the
+ * ladder stationary while looking adaptive. Absence — `undefined` — is a
+ * designed outcome rather than an error: the classifier failed, timed out,
+ * declined an ill-posed question, or the mark never finished. It means *hold
+ * the band*, so every failure in this feature is quiet.
+ *
+ * It lives here rather than beside the ladder because both sides speak it: the
+ * server puts it on `done`, the client reads it off. docs/project/quiz.md § It
+ * adapts, and docs/plans/260907d-make-the-quiz-adaptive.md.
+ */
+export type QuizVerdict = "right" | "wrong";
 
 /**
  * **Where the reference answer lives — checked, never trusted.**
@@ -3747,47 +3831,66 @@ export interface DebateGroup<Row> {
  * CLI and two model calls in it. The stage re-exports it, so it still has one
  * name on the server side.
  *
- * **A sum of every field rather than `Object.values`**, so a new loss reason
- * added to `DebateLosses` is a compile error at this line rather than a number
- * silently folded into a sentence nobody re-read.
- *
- * **The `rest` line is what makes that true, and it was added on 2026-09-06
- * because it was not.** The sentence above is older than this line and was a
- * claim rather than a mechanism: `sourceIsCopy` was added to `DebateLosses` that
- * day, every field below was still summed by hand, and nothing failed to
- * compile — the new counter would have been dropped from the reader's foot line
- * in silence, which is the one thing this function exists to prevent. A
- * docblock that states a rule the code does not make is the shape of this file's
- * worst bug (Sol's F24, `readDirectGroup`), so the rule is now under it: `rest`
- * must be empty, and an unlisted field makes it not.
+ * **A sum of every field rather than `Object.values` over the argument**, so a
+ * new loss reason added to `DebateLosses` is a compile error rather than a
+ * number silently folded into a sentence nobody re-read. `lossesOf` below is
+ * where that is enforced, and it is enforced rather than asserted: the sentence
+ * above is older than the mechanism and was a claim without one until
+ * 2026-09-06, when `sourceIsCopy` was added to `DebateLosses`, every field here
+ * was still summed by hand, and nothing failed to compile. A docblock stating a
+ * rule the code does not make is the shape of this file's worst bug (Sol's F24,
+ * `readDirectGroup`).
  */
 export function anyLost(lost: DebateLosses): boolean {
-  const {
-    uncited,
-    selfSource,
-    unverifiedSource,
-    directnessUnverified,
-    sourceIsCopy,
-    claimNotInBlock,
-    unknownBlockId,
-    malformed,
-    ...rest
-  } = lost;
-  /* Every field is named above, so there is nothing left. Add one to
-     `DebateLosses` without adding it here and this assignment stops compiling. */
-  const exhaustive: Record<string, never> = rest;
-  void exhaustive;
-  return (
-    uncited +
-      selfSource +
-      unverifiedSource +
-      directnessUnverified +
-      sourceIsCopy +
-      claimNotInBlock +
-      unknownBlockId +
-      malformed >
-    0
-  );
+  return Object.values(lossesOf(lost)).some((n) => n > 0);
+}
+
+/**
+ * **Every loss counter, off an artefact that may not carry them all.**
+ *
+ * Two jobs in one function because they are one fact.
+ *
+ * **It fills the gaps.** `sourceIsCopy` landed on 2026-09-06 and
+ * `isDebateDocument` validates two arrays and nothing else, so every debate
+ * stored before that day reads back with the key absent — as, that day, did
+ * every one in the local database. The type says `number` because that is what
+ * the stage writes; **JSONB read back is not bound by it**, and `undefined`
+ * through arithmetic is `NaN`, which fails every comparison silently. The panel
+ * met this for real: an old artefact printed *"offered 5 of these; 3 are shown —
+ * ."* with both counts intact and the whole explanation gone — the failure that
+ * counter was added to prevent, arriving through the counter itself.
+ *
+ * **And it is the exhaustiveness gate.** The returned object names every field,
+ * so a new one added to `DebateLosses` stops this literal compiling, and both
+ * `anyLost` and the panel pick it up rather than dropping it. One place to add a
+ * counter and one place to forget it, instead of a hand-written sum in each
+ * caller — which is how `sourceIsCopy` was nearly lost twice on the day it was
+ * written.
+ */
+export function lossesOf(lost: DebateLosses): DebateLosses {
+  return {
+    uncited: count(lost.uncited),
+    selfSource: count(lost.selfSource),
+    unverifiedSource: count(lost.unverifiedSource),
+    directnessUnverified: count(lost.directnessUnverified),
+    sourceIsCopy: count(lost.sourceIsCopy),
+    claimNotInBlock: count(lost.claimNotInBlock),
+    unknownBlockId: count(lost.unknownBlockId),
+    malformed: count(lost.malformed),
+  };
+}
+
+/**
+ * **A counter off stored JSONB, or zero.**
+ *
+ * Not `?? 0`: absent is the common case but it is not the only one this has to
+ * survive. A hand-edited artefact, a half-written one, or a future writer can
+ * put a string, a `null` or a negative here, and each of those reaches a
+ * sentence as *"-2 could not be checked"* or as a silent `NaN`. The type says
+ * `number`; the row came from a database.
+ */
+function count(value: number | undefined): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 /**

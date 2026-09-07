@@ -73,12 +73,14 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | the wrapper: `<Tooltip content={…}>{trigger}</Tooltip>`, plus `TooltipGroup` and `TipNote` — the latter being the panel's text where the panel is only a sentence, which is most of them outside the reading view |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | `BandCard` — what a spine band actually says |
 | [`src/web/ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) | the other one — see below |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar — the fourteen mode buttons, twice over, and the experimental switch. See [§ The bar](#the-bar-and-the-two-shapes-of-the-same-fourteen) |
+| [`src/mode-catalog.ts`](../../src/mode-catalog.ts) | the words in those fourteen cards, both paragraphs of each — the bar holds none of its own copy |
 | [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage masthead's links — Profile, plus Admin for the administrator — and the one place a tooltip's trigger is not a host element |
 | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | the two things said at the top of an article — where it came from, and who can read it. Both were `title` attributes or a bare sentence until 2026-09-06 and are `ControlTip`s now; the origin one is also the app's only tooltip on a line of *text* rather than on a glyph. Its trigger is the address's own anchor when there is an address, and a plain `<span>` with `cursor: help` and an `sr-only` pair of sentences when there is not — the second of those is the app's one tooltip a keyboard cannot open, which is why its content is duplicated rather than only shown |
 | [`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx) | the line under `/read/public`'s lede — **the app's only `ControlTip` on a link to a *page* rather than on a control**, and the only one whose reader may want nothing from us at all ([public-readable-sharing.md](public-readable-sharing.md)). Greg asked for five claims in it; two of the five were false, so the card carries the idiom's two paragraphs and the page carries the claims |
 | [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | the shelf card's five action buttons — the one row where a card also has to say *why this one does nothing* ([library.md § When a button cannot do its job](library.md#when-a-button-cannot-do-its-job)) |
 | [`src/web/AccessSharing.tsx`](../../src/web/AccessSharing.tsx) | the sharing card's three controls, and its two dozen inventory chips — where a tooltip is the *only* place a row's sentence is written, which is why each chip is a `<button>` rather than a `title` attribute ([security-map.md § the inventory](security-map.md#the-owner-is-shown-the-inventory-before-they-publish)) |
-| [`src/web/styles.css`](../../src/web/styles.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |
+| [`src/web/styles/tooltip.css`](../../src/web/styles/tooltip.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |
 
 `Tooltip` is deliberately generic — nothing in it knows about the spine.
 
@@ -170,14 +172,83 @@ set — the second paragraph is where the unguessable fact goes, which is exactl
 invention goes too. The four are listed in
 [260905h](../plans/260905h-rich-tooltips-on-the-shelf-action-buttons.md#four-of-these-were-wrong-in-the-first-draft).
 
+### The bar, and the two shapes of the same fourteen
+
+**The bottom bar joined on 2026-09-07**, on the same ask again — Greg: *"Make sure all the modes in
+the bottom-bar have rich tooltips."* It is the largest customer by count after Referee and the one
+whose cards had existed longest, because the buttons had a card already: a head and **one**
+sentence, which was the mode's `description` and therefore what the label plus a second's thought
+already said. A card can be present and still not be a card
+([260907b](../plans/260907b-rich-tooltips-on-the-dock-modes.md)).
+
+Three things about it are not true of any other set here.
+
+- **The copy is not in the component.** Both paragraphs come from `MODE_CATALOG`
+  ([`src/mode-catalog.ts`](../../src/mode-catalog.ts)), which is a pure module the server can read
+  too, so a fifteenth mode is a compile error until somebody has written both halves. Everywhere
+  else in this file the words sit beside the JSX. [new-mode.md § The card on the
+  button](new-mode.md#the-card-on-the-button) is what a new mode's author is told to do, including
+  the rule that **no card in this bar names a price** — the command bar says `generates` and no
+  figure, and a tooltip on the button beside it must not be more disclosed than the bar is.
+- **The same fourteen modes are drawn by two different components**, and only one of them had a
+  card. On the reading view they are a `role="radiogroup"` segment; on the metadata and tweets pages
+  they are loose `DockLink`s, and those carried a `title` attribute while the segment had a panel.
+  `DockLink`'s hover became a two-member union rather than a `title: string` so that the arm a link
+  took was a choice the compiler could see, with the three buttons that are *not* modes sitting
+  visibly in the `title` arm — the debt written into the type rather than into a comment. **That
+  lasted one day**: the three took cards on 2026-09-07 too (below), the arm emptied, and the union
+  went with them. A discriminant with nothing on one side of it is a shape the next author has to
+  read before finding out it decides nothing.
+- **The visitor's sentence goes above the description**, as `ControlTip`'s `state`. It was a third
+  paragraph while the card had two; with the second paragraph added it would have been third of
+  three, burying the one line saying why the button is drawn dimmed under two about a mode the
+  visitor cannot *use* — they can open it, and what they get is a band explaining the gap, which is
+  why the button is dimmed rather than `aria-disabled`. That widened `state`, which until then had
+  meant *this switch is mid-flight or broken*; what the two share is that somebody who opened the
+  card because the control looked wrong wants that answered before they are told what it is for.
+- **And the three buttons in the bar that are not modes** — Comments, Tweets and Metadata — took the
+  same two-paragraph card later the same day. Their copy is `NOT_A_MODE` in
+  [`Dock.tsx`](../../src/web/Dock.tsx) rather than `MODE_CATALOG`, because a record keyed by `Mode`
+  is the wrong home for three things that are not modes and never will be. They are in a
+  `TooltipGroup` of their own, so running along the end of the bar is instant after the first card;
+  the experimental switch stays outside it, being the adjacent account-level control — a setting
+  rather than a view of this article.
+  Two buttons in the bar still carry a `title`, `DockHome` and `DockCommands`, and neither goes
+  through `DockLink`.
+
+  Comments is the one that repaid the pass. It is **two** buttons — a `DockTab` opening the drawer on
+  the reading view, a `DockLink` back to it everywhere else — and a visitor's copy on it had gone
+  stale in a way only reading both could show: the drawer's *comments belong to whoever added this
+  article* notice was retired on 2026-09-04, when a shared link started carrying them
+  ([260904c](../plans/260904c-more-modes-on-a-shared-link.md)), and the button went on saying half of
+  it. Both arms read one string now. `COMMENTS_GAP` and the `readers-own` variant behind it are
+  still in [`visitor.ts`](../../src/web/visitor.ts) with no live consumer; retiring them is a
+  separate change.
+
+Five of the fourteen second paragraphs were drafted, checked against the source and thrown away for
+being **plausible and false** — the same failure the shelf's row produced four of, and the reason
+this page keeps saying so. All five are named in the plan, and four of them were caught by re-reading
+the set as a group rather than by any check in the diff: each looked right on its own line.
+
+Then three of the three non-mode buttons' six sentences went the same way, and their shared cause is
+worth more than the count: **each was inherited from a project doc or a module header that had itself
+gone stale.** *Nothing on the metadata page is generated* came from `Metadata.tsx`'s own docblock,
+and the page opens with the hierarchy's gist and summary on it. Copy written from a doc inherits the
+doc's staleness with none of its dating, so a sentence a reader will act on gets checked against the
+code even when a doc already says it.
+
 **A `title` attribute is not a small version of this**, and that is the argument for every one of
 them: it waits about a second, cannot be styled, truncates at the OS's idea of a line, and does not
 exist at all on a touch device. `title` attributes are a regression here rather than a shortcut, and
-they are invisible on a laptop because they still show *something* — so three test files assert
+they are invisible on a laptop because they still show *something* — so five test files assert
 their absence as well as the cards' presence
 ([`tests/diagram-panel-hover.test.tsx`](../../tests/diagram-panel-hover.test.tsx),
 [`tests/referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx),
-[`tests/feedback-button-tooltip.test.tsx`](../../tests/feedback-button-tooltip.test.tsx)).
+[`tests/feedback-button-tooltip.test.tsx`](../../tests/feedback-button-tooltip.test.tsx),
+[`tests/shelf-action-tooltips.test.tsx`](../../tests/shelf-action-tooltips.test.tsx),
+[`tests/dock-mode-tooltips.test.tsx`](../../tests/dock-mode-tooltips.test.tsx), the last of which
+checks both arms of the bar because the arm that had the attribute was not the one anybody looked
+at).
 
 **An SVG `<title>` is the same mistake spread over a whole picture**, and it is worse than the
 attribute because there is nothing to aim at: the tooltip is the *whole* drawing, so the sentence
@@ -202,9 +273,11 @@ was an unlabelled icon on exactly the widths where no tooltip can be opened eith
 replaced it, pinned by the same test — and nothing on a wide screen, where the visible word names
 the button perfectly well, would ever have shown that it was missing.
 
-### Two things about testing a card in jsdom
+### Three things about testing a card in jsdom
 
-Both were measured rather than reasoned about, and both make a test that looks right assert nothing.
+All three were measured rather than reasoned about. The first two make a test that looks right assert
+nothing; the third makes one fail loudly for a reason that is not in the code it is testing, which
+costs an hour in a different way.
 
 - **Opening and closing do not take the same event.** A native `mouseenter` dispatched on the trigger
   opens it — `useHover` binds that listener to the reference node rather than going through React, so
@@ -215,6 +288,23 @@ Both were measured rather than reasoned about, and both make a test that looks r
   render between them: the close delay sets `open` false, and only the render that follows schedules
   the transition's unmount. Inside a single `act` the queued update is not applied until the block
   exits, so the card is still in the DOM however long that block waits.
+- **Re-hovering the same control inside a `TooltipGroup` needs a *third* `act` block.** Two blocks
+  close the card and unmount it; the third is not part of closing at all, and waits out the group
+  instead. `FloatingDelayGroup` waits its `timeoutMs` after a close before clearing the current group
+  member — 400ms in the bottom bar — and that timer starts at the close *render*, so two 300ms waits
+  do not outlast it. Hover the same control again while it is pending and the card opens instantly
+  (the group is in its instant phase) and the stale timer's close lands in the same `act`: it opens
+  and shuts inside one block, and the assertion reads zero. One more wait fixes it, and
+  [`tests/dock-mode-tooltips.test.tsx`](../../tests/dock-mode-tooltips.test.tsx)'s `cardFor` is the
+  copy to take.
+
+  **This was diagnosed wrongly first**, and the wrong diagnosis is instructive: the symptom is *a
+  control opens its card once per mount*, which is what three probes appeared to show — an identical
+  re-render between the hovers, a prop-changing one, and no render at all, all failing the same way.
+  That reading blamed the element and was remounted around. `useHover` keeps no one-shot state; it
+  was the group's timer the whole time, and the same element reopens three times running once the
+  timer is allowed to finish. A reproduction that fails three ways can still be failing for a fourth
+  reason. GPT Sol found it, 2026-09-07.
 
 A card left open is the failure that matters, because the panel is portalled to `<body>` rather than
 into the test's host: the next control's assertion then reads the previous control's words. Assert
@@ -234,7 +324,8 @@ the node shape explicitly sanctions navigation chrome
 ([granularity-zoom.md § Node shape](granularity-zoom.md#node-shape)). It is styled differently, and
 it is never a fallback for a missing gist in the reading view.
 
-Listing the sub-sections is why [`App.tsx`](../../src/web/App.tsx) builds the outline three levels
+Listing the sub-sections is why [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) builds the
+outline three levels
 deep rather than two. The rail itself still only ever draws L1 and L2.
 
 ## Five things that are load-bearing
@@ -288,7 +379,7 @@ blink the panel out and back.
 ## The pointer cannot enter a card, and that used to be exempt
 
 Every panel is `pointer-events: none` (`.tooltip-anchor` in
-[styles.css](../../src/web/styles.css)), so moving the pointer onto a card closes it: `useHover`
+[styles/tooltip.css](../../src/web/styles/tooltip.css)), so moving the pointer onto a card closes it: `useHover`
 sees the pointer leave the trigger, and the card is not somewhere the pointer can go. That is
 deliberate and it is right for the rail — a spine card that took hover would sit on top of the band
 you are pointing at and hold itself open. The single exception is `ProseHoverCard`, which carries

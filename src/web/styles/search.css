@@ -1,0 +1,679 @@
+/* search.css — the Search panel: one box with two matchers behind it, the saved
+   searches and their colour picker, the five ways of having nothing to show,
+   the results, and the confidence gutter. SearchPanel.tsx,
+   docs/project/search.md.
+
+   The marks a search leaves in the prose are `mark.hit`, in annotations.css. */
+
+/* --------------------------------------------------------- § search mode ----
+   Finding a passage by the words it uses, or by what it says. The shell is
+   `.mode-band` above; everything here is what goes inside it.
+
+   Read SearchPanel.tsx before changing what is on screen. The arrangement is
+   one box with two matchers behind it, and several things this panel does not
+   do were decided rather than skipped: no submit button in words mode (there is
+   nothing to submit), no confidence sort in words mode (there are no
+   confidences to sort by), and no single "no results" state (there are five
+   different ways to have nothing to show, and they want different sentences).
+
+   The marks these produce in the prose are `mark.hit` and `td.text.has-hit`,
+   further up this file — and the hue is deliberately not the orange. */
+
+/* The title row is `.band-head`, § mode band. */
+
+.srch-box {
+  padding: 0.5rem 0.6rem 0.55rem;
+  border-bottom: 1px solid var(--rule);
+}
+.srch-field { position: relative; display: flex; align-items: center; }
+.srch-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.94rem;
+  line-height: 1.4;
+}
+.srch-input:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.srch-input::placeholder { color: var(--ink-faint); }
+/* The browser's own clear button on `type="search"`, which on a dark page is a
+   dark X on a dark field. Ours is Escape, and it is in the keydown handler. */
+.srch-input::-webkit-search-cancel-button { display: none; }
+/* The same arc, the same keyframe, and the same reduced-motion pulse as
+   `.cmt-spinner` — see docs/project/icons.md#the-loading-spinner. Only the
+   colour differs, because in this mode the working colour is the search hue. */
+.srch-spin {
+  flex: none;
+  color: var(--hit);
+  animation: cmt-spin 0.7s linear infinite;
+}
+.srch-field .srch-spin { position: absolute; right: 0.5rem; }
+@media (prefers-reduced-motion: reduce) {
+  .srch-spin { animation: cmt-pulse 1.4s ease-in-out infinite; }
+}
+
+/* The row under the box: the matcher pair on the left, `find` pushed right.
+   The pair is a `role="radiogroup"` of its own rather than the whole row, so
+   that `find` is not one of its children — see SearchPanel.tsx. */
+.srch-modes {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.4rem;
+}
+.srch-matchers { display: flex; align-items: center; gap: 0.25rem; }
+.srch-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+  cursor: pointer;
+}
+.srch-mode:hover { color: var(--ink); }
+/* The selected matcher, in the search hue rather than the brand orange — so the
+   control that says which colour the page is about to go is that colour. */
+.srch-mode.on {
+  border-color: rgb(var(--hit-rgb) / 0.5);
+  background: rgb(var(--hit-rgb) / 0.14);
+  color: var(--ink);
+}
+.srch-go {
+  margin-left: auto;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+  cursor: pointer;
+}
+.srch-go:disabled { opacity: 0.4; cursor: default; }
+.srch-go:not(:disabled):hover { border-color: var(--hit); color: var(--ink); }
+
+.srch-error {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  color: var(--destructive, oklch(0.65 0.2 25));
+  font-size: 0.88rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* ---- the saved searches ----
+   Since 2026-08-26 every one of them is on screen at once with a box beside it,
+   rather than one being "open". The two halves of the panel therefore share the
+   height: the list is capped and scrolls, the results below take what is left.
+   `40%` rather than a fixed height so that a reader with two saved searches is
+   not looking at an empty box the size of eight. */
+
+.srch-saved-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 40%;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* Select/deselect-all — Greg's ask. Reads as a header for the list rather than
+   as another row of it: the count is the label, and it changes to say how many
+   are showing the moment any are. */
+.srch-all {
+  flex: none;
+  padding: 0.35rem 0.5rem 0.25rem;
+}
+.srch-all-tick, .srch-saved-tick {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  cursor: pointer;
+}
+.srch-all-tick {
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+}
+.srch-all-tick:hover { color: var(--ink-soft); }
+/* The native box, restyled rather than replaced. `accent-color` is the whole of
+   it: one property, the browser keeps the tick, the focus ring, the
+   indeterminate dash and every keyboard behaviour, and there is no hidden input
+   with a faked `::before` to get wrong. `color-scheme: dark` on :root
+   (tokens.css) is what makes the unchecked box dark rather than a white square
+   on a black page — without it this needs a filter, and the filter is what
+   people mean when they say the native control cannot be styled. */
+.srch-all-tick input, .srch-saved-tick input {
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin: 0;
+  accent-color: var(--highlight);
+  cursor: pointer;
+}
+/* Each row's box takes the search's own colour, so the control and the mark it
+   draws are visibly the same thing. `--cat-rgb` is set inline by SearchPanel and
+   holds a palette reference; the fallback is the neutral wash, which is what a
+   row with no slot should look like rather than an orange one. */
+.srch-saved-tick input {
+  accent-color: rgb(var(--cat-rgb, var(--hit-wash-rgb)));
+}
+
+.srch-saved { flex: 1; margin: 0; padding: 0 0.35rem 0.35rem; list-style: none; overflow-y: auto; }
+.srch-saved-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.15rem;
+  border-radius: var(--radius);
+  /* The second place the hue appears on a row, because an 11px dot is easy to
+     miss and small-field colour discrimination is the worst case for any
+     palette — the same reason the granularity tints run down lightness as well
+     as chroma (§ --depth-0 at the top of this file). Faint until the search is
+     switched on: an unticked row is a search that is drawing nothing, and a
+     full-strength edge on it would be the panel claiming otherwise. */
+  border-left: 2px solid rgb(var(--cat-rgb, var(--rule)) / 0.3);
+}
+.srch-saved-row.on { border-left-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
+.srch-saved-row:hover { background: var(--surface-raised); }
+/* The box no longer wraps the words — it adds a search to the marks, while
+   pressing the row replaces them (SearchPanel.tsx § Four targets on a row). So
+   it is a target of its own, and it keeps generous padding on both sides of a
+   0.85rem control: two adjacent hit areas that do different things is the one
+   arrangement where a few pixels either way is a wrong answer rather than a
+   near miss. */
+.srch-saved-tick {
+  flex: none;
+  padding: 0.4rem 0.35rem 0.4rem 0.45rem;
+}
+/* The row's own button: everything a `<button>` brings except the way one
+   looks. `text-align: left` because a button centres its text by default, and
+   the children are left on the flex default of `stretch` rather than
+   `flex-start` — the criterion ellipsizes, and a span sized to its own content
+   has nothing to ellipsize against. */
+.srch-saved-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.4rem 0.45rem 0.4rem 0.1rem;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.91rem;
+  text-align: left;
+  cursor: pointer;
+}
+.srch-saved-row.on .srch-saved-body { color: var(--ink-soft); }
+.srch-saved-body:hover { color: var(--ink); }
+/* The app's own focus convention rather than the browser's blue ring, the same
+   call .cmt-dialog button:focus-visible explains further up. Inset, because the
+   list is a scroller and an outward ring on the first or last row is clipped by
+   it. The ↺ and 🗑 beside it keep the browser ring; they are secondary, and this
+   is the control the keyboard is here for. */
+.srch-saved-body:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: -2px;
+}
+.srch-saved-criterion {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.srch-saved-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--ink-faint);
+  font-size: 0.83rem;
+}
+.srch-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.srch-icon:hover { background: var(--surface-raised); color: var(--ink); }
+.srch-icon.danger:hover { color: var(--destructive, oklch(0.65 0.2 25)); }
+/* The warning sign on a search that failed in a way running it again cannot fix.
+   It carries the same glyph as the retry button next to it, so without this it
+   inherits `cursor: pointer` and a hover background and reads as a control —
+   which is the "button under a message saying it will not help" mistake at one
+   remove: the reader is invited to press, and nothing happens. */
+.srch-icon-dead { cursor: default; }
+.srch-icon-dead:hover { background: none; color: var(--ink-faint); }
+
+/* ---------------------------------------------------------------------------
+   The colour picker — sixteen swatches and "Automatic", in a floating panel.
+   `srch-picker-*`, NOT `srch-swatches`: that name was already taken, by the
+   three-hue specimen strip in the results legend a few hundred lines up. The
+   first version of this block used it and the two silently merged — the legend
+   picked up a border, a background and a drop shadow, and the picker picked up
+   the legend's `display: inline-flex` and 1px gap. Both still rendered.
+   GPT Sol's review, 2026-08-27.
+   SearchPanel.tsx § ColourPicker says why there is no library behind it.
+
+   Portalled, so none of this is inside the 288px band: the panel is a sibling
+   of <body> and Floating UI places it. That is the reason a 4×2 grid fits at
+   all next to a row whose four controls already share about 5rem.
+
+   z-index below .tooltip-anchor's 100, and above the drawer's 95, for the same
+   reason the tooltip is where it is — it is about the row you just pressed, so
+   nothing may cover it. It is *below* the tooltip because a tooltip is a fact
+   and this is a control: if the two ever overlap, the fact should win.
+   --------------------------------------------------------------------------- */
+.srch-picker {
+  z-index: 99;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.35rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  /* The tooltip's shadow, because it is the same kind of object: a small panel
+     lifted off the page near the thing it belongs to. */
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.5),
+    0 8px 24px -6px rgb(0 0 0 / 0.65);
+  font-family: var(--font-ui);
+}
+.srch-picker-grid {
+  display: grid;
+  /* Four across, four down, for sixteen — and four columns rather than eight
+     because the panel sits beside a row in a vertical list, so a wide one
+     reaches across the prose while a squarer one stays over the band it
+     belongs to. Row-major in hue order (`PALETTE_BY_HUE`, hit-colours.ts), so
+     each row is a quarter of the wheel: warms, greens, blues, violets — and
+     the one colourless slot last, where it cannot interrupt the run. */
+  grid-template-columns: repeat(4, 1.35rem);
+  /* Wide enough that the two rings below never touch their neighbours. They are
+     `box-shadow`, so they take no space in the grid and will happily overlap
+     the swatch next door — and the strong ring reaches 4px out, the faint one
+     3px, so a pair of marked neighbours needs 7px between them. */
+  gap: 0.45rem;
+}
+.srch-picker-swatch {
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  /* A hairline in the page's own ink rather than in the hue, so the two
+     darkest swatches still have an edge against the panel. `color-mix` in
+     **oklab**, the rule tokens.css carries at length: `--ink` is achromatic
+     with an explicitly-specified hue, and polar interpolation would drag the
+     result off towards a colour nobody asked for. */
+  border: 1px solid color-mix(in oklab, var(--ink) 18%, transparent);
+  border-radius: var(--radius);
+  /* The hue itself, from the custom property SearchPanel sets inline — which
+     holds `var(--cat-N-rgb)` and never a colour. Nothing in this stylesheet
+     knows what colour any of these are either. */
+  background: rgb(var(--cat-rgb));
+  cursor: pointer;
+}
+/* Two rings, because the panel is saying two different things. `.showing` is
+   the hue the row is wearing right now — true of a row on automatic as much as
+   of a pinned one — and `.current` is what the reader actually chose. When they
+   have chosen, the same swatch wears both and the strong ring simply wins,
+   because they set the same property and this one comes second.
+
+   **They differ in weight as well as in strength, and that is deliberate.**
+   The first version separated them by opacity alone — 35% against 100% of the
+   same ink — and a browser pass called it: visible once you were looking for
+   it, easy to miss at a glance across eight coloured swatches. Two marks that
+   mean different things should not be one mark at two volumes; that is the
+   same "never carry meaning by one channel" rule § Several searches at once
+   applies to the wash and the stripes. So the chosen one is 2px and the drawn
+   one is 1px, and the faint one went to 55% besides.
+
+   A ring outside the swatch rather than a tick inside it. A glyph on top of an
+   arbitrary hue is a contrast problem with eight different answers — white
+   reads on the blue and vanishes on the yellow — and the ring is drawn in the
+   page's own ink, on the page's own background, so it is the same legibility
+   on all eight. `box-shadow` rather than `outline` so the gap between the ring
+   and the swatch is the page showing through. */
+.srch-picker-swatch.showing {
+  box-shadow:
+    0 0 0 2px var(--surface-raised),
+    0 0 0 3px color-mix(in oklab, var(--ink) 55%, transparent);
+}
+.srch-picker-swatch.current {
+  box-shadow:
+    0 0 0 2px var(--surface-raised),
+    0 0 0 4px var(--ink);
+}
+.srch-picker-swatch:hover { border-color: color-mix(in oklab, var(--ink) 55%, transparent); }
+.srch-picker-swatch:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+}
+/* The ninth choice, and the only one with words on it — "whichever colour it
+   would have had" cannot be drawn as a colour, because which colour that is
+   depends on the other searches. Full width under the grid so it reads as one
+   more item in the same list rather than as a reset button in a corner. */
+.srch-picker-auto {
+  padding: 0.2rem 0.3rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-faint);
+  font-family: inherit;
+  font-size: 0.83rem;
+  text-align: center;
+  cursor: pointer;
+}
+.srch-picker-auto:hover {
+  background: color-mix(in oklab, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+.srch-picker-auto.current { color: var(--ink); border-color: var(--rule-strong); }
+.srch-picker-auto:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: -1px;
+}
+
+/* "older version", on the meta line of a saved row whose article has moved.
+   Same block as the passage count, so it reads as one more thing the row says
+   about itself rather than as a control — there is nothing to press here, and
+   the ↺ two columns over is the offer. The glyph is `--highlight`, which is
+   what every other stale banner in the app uses (`.gloss-stale svg`), and
+   deliberately NOT `--destructive`: the run has not failed, it is simply about
+   a version of the piece that has gone. */
+.srch-saved-stale {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.srch-saved-stale::before { content: "·"; margin-right: 0.2rem; }
+.srch-saved-stale svg { flex: none; color: var(--highlight); }
+
+/* The same banner the glossary and the tweet thread page carry, in the same
+   words and the same box — see `StaleNote` in SearchPanel.tsx. Sits between the
+   ticks and the results, so it reads as being about the marks below it. */
+.srch-stale {
+  margin: 0.5rem 0.7rem 0;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.srch-stale p {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.srch-stale svg { flex: none; color: var(--highlight); }
+/* `p.srch-stale-hint`, not `.srch-stale-hint`: the rule above matches every `p`
+   in this box and is one class plus one element, so a bare class loses to it and
+   the hint would come out flexed, full-size and hard against the line above.
+   Specificity, not `!important`. */
+.srch-stale p.srch-stale-hint {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--ink-faint);
+  font-size: 0.84rem;
+}
+
+/* ---- nothing to show, in its five flavours ---- */
+
+.srch-empty { padding: 0.85rem 0.9rem; color: var(--ink-faint); }
+.srch-empty p { margin: 0 0 0.5rem; }
+.srch-empty-hint { font-size: 0.9rem; line-height: 1.5; }
+.srch-empty-hint em { color: var(--ink-soft); font-style: italic; }
+.srch-working, .srch-failed {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.91rem;
+}
+.srch-failed { color: var(--destructive, oklch(0.65 0.2 25)); }
+/* The 600ms before the spinner is allowed to say anything. Holding one line's
+   worth of height means the panel does not grow when it does — see
+   `SavedLoading`, and useSlow.ts for why the words wait at all. */
+.srch-waiting { min-height: 1.2em; }
+.srch-retry {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.srch-retry:hover { border-color: var(--hit); }
+
+/* ---- the results ---- */
+
+.srch-sort {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.srch-count { margin-right: auto; color: var(--ink-faint); font-size: 0.83rem; }
+.srch-sort-btn {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+  cursor: pointer;
+}
+.srch-sort-btn:hover { color: var(--ink); }
+.srch-sort-btn.on { border-color: var(--rule-strong); background: var(--surface-raised); color: var(--ink); }
+
+.srch-hits { flex: 1; margin: 0; padding: 0.3rem; list-style: none; overflow-y: auto; }
+.srch-hit { margin: 0; }
+.srch-hit-btn {
+  display: flex;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.4rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+.srch-hit-btn:hover { background: var(--surface-raised); color: var(--ink); }
+/* The row's own left edge in its search's hue — the same pairing the saved rows
+   use, and for the same reason: one small mark is one too few. No fallback
+   colour, so a literal result (which has no search and no slot) simply has no
+   edge rather than borrowing one that would mean something. */
+.srch-hit-btn { border-left: 2px solid transparent; }
+/* The row whose passage is marked as open in the prose. */
+.srch-hit-btn.on {
+  border-color: rgb(var(--hit-rgb) / 0.45);
+  /* NOTE: this sets all four edges, which is why the categorical left edge is
+     reasserted BELOW rather than above — see the rule after this block. */
+  background: rgb(var(--hit-rgb) / 0.1);
+  color: var(--ink);
+}
+/* The row's own left edge in its search's hue — the same pairing the saved rows
+   use, and for the same reason: one small mark is one too few.
+
+   **After `.on`, and that is not cosmetic ordering.** `.srch-hit-btn[data-hue]`
+   and `.srch-hit-btn.on` have identical specificity (0,2,0), so whichever comes
+   last wins — and `.on` sets `border-color` on all four edges. With this rule
+   above it, pressing a result replaced its categorical hue with the flat search
+   blue, so the one row the reader had just picked out was the one row that
+   stopped saying which search found it. Caught by a GPT Sol review, 2026-08-26.
+
+   No fallback colour: a literal result has no search and no slot, so it gets no
+   edge rather than borrowing one that would mean something. */
+.srch-hit-btn[data-hue] { border-left-color: rgb(var(--cat-rgb) / 0.75); }
+
+/* ---- the gutter: how sure, and where ----
+
+   Two channels stacked in a fixed 2.6rem column down the left of every row —
+   the model's confidence and the passage's place in the article. Fixed, so the
+   quotes beside them line up down the list even though a words-search has no
+   confidence to show and a meaning-search does.
+
+   They are deliberately different colours and different shapes: the hue means
+   "a match" everywhere in this mode (the wash in the prose, the selected
+   matcher), so place gets neutral grey rather than a second reading of the same
+   blue. Neither carries its meaning by colour alone — the confidence prints its
+   number, the place bar has an accessible name and a legend above the list. */
+
+.srch-gutter {
+  flex: none;
+  width: 2.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+  /* Top-aligned with the first line of the quote, not centred against a row
+     whose height is whatever three clamped lines came to. */
+  align-self: flex-start;
+  padding-top: 0.05rem;
+}
+
+/* The confidence, printed as well as drawn — see the note in SearchPanel.tsx.
+   Their version encoded it only as opacity, and a reader cannot tell 40 from 55
+   by looking at two washes. Tabular figures so a column of them lines up. */
+.srch-conf {
+  --hit-a: 1;
+  padding: 0.05rem 0.2rem;
+  border-radius: 3px;
+  background: rgb(var(--hit-rgb) / calc(var(--hit-a) * 0.35));
+  color: var(--ink);
+  font-size: 0.79rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* How far through the article the passage is, as a bar that fills up to it.
+
+   A 2px track and not a hairline: 1px lands on a half-device-pixel at the
+   fractional zoom levels people actually read at, and a track that disappears
+   at 110% is a track that looks like a rendering fault. The fill is the same
+   height, so the two read as one object rather than as a bar in a box.
+
+   `--at` is a percentage set inline. It has a default here so the element is
+   still meaningful if it ever renders without one — 0% draws an empty track at
+   the start of the piece, which is at least a place, where an invalid width
+   would collapse the whole bar and read as "no data" in a UI that has no such
+   state. */
+.srch-place {
+  --at: 0%;
+  position: relative;
+  height: 2px;
+  margin: 0.15rem 0 0.1rem;
+  border-radius: 1px;
+  background: var(--rule-strong);
+  overflow: hidden;
+}
+.srch-place-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  /* The very start of the article would otherwise draw nothing at all, which is
+     indistinguishable from a bar that failed to render. A minimum sliver keeps
+     "at the top" visible as a value. */
+  width: max(2px, var(--at));
+  border-radius: 1px;
+  background: var(--ink-soft);
+}
+
+/* One line saying what the two gutter marks are, so neither is hover-only —
+   a hover-only explanation is one nobody on a touchscreen ever sees. Built from
+   the same components as the rows, so it cannot drift from what it describes. */
+.srch-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.7rem;
+  margin: 0;
+  padding: 0.3rem 0.7rem 0.35rem;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: 0.77rem;
+  line-height: 1.4;
+}
+.srch-legend-item { display: inline-flex; align-items: center; gap: 0.3rem; }
+/* Three of the palette's hues as a specimen, drawn from the same tokens the
+   marks use so the legend cannot show a colour the article does not. Which
+   three is arbitrary — it is a picture of "there are colours and they mean
+   something", not a key, because a key to eight hues in a 0.7rem line would be
+   unreadable and the answer for any one row is in its hover card. */
+.srch-swatches { display: inline-flex; gap: 1px; flex: none; }
+.srch-swatches i {
+  width: 0.3rem;
+  height: 0.7rem;
+  border-radius: 1px;
+  background: rgb(var(--cat-rgb));
+}
+/* The dot on a result row, in the colour of the search that found it. */
+.srch-hit-dot {
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: rgb(var(--cat-rgb, var(--hit-wash-rgb)));
+}
+/* "2 still searching", beside a count that is real but not final. */
+.srch-count-more { font-style: italic; }
+/* Sized down and pinned to a width, so the two specimens sit on the text
+   baseline rather than stretching to whatever the flex row is. */
+.srch-legend .srch-conf { flex: none; opacity: 0.75; }
+.srch-legend .srch-place { width: 1.6rem; margin: 0; flex: none; }
+
+.srch-hit-body { min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.srch-hit-quote {
+  /* Three lines, then cut. Enough to recognise a passage, never enough to read
+     it here instead of in the article — the hover card is where a longer look
+     lives, and the article is where reading lives. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+}
+.srch-hit-why { color: var(--ink-faint); font-size: 0.84rem; line-height: 1.4; }
+.srch-hit-whole { color: var(--ink-faint); font-size: 0.79rem; font-style: italic; }
+
+/* The longer snippet, on hover. Wider than the band, because the whole point of
+   it is to show more than the row could. */
+.tip-hit { max-width: 26rem; }
+.tip-hit p { margin: 0; font-size: 0.9rem; line-height: 1.5; }
+/* What the two numbers in the gutter mean, under the passage they belong to.
+   Ruled off and set smaller, because it is *about* the result rather than part
+   of it — the passage is the reader's, the note is ours. */
+/* Two classes deep, deliberately: `.tip-hit p` above is more specific than a
+   single class would be, and losing to it is how this ends up needing an
+   `!important` instead. */
+.tip-hit .tip-hit-meta {
+  margin-top: 0.45rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: 0.83rem;
+}
+.tip-hit-meta b { color: var(--ink-soft); font-weight: 600; }
+.tip-hit-meta em { font-style: italic; }
+

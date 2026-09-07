@@ -183,7 +183,7 @@ class FeatureErrorBoundary extends Component<BoundaryProps, BoundaryState> {
     return null;
   }
 
-  override componentDidCatch(error: Error, info: ErrorInfo): void {
+  override componentDidCatch(error: unknown, info: ErrorInfo): void {
     /* `componentStack` is deliberately not sent, for the reason `AppBoundary`
        gives: it is a list of component display names, which is safe, but it
        arrives as one free-text blob and this is not the place to start making
@@ -242,10 +242,15 @@ class FeatureErrorBoundary extends Component<BoundaryProps, BoundaryState> {
        cannot. The **name only**: `error.message` is not sent for the same
        reason it is not rendered. src/web/log-buffer.ts § ClientErrorLogEntry.
 
-       Not `error.name`: the parameter is typed `Error` and the runtime value
-       need not be one, so the read is `nameOfThrown`'s job and not this file's
-       — src/web/log-buffer.ts § nameOfThrown, which is where F10 above now
-       lives. */
+       Not `error.name`: the read is `nameOfThrown`'s job and not this file's —
+       src/web/log-buffer.ts § nameOfThrown, which is where F10 above now lives.
+       **The parameter is `unknown` rather than React's own `Error`**, which is
+       what makes F10 a compile error rather than a rule. Said in the right
+       tense, because the obvious phrasing is now false: `throw null` reaching
+       `error.name` **once skipped the retirement**, before the retirement was
+       moved ahead of every diagnostic. It could not do so today — the ordering
+       above is what prevents it — and the type is the second lock, on the read
+       itself. AppBoundary.tsx makes the argument in full. */
     recordLog({ kind: "client-error", source: "boundary", name: nameOfThrown(error) });
   }
 
@@ -263,8 +268,29 @@ class FeatureErrorBoundary extends Component<BoundaryProps, BoundaryState> {
     return (
       /* Shaped like the band it stands in for — the same `.mode-band` shell,
          the same width, the same place — so a failure does not move the rest of
-         the page. Copied from `VisitorBand` in src/web/PublicChrome.tsx, and
-         deliberately with no new CSS of its own. */
+         the page, and deliberately with no new CSS of its own.
+
+         **Hand-written, and it must stay hand-written.** Every other band in the
+         reader goes through `src/web/ModeSurface.tsx` since 2026-09-07, so this
+         copy reads like the one that was missed. It is not. A boundary renders
+         its fallback *in its own place in the tree*, so if the throw it just
+         caught came from `ModeSurface`, a fallback that also used `ModeSurface`
+         would invoke the component that had just thrown — and a boundary cannot
+         catch its own render, so that second throw goes to `AppBoundary` and
+         replaces the whole reader with a page-level apology. That is the exact
+         failure this file exists to prevent.
+
+         Migrating it is therefore a P1, not a tidy-up, and
+         tests/the-band-fallback-must-not-use-modesurface.test.tsx fails on three
+         assertions the moment anybody tries — including one that shows the
+         article's own text disappearing. GPT Sol F4 on
+         docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md,
+         2026-09-06.
+
+         (This comment used to say it was copied from `VisitorBand` in
+         src/web/PublicChrome.tsx. That was true when it was written and is not
+         a reason: `VisitorBand` went through `ModeSurface` in stage 2, and this
+         did not.) */
       <aside className="mode-band" aria-label={`${name} is not working`}>
         <div
           role="alert"

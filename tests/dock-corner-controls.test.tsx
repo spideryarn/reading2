@@ -57,6 +57,7 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { readerCssNoComments } from "./helpers/stylesheets.js";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
@@ -630,10 +631,11 @@ describe("the fit signature", () => {
  * docs/reusable/silent-success.md's exact shape.
  */
 describe("nothing reserves the corners they left", () => {
-  const stylesheet = readFileSync(
-    path.join(import.meta.dirname, "../src/web/styles.css"),
-    "utf8",
-  ).replace(/\/\*[\s\S]*?\*\//g, "");
+  /* The reading-view sheets as a set. `src/web/styles.css` has held nothing
+     but `@import`s since the split on 2026-09-06, so that path alone would
+     find no declarations at all — the positive control below is what turns
+     that into a red test rather than a quiet one. */
+  const stylesheet = readerCssNoComments();
 
   /** Every `padding…` declaration whose value names `token`. */
   const paddingsNaming = (token: string): string[] =>

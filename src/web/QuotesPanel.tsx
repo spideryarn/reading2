@@ -47,7 +47,7 @@
  */
 import { useState, type ReactElement } from "react";
 import { Info, Quote as QuoteIcon, RotateCcw, Sparkles, TriangleAlert } from "lucide-react";
-import type { BlockId, Job, Quote, QuoteDrops } from "../types.js";
+import type { BlockId, Job, Quote, QuoteDrops, QuoteTier } from "../types.js";
 import type { QuoteRank } from "./params.js";
 import type { UseQuotes } from "./useQuotes.js";
 import type { StepFailure } from "./useStepJob.js";
@@ -56,6 +56,7 @@ import { ScoreBars } from "./ScoreBars.js";
 import { Tooltip } from "./Tooltip.js";
 import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
+import { ModeSurface } from "./ModeSurface.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
 import { applyThreshold, hiddenNote, type ThresholdResult } from "./threshold.js";
@@ -244,6 +245,36 @@ export function priorityOf(quote: Quote): number | undefined {
     (n): n is number => n !== undefined,
   );
   return scores.length === 0 ? undefined : Math.max(...scores);
+}
+
+/**
+ * The bar the heavy stroke starts at, and it is `QUOTE_BAR_DEFAULT` **on
+ * purpose**: at the bar's resting position every quote on the page is heavy, and
+ * the light ones are exactly what dragging the bar down reveals. Two controls
+ * telling one story rather than two.
+ */
+export const QUOTE_HEAVY_AT = QUOTE_BAR_DEFAULT;
+
+/**
+ * How heavily this quote is drawn in the prose — the priority the reader can see
+ * without opening the panel. docs/project/quotes.md § The stroke.
+ *
+ * **`priorityOf`, not `importance`.** Greg asked for *"an indicator of the Quote
+ * priority"*, and `priorityOf` is what `?bar=` already thresholds on. Driving the
+ * stroke from `importance` alone would let the two disagree — raising the bar
+ * could hide a heavy stroke and leave a light one on the page, which reads as a
+ * bug in the feature whose whole job is to say what matters. On this the bar and
+ * the stroke are the same statement.
+ *
+ * **A quote with no score at all is light, not absent.** It has earned no
+ * emphasis, but it must still be drawn: a quote scored on neither axis survives
+ * every position of the bar (docs/project/quotes.md § The bar hides what is
+ * below it), so an unmarked one would be a row in the panel with nothing in the
+ * prose — the precise failure `threshold.ts` exists to prevent.
+ */
+export function quoteTier(quote: Quote): QuoteTier {
+  const priority = priorityOf(quote);
+  return priority !== undefined && priority >= QUOTE_HEAVY_AT ? 2 : 1;
 }
 
 /**
@@ -542,26 +573,42 @@ export function QuotesPanel({
   );
 
   return (
-    <aside className="mode-band quotes" aria-label="Quotes">
-      <div className="band-head">
-        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
-            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-            stays for the count below it. */}
-        {quotes && (
-          <span className="quotes-count">
-            {quotes.quotes.length} {quotes.quotes.length === 1 ? "quote" : "quotes"}
-          </span>
-        )}
-        {/* Provenance about the owner's own run, so a visitor sees none of it:
-            `profileHash` never leaves the server (src/public-types.ts). */}
-        {quotes && owner && (
-          <WrittenForYou
-            written={owner.profiled}
-            changed={owner.profileChanged}
-            slug={owner.slug}
-          />
-        )}
-      </div>
+    <ModeSurface
+      label="Quotes"
+      feature="quotes"
+      /* **A fragment, so the row is there before the quotes are.** Both
+          children are gated on `quotes`; `head={quotes && …}` would pass the
+          surface `null` while the list loads and no `.band-head` would be
+          drawn at all. */
+      head={
+        <>
+          {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+              docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+              stays for the count below it. */}
+          {quotes && (
+            <span className="quotes-count">
+              {quotes.quotes.length} {quotes.quotes.length === 1 ? "quote" : "quotes"}
+            </span>
+          )}
+          {/* Provenance about the owner's own run, so a visitor sees none of it:
+              `profileHash` never leaves the server (src/public-types.ts). */}
+          {quotes && owner && (
+            <WrittenForYou
+              written={owner.profiled}
+              changed={owner.profileChanged}
+              slug={owner.slug}
+            />
+          )}
+        </>
+      }
+      /* Pinned under the list rather than at the end of it. Same guard it had
+          as a trailing child of the band. */
+      foot={
+        quotes && (owner === null || owner.status === "ready") && owner?.quotes ? (
+          <Foot rerun={rerun} />
+        ) : null
+      }
+    >
 
       {quotes && quotes.quotes.length > 1 && (
         <RankBar quotes={all} rank={rank} onRank={onRank} />
@@ -670,11 +717,9 @@ export function QuotesPanel({
               ))}
             </ol>
           </div>
-
-          {owner?.quotes && <Foot rerun={rerun} />}
         </>
       )}
-    </aside>
+    </ModeSurface>
   );
 }
 

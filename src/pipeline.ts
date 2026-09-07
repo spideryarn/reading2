@@ -44,12 +44,16 @@ import {
   pdfFigureMarkersIn,
 } from "./collect-assets.js";
 import { collectPdfFigures, type PdfFiguresRun } from "./collect-pdf-figures.js";
-import { ReadabilityRefused, runExtract } from "./extract.js";
+import { ReadabilityRefused, TooLittleTextToRead, runExtract } from "./extract.js";
 import {
+  cameFromAnUpload,
+  decodeHtml,
   fetchDocument,
   type RawManifest,
   RawDocumentUnavailable,
   readRawBytes,
+  storedDocumentBytes,
+  uploadedDocumentKind,
   writeRaw,
 } from "./fetch.js";
 import {
@@ -114,7 +118,7 @@ import {
   STAGE_EFFORT,
 } from "./models.js";
 import { STEP_ORDER } from "./step-order.js";
-import { articleFingerprint } from "./source-hash.js";
+import { articleFingerprint, hashBlocks } from "./source-hash.js";
 import { hashProfile, profileIsStale } from "./profile.js";
 import {
   ARTICLE_HAD_NO_TEXT,
@@ -122,12 +126,13 @@ import {
   ILLUSTRATE_SKETCH_PROFILE,
   ILLUSTRATE_SKETCH_STALE,
   PAGE_HAS_NO_ARTICLE,
+  pageHadTooLittleText,
   pdfTooManyPages,
   type ReaderFacingFailure,
   SOURCE_DOCUMENT_DAMAGED,
   SOURCE_DOCUMENT_GONE,
 } from "./messages.js";
-import { type RejectReason, looksLikePdf, MAX_UPLOAD_BYTES, rejectionFailure, stagingKey } from "./source.js";
+import { type RejectReason, MAX_UPLOAD_BYTES, rejectionFailure, stagingKey } from "./source.js";
 import { readUpload, rejectUpload, settleUpload } from "./upload-records.js";
 import { blobStore, CONTENT_TYPE, storeRawSource } from "./store/blobs.js";
 import {
@@ -137,7 +142,8 @@ import {
   sameStamp,
   type StepStamp,
 } from "./store/artifacts.js";
-import { generateHierarchy } from "./hierarchy.js";
+import { checkCoverage, generateHierarchy } from "./hierarchy.js";
+import { LABELS_PROMPT_VERSION, generateLabels, mergeLabels } from "./labels.js";
 import { generateTweets, PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "./tweets.js";
 import type { Block, JobUpload, StepName } from "./types.js";
 import { getDb } from "./db/client.js";
@@ -228,6 +234,20 @@ export const DEFAULT_INGEST_STEPS: StepName[] = [
   "extract",
   "blocks",
   "hierarchy",
+  /* **And deliberately NOT `labels`, which is the whole of the 2026-09-06
+     change and the one line nothing checks.**
+
+     The label pass was inside `hierarchy` and was 79.5–92% of its wall clock —
+     one measured call took 602 s of a 682 s pass against a 740 s claimant
+     deadline. Adding `labels` here would put every second of that back between
+     pasting a URL and being able to read, which is exactly what the split
+     removed. A freshly ingested article shows *"Paragraph labels are still
+     arriving"* until a labels job runs for it (`nav_label_status`, stage 1).
+
+     There is no compiler check and no test that can state a negative usefully,
+     so this comment is the mechanism. If you are adding a step here, ask
+     whether a reader has to wait for it before the article is readable.
+     docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md. */
   /* In the default, unlike the four steps after `arc`: it costs no model call,
      and an article whose images are still hot-linked to the publisher announces
      the reader's IP to that publisher on every single read. That is the privacy
@@ -372,6 +392,25 @@ export function cacheArticleForStep(steps: readonly StepName[], index: number): 
  *
  */
 export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
+  /* **`labels` is deliberately NOT in this set, and that is the opposite call
+     from `arc`'s one row down.**
+
+     Every other name here reads the blocks and the tree and has nothing read
+     what it writes, so the positional cascade would buy a model call for
+     nothing. `labels` fails the second half of that: forcing `hierarchy` re-cuts
+     the tree, and a label written to tell a paragraph apart from *the wrong set
+     of neighbours* is wrong in the one way this stage exists to prevent
+     (src/labels.ts § `structureHash`). Re-running `hierarchy` is precisely what
+     invalidates the labels, so the cascade sweeping them in is the correct
+     answer rather than a wasted call — and the store agrees with it in the
+     stronger place: a forced `hierarchy` writes a pending manifest, which
+     deletes this step's receipt whether or not it was swept in.
+
+     Left out rather than absent by accident: `arc` is in this set because it
+     gained a freshness check of its own and its position stopped being the only
+     signal it had. `labels` has a `stamp` too, and it still belongs in the
+     cascade, because what the cascade encodes here is real — the tree it was
+     written against has moved. */
   /* **`arc` joined on 2026-08-29, the day it got a `stamp`.** The paragraph above
      names the exact condition — "give it a freshness check of its own and it
      belongs here too" — and it now has one, over the blocks, the tree and the
@@ -828,7 +867,7 @@ function canonicalBlock(block: Block): string {
  * blocks artefact beside them: 7 ms for the smallest, 469 ms at 669 blocks, and
  * **934 ms for the 676 KB `consciousness`**, which is the worst case in the
  * corpus. It runs once per `stepIsDone` for this one step: once per job that
- * contains `blocks`, and once per metadata-page load (src/api.ts). Accepted as
+ * contains `blocks`, and once per metadata-page load (src/store/pg.ts). Accepted as
  * temporary, against the persisted binding above.
  *
  * It is **not** short-circuited on the filesystem, where the two reads return
@@ -960,7 +999,7 @@ async function blocksMatchTheirHtml(ctx: StepContext, store: ArtifactReads): Pro
  * answer about the filesystem — the silent-success shape this seam exists to
  * remove, sitting inside the seam. There is no correct value to fall back to,
  * so there is no fallback: src/jobs.ts passes the pipeline's store, and
- * src/api.ts passes its own because the metadata page falls back to the
+ * src/api.ts passed its own because the metadata page fell back to the
  * `example/` fixture.
  */
 export async function stepIsDone(
@@ -1358,9 +1397,11 @@ async function refuseAnOverlongPdf(
  *
  *  1. **`head`** — cheap, and refuses an over-cap object before anything moves.
  *  2. **one `get`**, bounded by the same cap.
- *  3. **`%PDF-`** over the bytes we hold. The bucket's MIME allowlist checked
- *     the type the *uploader claimed*; this checks the actual one, and they are
- *     different questions asked of different parties.
+ *  3. **What the bytes we hold actually are** — `uploadedDocumentKind`, PDF or
+ *     web page or neither. The bucket's MIME allowlist checked the type the
+ *     *uploader claimed*; this checks the actual one, and they are different
+ *     questions asked of different parties. It was a bare `%PDF-` test until
+ *     2026-09-07, when a web page became a legal upload.
  *  4. **our SHA-256 against the browser's**, over that same copy. A mismatch is
  *     a refusal rather than a warning: the thing we are about to spend model
  *     money reading is not the thing the reader chose.
@@ -1422,7 +1463,27 @@ async function acquireUpload(
   if (!bytes) await refuse("missing");
 
   const got = bytes as Uint8Array;
-  if (!looksLikePdf(got)) await refuse("not-a-pdf");
+
+  /* **What is this?** — asked of the bytes, by the same function the URL half
+     asks, and that sharing is the whole design of the 2026-09-07 change
+     (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md). It was
+     `looksLikePdf(got)` when a PDF was the only legal upload.
+
+     The rule itself is `uploadedDocumentKind`'s, in src/fetch.ts beside the
+     `sniffKind` it is built from — two calls that are two different questions,
+     and its header is where they are argued. It is here rather than inline
+     because `npm run ingest -- <file>` has to reach the identical answer, and a
+     CLI that disagreed with the queue about what a file is would be a bug
+     nobody could reproduce through the browser.
+
+     **`??` rather than an `if`**, and it is the type system doing the work
+     `refuse`'s `Promise<never>` was built for. An `if (kind === null) await
+     refuse(…)` compiles and leaves `kind` still `DocumentKind | null` for the
+     next forty lines, so every use of it needs a cast or a second check — and a
+     cast here would be a claim that a refusal happened, which is the one thing
+     nothing downstream could verify. This way the compiler knows. */
+  const kind = uploadedDocumentKind(upload.filename, got) ?? (await refuse("not-a-pdf"));
+
   const sha256 = createHash("sha256").update(got).digest("hex");
   if (sha256 !== record.claimedSha256) await refuse("checksum-mismatch");
 
@@ -1430,8 +1491,32 @@ async function acquireUpload(
      it: three lines further down the record is `verified` and nothing can move
      it again. Not through `refuse` above, because that throws the *static*
      sentence for the reason and the reader wants the page count — the record
-     takes the reason, the job takes the number. See `refuseAnOverlongPdf`. */
-  await refuseAnOverlongPdf(ctx, got, () => rejectUpload(upload.id, "too-many-pages"));
+     takes the reason, the job takes the number. See `refuseAnOverlongPdf`.
+
+     **Inside the PDF branch since 2026-09-07**, where the fetched half has
+     always had it (`if (doc.kind === "pdf")` in the `fetch` step below). It was
+     unconditional here only because every upload was a PDF; a web page has no
+     pages to count, and `MAX_PAGES` is a statement about what transcription
+     costs rather than about how long a document may be. */
+  if (kind === "pdf") {
+    await refuseAnOverlongPdf(ctx, got, () => rejectUpload(upload.id, "too-many-pages"));
+  }
+
+  /* **The decoded string for a web page, the arrived bytes for a PDF** — the
+     rule is `storedDocumentBytes`'s and this calls it rather than restating it,
+     because stage 2 does `new TextDecoder().decode(bytes)` with no encoding
+     branch on the strength of it. An upload path that stored the bytes it
+     received would put a windows-1252 page's curly quotes into the reader's
+     prose as replacement characters, with nothing raised and nothing logged.
+
+     `decodeHtml(got, null)` — `null` rather than `claimed` above, and the
+     difference is real: that argument is a *transport* encoding label, and a
+     filename carries none. Passing `text/html` there would be handing the
+     sniffer a charset claim nobody made. So the encoding comes from the BOM,
+     then the document's own `<meta charset>`, then windows-1252 — which is what
+     a browser does with a file off a disk too. */
+  const decoded = kind === "html" ? decodeHtml(got, null) : null;
+  const storedBytes = storedDocumentBytes({ kind, bytes: got, text: decoded?.text ?? null });
 
   /* Promoted to a name that is a statement about its contents, and create-only.
      `already-there` is the dedup hit — two readers with the same paper — and it
@@ -1446,11 +1531,13 @@ async function acquireUpload(
      while the canonical object stays corrupt. Uploads were the one path still
      doing it the old way after the helper landed, which is the shape a shared
      helper is supposed to prevent. GPT Sol, 2026-08-27. */
-  const { sha256: storedSha256, outcome: promotion } = await storeRawSource(got, "pdf");
+  const { sha256: storedSha256, outcome: promotion } = await storeRawSource(storedBytes, kind);
 
   const manifest: RawManifest = {
-    kind: "pdf",
-    file: "raw.pdf",
+    kind,
+    /* A restatement of `kind` rather than a path — nothing writes this file any
+       more, and `RawManifest.file`'s own header says why the field stays. */
+    file: kind === "pdf" ? "raw.pdf" : "raw.html",
     /* **No URL, and none invented.** `RawManifest` used to require two, which
        is exactly the assumption docs/plans/260826u-pdf-upload-and-storage.md § 5 warned
        would take the time. A `file://` or an `upload://…` here would have read
@@ -1460,8 +1547,13 @@ async function acquireUpload(
     origin: "upload",
     uploadId: upload.id,
     filename: upload.filename,
-    contentType: CONTENT_TYPE.pdf,
-    encoding: null,
+    /* **Ours, not the browser's.** For a fetched document this field is the
+       origin's own header verbatim; an upload has none, and the browser's claim
+       on the PUT is not a header a server sent. So it records the type of the
+       thing we decided it is — which is the same value `storeRawSource` just
+       put the object in the bucket under. */
+    contentType: CONTENT_TYPE[kind],
+    encoding: decoded?.encoding ?? null,
     bytes: got.byteLength,
     sha256,
     /* **The two stored fields, which this path was writing to the bucket and
@@ -1475,9 +1567,14 @@ async function acquireUpload(
 
        For a PDF this equals `sha256` above, because the stored bytes *are* the
        fetched bytes. It is taken from the helper's return anyway rather than
-       assumed, since that is the value the object is actually under. */
+       assumed, since that is the value the object is actually under. **And for
+       a web page it genuinely differs**, since 2026-09-07, for exactly the
+       reason `writeRaw`'s own comment gives: what we store is the decoded
+       string, so anything that arrived in another encoding hashes to something
+       else. Two different questions, and this is the one that names the object.
+       */
     storedSha256,
-    storedBytes: got.byteLength,
+    storedBytes: storedBytes.byteLength,
     fetchedAt: new Date().toISOString(),
   };
 
@@ -1845,7 +1942,24 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          first thing an upload hit, three stages after the last thing that could
          have supplied one. */
       if (manifest.kind !== "pdf") {
-        const url = requireUrl(ctx);
+        /* **And since 2026-09-07 an uploaded *web page* has none either**
+           (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md). So the
+           question is no longer the *kind* but the *origin* — and it is asked
+           through `cameFromAnUpload` rather than of `manifest.origin`, because
+           that field does not survive the store and this line read it wrongly
+           for an afternoon. Its header is the whole story. The answer is
+           `null` rather than a placeholder — a `file://` or an `upload://…`
+           here would read as an address to `meta.url` and to everything that
+           renders it, and not one of them would complain. `requireUrl` is still
+           right for a fetched page: that one *must* have an address and a
+           missing one is our bug, not the reader's.
+
+           What it costs is stated where a reader can act on it: relative hrefs
+           and relative `<img src>` stay relative, so `src/assets.ts` refuses
+           them — cleanly, and by a rule it already had. A document carrying its
+           own `<base href>` resolves correctly with no help from us, because
+           that is what `document.baseURI` is. */
+        const url = cameFromAnUpload(manifest) ? null : requireUrl(ctx);
         /* `TextDecoder`, and no encoding branch: `writeRaw` stores the
            *decoded* string for an HTML page, so these bytes are already UTF-8
            whatever the publisher served. The manifest records the original
@@ -1853,6 +1967,31 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         const html = new TextDecoder().decode(bytes);
         try {
           const result = await runExtract({ html, url, slug: ctx.slug });
+          /* **The audit line for the one step that deletes by policy.**
+             `removePlatformFurniture` (src/furniture.ts) is the only place in
+             this pipeline that removes an element *because of what the
+             publisher called it*, and a delete nothing records is a delete
+             nobody can check — so the counts go somewhere a person can read
+             them.
+
+             In the log rather than in `detail`, which is persisted with the step
+             and rendered on the reader's progress card: `.mw-editsection × 47`
+             is an operator's number, and the card is the wrong audience for a
+             CSS selector. It is also *not* in `Meta`, which would be a column
+             and a migration for a field stage D has not been built to read yet —
+             `ExtractResult.removed` says why.
+
+             Silent when nothing was removed, which is nearly every page: a line
+             saying zero on every article is how the one page that matters gets
+             lost. Selector names and integers only; nothing here can carry a
+             word of the article. */
+          const removals = Object.entries(result.removed);
+          if (removals.length > 0) {
+            plog.info(
+              { slug: ctx.slug, step: "extract", removed: result.removed },
+              `extract ${ctx.slug}: removed ${removals.map(([sel, n]) => `${n}× ${sel}`).join(", ")}`,
+            );
+          }
           return {
             parts: { extractedHtml: result.extractedHtml, meta: result.meta },
             detail: result.meta.title,
@@ -1880,6 +2019,22 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
             throw stageFailure(
               PAGE_HAS_NO_ARTICLE,
               "Readability found no article in the fetched page.",
+            );
+          }
+          /* **The same shape, one branch along** — and `blocked` for the same
+             reason: Retry never re-runs the step that fetched the bytes, so the
+             second attempt measures the identical page and refuses it
+             identically.
+
+             The count travels on the error rather than in its prose
+             (src/extract.ts § `TooLittleTextToRead`), so the reader's sentence
+             can carry the one fact about their page they can check, and the
+             diagnostic can keep the library's name for the log. */
+          if (err instanceof TooLittleTextToRead) {
+            throw stageFailure(
+              pageHadTooLittleText(err.chars),
+              "Readability returned less than its own threshold of text; the parse it disowned " +
+                "is what stage 2 used to publish.",
             );
           }
           throw err;
@@ -2261,27 +2416,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              block, so it is its own figure rather than a repair.
              src/hierarchy.ts § `collapseRestatedRungs`. */
           collapsedRungs: run.collapsedRungs,
-          /* The third thing this stage forgives, and the only one with no trace
-             in the product: a paragraph the model would not label twice running
-             is a leaf with no row, which renders as nothing rather than as an
-             error. Logged at zero like the two above, so that an article
-             quietly losing ten labels is a line somebody can see rather than an
-             absence nobody can. src/labels.ts § `droppedBudget`,
+          /* **`labelsDropped`, `labelBatches`, `labelsResumed` and `labelCalls`
+             were here until 2026-09-06** and are on the `labels` step's own log
+             line now. Not dropped: a paragraph the model would not label leaves
+             no trace in the product at all, so the count has to be logged
+             somewhere — it is just that this step no longer asks for a label.
              docs/reusable/silent-success.md. */
-          labelsDropped: run.labelsDropped,
-          /* **What the checkpoints actually bought this run**, at zero as well
-             as above it. `generateLabels` logs `{ asked, found }` at its read,
-             which is what the store returned; these two are what the stage
-             *accepted*, and the gap between them is a batch that was stored and
-             then rejected as not covering the blocks it was asked about — a
-             failure with no other symptom. Neither number was logged at all
-             until 2026-09-04:
-             docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md,
-             recommendation 2. */
-          labelBatches: run.labelBatches,
-          labelsResumed: run.labelsResumed,
-          /* What the label pass actually paid for, beside what it resumed. */
-          labelCalls: run.labelCalls,
           /* **Was the tree bought or replayed?** Until 2026-09-05 this was
              printed only by `src/hierarchy.ts`'s own `main()`, and stage E of
              docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
@@ -2328,12 +2468,26 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * writes. Under one map both halves of that reasoning are gone, and
        * `src/hierarchy.ts` now says so where it used to say the other thing.
        *
-       * **`inputHash` and nothing else.** `STAMP_SOURCE.hierarchy` is `"labels"`, so
-       * whatever is passed here is compared by `assertStampAgrees` against the
-       * labels file's own stamp. `run.inputHash` *is* `labels.sourceHash`, so it
-       * cannot clash; a `promptVersion` beside it would, because the labels file
-       * is `labels/1` and the tree is `toc/2`, and that throw fails every
-       * ingest. Verified against a real artefact rather than reasoned about.
+       * **`inputHash` and nothing else**, and the reason changed shape on
+       * 2026-09-06 without changing the answer.
+       *
+       * It used to be a *clash*: `STAMP_SOURCE.hierarchy` is `"labels"`, so
+       * `assertStampAgrees` compared whatever was passed here against the labels
+       * file's own `version` and `generator` — `labels/2` and a model — and a
+       * `promptVersion` of `toc/3` beside it threw on every ingest.
+       *
+       * This step now writes a `PendingLabelsFile`, which carries **neither**
+       * field (src/labels.ts), so `assertStampAgrees` has nothing to compare a
+       * `promptVersion` against and would no longer throw. It is still
+       * `inputHash` alone, and now for a plainer reason: a stamp is the
+       * provenance of the artefact it is read off, and this step buys no labels
+       * — recording the *tree's* prompt version in a field whose established
+       * meaning is the labels prompt would put a second pass's provenance on
+       * this one's receipt. `structureVersion` inside the manifest is where the
+       * tree's version already lives.
+       *
+       * `run.inputHash` *is* `parts.labels.sourceHash`, read off the artefact
+       * rather than recomputed here.
        *
        * The hash comes back from the stage rather than being `hashBlocks(...)`
        * here, because a second computation of "the blocks hash" is exactly how
@@ -2375,15 +2529,173 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           : run.deepen && run.deepen.targets > 0
             ? `, ${run.deepen.expanded} of ${run.deepen.targets} sections deepened`
             : "";
+      /* **The "N paragraphs unlabelled" clause left with the labels**
+         (2026-09-06). It is on `STEPS.labels`'s `detail` now, which is the card
+         the reader is watching while a label run is going; saying it here would
+         be a sentence about a pass this step did not make, and at this point in
+         an ingest **every** paragraph is unlabelled, which is not news. */
       return {
         parts: run.parts,
         stamp: { inputHash: run.inputHash },
+        detail: `${run.internal} sections over ${run.blocks} blocks${deepened}`,
+      };
+    },
+  },
+
+  /**
+   * Stage 4b — the per-paragraph navigation labels, and **the reason this whole
+   * plan exists.**
+   *
+   * It was the second half of `hierarchy` until 2026-09-06, and it was
+   * 79.5–92% of that step's wall clock: one measured call took 602 s of a 682 s
+   * pass, against a claimant deadline of 740 s. So it is its own step, off
+   * `DEFAULT_INGEST_STEPS`, bought later by a job nobody is watching.
+   * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
+   *
+   * **It produces the tree as well as the manifest**, which no other step here
+   * does with somebody else's artefact. `mergeLabels` writes the labels onto
+   * the leaves, and the merged tree is what the reading view opens — so the two
+   * are one write, or they are a tree describing labels that are not in it.
+   * `writeArtefacts` refuses a `tree` with no manifest beside it for the
+   * mirror-image reason.
+   *
+   * **A `stamp`, and deliberately no `isDone`.** The receipt is what says
+   * whether this step ran — `hasArtefacts` (src/store/artifacts-pg.ts) asks the
+   * asking step's own `revision_step_runs` row before it looks at any artefact,
+   * so an `isDone` would be a second check of a fact the row already carries.
+   * **And the stamp is not the structure-currency check.** That is the receipt
+   * *deletion* in `writeArtefacts`: a re-cut tree can only come from a tree
+   * write, a tree write always carries a manifest, and a pending manifest
+   * deletes this step's row — so a stale tree leaves nothing here to compare
+   * against. What the stamp catches is the one case the deletion cannot see, a
+   * prompt or a model bump with no `hierarchy` run behind it.
+   */
+  labels: {
+    name: "labels",
+    label: "Labelling the paragraphs",
+    /**
+     * **Both, and the tree is not incidental.** This step reads the tree
+     * `hierarchy` cut, merges the labels into its leaves and writes it back, so
+     * `tree` is genuinely one of its outputs. It is also what makes
+     * `writeArtefacts`'s refusal — a `tree` with no `labels` beside it — a rule
+     * every writer of the tree has to keep rather than one step's habit.
+     * tests/labels-step-registration.test.ts pins the pair.
+     */
+    produces: ["labels", "tree"],
+    /**
+     * The blocks these labels were written against, the prompt that wrote them
+     * and the model that ran — the same three `stampOf` reads back off the
+     * manifest's `sourceHash`, `version` and `generator`.
+     *
+     * `null` when the blocks cannot be read, which answers not-current: the
+     * safe way to be wrong here is a model call.
+     */
+    async stamp(ctx, store) {
+      const file = await store.read(ctx.slug, "hierarchy", "blocks");
+      if (!file?.blocks) return null;
+      return {
+        inputHash: hashBlocks(file.blocks),
+        promptVersion: LABELS_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+      };
+    },
+    async run(ctx, store, checkpoints) {
+      /* Stage 4's copy of the blocks, and the tree it cut them into. Both, and
+         from the same step, because the batches are cut along the tree's own
+         section boundaries — a label's job is to tell its paragraph apart from
+         its neighbours, so the model has to see the neighbours. src/labels.ts. */
+      const file = await store.read(ctx.slug, "hierarchy", "blocks");
+      const structure = await store.read(ctx.slug, "hierarchy", "tree");
+      if (!file?.blocks || !structure) {
+        throw stageFailure("ours", {
+          generic: `No tree for "${ctx.slug}" — run the hierarchy step first.`,
+        });
+      }
+      const run = await generateLabels({
+        tree: structure,
+        blocks: file.blocks,
+        slug: ctx.slug,
+        /* **The checkpoint namespace stays `hierarchy-labels`**, and that is the
+           one thing this split must not tidy. `batchFingerprint` carries no step
+           and no job identity, so every checkpoint row written before today
+           survives — but only while the key does not move. Renaming it would
+           invalidate every stored row and buy the next run nothing.
+           src/store/checkpoints.ts. */
+        checkpoints,
+        onProgress: ctx.report,
+        signal: ctx.signal,
+      });
+
+      /* The artefacts, assembled once, with every check below asked of *this*
+         object rather than of the locals it came from — the discipline
+         src/hierarchy.ts § `parts` explains at length, for the same reason: a
+         tree merged from one set of labels and returned beside another is a pair
+         that looks finished and describes two different articles. */
+      const parts = { labels: run.file, tree: mergeLabels(structure, run.file.labels) };
+
+      /* **`checkCoverage` moved here from `generateHierarchy` on 2026-09-06**,
+         and this position is the point of it: after the merge, over the tree
+         about to be written, and before anything can set `nav_label_status` to
+         `ready`. Its two per-batch siblings, `assertEveryBlockLabelled` and
+         `assertInsideCoverageFloor`, are inside `generateLabels` and travelled
+         with it for free. */
+      checkCoverage(parts.labels.labels, parts.tree, file.blocks);
+
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "labels",
+          model: CAPABLE_MODEL,
+          /* The one thing this stage forgives with no trace in the product: a
+             paragraph the model would not label twice running is a leaf with no
+             row, which renders as nothing rather than as an error. Logged at
+             zero, so that an article quietly losing ten labels is a line
+             somebody can see rather than an absence nobody can.
+             src/labels.ts § `droppedBudget`, docs/reusable/silent-success.md. */
+          labelsDropped: run.dropped.length,
+          /* **What the checkpoints actually bought this run**, at zero as well
+             as above it. `generateLabels` logs `{ asked, found }` at its read,
+             which is what the store returned; these are what the stage
+             *accepted*, and the gap between them is a batch that was stored and
+             then rejected as not covering the blocks it was asked about — a
+             failure with no other symptom.
+             docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md. */
+          labelBatches: run.batches,
+          labelsResumed: run.resumed,
+          /* What it actually paid for, beside what it resumed. */
+          labelCalls: run.calls,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          ms: run.elapsedMs,
+          blocks: file.blocks.length,
+        },
+        `labels ${ctx.slug}: ${Object.keys(run.file.labels).length} paragraphs labelled`,
+      );
+
+      return {
+        parts,
+        /* Three values, and all three are read back off the manifest by
+           `stampOf`. `inputHash` comes off the artefact rather than being hashed
+           again here, for the reason src/hierarchy.ts gives at its own
+           `inputHash`: two computations of "the blocks hash" is how the two
+           sides of `assertStampAgrees` come to disagree. */
+        stamp: {
+          inputHash: run.file.sourceHash,
+          promptVersion: run.file.version,
+          model: run.file.generator,
+        },
+        /* **The reader-scale sentence, moved here with the pass it is about.**
+           It was on `hierarchy`'s `detail` until 2026-09-06, where after the
+           split it would have said "every paragraph unlabelled" on every
+           ingest. The operator's numbers stay in the log line above, which is
+           where src/jobs.ts says a step's real numbers belong. */
         detail:
-          `${run.internal} sections over ${run.blocks} blocks` +
-          (run.labelsDropped > 0
-            ? ` (${run.labelsDropped} paragraph${run.labelsDropped === 1 ? "" : "s"} unlabelled)`
-            : "") +
-          deepened,
+          `${Object.keys(run.file.labels).length} paragraphs labelled` +
+          (run.dropped.length > 0
+            ? ` (${run.dropped.length} paragraph${run.dropped.length === 1 ? "" : "s"} unlabelled)`
+            : ""),
       };
     },
   },

@@ -10,9 +10,8 @@
  * See docs/project/comments.md § Anchoring.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { readerCss } from "./helpers/stylesheets.js";
+import { SPECIMEN_HTML, SPECIMEN_MARKS, SPECIMEN_OUT } from "../src/web/DesignPage.js";
 import {
   annotateHtml,
   BAR_HUES,
@@ -565,15 +564,31 @@ describe("annotateHtml — the colours of the searches that found the words", ()
        paints nothing at all — the whole mark vanishes rather than losing its
        ninth stripe. Nothing in TypeScript can see that, so it is checked
        against the stylesheet here rather than left to a comment. */
-    const css = readFileSync(
-      path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src/web/styles.css"),
-      "utf8",
-    );
+    /* The reading-view sheets as a set — `src/web/styles.css` has been the list
+       of `@import`s since 2026-09-06, and these rules live in one of the files
+       it names. tests/helpers/stylesheets.ts. */
+    const css = readerCss();
+    /* **Through the rule opener, and this is the load-bearing part.** The
+       pattern stopped at `]` until 2026-09-06, so it matched a selector that
+       could never draw anything: GPT Sol appended `.never` to all eight and
+       every test in this file stayed green. `\s*\{` is what makes a match mean
+       "a rule that fires on `data-hues="N"`" rather than "those characters
+       appear somewhere". */
     const counts = [
-      ...css.matchAll(/td\.text\.has-hit\[data-hues="(\d+)"\]/g),
+      ...css.matchAll(/td\.text\.has-hit\[data-hues="(\d+)"\]\s*\{/g),
     ].map((m) => Number(m[1]));
-    expect(counts.length).toBeGreaterThan(0);
-    expect(Math.max(...counts)).toBe(BAR_HUES);
+    /* **Every rung, not the highest one.** The check was `Math.max(...) ===
+       BAR_HUES`, which is satisfied by a stylesheet holding nothing but rule 8 —
+       Sol deleted rules 1 through 7 and all fifty tests here passed, while a
+       paragraph with two or three hits painted no bar at all. The gradient's
+       stops are written out per count, so a missing count is a missing rule, and
+       a missing rule paints nothing rather than degrading. Sorted unique values
+       against the whole range says that. */
+    expect(
+      [...new Set(counts)].sort((a, b) => a - b),
+      'the `td.text.has-hit[data-hues="N"]` rules no longer cover 1..BAR_HUES — a count with ' +
+        "no rule behind it paints NO bar, so the whole mark vanishes rather than losing a stripe",
+    ).toEqual(Array.from({ length: BAR_HUES }, (_, i) => i + 1));
   });
 
   it("paints a hue only a reader could have chosen", () => {
@@ -722,5 +737,114 @@ describe("annotateHtml — the colours of the searches that found the words", ()
     const out = annotateHtml(HTML, [hitMark({ slot: 1, strength: 0.42 })]);
     expect(out).toContain("--hit-a:0.420");
     expect(out).toContain("--h0:var(--cat-1-rgb)");
+  });
+});
+
+/**
+ * **Quotes outline; search fills** — docs/project/quotes.md § The stroke, and
+ * docs/plans/260907c-quotes-drawn-as-a-stroke-in-the-prose-with-weight-carrying-priority.md.
+ *
+ * The markup half of a change that is otherwise entirely visual. What a jsdom
+ * test can hold is exactly this — which attributes land on which run. Whether
+ * the result *reads* as one quote is the browser pass, and it is in the plan.
+ */
+describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
+  const html = "<p>He rejects the idea that mind is <em>software</em> running on wet hardware.</p>";
+  const host = (out: string) => {
+    const el = document.createElement("div");
+    el.innerHTML = out;
+    return el;
+  };
+
+  it("gives a quote its tier and no wash at all", () => {
+    /* `data-wash` is the switch the stylesheet hangs the fill, the hue band and
+       its bottom padding off. A quote must not have it, or it arrives wearing a
+       fill — the exact opposite of what a quote is supposed to be. */
+    const out = annotateHtml(html, [{ id: "q1", start: 3, end: 10, kind: "hit", quoteTier: 2 }]);
+    const mark = host(out).querySelector("mark.hit");
+    expect(mark?.getAttribute("data-quote")).toBe("2");
+    expect(mark?.hasAttribute("data-wash")).toBe(false);
+    expect(mark?.hasAttribute("data-hues")).toBe(false);
+    expect(mark?.getAttribute("style")).toBe(null);
+  });
+
+  it("gives a search hit a wash and no tier", () => {
+    const out = annotateHtml(html, [{ id: "h1", start: 3, end: 10, kind: "hit", strength: 0.4 }]);
+    const mark = host(out).querySelector("mark.hit");
+    expect(mark?.hasAttribute("data-quote")).toBe(false);
+    expect(mark?.hasAttribute("data-wash")).toBe(true);
+    expect(mark?.getAttribute("style")).toBe("--hit-a:0.400");
+  });
+
+  it("does NOT let a quote repaint a hedged search hit's confidence", () => {
+    /* **The bug this change had to fix before it could draw anything.** A quote
+       used to be a `strength: 1` hit, and `--hit-a` is the maximum over every
+       mark covering the run — so a quote lying across a 0.4-confidence hit took
+       that wash to full and silently overwrote the one channel saying how sure
+       the model was. Invisible only because quotes and search were drawn
+       identically; the moment they are not, it is a quote making somebody
+       else's search look certain. */
+    const out = annotateHtml(html, [
+      { id: "h1", start: 3, end: 30, kind: "hit", strength: 0.4 },
+      { id: "q1", start: 3, end: 30, kind: "hit", quoteTier: 2 },
+    ]);
+    const mark = host(out).querySelector("mark.hit");
+    expect(mark?.getAttribute("style")).toBe("--hit-a:0.400");
+    expect(mark?.getAttribute("data-quote")).toBe("2");
+    expect(mark?.hasAttribute("data-wash")).toBe(true);
+  });
+
+  it("caps the outline only at the true ends of a quote that gets split", () => {
+    /* One quote containing an `<em>` is THREE sibling marks — annotateHtml
+       splits per text node, and a wash hides that where an outline cannot. So
+       the rules are drawn on every fragment and the inline end-caps only on the
+       two carrying these, and the outline runs continuously across the joins.
+       Without it, one sentence reads as three separate quotes. */
+    const out = annotateHtml(html, [{ id: "q1", start: 20, end: 50, kind: "hit", quoteTier: 1 }]);
+    const marks = [...host(out).querySelectorAll("mark.hit")];
+    expect(marks.length).toBe(3);
+    expect(marks.map((m) => m.hasAttribute("data-quote-start"))).toEqual([true, false, false]);
+    expect(marks.map((m) => m.hasAttribute("data-quote-end"))).toEqual([false, false, true]);
+    /* And every fragment still knows it is a quote, so every one draws its
+       rules — that is what makes the outline continuous rather than two ends. */
+    expect(marks.every((m) => m.getAttribute("data-quote") === "1")).toBe(true);
+  });
+
+  it("caps both ends when a quote is a single run", () => {
+    const out = annotateHtml(html, [{ id: "q1", start: 3, end: 10, kind: "hit", quoteTier: 1 }]);
+    const mark = host(out).querySelector("mark.hit");
+    expect(mark?.hasAttribute("data-quote-start")).toBe(true);
+    expect(mark?.hasAttribute("data-quote-end")).toBe(true);
+  });
+
+  it("keeps /design's pasted specimens identical to what the annotator produces", () => {
+    /* `/design` shows the mark treatments as literal markup rather than calling
+       `annotateHtml`, because that route is lazily loaded and the annotator is
+       eagerly loaded by the reader — `tests/eager-client-graph.test.ts` fails a
+       module that becomes reachable from both without a decision. The cost of
+       pasting is that the copy can rot, so it is checked here instead of
+       trusted, exactly as tests/valence.test.ts checks the direction glyphs
+       against the stylesheet.
+
+       If this fails, regenerate the strings rather than editing them by hand —
+       the whole value of that page is that it shows what the reader sees. */
+    SPECIMEN_MARKS.forEach((specimen, i) => {
+      expect(annotateHtml(SPECIMEN_HTML, specimen.marks), specimen.label).toBe(
+        SPECIMEN_OUT[i],
+      );
+    });
+  });
+
+  it("draws the heavier of two quotes over one run, which the artefact prevents", () => {
+    /* `dedupeOverlaps` (src/quotes.ts) drops any quote clashing with a longer
+       one in the same block, so two nested outlines — which would read as one
+       heavier mark, a priority neither quote has — cannot arise. This is the
+       belt to that brace, because the drawing now leans on a property the
+       artefact happens to hold rather than one this file enforces. */
+    const out = annotateHtml(html, [
+      { id: "q1", start: 3, end: 30, kind: "hit", quoteTier: 1 },
+      { id: "q2", start: 3, end: 30, kind: "hit", quoteTier: 2 },
+    ]);
+    expect(host(out).querySelector("mark.hit")?.getAttribute("data-quote")).toBe("2");
   });
 });

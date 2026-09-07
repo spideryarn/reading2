@@ -18,8 +18,9 @@ Code: [`src/converse.ts`](../../src/converse.ts) § `REMEMBER_SYSTEM`, `systemFo
 prompt and where each piece of it lands), [`src/chat.ts`](../../src/chat.ts) (`withTurn`,
 `withRetry`, `withEdit` — who owns a stance), [`src/routes.ts`](../../src/routes.ts) § `streamChat`
 (validation, the 409, `MAX_REMEMBER_CHARS`), [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx)
-(one panel, parameterised by kind), [`src/web/App.tsx`](../../src/web/App.tsx) §
-`ConversationBand`.
+(one panel, parameterised by kind),
+[`src/web/modes/conversation/ConversationModes.tsx`](../../src/web/modes/conversation/ConversationModes.tsx)
+§ `ConversationBand`.
 Tests: [`remember-prompt.test.ts`](../../tests/remember-prompt.test.ts),
 [`remember-store.test.ts`](../../tests/remember-store.test.ts),
 [`remember-route.test.ts`](../../tests/remember-route.test.ts),
@@ -275,7 +276,8 @@ on every load and a missing thread sat on "Starting…" forever.
 **One panel, parameterised by kind, not two panels.** The transcript, the scroll-follow, the citation
 chips, the tool strip, the retry, the editor and the stream recovery are identical in both; what
 differs is an empty state, a box six rows tall instead of one, and one `<select>`. Likewise one
-`ConversationBand` in App.tsx with one `useChat`, rather than a second chat state machine.
+`ConversationBand` in `modes/conversation/ConversationModes.tsx` with one `useChat`, rather than a
+second chat state machine.
 
 The composer's microphone is **the existing** `useDictationField` ([dictation.md](dictation.md)) —
 same hook, same two-pass transcription, same priming with this article's glossary — with a label

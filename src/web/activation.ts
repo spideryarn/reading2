@@ -137,6 +137,7 @@
  */
 import type { Mode } from "../modes.js";
 import type { AutoRunTarget } from "./auto-run-targets.js";
+import type { DiagramKind } from "./diagram.js";
 import type { RefereeView } from "./referee-views.js";
 import { jobEngine } from "./jobEngine.js";
 
@@ -150,13 +151,40 @@ import { jobEngine } from "./jobEngine.js";
 export type { AutoRunTarget };
 
 /**
- * Which mode's button arms which target, and the six that do.
+ * **What a press on this mode's bar button arms**, for every one of the
+ * fourteen. Total since 2026-09-06, so a fifteenth word in `MODES` is a
+ * typecheck error here until somebody has answered the money question — which
+ * is the point of it. This table was `Partial`, and under a `Partial` an
+ * omitted row and a considered "nothing" are the same thing, so a new
+ * artefact-backed mode could be wired end to end with nobody ever asked whether
+ * pressing it should start generating.
+ * docs/plans/260906d-make-style-ownership-visible-and-a-new-mode-fail-to-compile.md
+ * § Stage 4.
  *
- * **`diagram` is deliberately not a row here**, and since 2026-09-06 that is no
- * longer because pressing it spends nothing — it does. It is because the picture
- * a Diagram press lands on is whatever `?diagram=` says, so a *fixed* target
- * would be a lie about half the presses. `armActivationForDiagram` below is the
- * row, written as a function.
+ * Three answers, and the second is the one that has to carry a function:
+ *
+ *  - **`fixed`** — the press arms one named target, always. The five rows that
+ *    were the whole of this table before.
+ *  - **`delegated`** — the press arms something, but *which* thing depends on
+ *    state this table cannot see, so the row carries a function that **names
+ *    the target**, and `armActivationForMode` below does the arming.
+ *    **Not a name, and not a string.** `{ kind: "delegated"; owner: "…" }` was
+ *    the round-one draft and GPT Sol refused it: nothing consumes a string, so a
+ *    fifteenth mode could write one, typecheck, and have no arming path anywhere
+ *    in the app — documentation wearing a type's clothes. A function is the
+ *    difference between a row that claims to arm something and one that does.
+ *
+ *    **It answers rather than acts**, and that is the second round's change:
+ *    the row used to be handed `(slug, ctx)` and call `armActivation` itself,
+ *    which let a delegated row arm *any* number of targets, for *any* slug,
+ *    while the bar's own `MODE_TARGET[mode]` said one thing. A sweep that
+ *    watches what a press posts cannot see a token nothing has mounted to
+ *    claim — GPT Sol, F12, 2026-09-06. Returning `AutoRunTarget | null` keeps
+ *    everything the function bought (it is consumed, so a row that names a
+ *    target the app cannot run is a compile error) and makes the *quantity*
+ *    structural: one arm per press, or none, decided in one place below.
+ *  - **`none`** — nothing to arm, with the reason written out. The reasons were
+ *    prose in this docblock until the type asked for them by name.
  *
  * **`debate` is the dearest mode press in the app** — two metered calls that
  * each go out to the open web, up to ~$0.27 and rising with the length of the
@@ -166,24 +194,131 @@ export type { AutoRunTarget };
  *
  * `tweets` is not here because it is not a mode: it is its own page, and the
  * press is on a `DockLink`. See `armActivationForTweets` below.
- *
- * The rest of `MODES` is either free (Plain, Hierarchy, Outline, Summary — they
- * read the tree that is already there) or stores nothing at all (Search, Chat).
- * Referee and Remember arm nothing *as modes* — both land on a sub-mode that
- * waits on the reader's own words. Their chips arm for themselves: Referee's
- * through `REFEREE_TARGET` below, Remember's inline in `RememberSubModeToggle`
- * (QuizPanel.tsx), which is the same call `DiagramPanel`'s picture chips make.
  */
-const MODE_TARGET: Partial<Record<Mode, AutoRunTarget>> = {
-  glossary: "glossary",
-  ideas: "ideas",
-  quotes: "quotes",
-  timeline: "timeline",
-  debate: "debate",
+export type ModeActivation =
+  | { kind: "fixed"; target: AutoRunTarget }
+  | { kind: "delegated"; target: (ctx: PressContext) => AutoRunTarget | null; why: string }
+  | { kind: "none"; reason: string };
+
+/**
+ * **What the bar knew at the moment of the press**, for the rows that cannot
+ * decide without it.
+ *
+ * One field so far, and it is deliberately the *answer* rather than the raw
+ * query string: the bar has already run `diagramInSearch` (params.ts), so an
+ * unrecognised `?diagram=` arrives here as `sketch`, exactly as `diagramParam`
+ * would open it. This module knows nothing about URLs and must not start to —
+ * `activationForDiagram` below says what reading the raw value cost.
+ */
+export interface PressContext {
+  /** Which picture a Diagram press is about to land on. */
+  diagram: DiagramKind;
+}
+
+const MODE_TARGET: Record<Mode, ModeActivation> = {
+  glossary: { kind: "fixed", target: "glossary" },
+  ideas: { kind: "fixed", target: "ideas" },
+  quotes: { kind: "fixed", target: "quotes" },
+  timeline: { kind: "fixed", target: "timeline" },
+  debate: { kind: "fixed", target: "debate" },
+
+  /* The one delegated row, and the reason the variant carries a function at
+     all: the picture a Diagram press lands on is whatever `?diagram=` says, so
+     a fixed row would be a lie about half the presses — and an expensive one,
+     which `activationForDiagram` below spells out step by step. */
+  diagram: {
+    kind: "delegated",
+    target: (ctx) => activationForDiagram(ctx.diagram),
+    why: "the picture a press lands on is whatever `?diagram=` says, not a fixed target",
+  },
+
+  /* Free: no model call behind any of them, because the tree they read is
+     already there by the time the article is on screen. */
+  plain: { kind: "none", reason: "the article and nothing else — there is nothing to generate" },
+  hierarchy: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
+  outline: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
+  structure: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
+  summary: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
+
+  /* Nothing exists to fill until the reader has typed. */
+  search: { kind: "none", reason: "stores nothing until the reader types a query" },
+  chat: { kind: "none", reason: "stores nothing until the reader asks something" },
+
+  /* **These two arm nothing *as modes*, and that is the honest answer rather
+     than a gap.** Each opens on a sub-mode that waits on somebody's own words —
+     Referee on Criteria, which has nothing to run until the referee has written
+     a criterion; Remember on Recall, which has nothing to run until the reader
+     has said what they took from the piece. There is no empty artefact for the
+     press to fill, so a `delegated` row would be one whose function armed
+     nothing, which is the shape this union exists to refuse. Their chips arm
+     for themselves, one level down: Referee's through
+     `armActivationForRefereeView` below, Remember's inline in
+     `RememberSubModeToggle` (QuizPanel.tsx), which is the same call
+     `DiagramPanel`'s picture chips make. */
+  referee: {
+    kind: "none",
+    reason:
+      "opens on Criteria, which has nothing to run until the referee has written one; the chips arm themselves",
+  },
+  remember: {
+    kind: "none",
+    reason: "opens on Recall, which waits on the reader's own words; the Quiz chip arms itself",
+  },
 };
 
 /**
- * **Referee's chips that arm something**, which is `MODE_TARGET` one level down.
+ * **Would opening this mode start work?** One bit, read-only, and the whole of
+ * what anything outside this module is allowed to ask `MODE_TARGET`.
+ *
+ * ## Why it exists
+ *
+ * So the command bar can be **honest about which of its rows spend**. The Dock
+ * discloses by shape — an icon in a fixed place that you reach for, with the
+ * mode's own sentence in the tooltip. The bar replaces that with a typed prefix
+ * and a reflex Enter, and Fable's arbitration on 2026-09-07 is that what the
+ * bar is missing is not a price but exactly this one bit: *does this row start
+ * work*. Each row whose answer is `true` carries a muted trailing `generates`.
+ * docs/plans/260906h-mode-catalog-and-a-command-bar.md § F1, and its § Review
+ * record, which is where GPT Sol's P0 was partly upheld and partly overruled.
+ *
+ * ## Why it is derived rather than written down
+ *
+ * `MODE_TARGET` is already **total** over `Mode`, so mode fifteen has to answer
+ * the money question before it compiles — and this reads that answer instead of
+ * asking for a second one. A hand-maintained list of "the paid ones" beside it
+ * would be a fact stated twice, and the copy that goes stale is always the one
+ * nothing is watching. **Mode fifteen therefore cannot arrive unmarked**, which
+ * is the property, and tests/command-bar.test.tsx holds it.
+ *
+ * ## What it deliberately does NOT say
+ *
+ *  - **How much.** No figure, no range. Readers hold slots rather than paying
+ *    per call, and the Dock button beside this one says nothing either — a bar
+ *    with a price on it and a button without would be *more* disclosed than the
+ *    Dock, which reverses a decision Greg made on 2026-09-06
+ *    (docs/plans/260906b-opening-a-mode-starts-it-generating.md).
+ *  - **Whether the artefact is already there.** So it **over-warns**: open
+ *    Glossary on an article whose glossary was built last week and nothing is
+ *    spent, while the row still said `generates`. That imprecision is recorded
+ *    rather than fixed — the exact answer needs a readiness adapter 260906h is
+ *    deliberately not building, and the Dock *under*-warns in the identical
+ *    case. Both are acceptable for v1.
+ *
+ * `delegated` counts as `true` even though its function can return `null` for a
+ * given press: the row's honest answer is *this may start work*, and the three
+ * Diagram geometries that arm nothing buy an embedding on mount anyway
+ * (§ `activationForDiagram`). A marker that went quiet for those would be wrong
+ * in the direction that costs money.
+ */
+export function modeGenerates(mode: Mode): boolean {
+  return MODE_TARGET[mode].kind !== "none";
+}
+
+/**
+ * **Referee's chips that arm something**, which is `MODE_TARGET` one level
+ * down — still `Partial`, and the four views below are why: the two absences
+ * are next to each other in one short list that one file owns, where a mode's
+ * absence is spread across the whole client.
  *
  * `criteria` and `mirror` are absent because neither has anything to generate
  * until the referee has written a criterion or left a comment — there is no
@@ -266,21 +401,51 @@ export function armActivation(slug: string, target: AutoRunTarget): void {
 }
 
 /**
- * The same, for a press on one of the bottom bar's mode buttons. A mode with no
- * paid artefact behind it arms nothing, silently — which is most of them.
+ * **A press on one of the bottom bar's mode buttons**, whatever that mode turns
+ * out to arm — which, for eight of the fourteen, is nothing.
+ *
+ * The `switch` is exhaustive and ends on a `never`, so a fourth variant cannot
+ * be added to `ModeActivation` without a branch here. And because the table is
+ * total, this is the **one** call the bar makes for every mode: Dock.tsx
+ * carried an `if (m.mode === "diagram")` branch until 2026-09-06, which was a
+ * special case the type could not oblige anybody else to write, and is the
+ * whole reason the delegated row holds a function rather than a name.
  */
-export function armActivationForMode(slug: string, mode: Mode): void {
-  const target = MODE_TARGET[mode];
-  if (target) armActivation(slug, target);
+export function armActivationForMode(slug: string, mode: Mode, ctx: PressContext): void {
+  const decision = MODE_TARGET[mode];
+  switch (decision.kind) {
+    case "fixed":
+      armActivation(slug, decision.target);
+      return;
+    case "delegated": {
+      /* **The sole arm for a delegated row, and it is here rather than in the
+         row**, so that "one press, at most one token" is a property of this
+         function instead of a promise each row makes separately. */
+      const target = decision.target(ctx);
+      if (target !== null) armActivation(slug, target);
+      return;
+    }
+    case "none":
+      return;
+    default: {
+      const unhandled: never = decision;
+      throw new Error(`unhandled activation: ${JSON.stringify(unhandled)}`);
+    }
+  }
 }
 
 /**
- * **A press on the bar's Diagram button arms the picture it is about to land
- * on**, which is whatever `?diagram=` currently says — `sketch` by default, and
- * two of the five pictures cost anything at all.
+ * **Which picture a press on the bar's Diagram button is about to land on**,
+ * as an `AutoRunTarget` — or `null` for the three that have no artefact behind
+ * them. Whatever `?diagram=` currently says, `sketch` by default.
  *
- * This is a function rather than a `MODE_TARGET` row, and the reason is a bug a
- * fixed row would have. GPT Sol found it in the plan for this change, 2026-09-06:
+ * It **answers**; `armActivationForMode` above does the arming. See
+ * `ModeActivation` § `delegated` for why that split, and for what it was
+ * before 2026-09-06.
+ *
+ * This is what `MODE_TARGET`'s **delegated** Diagram row calls, rather than a
+ * `fixed` target beside the other five, and the reason is a bug a fixed row
+ * would have. GPT Sol found it in the plan for this change, 2026-09-06:
  *
  *  1. open Diagram and press the Illustrated chip, so `?diagram=illustrated`;
  *  2. leave for Plain — `?diagram=` survives, it is query state;
@@ -295,12 +460,36 @@ export function armActivationForMode(slug: string, mode: Mode): void {
  * *different* mount asks — so the fix has to be at the mint: arm the target that
  * is going to mount, and it is claimed on the next commit like every other.
  *
- * **The three geometries arm nothing** and want nothing armed: Force, Drift and
- * Trail are drawn from the tree that is already there, cost nothing and are
- * instant. Only `sketch` and `illustrated` are model calls, and both are named
- * in `AutoRunTarget`, so this narrowing is the same one `DiagramPanel`'s chips
- * make — a sixth picture that spends money cannot be armed here until it is a
- * target there.
+ * ## The three geometries arm nothing, which is **not** the same as costing
+ * nothing
+ *
+ * That sentence used to end *"cost nothing and are instant"*, and it was false.
+ * GPT Sol found it, F11, 2026-09-06, along with the reason nothing caught it:
+ * the money sweep in tests/every-mode-draws-its-surface.test.tsx was written from
+ * this paragraph, and recorded only `POST /api/jobs`.
+ *
+ * What is true is that Force, Drift and Trail have **no artefact to generate**,
+ * so there is no job to post and nothing here to arm — the tree they are drawn
+ * from is already on the page. But the pictures themselves buy an embedding:
+ * `useSimilar` POSTs `/api/similar` for **Force**, and `useProjection` POSTs
+ * `/api/projection` for **Drift** and **Trail** (DiagramPanel.tsx § `similar`
+ * and § `projection`; src/similar.ts meters it to the ledger).
+ *
+ * Those two fetches are gated on the picture being on screen and on the reader
+ * owning the article — **and on nothing else, a press included**. So arming
+ * them here would buy nothing anyway: the hook has already asked by the time a
+ * token could be claimed. It also means a reader reaches them *without*
+ * pressing, by a pasted or bookmarked `?mode=diagram&diagram=force` or by Back
+ * onto one. That is known and deliberate — useSimilar.ts § `enabled` is the
+ * whole gate weighs it, and `NEEDS_AN_EXPLICIT_PRESS` in last-view.ts is what
+ * stops a *restore* from making the request — but it is the one paid request in
+ * the reading view that this module does not stand in front of, and the reason
+ * this paragraph now says so out loud.
+ *
+ * Only `sketch` and `illustrated` are runs this module can start, and both are
+ * named in `AutoRunTarget`, so this narrowing is the same one `DiagramPanel`'s
+ * chips make — a sixth picture with an artefact behind it cannot be armed here
+ * until it is a target there.
  *
  * @param kind which picture the reader will be looking at after the press —
  *   **already degraded** by `diagramInSearch` (params.ts), so an unrecognised
@@ -310,8 +499,8 @@ export function armActivationForMode(slug: string, mode: Mode): void {
  *   the Sketch, so the press would do nothing at all. The bar does the reading,
  *   so this module needs to know nothing about URLs.
  */
-export function armActivationForDiagram(slug: string, kind: string): void {
-  if (kind === "sketch" || kind === "illustrated") armActivation(slug, kind);
+export function activationForDiagram(kind: DiagramKind): AutoRunTarget | null {
+  return kind === "sketch" || kind === "illustrated" ? kind : null;
 }
 
 /**

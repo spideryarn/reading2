@@ -35,7 +35,7 @@
  * The hover mechanics — a native `mouseenter` to open, both leave events and
  * two `act` blocks to close — are lifted wholesale from
  * tests/referee-tooltips.test.tsx, which measured them. docs/project/tooltips.md
- * § Two things about testing a card in jsdom.
+ * § Three things about testing a card in jsdom.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";

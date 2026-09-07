@@ -133,10 +133,20 @@ const classified = (blocks: Block[]): Block[] =>
  * the `<section>` and its `<ol>`, which the plan's own stage-2 section counts as
  * "2 minted blocks per article". The plan's table was measured before those
  * existed. The supplement counts are unchanged.
+ *
+ * **`wiki_transformer` moved 358 → 367 on 2026-09-06**, and the reason is worth
+ * a line, because a total that drifts is the sort of number somebody re-measures
+ * rather than asks about. Stage 2 began removing MediaWiki's per-section edit
+ * links ([src/furniture.ts](../src/furniture.ts)), and Parsoid puts each one
+ * inside the heading's own wrapper — a wrapper of one heading plus one link
+ * reads to Readability as navigation, so **28 of this article's 47 section
+ * headings were never reaching the reader at all**. They do now: 19 `[edit]`
+ * paragraphs out, 28 headings in. The note counts are untouched, which is what
+ * this file is really about.
  */
 const FIXTURE_TABLE = [
   { fixture: "gwern", notes: 34, supplement: 41, total: 186 },
-  { fixture: "wiki_transformer", notes: 121, supplement: 121, total: 358 },
+  { fixture: "wiki_transformer", notes: 121, supplement: 121, total: 367 },
   { fixture: "acx_footnotes", notes: 18, supplement: 18, total: 98 },
   { fixture: "tufte", notes: 5, supplement: 5, total: 70 },
 ] as const;

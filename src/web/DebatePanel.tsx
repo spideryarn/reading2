@@ -28,6 +28,27 @@
  * the quotations were checked against, and **which** of the two empty answers
  * this is.
  *
+ * ## One list, and why it stopped being two
+ *
+ * Two separately metered searches run — one for pages replying to this piece,
+ * one for the argument around what it claims — and until 2026-09-06 the panel
+ * drew them as two headed groups. **That split was our epistemics, not the
+ * reader's question.** On Cargo Cult Science it produced two headings, two
+ * blurbs, an empty-state paragraph and two foot lines stacked over *zero rows*,
+ * followed by the three rows that were the actual product.
+ *
+ * So: one list, direct rows first, then claim rows, search order within each —
+ * `DEBATE_NO_RANKING` still stands, and the list is emphatically **not** sorted
+ * by identification level, because the chip on the row already says it. Each row
+ * self-labels instead: a direct row carries the identification chip, a claim row
+ * carries *On what it claims* and its *Answering "…"* line.
+ *
+ * **Not grouped by `relation` either**, which is the obvious replacement and is
+ * worse. A section heading is a claim we stand behind; `relation` is fenced off
+ * below as the model's reading of a stranger's page. Structure by what we can
+ * verify, and keep the model's readings inside rows.
+ * docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md § 1.
+ *
  * ## The three things a row keeps apart
  *
  *  1. **The host**, first and largest. Greg asked for *"ideally from
@@ -75,45 +96,106 @@ import {
   ExternalLink,
   Globe,
   Info,
+  RotateCcw,
   ThumbsDown,
   ThumbsUp,
   TriangleAlert,
 } from "lucide-react";
 import { FloatingArrow, FloatingPortal } from "@floating-ui/react";
 import {
+  DEBATE_CLAIMS_FOLLOW,
   DEBATE_CLAIMS_NONE,
-  DEBATE_CLAIMS_UNVERIFIED,
   DEBATE_EXTRACTS_ONLY,
   DEBATE_NO_RANKING,
   DEBATE_RESPONSES_NONE,
-  DEBATE_RESPONSES_UNVERIFIED,
+  debateClaimsUnverified,
+  debateResponsesUnverified,
 } from "../messages.js";
 import {
   type BlockId,
   type ClaimDebateRow,
   type DebateCounts,
-  type DebateGroup,
   type DebateValence,
   type DirectDebateRow,
+  type IdentificationLevel,
+  type IdentificationSignal,
   distinctSources,
+  identificationLevel,
+  identifiesOf,
+  lossesOf,
 } from "../types.js";
 import { BlockRef } from "./BlockRef.js";
+import {
+  DEBATE_LEVEL_DEFAULT,
+  IDENTIFICATION_STOPS,
+  stopAt,
+  stopIndex,
+  visibleDirect,
+} from "./debate-levels.js";
+import { hiddenNote, type ThresholdNoun, type ThresholdResult } from "./threshold.js";
 import { JobProgress } from "./JobProgress.js";
+import { ModeSurface } from "./ModeSurface.js";
+import { Tooltip } from "./Tooltip.js";
 import { useHoverCard } from "./useHoverCard.js";
 import { useRenderCount } from "./perf.js";
 import type { UseDebate } from "./useDebate.js";
 
-/** Either group's row, so one component can draw both. */
+/** Either search's row, so one component can draw both. */
 type DebateRow = DirectDebateRow | ClaimDebateRow;
 
-/** Group two's rows are the ones that answer a claim the article makes. */
+/**
+ * **Which of the two searches a sentence is about**, in the reader's terms
+ * rather than ours.
+ *
+ * The headings used to carry this and there are no headings any more, so every
+ * foot line has to name its own search. Not *"group one"* and not *"the direct
+ * pass"*: a reader has never heard of either.
+ */
+const SEARCH_NAME: Record<"direct" | "claims", string> = {
+  direct: "The search for replies to this piece",
+  claims: "The search for answers to what it claims",
+};
+
+/**
+ * **What the bar is holding back, in one word** — and it is deliberately not
+ * *pages*.
+ *
+ * Three counts can be on this screen at once (`DebatePanel` § `pages`), and two
+ * of them are already page counts: the head's *pages behind the rows on screen*,
+ * and the searches' *pages returned*. A third noun for a third fact would be a
+ * panel with three numbers all called pages, so this one uses the word the
+ * lead sentence already uses for what a direct row **is** — a page that
+ * *responds* to this piece — and counts rows rather than pages, which is also
+ * what it is hiding.
+ *
+ * docs/project/copy.md records the app already carrying *"two nouns for the same
+ * thing, and nobody has decided which"* on the waiting copy, and calls that
+ * half unsettled. This is not the place to add a third.
+ */
+const RESPONSE: ThresholdNoun = { one: "response", many: "responses" };
+
+/**
+ * **A module constant rather than a fresh `[]`**, because the memo that applies
+ * the bar keys on it by identity. `NO_QUOTES` in App.tsx is the same call.
+ */
+const NO_DIRECT: readonly DirectDebateRow[] = [];
+
+/** The rows that answer a claim the article makes. */
 function claimOf(row: DebateRow): ClaimDebateRow | null {
   return "claimQuote" in row ? row : null;
 }
 
-/** Group one's rows are the ones that name this article in their own extract. */
+/**
+ * The rows that name this article in their own extract — the ones that carry
+ * `identifies`, and therefore the ones with a level to put on a chip.
+ */
+function directOf(row: DebateRow): DirectDebateRow | null {
+  return "articleReferenceQuote" in row ? row : null;
+}
+
+/** The witness that a page names this article, for the ⓘ card. */
 function referenceOf(row: DebateRow): string | null {
-  return "articleReferenceQuote" in row ? row.articleReferenceQuote : null;
+  return directOf(row)?.articleReferenceQuote ?? null;
 }
 
 /**
@@ -135,10 +217,11 @@ function referenceOf(row: DebateRow): string | null {
  * because neither of them is a failure.
  *
  * **The target of the valence is the row's own**, which is why the labels do not
- * name it: the article itself in group one, the `claimQuote` in group two. The
- * group heading says which, and the AI-interpretation block spells it out. Sol's
- * F19 — without a stated target "positive" could mean a friendly register,
- * agreement with one claim, or praise for the whole piece.
+ * name it: the article itself on a direct row, the `claimQuote` on a claim row.
+ * The row's own chip says which — `RowMark`, which is what the group heading
+ * used to do — and the AI-interpretation block spells it out. Sol's F19 —
+ * without a stated target "positive" could mean a friendly register, agreement
+ * with one claim, or praise for the whole piece.
  */
 export const VALENCE_APPEARANCE: Record<
   DebateValence,
@@ -160,33 +243,60 @@ export const VALENCE_APPEARANCE: Record<
  * the reader anything.
  *
  * **The reasons are not named one by one**, unlike Quotes, and that is a
- * decision rather than laziness. Six of the seven — `uncited`, `selfSource`,
+ * decision rather than laziness. Seven of the eight — `uncited`, `selfSource`,
  * `unverifiedSource`, `directnessUnverified`, `claimNotInBlock`,
- * `unknownBlockId` — are all the same fact to a reader: *we could not check
- * this, so we did not show it*. Spelling them out would turn an honest
+ * `unknownBlockId`, `malformed` — are all the same fact to a reader: *we could
+ * not check this, so we did not show it*. Spelling them out would turn an honest
  * disclosure into a changelog of our own rules, which is exactly what
  * `discardedNote` next door refuses for its three editorial counters.
  *
- * **The cap gets a clause of its own**, and that is the one distinction worth
- * drawing here. A row past `MAX_DIRECT_ROWS` was not refused — nothing was
- * wrong with it, the list simply stopped — so folding it in with *"could not be
- * checked"* would tell the reader something false about a row that may have been
- * perfectly good. But it is still a loss they have a stake in: a cap that
- * stopped silently would make position a ranking in a feature built to have
- * none.
+ * **The eighth is `sourceIsCopy`, and it needs its own clause because that
+ * sentence is false of it.** A mirror of the article *was* checked, and checked
+ * successfully — it links the piece, it quotes it exactly, every counter reads
+ * clean — and it was refused for being the article rather than a reply to it
+ * (src/shingles.ts § `isCopy`). Folding it into *"could not be checked"* tells
+ * the reader we failed at something we did not fail at, and hides the one loss
+ * on this panel that is a judgment about the page rather than about our reach.
+ * Added 2026-09-06 with the counter itself; docs/project/copy.md rule 1.
+ *
+ * **The cap gets a clause of its own** for the same shape of reason. A row past
+ * `MAX_DIRECT_ROWS` was not refused — nothing was wrong with it, the list simply
+ * stopped — so folding it in with *"could not be checked"* would tell the reader
+ * something false about a row that may have been perfectly good. But it is still
+ * a loss they have a stake in: a cap that stopped silently would make position a
+ * ranking in a feature built to have none.
+ *
+ * **`which` names the search**, because the headings that used to are gone.
+ *
+ * **It says *kept*, not *shown*, and that changed on 2026-09-06 with the
+ * identification bar.** This sentence is arithmetic about the run —
+ * `reportedRows` against `keptRows`, and the gap accounted for — and the reader
+ * now has a control that decides what is *shown*. *"3 are shown"* over a list of
+ * two would be the count-disagrees-with-the-list failure
+ * ([`threshold.ts`](threshold.ts)) arriving through the one sentence on this
+ * panel whose job is to be trustworthy about counts. What the bar is holding
+ * back is said by `hiddenNote`, in the reader's own terms, beside the control
+ * that did it.
  */
-export function keptNote(counts: DebateCounts): string | null {
+export function keptNote(counts: DebateCounts, which: "direct" | "claims"): string | null {
   const lost = counts.reportedRows - counts.keptRows;
   if (lost <= 0) return null;
-  /* `Math.max` because these are three numbers off a stored artefact and this is
-     a panel, not an invariant: a negative here would print "-2 could not be
+  /* `Math.max` because these are numbers off a stored artefact and this is a
+     panel, not an invariant: a negative here would print "-2 could not be
      checked", which is worse than saying nothing about a count that cannot
      happen. */
-  const refused = Math.max(0, lost - counts.omittedOverCap);
+  const copies = Math.max(0, Math.min(lossesOf(counts.lost).sourceIsCopy, lost - counts.omittedOverCap));
+  const refused = Math.max(0, lost - counts.omittedOverCap - copies);
   const clauses: string[] = [];
   if (refused > 0) {
     clauses.push(
       `${refused} could not be checked against the page ${refused === 1 ? "it cites" : "they cite"}`,
+    );
+  }
+  if (copies > 0) {
+    clauses.push(
+      `${copies} turned out to be ${copies === 1 ? "a copy" : "copies"} of this article ` +
+        `rather than ${copies === 1 ? "a reply" : "replies"} to it`,
     );
   }
   if (counts.omittedOverCap > 0) {
@@ -196,16 +306,29 @@ export function keptNote(counts: DebateCounts): string | null {
     );
   }
   return (
-    `The search offered ${counts.reportedRows} of these; ${countWord(counts.keptRows)} ` +
-    `${counts.keptRows === 1 ? "is" : "are"} shown — ${clauses.join(", and ")}.`
+    `${SEARCH_NAME[which]} offered ${counts.reportedRows} of these; ` +
+    `${countWord(counts.keptRows)} ${counts.keptRows === 1 ? "was" : "were"} kept — ` +
+    `${andList(clauses)}.`
   );
+}
+
+/**
+ * *"a, and b"* for two and *"a, b, and c"* for three.
+ *
+ * There were only ever two clauses until `sourceIsCopy` arrived, and
+ * `join(", and ")` was right for two and reads as a stutter for three.
+ */
+function andList(parts: readonly string[]): string {
+  const last = parts[parts.length - 1];
+  if (parts.length <= 1 || last === undefined) return parts.join("");
+  return `${parts.slice(0, -1).join(", ")}, and ${last}`;
 }
 
 /**
  * `0` written as **none**, and every other number as itself.
  *
- * Both foot lines below reach zero often — group one keeping nothing is this
- * mode's second-commonest output — and *"0 are shown"* is the register of a
+ * The foot lines below reach zero often — the direct search keeping nothing is
+ * this mode's second-commonest output — and *"0 are shown"* is the register of a
  * dashboard rather than of a sentence. The digits stay everywhere else, because
  * a reader comparing two counts in one line wants to compare figures.
  */
@@ -228,18 +351,70 @@ function countWord(n: number): string {
  * **It counts pages, not rows.** Rows are deliberately not deduplicated by URL —
  * one review can answer two different claims, and two rows about one page is a
  * real answer — so a row count here would fire on a truth.
+ *
+ * **`rows` is what is on screen, which since 2026-09-06 is not always the whole
+ * group.** The sentence ends *"contribute to the rows shown"*, so the direct
+ * pass is handed the rows the identification bar left rather than everything the
+ * run kept. A reader who raises the bar sees this number fall, and it is still
+ * true; leaving it on the unfiltered list would make the words false while the
+ * figure looked right.
  */
 export function sourcesNote(
   counts: DebateCounts,
   rows: readonly { url: string }[],
+  which: "direct" | "claims",
 ): string | null {
   const contributing = distinctSources(rows);
   if (contributing === counts.returnedSources) return null;
   return (
-    `The search returned evidence from ${counts.returnedSources} ` +
+    `${SEARCH_NAME[which]} returned evidence from ${counts.returnedSources} ` +
     `${counts.returnedSources === 1 ? "page" : "pages"}; ${countWord(contributing)} ` +
     `${contributing === 1 ? "contributes" : "contribute"} to the rows shown.`
   );
+}
+
+/**
+ * **The provenance under the one list**, and the reason it is four sentences
+ * rather than two.
+ *
+ * The two foot lines used to sit under their own group, where the heading said
+ * which search they were counting. One list, no headings — so the question is
+ * where the numbers go, and there are only two answers. **Summing the two
+ * searches into one pair of sentences is the tempting one and it is wrong**, on
+ * a fact rather than on taste: `returnedSources` is *unique admissible URLs per
+ * pass*, while `distinctSources` dedupes across the whole list, so one page
+ * returned by both searches counts twice on the left and once on the right, and
+ * the sentence fires on a truth. There is no cross-pass source count stored to
+ * fix that with, and inventing one would be arithmetic over two numbers we did
+ * not measure together.
+ *
+ * So: **both searches keep their own numbers, and every sentence names its own
+ * search** (`SEARCH_NAME`). They sit once, under the last row, because that is
+ * where they were — provenance you read after a list, not a control above it.
+ * Direct before claims, matching the order of the rows.
+ *
+ * **Losing one of these is the single unacceptable outcome**
+ * (docs/reusable/silent-success.md): between them these four sentences carry
+ * every counter this panel has — what the search returned against what
+ * contributed, what the model offered against what survived, and each of the
+ * three kinds of loss inside that gap. `keptNote` fires on
+ * `reportedRows - keptRows` rather than on a sum of reasons, so a **new** loss
+ * reason reaches the reader through the total on the day it is added, even if
+ * nobody writes it a clause. What checks that is not the compiler: it is
+ * tests/debate-panel.test.tsx § *"puts every loss reason there is into a
+ * sentence the reader gets"*, which walks every field of `DebateLosses` and
+ * fails on one the sentence cannot account for.
+ */
+function footLines(debate: {
+  direct: { rows: readonly { url: string }[]; counts: DebateCounts };
+  claims: { rows: readonly { url: string }[]; counts: DebateCounts };
+}): string[] {
+  return [
+    keptNote(debate.direct.counts, "direct"),
+    sourcesNote(debate.direct.counts, debate.direct.rows, "direct"),
+    keptNote(debate.claims.counts, "claims"),
+    sourcesNote(debate.claims.counts, debate.claims.rows, "claims"),
+  ].filter((line): line is string => line !== null);
 }
 
 /**
@@ -281,7 +456,7 @@ export function hostOf(url: string): string {
 }
 
 /**
- * **What one group says when it has no rows**, and it is two sentences rather
+ * **What one search says when it kept no rows**, and it is two sentences rather
  * than one.
  *
  * Collapsing them is the single thing most worth getting right in this panel
@@ -302,17 +477,152 @@ export function hostOf(url: string): string {
  * false.
  *
  * The third empty state is not here: a failed pass writes no artefact at all, so
- * there is no group to be empty. The panel shows the ordinary job-failure state
+ * there is no search to be empty. The panel shows the ordinary job-failure state
  * with its retry, which is what `JobProgress` already draws.
+ *
+ * **A fourth is coming and is deliberately not here either**: every row hidden
+ * by the identification threshold, which is Stage P3's `hiddenNote`. That is a
+ * fact about the reader's own setting rather than about the search, so it does
+ * not belong in a sentence whose subject is what came back.
  */
-export function emptyGroupNote(
-  counts: DebateCounts,
-  group: "direct" | "claims",
-): string {
+export function emptyGroupNote(counts: DebateCounts, group: "direct" | "claims"): string {
   if (counts.returnedSources === 0) {
     return group === "direct" ? DEBATE_RESPONSES_NONE : DEBATE_CLAIMS_NONE;
   }
-  return group === "direct" ? DEBATE_RESPONSES_UNVERIFIED : DEBATE_CLAIMS_UNVERIFIED;
+  return group === "direct"
+    ? debateResponsesUnverified(counts.returnedSources)
+    : debateClaimsUnverified(counts.returnedSources);
+}
+
+/**
+ * **The one sentence at the top of the one list** — or nothing, when both
+ * searches kept something and there is no negative result to report.
+ *
+ * Up to two clauses, because there are two searches and either can come back
+ * with nothing. The direct one leads, because *"no page responds to this piece
+ * by name"* is the finding a reader of a famous article is most likely to be
+ * surprised by, and because what follows it is the answer to *"then what am I
+ * looking at?"* — `DEBATE_CLAIMS_FOLLOW`, appended only when there is in fact
+ * something below to look at.
+ *
+ * **Both are said when both are empty.** They are two searches and two facts,
+ * and dropping the second because the first already sounds negative is how a
+ * panel comes to say less than it knows.
+ */
+export function leadNote(debate: {
+  direct: { rows: readonly unknown[]; counts: DebateCounts };
+  claims: { rows: readonly unknown[]; counts: DebateCounts };
+}): string | null {
+  const noDirect = debate.direct.rows.length === 0;
+  const noClaims = debate.claims.rows.length === 0;
+  const parts: string[] = [];
+  if (noDirect) parts.push(emptyGroupNote(debate.direct.counts, "direct"));
+  if (noClaims) parts.push(emptyGroupNote(debate.claims.counts, "claims"));
+  else if (noDirect) parts.push(DEBATE_CLAIMS_FOLLOW);
+  return parts.length > 0 ? parts.join(" ") : null;
+}
+
+/**
+ * **What a row's chip says**, and it is the name of a fact rather than a grade.
+ *
+ * `identificationLevel` is a lookup over a fixed strength order, never a sum
+ * (src/types.ts), and these three words are that lookup made readable. They say
+ * *this piece* rather than *this article* only because the panel's own sentences
+ * do; nothing turns on it.
+ *
+ * **All three are drawn identically.** They are ordered — a link is stronger
+ * evidence than a title — but a chip that got redder as the evidence got weaker
+ * would be a scale, and a scale over one fact is the composite this feature
+ * refused: docs/project/quotes.md, and the plan's § 2. The order lives in the
+ * threshold, where the reader sets it themselves.
+ */
+const IDENTIFICATION_LABEL: Record<IdentificationLevel, string> = {
+  linked: "Links this piece",
+  quoted: "Quotes this piece",
+  named: "Names this piece",
+};
+
+/**
+ * **The same three facts as the words on the bar** — the weakest chip a reader
+ * is still willing to see.
+ *
+ * Lower case and shorter than the chip's, because the chip labels a row and this
+ * labels a *setting*: *"quotes it · 2 of 3"* reads as a rule the reader has set,
+ * where *"Quotes this piece"* on the slider would read as a description of
+ * something on screen. Same verbs in the same order, so the setting and the
+ * chips it governs are obviously the same vocabulary.
+ *
+ * **Words and not digits**, which is the whole shape of this control: Quotes'
+ * *"the stops are the data, not a grid"* applies with a vengeance when the data
+ * is three named facts rather than a scale. A `1`, `2`, `3` here would be the
+ * score this feature refused, drawn as a slider.
+ */
+const STOP_LABEL: Record<IdentificationLevel, string> = {
+  linked: "links it",
+  quoted: "quotes it",
+  named: "names it",
+};
+
+/**
+ * **Every signal this row earned, as sentences** — the tooltip Greg asked for
+ * by name, 2026-09-06: *"a tooltip for each showing the reasons"*.
+ *
+ * It is **the evidence itself and not a gloss on it**: the address that matched,
+ * the article's own words found in that page's extract, the title or byline it
+ * named. A reader can check every line of it against the page behind the link,
+ * which is the whole reason the level is a name and not a number.
+ *
+ * **The `quoted` signal's block id is deliberately left out.** It is a location
+ * in *our* article, and this card cannot be pointed into — `Tooltip` sets
+ * `handleClose: null`, so nothing in here can be clicked — which would make it
+ * an identifier the reader can neither follow nor use. The quotation is the
+ * evidence; the id is machinery.
+ *
+ * A string list rather than markup so a test can read what a reader reads.
+ */
+export function identificationEvidence(row: DirectDebateRow): string[] {
+  return identifiesOf(row).map(describeSignal);
+}
+
+function describeSignal(signal: IdentificationSignal): string {
+  switch (signal.kind) {
+    case "linked":
+      return `Links this article's address — ${signal.url}`;
+    case "quoted":
+      /* Two ratios rather than one, because they answer different questions and
+         the second is the one that catches a mirror: how much of the article
+         turns up here, and how much of what came back is the article's words
+         (src/shingles.ts § `isCopy`). Neither is combined with the other, and
+         neither is combined with anything else. */
+      return (
+        `Quotes this article — “${signal.quote}”. ` +
+        `${share(signal.coverage)} of the article's phrasings turn up in this page's extract, ` +
+        `and ${share(signal.density)} of that extract is the article's own words.`
+      );
+    case "named":
+      return (
+        `Names this article by ${signal.by === "title-and-byline" ? "title and byline" : "title"} ` +
+        `— “${signal.witness}”`
+      );
+    default: {
+      const unreachable: never = signal;
+      return unreachable;
+    }
+  }
+}
+
+/**
+ * A 0–1 ratio as a percentage, with **`under 1%` rather than `0%`** at the
+ * bottom.
+ *
+ * The floor fires on a single 8-word window, so a real hit on a long article
+ * rounds to zero — and *"0% of the article turns up here"* under a chip that
+ * says the page quotes it reads as a contradiction, or as a bug.
+ */
+function share(ratio: number): string {
+  if (!(ratio > 0)) return "0%";
+  const pct = ratio * 100;
+  return pct < 1 ? "under 1%" : `${Math.round(pct)}%`;
 }
 
 /**
@@ -339,7 +649,7 @@ export type DebateAccess = { kind: "owner"; owner: DebateOwner };
 interface Props {
   access: DebateAccess;
   /**
-   * Go to the block a group-two row's claim is in.
+   * Go to the block a claim row's claim is in.
    *
    * **Marks in the prose are deliberately not in v1** — they are the first
    * thing to add, and they want a resolver into `search-hits.ts`'s `Found`
@@ -348,15 +658,41 @@ interface Props {
    * is asking them to search for a sentence it is already holding.
    */
   onJump(id: BlockId): void;
+  /**
+   * Where the reader has put the identification bar, or `null` for *hasn't
+   * touched it* — `?name=`, resolved here to `DEBATE_LEVEL_DEFAULT`.
+   *
+   * Null rather than a defaulted level, for the reason every sibling threshold
+   * gives (docs/project/url-state.md): the constant lives in one file, and *set
+   * to the default* stays distinguishable from *never set*, which is what the
+   * reset button is drawn from.
+   */
+  level: IdentificationLevel | null;
+  onLevel(level: IdentificationLevel | null): void;
 }
 
-export function DebatePanel({ access, onJump }: Props) {
+export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Props) {
   useRenderCount("DebatePanel");
   const owner = access.owner;
   const debate = owner.debate;
+  const level = chosenLevel ?? DEBATE_LEVEL_DEFAULT;
+  /**
+   * **The bar, applied once**, and every number on this panel is read out of
+   * this one result: the rows in the list, the *N of M* beside the slider, the
+   * count in the head, and the foot line saying what is held back. That is
+   * `threshold.ts`'s whole argument, and it is why there is no second filter
+   * anywhere below.
+   *
+   * **Only the direct rows go through it.** Claim rows carry no identification
+   * level — they answer something the article argues, whether or not their
+   * author has ever heard of it — so they are not hidden by the bar, not in its
+   * `N of M`, and not in what it says it is holding back.
+   */
+  const directRows = debate?.direct.rows ?? NO_DIRECT;
+  const barred = useMemo(() => visibleDirect(directRows, level), [directRows, level]);
   const rows = useMemo(
-    () => [...(debate?.direct.rows ?? []), ...(debate?.claims.rows ?? [])],
-    [debate],
+    () => [...barred.visible, ...(debate?.claims.rows ?? [])],
+    [barred, debate],
   );
   /**
    * **Pages, not rows**, and the two really do differ here: rows are
@@ -364,10 +700,43 @@ export function DebatePanel({ access, onJump }: Props) {
    * different claims and two rows about one page is a real answer. So a head
    * count of `rows.length` labelled *sources* would overstate how many places
    * this came from — the one number on this panel that a reader would take as a
-   * measure of how much the web had to say. The counts beside the two group
-   * headings are row counts, and are called that by sitting on a list.
+   * measure of how much the web had to say. It is the one count on the panel
+   * since the two group headings went, and it is the right one to have kept.
+   *
+   * **It counts the rows on screen, so it moves with the bar.** It always did —
+   * `rows` is the list being drawn — and saying so is worth a line now that a
+   * reader can take rows away: a head reading *"7 pages"* over four rows would
+   * be the same disagreement `threshold.ts` refuses one line lower down. Note
+   * this is the third count a reader can see at once, and the three are three
+   * different facts said in three different places: **pages behind what is on
+   * screen** here, **responses the bar is holding back** at the slider, and
+   * **pages the search returned** in the lead sentence and the foot lines, each
+   * of those naming its own search.
    */
   const pages = distinctSources(rows);
+
+  /* The two sentences that are not rows: what came back with nothing, at the
+     top, and what each search lost, at the foot. Both are derived from the
+     stored counts, so both are memoised on the artefact rather than rebuilt on
+     every hover of a card.
+
+     **The foot is handed the direct rows the bar left**, not the artefact's
+     whole group: its second sentence counts the pages that *contribute to the
+     rows shown*, and the bar decides which those are (`sourcesNote`). The lead
+     is handed the artefact untouched, because its subject is what the search
+     came back with — a group emptied by the reader's own threshold is not a
+     search that found nothing, and `hiddenNote` already says which it is. */
+  const lead = useMemo(() => (debate ? leadNote(debate) : null), [debate]);
+  const foot = useMemo(
+    () =>
+      debate
+        ? footLines({
+            direct: { rows: barred.visible, counts: debate.direct.counts },
+            claims: debate.claims,
+          })
+        : [],
+    [debate, barred],
+  );
 
   /**
    * The ⓘ card's contents, looked up from whatever the pointer is on.
@@ -431,16 +800,41 @@ export function DebatePanel({ access, onJump }: Props) {
   );
 
   return (
-    <aside className="mode-band gloss dbt" aria-label="Debate">
-      <div className="band-head">
-        <Globe size={14} className="band-head-icon" />
-        <h2>Debate</h2>
-        {debate && (
-          <span className="gloss-count">
-            {pages} {pages === 1 ? "page" : "pages"}
-          </span>
-        )}
-      </div>
+    <ModeSurface
+      label="Debate"
+      feature="gloss dbt"
+      /* **The one header that cannot come out empty** — the globe and the
+          `<h2>` are unconditional and only the count is gated — which is what
+          makes Debate the control for the five bands whose headers do empty
+          out. A fragment all the same, so the shape here reads the same as
+          theirs rather than looking like a second pattern. */
+      head={
+        <>
+          <Globe size={14} className="band-head-icon" />
+          <h2>Debate</h2>
+          {debate && (
+            <span className="gloss-count">
+              {pages} {pages === 1 ? "page" : "pages"}
+            </span>
+          )}
+        </>
+      }
+      /* Below the lists: this is what you reach for after reading them and
+          wanting a fresher answer, not before. Pinned under the scroller
+          through `foot` rather than at the end of it — `debate.css` says so of
+          `.dbt-again` in as many words.
+
+          Offered even when both groups are empty, and that is the difference
+          from Timeline's equivalent — an empty timeline is a fact about the
+          article, which running it again cannot change, while an empty debate
+          is a fact about *one search on one day*, which is exactly what running
+          it again does change. */
+      foot={
+        debate && owner.status === "ready" && !owner.stale && !owner.outdated ? (
+          <div className="dbt-again">{run("Search again", true)}</div>
+        ) : null
+      }
+    >
 
       {owner.error && <p className="gloss-error">{owner.error}</p>}
 
@@ -512,37 +906,60 @@ export function DebatePanel({ access, onJump }: Props) {
             {DEBATE_NO_RANKING}
           </p>
 
+          {/* **The bar, above the list and outside the scroller**, where every
+              other threshold in this app sits: it is a control on the list, not
+              provenance to read after it.
+
+              Only when there is something for it to be about. A slider over a
+              group with no rows in it would be a control that cannot change
+              anything, and — worse — a foot line saying *"nothing is hidden by
+              this threshold"* under an empty list, which is true and reads as an
+              explanation of the emptiness. `leadNote` owns that sentence. */}
+          {debate.direct.rows.length > 0 && (
+            <NameBar
+              barred={barred}
+              level={level}
+              moved={chosenLevel !== null}
+              onLevel={onLevel}
+            />
+          )}
+
           <div className="dbt-scroll">
-            <Group
-              heading="About this piece"
-              blurb="Pages that name this article — its title, its address, or its title and byline — in their own words."
-              group={debate.direct}
-              which="direct"
-              onJump={onJump}
-            />
-            <Group
-              heading="About what it claims"
-              blurb="Pages answering something the piece argues, whether or not they have ever heard of it."
-              group={debate.claims}
-              which="claims"
-              onJump={onJump}
-            />
+            {/* **The negative result, as one sentence at the top of the list**
+                rather than as a headed section with nothing in it. On a famous
+                piece with no reception this is the whole answer, and it has to
+                read as a finding. `leadNote`. */}
+            {lead && <p className="gloss-quiet dbt-empty">{lead}</p>}
+
+            {/* **One list.** Direct rows first, then claim rows, search order
+                within each — and no sort by identification level, because the
+                chip on the row already says it and a sorted list would make
+                position mean something in a feature built to have it mean
+                nothing (`DEBATE_NO_RANKING`). */}
+            {rows.length > 0 && (
+              <ol className="dbt-list">
+                {rows.map((row) => (
+                  <Row key={row.id} row={row} onJump={onJump} />
+                ))}
+              </ol>
+            )}
+
+            {/* Both searches' numbers, once, under the last row. `footLines`
+                has the argument for four sentences rather than two. */}
+            {foot.length > 0 && (
+              <div className="dbt-foot">
+                {foot.map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+              </div>
+            )}
+
             {/* Inside the scroller, so it sits under the last row rather than
                 pinned above the button — it is provenance to read after the
                 list, not a control. */}
             <p className="dbt-verified">{DEBATE_EXTRACTS_ONLY}</p>
           </div>
 
-          {/* Below the lists: this is what you reach for after reading them and
-              wanting a fresher answer, not before. Offered even when both
-              groups are empty, and that is the difference from Timeline's
-              equivalent — an empty timeline is a fact about the article, which
-              running it again cannot change, while an empty debate is a fact
-              about *one search on one day*, which is exactly what running it
-              again does change. */}
-          {!owner.stale && !owner.outdated && (
-            <div className="dbt-again">{run("Search again", true)}</div>
-          )}
         </>
       )}
 
@@ -570,65 +987,165 @@ export function DebatePanel({ access, onJump }: Props) {
           </div>
         </FloatingPortal>
       )}
-    </aside>
+    </ModeSurface>
   );
 }
 
 /**
- * One group — its heading, its rows or its one sentence, and its two foot lines.
+ * **How firmly a page has to identify this article to stay on the list** — the
+ * threshold Greg asked for, and the fourth in this app rather than a new idea.
  *
- * **The heading is drawn over an empty group**, unlike Timeline's, and that is
- * the point rather than an oversight: *"this search found nothing"* is a real
- * answer to a real question, and the question is in the heading. Dropping the
- * heading would leave a bare sentence with nothing saying which of the two
- * searches it is about — and group one being empty is this mode's commonest
- * correct output.
+ * Everything here is Quotes' `BarSlider` and the glossary's `GateSlider` with
+ * the *stops* changed, and their four properties are kept for the same reasons:
+ * the setting is on screen in words, the count is on screen (`2 of 3`, the thing
+ * the reader is actually aiming at), every stop is a different rule, and it says
+ * how many it is holding back in **every** state including none
+ * ([`hiddenNote`](threshold.ts)).
+ *
+ * Two things differ from its three siblings, and both follow from the fact
+ * underneath being **named rather than measured**:
+ *
+ *  - **The track is an index into three fixed words**, not into scores this list
+ *    contains. So a stop can be inert on a given article — nothing here links
+ *    the piece, say, and the last two stops then show the same list — where
+ *    `barStops` guarantees each adjacent pair differs. That is the right trade:
+ *    a word in a link means the same thing on every article
+ *    (debate-levels.ts § `IDENTIFICATION_STOPS`).
+ *  - **`?name=` carries the word**, so there is nothing to snap and no
+ *    `snapToStop` here. `?bar=0.63` against a track of real scores was a bug
+ *    that needed a whole function; `?name=quoted` is a stop or it is nothing.
+ *
+ * **Direct rows only, and the type is the guard.** `rows` is
+ * `DirectDebateRow[]` — claim rows carry no level, are never hidden by this, and
+ * are in neither number it prints.
  */
-function Group({
-  heading,
-  blurb,
-  group,
-  which,
-  onJump,
+function NameBar({
+  barred,
+  level,
+  moved,
+  onLevel,
 }: {
-  heading: string;
-  blurb: string;
-  group: DebateGroup<DirectDebateRow> | DebateGroup<ClaimDebateRow>;
-  which: "direct" | "claims";
-  onJump(id: BlockId): void;
+  /**
+   * **The pass the panel already made**, rather than the rows to make it over
+   * again.
+   *
+   * `threshold.ts`'s whole argument is that the visible list, the `N of M`, the
+   * hidden count and the foot line come out of **one** result: *a count that
+   * disagrees with the list under it is this feature's worst failure*. Handing
+   * this component the rows and letting it re-apply the rule would have been
+   * two passes agreeing only because they were handed the same array — true
+   * today, and a prop away from not being.
+   */
+  barred: ThresholdResult<DirectDebateRow>;
+  level: IdentificationLevel;
+  moved: boolean;
+  onLevel(level: IdentificationLevel | null): void;
 }) {
-  const rows: DebateRow[] = group.rows;
-  const kept = keptNote(group.counts);
-  const sources = sourcesNote(group.counts, rows);
+  const total = barred.visible.length + barred.hiddenCount;
+  const count = `${barred.visible.length} of ${total}`;
+  const note = hiddenNote(barred.hiddenCount, total, RESPONSE);
+
   return (
-    <section className="dbt-group">
-      <h3>
-        {heading}
-        <span className="gloss-count">{rows.length}</span>
-      </h3>
-      <p className="dbt-blurb">{blurb}</p>
+    <div className="dbt-bar">
+      <div className="dbt-bar-row">
+        <label className="dbt-bar-label" htmlFor="dbt-bar">
+          identification
+        </label>
+        <span className="dbt-bar-value">
+          {STOP_LABEL[level]} · {count}
+        </span>
+        {/* Only once there is something to undo, exactly as next door: a reset
+            that is always there invites you into a state you are already in. */}
+        {moved && (
+          <button
+            type="button"
+            className="dbt-bar-reset"
+            title={`Back to “${STOP_LABEL[DEBATE_LEVEL_DEFAULT]}”`}
+            aria-label={`Reset the bar to “${STOP_LABEL[DEBATE_LEVEL_DEFAULT]}”`}
+            onClick={() => onLevel(null)}
+          >
+            <RotateCcw size={11} />
+          </button>
+        )}
+      </div>
+      <input
+        id="dbt-bar"
+        className="dbt-bar-range"
+        type="range"
+        min={0}
+        max={IDENTIFICATION_STOPS.length - 1}
+        step={1}
+        value={stopIndex(level)}
+        title="How firmly a page has to identify this article to stay on the list: it names the title, it quotes the article's own words, or it links to its address. Left shows every page the search kept, right only the ones that link it. Rows answering what the article claims are not affected."
+        /* The thumb's position is a number nobody can hear, and here it is not
+           even a number — so this is the word and the count, which between them
+           are the whole of what the control does. */
+        aria-valuetext={`${STOP_LABEL[level]}, showing ${count} responses`}
+        onChange={(e) => onLevel(stopAt(Number.parseInt(e.target.value, 10)))}
+      />
+      {/* Always, never conditionally: present wherever the slider is, absent
+          wherever it is not. A line that is sometimes missing for a *different*
+          reason teaches the reader nothing — and a bar that has hidden every row
+          looks exactly like a search that found none. */}
+      <p className="dbt-bar-note">{note}</p>
+    </div>
+  );
+}
 
-      {rows.length === 0 ? (
-        <p className="gloss-quiet dbt-empty">{emptyGroupNote(group.counts, which)}</p>
-      ) : (
-        <ol className="dbt-list">
-          {rows.map((row) => (
-            <Row key={row.id} row={row} onJump={onJump} />
-          ))}
-        </ol>
-      )}
-
-      {/* Two different facts, and a group can say both: what the model offered
-          against what survived, and what the search returned against what got
-          into the answer. The second is the one nothing else would ever
-          mention. */}
-      {(kept || sources) && (
-        <div className="dbt-foot">
-          {kept && <p>{kept}</p>}
-          {sources && <p>{sources}</p>}
-        </div>
-      )}
-    </section>
+/**
+ * **The chip that says what kind of row this is**, and it is the whole of what
+ * the two headings used to do.
+ *
+ * A direct row says how it identifies the article, with every signal it earned
+ * in a tooltip. A claim row says it is answering something the piece argues,
+ * with the claim itself already on the row below. Two shapes rather than one
+ * word, because the two are not points on a scale: *this page is about this
+ * piece* and *this page argues about the same thing* are different kinds of
+ * relevance, and a reader has to be able to tell them apart at a glance now
+ * that nothing above the row does it for them.
+ *
+ * **Only the direct chip is a hover target**, because only it has evidence
+ * behind it. Making the claim chip look pressable for a card that would say
+ * nothing new is the kind of uniform-looking control that teaches a reader to
+ * stop hovering.
+ */
+function RowMark({ row }: { row: DebateRow }) {
+  const direct = directOf(row);
+  if (!direct) {
+    return (
+      <p className="dbt-mark-line">
+        <span className="dbt-mark dbt-mark-claim">On what it claims</span>
+      </p>
+    );
+  }
+  const level = identificationLevel(direct);
+  const evidence = identificationEvidence(direct);
+  return (
+    <p className="dbt-mark-line">
+      <Tooltip
+        placement="bottom"
+        keepSide
+        className="dbt-mark-card"
+        content={
+          <>
+            <span className="dbt-mark-card-head">How this page identifies the article</span>
+            <ul className="dbt-mark-card-list">
+              {evidence.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </>
+        }
+      >
+        {/* A real button, so it is a tab stop and `useFocus` gives a keyboard
+            reader the same card a pointer gets. It does nothing on press —
+            `cursor: help` says so — for the same reason the ⓘ beside it does
+            nothing: this is a reveal, not a control. */}
+        <button type="button" className={`dbt-mark dbt-mark-${level}`}>
+          {IDENTIFICATION_LABEL[level]}
+        </button>
+      </Tooltip>
+    </p>
   );
 }
 
@@ -668,6 +1185,11 @@ function Row({ row, onJump }: { row: DebateRow; onJump(id: BlockId): void }) {
         </button>
       </div>
 
+      {/* **What used to be the heading, now on the row.** Directly under the
+          host and above the title, because it is the answer to *why is this
+          here*, which a reader asks before they read the title. */}
+      <RowMark row={row} />
+
       {/* The search result's own title, never the model's — the wire's, or
           nothing. */}
       {row.title && <p className="dbt-title">{row.title}</p>}
@@ -677,7 +1199,7 @@ function Row({ row, onJump }: { row: DebateRow; onJump(id: BlockId): void }) {
           stranger's page and nothing here may ever become markup. */}
       <blockquote className="dbt-quote">“{row.sourceQuote}”</blockquote>
 
-      {/* Group two only: the article's own words for the claim being answered,
+      {/* Claim rows only: the article's own words for the claim being answered,
           located in the named block, and the way to it. */}
       {claim && (
         <p className="dbt-claim">
@@ -712,9 +1234,10 @@ function Row({ row, onJump }: { row: DebateRow; onJump(id: BlockId): void }) {
  * The ⓘ card: the passage, what it was found in, and the way out to the page.
  *
  * What it adds over the row is the evidence the row cannot carry without
- * becoming unscannable — the page's full address, group one's witness that this
- * page names *this* article, and the sentence saying what the quotation was
- * checked against.
+ * becoming unscannable — the page's full address, a direct row's witness that
+ * this page names *this* article, and the sentence saying what the quotation was
+ * checked against. The full evidence behind the chip is on the chip's own card
+ * (`RowMark`); this line is the one witness, where it has always been.
  *
  * Every string here is text. The excerpt is a slice of a stranger's page: a
  * `dangerouslySetInnerHTML` added later to highlight the matched span would be
@@ -727,7 +1250,7 @@ function Excerpt({ row }: { row: DebateRow }) {
       {row.title && <p className="dbt-card-title">{row.title}</p>}
       <p className="dbt-card-url">{row.url}</p>
       <blockquote className="dbt-card-quote">“{row.sourceQuote}”</blockquote>
-      {/* Group one's whole claim is that this page is about this piece, and this
+      {/* A direct row's whole claim is that this page is about this piece, and this
           is the witness for it: words from the source's own extract in which it
           names the article. A row without one cannot exist in that group.
 

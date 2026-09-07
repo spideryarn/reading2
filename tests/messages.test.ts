@@ -23,9 +23,11 @@ import {
   authProviderRefused,
   ingestQuotaReached,
   type ReaderFacingFailure,
+  pageHadTooLittleText,
   pdfChunkTooBig,
   pdfPagesCutOff,
   pdfPagesFiltered,
+  pdfPagesIncomplete,
   pdfTooManyPages,
   placingFailed,
   saidNothing,
@@ -149,10 +151,18 @@ const FROM_FACTORIES: Record<FactoryName, ReaderFacingFailure[]> = {
      450-page PDF would trip it; that is the invariant being a little too broad
      rather than this message being wrong, and it is cheaper to note than to
      narrow a check that has never had a false negative. */
+  /* **The capability floor's count, and 185 is the real one** — Medium's 404
+     shell, measured. It is also deliberately clear of 400-599, which the "never
+     repeats the raw status number" invariant below reads as a leaked HTTP status
+     wherever it appears in a sentence; a page of 431 characters would trip it.
+     That is the invariant being broad rather than this message being wrong, and
+     it is why the 500-character threshold itself is not in the sentence. */
+  pageHadTooLittleText: [pageHadTooLittleText(185)],
   pdfTooManyPages: [pdfTooManyPages(142, 100)],
   pdfChunkTooBig: [pdfChunkTooBig(34, 30)],
   pdfPagesCutOff: [pdfPagesCutOff([12, 13])],
   pdfPagesFiltered: [pdfPagesFiltered([12, 13])],
+  pdfPagesIncomplete: [pdfPagesIncomplete([12, 13])],
 };
 
 const EVERY: ReaderFacingFailure[] = [...CONSTANTS, ...Object.values(FROM_FACTORIES).flat()];

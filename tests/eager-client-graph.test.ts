@@ -43,13 +43,21 @@
  * A local specifier this cannot resolve fails the test loudly rather than being
  * dropped. A resolver that silently drops an edge is how a guard stops being a
  * guard, and it would drop the edge that matters on exactly the day somebody
- * introduces it.
+ * introduces it. `import.meta.glob` is refused below for the same reason, and
+ * so is a dynamic `import()` whose specifier is not a literal — that one is
+ * GPT Sol's F21, 2026-09-06, and the refusal lives in
+ * [`refuseUntraceableImports`](helpers/ts-ast.ts).
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { type AstNode, parseSource, walkAst } from "./helpers/ts-ast.js";
+import {
+  type AstNode,
+  parseSource,
+  refuseUntraceableImports,
+  walkAst,
+} from "./helpers/ts-ast.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const WEB = path.join(ROOT, "src", "web");
@@ -219,6 +227,14 @@ function edgesOf(file: string): Edges {
      `errorRecovery`, out of the module-scope walk below, which is loud. */
   const errors = ast.errors ?? [];
   if (errors.length > 0) parseFailures.push(`${path.relative(ROOT, file)}: ${errors[0]}`);
+  /* A computed `import()` is an edge with no name, and this walker records
+     dynamic edges by name — so it would drop it. F21, and the argument is with
+     the helper. */
+  refuseUntraceableImports(
+    ast.program,
+    path.relative(ROOT, file),
+    "tests/eager-client-graph.test.ts",
+  );
   const out: Edges = { staticLocal: [], dynamic: [], external: [] };
 
   const record = (spec: string, kind: "static" | "dynamic") => {
@@ -328,7 +344,7 @@ if (graphOut) {
  * The seam: everything the two lazy routes reach that the reader reaches too.
  *
  * Walked a second time from the route roots, and intersected. The two closures
- * overlap in 45 files and are otherwise disjoint — measured 2026-09-06, and the
+ * overlap in 47 files and are otherwise disjoint — measured 2026-09-06, and the
  * complement is exactly the six modules in `ROUTE_PRIVATE`, which is a pleasant
  * accident rather than something asserted.
  *
@@ -431,8 +447,16 @@ const ROUTE_PRIVATE = [
  * `lucide-react` are recorded as external and never enter either closure — this
  * list is about *this repo's* modules, not about node_modules.
  *
- * Sorted, one per line, so a diff reads as a decision. 45 of them on
- * 2026-09-06, against a 264-file eager closure and a 51-file route closure.
+ * Sorted, one per line, so a diff reads as a decision.
+ *
+ * **There was a count in this sentence and it is gone** (2026-09-07). It said
+ * how many entries the list has, and it was wrong at the base of this merge —
+ * 45 written over 46 — so two branches each added entries, each carried the
+ * wrong total forward, and the two wrong totals conflicted. A number nobody can
+ * be wrong about is the one the test below already asserts, exactly and in both
+ * directions: an entry missing from the list fails, and an entry here that is
+ * not in both closures fails too. Prose restating a proved fact can go stale;
+ * the proof cannot.
  */
 const SHARED_WITH_READER = [
   "src/admin.ts",
@@ -473,7 +497,23 @@ const SHARED_WITH_READER = [
   "src/web/build-stamp.ts",
   "src/web/components/ui/button.tsx",
   "src/web/components/ui/toggle.tsx",
+  /* Arrived 2026-09-06 with debate's `?name=` bar, by the *first* of the two
+     zero-cost routes this list's header predicts, and it is the same shape as
+     `referee-views.ts` below: a categorical URL parameter needs its vocabulary
+     in one place, so `params.ts` — already here — imports it, and `params.ts` is
+     in both closures. The reader downloaded it already, through
+     `DebatePanel.tsx`; what is new is only that the lazy routes reach it.
+
+     **`threshold.ts` follows it in**, which is this list's second predicted
+     case: a module here gaining an import of its own. It is the one threshold
+     rule Glossary, Quotes and Search already share, so it has been in the
+     reader's eager closure since long before this — three eager panels import
+     it — and nothing about the admin closure reaching it costs a byte. Keeping
+     it out would mean splitting the ordering from the filtering it exists to
+     drive, which is the seam this module was made to close. */
+  "src/web/debate-levels.ts",
   "src/web/diagram.ts",
+  "src/web/jump-history.ts",
   "src/web/lib/DataTable.tsx",
   "src/web/lib/api.ts",
   "src/web/lib/offline-store.ts",
@@ -490,8 +530,72 @@ const SHARED_WITH_READER = [
   "src/web/referee-views.ts",
   "src/web/relative-time.ts",
   "src/web/router.ts",
+  /* See `debate-levels.ts` above, which is what brought it here. */
+  "src/web/threshold.ts",
   "src/web/useNow.ts",
 ];
+
+/**
+ * **The mode controllers, discovered rather than listed — and they are the
+ * other side of this file's boundary.**
+ *
+ * `/admin` and `/design` must stay *out* of the reader's first download; the
+ * reading view's own code must stay *in* it, and until 2026-09-06 nothing said
+ * so. The positive controls above name generic modules — `main.tsx`,
+ * `Library.tsx`, `supabase.ts` — so making `DebateMode.tsx` a `React.lazy`
+ * boundary left every assertion in this file green while breaking the
+ * documented contract: *cached JSON cannot make an unloaded chunk execute, and
+ * in-tab offline navigation depends on that* (docs/project/web-client.md
+ * § `LazyPage.tsx`, and 260905i's A4). GPT Sol, 2026-09-06, F19.
+ *
+ * **Every `.tsx` under `src/web/modes/`, not `*Mode.tsx`.** A naming convention
+ * is a second list beside the data and this one already has a hole in it:
+ * `ConversationModes.tsx` is plural and would not have matched. The directory
+ * is the fact; what a file inside it is called is not.
+ */
+const MODES = path.join(WEB, "modes");
+
+const MODE_CONTROLLERS = readdirSync(MODES, { recursive: true, encoding: "utf8" })
+  .filter((f) => f.endsWith(".tsx"))
+  .map((f) => path.join(MODES, f))
+  .sort();
+
+describe("the reading view's modes are code a reader already has", () => {
+  it("found the mode controllers at all", () => {
+    /* The walk that finds nothing satisfies both assertions below.
+       docs/reusable/silent-success.md. */
+    expect(MODE_CONTROLLERS.map(rel), "no mode controllers under src/web/modes/").not.toEqual([]);
+    expect(MODE_CONTROLLERS.map(rel)).toContain("src/web/modes/debate/DebateMode.tsx");
+  });
+
+  it("has every one of them in the reader's first download", () => {
+    const missing = MODE_CONTROLLERS.filter((f) => !closure.files.has(f)).map(rel);
+    expect(
+      missing,
+      `${missing.length} mode controller(s) are not in the reader's eager closure: ` +
+        `${missing.join(", ")}. A mode behind a lazy boundary is a mode an offline reader ` +
+        `cannot open, because cached JSON cannot make an unloaded chunk execute — ` +
+        `docs/project/web-client.md § LazyPage.tsx. If a mode is genuinely meant to be ` +
+        `lazy, that is a decision to take with Greg and to write into that doc first.`,
+    ).toEqual([]);
+  });
+
+  it("is reached by no dynamic import at all", () => {
+    /* The half the assertion above cannot see. A mode made lazy while some
+       other eager module still imports it stays in the closure and passes —
+       and then ships in both the eager bundle and a chunk. Any `import()`
+       naming a file under `src/web/modes/` is wrong whichever way the closure
+       reads. */
+    const dynamic = [...closure.dynamic]
+      .filter((d) => d.startsWith(`${MODES}${path.sep}`))
+      .map(rel)
+      .sort();
+    expect(
+      dynamic,
+      `a dynamic import() reaches ${dynamic.join(", ")}. Mode code is eager on purpose.`,
+    ).toEqual([]);
+  });
+});
 
 describe("the eager client graph", () => {
   it("parsed every file it walked", () => {

@@ -4,7 +4,7 @@
  * Connect-shaped (`req`, `res`) but not Vite-specific — vite.config.ts mounts
  * this as dev middleware today, and the standalone Node server that
  * architecture.md § Server and client defers will mount the same function. The
- * actual work stays in src/api.ts, src/comments.ts and src/explain.ts; this file
+ * actual work stays in src/store/index.ts, src/comments.ts and src/explain.ts; this file
  * is only routing, parsing and status codes.
  *
  *   GET    /api/library         every article on the shelf, for the homepage
@@ -197,7 +197,7 @@ import { mirrorStream } from "./referee-mirror.js";
    `withRetry` import above states. The palette's *size* is deliberately not in
    it: see `SearchRun.colour`. */
 import { isStorableColour } from "./searches.js";
-/* Through the store, so SPIDERYARN_STORE moves comments and articles together.
+/* Through the store, so comments and articles stay together.
    They cannot be split: a comment anchors to a block id, and leaving the
    questions on disk while the paragraphs they point at come from Postgres puts
    the two halves in stores nothing keeps in step. */
@@ -510,11 +510,9 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
      one is right whenever `ownedSlug` is right, which is the property worth
      having. The answer is discarded — it is asked as a question, not read.
 
-     **Kept even though `sourceStore.readPdf` is owner-filtered too** (the
-     Postgres half joins through `ownedSlug`). Two independent refusals on the one route that
-     hands back somebody's private document is worth the round trip, and the
-     filesystem store has no owner column at all — which is the hole
-     src/store/index.ts refuses to boot into in production, and why it does. */
+     **Kept even though `sourceStore.readPdf` is owner-filtered too** (it joins
+     through `ownedSlug`). Two independent refusals on the one route that hands
+     back somebody's private document is worth the round trip. */
   await shelfStore.read(slug);
 
   /* **The store, not the disk** — and until 2026-08-31 this was the disk.
@@ -1952,8 +1950,18 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
         continue;
       }
       /* **The one explicit `done`**, and the only frame that lets the client
-         tick this question answered. */
-      frame("done", { reply: event.reply, model: event.model });
+         tick this question answered.
+
+         `verdict` rides here and only here — never on a `delta` — so the word
+         that decides how hard the next question is cannot reach the reader's
+         screen even by accident, because nothing renders this frame's fields
+         except the tick. It is often absent, which is normal: the ladder reads
+         absence as *hold the band*. docs/plans/260907d-make-the-quiz-adaptive.md. */
+      frame("done", {
+        reply: event.reply,
+        model: event.model,
+        ...(event.verdict ? { verdict: event.verdict } : {}),
+      });
     }
   } catch (err) {
     /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
@@ -2533,7 +2541,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      here.
 
      The real client sends exactly what these allow: `helpAboutBlock` in
-     src/web/App.tsx mints a draft with `{ blockId }`, no kind, and `help: true`
+     src/web/reader/Reader.tsx mints a draft with `{ blockId }`, no kind, and `help: true`
      on the send that creates the thread — pinned by *still lets through the
      thing the real client sends* in tests/chat-help-route.test.ts, so tightening
      this any further goes red rather than quiet.
@@ -3639,7 +3647,7 @@ function summarise(thread: ChatThread): ThreadSummary {
        `ChatDialog` in every mode but the two conversation modes, and that
        dialog is chat's UI asking with chat's prompt; a pasted
        `?mode=hierarchy&thread=<a Remember thread>` would continue it as a chat. The
-       overlay is gated on this. src/web/App.tsx § overlay. */
+       overlay is gated on this. src/web/reader/Reader.tsx § overlay. */
     kind: thread.kind,
     turns: thread.messages.filter((m) => m.role === "user").length,
     ...(last ? { lastLine: last } : {}),
@@ -4468,7 +4476,7 @@ function part(m: RegExpExecArray, group: number): string {
  * docs/reusable/silent-success.md, and it is why this is written up in
  * docs/project/security.md rather than filed as a bug fix.
  *
- * That fallback is gone as of stage 1a: `candidateDirs` in src/api.ts offers
+ * That fallback is gone as of stage 1a: `candidateDirs` offered
  * `example/` for the fixture's own slug and for nothing else, so a slug with no
  * artefacts now answers 404 whether it is a typo or a traversal. The history
  * stays here because it is the reason this route validates the slug rather than
@@ -6516,6 +6524,564 @@ interface ApiRequest {
   query: URLSearchParams;
 }
 
+/* -------------------------------------------------------- the route table */
+
+/**
+ * **The five verbs the authenticated dispatcher answers.**
+ *
+ * A closed union rather than `string`, so a sixth verb is a compile error here
+ * rather than a row nothing asks about: `METHOD_UNIVERSE` in
+ * tests/authenticated-api-route-contract.test.ts is the universe every refusal
+ * and collision question is asked over, and a verb outside it is skipped by all
+ * of them (GPT Sol, review § P2-METHOD-UNIVERSE). HEAD and OPTIONS are
+ * deliberately absent: this dispatcher has no handling for either, and that
+ * stays a matter for the terminal 404 rather than a pair to answer.
+ */
+type AuthRouteMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+/**
+ * **Everything a table handler is given, and all of it.**
+ *
+ * The entries below are built once, at module scope, so a handler cannot close
+ * over anything about the request — it is handed the request instead (GPT Sol,
+ * review § P2-STATIC-CONTRACT). `user` is here rather than only `request`
+ * because one handler outside billing already needs it (`fileFeedback`), and
+ * because the alternative — reading the owner back out of the async store — is
+ * a second way to answer a question this parameter already answers.
+ */
+interface AuthRouteContext {
+  user: VerifiedUser;
+  request: ApiRequest;
+}
+
+/** An entry matched by string equality — the shape of `/api/jobs` and billing. */
+interface ExactAuthRoute {
+  kind: "exact";
+  method: AuthRouteMethod;
+  path: string;
+  handler: (context: AuthRouteContext) => Promise<void>;
+}
+
+/**
+ * An entry matched by a regex.
+ *
+ * **Not "an entry whose path has captures", which is what this said.** Nothing
+ * in the type requires a capture group: `/^\/api\/x$/` is a legal `pattern` and
+ * its handler is handed a one-element `RegExpExecArray` (GPT Sol, stage 3a
+ * review § P3-CAPTURE-CONTRACT). Every pattern row here does capture, and the
+ * paragraph below is about what happens to those captures — but that is a fact
+ * about the rows, not a guarantee the compiler makes. Encoding it would need a
+ * matcher abstraction rather than a `RegExp`, which is not worth building yet.
+ *
+ * The handler is handed the **raw `RegExpExecArray`**, not a decoded tuple, and
+ * that is the point of the discriminated union: dispatch does no decoding. Which
+ * happens first — reading the body or decoding the slug — differs per route and
+ * is observable from outside as two different status codes for the same two
+ * malformed inputs (§ [DECODE] in
+ * docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md, and two
+ * cases in tests/authenticated-api-route-contract.test.ts pin both). A dispatcher
+ * that decoded captures for its handlers would have to pick one order for all of
+ * them. `part` and `slugPart` go on doing the decoding and the validation they
+ * already do, at the point in the handler where they were already called.
+ */
+interface PatternAuthRoute {
+  kind: "pattern";
+  method: AuthRouteMethod;
+  pattern: RegExp;
+  handler: (context: AuthRouteContext, captures: RegExpExecArray) => Promise<void>;
+}
+
+/**
+ * One row of the table: exact or pattern, and never both.
+ *
+ * Discriminated so a handler cannot be handed captures the match cannot produce
+ * — an exact route's handler has no `captures` parameter to be given, and a
+ * pattern route's handler cannot be attached to a `path`.
+ */
+type AuthRoute = ExactAuthRoute | PatternAuthRoute;
+
+/**
+ * **The three matchers two rows each share**, named once so there is one place
+ * that decides what they match.
+ *
+ * The chain has fourteen bindings read by two guards apiece, and each is still a
+ * single `const`. A table row has no such binding, so the same shape has to be a
+ * module-scope constant that both rows name. Spelling a regex out twice would
+ * compile, run identically today, and let the copies drift apart tomorrow —
+ * tests/authenticated-api-route-contract.test.ts § `names each matcher once` is
+ * what refuses that, and it counts declaration *sites*, so these three are three
+ * matchers and not six.
+ *
+ * A matcher used by exactly one row is written into that row instead: there is
+ * nothing to keep in step, and a constant named from one place is a name to
+ * chase rather than a fact recorded once.
+ */
+const JOBS_PATH = "/api/jobs";
+const UPLOAD_PATTERN = /^\/api\/uploads\/([\w-]+)$/;
+const JOB_PATTERN = /^\/api\/jobs\/([\w.%-]+)$/;
+
+/**
+ * **The ordered table `serveAuthenticatedApi`'s `if` chain is being moved into,
+ * one domain at a time.**
+ *
+ * docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md § *The
+ * shape, and the fork that had to be settled*. Three opinions disagreed; this is
+ * the settled one — a static ordered table of closures, gates outside it,
+ * handlers owning their own response and returning nothing. The alternative was
+ * fourteen `async function tryXRoutes(): Promise<boolean>` dispatchers, and the
+ * argument against it is one centralised handled/miss protocol instead of
+ * fourteen boolean ones.
+ *
+ * ## Why it is consulted *after* the chain rather than instead of it
+ *
+ * Because the move is incremental and must reorder nothing. What is here is the
+ * **bottom of the chain, taken upward**: billing was its last four guards, jobs
+ * and uploads the nine immediately above those, and asking the table after every
+ * remaining guard and before the terminal 404 puts each of the thirteen in
+ * exactly the position it already had.
+ *
+ * **So the rows are in chain order, and prepending is how a domain arrives.**
+ * The next slice up goes above the jobs rows, not below them — the table's order
+ * *is* the chain's order, continued. Taking the slice contiguously is also what
+ * preserves the one interleave here for free: `/api/uploads` and
+ * `/api/uploads/:id` sit *between* `GET /api/jobs` and `POST /api/jobs`, which is
+ * why these rows are not grouped by domain name and must not be tidied into it.
+ *
+ * A domain lifted out of the *middle* of the chain could not be added here
+ * without also proving the reorder is safe — which the contract test's § *no two
+ * guards accept the same method and path* is what would say. Its disjointness is
+ * a corpus check over a hand audit, not a proof, so the safe move is to go on
+ * taking the bottom slice (GPT Sol, stage 3a review § P2-STAGE3B-ORDER). And
+ * there must stay exactly **one** dispatch of this table: a second call earlier
+ * in the chain would let billing answer from the wrong position.
+ *
+ * ## What the entries may not do
+ *
+ * **Nothing, at construction.** Building this array evaluates string literals,
+ * regex literals and function expressions and calls nothing — so importing
+ * src/routes.ts still contacts no provider, opens no pool and reads no store.
+ * tests/owner-isolation.test.ts does not cover that (GPT Sol, review §
+ * P2-ISOLATION-SCOPE), so the contract test asserts it directly against this
+ * literal.
+ *
+ * **No `g` or `y` flag**, refused by `assertDispatchableRoutes` below.
+ */
+const AUTH_ROUTES: readonly AuthRoute[] = [
+  {
+    kind: "exact",
+    method: "GET",
+    path: JOBS_PATH,
+    handler: async ({ request: { res } }) => {
+      send(res, 200, { jobs: (await listJobs()).map(publicJob) });
+    },
+  },
+
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/uploads",
+    handler: async ({ request: { req, res } }) => {
+      // 201: a record now exists that did not before, and the body says where
+      // to put the bytes. Nothing has been queued and nothing has been read.
+      send(res, 201, await mintAnUpload(await readBody(req)));
+    },
+  },
+
+  /* `GET /api/uploads/:id` — for a browser that lost its tab, and for the
+     picker to confirm what landed. Read-only in the strict sense: an expired
+     grant is *reported* as expired without the record being rewritten, so a
+     poll cannot be a mutation. See `asOf`. */
+  /* `DELETE /api/uploads/:id` — **the reader pressed Stop.**
+     `pending → expired`, so a reload of `/add/upload/<id>` is answered rather
+     than polled at for the two hours of the grant, and so that *"nothing was
+     added"* is a claim the server backs rather than one the browser asserts
+     about itself. `cancelUpload` for the race against a queue request that
+     got there first: it loses, quietly, and the ingest goes on.
+
+     200 either way, with `cancelled` saying which. A Stop that arrived too
+     late is not an error the reader did anything wrong to cause, and the page
+     is about to show them the running job it lost to. */
+  {
+    kind: "pattern",
+    method: "DELETE",
+    pattern: UPLOAD_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      const id = part(captures, 1);
+      const stopped = await cancelUpload(id, currentOwnerId());
+      send(res, 200, { uploadId: id, cancelled: stopped });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: UPLOAD_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      const id = part(captures, 1);
+      const found = await readUpload(id, currentOwnerId());
+      if (!found) throw httpError(404, "No such upload");
+      /* **After the ownership check, never before.** A `head` on a staging key
+         derived from an id is a yes-or-no about somebody else's file, and this
+         route already answers 404 for an upload that is not the reader's. */
+      send(res, 200, publicUpload(asOf(found), await uploadHasArrived(id)));
+    },
+  },
+
+  {
+    kind: "exact",
+    method: "POST",
+    path: JOBS_PATH,
+    handler: async ({ request: { req, res } }) => {
+      // 202, not 200: the work has been accepted and has not been done. The
+      // body is the receipt to poll, which is the only thing there is to say
+      // about a job that has not started.
+      const request = parseJobRequest(await readBody(req));
+      const uploadId = request.uploadId;
+      if (uploadId !== undefined) {
+        /* No other field survives `checkUploadOrigin`, so there is nothing to
+           forward: an upload is always the default ingest.
+
+           **Three steps, and the order is the point.** Each of the first two is
+           outside the quota slot, because neither of them is a new ingest:
+
+           1. `resolveExistingUpload` — the answer for a reload, a second tab or
+              a double-click is the job that already exists, and asking for it
+              inside `withIngestSlot` meant a reader with nothing left was told
+              402 about a slot nobody needed (GPT Sol, 2026-09-03).
+           2. `uploadHasArrived` — the readiness gate. The reader reaches this
+              address at byte zero now, so "the file is not there yet" is an
+              ordinary state and must cost nothing: no claim, no job, no slot.
+              Queueing anyway is what `acquireUpload` refuses **terminally**.
+           3. and only then a **new ingest, which takes a quota slot** — with no
+              slug to name the reservation with, because the article's name comes
+              from the upload record's filename inside `queueAnUpload`. */
+        const existing = await resolveExistingUpload(uploadId);
+        if (existing?.kind === "article") {
+          send(res, 200, { article: existing.slug });
+          return;
+        }
+        if (existing) {
+          send(res, 202, publicJob(existing.job));
+          return;
+        }
+        if (!(await uploadHasArrived(uploadId))) {
+          throw httpError(409, UPLOAD_STILL_ARRIVING.message);
+        }
+        const outcome = await withIngestSlot({ ownerId: currentOwnerId() }, (slot) =>
+          queueAnUpload(uploadId, slot),
+        );
+        /* **200, not 202**: nothing has been accepted, because there is nothing
+           left to do. The file became this article a while ago and its job
+           record has since been trimmed — `queueAnUpload` for why the record
+           rather than the job is what answers. */
+        if (outcome.kind === "article") {
+          send(res, 200, { article: outcome.slug });
+          return;
+        }
+        send(res, 202, publicJob(outcome.job));
+        return;
+      }
+      /* **Not for the `{ url }` shape**, and that is a correctness fix rather
+         than an economy. The slug this resolves against is the one *derived*
+         from the URL, and `enqueue` may not use it: `freeSlug` renames on a
+         collision. So resolving here would read the purpose of *another
+         article* and stamp a new one's artefacts with it — and under `postgres`
+         it would simply throw, because the article does not exist yet.
+
+         Nothing is lost. A new ingest runs `DEFAULT_INGEST_STEPS`, which stops
+         at `arc`, and no step in it takes a profile. The reader asks for a
+         glossary or a set of ideas later, by slug, and that request resolves
+         correctly. GPT Sol's review of the built code, 2026-08-26.
+
+         `=== false`, so absent means yes: a client that has never heard of this
+         field gets the profiled run, which is the default the panel offers. */
+      const profile =
+        request.url !== undefined || request.useProfile === false
+          ? null
+          : await resolveProfile(request.slug);
+      const { useProfile: _asked, ...work } = request;
+      const queue = (slot: IngestSlot) =>
+        enqueue({ ...work, ...(profile ? { profile } : {}), ...slot });
+      /**
+       * **A URL is a new ingest and spends a slot; a bare slug is a re-run and
+       * is free.** The two shapes arrive at the same endpoint and are told apart
+       * only here — by the time `enqueue` has them, a re-run's job carries a URL
+       * too, read off the article it names.
+       *
+       * That is the whole of docs/project/billing.md § *The quota*: a slot is
+       * one successful **new** ingest, and asking for a glossary, a set of ideas
+       * or a quiz on an article already on the shelf costs nothing.
+       */
+      const job =
+        request.url === undefined
+          ? await queue({})
+          : await withIngestSlot({ ownerId: currentOwnerId(), slug: request.slug }, queue);
+      send(res, 202, publicJob(job));
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: JOB_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      const found = await getJob(part(captures, 1));
+      if (!found) throw httpError(404, "No such job");
+      send(res, 200, publicJob(found));
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "DELETE",
+    pattern: JOB_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      if (!(await forgetJob(part(captures, 1)))) throw httpError(404, "No such job");
+      send(res, 200, { forgotten: part(captures, 1) });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/jobs\/([\w.%-]+)\/(cancel|retry)$/,
+    handler: async ({ request: { res } }, captures) => {
+      const [id, action] = [part(captures, 1), part(captures, 2)];
+      /* **Retry is the second front door to a new ingest**, and it never passes
+         through the handler above: a check bolted on there alone would leave a
+         failed ingest retryable free for ever. `withRetrySlot` reserves only
+         when the attempt being repeated spent a slot — src/billing/admission.ts. */
+      const result =
+        action === "cancel"
+          ? await cancelJob(id)
+          : await withRetrySlot({ jobId: id, ownerId: currentOwnerId() }, (slot) =>
+              retryJob(id, slot),
+            );
+      if (!result) throw httpError(404, "No such job");
+      send(res, action === "cancel" ? 200 : 202, publicJob(result));
+    },
+  },
+
+  /**
+   * Run one step of this job, here, now, and answer when it is finished.
+   *
+   * Its own branch rather than a third name in `jobAction` above, because it
+   * is the one job action that does not answer with a bare `Job`: the caller
+   * is a loop, and a loop needs to be told whether to come back — see
+   * `Advanced` in src/jobs.ts and docs/plans/260826q-job-queue-rethink.md.
+   *
+   * **A long request on purpose.** One step can be a minute of model calls,
+   * and that is the design: the browser holds the request open so the work
+   * happens inside an invocation somebody is waiting on, rather than in a
+   * floating promise a serverless runtime is free to freeze. `vercel.json`
+   * caps a function at **800** seconds (`functions."api/**".maxDuration`),
+   * which is the real ceiling on a request. It is not the ceiling on a *step*:
+   * the claimant aborts itself at `LEASE_MS - DEADLINE_MARGIN_MS` = 740 s so
+   * that an expired lease means *the process is gone*, and a step that
+   * overruns that hands the job back rather than ending it
+   * (src/jobs.ts § `LEASE_MS`, src/store/jobs.ts § `pauseForDeadline`). This
+   * line said 300 seconds, which no version of `vercel.json` in this repo has
+   * ever said.
+   *
+   * **200, not 409, when somebody else has it.** A second tab asking to
+   * advance a job that is already advancing is a correct thing for a correct
+   * client to do — it cannot know without asking — so it is an answer, not an
+   * error. `readJson` in src/web/lib/api.ts throws on any non-2xx, so a 409
+   * would turn the ordinary case into a message on the reader's screen.
+   */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/jobs\/([\w.%-]+)\/advance$/,
+    handler: async ({ request: { res } }, captures) => {
+      const advanced = await advanceJob(part(captures, 1));
+      if (!advanced) throw httpError(404, "No such job");
+      send(res, 200, advanced);
+    },
+  },
+
+  /**
+   * **The four billing routes.** No slug and no id in any path: each is about
+   * the reader who is signed in, and the only one that takes an identifier at
+   * all takes a Checkout Session id in its *body*, where it is proved to be
+   * theirs before anything is done with it (src/billing/checkout.ts).
+   *
+   * They are exact paths, like the shelf's, so `/api/billing/anything` is a 404
+   * rather than a quiet match — and none of them is a namespace, for the same
+   * reason `/api/webhooks/stripe` is not: a namespace is somewhere a later
+   * endpoint gets added without anybody re-reading the ordering rules that make
+   * checkout safe.
+   *
+   * **Three POSTs and one GET, and the split is not about which of them writes.**
+   * `checkout` and `portal` each *create a Stripe object* — a Checkout Session
+   * is a real, chargeable thing — and `confirm` retrieves one and then **writes
+   * a subscription into `billing_accounts`**. A GET is something a browser
+   * prefetches, a crawler follows and a cache may keep, and none of those three
+   * should be. `usage` reads four of our own tables, writes nothing and never
+   * touches the network, so asking for it twice costs nothing and means nothing:
+   * that is a GET.
+   * docs/project/billing.md.
+   *
+   * **Start a subscription — or, if they already have one, manage it.**
+   *
+   * The whole handler is one call, and that is deliberate: the order of
+   * operations inside `startCheckout` is what stops a paying customer arriving
+   * at a webhook that cannot find them, and it is written out once in
+   * src/billing/checkout.ts rather than spread across a route.
+   *
+   * The reply carries `kind` as well as `url`, so a client *can* tell which
+   * door it is being sent through — the two look identical to
+   * `location.assign`. **Ours does not use it**, and that was a decision
+   * rather than an omission: it navigates immediately, and a sentence rendered
+   * for the half-second before a navigation is a sentence nobody reads. The
+   * page says which door it is before the press instead of after it: since
+   * 2026-09-04 `summary.purchase` (src/billing-plan.ts) carries the same
+   * distinction, so a subscriber's button reads *Switch plan* and the sentence
+   * under the cards names the Portal. The field stays because the two outcomes
+   * really are different and a caller that wanted to wait could say so. This
+   * comment claimed the client explained it; it did not. GPT Sol, 2026-09-03.
+   *
+   * **200, not 302.** A redirect would be answered by `fetch` before the page
+   * could say anything, and the client is an SPA that navigates itself.
+   */
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/billing/checkout",
+    handler: async ({ request: { req, res } }) => {
+      const asked = parseCheckoutRequest(await readBody(req));
+      send(res, 200, await startCheckout(currentOwnerId(), asked));
+    },
+  },
+
+  /**
+   * The hosted place to see invoices, change a card, or cancel — none of which
+   * this app implements, on purpose (docs/project/billing.md § *We never touch
+   * a card*). No body at all: the only thing it could carry is a customer id,
+   * and that comes from the reader's own row.
+   */
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/billing/portal",
+    handler: async ({ request: { res } }) => {
+      send(res, 200, await openPortal(currentOwnerId()));
+    },
+  },
+
+  /**
+   * The return path from a completed Checkout.
+   *
+   * It takes **only** a session id, and `confirmCheckout` proves the session
+   * is this reader's before it syncs anything — a callback that synced
+   * whatever id it was handed would let one reader make this server work on
+   * another's subscription, and would answer the question *did that person
+   * subscribe?*.
+   *
+   * It is a convenience rather than the mechanism: the webhook is what makes a
+   * subscription real, and this exists so the reader landing back on
+   * `/profile` a second after paying sees their new plan.
+   */
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/billing/confirm",
+    handler: async ({ request: { req, res } }) => {
+      const body = fields(await readBody(req));
+      const sessionId = body.sessionId;
+      if (typeof sessionId !== "string" || sessionId === "") {
+        throw httpError(400, "Expected { sessionId } from the Checkout return URL");
+      }
+      send(res, 200, await confirmCheckout(currentOwnerId(), sessionId));
+    },
+  },
+
+  /**
+   * **What plan this reader is on, and what they have used.** The one billing
+   * route that is a read.
+   *
+   * It never reaches Stripe — see src/billing/summary.ts. A stored period that
+   * has run out comes back as *we cannot say*, rather than as a guess or as
+   * the 503 admission answers, because nothing is being decided here.
+   */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/billing/usage",
+    handler: async ({ request: { res } }) => {
+      send(res, 200, await readBillingSummary(currentOwnerId()));
+    },
+  },
+];
+
+/**
+ * **Refuse a `g` or `y` pattern at registration**, once, at import.
+ *
+ * A table entry's `RegExp` is constructed once and shared by every request that
+ * reaches it — which is the whole point of a static table, and the one way it
+ * differs from the 51 literals in the chain above, each of which is built fresh
+ * per request. `lastIndex` on a `/g` or `/y` regex survives a call, so a shared
+ * one would make whether a route matches depend on the *previous* request. All
+ * 51 have no flags today, so nothing is being fixed here; this is the check that
+ * stops the property being lost silently when the next domain moves.
+ * § [REGEX] in docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md.
+ *
+ * A throw at import rather than a per-request check: a bad registration is a
+ * programmer error, and boot is when it should be found.
+ */
+function assertDispatchableRoutes(routes: readonly AuthRoute[]): void {
+  for (const route of routes) {
+    if (route.kind !== "pattern") continue;
+    if (/[gy]/.test(route.pattern.flags)) {
+      throw new Error(
+        `AUTH_ROUTES: ${route.method} ${route.pattern} uses a \`g\` or \`y\` flag, so whether it matches would depend on the request before it`,
+      );
+    }
+  }
+}
+assertDispatchableRoutes(AUTH_ROUTES);
+
+/**
+ * **First match wins, the handler is awaited, and then this returns whether it
+ * answered.**
+ *
+ * `true` means an entry took the request and has already replied on `res`; the
+ * caller must return rather than fall through to its 404. The boolean is the
+ * *table's* handled/miss protocol and there is exactly one of it — handlers
+ * themselves return nothing, so there is no per-handler "did you take it?" value
+ * to get wrong (the shape argued for in the plan's § *The shape*).
+ *
+ * **The `await` is not decoration.** The catch and the finally live in
+ * `serveApi`, which awaits `serveAuthenticatedApi`; a handler that returned a
+ * floating promise would have its errors land nowhere and its spend counted
+ * nowhere — the collector at § `withSpendAttribution` depends on the request
+ * still being open. Streaming handlers must stay awaited to completion. Billing
+ * opens no stream, which is part of why it is the first domain moved, but the
+ * next one does. § [LIFETIME].
+ *
+ * **No decoding, no normalisation, no trailing-slash tolerance, no `Allow`.**
+ * The method is compared, the path is compared, and nothing else happens here.
+ */
+async function dispatchAuthRoute(
+  routes: readonly AuthRoute[],
+  context: AuthRouteContext,
+): Promise<boolean> {
+  const { req, path } = context.request;
+  for (const route of routes) {
+    if (route.method !== req.method) continue;
+    if (route.kind === "exact") {
+      if (route.path !== path) continue;
+      await route.handler(context);
+      return true;
+    }
+    const captures = route.pattern.exec(path);
+    if (captures === null) continue;
+    await route.handler(context, captures);
+    return true;
+  }
+  return false;
+}
+
 /**
  * **Everything behind the gate.** Reached only with a `VerifiedUser`, which only
  * `requireUser` can make.
@@ -6723,7 +7289,7 @@ export async function serveAuthenticatedApi(
 
      GET *and* DELETE, which the thread does not have. Asking for the step again
      appends terms rather than replacing them (src/glossary.ts), so "start over"
-     needs a way to say so — see `deleteGlossary` in src/api.ts for why that is
+     needs a way to say so — see `deleteGlossary` in src/store/pg-glossary.ts for why that is
      two acts rather than one flag. There is still no POST: *finding* terms is a
      model call that takes tens of seconds, which is a job, not a request.
      POST /api/jobs { slug, steps: ["glossary"] } is how you ask. */
@@ -6920,38 +7486,12 @@ export async function serveAuthenticatedApi(
      alike. GET only, and nothing to POST: the answer is a pure function of bytes
      already stored, so asking for it is reading. */
   const refereeScan = /^\/api\/referee\/scan\/([\w.%-]+)$/.exec(path);
-  const allJobs = path === "/api/jobs";
-  const uploads = path === "/api/uploads";
-  const upload = /^\/api\/uploads\/([\w-]+)$/.exec(path);
-  const job = /^\/api\/jobs\/([\w.%-]+)$/.exec(path);
-  const jobAction = /^\/api\/jobs\/([\w.%-]+)\/(cancel|retry)$/.exec(path);
-  const jobAdvance = /^\/api\/jobs\/([\w.%-]+)\/advance$/.exec(path);
-  /**
-   * **The four billing routes.** No slug and no id in any path: each is about
-   * the reader who is signed in, and the only one that takes an identifier at
-   * all takes a Checkout Session id in its *body*, where it is proved to be
-   * theirs before anything is done with it (src/billing/checkout.ts).
-   *
-   * They are exact paths, like the shelf's, so `/api/billing/anything` is a 404
-   * rather than a quiet match — and none of them is a namespace, for the same
-   * reason `/api/webhooks/stripe` is not: a namespace is somewhere a later
-   * endpoint gets added without anybody re-reading the ordering rules that make
-   * checkout safe.
-   *
-   * **Three POSTs and one GET, and the split is not about which of them writes.**
-   * `checkout` and `portal` each *create a Stripe object* — a Checkout Session
-   * is a real, chargeable thing — and `confirm` retrieves one and then **writes
-   * a subscription into `billing_accounts`**. A GET is something a browser
-   * prefetches, a crawler follows and a cache may keep, and none of those three
-   * should be. `usage` reads four of our own tables, writes nothing and never
-   * touches the network, so asking for it twice costs nothing and means nothing:
-   * that is a GET.
-   * docs/project/billing.md.
-   */
-  const billingCheckout = path === "/api/billing/checkout";
-  const billingPortalRoute = path === "/api/billing/portal";
-  const billingConfirm = path === "/api/billing/confirm";
-  const billingUsage = path === "/api/billing/usage";
+  /* The jobs, uploads and billing matchers used to be declared here and handled
+     at the very end of the chain. They are the rows of `AUTH_ROUTES` above, in
+     that same order, and the table is consulted after every guard below and
+     before the terminal 404 — the position they already had, so the move
+     reorders nothing. `refereeScan` is now the last matcher this chain declares,
+     and the referee guards are the next slice up. */
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
@@ -7921,266 +8461,26 @@ export async function serveAuthenticatedApi(
       );
       return;
     }
-    if (allJobs && req.method === "GET") {
-      send(res, 200, { jobs: (await listJobs()).map(publicJob) });
-      return;
-    }
-    if (uploads && req.method === "POST") {
-      // 201: a record now exists that did not before, and the body says where
-      // to put the bytes. Nothing has been queued and nothing has been read.
-      send(res, 201, await mintAnUpload(await readBody(req)));
-      return;
-    }
-    /* `GET /api/uploads/:id` — for a browser that lost its tab, and for the
-       picker to confirm what landed. Read-only in the strict sense: an expired
-       grant is *reported* as expired without the record being rewritten, so a
-       poll cannot be a mutation. See `asOf`. */
-    /* `DELETE /api/uploads/:id` — **the reader pressed Stop.**
-       `pending → expired`, so a reload of `/add/upload/<id>` is answered rather
-       than polled at for the two hours of the grant, and so that *"nothing was
-       added"* is a claim the server backs rather than one the browser asserts
-       about itself. `cancelUpload` for the race against a queue request that
-       got there first: it loses, quietly, and the ingest goes on.
-
-       200 either way, with `cancelled` saying which. A Stop that arrived too
-       late is not an error the reader did anything wrong to cause, and the page
-       is about to show them the running job it lost to. */
-    if (upload && req.method === "DELETE") {
-      const id = part(upload, 1);
-      const stopped = await cancelUpload(id, currentOwnerId());
-      send(res, 200, { uploadId: id, cancelled: stopped });
-      return;
-    }
-    if (upload && req.method === "GET") {
-      const id = part(upload, 1);
-      const found = await readUpload(id, currentOwnerId());
-      if (!found) throw httpError(404, "No such upload");
-      /* **After the ownership check, never before.** A `head` on a staging key
-         derived from an id is a yes-or-no about somebody else's file, and this
-         route already answers 404 for an upload that is not the reader's. */
-      send(res, 200, publicUpload(asOf(found), await uploadHasArrived(id)));
-      return;
-    }
-    if (allJobs && req.method === "POST") {
-      // 202, not 200: the work has been accepted and has not been done. The
-      // body is the receipt to poll, which is the only thing there is to say
-      // about a job that has not started.
-      const request = parseJobRequest(await readBody(req));
-      const uploadId = request.uploadId;
-      if (uploadId !== undefined) {
-        /* No other field survives `checkUploadOrigin`, so there is nothing to
-           forward: an upload is always the default ingest.
-
-           **Three steps, and the order is the point.** Each of the first two is
-           outside the quota slot, because neither of them is a new ingest:
-
-           1. `resolveExistingUpload` — the answer for a reload, a second tab or
-              a double-click is the job that already exists, and asking for it
-              inside `withIngestSlot` meant a reader with nothing left was told
-              402 about a slot nobody needed (GPT Sol, 2026-09-03).
-           2. `uploadHasArrived` — the readiness gate. The reader reaches this
-              address at byte zero now, so "the file is not there yet" is an
-              ordinary state and must cost nothing: no claim, no job, no slot.
-              Queueing anyway is what `acquireUpload` refuses **terminally**.
-           3. and only then a **new ingest, which takes a quota slot** — with no
-              slug to name the reservation with, because the article's name comes
-              from the upload record's filename inside `queueAnUpload`. */
-        const existing = await resolveExistingUpload(uploadId);
-        if (existing?.kind === "article") {
-          send(res, 200, { article: existing.slug });
-          return;
-        }
-        if (existing) {
-          send(res, 202, publicJob(existing.job));
-          return;
-        }
-        if (!(await uploadHasArrived(uploadId))) {
-          throw httpError(409, UPLOAD_STILL_ARRIVING.message);
-        }
-        const outcome = await withIngestSlot({ ownerId: currentOwnerId() }, (slot) =>
-          queueAnUpload(uploadId, slot),
-        );
-        /* **200, not 202**: nothing has been accepted, because there is nothing
-           left to do. The file became this article a while ago and its job
-           record has since been trimmed — `queueAnUpload` for why the record
-           rather than the job is what answers. */
-        if (outcome.kind === "article") {
-          send(res, 200, { article: outcome.slug });
-          return;
-        }
-        send(res, 202, publicJob(outcome.job));
-        return;
-      }
-      /* **Not for the `{ url }` shape**, and that is a correctness fix rather
-         than an economy. The slug this resolves against is the one *derived*
-         from the URL, and `enqueue` may not use it: `freeSlug` renames on a
-         collision. So resolving here would read the purpose of *another
-         article* and stamp a new one's artefacts with it — and under `postgres`
-         it would simply throw, because the article does not exist yet.
-
-         Nothing is lost. A new ingest runs `DEFAULT_INGEST_STEPS`, which stops
-         at `arc`, and no step in it takes a profile. The reader asks for a
-         glossary or a set of ideas later, by slug, and that request resolves
-         correctly. GPT Sol's review of the built code, 2026-08-26.
-
-         `=== false`, so absent means yes: a client that has never heard of this
-         field gets the profiled run, which is the default the panel offers. */
-      const profile =
-        request.url !== undefined || request.useProfile === false
-          ? null
-          : await resolveProfile(request.slug);
-      const { useProfile: _asked, ...work } = request;
-      const queue = (slot: IngestSlot) =>
-        enqueue({ ...work, ...(profile ? { profile } : {}), ...slot });
-      /**
-       * **A URL is a new ingest and spends a slot; a bare slug is a re-run and
-       * is free.** The two shapes arrive at the same endpoint and are told apart
-       * only here — by the time `enqueue` has them, a re-run's job carries a URL
-       * too, read off the article it names.
-       *
-       * That is the whole of docs/project/billing.md § *The quota*: a slot is
-       * one successful **new** ingest, and asking for a glossary, a set of ideas
-       * or a quiz on an article already on the shelf costs nothing.
-       */
-      const job =
-        request.url === undefined
-          ? await queue({})
-          : await withIngestSlot({ ownerId: currentOwnerId(), slug: request.slug }, queue);
-      send(res, 202, publicJob(job));
-      return;
-    }
-    if (job && req.method === "GET") {
-      const found = await getJob(part(job, 1));
-      if (!found) throw httpError(404, "No such job");
-      send(res, 200, publicJob(found));
-      return;
-    }
-    if (job && req.method === "DELETE") {
-      if (!(await forgetJob(part(job, 1)))) throw httpError(404, "No such job");
-      send(res, 200, { forgotten: part(job, 1) });
-      return;
-    }
-    if (jobAction && req.method === "POST") {
-      const [id, action] = [part(jobAction, 1), part(jobAction, 2)];
-      /* **Retry is the second front door to a new ingest**, and it never passes
-         through the handler above: a check bolted on there alone would leave a
-         failed ingest retryable free for ever. `withRetrySlot` reserves only
-         when the attempt being repeated spent a slot — src/billing/admission.ts. */
-      const result =
-        action === "cancel"
-          ? await cancelJob(id)
-          : await withRetrySlot({ jobId: id, ownerId: currentOwnerId() }, (slot) =>
-              retryJob(id, slot),
-            );
-      if (!result) throw httpError(404, "No such job");
-      send(res, action === "cancel" ? 200 : 202, publicJob(result));
-      return;
-    }
-    /**
-     * Run one step of this job, here, now, and answer when it is finished.
-     *
-     * Its own branch rather than a third name in `jobAction` above, because it
-     * is the one job action that does not answer with a bare `Job`: the caller
-     * is a loop, and a loop needs to be told whether to come back — see
-     * `Advanced` in src/jobs.ts and docs/plans/260826q-job-queue-rethink.md.
-     *
-     * **A long request on purpose.** One step can be a minute of model calls,
-     * and that is the design: the browser holds the request open so the work
-     * happens inside an invocation somebody is waiting on, rather than in a
-     * floating promise a serverless runtime is free to freeze. `vercel.json`
-     * caps a function at **800** seconds (`functions."api/**".maxDuration`),
-     * which is the real ceiling on a request. It is not the ceiling on a *step*:
-     * the claimant aborts itself at `LEASE_MS - DEADLINE_MARGIN_MS` = 740 s so
-     * that an expired lease means *the process is gone*, and a step that
-     * overruns that hands the job back rather than ending it
-     * (src/jobs.ts § `LEASE_MS`, src/store/jobs.ts § `pauseForDeadline`). This
-     * line said 300 seconds, which no version of `vercel.json` in this repo has
-     * ever said.
-     *
-     * **200, not 409, when somebody else has it.** A second tab asking to
-     * advance a job that is already advancing is a correct thing for a correct
-     * client to do — it cannot know without asking — so it is an answer, not an
-     * error. `readJson` in src/web/lib/api.ts throws on any non-2xx, so a 409
-     * would turn the ordinary case into a message on the reader's screen.
-     */
-    if (jobAdvance && req.method === "POST") {
-      const advanced = await advanceJob(part(jobAdvance, 1));
-      if (!advanced) throw httpError(404, "No such job");
-      send(res, 200, advanced);
-      return;
-    }
 
     /**
-     * **Start a subscription — or, if they already have one, manage it.**
+     * **The table, asked after every guard above and before the 404 below.**
      *
-     * The whole handler is one call, and that is deliberate: the order of
-     * operations inside `startCheckout` is what stops a paying customer arriving
-     * at a webhook that cannot find them, and it is written out once in
-     * src/billing/checkout.ts rather than spread across a route.
+     * Jobs, uploads and billing live in `AUTH_ROUTES` (above
+     * `serveAuthenticatedApi`) rather than in this chain. They were its last
+     * thirteen guards, immediately above the terminal 404, so consulting the
+     * table exactly here leaves each of them where it already was and reorders
+     * nothing — the property that makes each increment a rearrangement rather
+     * than a behaviour change.
      *
-     * The reply carries `kind` as well as `url`, so a client *can* tell which
-     * door it is being sent through — the two look identical to
-     * `location.assign`. **Ours does not use it**, and that was a decision
-     * rather than an omission: it navigates immediately, and a sentence rendered
-     * for the half-second before a navigation is a sentence nobody reads. The
-     * page says which door it is before the press instead of after it: since
-     * 2026-09-04 `summary.purchase` (src/billing-plan.ts) carries the same
-     * distinction, so a subscriber's button reads *Switch plan* and the sentence
-     * under the cards names the Portal. The field stays because the two outcomes
-     * really are different and a caller that wanted to wait could say so. This
-     * comment claimed the client explained it; it did not. GPT Sol, 2026-09-03.
+     * **This is the only place the table is dispatched, and it has to be.** A
+     * second call earlier in the chain would give the *whole* table its turn
+     * there, so billing would answer from a position it has never had.
      *
-     * **200, not 302.** A redirect would be answered by `fetch` before the page
-     * could say anything, and the client is an SPA that navigates itself.
+     * `true` means an entry answered on `res`, so this returns instead of
+     * falling into the 404. The handler is awaited inside `dispatchAuthRoute`;
+     * see there for why that is load-bearing rather than tidy.
      */
-    if (billingCheckout && req.method === "POST") {
-      const asked = parseCheckoutRequest(await readBody(req));
-      send(res, 200, await startCheckout(currentOwnerId(), asked));
-      return;
-    }
-
-    /* The hosted place to see invoices, change a card, or cancel — none of which
-       this app implements, on purpose (docs/project/billing.md § *We never touch
-       a card*). No body at all: the only thing it could carry is a customer id,
-       and that comes from the reader's own row. */
-    if (billingPortalRoute && req.method === "POST") {
-      send(res, 200, await openPortal(currentOwnerId()));
-      return;
-    }
-
-    /**
-     * The return path from a completed Checkout.
-     *
-     * It takes **only** a session id, and `confirmCheckout` proves the session
-     * is this reader's before it syncs anything — a callback that synced
-     * whatever id it was handed would let one reader make this server work on
-     * another's subscription, and would answer the question *did that person
-     * subscribe?*.
-     *
-     * It is a convenience rather than the mechanism: the webhook is what makes a
-     * subscription real, and this exists so the reader landing back on
-     * `/profile` a second after paying sees their new plan.
-     */
-    if (billingConfirm && req.method === "POST") {
-      const body = fields(await readBody(req));
-      const sessionId = body.sessionId;
-      if (typeof sessionId !== "string" || sessionId === "") {
-        throw httpError(400, "Expected { sessionId } from the Checkout return URL");
-      }
-      send(res, 200, await confirmCheckout(currentOwnerId(), sessionId));
-      return;
-    }
-
-    /**
-     * **What plan this reader is on, and what they have used.** The one billing
-     * route that is a read.
-     *
-     * It never reaches Stripe — see src/billing/summary.ts. A stored period that
-     * has run out comes back as *we cannot say*, rather than as a guess or as
-     * the 503 admission answers, because nothing is being decided here.
-     */
-    if (billingUsage && req.method === "GET") {
-      send(res, 200, await readBillingSummary(currentOwnerId()));
+    if (await dispatchAuthRoute(AUTH_ROUTES, { user, request })) {
       return;
     }
 

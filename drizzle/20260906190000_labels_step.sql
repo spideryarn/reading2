@@ -1,0 +1,41 @@
+-- The labels become a step of their own — stage 2 of
+-- docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
+--
+-- One statement's worth of change: `revision_step_runs_step` has to admit
+-- `'labels'`, because the label pass now has a `revision_step_runs` row like
+-- every other step instead of riding on `hierarchy`'s. It was 79.5–92% of stage
+-- 4's wall clock — one measured call took 602 s of a 682 s pass, against a job
+-- lease that allows 740 s — so it left the blocking step and is bought later by
+-- a free successor job.
+--
+-- **The CHECK is hand-kept, and this is the seventh comment in a row saying so.**
+-- `drizzle-kit generate` diffs src/db/schema.ts; on 0.31.10 it can see a check
+-- expression and emitted the pair below for `illustrated` unprompted, but the
+-- literal it diffs *from* is still typed out by a person, which is how
+-- `'summary'`, `'assets'` (0029), `'sketch'` (0031) and `'timeline'` (0035) were
+-- each left behind in turn. The failure is far from the cause and names none of
+-- this: a job dying inside `revision_step_runs` with a `23514 check_violation`.
+-- `tests/db-step-constraint.test.ts` reads these files statically and compares
+-- the last `ADD CONSTRAINT` against `STEP_ORDER` in both directions; it went red
+-- the moment `'labels'` entered that array and stayed red until this statement
+-- existed.
+--
+-- Dropped and re-added rather than altered, because Postgres has no ALTER for a
+-- check expression.
+--
+-- **Nothing narrows, so nothing can fail to validate.** `'labels'` is only ever
+-- ADDED, and every name already in the list stays — including `'summary'`, which
+-- is not a step any more and is deliberately left permitted rather than
+-- validated against the rows a real summary run wrote (`RETIRED` in
+-- tests/db-step-constraint.test.ts names it). Removing a name is the direction
+-- with the trap in it (0036).
+--
+-- **And no data migration.** No existing revision gets a `labels` receipt here:
+-- an article ingested before today has its labels inside a `hierarchy` run that
+-- could not have finished without producing them, and giving it a synthetic
+-- receipt would be a second writer of these rows with no `prompt_version` or
+-- `model` to put on them — which is the `StampDisagrees` throw the plan's F4
+-- names. Backfilling legacy articles is a later stage's decision, and Greg's.
+
+ALTER TABLE "spideryarn"."revision_step_runs" DROP CONSTRAINT "revision_step_runs_step";--> statement-breakpoint
+ALTER TABLE "spideryarn"."revision_step_runs" ADD CONSTRAINT "revision_step_runs_step" CHECK ("spideryarn"."revision_step_runs"."step_name" in ('fetch','extract','blocks','hierarchy','labels','assets','arc','tweets','glossary','quotes','ideas','timeline','quiz','sketch','illustrated','debate'));

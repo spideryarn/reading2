@@ -33,9 +33,10 @@
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
  * § F; docs/project/testing.md § When a skip is not acceptable).
  *
- * The flag is still set below and nothing reads it — a leftover, kept only
- * because removing it touches a dozen suite headers that cite it as the way to
- * turn a skip into a failure. Nothing depends on its value.
+ * It was still being set here, read by nothing, until 2026-09-06 — a variable
+ * that decides nothing, which is the exact shape the plan above spent a week
+ * deleting. The suite headers that cite it still do, correctly, in the past
+ * tense: it is how a skip *used to* be turned into a failure.
  *
  * **`--offline` no longer buys a usable run of the test gate** — there is
  * nothing left for it to switch off — and it says so in the summary rather than
@@ -54,8 +55,6 @@ type Step = {
   /** Fails `npm run check` when non-zero. */
   gate: boolean;
   argv: string[];
-  /** Added to the environment of this step only. */
-  env?: Record<string, string>;
   /** Why it is advisory rather than a gate, printed when it has findings. */
   note?: string;
   /**
@@ -108,7 +107,6 @@ const STEPS: Step[] = [
     name: "test",
     gate: true,
     argv: ["run", "--silent", "test"],
-    ...(OFFLINE ? {} : { env: { REQUIRE_POSTGRES: "1" } }),
   },
   {
     // Import cycles. Zero of them today, across four independent tools, so
@@ -146,6 +144,39 @@ const STEPS: Step[] = [
     name: "chain",
     gate: true,
     argv: ["run", "--silent", "db:chain"],
+  },
+  {
+    /**
+     * **An unresolved merge conflict in a tracked file.**
+     *
+     * The other half of `chain`'s postmortem, and the half that had not been
+     * built. On 2026-09-02 a half-finished merge left markers in
+     * `drizzle/meta/_journal.json`, every migration command went blind at once,
+     * and what the reader saw was a byte offset in a `SyntaxError`. The hour
+     * after that went on sha256ing every `.sql` file across eight trees to clear
+     * a ledger that had been correct all along.
+     * docs/postmortems/260903b-the-ledger-took-the-blame-for-a-half-finished-merge.md
+     * calls a repo-wide check *"the widest fix, and the one not yet done"*.
+     *
+     * It matters here more than in most repositories because AGENTS.md has a
+     * dozen agents integrating with `git merge` in trees they share — the
+     * journal is simply where the damage was loudest, not the only file it can
+     * happen to.
+     *
+     * **Gates from day one on this file's own rule:** green on this tree, and it
+     * needs no database and no network. About 400 ms, and it prints how many
+     * files it scanned rather than only that it found nothing — a count is the
+     * difference between a clean tree and a scan that reached none of it.
+     *
+     * Its false-positive design is most of the work, because a marker is seven
+     * identical characters and this repo quotes conflicts in its own docs. That
+     * reasoning and its three named blind spots are in
+     * scripts/conflict-markers.ts; the cases are in
+     * tests/conflict-markers.test.ts.
+     */
+    name: "conflicts",
+    gate: true,
+    argv: ["run", "--silent", "check:conflicts"],
   },
 
   {
@@ -228,10 +259,9 @@ for (const step of STEPS) {
   const argv = FAST && step.name === "build" ? ["run", "--silent", "build:api"] : step.argv;
   const fast = argv !== step.argv ? " (--fast: API build only)" : "";
 
-  const requiring = step.env?.REQUIRE_POSTGRES === "1" ? " REQUIRE_POSTGRES=1" : "";
-  console.log(`\n── ${step.name} ${step.gate ? "(gate)" : "(advisory)"}${requiring}${fast}`);
+  console.log(`\n── ${step.name} ${step.gate ? "(gate)" : "(advisory)"}${fast}`);
 
-  const env = { ...process.env, ...step.env };
+  const env = { ...process.env };
 
   if (!step.count) {
     const run = spawnSync("npm", argv, { cwd: ROOT, stdio: "inherit", env });

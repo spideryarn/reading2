@@ -1,7 +1,8 @@
 # The quiz questions are too hard
 
 **[SPIDERYARN-READING2-21](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-21)** · reported
-2026-09-05 18:00 UTC · *the prompt half shipped; the slider deferred with three questions*
+2026-09-05 18:00 UTC · *the prompt half shipped; the slider declined 2026-09-06 in favour of an
+adaptive quiz*
 
 ## What Greg said
 
@@ -41,7 +42,7 @@ quote throws away a paid batch — which is `260903c` wearing a different number
 the lead the reader meets is set by the easy end anyway. `missingBandEnds` itself was not touched and
 no quota went back into it.
 
-## The slider is deferred, and these are the three questions
+## The slider was declined on 2026-09-06, and replaced with an adaptive quiz
 
 Greg asks to threshold on *"a combination of centrality and easiness"*. That collides with three
 decisions already on the record. **The first is fatal rather than awkward:**
@@ -57,9 +58,33 @@ decisions already on the record. **The first is fatal rather than awkward:**
    reverses it.
 
 Question 1 is the one to answer first; the other two follow from it. Half an hour on those three is
-worth more than a week building against a guess — and the prompt change above may well be the whole
-of what he wanted, since it addresses the sentence he actually opened with.
+worth more than a week building against a guess.
 
 Written up in
 [260905g](../plans/260905g-mark-every-visible-quote-and-make-the-quiz-start-easier.md) § Three questions for
 Greg.
+
+### What Greg decided
+
+Offered four endings — decline the slider, build a narrower version, build it as asked, or go
+adaptive — **he chose adaptive**, on 2026-09-06. As recorded on the day: *right answer, harder next;
+wrong answer, easier.* (That sentence is the note-taker's, not Greg's; his verbatim wording was not
+captured, and inventing one to fill the gap would be worse than saying so.)
+
+**The reasoning is that it serves the goal the slider was for without the slider.** "Start easy, stay
+at the right level" is what the report is asking for; a control is one way to get there and not the
+only one. Adaptive gets there without a knob, and — this is the part that dissolves objections 2 and
+3 rather than answering them — **without ever exposing a score**. There is no control, so there is no
+number the reader would have to be shown to justify it, and no second opinion about the order: the
+server ranks the batch once, as now, and the client walks that ranking one question at a time.
+
+So the thing built is *the absence of a control*, which is why it is a better answer than the thing
+asked for. The reader never learns what `band` or `value` mean and never tunes anything; the quiz
+just fits.
+
+Objection 1 — the fatal one — is honoured rather than dodged: adaptive never blends `band` with
+`value` either. Band chooses the rung, value chooses which question on it, and the two judgements
+stay in separate jobs exactly as `orderQuestions` keeps them.
+
+Built in [260907d](../plans/260907d-make-the-quiz-adaptive.md), which carries the ladder's edges, the
+hidden correctness signal the mark had to grow, and the measurements.

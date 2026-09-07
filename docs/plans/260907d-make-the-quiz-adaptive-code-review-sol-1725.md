@@ -1,0 +1,26 @@
+## Findings
+
+1. **High — Next can outrun the classifier and silently disable adaptation.**  
+   [quiz-mark.ts](/home/greg/code/spideryarn2/.claude/worktrees/adaptive-quiz/src/quiz-mark.ts:835) waits for classification before sending `done`, while [QuizPanel.tsx](/home/greg/code/spideryarn2/.claude/worktrees/adaptive-quiz/src/web/QuizPanel.tsx:566) leaves Next enabled during `marking`. After the last visible delta, clicking Next computes `upcoming` with no verdict, aborts the classifier, and advances using the no-verdict row. This is a normal-looking failure of the feature, and the gap can last up to eight seconds. It also keeps the textarea and Answer button locked, so more than the tick is delayed. Queue tail navigation until `done`, or disable adaptive Next while marking while retaining an explicit way to abandon the mark. Test “final prose visible, verdict pending, Next pressed.”
+
+2. **Medium — an answer made after navigating back is never used.**  
+   [goNext](/home/greg/code/spideryarn2/.claude/worktrees/adaptive-quiz/src/web/QuizPanel.tsx:355) always retraces history before considering the current attempt. Thus `A → B → C → Previous to B → answer B correctly → Next` returns to C and `move` discards B’s verdict. It is applied zero times, not twice. This contradicts [quiz.md](/home/greg/code/spideryarn2/.claude/worktrees/adaptive-quiz/docs/project/quiz.md:292), which says answering a picked question moves the ladder. Either make a newly completed historical attempt select an unseen adaptive question exactly once, or explicitly document that only answers made at the tail affect adaptation. Add this exact transition test.
+
+3. **Medium — choosing the currently displayed row from Show all destroys the current attempt.**  
+   [pick](/home/greg/code/spideryarn2/.claude/worktrees/adaptive-quiz/src/web/QuizPanel.tsx:375) calls `move` for every seen question, including `already === cursor`; [move](/home/greg/code/spideryarn2/.claude/worktrees/adaptive-quiz/src/web/QuizPanel.tsx:309) then aborts marking and clears the draft, failure, or completed feedback. The previous index implementation explicitly avoided moving when the selected row was current. Make this case close the list without calling `move`, and test it with at least a marking and completed attempt.
+
+4. **Low — the model/job documentation was not updated with the registration.**  
+   Executable registration is complete: task, tier, wire, route, override, and cost category are all present; quick tier and no provider `order` are correct. But [setup-dev.md](/home/greg/code/spideryarn2/.claude/worktrees/adaptive-quiz/docs/project/setup-dev.md:410) and several comments in [models.ts](/home/greg/code/spideryarn2/.claude/worktrees/adaptive-quiz/src/models.ts:21) still claim `link-summary` is the sole quick-tier job, the override table omits `SPIDERYARN_QUIZ_VERDICT_MODEL`, and [ai-gateway.md](/home/greg/code/spideryarn2/.claude/worktrees/adaptive-quiz/docs/project/ai-gateway.md:104) omits the new chat-wire call. Update those inventories. Also narrow quiz.md’s claim that the worst possible broken verdict merely repeats the level: an accepted misclassification can step the ladder, as `illPosed` demonstrates, and an absent verdict can leave the band once that band is exhausted.
+
+5. **Low — cancellation and timeout are claimed as tested, but are not.**  
+   The mock in [quiz-verdict.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/adaptive-quiz/tests/quiz-verdict.test.ts:30) ignores the gateway options. Its abort test manually rejects; it would remain green if `AbortSignal.any`, caller cancellation, or the timeout were removed. Capture the passed signal, keep the mock pending, and separately prove caller abort and fake-timer expiry settle as `undefined`. The current implementation itself combines the signals correctly.
+
+The rest checks out: `seen` stays unique, the cursor cannot exceed the question count under the batch-ID contract, valid states do not leave Next inert or disabled with unseen questions, and a missing `seen[cursor]` requires questions to mutate without changing `batchId`. The reset effect runs once when `undefined` becomes the loaded batch ID and reads that render’s questions, so I do not see the feared permanently empty panel.
+
+`parseVerdict` is appropriately conservative; navigation cancellation reaches the classifier; the optional-property spreads are correct under `exactOptionalPropertyTypes`; and `QUIZ_MARK_SYSTEM` is byte-for-byte unchanged.
+
+Your trace reading is right: the struggling path is identical because fixed order already exhausts easy, then medium, then hard. Six of seven across two stable runs is enough as a beta shipping veto test, especially with `poisonedReference` passing twice. It is not enough to claim a general accuracy rate, and `illPosed → right` is not wholly benign—it silently steps harder—but it does not justify blocking shipment.
+
+Relevant unit tests passed: 174 tests across nine files. All TypeScript projects passed, covering 1,526 source files. The database-backed route suite could not run in this sandbox.
+
+**Ship it with these fixes.**

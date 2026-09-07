@@ -61,6 +61,7 @@ import {
 import { FeedbackTrigger } from "./FeedbackButton.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { Link } from "./Link.js";
+import { ModeSurface } from "./ModeSurface.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { LOGIN_HREF } from "./router.js";
 import { anAccountWouldHelp, visitorSentence, type VisitorGap } from "./visitor.js";
@@ -168,19 +169,25 @@ export function SharedNotice({
 /**
  * The band a marked mode opens.
  *
- * Deliberately shaped like the panels it stands in for — same `.mode-band`
+ * Deliberately shaped like the panels it stands in for — the same `ModeSurface`
  * shell, same width, same place — so pressing Glossary moves the layout exactly
  * as it would for a reader who has one. A mode that answered a press by doing
  * nothing at all would read as broken.
+ *
+ * **No `feature` prop, and that is the whole of the difference.** This is the
+ * one band with no hook class: the surface writes a bare `mode-band` when
+ * `feature` is omitted, rather than the `"mode-band "` with a trailing space
+ * that an unguarded template would produce. There is no header row either — the
+ * band is one Tailwind box and the sentence inside it.
  */
 export function VisitorBand({ gap, signedIn }: { gap: VisitorGap; signedIn: boolean }) {
   return (
-    <aside className="mode-band" aria-label="Not available on a shared link">
+    <ModeSurface label="Not available on a shared link">
       <div className="tw:flex tw:flex-1 tw:flex-col tw:justify-center tw:gap-3 tw:px-4 tw:py-6 tw:text-sm tw:text-ink-faint">
         <p className="tw:m-0 tw:text-ink">{visitorSentence(gap)}</p>
         {offerAnAccount(gap, signedIn) && <SignUp reason="to read your own articles this way" />}
       </div>
-    </aside>
+    </ModeSurface>
   );
 }
 

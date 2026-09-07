@@ -48,7 +48,7 @@ export function TitleEditor({
    *
    * `undefined` means *we do not know*, which is the honest answer in the
    * reading view: the masthead has the article payload and no shelf entry, and
-   * a payload deliberately does not carry the superseded title (src/api.ts §
+   * a payload deliberately does not carry the superseded title (src/library-scalars.ts §
    * `titleFor`). The hint below then says the thing that is true either way
    * rather than naming a title that might be the reader's own.
    */
@@ -94,7 +94,26 @@ export function TitleEditor({
         aria-describedby={hintId}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Escape") onDone(undefined);
+          if (e.key !== "Escape") return;
+          /* **The press stops here.** This is tier T1 of five — React's own
+             root container, which is a descendant of `document` — so the hover
+             cards and the gutter (T2, `document`) and the three modeless
+             dialogs (T3, `window`) all listen further along the same bubble
+             path. Without this, cancelling a rename while a comment, a chat or
+             an annotation was open closed that too, and for the annotation that
+             meant a half-typed note thrown away by a reader who only meant to
+             stop renaming.
+
+             `stopPropagation` on a synthetic event calls the native event's, so
+             it really does cut the path rather than only React's view of it.
+             **Conditional on the press being Escape**, which the early return
+             above is: an unconditional stop here would swallow every key the
+             rest of the reader listens for, for as long as a title is being
+             edited. The inventory's pair 7 —
+             docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-escape-inventory.md;
+             both halves are tests/one-escape-closes-one-surface.test.tsx. */
+          e.stopPropagation();
+          onDone(undefined);
         }}
         // Blur commits rather than cancels: clicking away from a field you have
         // typed into and losing the typing is the more annoying of the two.
@@ -153,7 +172,7 @@ export interface ArticleRename {
  * `null` clears the override, and what the reader should then see is whatever
  * the extractor last found — a string this page does not have. So `onRenamed`
  * is called with `entry.title`, which is the store's answer to "what is this
- * article called now" (src/api.ts § `titleFor`). Echoing the typed value would
+ * article called now" (src/library-scalars.ts § `titleFor`). Echoing the typed value would
  * be right for a rename and blank for a clear.
  *
  * **A failed write leaves the heading alone and says so.** No optimistic
