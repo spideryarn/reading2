@@ -515,9 +515,15 @@ summary left doing nothing — scores 1.50 and is also below. Every real arm sco
 `demand`. **The axis separates exactly what it was added to separate**, and each of the other four
 anchors is still caught by the axis it was designed for.
 
-**No leader is named** — and the reason is simple and sufficient: **the two completed repeats have
-different leaders**, so this run can never satisfy `separate`'s requirement that one arm lead every
-repeat.
+**No leader is named** — and the reason is simple and sufficient: on the questions lineup the two
+completed repeats have **different leaders** (repeat 1 `incumbent`, repeat 3 `questions-toc6`), so
+this run can never satisfy `separate`'s requirement that one arm lead every repeat.
+
+*(Said precisely, because the same sentence was **not** true of the gists table and I nearly wrote it
+of both. There, repeat 3 is an exact tie between `questions-toc6` and `incumbent` at 1.6667, which
+the old `perRepeatLeaders` silently resolved by insertion order and printed as a flip. GPT Sol's F25;
+the report now prints `questions-toc6 = incumbent tied` and the leader must be the **sole** leader of
+every repeat. The promoted results file is the regenerated one.)*
 
 | arm | recipe | mean rank (questions) |
 |---|---|---|
@@ -933,6 +939,39 @@ childless root; carrying the question through to `buildTree` is cleaner than dup
 `questionFor`, and deeper questions are dropped there. No import cycle, no article-adjacent logging.
 `DeepenStats` is the right home for an answer omission — subject to F17, which is the artefact-version
 half I had missed entirely.
+
+## The stage 3/4 review, which did not refuse and changed the answer anyway
+
+GPT Sol on commit `764e9c57`, 2026-09-07, round 4 —
+[prompt](260907d-review-4-stage34-prompt.md) / [answer](260907d-review-4-stage34-answer.md).
+**No established P0 or P1, so no refusal** — and it is the most useful review of the four, because
+two of its six P2s are about the *conclusion*, which is the deliverable.
+
+| ID | sev | finding | disposition |
+|---|---|---|---|
+| F21 | P2 | the conclusion ignores the registered comparator and two further V4 replicates; the control beats all three head-to-head | **taken** — conclusion rewritten, § *The result* |
+| F22 | P2 | the factor-of-three comparison puts two statistics on different sampling scales against each other | **taken** — the language is deleted; the no-leader outcome now rests on the flip alone |
+| F23 | P2 | the rubric's `demand` examples are lexically anchor 2 and V3's worked line, so the judge can pattern-match instead of applying the criterion | **taken** — the examples moved to a different domain entirely, and the doc says the 2026-09-07 result was produced under the coached wording |
+| F24 | P2 | a partially failed judging pass exits 0 **and** could still name a leader | **taken** — non-zero exit, and `judgingComplete` threaded into `separate`; the second half is the load-bearing one |
+| F25 | P2 | `perRepeatLeaders` takes `[0]`, so a tie becomes a leader by insertion order | **taken** — the whole leading set, uniqueness required, ties printed as ties |
+| F26 | P2 | the `demand` axis is requested and never validated; an answer with no axes at all passes | **taken** — `validateAnswer` at the seam where the answer arrives, sharing only `permutationOf` with the gate |
+
+**F21 and F22 are the ones worth reading.** I had written that the two wordings were *"not
+separable"* and that the control's lead *"means nothing"*, and both were too strong — one on a
+statistics error, the other on not noticing that three of the five arms were the same recipe. The
+corrected reading is in § *The result*: the run licensed no winner, and every V4 generation trailed
+the control.
+
+**What that means about this stage's own failure mode.** Stage 4 was written expecting the temptation
+to be *inventing* a tweak. The temptation that actually arrived was the opposite — explaining away a
+result that pointed at work I had done that morning. Both are ways of not doing the stage, and only
+one of them was written down in advance.
+
+**One consequence of F24 and F25 together, recorded because a reader of the old file would be
+confused:** `separate` is now stricter in two ways at once, so the run's `results.md` was
+**regenerated and re-promoted** under the new code. Its stated outcome is unchanged — it named no
+leader before and names none now — but it refuses for more reasons, and its gists repeat 3 prints as
+a tie rather than as a flip.
 
 ## Decisions and assumptions taken without asking
 
