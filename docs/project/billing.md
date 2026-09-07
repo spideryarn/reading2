@@ -647,8 +647,9 @@ Four things to know before touching any of it.
 - **The discount starts from the day it shipped.** A charged row is resolved to its article through
   `ingest_events.article_id`, added 2026-09-05; every row charged before that has nothing to resolve
   and there is no way to backfill one, because jobs are hard-deleted and a slug is not identity. The
-  usage query is a `left join` with `coalesce(visibility, 'private')`, so **an unresolvable row is
-  charged full price** — the direction that cannot be gamed. Said out loud rather than discovered:
+  usage query is a `left join` with `coalesce(visibility, article_visibility_at_delete, 'private')`,
+  so **an unresolvable row is charged full price** — the direction that cannot be gamed. (The middle
+  term is a deleted article's frozen price; see below.) Said out loud rather than discovered:
   *an article you shared last week does not become cheaper; the discount applies to what you add from
   now on.* Articles added before billing launched have no ledger row at all and already cost nothing.
 - **It is a statement about ingests, not about articles.** Cardinality is N charged rows : 1 article
@@ -670,11 +671,6 @@ billing anchor if absent, locks that row, and only then locks the article
 between an admission's usage read and its reservation. It does **not** let two ingests consume one
 slot; a consistent order is also what stops the two deadlocking, so it is applied everywhere or
 nowhere, and `read committed` is then sufficient.
-
-**Deleting a public article would silently raise its owner's usage** — `on delete set null` turns
-each of its charged rows back into full price. There is no article-deletion path in the app today, so
-this is a policy written at the column rather than a defect: if one is ever built it takes the same
-billing lock and warns the same way unsharing does.
 
 **Where a reader meets it.** The unshare side of the sharing card says what taking it down costs
 (`UNSHARING_COSTS_ALLOWANCE`) — a statement of consequence, with no tick-box and no second
@@ -718,6 +714,38 @@ a free account and `used` stays at six with nothing shared, which printed *"6 of
 in the refusal — the invalid ratio this whole design exists to avoid, arrived at from the other
 direction. The refusals now say the *allowance* is spent rather than counting what was added, and
 neither page claims a count *fits* an allowance it is over. GPT Sol, 2026-09-05.
+
+### Deleting an article freezes its price rather than moving it
+
+**Deleting a public article would otherwise silently raise its owner's usage.**
+`ingest_events.article_id` is `on delete set null`, so destroying the article turns each of its
+charged rows back into an unresolvable one, and an unresolvable row is charged full price — the
+reader's usage goes *up* for having thrown something away. So a `BEFORE DELETE` trigger on `articles`
+stamps that article's visibility onto every one of its charged rows, and the predicate above gains a
+middle term:
+
+```
+coalesce(a.visibility, e.article_visibility_at_delete, 'private') = 'public'
+```
+
+**Frozen at deletion, not at charge, and that distinction is the whole of it.** Stamping the price
+when the ingest settles is the design § *A public article counts half* rejects in as many words: it
+misprices the article shared three weeks later and the one taken down a month after that, which
+between them is most of them. The live column goes on winning for as long as there is one, so nothing
+about a live article changes; the frozen value only ever answers once there is nothing left to ask.
+That is also why it is not a second source of truth — the two are never both readable. GPT Sol's F2,
+2026-09-06, and
+[the plan](../plans/260906h-delete-an-article-permanently.md#stage-b-deleting-must-not-change-the-bill).
+
+**The trigger, rather than the store method that will call it.** There is no delete path in the
+product yet; this landed before one. Putting the stamp in application code would make the ledger
+right for exactly the route somebody remembered, and wrong for a future admin path, a cascade nobody
+has written, or a statement run by hand — and nothing about a wrongly-priced row looks wrong.
+
+**Deleting does not give the slot back**, any more than archiving does. It costs nothing extra and
+refunds nothing: the ledger row survives with the price it had. `isPublicPrice` in
+[`src/store/pg-billing.ts`](../../src/store/pg-billing.ts) is the one spelling of that predicate, and
+the admin page's half-price split imports it rather than repeating it.
 
 ### The allowance prorates, and the column holds a delta
 

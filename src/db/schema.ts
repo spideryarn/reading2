@@ -4323,25 +4323,65 @@ export const ingestEvents = spideryarn.table(
      *
      * Every row charged before 2026-09-05 has no way to be backfilled, so a
      * `NOT NULL` constraint is impossible. `usageSql` therefore reads
-     * `coalesce(visibility, 'private')` over a **left** join: a row that cannot
-     * be resolved is charged **full price**, which is the direction that cannot
-     * be gamed. The guard against a future caller quietly charging a public
-     * article full price for ever is in the type: `settleReservation` takes a
-     * discriminated outcome that *carries* the article id, so a successful
-     * settlement cannot be expressed without one.
+     * `coalesce(visibility, article_visibility_at_delete, 'private')` over a
+     * **left** join: a row that cannot be resolved is charged **full price**,
+     * which is the direction that cannot be gamed. The guard against a future
+     * caller quietly charging a public article full price for ever is in the
+     * type: `settleReservation` takes a discriminated outcome that *carries* the
+     * article id, so a successful settlement cannot be expressed without one.
      *
-     * ## Deleting an article silently raises its owner's usage
+     * ## Deleting an article would silently raise its owner's usage
      *
      * `on delete set null` turns each of that article's charged rows back into
-     * full price. **There is no article-deletion path in the app today** —
-     * archiving is the only removal the interface offers — so this is a policy
-     * written down rather than a defect: if one is ever built it must take the
-     * owner's `billing_accounts` lock first (see the lock order in
-     * src/store/pg-billing.ts) and say what it will cost, exactly as unsharing
-     * does. The alternative — `on delete restrict` — would make the ledger able
-     * to veto a deletion, which is worse.
+     * something unresolvable, and therefore back into full price — so a reader
+     * who destroyed a public article would watch their usage go **up** for
+     * having thrown something away. That is what `articleVisibilityAtDelete`
+     * below and the `ingest_events_freeze_article_price` trigger exist to stop;
+     * read them together with this. The alternative — `on delete restrict` —
+     * would make the ledger able to veto a deletion, which is worse.
+     *
+     * A deletion path must still take the owner's `billing_accounts` lock before
+     * the article row (the lock order in src/store/pg-billing.ts). It no longer
+     * has to *say what it will cost*, because it costs nothing.
      */
     articleId: uuid("article_id").references(() => articles.id, { onDelete: "set null" }),
+    /**
+     * **What the article was, at the instant it stopped existing** — `'private'`
+     * or `'public'`, and null for every row whose article is still there.
+     *
+     * ## Why the price freezes at deletion rather than at charge
+     *
+     * A currently-public article costs half a slot, and usage is recomputed
+     * **live** from `articles.visibility` on every read, so sharing lowers it
+     * and unsharing puts it straight back. Stamping the price when the ingest is
+     * charged is the design docs/project/billing.md rejects in as many words —
+     * *"charging half at add time misses the article you decide to share three
+     * weeks later, which is most of them"* — and it would misprice in both
+     * directions. So the live column goes on winning for as long as there is
+     * one, and this only answers once there is not.
+     *
+     * ## Not a second source of truth
+     *
+     * It is null while the article exists, so there is nothing here for
+     * `articles.visibility` to disagree with; the two are never both readable.
+     * That is the whole reason it is safe (GPT Sol, F2, 2026-09-06), and it is
+     * why nothing may stamp it early.
+     *
+     * ## Written by a trigger, not by the application
+     *
+     * `ingest_events_freeze_article_price`, a `BEFORE DELETE` on
+     * `spideryarn.articles`
+     * (drizzle/20260906193737_ingest_events_freeze_price_at_delete.sql) — so it
+     * holds for *every* route out of existence: the store method, a future admin
+     * path, a cascade, a statement somebody runs by hand. Application code that
+     * has to remember is application code that will one day forget, and the
+     * ledger is not a place to find that out. drizzle's snapshot knows nothing
+     * about triggers, so tests/db-schema.test.ts is the drift guard.
+     *
+     * Read by `isPublicPrice` in src/store/pg-billing.ts, which is the one
+     * spelling both the quota wall and the admin page use.
+     */
+    articleVisibilityAtDelete: text("article_visibility_at_delete"),
     /**
      * What the article was called at the time — **diagnostic only**. A slug is
      * mutable, so it could never be this row's identity; it is here so that a
@@ -4363,6 +4403,16 @@ export const ingestEvents = spideryarn.table(
       "ingest_events_settled_after_reserved",
       sql`(${t.succeededAt} is null or ${t.succeededAt} >= ${t.reservedAt})
           and (${t.releasedAt} is null or ${t.releasedAt} >= ${t.reservedAt})`,
+    ),
+    /* The frozen price is one of the two visibilities or nothing at all — the
+       same check `articles_visibility` puts on the live column, because the
+       fallback reads them as one value and a third spelling would silently be
+       neither branch. Null is the ordinary state: every row whose article still
+       exists, and every row charged before this column landed. */
+    check(
+      "ingest_events_visibility_at_delete",
+      sql`${t.articleVisibilityAtDelete} is null
+          or ${t.articleVisibilityAtDelete} in ('private','public')`,
     ),
     /* The admission query, which runs on the critical path of every ingest. */
     index("ingest_events_owner_reserved").on(t.ownerId, t.reservedAt.desc()),

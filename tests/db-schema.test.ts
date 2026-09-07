@@ -265,6 +265,58 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
+  /**
+   * **The one thing standing between a delete and somebody's bill.**
+   *
+   * `ingest_events.article_id` is `on delete set null`, and usage is priced live
+   * from `articles.visibility` — a public ingest costs half a slot, a private one
+   * a full one. So without this trigger, destroying a public article turns its
+   * charged rows unresolvable, an unresolvable row is charged full price, and the
+   * owner's usage goes **up** for having thrown something away.
+   *
+   * It is here rather than only in tests/billing-half-units.test.ts because the
+   * trigger is drift: drizzle's snapshot knows the column and knows nothing about
+   * the trigger, exactly like the guards in 0001, so a generated migration that
+   * dropped and recreated `articles` would take it away in silence. **This is the
+   * assertion that would notice** — do not delete it for looking like a test of
+   * Postgres, which is what the header of this file is about.
+   */
+  it("deleting an article freezes what it cost onto its charged rows", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      await c.query("update spideryarn.articles set visibility = 'public' where id = $1", [ART_1]);
+      /* The id is carried rather than the row re-found by owner, so a leftover
+         row from some killed run cannot make this pass or fail for a reason that
+         is not about the trigger. */
+      const charged = await c.query<{ id: string }>(
+        `insert into spideryarn.ingest_events (owner_id, succeeded_at, article_id)
+         values ($1, now(), $2) returning id`,
+        [OWNER, ART_1],
+      );
+      const eventId = charged.rows[0]!.id;
+      const priceOf = async () =>
+        (
+          await c.query<{ article_id: string | null; v: string | null }>(
+            `select article_id, article_visibility_at_delete as v
+               from spideryarn.ingest_events where id = $1`,
+            [eventId],
+          )
+        ).rows;
+
+      /* Null while the article exists: there is nothing here for
+         `articles.visibility` to disagree with, which is the whole reason a
+         deletion-only snapshot is not a competing source of truth. */
+      expect(await priceOf()).toEqual([{ article_id: ART_1, v: null }]);
+
+      await c.query("delete from spideryarn.articles where id = $1", [ART_1]);
+
+      /* And the row survives the delete with its price on it — `set null`, so
+         the ledger may not lose an ingest, and the article it can no longer
+         reach is remembered as having been public. */
+      expect(await priceOf()).toEqual([{ article_id: null, v: "public" }]);
+    });
+  });
+
   it("the queue_state row cannot be deleted", async () => {
     await inRollback(async (c) => {
       // The CHECK stops a SECOND row. Nothing in SQL can stop the row going

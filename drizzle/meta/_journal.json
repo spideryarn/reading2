@@ -561,6 +561,13 @@
       "when": 1788678017527,
       "tag": "20260906070017_nav_label_status",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1788723457954,
+      "tag": "20260906193737_ingest_events_freeze_price_at_delete",
+      "breakpoints": true
     }
   ]
 }
