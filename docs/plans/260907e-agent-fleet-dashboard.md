@@ -276,13 +276,33 @@ Run on the box, 2026-09-07, before this plan was written.
 - **`claude agents --json` works and is fast.** 18 sessions, ~1s, spanning `spideryarn2` and
   `hellozenno`, with `status` values `busy`/`idle`/`waiting` and `waitingFor: "input needed"`.
 - **`gjd-remote ls` takes 10–12s**, measured three times (12.5s, 11.2s, 10.2s).
-- **The Claude inbox socket protocol works from an external process.** A plain Node script connected
-  to `$CLAUDE_CODE_MESSAGING_SOCKET`, sent `{"type":"auth","token":…}` then
-  `{"type":"message","message":…}`, and the message appeared in the session's transcript. This is the
-  published protocol, not a reverse-engineered one.
+- **~~The Claude inbox socket protocol works from an external process.~~ RETRACTED, 2026-09-07.**
+  The first version of this line claimed a successful delivery. **It was wrong, and the way it was
+  wrong is the point.** A Node script wrote `{"type":"auth","token":…}` and
+  `{"type":"message","message":…}` to `$CLAUDE_CODE_MESSAGING_SOCKET`, the socket accepted the
+  connection, no error was returned — and the transcript then matched the test string. The match was
+  **my own tool-call command text**, echoed into the transcript, not a delivered message.
+  Textbook [silent-success.md](../reusable/silent-success.md): the write cannot fail, and the check
+  shared an assumption with the thing it was checking.
+  Settled by two controls: a **nonce generated inside the script and written only to a file** (so it
+  can never appear in a typed command) returned **0** transcript hits; and a separate idle target
+  session, sent three frames, displayed nothing at all.
+- **All three auth variants behaved identically — correct token, wrong token, and no auth line at
+  all — none errored, none delivered.** So the socket write is not a channel we have working, and
+  "no error" carries no information about it.
+- **The `SessionStart` hook capture half does work.** A hook launched via `claude --settings <file>`
+  wrote its session's `{socket, token, pid}` to a file. So the capture is fine; it is the *delivery*
+  that is unproven.
 - **The token is not readable from another session's process.** `/proc/<pid>/environ` is readable
   (same user) but does not contain `CLAUDE_CODE_MESSAGING_TOKEN` — it is minted after exec and
-  exported only to children. **This is why Stage C needs a hook, and why Stage C is risk-first.**
+  exported only to children.
+- **`tmux send-keys` demonstrably answers a modal dialog.** `Down` then `Enter` selected "Yes, I
+  trust this folder" on a real trust prompt. **This is currently the only message mechanism proven
+  to work here**, which inverts the plan's original preference and vindicates the reference
+  system's choice.
+- **"Needs you" is usually a numbered modal dialog**, not a text prompt — captured live from a
+  blocked session showing a 4-option `/loop` scheduling menu. So the valuable phone action is
+  *answering a question*, which a message cannot do.
 - **Remote Control is already on for most sessions.** 11 of 19 had a non-null `bridgeSessionId`
   with no flag passed; `claude --remote-control <name>` sets it explicitly (tested with a throwaway
   session, since killed).
