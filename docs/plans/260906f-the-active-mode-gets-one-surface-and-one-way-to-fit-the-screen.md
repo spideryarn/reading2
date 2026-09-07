@@ -41,6 +41,26 @@ lands instead is the instrument that gets the measurement and the reviewed arith
 it — [Stage 4](#stage-4-the-fit-the-instrument-that-unblocks-it-and-the-arithmetic-that-waits).
 Shipping unverified viewport geometry would be inventing a bug and a fix for it in one motion.
 
+## Where this stands, 2026-09-07
+
+| Stage | State |
+|-------|-------|
+| 1 — the surface, piloted in Search and Chat | **Done**, on `dev` (`8cef3161`). Two review rounds, F15–F24. |
+| 2 step 0 — capture every band before touching it | **Done**, on `dev` (`e4952ecb`), committed on its own so the ordering is provable. |
+| 2 — the remaining eleven bands | **Done and committed** (`af589082`), two review rounds, F25–F33. **Not yet on `dev`:** blocked behind the A1 collision below. |
+| 4 step 1 — the diagnostic | **Done**, on `dev` (`2dfa5235`). |
+| 3 — A6, who owns Escape | **Inventory done and committed**; the implementation is **not started**. |
+| 4 — the fit itself | **Blocked**, and correctly so: it needs a trace from a real iPhone, which no machine here can produce. **A5 is therefore incomplete**, and the fit is not delivered. |
+
+**The open collision.** A1 landed while stage 2 was being built and moved every mode controller into
+`src/web/modes/<mode>/`, including `RefereeBand` → `src/web/modes/referee/RefereeMode.tsx`. Stage 2
+migrated Referee onto `ModeSurface` *in `App.tsx`*, where it no longer lives. All eleven panels merge
+cleanly; only `App.tsx` and `tests/referee-band-fits.test.ts` conflict. The merge was **aborted rather
+than resolved** — [a conflict is a proposal before it is an edit](../reusable/git-resolve-merge-conflicts.md).
+The proposal is to take `origin/dev`'s `App.tsx` whole, re-apply only the `ViewportProbe` import and
+mount, move the Referee migration to `RefereeMode.tsx`, and combine both sides of the test (their
+`BAND_FILE` constant, this branch's `ModeSurface` regex). Nothing is discarded either way.
+
 ## Design decisions
 
 ### The fit: specified, reviewed, and blocked on a phone
