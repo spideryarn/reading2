@@ -13,12 +13,11 @@
  * no Clipboard API, or announced nothing to a screen reader would all *look*
  * right on screen. Each is a test below.
  */
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AnnotateDialog } from "../src/web/AnnotateDialog.js";
+import { readerCss } from "./helpers/stylesheets.js";
 import type { BlockId } from "../src/types.js";
 
 const QUOTE = "The map is not the territory.";
@@ -334,12 +333,11 @@ describe("what it says is about the copy in front of you", () => {
  * asserts the declaration is *not* expressed in `rem`.
  */
 describe("the header's targets", () => {
-  /* Off the project root rather than `new URL(…, import.meta.url)`, which is
-     how `gutter-target-size.test.ts` reads the same file: that one runs in the
-     node environment, and under `jsdom` `import.meta.url` is not a `file:` URL,
-     so the same line throws "The URL must be of scheme file" before a single
-     test runs. Vitest's cwd is the project root. */
-  const css = readFileSync(resolve(process.cwd(), "src/web/styles.css"), "utf8");
+  /* The reading-view sheets as a set, resolved from the `@import` graph — the
+     rule read below lives in one of thirty-seven files since 2026-09-06, and
+     naming any one of them is how this test would go quietly green on a rule
+     that had simply moved. tests/helpers/stylesheets.ts. */
+  const css = readerCss();
 
   it("gives Copy and Close 24px in each direction, at every root size", () => {
     const rule = /\.annotate-close,\s*\.annotate-copy\s*\{([^}]*)\}/.exec(css)?.[1];

@@ -202,7 +202,8 @@ in the mode's own ramp rather than in the words "red" and "green".
 
 **Where the reader has commented on a phrase a criterion also marked**, the mark prints both the
 sign and the comment's `✳`, from one higher-specificity rule
-([`src/web/styles.css`](../../src/web/styles.css)). An element has one `::after`, and the two rules
+([`src/web/styles/annotations.css`](../../src/web/styles/annotations.css) § a comment and a sign on
+one mark). An element has one `::after`, and the two rules
 had equal specificity until 2026-09-02, so ours won and the reader's own marker silently
 disappeared. The cascade is the only place that is visible, so
 [`tests/mark-sign-in-chrome.test.ts`](../../tests/mark-sign-in-chrome.test.ts) reads the computed
@@ -746,7 +747,7 @@ that cannot be reached is not an explanation.
   emits no pointer and no focus events, so nothing opens a card on one — and the referee who wants to
   know what the button costs, or why it is dead, is standing in front of exactly that. It carries
   `aria-disabled` now, so it stays hoverable, focusable and announced as unavailable, with
-  `.crit-run[aria-disabled="true"]` in [`styles.css`](../../src/web/styles.css) doing what `:disabled`
+  `.crit-run[aria-disabled="true"]` in [`styles/referee.css`](../../src/web/styles/referee.css) doing what `:disabled`
   used to. **`aria-disabled` does not stop an activation**, so the inertness stays where it already
   was: the form's `onSubmit` returns on an incomplete criterion, which catches the click, the Enter
   and the Space alike.
@@ -968,7 +969,7 @@ shorter than about 1400px. Every test was green throughout, because jsdom has no
 
 The fix is a `.ref-brief` wrapper around the notice and the scan, capped at 40% of the band with its
 own scroll, and a `min-height` floor under `.ref-panel` so it is no longer the one child flexbox is
-willing to squeeze — [`src/web/styles.css`](../../src/web/styles.css) § *referee mode* carries the
+willing to squeeze — [`src/web/styles/referee.css`](../../src/web/styles/referee.css) § *referee mode* carries the
 measurements and the two fixes that were passed over. A referee still meets the whole
 confidentiality notice without scrolling at 1280 × 720; below the notice, the scan is one scroll
 away behind a trailing fade, and the panel keeps 294px. Verified across four sub-modes at seven

@@ -187,6 +187,7 @@ import {
   watchBarVisibility,
 } from "./scroll.js";
 import { orderComments, positionOf, stepComment } from "./comment-nav.js";
+import { jumpToComment, stepToComment } from "./comment-jump.js";
 import {
   buildSections,
   positionToWrite,
@@ -241,6 +242,7 @@ import {
 } from "./PublicChrome.js";
 import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
 import { SmallScreenHint } from "./SmallScreenHint.js";
+import { ViewportProbe } from "./ViewportProbe.js";
 import { useRenderCount } from "./perf.js";
 import { rowsForBlockIds } from "./rows.js";
 import {
@@ -2578,30 +2580,35 @@ function Reader({
     (c) => c.status === "pending" && c.id !== note,
   ).length;
 
+  /* ------------------------------------------ moving to a comment, twice --
+     **These were one function until 2026-09-06, and that was the bug.** The
+     drawer's list and the dialog's arrows want opposite things from the history
+     stack: choosing a question out of a list is an arbitrary jump and pushes,
+     while stepping between them is traversal and must not — twenty questions
+     cannot cost twenty presses of Back. The argument, and why the split is
+     better than either half alone, is comment-jump.ts. GPT Sol F9. */
+
+  /** The drawer's list: a jump, so there is a way back from it. */
+  const openCommentFromDrawer = useCallback(
+    (id: string) => jumpToComment(comments, id, setNote, jumpTo),
+    [comments, jumpTo, setNote],
+  );
+
   /**
-   * Step to another comment, bringing its passage into view *only if it isn't
-   * already*. Two comments in one paragraph are the common case, and jolting the
-   * page between them would lose the reader their place for no gain.
-   *
-   * It scrolls and writes no position state of its own — the listener in
-   * useReadingPosition notices and updates `?at=`, exactly as it does for a
-   * wheel. Same reasoning as keynav.ts.
+   * The dialog's arrows: traversal, writing no position state of their own —
+   * the listener in `useReadingPosition` notices the scroll and updates `?at=`,
+   * exactly as it does for a wheel. Same reasoning as keynav.ts.
    */
-  const goToComment = useCallback(
-    (id: string | null) => {
-      if (id === null) return;
-      void setNote(id);
-      const target = comments.find((c) => c.id === id);
-      if (target && !isBlockOnScreen(target.blockId)) scrollToBlock(target.blockId);
-    },
+  const stepToNeighbouringComment = useCallback(
+    (id: string | null) => stepToComment(comments, id, setNote),
     [comments, setNote],
   );
 
   /**
    * A `?note=` that arrived in the address bar brings its own passage into view.
    *
-   * The gap this closes: `goToComment` above scrolls, so stepping between
-   * questions inside the reading view was always fine — but that path needs the
+   * The gap this closes: the two above move the reader, so opening or stepping
+   * between questions inside the reading view was always fine — but they need the
    * comment in hand, and a pasted link has only an id. `/read/<slug>?note=<id>`
    * with no `?at=` beside it therefore opened a dialog about a paragraph that
    * was somewhere off screen, and which one was unguessable. That is exactly the
@@ -2615,13 +2622,14 @@ function Reader({
    * free — and then the comment arrives and this fires once.
    *
    * **Once**, and that is the ref. After the first honoured arrival, moving
-   * between comments belongs to `goToComment`, which deliberately holds still
-   * when the next passage is already on screen. Re-running this on every change
+   * between comments belongs to `comment-jump.ts`, which on both paths
+   * deliberately holds still when the next passage is already on screen —
+   * `passageToBringIntoView`. Re-running this on every change
    * to `note` would be a second thing moving the page, and the two would
    * disagree the moment either changed.
    *
    * `isBlockOnScreen` rather than an unconditional jump, for the same reason
-   * `goToComment` uses it: when `?note=` and `?at=` agree — the passage sits in
+   * comment-jump.ts uses it: when `?note=` and `?at=` agree — the passage sits in
    * the section the link restored — the reader is already looking at it, and a
    * jolt would cost them their place to move them nowhere.
    *
@@ -2907,7 +2915,22 @@ function Reader({
     [owner, setNote, setThread],
   );
 
-  const openCommentDialog = useCallback((id: BlockId) => void setNote(id), [setNote]);
+  /**
+   * Open a comment's dialog and **move nothing** — the third `onOpenComment`,
+   * and the one that is not a jump.
+   *
+   * `TableView`'s inline mark and gutter bookmark are controls attached to the
+   * block the reader is looking at, so the passage is on screen by
+   * construction; there is nothing to scroll to and nothing to push. The
+   * drawer's two closures go through `openCommentFromDrawer` instead, and the
+   * dialog's four arrows through `stepToNeighbouringComment` (comment-jump.ts).
+   *
+   * **`string`, not `BlockId`**: what arrives is a *comment* id, read off
+   * `data-comment`. It compiled as `BlockId` only because that is an alias for
+   * `string`, so the annotation was a lie a reader would have believed. GPT Sol
+   * F24, 2026-09-06.
+   */
+  const openCommentDialog = useCallback((id: string) => void setNote(id), [setNote]);
 
   /**
    * The whole address, subscribed to — the input to the block permalinks.
@@ -3338,8 +3361,8 @@ function Reader({
           total={ordered.length}
           hasPrev={stepComment(ordered, note, -1) !== null}
           hasNext={stepComment(ordered, note, 1) !== null}
-          onPrev={() => goToComment(stepComment(ordered, note, -1))}
-          onNext={() => goToComment(stepComment(ordered, note, 1))}
+          onPrev={() => stepToNeighbouringComment(stepComment(ordered, note, -1))}
+          onNext={() => stepToNeighbouringComment(stepComment(ordered, note, 1))}
           onClose={() => void setNote(null)}
         />
       )}
@@ -3350,8 +3373,8 @@ function Reader({
           total={ordered.length}
           hasPrev={stepComment(ordered, note, -1) !== null}
           hasNext={stepComment(ordered, note, 1) !== null}
-          onPrev={() => goToComment(stepComment(ordered, note, -1))}
-          onNext={() => goToComment(stepComment(ordered, note, 1))}
+          onPrev={() => stepToNeighbouringComment(stepComment(ordered, note, -1))}
+          onNext={() => stepToNeighbouringComment(stepComment(ordered, note, 1))}
           onClose={() => void setNote(null)}
           access={{
             kind: "owner",
@@ -3832,7 +3855,7 @@ function Reader({
                   // would otherwise be underneath the dim, which looks exactly
                   // like nothing happening.
                   void setPanel(null);
-                  goToComment(id);
+                  openCommentFromDrawer(id);
                 },
               }
             : /* **The same drawer, with the owner's comments in it**, since
@@ -3851,11 +3874,19 @@ function Reader({
                 onPanel: (next) => void setPanel(next),
                 onOpenComment: (id) => {
                   void setPanel(null);
-                  goToComment(id);
+                  openCommentFromDrawer(id);
                 },
               }
         }
       />
+
+      {/* **`?probe=1` only, and `null` for everybody else** — the viewport
+          diagnostic that stage 4 of
+          docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md
+          exists to get a measurement from. Inside `.reader` because that is
+          where `--mode-w` and `--spine-w` resolve, and after the `Dock` so it
+          is over the bars it is measuring. ViewportProbe.tsx. */}
+      <ViewportProbe />
     </div>
   );
 }

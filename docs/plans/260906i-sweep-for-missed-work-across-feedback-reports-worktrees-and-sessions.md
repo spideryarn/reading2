@@ -252,22 +252,84 @@ and it is mine".
 - **`structure-mode`** — 593 behind, 19 conflicting files, and its last commit had drifted from
   *merging* Hierarchy and Outline into *adding a third mode*, which is the opposite of the intent.
 
-## Questions for Greg
+## The second wave: what Greg's answers changed
 
-1. **A spend cap on the paid per-request endpoints.** An owner can currently drive unlimited paid
-   model calls at glossary ask/lookup and explain. S5 will hand you a plan and a Sol review and stop,
-   because the cap belongs in files `security-map.md` lists as defences. The question is just: build
-   it, and what daily number per reader?
-2. **`structure-mode`:** still wanted, and as a *replacement* for Hierarchy + Outline, or as a third
-   mode? (The recommendation is replacement or nothing.)
-3. **Permanent delete:** ship the row delete now with blobs orphaned and a later GC sweep, or hold
-   for the blob-GC race? (Recommendation: ship.)
-4. **Dictation:** can you record about ten clips of your own real dictation, so the accuracy claim
-   can be measured on speech rather than on synthesis?
-5. **`sweepAbandonedDrafts`** has existed since before 2026-09-05 with **no caller at all**, while
-   eleven comments across `src/jobs.ts`, `src/store/` and three test files reason carefully about
-   what it does to a draft. Every abandoned draft meanwhile carries a full copy of the article's
-   `revision_blocks`. Wiring it needs a retention decision and somewhere for periodic work to live,
-   so it is yours rather than an agent's.
-6. The four decisions already sitting in
-   [`awaiting-approval.md`](../user-feedback/awaiting-approval.md) are still unanswered.
+Greg answered seven questions in one sitting on the evening of 2026-09-06 and then went to bed with
+*"proceed autonomously, fanning out with `gjd-remote new-claude` with `--wait` set randomly within
+7-12h"*. The answers are the interesting part of this document, because **three of the seven were not
+one of the options put to him**, and two of those dissolved a trade-off an agent had already accepted
+as fixed:
+
+| asked | answered | what it changed |
+|---|---|---|
+| per-reader spend cap? | **no — the OpenRouter account already has a global monthly cap** | session killed; recorded in [ai-gateway.md](../project/ai-gateway.md), with what the account cap does *not* buy |
+| Structure mode: replace, drop, or third? | **third, behind Experimental Features** — *"I don't know if Structure will be better, so let's build it as a third, and that way I can flip back and forth to compare"* | the objection ("the band is meant to shrink") simply does not apply behind the switch. It is an instrument, not an addition |
+| permanent delete: blobs? | **ignore — another agent has it** | left alone |
+| the draft sweeper that never ran? | **sweep on demand**, plus *"create a new docs/project/cron-scheduler.md … as an example of where a scheduler would be useful in future"* | a decision *and* a new doc; two sweepers with no caller turned out to be one class |
+| dictation: measure real speech? | **no — switch to OpenAI, rewrite `/privacy`** | overruled the evidence knowingly; see below |
+| the yellow highlighter for quotes? | **neither — a border rather than a fill**, weight carrying priority | search hits fill, quotes outline: nobody borrows a channel |
+| the quiz difficulty slider? | **declined — make the quiz adaptive instead** | removes the control rather than tuning it |
+| `toc/6` backfill? | **leave it, new articles only** — plus *"there should be a way to re-run any of the generated modes"* | recorded in [hierarchy.md](../project/hierarchy.md#prompt-versions); the re-run became its own session |
+
+**The dictation one is the one to re-read later.** He was shown that we do not use Whisper, that a
+bake-off had scored the current model 78/78 on hard terms that were in the vocabulary, that OpenAI
+was excluded on two *measured* grounds (no ZDR endpoint on OpenRouter; `input_audio` refuses
+`MediaRecorder`'s webm), and that `/privacy` **publicly tells readers `zdr: true` is set on
+dictation**. He chose to go ahead anyway. That is his call and it is made — but the session is told
+to run `npm run eval:dictation-gate` first in case the OpenRouter route has since opened, and the
+privacy rewrite is gated: **a line in `awaiting-approval.md` says the wording needs his sign-off
+before the next deploy**, because landing on `dev` is safe and deploying a page that misdescribes
+what happens to people's voices is not.
+
+One consequence nobody asked about and the session is told to name: `OPENAI_API_KEY` is a separate
+billing account, **outside** the OpenRouter cap that is now the only spend ceiling we have.
+
+## Everything dispatched, in the order it wakes
+
+Fourteen sessions. The early ones came out of the trawls; everything from 03:34 came out of Greg's
+answers.
+
+| wakes | session | what it does |
+|---|---|---|
+| 00:07 | `publish-refused-reason-kinds` | permanent vs transient refusals, so a deterministic failure stops inviting a charged retry; plus the missing-key case in `pdf-read.ts` |
+| 01:07 | `pdf-figures-stage-f` | finish and land the figures worktree — merges clean, no owner |
+| 02:07 | `fb2a-upload-an-html-file` | the one unprocessed report: upload an HTML file, verify a URL to a PDF |
+| 03:07 | `class-killers-and-a-conflict-check` | four of T2.1's five (not b — already built) plus the conflict-marker check |
+| 03:34 | `fb1v-socratic-v4-and-the-eval` | ship V4, then repair the eval, then the depth-1 gap, then answer Q7 |
+| 04:22 | `fb15-dictation-to-openai` | the model switch and the privacy rewrite, gated on Greg before deploy |
+| 05:28 | `fb1z-quotes-outlined-by-priority` | quotes outlined rather than filled, weight carrying importance |
+| 05:44 | `cost-tracking-that-sets-a-price` | 260902g, "planned, not built" since 2026-09-02 — and now the only control is a global cap |
+| 05:58 | `structure-mode-as-a-third-mode` | Structure behind the Experimental Features switch |
+| 06:31 | `fb21-adaptive-quiz` | right answer harder, wrong answer easier, and no visible level |
+| 07:39 | `rerun-any-generated-mode` | the re-run button — and the plan says *don't* build staleness detection |
+| 08:42 | `adversarial-fixtures-four-postmortems` | one fixture set closing four postmortems' open recommendation |
+| 09:43 | `cheap-postmortem-preventions` | three verified-small preventions, plus one the session picks and justifies |
+| 10:45 | `split-routes-one-slice` | `src/routes.ts` is 8,180 lines and grew 423 in a day; one bounded slice, following A1's shape |
+
+Two more sessions in `gjd-remote ls` (`make-sure-all-the-modes`, `the-hierarchy-mode-has-a`) belong
+to somebody else and are not part of this.
+
+**The `--wait` stagger is not ordering** — GPT Sol's R2, and it was right. Where one session depends
+on another, the dependency is written into the brief as something the agent checks for itself:
+*is this on `dev` yet, and if not, do the part that does not depend on it.* Six briefs carry a check
+for whether the `App.tsx` split has landed, because a new mode written against the old 6,105-line
+file would hand its owner a conflict nobody needs.
+
+## What is left for Greg
+
+Everything else was answered. Two things remain, and neither blocks anything queued above:
+
+1. **The dictation privacy wording needs sign-off before the next deploy.** The session writes the
+   proposed sentences into its plan doc and adds the line to
+   [`awaiting-approval.md`](../user-feedback/awaiting-approval.md). Landing on `dev` is safe; a
+   deploy in between would publish a page that misdescribes what happens to a reader's voice.
+2. **Cluster C of the public-read audit is Greg's and cannot be an agent's**: the Vercel WAF rate
+   limit lives in the dashboard, and there is no Vercel credential on this box. It is the one item
+   from that audit that nothing here can move.
+
+And one thing that is nobody's to answer yet: the postmortem audit's **ninety unbuilt prevention
+items**. Two are being built tonight and one fixture set closes four more, but the body of it is the
+input to the next [improve-the-codebase](../reusable/improve-the-codebase.md) sweep — and what it
+most wants is the shape-and-age classification over all 70 postmortems that
+[260905b § T2.1](260905b-improve-the-codebase-third-sweep.md) says has never been done, which would
+turn its central hypothesis into a finding or kill it.

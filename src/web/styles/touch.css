@@ -1,0 +1,44 @@
+/* touch.css — the declarative half of the swipe gesture: `touch-action` on a
+   gist column, which is what hands the gesture to swipe.ts before any listener
+   runs. docs/project/touch.md. */
+
+/* ---------------------------------------------------------------- touch -- */
+
+/* A vertical swipe over a gist column steps one item instead of scrolling —
+   src/web/swipe.ts, docs/project/touch.md. This is the half of that feature
+   the browser has to be told about: `touch-action` is what hands the gesture
+   to us *before* any listener runs, which is why there is no non-passive
+   `touchmove` listener anywhere in this codebase. Safari, unlike Chrome and
+   Firefox, does not make touch listeners passive by default, so the
+   `preventDefault` route would have worked here and silently done nothing
+   elsewhere; the declarative route behaves the same in every engine and keeps
+   scrolling off the main thread.
+
+   `any-pointer: coarse` rather than `hover: none`: an iPad with a Magic
+   Keyboard has a pointer *and* a touchscreen, and the rule has to hold for the
+   finger without waiting for the trackpad to go away.
+
+   **The two declarations are a deliberate fallback pair, not a duplicate.**
+   `pinch-zoom` is the keyword that keeps zooming alive over these columns, and
+   it is a standard value that Safari has supported since 13 — so this is
+   belt-and-braces, not an expected failure. It costs one line and it guards
+   something disproportionate: an unsupported keyword invalidates the *whole*
+   declaration, so the swipe would stop working with no error anywhere. Plain
+   `pan-x` is stated first and survives on its own; the richer one overrides it
+   wherever it parses. If it ever does not, the cost is pinch-zoom on the gist
+   columns only — the prose, which is what anyone actually zooms, is untouched
+   either way.
+
+   **On the `<td>`, and it could not have gone on the `<tr>`.** `touch-action`
+   applies to "all elements except non-replaced inline elements, table rows, row
+   groups, table columns, and column groups" — so the obvious place to put a
+   per-row rule is the one place the property is defined to be ignored, with no
+   error and no warning. Another one for docs/reusable/silent-success.md.
+
+   Nothing here applies on a desktop: the hook ignores any pointer that is not
+   a touch, and this query never matches a mouse-only machine. */
+@media (any-pointer: coarse) {
+  [data-swipe-step] { touch-action: pan-x; }
+  [data-swipe-step] { touch-action: pan-x pinch-zoom; }
+}
+

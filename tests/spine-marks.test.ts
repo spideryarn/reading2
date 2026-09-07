@@ -15,6 +15,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bandMatchCounts,
+  jumpOriginMark,
   laneColour,
   laneOrder,
   spineMarks,
@@ -239,5 +240,67 @@ describe("bandMatchCounts", () => {
   it("ignores a match whose block is no longer on the page", () => {
     const counts = bandMatchCounts(rows, matchesOf([["gone", [["r0", 0]], 9]]), bands);
     expect(counts.size).toBe(0);
+  });
+});
+
+/* ------------------------------------------ where the reader jumped from -- */
+
+/**
+ * One mark, at the block a jump started from — Stage C of
+ * docs/plans/260906g-back-to-where-you-jumped-from.md.
+ *
+ * The same class of invisibility as everything above it: a tick at the wrong
+ * row is a tick, and a tick drawn at the top of the rail because the origin
+ * could not be found looks exactly like a reader who really did jump from the
+ * first paragraph.
+ */
+describe("jumpOriginMark", () => {
+  const rows = rowsOf([
+    ["a", 0, 0, 100],
+    ["b", 1, 100, 40],
+    ["c", 2, 140, 300],
+  ]);
+
+  it("puts the mark on the origin block's own row, by the rail's pixel ruler", () => {
+    /* Block `b` is the second of three and 100px down a 440px article — a
+       quarter of the way in, not two-thirds. The same ruler `spineMarks` uses
+       and for the same reason: the character ruler a result row prints its
+       "42% in" from would place this in the wrong band. */
+    expect(jumpOriginMark(rows, { kind: "block", blockId: "b" as BlockId })).toEqual({
+      top: 100,
+      height: 40,
+    });
+  });
+
+  it("draws nothing on an entry no jump stamped", () => {
+    // The ordinary state of the rail: no chip, so no mark.
+    expect(jumpOriginMark(rows, null)).toBeNull();
+  });
+
+  it("draws nothing for an origin at the top of the article", () => {
+    /* **There is no block to mark.** `top` exists precisely because no row had
+       reached the reading line (jump-history.ts § JumpOrigin, GPT Sol F8), so
+       marking the first row would put a tick where the reader was not — and
+       the chip already says "back to the beginning", which is the whole of the
+       information there is. */
+    expect(jumpOriginMark(rows, { kind: "top" })).toBeNull();
+  });
+
+  it("skips an origin the page no longer has, rather than drawing it at the top", () => {
+    /* A stamp outliving a re-extraction. `spineMarks` makes the same choice for
+       the same reason: a mark pointing at the wrong paragraph is worse than a
+       missing one, and it is the failure a reader would act on. The chip is
+       already gone in this case — it hides a stamp it cannot resolve. */
+    expect(jumpOriginMark(rows, { kind: "block", blockId: "gone" as BlockId })).toBeNull();
+  });
+
+  it("carries no lane and no colour, so it can take neither", () => {
+    /* The rail is 12px wide and the search lanes are packed into the right-hand
+       gutter: a mark arriving with a `lane` would have to be given one out of
+       that packing, and `laneOrder` would move every search sideways to make
+       room for it. Being a different shape from `SpineMark` is what makes that
+       impossible rather than merely avoided. */
+    const mark = jumpOriginMark(rows, { kind: "block", blockId: "c" as BlockId });
+    expect(mark && Object.keys(mark).sort()).toEqual(["height", "top"]);
   });
 });

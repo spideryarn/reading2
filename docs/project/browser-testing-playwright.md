@@ -257,7 +257,8 @@ SPIDERYARN_BASE_URL=http://localhost:<port> npx tsx scripts/safe-area-check.ts -
 whole point of it — so `--break` switches the defect back on and it must print FAIL and exit 1.
 [silent-success.md](../reusable/silent-success.md).
 
-Run it when you touch `styles.css` § a narrow window, § a band with no room, § a small device, or
+Run it when you touch [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css)
+§ a narrow window, § a band with no room, § a small device, or
 any rule naming a `--safe-*` token. Exit code 1 on a leak. `--top`, `--bottom`, `--width`,
 `--height`, `--modes`, `--scroll` and `--shots` are all flags; the defaults are an installed iPhone,
 scrolled, so the article is genuinely moving behind the panel.

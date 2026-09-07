@@ -374,6 +374,23 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      job resumes from its artefacts, the same reason `jb-gone` is. See
      `STEP_STOPPED`. */
   "jb-stopped": "retry",
+  /* **The two ways a publication is refused**, and the pair exists because the
+     difference between them is money. `PublishRefused` (src/store/pg-revisions.ts)
+     carried free text and no kind until 2026-09-07, so every refusal fell
+     through to `retry` — and on 2026-09-05 one article was refused four times in
+     thirteen minutes, each attempt completing and paying for its model call
+     before meeting the identical, deterministic refusal, and each telling the
+     reader that trying again was worth a go.
+
+     `jb-publish-refused` is `bug` because the reader has no move: the remedy —
+     re-running the `hierarchy` step — belongs to whoever runs the app, and a
+     *retry* is not it, since a retry skips every step that finished and reads
+     the same artefacts back. `jb-publish-moved` is `retry` because for that one
+     the old sentence was true all along: another publication landed first, and
+     the next attempt starts from where the article now is. See
+     `PUBLICATION_REFUSED` below. */
+  "jb-publish-refused": "bug",
+  "jb-publish-moved": "retry",
   /* **The steps that know why they stopped** — seven when this note was
      written, eight since the capability floor joined them on 2026-09-06, and
      all but one `blocked`: see § the steps that know why they stopped below for
@@ -924,6 +941,86 @@ export const STEP_STOPPED: ReaderFacingFailure = {
   message:
     "You stopped this before it finished. Whatever had already been done is kept, so starting it " +
     "again picks up from there rather than beginning over. [jb-stopped]",
+};
+
+/**
+ * **The work was done, and the store would not take it** — and it will not take
+ * it next time either.
+ *
+ * `PublishRefused` (src/store/pg-revisions.ts) is the last gate before a draft
+ * becomes the article: it refuses a draft with no blocks, no tree, a tree
+ * `checkTree` rejects, a `hierarchy` run that did not finish or ran against
+ * different blocks, or a revision that is not this article's to publish. Until
+ * 2026-09-07 it carried a list of free-text reasons and nothing else, so
+ * `failureKindOf` (src/job-failure.ts) found nothing to read and fell through
+ * to `retry`.
+ *
+ * What that cost is the whole of
+ * docs/postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md.
+ * A `checkTree` rule tightened over already-stored trees took roughly one
+ * article in twenty off the air permanently, and each attempt to publish
+ * *anything* for one of them — glossary, quotes, debate — completed its model
+ * call, paid for it, and was then refused at the door. Four times on one
+ * article in thirteen minutes, one of them $0.2454, every one of them shown
+ * this file's `retry` sentence: *"a step that stops like this often comes out
+ * differently on a second attempt — so trying again is worth a go"*.
+ *
+ * **`bug`, not `blocked`.** `blocked` is the one non-retryable kind that admits
+ * a way out, and there is none here that a reader can take: the remedy is
+ * re-running the `hierarchy` step, which is an instruction for whoever runs the
+ * app. And note that a **retry** is not that re-run — Retry skips every step
+ * that finished, so it reads the identical tree back and stops in the same
+ * place (src/job-failure.ts § `stageFailure`).
+ *
+ * **It does not say which reason it was**, and that is deliberate rather than
+ * lazy. The reasons name node ids, block indices and hashes: a diagnostic for
+ * whoever runs the app, addressed to somebody who cannot run anything. They go
+ * to the log instead (src/jobs.ts § `endAsStorageFailure`), and thirteen
+ * sentences, twelve of which say the same thing to a reader, is not the fix.
+ *
+ * **What it does not claim, and why the first draft claimed both.** ⟨Sol,
+ * 2026-09-07⟩ It opened *"This finished its work"* and promised *"Nothing was
+ * published and your library is unchanged"*. The first is false for the two
+ * refusals raised while the draft is being **opened**, before a single step
+ * runs; the second is false for the branch that refuses a revision which is
+ * *already published*, where the work is on the shelf already. One sentence
+ * stands in for eight throw sites, so it may only claim what is true at all of
+ * them — the ordinary hazard of shared copy, and the reason to write the
+ * narrow claim rather than the vivid one.
+ */
+export const PUBLICATION_REFUSED: ReaderFacingFailure = {
+  kind: "bug",
+  message:
+    "The app would not save this article's latest result — it found something about the article " +
+    "it will not publish. It has been recorded and needs fixing here; asking again would stop in " +
+    "the same place. [jb-publish-refused]",
+};
+
+/**
+ * **The other publication refusal, and the one where another go is the answer.**
+ *
+ * A draft may only replace the revision it was copied from
+ * (`publishRevisionIn`, src/store/pg-revisions.ts). When the article has moved
+ * on underneath it, publishing now would discard whatever landed first — so it
+ * is refused, and nothing is lost by refusing it.
+ *
+ * `retry`, and it means it: the next attempt begins a fresh draft from what the
+ * article is serving now, so the identical work over the newer base is exactly
+ * what happens. This is the case that makes the refusal a **distinction** rather
+ * than a blanket "never retry a publication" — get this one wrong in the other
+ * direction and the fix for `PUBLICATION_REFUSED` is a second bug, withholding
+ * a button that would have worked.
+ *
+ * It says *something else finished* rather than naming revision ids, for
+ * `PUBLICATION_REFUSED`'s reason: the ids are the diagnostic and belong in the
+ * log.
+ */
+export const PUBLICATION_MOVED_ON: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "Something else finished for this article while this was working, so saving now would have " +
+    "thrown that away. Nothing was published and your library is unchanged. Starting this again " +
+    "picks up from where the article is now. [jb-publish-moved]",
 };
 
 /* --------------------------------------- the steps that know why they stopped -- */
