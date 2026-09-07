@@ -938,28 +938,155 @@ export function portalDrift(
   live: Stripe.BillingPortal.Configuration,
   desired: DesiredPortal,
 ): string[] {
-  const f = live.features;
-  const drift: string[] = planSwitchDrift(f.subscription_update, desired);
+  /* **First, because it decides whether any of the rest is reachable.** An
+     inactive configuration serves no Portal session at all, and every feature
+     under it can read as perfectly correct while no reader ever gets to one.
+     Pinned for the same reason `is_default` is asserted on create: being the
+     right configuration and being a *usable* one are two questions.
 
-  /* **An inactive configuration serves no Portal session at all**, and every
-     feature under it can read as perfectly correct while no reader ever reaches
-     one. Pinned for the same reason `is_default` is asserted on create: being
-     the right configuration and being a *usable* one are two questions. */
-  if (!live.active) drift.push("the configuration is inactive — it can serve no Portal sessions");
+     Not in `FEATURE_DRIFT` below because it is not a feature — it is a property
+     of the configuration, and putting it there would need a sixth key the SDK
+     does not declare, which is the one thing that map exists to refuse. */
+  const drift: string[] = live.active
+    ? []
+    : ["the configuration is inactive — it can serve no Portal sessions"];
 
-  if (!f.subscription_cancel?.enabled) drift.push("subscription_cancel.enabled is false");
-  else if (f.subscription_cancel.mode !== "at_period_end") {
-    drift.push(`subscription_cancel.mode is ${f.subscription_cancel.mode}, not at_period_end`);
-  }
-  if (!f.invoice_history?.enabled) drift.push("invoice_history.enabled is false");
-  if (!f.payment_method_update?.enabled) drift.push("payment_method_update.enabled is false");
-  if (!f.customer_update?.enabled) drift.push("customer_update.enabled is false");
-  else {
-    const updates = [...f.customer_update.allowed_updates].sort().join(",");
-    if (updates !== "address,email") drift.push(`customer_update.allowed_updates is [${updates || "empty"}]`);
-  }
+  for (const check of Object.values(FEATURE_DRIFT)) drift.push(...check(live.features, desired));
+  drift.push(...uncomparedFeatures(live.features));
   return drift;
 }
+
+/**
+ * **A live feature that is switched on and that nothing above compares.**
+ *
+ * The second of the two routes a sixth Portal feature can arrive by, and the
+ * one no type can reach: `FEATURE_DRIFT` is keyed off the **SDK's** idea of the
+ * feature list, and Stripe's API is free to return a key the installed SDK has
+ * never heard of. That is not hypothetical in the other direction either —
+ * `liveConfig` in tests/billing-portal-setup.test.ts has carried
+ * `subscription_pause` since it was written, and the SDK does not declare it
+ * (`node_modules/stripe/esm/resources/BillingPortal/Configurations.d.ts:88`).
+ *
+ * **Only when it is on, and that is the whole of the design.** `portalDrift`'s
+ * output is a blocking `✗` in scripts/stripe-check.ts, under a line telling the
+ * reader to run `stripe:setup --apply` — and an apply cannot remove a legacy key
+ * Stripe keeps on the object. Reporting every unrecognised key would therefore
+ * make that command permanently red with advice that cannot work, and a check
+ * that cries wolf gets switched off (docs/reusable/silent-success.md is the
+ * other half of the same lesson). An inert `{ enabled: false }` exposes no
+ * control to any reader, so it is not drift. A feature that is **on** is a
+ * Portal control nobody costed, which is exactly the money-sensitive case
+ * docs/postmortems/260904a-four-billing-faults-and-the-witnesses-that-agreed-with-the-code.md
+ * is about.
+ *
+ * The known set is derived from `FEATURE_DRIFT` rather than written out again:
+ * a second list of the same five is the exact shape of the bug this file exists
+ * to fix. GPT Sol, 2026-09-07.
+ *
+ * **Exhaustive over feature *names*, not over the fields inside each one.**
+ * `payment_method_update` also carries `payment_method_configuration` and only
+ * `enabled` is compared; that is a deliberate gap and this says nothing about
+ * it.
+ */
+function uncomparedFeatures(features: Stripe.BillingPortal.Configuration.Features): string[] {
+  const found: string[] = [];
+  for (const [name, value] of Object.entries(features)) {
+    /* `Object.hasOwn`, not `in`: `in` walks the prototype, so a feature Stripe
+       named `toString` or `constructor` would read as already compared. GPT
+       Sol — own-key membership is the actual question being asked. */
+    if (Object.hasOwn(FEATURE_DRIFT, name)) continue;
+
+    /* An inert feature exposes no control to any reader, so it is not drift.
+       Anything else — on, or a shape with no `enabled` to read — is reported,
+       and the sentence says which of those it saw rather than claiming the
+       stronger one for both. Failing closed on an unreadable shape is
+       deliberate; describing it as "switched on" was not. */
+    const state = value as { enabled?: unknown } | null;
+    if (typeof value === "object" && state !== null && state.enabled === false) continue;
+    found.push(
+      typeof value === "object" && state !== null && state.enabled === true
+        ? `the Portal has ${name} switched on and nothing here compares it`
+        : `the Portal has ${name}, whose state this cannot read, and nothing here compares it`,
+    );
+  }
+  return found.sort();
+}
+
+/**
+ * **Every feature Stripe's Portal has, and what we compare of each — keyed off
+ * the SDK's own type, so a sixth cannot arrive unnoticed.**
+ *
+ * This was five hand-written `if`s until 2026-09-07. Today's SDK
+ * (`stripe@22.6.1`,
+ * `node_modules/stripe/esm/resources/BillingPortal/Configurations.d.ts:88`)
+ * declares **exactly these five**, so that comparison was complete — by
+ * coincidence of nobody having upgraded the SDK, which is not a property
+ * anything was holding.
+ *
+ * A sixth feature going unnoticed is precisely how `subscription_update` was
+ * missed, at the cost of a paying customer unable to upgrade for a month:
+ * docs/postmortems/260904a-four-billing-faults-and-the-witnesses-that-agreed-with-the-code.md.
+ * `Record<keyof …Features, …>` makes that a compile error — a sixth feature
+ * cannot go in without somebody deciding what to do about it, and the decision
+ * is forced at the moment the SDK moves rather than at the moment a reader
+ * complains.
+ *
+ * **The map is load-bearing, not decoration**, and that distinction is the
+ * whole reason `portalDrift` above iterates it rather than naming its members.
+ * A key added only to satisfy the compiler, holding a function that returns
+ * `[]`, would be a list saying *compared* over a comparison nobody wrote — the
+ * shape of every entry in docs/reusable/silent-success.md. Each entry is driven
+ * to produce drift, and then driven again against a correct configuration to
+ * produce none, in tests/billing-portal-setup.test.ts § every Portal feature
+ * the SDK declares is compared.
+ *
+ * ## The other way a sixth feature can arrive, and why nothing here catches it
+ *
+ * The live API can return a key the SDK's type does not declare —
+ * `subscription_pause` is one, and `liveConfig` in that test file has carried it
+ * since the fixture was written. Reporting an unrecognised key as drift was
+ * weighed and **declined**: `portalDrift`'s output is a blocking `✗` in
+ * `scripts/stripe-check.ts`, so a legacy key Stripe keeps on the object for ever
+ * would make that command permanently and unfixably red — a check that cries
+ * wolf gets switched off, which is the failure mode this whole tier of work
+ * exists to prevent. Whoever next has the live account in front of them should
+ * settle what it actually returns;
+ * docs/plans/260907b-five-class-killers-from-the-postmortems-become-checks.md
+ * § Stage 3 records the reasoning.
+ *
+ * Insertion order is the order the drift is reported in, and
+ * `subscription_update` is first because it is the money-sensitive one and most
+ * of the list.
+ */
+export const FEATURE_DRIFT: Record<
+  keyof Stripe.BillingPortal.Configuration.Features,
+  (f: Stripe.BillingPortal.Configuration.Features, desired: DesiredPortal) => string[]
+> = {
+  subscription_update: (f, desired) => planSwitchDrift(f.subscription_update, desired),
+
+  subscription_cancel: (f) => {
+    if (!f.subscription_cancel?.enabled) return ["subscription_cancel.enabled is false"];
+    if (f.subscription_cancel.mode !== "at_period_end") {
+      return [`subscription_cancel.mode is ${f.subscription_cancel.mode}, not at_period_end`];
+    }
+    return [];
+  },
+
+  invoice_history: (f) => (f.invoice_history?.enabled ? [] : ["invoice_history.enabled is false"]),
+
+  payment_method_update: (f) =>
+    f.payment_method_update?.enabled ? [] : ["payment_method_update.enabled is false"],
+
+  customer_update: (f) => {
+    if (!f.customer_update?.enabled) return ["customer_update.enabled is false"];
+    const updates = [...f.customer_update.allowed_updates].sort().join(",");
+    /* Exact equality, never "contains": an extra allowed update is a Portal
+       control nobody costed. Same rule as `default_allowed_updates` above. */
+    return updates === "address,email"
+      ? []
+      : [`customer_update.allowed_updates is [${updates || "empty"}]`];
+  },
+};
 
 /** The `subscription_update` half — the money-sensitive one, and most of the list. */
 function planSwitchDrift(
