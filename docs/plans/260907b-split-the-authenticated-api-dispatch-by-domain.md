@@ -1,7 +1,9 @@
 # The authenticated API's dispatch becomes enumerable — and the matrix test that has to come first
 
-Status as of 2026-09-07: **reviewed; stages 1, 1b, 1c, 2, 3a and 3b landed; the table holds the
-bottom thirteen guards of the chain — jobs, uploads and billing — and referee is the next slice up.** Evidence gathered at `d4b503b4`;
+Status as of 2026-09-07: **done enough to stop here.** Stages 1, 1b, 1c, 2, 3a, 3b and 3c are landed
+and reviewed. The table holds the bottom thirteen guards of the chain (jobs, uploads, billing) and
+referee is the next slice up. What remains is real but optional: stopping here leaves the mechanism proven, the safety net in
+place, and the next slice specified with its prerequisite named. Evidence gathered at `d4b503b4`;
 every line number below was live at `d4b503b4` and stage 3a has since moved them — the four billing
 guards are gone from the chain and roughly 280 lines were added above `serveAuthenticatedApi`, so
 read a line number as "which statement", not "which line". Design
@@ -431,6 +433,25 @@ unchanged, one domain per commit, suite green each time. (An earlier draft of th
 `async function tryXRoutes(request): Promise<boolean>`; that was the shape the mis-read review
 argued for. The settled shape is § *The shape* above.)
 
+**Migrate from the bottom upward, and do not hoist.** Sol's P2-STAGE3B-ORDER, and the alternative is
+a trap worth naming: take the contiguous guard slice immediately above the existing table call and
+prepend those rows before the ones already there, in original order. One call, total order preserved.
+**Do not dispatch the complete `AUTH_ROUTES` at several positions** — that lets an already-migrated
+domain match at the first call. A non-contiguous domain instead gets an explicitly named *slice*
+table at its recorded position, keeping the invariant "the complete `AUTH_ROUTES` is dispatched
+exactly once".
+
+Hoisting the table earlier is **not** licensed by the disjointness property. That property is true
+today, but it rests on a hand-read of 67 patterns plus a finite corpus, and it expires the moment a
+pattern is widened. It becomes durable only when every guard has moved, or when matchers use a
+representation whose same-method intersections can be checked exhaustively.
+
+**And capture the order oracle *before* the move, not with it.** Stage 3b's order test was written in
+the same commit as the arrangement it approves, so it would equally have blessed a mistaken one — a
+regression pin, not evidence. Sol checked the nine rows against `468d1eeb^` by hand and confirmed
+they are right, so stage 3b is sound; the lesson is for the next slice. Commit an ordered fixture
+while the guards are still in the chain, watch it green, then move without touching the oracle.
+
 **Stage 3a — the table exists and billing is in it. ✅ Landed.** `AUTH_ROUTES` and
 `dispatchAuthRoute` in `src/routes.ts`, above `serveAuthenticatedApi`; the four billing guards are
 now four rows; `serveAuthenticatedApi` gained one statement,
@@ -503,10 +524,16 @@ Three things this stage hit that billing did not:
   order, newest domain first*. The chain's order is deliberately not asserted because its guards are
   disjoint; the table's order **is** the chain's order carried across, and nothing else recorded
   that. It is the only thing the interleave mutation reddened.
-- **Sol's trap has a rail, and it is absolute.** A second `dispatchAuthRoute(AUTH_ROUTES, …)` earlier
-  in the chain is refused by `readTableDispatch` at module scope — `Tests: no tests`. The same rail
-  would refuse a *slice* dispatched at its old position, which is Sol's sanctioned move for a domain
-  that is not a contiguous suffix; teaching it that is a deliberate edit at the stage that needs one.
+- **Sol's trap has a rail, and it is blanket rather than absolute.** A second
+  `dispatchAuthRoute(AUTH_ROUTES, …)` earlier in the chain is refused by `readTableDispatch` at
+  module scope — `Tests: no tests`. "Absolute" was this write-up overstating it (Sol, stage 3b review
+  § P2-DISPATCH-RAIL-SCOPE): the walk reads `serveAuthenticatedApi`'s own statement list, so it
+  counts *recognised top-level* dispatches and not a call nested inside a guard body or anywhere else
+  in the module. The blanket refusal stays, because the alternative is slice machinery nothing uses.
+  The same rail would refuse a *slice* dispatched at its old position, which is Sol's sanctioned move
+  for a domain that is not a contiguous suffix; teaching it that is a deliberate edit at the stage
+  that needs one, and the invariant to preserve there is **the complete `AUTH_ROUTES` is dispatched
+  exactly once**.
 
 Also done here, since the file was open: **P3-CAPTURE-CONTRACT**. `PatternAuthRoute`'s comment said
 the pattern arm necessarily captures; `/^\/api\/x$/` is a legal row. The comment now says regex
@@ -520,6 +547,68 @@ place the registries actually bite); anything inside the 81 handler bodies; the 
 a 405 policy; and pre-committing to extract all fourteen domains — Greg's request is enough to
 override 260905b's "Tier 3, do not start", but not enough to make every domain automatically worth
 extracting.
+
+**Stage 3c — the P1 the stage 3b review found. ✅ Landed.** `literalConstants` accepted every
+top-level `VariableDeclaration` without checking `kind === "const"`, so `let P = /^\/api\/safe$/`
+followed by `P = makePattern()` would be silently accepted: **the reader records one route while the
+server dispatches another.** That is the contract test certifying a route the server does not serve —
+this job's own failure mode, inside the thing built to prevent it.
+
+Both readers now require `const`. `literalConstants` admits a name only if it is `const`, declared
+**before** `AUTH_ROUTES`, and declared once; `readRouteTable` throws on `AUTH_ROUTES` being non-`const`
+or declared twice. Two details worth keeping:
+
+- **The kind check is a skip, not a refusal.** An unrelated module-scope `let` in `src/routes.ts` is
+  none of the reader's business; only a *row naming* it refuses, as "names nothing declared here".
+- **"Declared before" is enforced by slicing, not by trusting TDZ** — `literalConstants(statements.slice(0, declaredAt))`.
+  That matters because the reader must not depend on a runtime rule it does not execute.
+
+**The mutation evidence is honestly weaker than it looks, in two of four cases.** Moving a `const`
+below the table went red as a `ReferenceError` — TDZ fired at import, *before* the reader ran — and
+the duplicate-declaration mutation went red as `Transform failed`, esbuild refusing the redeclaration.
+In both, the runtime won the race and the reader's own refusal was proved by fixture case instead.
+Recorded because a mutation that reddens for a reason other than the one you are testing is a green
+test wearing a red coat. The six new fixture cases were controlled properly: with the new checks
+temporarily removed, exactly **6 failed | 319 passed** — every new case is a real control and no old
+case moved. 325 pass.
+
+**On the duplicate-name check, kept against its own author's lean.** Once `const` is enforced, a
+duplicate top-level name is unreachable in production: two `const`s of a name is a `SyntaxError`, and
+any *legal* duplicate needs a `var`, which the `const` check already rejects. It bites only on the
+fixture path, where `parseSource` sets `errorRecovery: true` and babel hands back both declarations
+with an error nobody inspects — so without the check the second silently wins. Three lines to refuse
+a reader resolving a name to something the source does not unambiguously say, which is the P1's class
+exactly. Kept.
+
+## Where stage 3 stands, and what the next slice costs
+
+**13 of 81 guards migrated** (billing 4, jobs/uploads 9). 68 remain in the chain, plus the admin gate
+and the one table call. Biome on `serveAuthenticatedApi`: **244 → 234 → 183**. `npm run check`
+EXIT=0 at each stage, all seven hard checks clean.
+
+The next slice up is **referee, and it is where the cheap part ends**:
+
+- **It is the first streaming slice, and not for the reason first thought.** `POST criteria`
+  (`:8321`) calls `runRefereeCriterion`, which opens SSE *and holds `refereeing`*; Claims POST
+  streams and holds `pullingClaims`; Mirror POST streams but holds no live-run lock. So the plan's
+  "chat is the first streaming domain" was wrong twice over — it is referee, and the first guard
+  inside it is criteria rather than mirror.
+- **`assertHandlersAwaited` is a syntax tripwire, not behavioural proof.** It would still pass if a
+  moved closure launched its stream without returning it, swallowed an error, or released its lock
+  early — [silent-success.md](../reusable/silent-success.md), a claim about shape standing in for a
+  claim about lifetime. Sol's required integration test, against the **still-chain-based** criteria
+  POST: pause `runCriterionStream` after the pending row and the SSE `begin` frame; prove the
+  `handleApi` promise is unsettled and the response not ended; issue the corresponding GET and prove
+  its sweep leaves the row `pending`, so `refereeing` is demonstrably still held; release, then
+  require the terminal frame, the store finish, the response end, the lock removal, and only then
+  `handleApi` resolving. Plus a deferred-handler rejection-propagation check.
+- **One test must move with it.** `tests/referee-scan-route.test.ts:342` cuts an arm starting from
+  `if (refereeScan && req.method === "GET") {`, which will not exist. It returns `""` and its
+  presence control fires — loud, but a deliberate one-line edit in that commit. It is the only one of
+  the five source readers that has to move.
+- **A note against ourselves:** stage 3b already moved `jobAdvance`, a long-lived lease-owning
+  handler. Its awaits are correct, but under the lifetime finding's own wording the integration
+  coverage was arguably already due — we moved it on a syntactic check.
 
 ## The baseline, so a later red is attributable
 

@@ -217,9 +217,12 @@
  *     from the top of the chain instead of the bottom. Refused at module scope,
  *     before a case ran: *serveAuthenticatedApi: a second table dispatch at line
  *     8454*. `Tests: no tests`, `Test Files: 1 failed`. The rail is
- *     `readTableDispatch`, and it is absolute: a *slice* dispatched at its old
- *     position — Sol's sanctioned move for a domain that is not a contiguous
- *     suffix — would also have to be taught here, deliberately.
+ *     `readTableDispatch`, and it is blanket rather than absolute — it counts
+ *     *recognised top-level* dispatches and not calls nested elsewhere in the
+ *     module; its header says so, and why that is still the right rail. A
+ *     *slice* dispatched at its old position — Sol's sanctioned move for a
+ *     domain that is not a contiguous suffix — would have to be taught here,
+ *     deliberately.
  *
  * The disjointness check has a **control rather than a mutation**: a real
  * overlap cannot be introduced into `src/routes.ts` without also failing the
@@ -956,6 +959,21 @@ function readDeclaration(statement: AstNode, acc: Accumulator): void {
  * table contributes hangs off it: the entries are guards only if this statement
  * is really there, really awaited, and really returns. A dispatcher that called
  * the table and then fell through to the 404 would answer twice on one response.
+ *
+ * **What the second-dispatch refusal covers, and what it does not.** It refuses
+ * a second *recognised top-level* dispatch, because this walk reads
+ * `serveAuthenticatedApi`'s own statement list and nothing else: a
+ * `dispatchAuthRoute` call nested inside a guard body, or anywhere else in the
+ * module, is not counted. The stage 3b write-up called the rail "absolute";
+ * Sol's review of it (§ P2-DISPATCH-RAIL-SCOPE) is right that this overstates
+ * it. Making it literal would mean scanning every call site in the file for the
+ * name.
+ *
+ * The blanket refusal stays anyway, because the alternative is slice machinery
+ * nothing yet uses. When a non-contiguous domain genuinely needs a slice, the
+ * invariant to preserve is **the complete `AUTH_ROUTES` is dispatched exactly
+ * once**, with an explicitly named slice table permitted at its recorded
+ * position — a deliberate edit here, at the stage that needs one.
  */
 function readTableDispatch(statement: AstNode, test: AstNode, acc: Accumulator): void {
   const call = test.argument;
@@ -1195,16 +1213,57 @@ function resolveMatchValue(
   return target === undefined ? undefined : { node: target, site: `const ${name}` };
 }
 
-/** Every top-level `const NAME = <string or regex literal>`, by name. */
+/**
+ * Every top-level `const NAME = <string or regex literal>` **declared before the
+ * table**, by name — and only if the name is declared once.
+ *
+ * Those three qualifications are the finding, not decoration. Until Sol's stage
+ * 3b review (§ P1-MUTABLE-MATCHER-RESOLUTION) this took any top-level
+ * `VariableDeclaration`, so
+ *
+ * ```ts
+ * let P = /^\/api\/safe$/;
+ * P = makePattern();
+ * ```
+ *
+ * was read as `/api/safe` and dispatched as whatever the call returned: the
+ * reader certifying a route the server does not serve, which is the one failure
+ * this whole file exists to prevent, sitting inside the thing meant to prevent
+ * it. So:
+ *
+ * - **`const`, checked.** A `let` or `var` is never admitted, so a row naming
+ *   one refuses as a pattern that "names nothing declared here". Not admitting
+ *   it, rather than refusing the declaration outright, is what keeps unrelated
+ *   module-scope `let`s in src/routes.ts none of this reader's business.
+ * - **Declared before `AUTH_ROUTES`.** A `const` written after the table
+ *   resolves perfectly well *syntactically* — the caller slices the statement
+ *   list so it cannot. A real one would die at import through the temporal dead
+ *   zone, and the reader should not be leaning on the runtime to catch what it
+ *   can see for itself.
+ * - **Declared once.** A second top-level declaration of the name would
+ *   otherwise resolve to whichever the walk happened to see last, so the name is
+ *   dropped instead of picked and the row naming it refuses.
+ *
+ * Sol also noted that local shadowing cannot reach this module-scope use site,
+ * so there is deliberately no machinery for it.
+ */
 function literalConstants(statements: unknown[]): Map<string, AstNode> {
   const found = new Map<string, AstNode>();
+  const seen = new Set<string>();
   for (const statement of statements) {
     if (!isNode(statement) || nodeType(statement) !== "VariableDeclaration") continue;
     for (const raw of statement.declarations as unknown[]) {
       if (!isNode(raw)) continue;
       const name = identName(raw.id);
+      if (name === undefined) continue;
+      if (seen.has(name)) {
+        /* Ambiguous from here on, whichever kind either declaration was. */
+        found.delete(name);
+        continue;
+      }
+      seen.add(name);
       const init = raw.init;
-      if (name === undefined || !isNode(init)) continue;
+      if (statement.kind !== "const" || !isNode(init)) continue;
       if (nodeType(init) === "StringLiteral" || nodeType(init) === "RegExpLiteral") {
         found.set(name, init);
       }
@@ -1283,24 +1342,42 @@ function readTableEntry(element: unknown, constants: Map<string, AstNode>): Pars
   };
 }
 
-/** `const AUTH_ROUTES: readonly AuthRoute[] = [ … ]`, read row by row. */
+/**
+ * `const AUTH_ROUTES: readonly AuthRoute[] = [ … ]`, read row by row.
+ *
+ * The `const` is checked rather than claimed, for the same reason as in
+ * `literalConstants` above: this header has always said "const", and a `let`
+ * table could be reassigned between the module reading it and a request
+ * reaching it. So could a second declaration of the name, which is why one
+ * refuses instead of quietly winning.
+ */
 function readRouteTable(statements: unknown[], name: string): ParsedTableEntry[] {
   let literal: AstNode | undefined;
-  for (const statement of statements) {
+  let declaredAt = 0;
+  for (const [index, statement] of statements.entries()) {
     if (!isNode(statement) || nodeType(statement) !== "VariableDeclaration") continue;
     for (const raw of statement.declarations as unknown[]) {
       if (!isNode(raw) || identName(raw.id) !== name) continue;
+      if (statement.kind !== "const") {
+        throw new UnsupportedDispatchSyntax(`${name} is not declared \`const\``);
+      }
+      if (literal !== undefined) {
+        throw new UnsupportedDispatchSyntax(`${name} is declared more than once`);
+      }
       const init = raw.init;
       if (!isNode(init) || nodeType(init) !== "ArrayExpression") {
         throw new UnsupportedDispatchSyntax(`${name} is not an array literal`);
       }
       literal = init;
+      declaredAt = index;
     }
   }
   if (literal === undefined) {
     throw new UnsupportedDispatchSyntax(`${name} is not a top-level const`);
   }
-  const constants = literalConstants(statements);
+  /* Only what precedes the table can be a matcher it names — `literalConstants`
+     for why the slice is the whole enforcement of that. */
+  const constants = literalConstants(statements.slice(0, declaredAt));
   return (literal.elements as unknown[]).map((element) => readTableEntry(element, constants));
 }
 
@@ -1939,6 +2016,75 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
 const ${ROUTE_TABLE}: readonly AuthRoute[] = [
   { kind: "pattern", method: "GET", pattern: P, ${HANDLER} },
 ];`;
+      expect(() =>
+        readRouteTable(parseSource(source).program.body as unknown[], ROUTE_TABLE),
+      ).toThrow(UnsupportedDispatchSyntax);
+    });
+
+    /**
+     * The `const` in "a module-scope `const`" is now checked, and these are the
+     * shapes that were accepted while it was not — Sol's stage 3b review §
+     * P1-MUTABLE-MATCHER-RESOLUTION.
+     *
+     * The case above refuses `new RegExp(…)` because the *initialiser* is a
+     * call, which is a claim about construction having no effects. It says
+     * nothing about the binding staying what it was read as. `let P = /…/;
+     * P = makePattern();` has a literal initialiser and a value the reader never
+     * sees, and until the check below it was recorded as `/api/safe` and
+     * dispatched as whatever the call returned — the reader vouching for a route
+     * the server does not serve.
+     *
+     * A declaration *after* the table is the same hole from the other side: it
+     * resolves syntactically here, and a real `const` would then fail at import
+     * through the temporal dead zone. The reader refuses it on its own account
+     * rather than trusting the runtime to notice.
+     */
+    it.each([
+      [
+        "a shared matcher is `let`",
+        `let P = /^\\/api\\/x$/;
+const ${ROUTE_TABLE}: readonly AuthRoute[] = [
+  { kind: "pattern", method: "GET", pattern: P, ${HANDLER} },
+];`,
+      ],
+      [
+        "a shared matcher is `var`",
+        `var P = /^\\/api\\/x$/;
+const ${ROUTE_TABLE}: readonly AuthRoute[] = [
+  { kind: "pattern", method: "GET", pattern: P, ${HANDLER} },
+];`,
+      ],
+      [
+        "a shared matcher is declared after the table",
+        `const ${ROUTE_TABLE}: readonly AuthRoute[] = [
+  { kind: "pattern", method: "GET", pattern: P, ${HANDLER} },
+];
+const P = /^\\/api\\/x$/;`,
+      ],
+      [
+        "a shared matcher name is declared twice",
+        `const P = /^\\/api\\/x$/;
+const P = /^\\/api\\/y$/;
+const ${ROUTE_TABLE}: readonly AuthRoute[] = [
+  { kind: "pattern", method: "GET", pattern: P, ${HANDLER} },
+];`,
+      ],
+      [
+        "the table itself is `let`",
+        `let ${ROUTE_TABLE}: readonly AuthRoute[] = [
+  { kind: "exact", method: "GET", path: "/api/x", ${HANDLER} },
+];`,
+      ],
+      [
+        "the table itself is declared twice",
+        `const ${ROUTE_TABLE}: readonly AuthRoute[] = [
+  { kind: "exact", method: "GET", path: "/api/x", ${HANDLER} },
+];
+const ${ROUTE_TABLE}: readonly AuthRoute[] = [
+  { kind: "exact", method: "GET", path: "/api/y", ${HANDLER} },
+];`,
+      ],
+    ])("refuses a table where %s", (_why, source) => {
       expect(() =>
         readRouteTable(parseSource(source).program.body as unknown[], ROUTE_TABLE),
       ).toThrow(UnsupportedDispatchSyntax);
