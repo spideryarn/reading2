@@ -128,6 +128,29 @@ export interface EnqueueTicket {
    * Postgres feature (docs/project/billing.md), and there is no second ledger.
    */
   ingestEventId?: string;
+  /**
+   * **This request names an article that must already exist**, so the store may
+   * refuse rather than insert if it does not.
+   *
+   * True for exactly one shape: `{ slug, steps }` — *run something on the
+   * article I already have*. False, and absent, for a URL or an upload, which
+   * are requests to **have** an article: the worker's `lockOrCreateArticle`
+   * creating the row is right for those, and refusing on absence would break a
+   * simultaneous double-paste that legitimately adopts a name from an in-flight
+   * job before any article row exists.
+   *
+   * `enqueue` (src/jobs.ts) already refuses that shape up front, and this is not
+   * a second copy of that check — it is the same check taken again **under the
+   * article lock**, because the preflight's answer is a fact from before the
+   * lock and a delete committing in between is what invalidates it. GPT Sol's
+   * F4 on docs/plans/260906h-delete-an-article-permanently.md; the reasoning is
+   * at `lockArticleFor` in src/store/pg-jobs.ts.
+   *
+   * Optional, and absent means *no*, so that a caller written before this
+   * existed goes on inserting rather than starting to refuse — the direction
+   * that can only fail to block, never wrongly block.
+   */
+  requiresArticle?: boolean;
 }
 
 /**

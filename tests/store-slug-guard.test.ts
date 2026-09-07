@@ -53,6 +53,7 @@ import { pgGlossaryLookupStore } from "../src/store/pg-lookups.js";
 import { pgRefereeClaimsStore } from "../src/store/pg-referee-claims.js";
 import { pgRefereeCriteriaStore } from "../src/store/pg-referee-criteria.js";
 import { pgSearchStore } from "../src/store/pg-searches.js";
+import { pgShelfStore } from "../src/store/pg-shelf.js";
 import { pgVisibilityStore } from "../src/store/pg-visibility.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
@@ -94,6 +95,12 @@ const STORES: readonly (readonly [string, (slug: string) => Promise<unknown>])[]
   ["the glossary-lookup store", (slug) => pgGlossaryLookupStore.load(slug)],
   ["the visibility switch", (slug) => pgVisibilityStore.set(slug, "public", true)],
   ["the glossary delete", (slug) => pgGlossaryStore.deleteGlossary(slug)],
+  /* The eighth copy, and the one where the 400/404 distinction stops being
+     about wording. A pasted article title decoded into `not a slug` must not
+     reach a query at all — and "there is no such article" is the wrong thing to
+     tell somebody about a string that could not name one, on the one route
+     where the next thing they do is press the button again. */
+  ["the shelf destroy", (slug) => pgShelfStore.destroy(slug)],
 ];
 
 describe("a malformed slug", () => {

@@ -19,13 +19,16 @@
  *    find. See docs/plans/260826e-postgres-storage-implementation.md § Rules.
  */
 
-import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articles, articleRevisions, revisionBlocks } from "../db/schema.js";
+import { articles, articleRevisions, jobs, revisionBlocks } from "../db/schema.js";
 import { MAX_TITLE_CHARS } from "../shelf.js";
 import { MAX_PURPOSE_CHARS, normaliseProfileText } from "../profile.js";
 import { log } from "../log.js";
+import { currentOwnerId, type OwnerId } from "../owner.js";
+import { READ_COMMITTED } from "./isolation.js";
+import { lockBillingAccount } from "./pg-billing.js";
 import { notFound, ownedByReader, ownedSlug, requireSlug, shelfFrom } from "./pg.js";
 import type { LibrarySearch, LibrarySearchOptions, ShelfStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
@@ -42,6 +45,127 @@ import { pgArticleReader } from "./pg.js";
  * looks like an empty library.
  */
 const CONFIG = "english";
+
+/**
+ * **The article this delete is about to destroy, read and locked** — taking its
+ * builder so a test can read the SQL rather than a constant beside it.
+ *
+ * The same shape and the same reason as `lockedGlossaryArticleQuery`
+ * ([pg-glossary.ts](pg-glossary.ts)) and `lockedArticleQuery`
+ * ([pg-visibility.ts](pg-visibility.ts)), and the finding behind all three is
+ * one finding: deleting `.for("update")` leaves the entire suite green, because
+ * a lock's absence is only visible while a race is actually happening.
+ * `tests/store-shelf-pg.test.ts` reads this statement instead, and that
+ * assertion fires every time.
+ *
+ * **`for update` is the whole ordering argument here, and it is doing more work
+ * than it does for the glossary.** It is the same row `lockOrCreateArticle`
+ * takes (src/store/pg-revisions.ts) and — since Sol's F4, 2026-09-06 — the same
+ * row `tryEnqueue` takes before inserting a job. So the three are serialised
+ * against each other: either the delete gets it and a later enqueue re-reads
+ * absence and answers 404, or the enqueue gets it and the job check below sees
+ * a committed row and refuses. Without it, an enqueue that had already passed
+ * `articleExists` can insert *after* the check and *before* the delete, and the
+ * worker that picks that job up recreates the article the reader destroyed.
+ *
+ * **Through `ownedSlug`, like everything else**, so the owner check and the
+ * lookup are one clause and there is no window between "whose is it" and
+ * "destroy it".
+ */
+export function lockedArticleForDestroyQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  slug: string,
+  ownerId: OwnerId,
+) {
+  return db
+    .select({ id: articles.id })
+    .from(articles)
+    .where(ownedSlug(slug, ownerId))
+    .for("update")
+    .limit(1);
+}
+
+/**
+ * **Is anything working on this article right now?**
+ *
+ * Deliberately **broader** than `liveJobHoldingADraftQuery` in
+ * [pg-glossary.ts](pg-glossary.ts), which this was first written as a copy of,
+ * and the two narrowings that file makes on purpose are the two this must not
+ * inherit. GPT Sol's F3, 2026-09-06.
+ *
+ * - **A claimed job that has not opened its draft yet counts.** The glossary
+ *   query misses it, correctly for its own question — it is asking whether a
+ *   job could put the deleted list back, and a job with no draft cannot. This
+ *   asks a different question, and `draft_revision_id is null` is the ordinary
+ *   *first* state of every ingest (src/db/schema.ts § `draft_revision_id`).
+ *   That job is charged, and deleting the article under it strands its
+ *   reservation.
+ * - **A running job whose lease has expired counts.** The glossary query
+ *   excludes it through `leaseIsLive`, again correctly: a fenced-out job cannot
+ *   publish. But it is not finished — `settleExpired` puts it back to `queued`
+ *   on the same row and it carries on (src/db/schema.ts § `requeues`) — so it
+ *   is a wait the reader can end by pressing Stop, not a row to delete under.
+ *
+ * `done` and `error` are the two this does **not** match, and that is measured
+ * rather than assumed: both slug indexes are partial on
+ * `status in ('queued','running')`, so a terminal row blocks nothing and the
+ * reader can re-add the same URL afterwards. It stays as history.
+ *
+ * **Owner-scoped as well as slug-scoped.** `jobs.slug` carries no foreign key
+ * and no owner filter of its own, so without `owner_id` this would let one
+ * reader's job refuse another reader's delete — which is both a leak (the 409
+ * says the slug is busy) and a denial of service.
+ *
+ * **No `limit`, because it locks.** Every matching row is locked, not just the
+ * first: the point is to hold whatever is live still for the length of this
+ * transaction. Nothing is locked when nothing matches, which is exactly the
+ * hole the article lock above closes
+ * (docs/postmortems/260901f-a-for-update-that-locks-nothing.md).
+ */
+function liveJobsForQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  slug: string,
+  ownerId: OwnerId,
+) {
+  return db
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.ownerId, ownerId),
+        eq(jobs.slug, slug),
+        inArray(jobs.status, ["queued", "running"]),
+      ),
+    )
+    .for("update");
+}
+
+/**
+ * **The import the reader is being asked to stop**, in the words they will see.
+ *
+ * A sentence rather than a code, and written for somebody who pressed a button:
+ * it says what is in the way and what to do about it, and nothing about leases,
+ * reservations or drafts. The same discipline as `jobRunning` in
+ * [pg-glossary.ts](pg-glossary.ts).
+ *
+ * **Refusing is the cheap answer, not the cautious one.** The first draft of
+ * this deleted the slug's non-terminal jobs instead, to clear the
+ * `jobs_reserved_slug` collision the Stage A spike measured — and that leaks the
+ * job's quota slot for ever, because deleting a job deliberately does not touch
+ * its reservation (src/db/schema.ts § `ingest_event_id`) and an unsettled
+ * reservation deliberately never expires (§ `ingest_events`). Refusing solves
+ * the collision as well: the reader stops the import, which settles the
+ * reservation through the path that exists for it, and then deletes.
+ */
+function importRunning(): Error {
+  return Object.assign(
+    new Error(
+      "An import is running on this article, so it cannot be deleted yet. Stop it, or wait " +
+        "for it to finish, then delete.",
+    ),
+    { status: 409 },
+  );
+}
 
 const rawPgShelfStore: ShelfStore = {
   async read(slug: string): Promise<ShelfState> {
@@ -115,6 +239,115 @@ const rawPgShelfStore: ShelfStore = {
       .where(ownedSlug(slug))
       .returning({ slug: articles.slug });
     if (!row) throw notFound(slug);
+  },
+
+  /**
+   * **One statement, and the cascade does the rest.** See `ShelfStore.destroy`
+   * for what the three answers mean; this is why it is shaped the way it is.
+   *
+   * ## Why nothing is tidied up first
+   *
+   * `articles_current_revision_fk` is `NO ACTION` and **not deferrable**, so it
+   * is checked at the end of each *statement* rather than at commit. Deleting
+   * the children by hand first therefore fails, and wrapping that in a
+   * transaction rescues nothing — measured, both ways round, by the Stage A
+   * spike on a fully populated article
+   * (docs/plans/260906h-delete-an-article-permanently.md § What the spike
+   * found). The single `delete from articles` succeeds on exactly that row.
+   *
+   * So the transaction here is not for the delete. It is for the three
+   * decisions in front of it, which have to be taken against a state nothing
+   * can move underneath them.
+   *
+   * ## The lock order, which is not negotiable
+   *
+   * `billing_accounts` **before** `articles`, everywhere — the rule
+   * [pg-billing.ts](pg-billing.ts) § *The lock order* states and the reason it
+   * is stated as *everywhere*: a consistent order is what stops this
+   * deadlocking, so a second writer that took the article first and the billing
+   * row second would be the cycle. Deleting an article moves usage in exactly
+   * the way an unshare does, which is why this transaction is in the rule at
+   * all — and since 2026-09-06 the price is frozen by a `BEFORE DELETE` trigger
+   * on `articles` (Stage B), which runs inside this lock and therefore cannot
+   * read a visibility somebody is changing.
+   *
+   * `lockBillingAccount` creates the row if the reader has none, because a
+   * `FOR UPDATE` that matches nothing locks nothing
+   * (docs/postmortems/260901f-a-for-update-that-locks-nothing.md) — a free
+   * reader is precisely the case the boundary is for.
+   *
+   * ## What survives, deliberately
+   *
+   * The four `on delete set null` tables keep their rows with a null
+   * `article_id`: `ai_calls` and `ingest_events` because the ledger outlives
+   * everything, `article_visibility_changes` because takedown evidence about a
+   * document we no longer serve is exactly what a late complaint needs, and
+   * `realtime_sessions`. Terminal `jobs` rows and the `uploads` row survive
+   * with a stale `slug` and no foreign key at all — neither has a unique index
+   * on it, so they dangle harmlessly.
+   *
+   * **The `uploads` row is left alone on purpose.** Deleting it destroys the
+   * only durable mapping from this article back to its staging object
+   * ([pg-uploads.ts](pg-uploads.ts) § `forget`), and Stage E owns removing that
+   * object. Removing the row here would make the bytes unreachable rather than
+   * deleted, which is the failure that stage exists to prevent.
+   */
+  async destroy(slug: string): Promise<{ destroyed: string }> {
+    /* Before any query, so a pasted title comes back as "that is not a name"
+       rather than as "there is no such article". tests/store-slug-guard.test.ts. */
+    requireSlug(slug);
+
+    /* Read once, out here, and passed down. Asking `currentOwnerId()` again at
+       each of the three sites would be three opinions that can differ — the
+       argument `ownedSlug` (src/store/owned-slug.ts) already makes about the AI
+       ledger, and it matters more here than anywhere: the owner in the `where`
+       of the DELETE has to be the owner the lock was taken as. */
+    const ownerId = currentOwnerId();
+
+    return getDb().transaction(async (tx) => {
+      /* **An unlocked read, and it has to come first.** `lockBillingAccount`
+         below *creates* the reader's billing row if they have none — so taking
+         it before establishing that the article is theirs means a request that
+         is about to be refused writes a row on its way out. For a stranger with
+         a real account that is a harmless empty anchor; for one without,
+         `billing_accounts.owner_id` references `auth.users(id)` and the whole
+         thing comes back as a `23503` wearing a 500 instead of the 404 it is.
+         Watched doing exactly that, 2026-09-06, by
+         tests/owner-isolation.test.ts.
+
+         **This is not the authorising read**, and moving the locked one up here
+         instead would break the lock order (`billing_accounts` before
+         `articles`, everywhere) and put the documented deadlock cycle back. A
+         plain `SELECT` takes no row lock at all, so it is outside that order and
+         cannot be half of a cycle. It refuses early and never permits: the
+         answer that counts is the locked re-read below, which is the one the
+         DELETE is ordered against. */
+      const [seen] = await tx
+        .select({ id: articles.id })
+        .from(articles)
+        .where(ownedSlug(slug, ownerId))
+        .limit(1);
+      if (!seen) throw notFound(slug);
+
+      await lockBillingAccount(tx, ownerId);
+
+      const [article] = await lockedArticleForDestroyQuery(tx, slug, ownerId);
+      if (!article) throw notFound(slug);
+
+      const live = await liveJobsForQuery(tx, slug, ownerId);
+      if (live.length > 0) throw importRunning();
+
+      const result = await tx.delete(articles).where(ownedSlug(slug, ownerId));
+
+      /* `rowCount === 1`, never `>= 1` and never ignored — the house idiom for a
+         conditional write. The `where` names a globally unique slug, so any
+         other number is a bug rather than a busier day, and reporting
+         `{ destroyed }` over a zero would be the silent success this repo keeps
+         writing up: the client navigates away and the article is still there. */
+      if (result.rowCount !== 1) throw notFound(slug);
+
+      return { destroyed: slug };
+    }, READ_COMMITTED);
   },
 };
 

@@ -52,7 +52,9 @@ import { MAX_PURPOSE_CHARS } from "../src/profile.js";
 import { MAX_TITLE_CHARS } from "../src/shelf.js";
 import { deriveLibraryScalars } from "../src/library-scalars.js";
 import { pgArticleReader } from "../src/store/pg.js";
-import { pgLibrarySearch, pgShelfStore } from "../src/store/pg-shelf.js";
+import { QueryBuilder } from "drizzle-orm/pg-core";
+
+import { lockedArticleForDestroyQuery, pgLibrarySearch, pgShelfStore } from "../src/store/pg-shelf.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -666,5 +668,183 @@ describe("the Postgres shelf and library search", () => {
     it("refuses a slug that is not a slug with a 400", async () => {
       await expect(pgShelfStore.recordOpen("../../etc")).rejects.toMatchObject({ status: 400 });
     });
+  });
+});
+
+/* --------------------------------------------- destroying one, for good -- */
+
+/**
+ * **The owner-can-delete positive control**, and it is here rather than in
+ * tests/owner-isolation.test.ts on purpose.
+ *
+ * That file's whole fixture is one article, shared by every case in its
+ * describe. A positive control for `destroy` there would consume it, and the
+ * eight tests after it would fail for a reason that has nothing to do with
+ * ownership. So the refusal lives there — a stranger gets 404 and the row is
+ * still there — and the other half, that the owner really can, lives here with
+ * a fixture of its own that nothing else reads.
+ *
+ * Its own `describe` and its own article for the same reason: the suite above
+ * builds one article and asserts against it thirty times.
+ *
+ * **What it is actually pinning is the cascade.** `articles_current_revision_fk`
+ * is `NO ACTION` and not deferrable, so an article with a *published* revision
+ * and a non-null `current_revision_id` is the shape that could refuse the
+ * delete — and it is the shape every real article is in. The Stage A spike
+ * measured this against a fully populated row
+ * (docs/plans/260906h-delete-an-article-permanently.md § What the spike found);
+ * this keeps it true.
+ */
+describe("destroying an article", () => {
+  const GONE_SLUG = "test-pg-shelf-destroyed";
+  const GONE_ARTICLE = "00000000-0000-4000-8000-0000000000d6";
+  const GONE_REVISION = "00000000-0000-4000-8000-0000000000d7";
+  const GONE_BLOCK = "spya-pgaaqg";
+
+  async function seed(): Promise<void> {
+    const db = getDb();
+    await db.insert(articles).values({
+      id: GONE_ARTICLE,
+      ownerId: currentOwnerId(),
+      slug: GONE_SLUG,
+    });
+    await db.insert(articleRevisions).values({
+      id: GONE_REVISION,
+      articleId: GONE_ARTICLE,
+      status: "published",
+      title: "About to go",
+      fetchedAt: new Date("2026-01-01T00:00:00.000Z"),
+      tree: {
+        version: "1",
+        generator: "test",
+        slug: GONE_SLUG,
+        rootId: "n0",
+        nodes: {
+          n0: {
+            id: "n0",
+            depth: 0,
+            parent: null,
+            children: [],
+            range: [GONE_BLOCK, GONE_BLOCK],
+            title: "Root",
+            gist: "An article that is about to stop existing.",
+          },
+        },
+      },
+    });
+    /* **The pointer is the point.** Without it the delete is a much easier
+       statement than the one a reader will actually run, and the constraint
+       this test exists for is never exercised. */
+    await db
+      .update(articles)
+      .set({ currentRevisionId: GONE_REVISION })
+      .where(eq(articles.id, GONE_ARTICLE));
+    await db
+      .insert(blockIdentities)
+      .values({ articleId: GONE_ARTICLE, blockId: GONE_BLOCK });
+    await db.insert(revisionBlocks).values({
+      articleId: GONE_ARTICLE,
+      revisionId: GONE_REVISION,
+      blockId: GONE_BLOCK,
+      ordinal: 0,
+      tag: "p",
+      kind: "text",
+      text: "A paragraph nobody will read again.",
+      words: 6,
+      html: "<p>A paragraph nobody will read again.</p>",
+      gistable: true,
+    });
+  }
+
+  async function sweep(): Promise<void> {
+    const db = getDb();
+    await db.delete(revisionBlocks).where(eq(revisionBlocks.articleId, GONE_ARTICLE));
+    await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, GONE_ARTICLE));
+    await db.delete(articleRevisions).where(eq(articleRevisions.articleId, GONE_ARTICLE));
+    await db.delete(blockIdentities).where(eq(blockIdentities.articleId, GONE_ARTICLE));
+    await db.delete(articles).where(eq(articles.id, GONE_ARTICLE));
+  }
+
+  beforeAll(async () => {
+    await sweep();
+    await seed();
+  });
+
+  afterAll(async () => {
+    await sweep();
+    await closeDb();
+  });
+
+  /**
+   * **The lock, read off the statement rather than raced for.**
+   *
+   * Dropping `.for("update")` leaves every other case in this file green, and
+   * the barrier in tests/article-delete-pg.test.ts green too — a lock's absence
+   * is only visible while a race is actually happening, and neither of those
+   * arranges the one it would lose. What it would lose is the ordering between
+   * this delete and `tryEnqueue`'s insert, which is the whole of GPT Sol's F4:
+   * without it an enqueue can insert between the live-job check and the DELETE,
+   * and the worker recreates the article the reader destroyed.
+   *
+   * The same assertion, for the same reason and after the same finding, as
+   * tests/store-glossary-delete-pg.test.ts § *locks the article row it is about
+   * to decide on*.
+   */
+  it("locks the article row it is about to destroy, by owner", () => {
+    const q = lockedArticleForDestroyQuery(
+      new QueryBuilder() as never,
+      "a-slug",
+      currentOwnerId(),
+    ).toSQL();
+    expect(q.sql).toMatch(/for update/i);
+    expect(q.sql, "and by owner, never by slug alone").toMatch(
+      /"slug" = \$1 and "spideryarn"\."articles"\."owner_id" = \$2/,
+    );
+  });
+
+  it("takes the article and everything the cascade owns", async () => {
+    const db = getDb();
+    expect(await pgShelfStore.destroy(GONE_SLUG)).toEqual({ destroyed: GONE_SLUG });
+
+    /* Every child table, asked separately. One `count(*)` over a join would go
+       green on a cascade that emptied three of the four. */
+    expect(
+      await db.select({ id: articles.id }).from(articles).where(eq(articles.id, GONE_ARTICLE)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select({ id: articleRevisions.id })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.articleId, GONE_ARTICLE)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select({ blockId: blockIdentities.blockId })
+        .from(blockIdentities)
+        .where(eq(blockIdentities.articleId, GONE_ARTICLE)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select({ blockId: revisionBlocks.blockId })
+        .from(revisionBlocks)
+        .where(eq(revisionBlocks.articleId, GONE_ARTICLE)),
+    ).toHaveLength(0);
+
+    /* And it is off the shelf, which is the thing the reader asked for. */
+    expect((await pgArticleReader.listArticles()).map((a) => a.slug)).not.toContain(GONE_SLUG);
+  });
+
+  it("404s for an article that is not there, rather than reporting a delete", async () => {
+    await expect(pgShelfStore.destroy("test-pg-no-such-article")).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it("404s a second time, so a repeat cannot report success", async () => {
+    /* The first case already destroyed it. A `destroy` that returned
+       `{ destroyed }` for a row it did not delete would make a double-press
+       look like two successes — and the client is about to navigate away on
+       the strength of that answer. */
+    await expect(pgShelfStore.destroy(GONE_SLUG)).rejects.toMatchObject({ status: 404 });
   });
 });

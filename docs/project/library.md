@@ -33,6 +33,13 @@ The shelf's own API surface grew on 2026-08-26: `GET /api/library` (now taking `
 shape and the specific pattern has to win — otherwise the search box would read as a request to
 rename an article called "search".
 
+`DELETE /api/library/:slug` joined them on 2026-09-06 and **nothing calls it yet** — the control
+that will is Stage D of
+[260906h-delete-an-article-permanently.md](../plans/260906h-delete-an-article-permanently.md), and
+until it lands this is reachable only by a `curl`. It destroys the article and everything cascading
+off it, answers 404 for a slug that is not yours and 409 while an import is running on it, and
+there is no undo: *Archive* below is the reversible ending, and this is the other one.
+
 **This said "the two routes" until 2026-08-25.** The last two arrived together, and they are one
 route with three views rather than three routes: same article, same fetch, same bottom bar, so
 `Route` carries a `view` and `ArticlePage` branches on it

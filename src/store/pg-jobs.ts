@@ -71,8 +71,9 @@ import { getDb } from "../db/client.js";
 import { guardDbStore, lockUnavailable, violatesConstraint } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { leaseIsOver, liveAttempt } from "./job-fence.js";
+import { ownedSlug } from "./owned-slug.js";
 import { RELEASED, releaseReservations, settleReservation } from "./pg-billing.js";
-import { jobs, queueState } from "../db/schema.js";
+import { articles, jobs, queueState } from "../db/schema.js";
 import { INTERRUPTED } from "../messages.js";
 import type { FailureKind } from "../messages.js";
 import type { Job, JobStatus, JobStep, OwnerId } from "../types.js";
@@ -215,9 +216,90 @@ export async function ingestProvenanceOf(
   return row;
 }
 
-/** One insert-or-look. `null` means the holder finished in between; ask again. */
-async function tryEnqueue(job: Job, ticket: EnqueueTicket): Promise<EnqueueOutcome | null> {
-  const db = getDb();
+/**
+ * **The article this job is about to be queued against, locked** — and the one
+ * new statement in this file since 2026-09-06.
+ *
+ * GPT Sol's F4 on the permanent-delete plan. `enqueue` (src/jobs.ts) checks
+ * that a bare-slug request names an article the reader owns *before* it builds
+ * the job, and nothing held that fact still:
+ *
+ *     enqueue: articleExists("x") → true
+ *     delete:  locks "x", sees no active job, deletes it, commits
+ *     enqueue: inserts its queued job for "x"
+ *     worker:  lockOrCreateArticle("x") → **creates the row**
+ *
+ * — and the delete had already reported success. `lockOrCreateArticle` creating
+ * an absent row is right for a first ingest and is the whole reason this is a
+ * race rather than a failure (src/store/pg-revisions.ts).
+ *
+ * So the check moves inside the insert's own transaction, under this lock. It
+ * is the same row `pgShelfStore.destroy` and `lockOrCreateArticle` take, which
+ * makes the three serialise: whoever gets it first, the other sees a committed
+ * fact rather than a stale one. Either the delete wins and this re-reads
+ * absence and refuses, or this wins and the delete finds a committed job and
+ * answers 409.
+ *
+ * **The lock is attempted for every enqueue and *insisted on* for only some.**
+ * `FOR UPDATE` on a row that is not there locks nothing
+ * (docs/postmortems/260901f-a-for-update-that-locks-nothing.md), so for a
+ * minted slug this costs one indexed miss and buys nothing — which is correct,
+ * because there is nothing yet to protect. What `ticket.requiresArticle` adds
+ * is the refusal, and it belongs to exactly one shape: see `EnqueueTicket`.
+ *
+ * **No `billing_accounts` lock is taken here and none may be.** The order is
+ * `billing_accounts` before `articles`, everywhere (src/store/pg-billing.ts §
+ * *The lock order*); a transaction that takes only the article is outside that
+ * order and cannot close a cycle with one that takes both. The reservation is
+ * already committed by the time `enqueue` is called — `withIngestSlot`
+ * (src/billing/admission.ts) says at length why the billing lock is *not* held
+ * across this — so there is nothing here to take it for.
+ */
+async function lockArticleFor(tx: Tx, job: Job) {
+  return await tx
+    .select({ id: articles.id })
+    .from(articles)
+    .where(ownedSlug(job.slug, job.ownerId))
+    .for("update")
+    .limit(1);
+}
+
+/**
+ * **The article a bare-slug request named has gone.**
+ *
+ * Word for word the sentence `enqueue`'s preflight throws (src/jobs.ts) and the
+ * one `GET /api/article/:slug` answers with for a slug that is not yours, so
+ * that "somebody else has it", "nobody has it" and "it was deleted while you
+ * were asking" cannot be told apart on the wire.
+ */
+function noSuchArticle(): Error {
+  return Object.assign(new Error("No such article."), { status: 404 });
+}
+
+/**
+ * One insert-or-look. `null` means the holder finished in between; ask again.
+ *
+ * **A transaction since 2026-09-06**, where it used to be two statements on the
+ * pool. The insert and the article lock in front of it have to land together or
+ * the lock is decorative — see `lockArticleFor`. The re-read below stays inside
+ * it for the same reason it was always immediately after the insert: it is
+ * answering *"who is in the way of the row I just failed to write"*, and a
+ * question asked outside the transaction that failed is a question about a
+ * different moment.
+ */
+async function enqueueIn(
+  db: Tx,
+  job: Job,
+  ticket: EnqueueTicket,
+): Promise<EnqueueOutcome | null> {
+  const [article] = await lockArticleFor(db, job);
+  /* **Re-read after the lock, never trusting the preflight.** The preflight in
+     src/jobs.ts still runs and still fails fast — it is what stops a typo
+     minting ids and spending a reservation — but by the time this line runs it
+     is a fact from before the lock, which is precisely the fact the race
+     invalidates. */
+  if (!article && ticket.requiresArticle === true) throw noSuchArticle();
+
   const inserted = await db
     .insert(jobs)
     .values({
@@ -360,6 +442,18 @@ async function tryEnqueue(job: Job, ticket: EnqueueTicket): Promise<EnqueueOutco
 
   // Whoever held it finished between the two statements. The caller asks again.
   return null;
+}
+
+/**
+ * The transaction `enqueueIn` above needs, and nothing else.
+ *
+ * Split in two so that the lock, the insert and the classification are not
+ * one function — the `…In` convention this file already keeps for `claimIn`,
+ * `settleIn` and `releaseStepIn`, and for the same reason: what happens inside
+ * a transaction should be readable without the transaction wrapped around it.
+ */
+async function tryEnqueue(job: Job, ticket: EnqueueTicket): Promise<EnqueueOutcome | null> {
+  return await getDb().transaction((db) => enqueueIn(db, job, ticket), READ_COMMITTED);
 }
 
 /**

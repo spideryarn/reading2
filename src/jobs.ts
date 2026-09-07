@@ -3073,6 +3073,15 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
          unique index on the column — and if none does, the caller releases it
          (src/billing/admission.ts). */
       ...(request.ingestEventId !== undefined && { ingestEventId: request.ingestEventId }),
+      /* **The preflight above, said again where it can be believed.** That check
+         reads `articleExists` on the pool, minutes of nothing in particular
+         later this loop inserts, and a delete committing in between leaves a
+         queued job whose worker calls `lockOrCreateArticle` and **remakes the
+         article the reader destroyed**. The store re-asks it under the article
+         lock; the condition is written the same way here so the two cannot come
+         to mean different things. GPT Sol's F4,
+         docs/plans/260906h-delete-an-article-permanently.md. */
+      requiresArticle: !request.url && !request.upload,
     });
 
     /**
