@@ -179,18 +179,15 @@ import {
 import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   arrivalTarget,
-  glideTarget,
   isBlockOnScreen,
   scrollToBlock,
   scrollToTop,
-  stickyOffset,
   watchBarVisibility,
 } from "./scroll.js";
 import { orderComments, positionOf, stepComment } from "./comment-nav.js";
 import { jumpToComment, stepToComment } from "./comment-jump.js";
 import {
   buildSections,
-  positionToWrite,
   sectionDepth,
   type Section,
 } from "./position.js";
@@ -244,7 +241,8 @@ import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
 import { SmallScreenHint } from "./SmallScreenHint.js";
 import { ViewportProbe } from "./ViewportProbe.js";
 import { useRenderCount } from "./perf.js";
-import { NO_FRAME, NO_GEOMETRY_CLOCK, noteGeometry, parentGeometryClock } from "./geometry-cost.js";
+import { NO_FRAME } from "./geometry-cost.js";
+import { measureReadingPosition } from "./reading-position.js";
 import { rowsForBlockIds } from "./rows.js";
 import {
   REFEREE_DECLARE_IT,
@@ -1768,47 +1766,20 @@ function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: str
        takes the `NO_FRAME` default — each of those is a frame of its own. */
     const measure = (at: number = NO_FRAME) => {
       frame = 0;
-      const t0 = parentGeometryClock();
-      /* Every rule this makes is in position.ts, and it is pure so that the one
-         that matters can be watched failing — an untested guard against a race
-         is the shape silent-success.md is about.
-
-         `jumpInFlight` is read out here rather than passed inline because
-         arguments are evaluated before the call, so an inline version would do
-         a rect read per section on every frame of a jump only to have the
-         function throw the answer away. The rects are the expensive half of
-         this measurement (performance.md). GPT Sol, 2026-08-30. */
-      const jumpInFlight = glideTarget() !== null;
-      /* **One `stickyOffset()` per frame, not two.** `line` and `atTop` both
-         wanted it and each called it, and each call is a rect on `.controls`
-         plus a `getComputedStyle` in safe-area.ts — four layout reads a frame
-         where two do, on every article whatever its length. Measured at 2
-         calls and 2 reads per frame before this hoist; see
-         docs/plans/260906d-share-measured-geometry-after-profiling-scroll-and-layout-reads.md
-         § Stage 2. The value cannot change between the two uses: nothing here
-         writes to the DOM, and a bar that moved mid-frame would have made the
-         old pair disagree with each other, which was the worse bug. */
-      const sticky = stickyOffset();
-      const next = positionToWrite({
+      /* The reads, the arithmetic and the instrument all live in
+         reading-position.ts, where a test can drive them — Sol's F15 found that
+         this body's published read count could be changed to `1` and its timer
+         start moved without a single test noticing, which made the one number
+         the whole decision rested on the one number nothing checked. What stays
+         here is the half that makes this a hook: the ref and the URL write. */
+      const next = measureReadingPosition({
         sections,
         rowOf,
-        tops: jumpInFlight
-          ? []
-          : rows.map((el) =>
-              el ? el.getBoundingClientRect().top : Number.POSITIVE_INFINITY,
-            ),
-        line: sticky + 1,
-        jumpInFlight,
-        atTop: window.scrollY <= sticky,
+        rows,
+        resolved,
         held: synced.current,
+        at,
       });
-      /* Before the early return, so a frame that decides to write nothing still
-         reports the layout it read to decide that. `window.scrollY` plus one
-         rect per resolved row — and **zero rects during a glide**, which is the
-         skip above working and is itself worth seeing in the data. The two
-         `stickyOffset()` calls are charged to their own leaf. */
-      if (t0 !== NO_GEOMETRY_CLOCK)
-        noteGeometry("readingPosition", t0, 1 + (jumpInFlight ? 0 : resolved), 0, at);
       if (next === null) return;
       synced.current = next.at;
       void setAt(next.at);

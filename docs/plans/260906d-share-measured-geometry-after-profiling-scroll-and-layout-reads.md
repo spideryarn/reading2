@@ -952,7 +952,22 @@ scoped follow-up that is plausibly worth more than everything else in this plan.
    327 DOM cells rather than 51 sections, which is easy to misread later.
 3. **F10's counterfactual**, which is the gate on Stage 3 and cannot be skipped by doing Stage 3 and
    calling Stage 4's A/B the discharge — that is the ordering error F10 names.
-4. **F15's seam**, which Stage 3 wants anyway.
+4. ~~**F15's seam**, which Stage 3 wants anyway.~~ **Done, 2026-09-07.**
+   `useReadingPosition`'s measurement body is lifted out of two nested closures into
+   [reading-position.ts](../../src/web/reading-position.ts) § `measureReadingPosition`, leaving the
+   hook only the ref and the URL write. No injected accessors: it reads the real DOM, and
+   [tests/reading-position-seam.test.ts](../../tests/reading-position-seam.test.ts) spies on
+   `Element.prototype.getBoundingClientRect` — a version that took its readers as parameters would be
+   a version whose test never exercised the reads.
+
+   **Both of Sol's exact mutations now fail.** Read count `1 + resolved` → `1`: 4 red. Timer start
+   moved down beside `noteGeometry`: 1 red. Restored green after each. The suite also pins the
+   exclusive-reads convention directly — the controls bar's rect is charged to `stickyOffset` and not
+   to this parent — and carries the paired zero: with the probe off, no clock is read and the row
+   rects still happen, so it reads as "the probe is silent" rather than "nothing ran".
+
+   A side benefit worth naming for A1, who is moving `Reader` and its position hook into new files:
+   this takes ~45 lines out of `App.tsx` rather than adding any.
 5. F17 and the clause-3 citation, prose.
 
 Stage 2 is unaffected: it is two hoists inside one function body each, it was authorised by clause 1,
