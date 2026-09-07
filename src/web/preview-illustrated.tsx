@@ -17,7 +17,7 @@
  * mounted in a plain, full-width container and the overlay is opened by
  * pressing the real `.ill-zoom` "Enlarge" button, exactly as a reader would.
  *
- * Delete this file and preview-illustrated.html when the check is done;
+ * Delete this file and preview/preview-illustrated.html when the check is done;
  * nothing links to either.
  */
 import { createRoot } from "react-dom/client";

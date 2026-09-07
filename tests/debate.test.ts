@@ -152,9 +152,11 @@ const ARTICLE = {
   byline: "Greg Detre",
 };
 
-const groupInput = { admissible, article: ARTICLE };
+const groupInput = { admissible, article: ARTICLE, blockText };
 
-const claimInput = { ...groupInput, blockText };
+/* One input for both readers since 2026-09-06: group one shingles the article's
+   blocks against a page's extract, so it needs them too. */
+const claimInput = groupInput;
 
 /* ------------------------------------------------------ the sourdough fixture -- */
 
@@ -539,7 +541,7 @@ describe("no row survives as an unchecked paraphrase", () => {
           applies: "It accepts the schedule only for cool kitchens.",
         },
       ],
-      { admissible: withReview, article: ARTICLE },
+      { admissible: withReview, article: ARTICLE, blockText },
       2,
     );
     expect(group.counts.keptRows).toBe(1);
@@ -613,7 +615,7 @@ describe("what a cap and a bad row are counted as", () => {
       valence: "negative",
       applies: "It accepts the schedule only for cool kitchens.",
     }));
-    const group = readDirectGroup(many, { admissible: evidenceMap([review]), article: ARTICLE }, 2);
+    const group = readDirectGroup(many, { admissible: evidenceMap([review]), article: ARTICLE, blockText }, 2);
 
     expect(group.counts.keptRows).toBe(MAX_DIRECT_ROWS);
     expect(group.counts.reportedRows).toBe(MAX_DIRECT_ROWS + 3);
@@ -736,7 +738,7 @@ describe("a direct row must show the page naming this article", () => {
           applies: "It agrees about the kitchen.",
         },
       ],
-      { admissible: evidenceMap([page]), article: ARTICLE },
+      { admissible: evidenceMap([page]), article: ARTICLE, blockText },
       2,
     );
     expect(group.rows).toEqual([]);
@@ -768,7 +770,7 @@ describe("a direct row must show the page naming this article", () => {
       };
       const group = readDirectGroup(
         [rowFor(page, "a piece called On rye that makes the same case")],
-        { admissible: evidenceMap([page]), article: SHORT },
+        { admissible: evidenceMap([page]), article: SHORT, blockText },
         2,
       );
       expect(group.rows).toEqual([]);
@@ -783,7 +785,7 @@ describe("a direct row must show the page naming this article", () => {
       };
       const group = readDirectGroup(
         [rowFor(page, "Marta Ek's On rye makes the same case")],
-        { admissible: evidenceMap([page]), article: SHORT },
+        { admissible: evidenceMap([page]), article: SHORT, blockText },
         2,
       );
       expect(group.counts.keptRows).toBe(1);
@@ -816,7 +818,7 @@ describe("a direct row must show the page naming this article", () => {
           applies: "It rejects the feeding schedule.",
         },
       ],
-      { admissible: evidenceMap([page]), article: ARTICLE },
+      { admissible: evidenceMap([page]), article: ARTICLE, blockText },
       2,
     );
     expect(group.counts.keptRows).toBe(1);
@@ -843,7 +845,7 @@ describe("a direct row must show the page naming this article", () => {
           applies: "It answers the claim.",
         },
       ],
-      { admissible: evidenceMap([page]), article: ARTICLE },
+      { admissible: evidenceMap([page]), article: ARTICLE, blockText },
       2,
     );
     expect(group.counts.keptRows).toBe(1);
@@ -856,6 +858,40 @@ describe("a direct row must show the page naming this article", () => {
     const short = { url: null, title: "On rye", byline: "Marta Ek" };
     expect(namesArticle("the piece On rye says so", short)).toBe(false);
     expect(namesArticle("Marta Ek in On rye says so", short)).toBe(true);
+  });
+
+  /**
+   * **Typography is not identity, and this comparison used to think it was.**
+   *
+   * `namesArticle` folded whitespace and case and nothing else, while every
+   * other text comparison in this mode goes through `findQuote`, whose `FOLD`
+   * table also maps curly quotes, the three dashes and the non-breaking space
+   * (src/quote-match.ts). Titles carry curly punctuation all the time —
+   * `Claude’s Constitution` is one on the shelf — and a search extract's
+   * apostrophe is whatever the page's CMS emitted.
+   *
+   * So the rule failed in **both** directions on one character, which is the
+   * worst of the three ways it could have gone: a source spelling the title with
+   * the straight apostrophe lost an honest row as `directnessUnverified` — the
+   * exact failure the rule exists to prevent — and which way any given page fell
+   * was decided by whose editor smart-quoted what.
+   *
+   * Found on 2026-09-06 while building 260906b's corpus, not by a reader.
+   */
+  it("reads the two apostrophes, and the two dashes, as the same character", () => {
+    const curly = { url: null, title: "Claude’s Constitution", byline: null };
+    const straight = { url: null, title: "Claude's Constitution", byline: null };
+    /* Each title against the other's spelling: the bug was symmetric. */
+    expect(namesArticle("a reply to Claude's Constitution, at length", curly)).toBe(true);
+    expect(namesArticle("a reply to Claude’s Constitution, at length", straight)).toBe(true);
+
+    /* The same fold, on the dash — and a title short enough to need its byline,
+       so the byline branch is exercised rather than only the length shortcut. */
+    const dashed = { url: null, title: "Rye — a note", byline: "Marta Ek" };
+    expect(namesArticle("Marta Ek in Rye - a note says so", dashed)).toBe(true);
+
+    /* And it stays a comparison: folding punctuation must not fold the words. */
+    expect(namesArticle("a reply to Claude's Manifesto, at length", curly)).toBe(false);
   });
 });
 
@@ -942,7 +978,7 @@ describe("a quote too short to be evidence", () => {
           applies: "It accepts the schedule only for cool kitchens.",
         },
       ],
-      { admissible: evidenceMap([review]), article: ARTICLE },
+      { admissible: evidenceMap([review]), article: ARTICLE, blockText },
       2,
     );
     expect(group.rows).toEqual([]);

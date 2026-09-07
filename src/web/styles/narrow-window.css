@@ -1,0 +1,1038 @@
+/* narrow-window.css — the reading view on a phone: the 731px width query, the
+   band that takes the whole screen once it and the prose cannot share one, the
+   bars that leave while you read, the coarse-pointer sizing of the bottom bar,
+   and the title over the column.
+
+   **This is where nearly every cross-file override in the reading view lives,
+   and it must stay near the end of the import order.** It redefines `:root`
+   itself and overrides `.reader`, `.masthead`, `.controls`, `.dock`,
+   `.dock-btn`, `.spine`, `.mode-band`, the sticky table head and the three
+   corner dialogs — every one of them defined in a file above. Almost nothing in
+   here raises its specificity to win; it wins by being later. Move it up and the
+   phone layout goes quietly back to the desktop's, with no error and nothing to
+   see on a laptop.
+
+   There is no second mobile stylesheet to keep in step with this one: every
+   rule here is a desktop rule followed further. The breakpoint is derived from
+   layout.ts's own constants rather than chosen — the banner below has the
+   arithmetic, and tests/spine-width.test.ts pins it so the two cannot drift.
+   ../styles.css is the load order this file's position is a fact about. */
+
+/* ================================================================================
+   § A NARROW WINDOW — the reading view on a phone
+   ================================================================================
+
+   Everything here is one of two rules followed further than the desktop needed,
+   never a second layout. There is no mobile view to keep in step with this one.
+
+   docs/plans/260827t-mobile-reading-view.md has the measurements and the arguments.
+
+   ## The breakpoint is derived, not chosen
+
+   732px is `GIST_MIN (176) + PROSE_MIN (544) + the spine (12)` — the exact width
+   at which layout.ts can still fit one gist column beside the prose. Below it
+   `fitView` shows no gist columns at all, so **the prose column IS the window**,
+   and every horizontal luxury the reading view affords itself stops being free:
+   136px reserved for a wordmark and 83px reserved for a block id are 21% and 35%
+   of a 390px screen.
+
+   That is why one number governs all of it. If `GIST_MIN` or `PROSE_MIN` ever
+   moves, this query moves with it — tests/layout.test.ts pins the crossover at
+   732/731 so the pair cannot drift silently, and tests/spine-width.test.ts checks
+   that the query below is still that sum minus one.
+
+   ## The other axis has its own query
+
+   Width is scarce in portrait; height is scarce in landscape, where 44 + 40 + 40
+   of bars was 32% of a 390px-tall viewport. Those two problems do not share a
+   breakpoint and do not share a fix, so `max-height` is a separate query below.
+*/
+
+/* spine-width-check: GIST_MIN + PROSE_MIN + SPINE_W - 1 */
+@media (max-width: 731px) {
+  :root {
+    /* The wordmark gives up its word, and the token has to follow or the corner
+       link is a 136px hit area around a 20px glyph. **It used to be worth more
+       than that**: both sticky bars read this as left padding, so leaving it at
+       8.5rem pushed the article's title 136px into a 390px window. Those two
+       reservations went on 2026-09-06 (§ shell, § tokens), so what is left here
+       is the control's own width on the pages that still draw it — the shelf,
+       the profile, `/privacy` and the article's own error screens, none of which
+       has a masthead to push anything into.
+
+       Still one decision about two controls, which is why they are two lines of
+       one block: the word goes and the width follows, on both sides at once. */
+    --logo-w: 2.6rem;
+    /* And the Feedback button gives up its word in the same breath —
+       FeedbackButton.tsx renders the label in a span this query hides, leaving
+       the icon and the `aria-label` (the `title` it used to lean on became a
+       hover card on 2026-09-03, and `display: none` takes the word out of the
+       accessibility tree as well as off the screen). Same story as its mirror
+       above: it sized a reservation until 2026-09-06 and now sizes only the
+       button. */
+    --feedback-w: 2.4rem;
+  }
+  .logo-text { display: none; }
+
+  /* **The block-id gutter used to be hidden here, and now there is nothing to
+     hide.** 83px of every prose row bought a 64px monospace id — "a big waste of
+     horizontal space", 21% of a 390px screen — so this query cut it out and
+     shrank the gutter to the 2.1rem the chat button needed.
+
+     Both declarations have gone, 2026-08-31, because the desktop came down to
+     meet them: the gutter is one width at every width now (§ text), and what is
+     in it is icons rather than text, so the width this query was rationing is no
+     longer being spent anywhere.
+
+     **It went to 3.7rem on 2026-09-04**, when the icons became a 2 × 2 pad of
+     24px targets, and back to 2.2rem on 2026-09-05, when the pad became one
+     column that truncates. This query rations neither, which is a decision
+     rather than an oversight: Greg asked for targets a finger can hit and a
+     phone is the device he asked about, so narrowing the column here would
+     narrow it for exactly the reader it is for. What the second column's
+     departure gave back is 24px of measure on a 390px screen — Greg's other ask
+     the same day, *"especially on mobile we want the margins either side of the
+     text to be minimal"* — and `PROSE_MIN` still does not move with it
+     (layout.ts).
+
+     **A phone gains rather than loses.** The permalink is the one affordance a
+     touch reader could not get any other way — there is no right-click, no
+     "copy link address" — and this query used to be what took it away. The cost
+     is one more focusable element per block on the narrow layout, which is said
+     out loud in docs/plans/prose-gutter-icons.md rather than glossed. */
+
+  /* Trailing padding still shrinks: 1.4rem of right margin is generous when the
+     measure is 366px. The left is § text's now.
+
+     **The token, not the padding, and that is a fix rather than a tidy-up.**
+     This was `td.text { padding-right: 0.9rem }` until 2026-09-05, which left
+     `--text-pad-r` still reading 1.4rem while the cell was actually padded by
+     0.9 — harmless for as long as nothing but the padding read the token, and
+     wrong the moment something did. Three rules now do: `.blk-gutter` and both
+     mastheads compute *half the room the centring divides* from it (§ the
+     gutter, § plain, centred), and each was quietly 0.25rem out below 731px.
+     Set here rather than in the `:root` block above because `--text-pad-r` is
+     declared on `.reader`, which would win. GPT Sol found it while reviewing
+     the merge that introduced the second and third readers, 2026-09-05. */
+  .reader { --text-pad-r: 0.9rem; }
+
+  /* ------------------------------------------------------------------------
+     The two bars that were silently eating their own controls.
+
+     Measured at 390px: `.controls` had a clientWidth of 366 against a
+     scrollWidth of 642, and `.dock-modes` 48 against 245. Nothing overflowed
+     visibly, nothing scrolled, and there was no sign anything was missing —
+     five of six mode buttons simply could not be pressed.
+
+     Two moves, in this order:
+
+      1. **Drop what does not earn its place**, so the row genuinely fits.
+      2. **Let whatever still does not fit scroll**, so the failure can never be
+         silent again. A safety net, not the plan: a bar you have to discover is
+         scrollable is a poor control, but it beats a button that is not there.
+     ------------------------------------------------------------------------ */
+
+  .controls {
+    overflow-x: auto;
+    overflow-y: hidden;
+    /* The bar is 44px tall with no room for a scrollbar inside it, and this is
+       a touch surface where scrollbars are overlays anyway. */
+    scrollbar-width: none;
+    /* **This was `calc(--feedback-w + 0.75rem)`, and it became wrong rather
+       than merely unnecessary on 2026-09-06.** The term was there because a flat
+       `0.75rem` had once replaced § shell's reservation and lost it, and on an
+       `overflow-x: auto` bar the last control did not merely sit under the
+       corner button, it *scrolled* under it — visible and unreachable. There is
+       no corner button now, so the term reserves 2.4rem of gutter against
+       nothing, on the width with the least of it to spare: 54px of a 390px
+       screen, on a bar that is already scrolling.
+
+       What replaces it is the masthead's own pair at this width, one rule below
+       — § shell's invariant is that these two bars share a gutter or the
+       granularity pills stop lining up with the title above them, and this is
+       the width where they had drifted apart (53.6px against 37.6px, measured,
+       because the two rules spelled the same expression with different
+       constants).
+
+       **Asymmetric, and it has to be**, which is a change from the flat
+       `1rem` this rule carried for half a day on 2026-09-06. The masthead's
+       left gutter is the prose's own inset there (see the rule below for why),
+       so a flat gutter here would put the pills 19.2px left of the title —
+       trading the step this stage removed for a new one, one line lower down
+       the screen. GPT Sol, U1.
+
+       Written out rather than reading `--masthead-pad-*`: those two are
+       declared *on* `.masthead`, so they do not reach this bar, and lifting the
+       pair to `:root` to share them would make two bars with genuinely
+       different vertical padding look like one thing. The invariant is the two
+       numbers, and it is asserted rather than left to the eye —
+       tests/prose-centred-in-its-cell.test.ts. */
+    padding: 0 1rem 0 var(--text-pad-l);
+  }
+  .controls::-webkit-scrollbar { display: none; }
+  /* Nothing in the bar may shrink; that is what turned `.dock-modes` into a
+     deletion machine. Items keep their size and the row scrolls instead. */
+  .controls > * { flex: none; }
+
+  /* **Four rules were here and there is nothing left for them to hide.** They
+     took the section label, the ↑↓ hint, the `fit`/`auto` and
+     `reading`/`outline` chips and the tree version off a phone — everything in
+     the bar this width could not use — while sparing `.mode.on`, the read-only
+     chip. On 2026-09-05 the desktop bar was cut down to what a phone was
+     already getting (App.tsx § the controls bar), so the two widths now agree
+     by construction rather than by a list somebody has to maintain. */
+
+  /* A tighter gutter and much less vertical padding: this bar is the first
+     thing between the reader and the article, and § shell's desktop breathing
+     room is a luxury on a 390px screen.
+
+     **Two rules used to follow this one, giving back a term the shorthand ate,
+     and both became wrong on 2026-09-06 rather than merely unnecessary.** The
+     left was `max(1rem, calc(--logo-w + 0.5rem - --spine-w - --mode-w))` and
+     the right `calc(--feedback-w + 1rem)`; each held its side open for a corner
+     control, and each still resolved *above* the gutter after the controls left
+     — 37.6px and 54.4px, measured, against 16px — so leaving them would have
+     gone on pushing the title in on the width with the least room for it. Their
+     history is worth one line, because it is the trap this file has been caught
+     by three times: a shorthand replaces all four sides silently, and a term
+     written into `padding-left` above it disappears with no error. GPT Sol found
+     that happening here on 2026-08-28 and again in `.controls` on 2026-09-01.
+
+     **The gutter is a pair of tokens now, and the shorthand reads them**, so
+     this width can no longer disagree with what `--masthead-pad-*` say — which
+     is exactly what it did until today, leaving § the title over the column
+     doing arithmetic with two numbers that described a bar it was not looking
+     at. */
+  /* **The left gutter is the prose's own inset, and the right is an ordinary
+     one.** On a phone this bar is `.text-alone`, so § the title over the column
+     never runs and nothing is centring anything: the title simply starts at the
+     bar's content edge. Give that edge the ordinary 1rem and it lands 19px left
+     of the first line of the article, which on a 390px screen reads as two
+     competing left margins rather than as a choice.
+
+     **That step is new and it is this change's own doing**, which is the reason
+     to fix it here rather than to argue it is fine. Until 2026-09-06 this
+     padding was `max(1rem, calc(--logo-w + 0.5rem - --spine-w - --mode-w))` —
+     room held for the corner wordmark — which came to 37.6px against a prose
+     inset of 35.2px, so the two edges lined up to within about two pixels *by
+     accident*. Taking the reservation away took the alignment with it. Naming
+     `--text-pad-l` makes it deliberate and makes it track: the inset is a
+     `--blk-slot` of icons plus its padding (§ text), and it has moved twice
+     already this month.
+
+     The right side stays a plain gutter. The prose's own right inset is
+     `--text-pad-r`, 0.9rem here, and matching it would be symmetry for its own
+     sake — nothing lines up against that edge, because the title wraps. */
+  .masthead {
+    --masthead-pad-l: var(--text-pad-l);
+    --masthead-pad-r: 1rem;
+    padding: calc(0.85rem + var(--safe-top)) var(--masthead-pad-r) 0.7rem var(--masthead-pad-l);
+  }
+  h1 { font-size: 1.25rem; }
+
+  /* **The scrolling floor is not here any more** — it is on `.dock` itself, at
+     every width. It was written into this query when 731px was the only place
+     the row could overflow; § the bar's fit ladder is now what decides that,
+     and its last rung can overflow at any width once enough modes arrive.
+     A floor that only exists on a phone is not a floor. */
+
+  /* **The labels are not dropped here any more.** Every button losing its text,
+     and the 0.45rem that goes with it, is the ladder's last rung — rung 3
+     since 2026-09-06, rung 2 before it —
+     measured rather than keyed to this width, because at thirteen modes the row
+     stops fitting a long way above 731px and did so silently. This query used to
+     carry a second copy of those three rules, and a second copy is a thing
+     nothing keeps in step: the modes' half was keyed to 1100px and went stale
+     while this half looked fine.
+
+     What stays here is what is genuinely about a small screen rather than about
+     the row's width — the gutters, and the scrolling above. */
+  .dock {
+    padding-left: calc(0.2rem + var(--safe-left));
+    padding-right: calc(0.2rem + var(--safe-right));
+  }
+  .dock-modes { margin-inline: 0.15rem; }
+
+}
+
+/* ------------------------------------------------ § a band with no room ----
+   **A mode is a full-screen panel once the band and the prose cannot share a
+   screen.**
+
+   **It is the one width-shaped behaviour in this file that is not written as a
+   width, and it cannot be.** The crossover is `MODE_MIN + MODE_PROSE_FLOOR` against the
+   window **minus the rail** — 700 with the rail on, 688 with `?spine=0` — and a
+   media query cannot see a query parameter. (It was `MODE_MIN + PROSE_MIN`, 844
+   and 832, until 2026-09-06; layout.ts § `MODE_PROSE_FLOOR` is why the prose now has
+   two numbers, and why no iPhone in landscape ever cleared the old one.) The
+   numbers below are the old pair, and they are the widths the measurements were
+   taken at rather than claims about today. It was `@media (max-width: 843px)` from
+   2026-08-27 to 2026-09-03, and across **832–843 with the rail off** the two
+   halves disagreed: `fitMode` handed the band 288–299px and squeezed the table
+   to make room for it, while this query widened that same band to the whole
+   window and laid it over the article the table had just made room for. GPT Sol
+   measured it on 2026-08-28; the comment describing it sat in layout.ts for six
+   days, which is a paper trail rather than a fix.
+
+   The fix is not a fourth hand-copied breakpoint — that is a *fifth* copy of a
+   number `tests/spine-width.test.ts` exists because there are already too many
+   of, and a conditional one at that. It is to stop the stylesheet deriving a
+   fact it cannot see. `App.tsx` already writes `--mode-w` from `fit.modeW`, so
+   it writes **`band-covers` on `.reader`** from the same value, and these rules
+   key off the class. One decision, in the one place that can make it, and the
+   spine's width may now move without any of this moving with it.
+
+   **`.band-covers` is on `.reader` whenever `fit.modeW` is 0, which includes
+   pages with no band at all** — so every rule here also names `.mode-band`, and
+   that is load-bearing rather than tidy.
+
+   **Measured in Chrome, 2026-09-03**, chat mode at 838px with `?spine=0`: band
+   `[0, 294]` against a table `[294, 838]`, masthead visible, nothing overlapping.
+   Re-inject the old `@media (max-width: 843px)` on that same page and the band
+   becomes `[0, 838]` over a table still sitting at `[294, 838]` — the article
+   gone, the room it was squeezed out of wasted. Glossary, Summary, Search and
+   Outline all behave the same at 830 (covering) and 900 (beside).
+
+   **Getting this wrong deletes the panel rather than making it look odd**, and
+   it did for a while: these rules were written inside the narrow-window query,
+   so across the gap between the two `fitMode` was handing the band a width of
+   zero while no rule was
+   widening it, and Chat, Search, Glossary, Summary, Ideas and Diagram were all
+   simply invisible on a small laptop window. Nothing errored — the element was
+   in the DOM, correctly positioned, and nought pixels wide. Caught by GPT Sol
+   reviewing the built code, 2026-08-27.
+
+   `fitMode` returning `modeW: 0` is what makes the rest of the page need no
+   changes at all: every rule that reserves horizontal room for a band reserves
+   none, so the two sticky bars keep their full `100vw` and `.reader` keeps its
+   ordinary padding. All that is left is to widen the band, which is
+   `position: fixed` and therefore costs the layout underneath it nothing.
+
+   layout.ts § fitMode has what was tried first, and why a fixed element cannot
+   be one of two panes you scroll between. `tests/chat.test.ts` still pins the
+   crossover on the TypeScript side — 700/699 since 2026-09-06, and 844/843
+   before it. */
+/* **The window minus the rail — not the whole window.** `left: 0` was tried
+   first and the panel came out with its left-hand rail-width missing: every
+   term name lost its first letter, the slider ran off the edge, and the
+   heading read "reshold". The spine is `position: fixed` at z-index 45 and the
+   band is 44, so a band starting at zero simply spends its first 12px underneath
+   the rail — drawn, and unreadable. Nothing overflows and nothing scrolls, so
+   it looks like a panel laid out slightly wrong rather than one being covered.
+
+   Starting where the rail ends is also just what every other element on this
+   page does; the band is the full width *available*, which was always what
+   "full width" meant here. */
+.reader.band-covers .mode-band {
+  left: calc(var(--spine-w) + var(--safe-left));
+  width: calc(100vw - var(--spine-w) - var(--safe-left) - var(--safe-right));
+  border-right: none;
+}
+
+/* **And the article's masthead goes while a mode is open.**
+   The band is `position: fixed` from `--bar-bottom` down, which on a wider
+   window is fine because it is a 400px column starting where the bars end
+   horizontally. Full width, it lands on top of whatever is in the top-left of
+   the page — and at the top of the article that is the title, the byline and
+   the controls bar, all of them drawn and none of them reachable.
+
+   Hiding the masthead is the fix rather than moving the band, because a fixed
+   element cannot be positioned relative to a sticky one that has not stuck
+   yet. It also happens to be right on its own terms: the masthead is the
+   *article's* identity, the article is behind a full-screen panel, and with
+   it gone the controls bar sticks at zero immediately and the band sits
+   exactly underneath it — which is what says which mode you are in and offers
+   the way back. */
+.reader.band-covers:has(.mode-band) .masthead { display: none; }
+/* **And a visitor's notice goes with it**, for the reason above and one more.
+   It sits between the masthead and the controls bar, so with the masthead
+   gone it became the first thing on the page at `y: 0` — directly under the
+   fixed corner logo, which is `position: fixed` at the same origin and cannot
+   be pushed by anything in flow. Found by a browser pass, 2026-08-29; the
+   rects were logo `(0,0,136,44)` against notice `(32,0,768,66)`.
+
+   Not merely a collision fix: the sentence and the ask belong with the
+   title, and the chip in the controls bar is the half that was always meant
+   to survive a scroll. src/web/PublicChrome.tsx § SharedNotice. */
+.reader.band-covers:has(.mode-band) .shared-notice { display: none; }
+/* **And the small-screen banner, for the first of those two reasons only.**
+   It sits in the same stretch of flow and would land under the fixed corner
+   logo the same way. There is no second argument here and none is needed: the
+   banner is one sentence about the layout, the layout has just put a panel
+   over the whole article, and a sentence nobody can read is not a sentence.
+
+   It is *hidden*, never dismissed — pressing Plain brings it back, which is
+   the state the banner is about. src/web/SmallScreenHint.tsx. */
+.reader.band-covers:has(.mode-band) .small-screen-hint { display: none; }
+
+/* ----------------------------------------------------- § a small device ----
+   Where a centimetre in *either* direction is worth having.
+
+   Measured at 844 × 390: `.controls` 44 + `thead` 40 + `.dock` 40 = **124px, a
+   third of the viewport**, permanently. Greg: *"the vertical screen estate was
+   at a premium … combine the top two bars into one? Only show after certain
+   kinds of scrolling?"*
+
+   Both, in the end, and neither by merging anything:
+
+    - The table head goes whenever the article is the only column — that rule
+      lives with the table (`table.only-prose` below), because it is true of a
+      chat band on a laptop too and has nothing to do with height.
+    - **The controls bar hides while you are reading forwards and comes back the
+      moment you scroll back.** The scroll direction is watched in
+      `src/web/scroll.ts § watchBarVisibility`, which sets `data-bars` on the
+      root element and re-renders nothing — see performance.md for why a React
+      state here would have been the expensive way to do it.
+
+   **Both orientations, at Greg's asking** — *"let's make portrait and landscape
+   consistent for small devices, because every centimetre of real estate in
+   either dimension is valuable"*, 2026-08-27. This first shipped as a
+   height-only rule on the argument that portrait has height to spare and a bar
+   that moves is a bar you can lose track of. That argument weighs a small risk
+   against a real 44px, and it was the wrong way round: a phone held either way
+   is a phone.
+
+   So the condition is a device that is small in *some* direction, and the
+   comma is doing that work — `(max-height: 620px), (max-width: 731px)` is an
+   OR. 620px so a landscape phone with browser chrome is comfortably inside it
+   and no laptop ever is; 731px is § a narrow window's own number, reused here
+   deliberately rather than picked again, so "small" means one thing in this
+   file. **`watchBarVisibility` in scroll.ts carries this whole string** and
+   attaches its listener only while it matches — change one and change both.
+
+   The bar and everything pinned under it move together because they are all
+   driven by `--bar-bottom` — see the token's own note in § tokens for the
+   `@property` version of this that could not survive the build. */
+/* spine-width-check: GIST_MIN + PROSE_MIN + SPINE_W - 1 */
+@media (max-height: 620px), (max-width: 731px) {
+  :root[data-bars="hidden"] {
+    /* **`var(--safe-top)`, not `0px`.** This is the y the table head parks at
+       once the bar has gone, and in the installed app y=0 is under the clock —
+       so `0px` would put the column headings behind the time on the one kind of
+       device this whole query exists for, and look perfect everywhere else.
+       At rest `--bar-bottom` is `--bar-h + --safe-top`; hidden it falls to the
+       inset and no further. */
+    --bar-bottom: var(--safe-top);
+    /* The bar's own travel, which is NOT the change in `--bar-bottom` — see
+       `--bar-hide` in § tokens for the 44px of chrome that would otherwise be
+       left drawn behind the clock. */
+    --bar-hide: calc(-1 * (var(--bar-h) + var(--safe-top)));
+    /* The bottom bar joins the same switch, which it never did before
+       2026-08-28 — it cost 40px at every scroll position and § below shrank it
+       to 2.2rem to claw some back, which is the wrong direction for a bar you
+       have to hit with a thumb. Now it leaves entirely while you read, and can
+       afford to be 52px tall when it is there (§ a coarse pointer).
+       docs/plans/260828av-mobile-screen-real-estate.md § 3. */
+    --dock-bottom: 0px;
+  }
+  /* Each consumer animates its own ordinary property. `top` is animatable on a
+     sticky or fixed element, and there are only ever four of these on screen at
+     once, so the layout cost of the 180ms is not worth avoiding.
+
+     Scoped like the rule that makes these sticky in the first place (§ the head
+     with no row) — bare, this handed the shelf's and an article's own header
+     cells a `transition: top` written for chrome that slides under a bar they
+     do not have. */
+  :where(table.zoom > thead) > tr > th,
+  td.gist .sticky,
+  .spine,
+  .mode-band,
+  .reader:has(table.zoom.overflowing)::after {
+    transition: top 0.18s ease;
+  }
+
+  /* `td.gist .sticky` is in that list because it was missed first time and
+     snapped while everything around it slid — GPT Sol, 2026-08-27. One thing it
+     does **not** cover: the column-context panels are positioned by JS
+     (useColumnContext.ts), which samples on scroll, so for up to 180ms after the
+     bar moves a panel can sit up to 44px out of step. In practice the bar only
+     ever moves *because* the reader is scrolling, so another sample is moments
+     away; it is a transient, not a resting state. If it ever looks wrong,
+     the fix is to re-sample on `transitionend` rather than to drop the slide. */
+  /* **Never hide a bar somebody is using.** A keyboard reader tabbing along the
+     granularity pills scrolls the page as focus moves, and without this the
+     control they are on slides off the top mid-tab — focus lands somewhere
+     invisible and the page looks broken.
+
+     `:root:has(…)` rather than the obvious `.controls:focus-within`, and the
+     difference is the whole rule: `--bar-bottom` is an inherited property that
+     only `:root` ever sets, and the table head reads it too. Declared on the
+     bar itself it would bring the bar back down on top of a header still parked
+     at the top of the viewport. Whatever moves this has to move both, so it has
+     to be set where both inherit from. Specificity (0,3,0) beats the attribute
+     rule above whichever order they end up in. */
+  /**
+   * **And `.mode-band`, since 2026-08-31** — the bars stay while a mode is open.
+   * This is the fix for a real complaint rather than a tidy-up:
+   *
+   * > on mobile I did find that I sometimes struggled to get back to the main
+   * > text (e.g. within the Search mode when the keyboard was open)
+   * >
+   * > — Greg, 2026-08-31
+   *
+   * Measured at 390 × 740 with a real wheel event: one scroll down in Search
+   * mode took `.controls` to `y: -44` and `.dock` to `y: 740`, so **both** exits
+   * left the screen at once — the close button at the top and the dock's mode
+   * buttons at the bottom. The keyboard then covers roughly the bottom 300px
+   * anyway, because index.html deliberately does not set
+   * `interactive-widget=resizes-content` (see `.cmt-dialog` for why), so a fixed
+   * bar at the foot of the layout viewport is behind it. Between them there was
+   * no way out of the mode that did not start with scrolling back up.
+   *
+   * **And hiding the bars was buying nothing in this state.** § a narrow window
+   * makes the band cover the whole article on a phone, so the 44px this query
+   * reclaims is 44px of something already behind a panel. The reader was paying
+   * the only price the rule has — chrome that is not where they left it — for a
+   * benefit that does not exist here.
+   *
+   * **In the guard rather than as a `:not()` on the rule above**, and that is
+   * the specificity argument the sibling guard below sets out at length:
+   * `:root[data-bars="hidden"]:not(:has(.mode-band))` would be (0,3,0), a tie
+   * with these guards, decided by source order — the exact fragility GPT Sol
+   * caught here on 2026-08-28. Adding an argument to a `:has()` changes nothing,
+   * because `:has()` takes its *most specific* argument and `.controls:focus-within`
+   * is still it. This list is the list of reasons the bars must stay, and this
+   * is another one. docs/plans/plain-mode-and-the-way-out.md § 1.
+   */
+  :root:has(.controls:focus-within, .mode-band) {
+    --bar-bottom: calc(var(--bar-h) + var(--safe-top));
+    /* Both, or the bar a keyboard reader is standing in stays off the top of
+       the screen while everything under it politely moves down to make room. */
+    --bar-hide: 0px;
+  }
+  /* The same guard for the bottom bar, and it needs two conditions rather than
+     one. `:focus-within` is the keyboard half — a reader tabbing along thirteen
+     icon buttons must not have the row slide out from under the one they are
+     on. `.dock-drawer` is the other: the drawer rises *out of* the bar and is
+     anchored to it, so a bar that slid away while the drawer was open would
+     take the drawer's foot with it.
+
+     On `:root` rather than on `.dock` for the reason the rule above gives:
+     `--dock-bottom` is read by the mode band and the overflow fade too, and a
+     value set on the bar alone would move the bar back up underneath a band
+     that had already closed over it.
+
+     **One `:has()` with two arguments rather than two selectors, and that is
+     about specificity rather than brevity.** `:has()` takes the specificity of
+     its most specific argument, so this is `.dock:focus-within` — (0,3,0),
+     which beats `:root[data-bars="hidden"]`'s (0,2,0) outright. Written as two
+     selectors the drawer branch would be (0,2,0), a *tie*, and would win only
+     by being further down the file: a guard that holds because of source order
+     is a guard that goes quiet the day somebody reorders the file. GPT Sol
+     caught the tie, 2026-08-28.
+
+     **The three dialogs are here on a second pass, and for a different reason
+     from the first three.** They cannot lose a control mid-press — they are
+     their own surface — but they are anchored to the bar's *resting* room
+     (`calc(var(--dock-space) + var(--hint-h) + 0.75rem)`), which is right for a
+     dialog that must not resize while you type in it and wrong the moment the
+     bar is not there: the dialog floats about 98px above the bottom of the
+     screen with nothing under it. Bringing the bar back is the cheaper of the
+     two fixes and the better one — a dialog is open because the reader stopped
+     reading, which is exactly when the chrome should come back. */
+  /* **And `.mode-band`, 2026-08-31.** Both bars need it, for the reason the
+     guard above sets out at length: the top one carries the close button and
+     this one carries the mode switch, and a reader in a mode with a keyboard up
+     could reach neither once they had slid away. */
+  :root:has(
+    .dock-drawer,
+    .dock:focus-within,
+    .install-hint:focus-within,
+    .cmt-dialog,
+    .chat-dialog,
+    .annotate-dialog,
+    .mode-band
+  ) {
+    --dock-bottom: var(--dock-space);
+  }
+
+  /* **And when a mode opens, both bars arrive rather than slide.**
+
+     The two guards above bring the bars back the instant `.mode-band` exists.
+     The band is `position: fixed` and takes its final bounds on the same frame;
+     the bars take 180ms of `transition: transform` to travel from off-screen —
+     so **for that window the band is the right size with nothing above or below
+     it**, and the article is painted at the top and the bottom of the screen.
+     That is the second half of Greg's report, and the half that is at the
+     bottom: § shell's backstop covers the top strip at rest and cannot cover a
+     bar that has not arrived.
+
+     Measured 2026-09-03 at 390 × 844 with the installed app's insets: scroll
+     until `data-bars="hidden"`, press Glossary, and sample every frame. At
+     t=181ms and t=410ms the top-most element at both `y: 2` and
+     `y: innerHeight - 2` was a `p` inside `div.prose`, with `.controls` still
+     at `bottom: 0` and `.dock` at `top: 844`; at t=472ms both were home. **The
+     180ms is the floor, not the number** — mounting a panel costs frames, and
+     these were real layout reads, not dropped ones.
+
+     A slide is how a bar announces that it is *getting out of the way*; a bar
+     coming back because the reader opened a panel is not announcing anything,
+     and there is nothing to see through in the meantime. Nothing else here
+     transitions on `.mode-band`, so this only ever fires on that switch.
+
+     GPT Sol found the ordering reviewing the first fix, 2026-09-03, and
+     predicted it from the CSS alone. */
+  :root:has(.mode-band) .controls,
+  :root:has(.mode-band) .dock {
+    transition: none;
+  }
+
+  /* Tighter chrome as well, which is free and needs no state: 12px more of the
+     article at every scroll position.
+
+     **The dock is no longer in this list.** It used to be shrunk to 2.2rem
+     here; since it leaves the screen entirely while you scroll, its resting
+     height stopped being the scarce thing and § a coarse pointer grows it
+     instead. */
+  /* The install hint goes with the bar it sits on, or it is left floating over
+     the article with a bar-shaped hole under it. Its own height as well as the
+     bar's, because it is above the bar rather than behind it, and `100%` of a
+     one-line strip is the only way to say that without knowing the number.
+     Its `:focus-within` is in the guard above, so a reader tabbing to the
+     dismiss button does not lose it mid-press. */
+  /* `:where()` around the guard so this keeps the specificity it had. Nothing
+     competes for this element's `transform` today, but the rule twenty lines up
+     — where a tie *would* have been decided by source order — is why the habit
+     is worth keeping in the same query. GPT Sol, 2026-08-31. */
+  :root[data-bars="hidden"]:where(:not(:has(.mode-band))) .install-hint {
+    transform: translateY(calc(100% + var(--dock-space)));
+  }
+  .masthead { padding-top: calc(0.6rem + var(--safe-top)); padding-bottom: 0.55rem; }
+  .root-gist { margin-top: 0.35rem; }
+}
+
+
+/* ================================================================ § a coarse
+   pointer — the bottom bar, sized for a thumb
+   ================================================================
+
+   > Also, make our button-bar at the bottom a bit easier to press, e.g. bigger
+   > buttons, slightly more spaced out.
+   >
+   > — Greg, 2026-08-28
+
+   **`pointer: coarse`, not `any-pointer: coarse`.** `any-pointer` is true of an
+   iPad with a trackpad plugged into it and of a laptop with a touchscreen it is
+   never touched on; `pointer` asks about the input the reader is actually
+   using. Everything else in this file that keys on touch is about what a
+   gesture may do — `touch-action`, the swipe steps — and is correctly
+   `any-pointer`, because a finger on a hybrid machine still needs the rule.
+   This one is about how big a control is, so getting it wrong puts 52px of
+   chrome on a desktop.
+
+   ## Height was the affordable axis, and it only became affordable today
+
+   Height is the axis with room, and it stopped costing anything the moment the
+   bar learnt to leave the screen while you read (§ a small device). Before that
+   this query would have been taking 12px of article away permanently to make a
+   button easier to hit — which is the trade § a small device made in the *other*
+   direction when it shrank the bar to 2.2rem for a landscape phone.
+
+   So: 52px tall, past Apple's 44pt minimum in the axis that has room, and a
+   40px floor on the width, which is where the arithmetic below leaves it.
+
+   ## The arithmetic, and it does not fit on a phone
+
+   **Do the sum, do not trust a remembered count.** This note said "nine
+   buttons" when it was written, GPT Sol counted eleven the same afternoon, and
+   a ninth mode (`outline`) landed hours later making it twelve. The count is
+   `MODES_UI.length + 3` — the modes, then Comments, Tweets and Metadata — and
+   it only ever goes up.
+
+   At 390px there is 383.6px of bar after `.dock`'s own padding. **Each button
+   costs 40px** (the floor below) and each mode costs a further 1px of hairline;
+   `.dock-modes` adds a 1px frame and 0.25rem of margin each side. So with *m*
+   modes the row is roughly `40 × (m + 3) + m + 9`. At m=8 that is 457px, at m=9
+   it is 498, at m=10 it is 539, at m=12 it is 621, and the bar is 384. **A phone
+   in portrait scrolls, and every new mode makes it scroll by another 41px.**
+
+   **`plain` is the twelfth (2026-08-31), and it is the one that had to be
+   leftmost.** A scrolling row means the buttons past the fold are found by
+   dragging a bar most readers do not know drags — so the position matters most
+   for the button somebody reaches for when they want *out* of where they are.
+   It also keeps its text label at this width (§ the modes segment), which costs
+   another ~35px of a row that already overflows and buys the one thing the
+   overflow takes away: being able to see what the exit is without hovering it.
+
+   No floor small enough to avoid it would be worth having: fifteen buttons
+   sharing 384px is 25px each, which is smaller than they were before any of
+   this.
+
+   Greg was asked and chose this, 2026-08-28: *"maybe also row scrolls sideways
+   if it doesn't fit horizontally"*. So the floor is set at the size worth
+   pressing rather than at the size that would fit, and the row scrolls — which
+   § a narrow window already made it do, with the scrollbar hidden. **What this
+   query cannot claim is that a phone reader can see all fifteen at once.** The
+   two-row bar that would fix that properly is written up in
+   docs/plans/260828av-mobile-screen-real-estate.md § Open for Greg; it is a design
+   change rather than a size change, and his to make.
+
+   `flex-grow` therefore does nothing at 390px and everything on a tablet, where
+   the row does fit and the buttons spread across the bar instead of huddling at
+   the left end. That is the "slightly more spaced out" half of the ask, and it
+   arrives at the width where there is space to spread into. */
+@media (pointer: coarse) {
+  :root {
+    /* 52px. Note that § a small device no longer shrinks this to 2.2rem, and
+       that these two queries overlap on every phone — this one wins because it
+       is declared later, which is exactly the kind of dependence on source
+       order worth saying out loud. */
+    --dock-h: 3.25rem;
+  }
+
+  /* **Grow to share the bar, never shrink below the floor.** The `0` in the
+     middle is the whole of `.dock-modes`'s long warning above kept intact: a
+     flex item that clips its own overflow must never be squeezed, because it
+     gets *shorter* rather than narrower and deletes buttons off its right-hand
+     end in silence. Growing has no such failure — there is nothing to clip when
+     an element is bigger than its content.
+
+     `.dock-modes` grows as eight buttons against each loose button's one, so a
+     bar with room to spare spreads it in proportion to what is inside rather
+     than handing the segment the same share as a single icon. */
+  .dock-modes { flex: 8 0 auto; }
+  .dock > .dock-btn { flex: 1 0 auto; }
+  .dock-modes .dock-btn { flex: 1 0 auto; }
+  /* **And the wordmark grows with them**, which is a decision rather than a
+     consequence — it is not a `.dock-btn`, so it would otherwise have been the
+     one item left at its content width while everything to its right spread
+     across a tablet's bar, huddled against the left end. It is the same kind of
+     control as the ones beside it here (something you press with a thumb), and
+     the reason it is not a `.dock-btn` is about the hover wash, not about size.
+     Fable's item 4. */
+  .dock > .dock-home { flex: 1 0 auto; }
+
+  /* The floor — 40px, Apple's 44pt minimum less the hairline it shares with its
+     neighbour — and the centring that makes growth look deliberate: without it
+     a button that grew would hold its icon at the left and the row would read
+     as ragged rather than as spread out. A min-width is a floor and not a cap,
+     which is what lets the Comments button carry a two-digit count without
+     anything being clipped.
+
+     `.dock-home` takes both, for the reason above: a grown box that held its
+     glyph at the left would be the one ragged thing in a spread-out row. */
+  .dock-btn,
+  .dock-home {
+    min-width: 2.5rem;
+    justify-content: center;
+  }
+}
+
+/* The bar still gets out of the way for a reader who has asked for less
+   motion — it just arrives there rather than travelling. Hiding the chrome is
+   the point; the 180ms slide is only how it is announced. */
+@media (prefers-reduced-motion: reduce) {
+  /* `.controls` animates `transform` and everything under it animates `top`
+     (see the `.controls` rule for why the two differ), so both have to be named
+     here or half the chrome would still slide. */
+  .controls,
+  .dock,
+  .install-hint,
+  /* Scoped for the reason § the head with no row gives — this is the reduced-motion
+     half of the transition it turns off, so the two selectors have to match. */
+  :where(table.zoom > thead) > tr > th,
+  td.gist .sticky,
+  .spine,
+  .mode-band {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------- § the gutter reveals ----
+   **What the gutter shows when you are not on the row.** Greg, 2026-08-27:
+   *"maybe we need to rethink the way we currently always show the block-ids to
+   the left of the blocks"*. The answer then was to reveal the id on `tr:hover`;
+   the answer now is that there is no id, and the reveal is a property of what
+   kind of thing each slot holds.
+
+   That rule and its `@media (hover: none)` companion live with the rest of the
+   gutter, at § the gutter far above, rather than here — one place, next to the
+   box they modify, instead of a second section a thousand lines away that has
+   to be kept in step. What was here was six declarations on `.block-ref.block-id`,
+   a class nothing renders any more.
+
+   **Two sentences of it were false before they were deleted, and both were
+   false in the same way**: they described the chat button as "already living in
+   the same gutter" and working "exactly this way". It was not in the gutter at
+   all — it had no `position` — and nobody noticed for four days because it was
+   `opacity: 0`. A comment that describes a layout instead of asserting one is a
+   comment that can rot without any test going red.
+   docs/postmortems/block-chat-was-never-in-the-gutter.md.
+
+/* ------------------------------------------------------- § one axis only ----
+   **A finger drag scrolls the page down, or across, and never both at once.**
+
+   Greg, 2026-08-27: *"when I'm scrolling on a phone/tablet with my finger, it's
+   annoying if it sometimes scrolls diagonally. I think I'd either like it to
+   scroll vertically, or horizontally, but not diagonally."*
+
+   The biggest cause of that is already gone: before today the table was 720px
+   wide in a 390px window, so the page scrolled in both directions everywhere
+   and *every* drag was diagonal. `fitView` now fits the table to the window at
+   every width, so on a phone there is usually nothing to scroll sideways to.
+   This rule is what makes it a guarantee rather than a consequence.
+
+   **Why the prose cell and not the page.** `touch-action` is the only way to
+   constrain an axis without taking over scrolling entirely — the alternative is
+   `preventDefault` on a non-passive `touchmove` and moving the page ourselves,
+   which throws away momentum and rubber-banding, and is the scrolljacking
+   touch.md refuses on the reading column specifically. But `touch-action` is
+   read when the finger goes **down**, so it cannot lock to whichever axis the
+   gesture turns out to favour; it can only be decided per region, in advance.
+
+   So the axis is a property of what you put your finger on, which this view
+   already had a shape for (touch.md § what happens where):
+
+     the prose      → down only          (this rule)
+     a gist column  → across, or a step  ([data-swipe-step], § touch above)
+
+   That keeps sideways panning reachable when a manual `?cols=` overflows the
+   window, which is the one case left where there is anything out there — you
+   pan from a gist column rather than from the middle of a sentence. Nothing is
+   taken away that auto-fit ever needs.
+
+   Two declarations, not one, for the reason the swipe rules give: `pinch-zoom`
+   is a newer keyword, and a browser that does not know it drops the whole
+   declaration — so the first line is the floor and the second is the upgrade.
+   Getting this wrong disables pinch-to-zoom on the article, which is an
+   accessibility regression that no screenshot would show. */
+@media (any-pointer: coarse) {
+  td.text { touch-action: pan-y; }
+  td.text { touch-action: pan-y pinch-zoom; }
+}
+
+
+/* **`table.only-prose thead { display: none }` was here, and it went on
+   2026-09-05.** It hid the head whenever the article was the only column —
+   worth 40px on a landscape phone, and a row reading `Text verbatim` over a
+   column of the author's paragraphs is no loss at any size. Both halves of that
+   are now true of every mode rather than this one: the head has no height
+   anywhere (§ the head with no row). And it could not have stayed, because
+   `display: none` takes the element out of the box tree entirely, which would
+   take every fisheye panel's geometry with it — `useColumnContext.ts` measures
+   `thead th[data-col]` and `ContextPanel` draws nothing without a rectangle.
+
+   **The class itself stays**: the rule below uses it too, and
+   `tests/prose-centred-in-its-cell.test.ts` pins that one. */
+
+/* **When it is the only column, it sits in the middle of the window.**
+   Greg, 2026-09-03: *"In Plain mode, can you centre the text on the page?"* —
+   the article had the whole width and used the left 738px of it, which on a
+   1600px screen is 850px of empty page down one side.
+
+   **The table moves, not the prose inside its cell**, and that is the whole
+   reason this is one declaration rather than a section. Four things are drawn
+   against the cell's own edges and would every one of them be left behind by
+   text that moved on its own: the gutter is absolutely positioned at the
+   cell's left (§ the gutter), a search hit paints an inset shadow at x=0
+   (§ has-hit), `row-active` fills the cell, and the hover target *is* the
+   cell. Moving the column moves all four, and no rule above has to learn that
+   a mode exists.
+
+   The margin it divides is made by `PROSE_ALONE_MAX_REM` in layout.ts — read
+   that for the width and for why the condition is "no other column" rather than
+   "Plain mode". A `max-width` here could not do it: this table is
+   `table-layout: fixed` with a `<col>` carrying an inline pixel width, and a
+   fixed table is at least as wide as its columns whatever `max-width` says.
+   Measured, 2026-09-03 — the rule was written that way first and changed
+   nothing at all.
+
+   **`.text-alone`, not `table.only-prose`**, though the two look
+   interchangeable from here. `only-prose` above is also true with a band open,
+   where the prose is the table's only column and the band has already taken
+   the space this would centre into; centring there would push the article away
+   from the panel it is being read against. layout.ts § `Fit.alone`. */
+.reader.text-alone table.zoom { margin-inline: auto; }
+
+/* And the masthead goes over the column rather than staying at the left edge
+   of a window it no longer shares with anything — the prose's own width, and
+   auto margins to put it on the prose's own axis.
+
+   **It tracks the prose from about 780px of window upwards, and not below**,
+   which is a smaller claim than the obvious one; the original measurements are
+   in docs/plans/plain-mode-and-the-way-out.md § Centring the column. Under that
+   width this bar has less room than the measure, so `max-width` stops
+   controlling anything and the title stays at the gutter while the prose slides
+   towards it. The gap closes smoothly and there is no jump.
+
+   **That crossover was ~1009px until 2026-09-06 and the reservations were why.**
+   This bar held `--logo-w` open on its left for the corner wordmark and
+   `--feedback-w` on its right for the button — 292px of the two together — so
+   the bar ran out of room to centre in long before the window did, and between
+   731 and ~1009px the title sat where it had always sat while the prose walked
+   away from it: measured 2026-09-04, 54.7px apart at a 900px window. Both
+   controls are in the Dock now (§ shell), the gutter is 24px a side, and the
+   whole of that band is gone — measured at an 800px window, 2026-09-06, the
+   title starts 6.3px *left* of the first line of prose where it used to start
+   107.6px right of it.
+
+   Above the crossover, measured 2026-09-06: the title lands **2.76px right** of
+   the first line of prose. It was 4.766px, and the difference is exactly the
+   term this stage removed: the number always broke into 2.762px from the weight
+   axis (the `font-size` below says why) and 2.0px from this bar's own padding
+   being 148px on the left against 144px on the right, so that centring in it
+   was 2px right of centring in the window. The bar is symmetric now and what is
+   left is the weight axis alone. It used to be 4px *left* of
+   the prose, and then **22.5px left of it for as long as it took to merge two
+   changes and photograph the result** — the day
+   `.prose` started dividing the leftover in its cell (§ text) and the day the
+   gutter became a 2 × 2 pad were different days on different branches, and
+   neither could see this rule. Both moved the prose right and neither moved the
+   title, and the errors added rather than cancelling. The fix is in the
+   `max-width` below; what is worth keeping is that **the defect existed only in
+   the composition**, so each branch's own checks were green and the number that
+   found it came from a browser after the merge, not from either side's tests.
+
+   The bars themselves stay full-bleed, deliberately: the controls row and the
+   dock are chrome that spans the window in every mode, and the masthead is the
+   one piece of *the article* above the fold. */
+.reader.text-alone .masthead-inner {
+  /* `65ch` measured in the article's face rather than the chrome's, for the
+     reason the sibling rule below gives at length and `.blk-gutter` gives again
+     (§ the gutter). Size and not weight, also for the sibling's reason: every
+     child of this box inherits its weight, so matching the prose's 450 would
+     embolden the byline and the source note.
+
+     **That leaves 2.8px, the same 2.8px the sibling ships and says so.** It is
+     not halved by arriving here through a width rather than a margin: the
+     weight axis makes this box's `65ch` 5.524px short of the prose's — measured,
+     732.614 against 738.138 at a 16px root — and the term reaches the left edge
+     through `W / 2` either way. An earlier comment here claimed 1.4px, from
+     halving the sibling's residual a second time — GPT Sol, 2026-09-05. */
+  font-size: var(--reading-size);
+  /* **A box whose CENTRE sits where the prose's centre sits**, because the two
+     are centred in boxes that share an axis and the reading cell's padding is
+     not symmetric. The prose sits `(--text-pad-l − --text-pad-r) / 2` right of
+     the table's centre, so a box centred on the same axis has to lose twice
+     that to start on the same pixel: `measure + padR − padL`. Exact, not an
+     approximation — 295.33px against the prose's 295.33px at a 1280 window,
+     measured 2026-09-04.
+
+     **`--table-w` is gone from this rule and that is the point.** It said
+     "the reading *cell*", which was the right box while the prose filled its
+     cell and became the wrong one the moment the prose started dividing the
+     leftover inside it.
+
+     What `--table-w` also carried was a width that *shrank with the window*, so
+     the old rule was guaranteed to stop biting on any narrow screen. This one
+     is a constant per root, so that guarantee has to be checked rather than
+     assumed. At the default root it holds — 705px against a bar with 696 to
+     give at a 1000px window and 596 at 900, so the rule is inert and the title
+     stays where it has always been while the prose slides towards it. **At a
+     small root it does not.** `--blk-slot`'s px floor stops `--text-pad-l`
+     shrinking with the type while `--reading-measure` goes on shrinking, so at
+     a 9px root this width is 365.2px and at 12px it is 503.8px — **the same at
+     600, 700 and 731px of window**, measured, where the old one would have
+     shrunk with each. Toward the prose rather than away from it, but a change,
+     and the sentence that used to stand here said nothing moved.
+     GPT Sol, 2026-09-05.
+
+     **And below the measure's own crossover this rule simply does not follow the
+     prose.** `.prose` is `clamp(45ch, 90vw, --reading-measure)` (§ text), so
+     under about `measure / 0.9` of window it is `90vw` and narrower than the
+     length this calc uses — 824px at a 16px root, but only 618px at a 12px one,
+     because the crossover moves with the type. Measured at a 12px root: −5.7px
+     at 700 and 731px of window, and **−22.1px at 600**, where `90vw` has taken
+     over. The title is then out by roughly half of what the prose gave up. Not
+     fixed here, because the fix is either a second `clamp` in this calc or a
+     custom property `.prose` and this rule can share, and neither is worth it
+     for a reader who has both shrunk their type and narrowed their window; but
+     it is the same shape as the bug this rule was just repaired for, so it is
+     written down rather than left to be found again. */
+  max-width: calc(var(--reading-measure) + var(--text-pad-r) - var(--text-pad-l));
+  margin-inline: auto;
+}
+
+/* ------------------------------------------- § the title over the column --
+   **And the same again in a mode, where the prose moved and the table did
+   not.** § text centres `.prose` inside its cell at every width; in a band mode
+   that cell is the whole table, so the article slides ~200px right and the
+   masthead — left-aligned at `62rem` — stays against the wordmark. A centred
+   column under a left-aligned title reads as a bug rather than as a choice, so
+   the title follows it.
+
+   **The condition is "the prose is the table's only column", asked of the
+   table itself.** That is exactly when this bar and the reading cell are the
+   same box — both start at `--spine-w + --mode-w` and both run to the right
+   edge — which is the fact the arithmetic below depends on. In Hierarchy the
+   gist columns are in front of the prose, the two boxes are not the same, and
+   `:has` does not match: the title stays where the gists start, which is where
+   the reader's eye enters that view anyway. `.text-alone` is excluded because
+   the rule above already has that case and does it with the cap instead.
+
+   **Not `margin-inline: auto`**, which is what the alone rule can afford, and
+   the reason survives the bar becoming symmetric. Auto margins would centre
+   this box in the bar, but the prose is *not* centred in the reading cell — the
+   cell's own padding is lopsided (`--text-pad-l` is a gutter of icons,
+   `--text-pad-r` is trailing space), so the prose sits half that difference
+   right of centre. So the left margin is stated: the prose's own inset
+   (`--text-pad-l` plus half the room the centring divides) measured from the
+   bar's content edge, which is where a margin starts.
+
+   **The bar's own padding is in this sum, and it was taken out and put back on
+   the same day.** It reconstructs the bar's full width from the content box
+   (`100% + --masthead-pad-l + --masthead-pad-r`) and then subtracts its way
+   back in, because the prose divides the *whole* cell while a margin starts at
+   the bar's content edge.
+
+   When the two reservations came out (§ shell) the two sides became equal, at
+   which point the gutter cancels exactly — the `+ G` inside the halved sum and
+   the `− G` outside it are the same number — and the expression was simplified
+   to drop both terms. **That was correct and it was still the wrong thing to
+   do**, because it turned an identity into a *precondition*: the rule then
+   silently required `--masthead-pad-l === --masthead-pad-r`, and the very next
+   fix needed them unequal, so § a narrow window could give the phone's title
+   the left gutter its prose has without breaking a rule two hundred lines away.
+   The long form is one term wider and true for any pair. Simplifying an
+   expression by assuming a fact declared somewhere else is how a rule acquires
+   a precondition nobody knows it has.
+
+   `max(0px, …)` is the same self-limiting as everywhere else in this change:
+   below the width at which the bar has less room than the measure the term goes
+   negative, and the title stays at the gutter while the prose slides towards
+   it. That width is much lower than it was, the reservations having been the
+   thing that raised it. Below the mode crossover (700px since 2026-09-06, 844
+   before it) the question does not arise anyway — a mode band with no room
+   hides this bar outright (§ a band with no room). */
+.reader:has(table.only-prose):not(.text-alone) .masthead-inner {
+  /* `65ch` measured in the article's face rather than the chrome's — the same
+     line, and the same reason, as `font-size` on `.blk-gutter` (§ the gutter).
+     Inert: every child of this box sets its own size (h1 1.45rem, `.facts` and
+     `.source-note` 0.82rem, `.root-gist` 0.95rem, the back link `text-xs`).
+
+     **Size and not weight, and that is what the last 2.8px is.** The gutter
+     matches `--reading-weight` too, because nothing in it is text; here the
+     byline, the source note and the whole-article gist all inherit their weight
+     from this box, so matching the prose's 450 would embolden four pieces of
+     small print nobody asked to change. Measured: the title lands 2.8px right
+     of the first line of the article. The sibling rule above ships 4px of the
+     same kind of slippage and says so; this is that, from the variable font's
+     weight axis rather than from a bar's padding. GPT Sol, 2026-09-04. */
+  font-size: var(--reading-size);
+  max-width: var(--reading-measure);
+  margin-left: max(
+    /* **The floor is the prose's own inset, not zero** — and zero is what it
+       was for half a day on 2026-09-06, which is how this was found. Below the
+       width at which the centring term survives, the title used to sit at the
+       bar's gutter while the prose stayed inset by `--text-pad-l`, and the two
+       left edges were a step apart. Nobody had noticed because the *reservation*
+       was accidentally paying for it: the masthead's left padding was
+       `--logo-w`-derived and landed within a couple of pixels of the prose's
+       inset, so removing the reservation is what exposed it. Measured at 1024 in
+       a band mode: title at 436 against a first line of prose at 447.
+
+       `--text-pad-l - --masthead-pad-l` because this is a margin from the bar's
+       *content* edge, and the bar's content edge is already `--masthead-pad-l`
+       in from the reading cell's. The outer `max` with `0px` is for a root size
+       where the gutter grows past the prose's inset; the term would go negative
+       and pull the title left of its own bar. GPT Sol, T1. */
+    max(0px, calc(var(--text-pad-l) - var(--masthead-pad-l))),
+    calc(
+      (100% + var(--masthead-pad-l) + var(--masthead-pad-r) - var(--text-pad-l) -
+          var(--text-pad-r) - var(--reading-measure)) / 2 + var(--text-pad-l) -
+        var(--masthead-pad-l)
+    )
+  );
+  margin-right: auto;
+}
+

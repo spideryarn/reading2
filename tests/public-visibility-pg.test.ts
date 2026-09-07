@@ -58,11 +58,9 @@ import type { Glossary, Ideas, TweetThread } from "../src/types.js";
 
 loadEnvLocal();
 
-/**
- * **Postgres, and set before `src/routes.ts` is ever imported.** `STORE` is read
- * once at module load in src/store/live.ts, which is why every import of the
- * route layer in this file is dynamic and everything else is not.
- */
+/* Every import of the route layer here is dynamic. That was because `STORE`
+   was read once at module load in src/store/live.ts, which went on 2026-09-06
+   with the store flag. */
 
 const SLUG = "test-public-visibility";
 const ARTICLE_ID = "00000000-0000-4000-8000-0000000000ea";
@@ -533,10 +531,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        computing it a second way would be pinning its own arithmetic.
 
        **Imported dynamically**, for the reason this file's header gives about
-       the route layer: `STORE` is read once at module load, and a static import
-       of `store/pg.js` at the top of this file reaches it before
-       `process.env.SPIDERYARN_STORE` is set two lines down — which turns every
-       request in the suite into a 501. Found by doing it. */
+       the route layer. */
     const { sourceHashFor } = await import("../src/store/pg.js");
     const fingerprint = await sourceHashFor(ARTICLE_ID);
     await db.insert(searchRuns).values([
@@ -1326,8 +1321,13 @@ describe("sharing one article", { timeout: 60_000 }, () => {
              stays *"the whole public surface"* rather than *"the routes that
              happen to take a slug"*. The set is asserted so a sweep cannot go on
              passing over an inventory that has quietly lost a kind. */
+          /* Three since 2026-09-06, when `asset` landed. `pathOf` fills its
+             hash in with sixty-four zeros, so what this sweep proves about it is
+             that reaching it spends nothing and needs no owner — not that it
+             serves anything, which no sweep can know a hash for.
+             tests/public-asset-route.test.ts is where that is checked. */
           expect(new Set(PUBLIC_ROUTES.map((r) => r.kind))).toEqual(
-            new Set(["slug", "collection"]),
+            new Set(["slug", "collection", "asset"]),
           );
           for (const path of [
             ...PUBLIC_ROUTES.map((route) => pathOf(route, SLUG)),

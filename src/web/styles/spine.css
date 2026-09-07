@@ -1,0 +1,319 @@
+/* spine.css — the bird's-eye rail down the left edge (Spine.tsx), and the
+   search marks drawn in it. Everything inside the track is positioned in
+   percentages of the document's height, so nothing here is recomputed on
+   resize. */
+
+/* ----------------------------------------------------------------- spine --
+   The bird's-eye rail. `position: fixed` rather than a table column, because an
+   overview has to be visible all at once and consecutive table rows are
+   thousands of pixels apart — see Spine.tsx and granularity-zoom.md#the-spine-a-birds-eye-rail.
+
+   Everything inside the track is positioned in PERCENTAGES of the document's
+   height, so the rail rescales itself on resize with no recomputation. */
+.spine {
+  position: fixed;
+  /* The rail is fixed to the left edge of the SCREEN, so in landscape on a
+     notched phone `left: 0` puts it — and every band and hover target on it —
+     inside the cut-out. `--safe-left` is what `.reader`'s padding already
+     reserves for it. */
+  left: var(--safe-left);
+  top: var(--bar-bottom);
+  /* Its bands are press targets (Spine.tsx § bandPress), so the rail stops at
+     the home indicator rather than continuing behind it. */
+  bottom: var(--safe-bottom);
+  width: var(--spine-w);
+  /* How much of the rail's width the search lanes may take, and how wide one
+     lane may get when there are few of them — see § search marks below.
+
+     The cap is what makes one search a tick rather than a slab.
+
+     **The gutter did not halve with the rail, and the reasoning is the whole
+     of why these two numbers are what they are.** A mark's legibility is
+     absolute rather than proportional: halving 15px to 7.5px would have given
+     a single search a 2.5px bar, which is not "the same mark, smaller", it is
+     a bar you cannot tell from the L2 hairline beside it. So the gutter keeps
+     enough absolute width for the cases that actually happen — at 10px of a
+     12px rail, one search and two searches each still draw the **same 4px bar
+     they drew on the 24px rail**, and two fill the gutter exactly.
+
+     What that costs is only apparent during a search, and less than it looks:
+     `.spine-matches` is `inset: 0` over the whole track and a mark is only as
+     tall as the paragraph it names, so the gutter is not a permanent 10px
+     stripe taken off the bands — it is the width a mark may reach on the rows
+     that matched, and nowhere else.
+
+     Where it gives out, measured rather than guessed. The pitch is
+     `min(--lane-max, 10 / lanes)` — the cap is why one search and two searches
+     both get 5px of it, and `10 / lanes` alone would predict a 10px slab for a
+     single search — and the painted width is `max(1.5px, pitch − 1px)`. The
+     widths therefore run 4px, 4px, 2.33px, 1.5px for one to four searches: the
+     floor starts governing at four and exceeds the pitch at seven, from which
+     point adjacent lanes merge into one band of colour. That is sooner than the 24px rail's eleven. No 12px rail can do
+     better — eight lanes at a 1.5px stroke and a 1px gap needs 20px — and the
+     search panel still lists every one of them. GPT Sol, 2026-08-28. */
+  --spine-gutter: 10px;
+  --lane-max: 5px;
+  z-index: 45;
+  background: var(--panel);
+  border-right: 1px solid var(--rule-strong);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-ui);
+}
+
+.spine-off .spine { display: none; }
+
+.spine-track {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.spine-part {
+  position: absolute;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--rule);
+  /* No `transition: background` here any more. It animated the
+     `--highlight-wash` that `.active` used to set, and that background went on
+     2026-09-06 — leaving a transition on a property nothing changes, which
+     reads like an intended animation and is dead. The tint that *does* change
+     lives on `::before`'s opacity; if the band should ever fade rather than
+     cut, animate that instead. GPT Sol, 2026-09-06. */
+}
+
+/* The part's tint bar, the full width and height of its band — the rail reads
+   as a stack of proportional blocks. It was a 3px stripe beside a label when
+   there was a labelled rail to put a label on. */
+.spine-part::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--depth-1);
+  opacity: 0.3;
+}
+
+/* **Quieter than it was, and that is the fix rather than a side-effect of it.**
+   This was `background: var(--highlight-wash)` behind a 0.75 tint, and on an
+   article whose one part holds 95% of the rows that made the whole rail orange
+   while saying nothing — Greg, 2026-09-06. Three of the thirteen trees in
+   `data/` have a part over half the document, so it is a shape, not a Nagel
+   quirk.
+
+   The wash is gone and the tint drops to 0.45, so that `.spine-here` below can
+   be the brightest *fill* on the rail and the part reads as the field it sits
+   in. Turning it down uniformly rather than suppressing it above some size: a
+   threshold would give the rail two behaviours a reader has to learn — *why is
+   the part not lit on this article?* — and a number to argue about, where this
+   degrades smoothly and still reads on a nine-part piece.
+
+   What the brand orange bought here it now buys nowhere on the rail except
+   hover and focus: `--highlight` means *where you are looking*, which is the
+   viewport band's edges. The **nested fills** mean *which part* and *which
+   section within it* — two strengths of one tint, which is why neither of them
+   is the brand colour any more. */
+.spine-part.active::before { opacity: 0.45; }
+
+/* The apparatus: **dimmed, at its true proportional height.** The band is the
+   same size it would be as a part — the rail must not lie about pixels — and
+   the tint drops so that the eye reads the argument as ending at its top edge.
+   Search lanes still paint over it, deliberately: a hit inside a footnote is a
+   real hit, and the dimming makes those marks more legible rather than less.
+   docs/plans/260828o-footnotes.md § What the reader sees. */
+.spine-part.supplement::before { opacity: 0.1; }
+.spine-part.supplement.active::before { opacity: 0.4; }
+
+/* **The section you are in.** The concentric inner ring: the part is a quiet
+   field, this is the bright fill inside it, and the viewport band's edges are
+   the exact pixels. Three layers, three channels, none mistakable for another.
+
+   **Opacity of one token rather than a step down the `--depth-N` ladder**,
+   which would have been the obvious move and is a trap on this page: that ramp
+   runs `oklch(0.82 …)` to `oklch(0.44 …)`, so it gets *darker* with depth, and
+   a "deeper" ring painted from it would recede into a near-black page instead
+   of advancing out of it. Same class of mistake as colour-scales.md § *The page
+   is near-black, so every published scale is upside down*.
+
+   `left: 2px` is the L2 tick's own inset, so the ring reads as nested inside
+   the part rather than as a second band stacked on it.
+
+   The `min-height` is the same admission the hit (4px), the mark (3px) and the
+   viewport band (2px) all make: everything in this track is a percentage of the
+   document's height, and a short section in a long article rounds to nothing.
+   Two pixels of lie about geometry, against a *you are here* that disappears
+   exactly when the reader most needs it.
+
+   **The floor needs the clamp above it to be worth anything at the end.** It
+   grows the box downward from `top`, and the article's last section starts at
+   nearly 100%, so without `min()` those two pixels grow out of the rail's
+   `overflow: hidden` and the ring vanishes on exactly the articles that have a
+   one-line colophon or acknowledgement to end on. `--here-top` is set inline;
+   Spine.tsx says why it is a custom property rather than a `calc()` there. */
+.spine-here {
+  position: absolute;
+  top: min(var(--here-top), 100% - 2px);
+  left: 2px;
+  right: 0;
+  min-height: 2px;
+  pointer-events: none;
+  background: var(--depth-1);
+  opacity: 0.8;
+}
+
+/* L2 as hairlines: the subdivision of the article stays visible even where
+   there is no room for a word of it. */
+.spine-tick {
+  position: absolute;
+  /* A sixth of the rail, so the tick still reads as an indent rather than a
+     full-width rule. It was 4px of 24; it is 2px of 12. */
+  left: 2px;
+  right: 0;
+  height: 1px;
+  background: var(--rule);
+  opacity: 0.8;
+}
+
+/* **Where the reader jumped from**, drawn only while the chip offering the way
+   back is up — ReturnChip.tsx is the same fact in words, and Spine.tsx has why
+   it is one mark rather than the fading trail that was asked for.
+
+   Three deliberate differences from everything else on the rail, because a mark
+   nobody can tell from a hairline is a mark that says nothing:
+
+   - **Full width**, where the L2 tick and the *you are here* fill both start at
+     `left: 2px`. It is not part of the article's structure; it is a place the
+     reader stood.
+   - **Neutral.** `--depth-1` means *which part, which section* and the brand
+     orange means *where you are looking*; this is neither, and a third meaning
+     borrowing either colour would be read as one of them.
+   - **Never in the right-hand gutter.** It is its own element rather than a
+     lane, so a search cannot be pushed sideways by it — Spine.tsx says why that
+     is structural rather than a matter of these numbers.
+
+   The floor is the same admission the hit (4px), the search mark (3px) and the
+   viewport band (2px) all make: one row of a long article rounds to nothing.
+   And the floor needs the clamp above it, for the reason `.spine-here` does —
+   `min-height` grows the box downward from `top`, so a jump made from the last
+   rows grows out of `.spine { overflow: hidden }` and the mark vanishes for
+   exactly the reader furthest from home. `--from-top` is set inline; Spine.tsx
+   says why it is a custom property rather than a `calc()` there. */
+.spine-from {
+  position: absolute;
+  top: min(var(--from-top), 100% - 3px);
+  left: 0;
+  right: 0;
+  min-height: 3px;
+  pointer-events: none;
+  background: var(--ink-faint);
+  opacity: 0.55;
+}
+
+/* Invisible hit targets, one per L2, over the top of everything. A 1px tick is
+   not something anyone can click, and landing on the L2 is more precise than
+   landing on the part that contains it. */
+.spine-hit {
+  position: absolute;
+  left: 0;
+  right: 0;
+  min-height: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.spine-hit:hover { background: color-mix(in oklab, var(--highlight) 14%, transparent); }
+.spine-hit:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: -1px;
+}
+
+/* ------------------------------------------------- search marks in the rail --
+   Where each switched-on search matched, as parallel lanes down the right-hand
+   edge — Greg, 2026-08-26: "dots/thin vertical lines of the relevant
+   search-colour in all the places where there's a match in the Spine so it's
+   easy to see at a glance where the results are in the doc (and how common)".
+
+   Lanes rather than a single stacked column: with several searches on at once
+   one column could only say "something matched here", which is the question the
+   colours were introduced to stop being the only one anybody could ask. See
+   Spine.tsx § Search results down the rail.
+
+   The gutter is a fixed slice of the rail's width, and the lane width is that
+   slice divided between however many searches actually matched — capped, so one
+   search draws a tick rather than a five-millimetre slab. `min()` with a
+   division means the whole thing is arithmetic the browser does, and the only
+   number React sets is `--lanes`. */
+.spine-matches {
+  position: absolute;
+  inset: 0;
+  /* Never in the way of the band buttons underneath, which are what the rail is
+     for. A mark is 3px tall at its thinnest and would otherwise be a 3px strip
+     of the rail that does not respond to a click. */
+  pointer-events: none;
+  /* **Declared here and not on `.spine`, and it has to be.** A custom property
+     is substituted where it is *declared*, not where it is used: `--lanes` is
+     set inline on this element, so a `--lane-w` written on `.spine` would
+     resolve against the fallback — one lane, every time — and inherit that
+     frozen value down. Every search would then draw a full-width bar in lane 0,
+     on top of each other. Nothing about that looks like a CSS bug; it looks
+     like the lanes feature not working. */
+  --lane-w: min(var(--lane-max), calc(var(--spine-gutter) / var(--lanes, 1)));
+}
+
+.spine-match {
+  position: absolute;
+  /* Clamped like `.spine-here` and `.spine-from`, and it was the last of the
+     three to get it: `min-height` grows the box downward, so a hit in the
+     article's final block grew past the rail's own bottom and `overflow:
+     hidden` cut the floor away — leaving a sliver, or nothing at all when the
+     final block is short. Measured in a browser at `top: 798.9, bottom: 801.9`
+     against a rail ending at 800. `--match-top` is set inline; Spine.tsx says
+     why it is a custom property rather than a `calc()` there. */
+  top: min(var(--match-top), 100% - 3px);
+  /* `--lane-w` is the *pitch*; the mark is a pixel narrower, and the pixel is
+     the gap that keeps two adjacent lanes reading as two marks rather than as
+     one wider one. It was a leftward `box-shadow`, which did not work and did
+     not look like it was not working: lanes are drawn right to left, so the
+     lane to the left is painted *after* its neighbour and its background
+     covered the neighbour's shadow. Every separator but the outermost was
+     invisible. Found by a GPT Sol review, 2026-08-26.
+
+     A `max()` under it because the gutter is shared: with eight searches on
+     the pitch is 1.25px, and a plain subtraction would leave a quarter of a
+     pixel. A lane that rounds to a sub-pixel line is the fault the phrase
+     stripes already cap for.
+
+     Where that turns over, said out loud rather than discovered, and it turned
+     over sooner when the rail was halved on 2026-08-28. The floor governs from
+     **four** searches (pitch 2.5px, so `pitch − 1` is 1.5px and they meet) and
+     exceeds the pitch from **seven** (pitch 1.43px), past which adjacent bars
+     overlap and the separating gap is gone. On the old 24px rail those numbers
+     were six and eleven. There is no cap stopping it — a cap would drop a
+     search from the rail silently, which is worse — and no arrangement of 12
+     pixels can hold eight distinguishable lanes at all: a 1.5px stroke with a
+     1px gap needs 20px. The panel still lists every one of them. */
+  right: calc(var(--lane) * var(--lane-w));
+  width: max(1.5px, calc(var(--lane-w) - 1px));
+  /* Percentages of the document's height, like everything else in the track —
+     so a mark is as tall as its paragraph. The floor is what keeps a one-line
+     list item in a long article visible at all; without it a mark can round to
+     zero and the search looks like it found nothing there. */
+  min-height: 3px;
+  background: rgb(var(--h));
+}
+
+/* How much of the article is on screen, and where. Drawn over everything and
+   deliberately not interactive. */
+.spine-viewport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  min-height: 2px;
+  pointer-events: none;
+  border-top: 1px solid var(--highlight);
+  border-bottom: 1px solid var(--highlight);
+  background: color-mix(in oklab, var(--highlight) 12%, transparent);
+}
+

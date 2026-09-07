@@ -112,6 +112,11 @@ const SHARED = new Set([
      after somebody has talked for two minutes.
      See src/dictation-limits.ts. */
   "dictation-limits.js",
+  // The server caps spoken passage/tool labels before saving them. Live's
+  // lost-response repair compares those saved fields with the same cap, so it
+  // must share the rule. Extracted from routes.ts into this import-free leaf;
+  // the purity check below keeps server dependencies out of the client.
+  "spoken-label.js",
   /* What a bug report may carry — the diagnostics blob's shape and the two
      image formats a pasted screenshot may be. On the list for the same reason
      `monitoring-scrub.js` is, and it is the same argument one seam over: the
@@ -234,6 +239,24 @@ const SHARED = new Set([
      URL left in place. One module, both callers.
      See src/assets.ts and docs/plans/260829b-hosting-the-articles-images.md. */
   "assets.js",
+  /* **Which stored object an asset URL names, and how that URL is spelled.**
+     The delivery half of the file above, and on the list for the same reason:
+     it imports `assets.js` for its types and nothing else.
+
+     Being on it is again the point rather than a convenience. `sendArticleAsset`
+     (src/routes.ts) and `pgPublicReader.loadAsset` both look a hash up with
+     `storedAssetFor`, and `rehost.ts` builds the `src` the browser asks with —
+     so the route's idea of which entry a URL names and the client's idea of
+     which URL an entry has are two halves of one fact. A second copy would not
+     404; it would serve nothing at a URL nobody complains about.
+
+     **This rule cost it one import**, which is worth knowing before somebody
+     adds it back: `publicAssetPath` spells a URL `src/public/route-names.ts`
+     also spells, and delegating to that file is refused here — the allowlist
+     holds flat module names, so a nested one cannot be shared. The two are tied
+     by an assertion in tests/rehost.test.ts instead.
+     See src/asset-delivery.ts. */
+  "asset-delivery.js",
   /* Escaping text into markup, and composing an article's page title. On the
      list because they qualify — `html.js` imports nothing at all, and
      `title-text.js` imports only the other leaves below it — and because being
@@ -258,6 +281,22 @@ const SHARED = new Set([
      another a second later. It imports nothing at all, and `params.ts`
      re-exports every name so no component knows it moved. See src/modes.ts. */
   "modes.js",
+  /* What each of those modes *is*: the sentence a reader is shown about it, the
+     words they might type meaning it, and whether it is still behind the
+     experimental switch. On the list because it qualifies — it imports
+     `modes.js` and nothing else — and because being on it is the point rather
+     than a convenience.
+
+     The two older fields were `blurb` and `experimental` on a `MODES_UI` row in
+     src/web/Dock.tsx, which is a 2,300-line React component, and they moved on
+     2026-09-07 because a second reader was arriving that cannot import it (the
+     command bar, docs/plans/260906h-mode-catalog-and-a-command-bar.md). The
+     alternative was a fifth field on a Dock layout row, which is how `MODES_UI`
+     became the place everything about a mode ended up. Nothing under
+     src/public/ reads it yet; it is written to this rule anyway, so that the
+     day a server-composed page wants to say what a mode is, the answer is one
+     import rather than a second copy. See src/mode-catalog.ts. */
+  "mode-catalog.js",
   /* What a `/read/…` address asks for — the view, and whether the client is
      about to rewrite a legacy spelling into the metadata page. On the list
      because it imports nothing at all, and because being on it is the point:
@@ -383,7 +422,34 @@ const SHARED = new Set([
      file names the prefix) and
      docs/plans/260831af-carrying-markup-facts-past-readability.md. */
   "reserved.js",
+  /* The changelog file's schema and its parser. The writer
+     (`scripts/changelog/changelog.ts`) and the reader
+     (`src/web/ChangelogPage.tsx`) are the two callers, and a format defined
+     twice drifts — here it would drift into a blank page rather than an error,
+     since the page is deliberately tolerant of a line it cannot read.
+
+     **One flat file rather than a `src/changelog/` pair**, which is what it was
+     for an hour on 2026-09-06. This list holds names resolved directly under
+     `src/`, so a nested module cannot be shared through it and would need a
+     second mechanism beside this one — `asset-delivery.ts` made the same call
+     for the same reason. It imports nothing, so the purity check below has
+     nothing to find.
+     See src/changelog.ts and docs/project/changelog.md. */
+  "changelog.js",
 ]);
+
+/**
+ * **The one file the client reaches for entirely outside `src/`.**
+ *
+ * `docs/changelog/versions.ndjson` is committed data, not code: nothing to
+ * bundle, only a string Vite inlines through `?raw`, and there is no `src/`
+ * leaf to move a copy into — the file *is* the changelog process's own
+ * append-only output (docs/project/changelog.md), and ChangelogPage.tsx is
+ * its one reader. The exact specifier, not a directory, because a second file
+ * reached this way is a decision of its own rather than something this line
+ * should wave through.
+ */
+const OUTSIDE_SRC_ALLOWED = new Set(["../../docs/changelog/versions.ndjson?raw"]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */
 function sourcesUnder(dir: string): string[] {
@@ -511,6 +577,10 @@ describe("the client's imports", () => {
       for (const spec of importsOf(file)) {
         // Only relative imports can escape; a bare specifier is a package.
         if (!spec.startsWith("../")) continue;
+
+        // `docs/changelog/versions.ndjson?raw` — the one exact specifier
+        // allowed entirely outside `src/`. See `OUTSIDE_SRC_ALLOWED`.
+        if (OUTSIDE_SRC_ALLOWED.has(spec)) continue;
 
         /* **Resolved against the importing file, not counted as `../`s.** The
            check used to read one leading `../` as "this leaves src/web", which

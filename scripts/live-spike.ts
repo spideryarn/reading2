@@ -26,7 +26,7 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
-/* **The store's reader, not `src/api.ts`'s.** That one is the *filesystem*
+/* **The store's reader, not `src/api.ts`'s.** That one was the *filesystem*
    reader, and this file used it at both `/session` and `/tool` while its
    vocabulary and its tools went to Postgres seams — so a slug that exists only
    in the database could not start a live session, and a stale `data/<slug>/`
@@ -162,7 +162,7 @@ server.listen(PORT, HOST, () => {
      `localhost`, not 127.0.0.1: vite binds IPv6, so the numeric form refuses
      the connection on a perfectly healthy server. */
   console.log(`  now run "npm run dev" and open, on whichever port it prints:`);
-  console.log(`  http://localhost:<vite's port>/preview-live.html?slug=noema-mythology-of-conscious-ai`);
+  console.log(`  http://localhost:<vite's port>/preview/preview-live.html?slug=noema-mythology-of-conscious-ai`);
   if (!process.env.OPENAI_API_KEY) {
     console.log(``);
     console.log(`  ! OPENAI_API_KEY is not set — /session will refuse.`);

@@ -101,9 +101,10 @@ export const MODES = [
      the two sub-modes that now live under it, Recall and Quiz.
 
      The cost, named rather than hidden: *Remember* can suggest saved memories
-     or spaced repetition, and this mode does neither. The dock blurb
-     (src/web/Dock.tsx) carries the weight of correcting that, so it has to
-     stay accurate.
+     or spaced repetition, and this mode does neither. Its description
+     (`MODE_CATALOG` in src/mode-catalog.ts, and a `blurb` on a `MODES_UI` row
+     in src/web/Dock.tsx until 2026-09-07) carries the weight of correcting
+     that, so it has to stay accurate.
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
   "remember",
   /* The eighth, 2026-08-28: the whole document as one nested list that never

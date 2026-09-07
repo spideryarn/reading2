@@ -102,7 +102,7 @@ export const PLATE_MEDIA_TYPES: Readonly<Record<string, IllustratedImageExt>> = 
  *
  * `store` is injectable so a test can exercise the refusals without a
  * container; the default follows the credentials the way everything else here
- * does (src/store/blobs.ts § Why selection does not read `SPIDERYARN_STORE`).
+ * does (src/store/blobs.ts § Why selection never read `SPIDERYARN_STORE`).
  */
 export async function storePlateImage(
   draw: { image: Uint8Array; mediaType?: string },

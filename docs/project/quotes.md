@@ -10,6 +10,11 @@ there. (The one exception is a row whose block a re-extraction took away.) See
 Verification can prove the words are in the piece. It cannot prove who wrote them, and the promise
 this mode makes is the one it can keep.
 
+**Every reader sees it.** It was behind the
+[experimental-features switch](experimental-features.md) from 2026-09-03 until 2026-09-06, when Greg
+took it out — *"Quotes mode is valuable enough that we should promote it to always show it"*. The
+limit above is unchanged; it is now something a reader meets rather than a reason to hide the mode.
+
 Built 2026-08-31. Greg asked for it that day:
 
 > Create a "Quotes" mode that extracts the most central, helpful, interesting quotes. By default,
@@ -82,8 +87,8 @@ Code: [`src/quotes.ts`](../../src/quotes.ts) (stage 5h — the prompt, the call,
 [`src/web/useQuotes.ts`](../../src/web/useQuotes.ts), `resolveQuotes` in
 [`src/web/search-hits.ts`](../../src/web/search-hits.ts),
 [`src/web/modes/quotes/QuotesMode.tsx`](../../src/web/modes/quotes/QuotesMode.tsx)
-(`QuotesBand`, `VisitorQuotesBand`, `useQuotesMode`), and `§ quotes mode` at the end of
-[`src/web/styles.css`](../../src/web/styles.css). Tests:
+(`QuotesBand`, `VisitorQuotesBand`, `useQuotesMode`), and `§ quotes mode` in
+[`src/web/styles/quotes.css`](../../src/web/styles/quotes.css). Tests:
 [`tests/quotes.test.ts`](../../tests/quotes.test.ts) (the stage),
 [`tests/quotes-panel.test.ts`](../../tests/quotes-panel.test.ts) (the orders and the bar),
 [`tests/quote-marks.test.ts`](../../tests/quote-marks.test.ts) (what the prose marks).

@@ -269,12 +269,20 @@ const ARTICLES: Record<string, Article> = {
     blocks: BLOCKS,
     tree: tree(A, BLOCKS),
     assets: undefined,
+    /* Required on `Article` since dev made the nav-label ladder explicit;
+       "ready" is what every writer produces today (src/types.ts). Nothing
+       in this test reads it — it draws marks, not rung 5. */
+    navLabelStatus: "ready",
   },
   [B]: {
     meta: { slug: B, title: "Another piece", url: "https://example.com/b", byline: "Somebody" },
     blocks: B_BLOCKS,
     tree: tree(B, B_BLOCKS),
     assets: undefined,
+    /* Required on `Article` since dev made the nav-label ladder explicit;
+       "ready" is what every writer produces today (src/types.ts). Nothing
+       in this test reads it — it draws marks, not rung 5. */
+    navLabelStatus: "ready",
   },
 };
 

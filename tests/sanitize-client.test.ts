@@ -211,17 +211,46 @@ describe("the ingress is wired up", () => {
        on its own, from `const article = sanitizeArticle(…)`) is the only form
        allowed; `article: <anything>` is a second source and fails here. The
        exception is the raw two-step below it, which is deliberately not
-       sanitised — it hands its payload to the doorway. */
+       sanitised — it hands its payload to the doorway.
+
+       **One exemption, added 2026-09-06**: `article: Article` immediately
+       followed by `)` or `,` — a parameter annotation and nothing else. Stage E
+       gave `resolveAccess` two answers to build, the first draw and the one
+       with the article's own images in it, and the thing that builds both takes
+       an `(article: Article)` parameter. A declaration cannot be a source of an
+       unsanitised payload, where every other right-hand side can.
+
+       **The delimiter narrows the exemption; it does not make it exact.**
+       Exempting the bare word let `{ article: Article }` and
+       `{ article: Article as Article }` through as value expressions, which is
+       what the delimiter was added to stop. It does not stop the comma arm:
+       `{ article: Article, other: 1 }` is an object property and is still
+       exempted, so the rule separates a parameter annotation from a value
+       expression only in the `)` case. Nothing reaches it today because
+       `Article` is a type-only import and cannot be a value — which is an
+       accident of another file, not a property of this scan. GPT Sol, merge
+       review, 2026-09-07. `article: found.article` still fails, which is the
+       assignment this test exists for.
+
+       **And be honest about what this proves.** It is a wiring check, not a
+       data-flow proof: `const article = found.article; return { …, article }`
+       has always passed it, because the shorthand is matched by shape and not by
+       origin. An AST check would be the real thing, and `tests/helpers/ts-ast.ts`
+       is already in hand for it. The scan's value is that a *deletion* or a
+       *rename* — the two ways this has actually broken, twice — cannot be
+       silent. */
     const start = ACCESS.indexOf("async function resolveAccess");
     const end = ACCESS.indexOf("async function findArticle");
     /* Both anchors, checked before the slice. `indexOf` returning -1 would make
        `slice` read from the end of the file and the two assertions below would
-       then hold against nothing — docs/reusable/silent-success.md. */
+       then hold against nothing — docs/reusable/silent-success.md. This is the
+       same failure the doorway moving to `src/web/article/access.ts` on
+       2026-09-06 would otherwise have caused, silently. */
     expect(start, "resolveAccess must exist in src/web/article/access.ts").toBeGreaterThan(-1);
     expect(end, "findArticle must follow it there").toBeGreaterThan(start);
     const doorway = ACCESS.slice(start, end);
     expect(doorway).toContain("sanitizeArticle(");
-    expect(doorway).not.toMatch(/article:\s*(?!article\b)\S/);
+    expect(doorway).not.toMatch(/article:\s*(?!article\b|Article[,)])\S/);
   });
 
   it("the client never imports the jsdom-bound sanitiser", () => {

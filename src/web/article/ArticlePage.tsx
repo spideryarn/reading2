@@ -38,6 +38,7 @@ import type { PublicArtefactSet, PublicArtefacts } from "../../public-types.js";
 import { NotSharedPage, ReauthRequiredPage } from "../PublicChrome.js";
 import { PublicMetadataPage, VisitorTweetsPage } from "../PublicPages.js";
 import { useRenderCount } from "../perf.js";
+import { FeedbackTrigger } from "../FeedbackButton.js";
 import { useArticleAccess } from "./access.js";
 
 /**
@@ -128,11 +129,14 @@ export function ArticlePage({
     ),
   );
 
-  /* **The one branch with no corner wordmark**, and the reason is that
-     `LandingPage` draws its own. Everything else on this page gets the corner
-     mark, because the reader may have arrived straight here from a pasted link
-     with no shelf behind them — and a visitor with no account especially so,
-     since the mark is the only thing on screen that says whose page this is. */
+  /* **Which of the six branches below draws a way home, and where.**
+     `LandingPage` draws its own wordmark, so this branch adds nothing. The four
+     that follow — not-shared, reauth-required, error and loading — keep the
+     corner mark, because the reader may have arrived straight here from a
+     pasted link with no shelf behind them, and a visitor with no account
+     especially so, since the mark is the only thing on screen that says whose
+     page this is. The last branch draws none: it mounts a `Dock`, and the bar
+     carries the wordmark there (2026-09-06 — see that branch). */
   if (access.kind === "not-shared") return signedIn ? <NotSharedPage /> : <LandingPage />;
 
   /* **Its own branch, beside `error` and never through it.** The reader can fix
@@ -140,10 +144,19 @@ export function ArticlePage({
      its own corner logo, as `NotSharedPage` above does. PublicChrome.tsx. */
   if (access.kind === "reauth-required") return <ReauthRequiredPage />;
 
+  /* **The corner pair, on the two branches with no bar to put it in.**
+     `App` stopped drawing the corner Feedback trigger on the `read` route on
+     2026-09-06, because the pages that mount a `Dock` draw it in the bar
+     instead — and these two mount none. Without this line a signed-in reader
+     waiting for an article, or looking at one that failed, would have no way to
+     report the thing they are looking at, which is the state a report is most
+     likely to be about. `FeedbackTrigger` renders nothing with no host above
+     it, so a stranger here still gets none. */
   if (access.kind === "error")
     return (
       <>
         <HomeLogo />
+        <FeedbackTrigger variant="corner" />
         <pre className="error">{access.message}</pre>
       </>
     );
@@ -154,6 +167,7 @@ export function ArticlePage({
     return (
       <>
         <HomeLogo />
+        <FeedbackTrigger variant="corner" />
         <div className="loading">{slow ? "Fetching the article and its summaries…" : ""}</div>
       </>
     );
@@ -162,9 +176,22 @@ export function ArticlePage({
      one article's reading position — or one owner's rename, or one visitor's
      artefact flags — into another's. NOT keyed on the view: switching view is
      meant to keep the fetch, which is the whole reason it happens up here. */
+  /* **No corner pair here since 2026-09-06, and this is the branch that lost
+     it.** Every page below this line mounts a `Dock` — the reading view, the
+     metadata and tweets pages, and the three visitor stand-ins in
+     PublicPages.tsx — and the bar draws both the wordmark and the Feedback
+     trigger itself (Dock.tsx). A `<HomeLogo />` here would be a second way home
+     on the same screen, one of them fixed over the top of the spine while the
+     bars are hidden, which is the live bug this move dissolves:
+     docs/postmortems/260905g-the-top-of-the-spine-is-under-the-wordmark-on-a-phone.md.
+
+     **The reservation has not followed yet**, and that is the intended
+     intermediate state rather than a miss: the masthead and the controls bar
+     still hold ~136px of left gutter and ~120px of right open on these pages
+     for controls that are no longer in them. Stage 2 of the plan takes it out,
+     across the five `main` elements that hold it. */
   return (
     <>
-      <HomeLogo />
       {access.kind === "owned" ? (
         <OwnedArticle key={slug} slug={slug} article={access.article} view={view} />
       ) : (
@@ -184,7 +211,6 @@ export function ArticlePage({
     </>
   );
 }
-
 /**
  * **Your own article**, and everything that follows from it being yours.
  *
@@ -210,7 +236,7 @@ function OwnedArticle({
    * The title the reader has just given this article, if they have.
    *
    * **Layered over the fetched payload rather than written into it**, which is
-   * the same shape the server uses: `titleFor` in src/api.ts does not edit the
+   * the same shape the server uses: `titleFor` in src/library-scalars.ts does not edit the
    * extractor's meta either, it picks the reader's title over it at the moment
    * of answering. Two reasons it matters here.
    *
@@ -349,7 +375,6 @@ function OwnedArticle({
   if (view === "tweets") return <Tweets slug={slug} article={article} />;
   return <OwnedReader slug={slug} article={article} onRenamed={renameTo} />;
 }
-
 /**
  * **Where the private hooks are mounted, and the only place they are.**
  *

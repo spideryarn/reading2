@@ -58,6 +58,7 @@ import {
   SIGN_IN_AGAIN,
   VIEW_ONLY,
 } from "../messages.js";
+import { FeedbackTrigger } from "./FeedbackButton.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
@@ -85,8 +86,8 @@ export function ViewOnlyChip({ sessionUnconfirmed }: { sessionUnconfirmed: boole
       {VIEW_ONLY}
       {/* **The half of the unconfirmed-session state that has to survive a
           narrow window.** `SharedNotice` below carries the sentence and the
-          action, and at iPad-portrait and below it is hidden whenever a mode
-          band is open (styles.css § a narrow window) — so at that width, with a
+          action, and on a narrow window it is hidden whenever a mode band is
+          open (styles.css § a narrow window) — so at that width, with a
           band open, this chip is the only thing left saying why the page has
           gone read-only, and *the action is not reachable at all*. That is a
           stated trade-off rather than an oversight: closing the band brings the
@@ -129,8 +130,8 @@ export function SharedNotice({
 }) {
   return (
     /* **`shared-notice` is a hook for one rule and not styling.** In the reading
-       view this box sits between the masthead and the controls bar, and at
-       iPad-portrait and below `.reader:has(.mode-band) .masthead` is
+       view this box sits between the masthead and the controls bar, and on a
+       narrow window `.reader:has(.mode-band) .masthead` is
        `display: none` — the band goes full width and the article's identity
        goes with it (styles.css § a narrow window). Without the same rule here
        the notice became the first element on the page, at `y: 0`, underneath
@@ -316,6 +317,22 @@ export function ReauthRequiredPage() {
   return (
     <>
       <HomeLogo />
+      {/* **The corner pair, because this page has no bar to put it in.**
+          `App.tsx` stopped drawing the corner Feedback trigger on the `read`
+          route on 2026-09-06 — the pages that mount a `Dock` draw it in the bar
+          — and this is one of the four `ArticlePage` branches that mount none.
+          Beside the wordmark rather than inside the `<main>`, because the two
+          are a pair: `.logo-home` and `.fb-button` are both fixed in the
+          window's top corners, and the bars this page does not have are what
+          reserve the room for them (FeedbackButton.tsx § The bars have to
+          reserve the space).
+
+          A reader who cannot get past this screen is a plausible reader for a
+          bug report, and this is the one state in the app they can actually
+          fix — so losing the button here would be losing it exactly where it is
+          most likely to be wanted. It draws nothing for a stranger: with no
+          session there is no `FeedbackHost` above it. */}
+      <FeedbackTrigger variant="corner" />
       <main className="tw:mx-auto tw:max-w-xl tw:px-6 tw:pt-24 tw:font-sans">
         <h1 className="tw:m-0 tw:mb-3 tw:font-prose tw:text-2xl tw:text-foreground">
           {REAUTH_REQUIRED_HEADING}
@@ -366,6 +383,10 @@ export function NotSharedPage() {
   return (
     <>
       <HomeLogo />
+      {/* The corner pair, for the reason `ReauthRequiredPage` gives above — and
+          here the reader is always signed in (a stranger gets the landing page),
+          so the trigger is always drawn. */}
+      <FeedbackTrigger variant="corner" />
       <main className="tw:mx-auto tw:max-w-xl tw:px-6 tw:pt-24 tw:font-sans">
         <h1 className="tw:m-0 tw:mb-3 tw:font-prose tw:text-2xl tw:text-foreground">
           Not shared

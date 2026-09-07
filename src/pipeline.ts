@@ -35,8 +35,16 @@ import {
   runBlocks,
   splitIntoBlocks,
 } from "./blocks.js";
-import { ASSETS_VERSION, collectAssets } from "./collect-assets.js";
-import { ReadabilityRefused, runExtract } from "./extract.js";
+import type { Assets, PdfFigureEntry, PdfFigureFailure } from "./assets.js";
+import {
+  ASSETS_VERSION,
+  assetsInputHash,
+  collectAssets,
+  describeStorageFailure,
+  pdfFigureMarkersIn,
+} from "./collect-assets.js";
+import { collectPdfFigures, type PdfFiguresRun } from "./collect-pdf-figures.js";
+import { ReadabilityRefused, TooLittleTextToRead, runExtract } from "./extract.js";
 import {
   fetchDocument,
   type RawManifest,
@@ -114,6 +122,7 @@ import {
   ILLUSTRATE_SKETCH_PROFILE,
   ILLUSTRATE_SKETCH_STALE,
   PAGE_HAS_NO_ARTICLE,
+  pageHadTooLittleText,
   pdfTooManyPages,
   type ReaderFacingFailure,
   SOURCE_DOCUMENT_DAMAGED,
@@ -129,7 +138,8 @@ import {
   sameStamp,
   type StepStamp,
 } from "./store/artifacts.js";
-import { generateHierarchy } from "./hierarchy.js";
+import { checkCoverage, generateHierarchy } from "./hierarchy.js";
+import { LABELS_PROMPT_VERSION, generateLabels, mergeLabels } from "./labels.js";
 import { generateTweets, PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "./tweets.js";
 import type { Block, JobUpload, StepName } from "./types.js";
 import { getDb } from "./db/client.js";
@@ -220,6 +230,20 @@ export const DEFAULT_INGEST_STEPS: StepName[] = [
   "extract",
   "blocks",
   "hierarchy",
+  /* **And deliberately NOT `labels`, which is the whole of the 2026-09-06
+     change and the one line nothing checks.**
+
+     The label pass was inside `hierarchy` and was 79.5–92% of its wall clock —
+     one measured call took 602 s of a 682 s pass against a 740 s claimant
+     deadline. Adding `labels` here would put every second of that back between
+     pasting a URL and being able to read, which is exactly what the split
+     removed. A freshly ingested article shows *"Paragraph labels are still
+     arriving"* until a labels job runs for it (`nav_label_status`, stage 1).
+
+     There is no compiler check and no test that can state a negative usefully,
+     so this comment is the mechanism. If you are adding a step here, ask
+     whether a reader has to wait for it before the article is readable.
+     docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md. */
   /* In the default, unlike the four steps after `arc`: it costs no model call,
      and an article whose images are still hot-linked to the publisher announces
      the reader's IP to that publisher on every single read. That is the privacy
@@ -364,6 +388,25 @@ export function cacheArticleForStep(steps: readonly StepName[], index: number): 
  *
  */
 export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
+  /* **`labels` is deliberately NOT in this set, and that is the opposite call
+     from `arc`'s one row down.**
+
+     Every other name here reads the blocks and the tree and has nothing read
+     what it writes, so the positional cascade would buy a model call for
+     nothing. `labels` fails the second half of that: forcing `hierarchy` re-cuts
+     the tree, and a label written to tell a paragraph apart from *the wrong set
+     of neighbours* is wrong in the one way this stage exists to prevent
+     (src/labels.ts § `structureHash`). Re-running `hierarchy` is precisely what
+     invalidates the labels, so the cascade sweeping them in is the correct
+     answer rather than a wasted call — and the store agrees with it in the
+     stronger place: a forced `hierarchy` writes a pending manifest, which
+     deletes this step's receipt whether or not it was swept in.
+
+     Left out rather than absent by accident: `arc` is in this set because it
+     gained a freshness check of its own and its position stopped being the only
+     signal it had. `labels` has a `stamp` too, and it still belongs in the
+     cascade, because what the cascade encodes here is real — the tree it was
+     written against has moved. */
   /* **`arc` joined on 2026-08-29, the day it got a `stamp`.** The paragraph above
      names the exact condition — "give it a freshness check of its own and it
      belongs here too" — and it now has one, over the blocks, the tree and the
@@ -820,7 +863,7 @@ function canonicalBlock(block: Block): string {
  * blocks artefact beside them: 7 ms for the smallest, 469 ms at 669 blocks, and
  * **934 ms for the 676 KB `consciousness`**, which is the worst case in the
  * corpus. It runs once per `stepIsDone` for this one step: once per job that
- * contains `blocks`, and once per metadata-page load (src/api.ts). Accepted as
+ * contains `blocks`, and once per metadata-page load (src/store/pg.ts). Accepted as
  * temporary, against the persisted binding above.
  *
  * It is **not** short-circuited on the filesystem, where the two reads return
@@ -952,7 +995,7 @@ async function blocksMatchTheirHtml(ctx: StepContext, store: ArtifactReads): Pro
  * answer about the filesystem — the silent-success shape this seam exists to
  * remove, sitting inside the seam. There is no correct value to fall back to,
  * so there is no fallback: src/jobs.ts passes the pipeline's store, and
- * src/api.ts passes its own because the metadata page falls back to the
+ * src/api.ts passed its own because the metadata page fell back to the
  * `example/` fixture.
  */
 export async function stepIsDone(
@@ -970,28 +1013,19 @@ export async function stepIsDone(
   return step.isDone ? await step.isDone(ctx, store) : true;
 }
 
-/**
- * The fingerprint of the blocks a late stage would be written against today.
+/*
+ * **`inputHashFor` used to live here** — the blocks hash a stamped stage would
+ * be written against today, `hashBlocks` over stage 4's `blocks.json` — and it
+ * is gone as of 2026-09-06 because its last caller stopped wanting it.
  *
- * `data/<slug>/blocks.json` — stage 4's copy, not stage 3's — because that is
- * the one the late stages read and the one their `sourceHash` was computed
- * from. Reading the other would make every artefact look stale the moment
- * stage 3 ran without stage 4.
- *
- * `null` when the blocks cannot be read at all, which is *"we cannot tell"* and
- * must not be confused with a hash that fails to match. Both answer
- * not-current; only one of them is a stale artefact.
- *
- * **One caller left: `assets`**, which really does read the blocks and nothing
- * else — `collectAssets` takes a block list, fetches the images in it, and has
- * no prompt and no head. Every stage that sends the article to a model reads the
- * tree and the metadata too and uses `articleInputHash` below.
+ * That caller was `assets`, and the reason it stopped is worth keeping: a
+ * blocks hash covers `id`, `text`, `role` and `treatment` and **not**
+ * `block.html` (src/source-hash.ts), so it could not see a PDF figure marker
+ * arrive. The step now stamps `assetsInputHash` (src/collect-assets.ts), which
+ * hashes what it actually consumes. Everything else stamped through this
+ * function had already moved to `articleInputHash` below on 2026-08-31, for a
+ * version of the same complaint.
  */
-async function inputHashFor(ctx: StepContext, store: ArtifactReads): Promise<string | null> {
-  const file = await store.read(ctx.slug, "hierarchy", "blocks");
-  if (!file?.blocks) return null;
-  return hashBlocks(file.blocks);
-}
 
 /**
  * The fingerprint an **article-reading** stage would be written against today:
@@ -1559,6 +1593,132 @@ function refuseToIllustrate(reason: IllustrateRefusal): never {
 }
 
 /**
+ * **The PDF half of the `assets` step** — or `undefined`, which means this
+ * article never had a PDF to look in.
+ *
+ * **The markers are looked for first, and that order is the whole of one bug.**
+ * This asked `manifest?.kind !== "pdf"` and returned *before* it had discovered
+ * a marker, so an inconsistent revision — valid markers in the blocks, a raw
+ * manifest that is missing or says HTML — produced no `pdfFigures` at all,
+ * which is indistinguishable from *there was nothing here to look at*. That is
+ * the one distinction this manifest exists to keep. GPT Sol, C-2.
+ *
+ * It costs nothing to reorder, which is why there was no trade to make: the
+ * walk is a regex over each block's html before any parse
+ * (src/collect-assets.ts § `MARKER_IN_HTML`), and `assetsInputHash` runs it on
+ * every article in the same step anyway. What the ordinary case still never
+ * reaches is `getDocument` — three of the seven eval PDFs contain no raster
+ * image anywhere and every web article contains no PDF at all.
+ *
+ * **`undefined` is not an empty run**, and the difference reaches the reader:
+ * an absent `pdfFigures` means *there was nothing here to look at*, and a
+ * present one with failed entries means *we looked and could not*. Collapsing
+ * them is how a feature that has not shipped yet gets reported as one that
+ * failed. src/assets.ts § `Assets`. So `undefined` is now reached by exactly one
+ * road — no markers — and every other road records what it found.
+ *
+ * **The bytes come through `readRawBytes`**, which is what stage 2 already uses
+ * and which verifies the object against the hash the manifest names — so this
+ * cannot read a *different* document than the one whose sha256 every marker's
+ * ref folds in. A raw document that has gone missing is recorded against the
+ * figures and does not fail the step, because the article's web images are the
+ * other half of it and are unaffected.
+ *
+ * @param deps the reader, injected. The default is the real `readRawBytes`; a
+ *   test replaces it to reach the two arms below, which otherwise need a
+ *   Storage outage and a corrupt canonical object to reproduce. Exported with
+ *   this function for tests/collect-pdf-figures.test.ts.
+ */
+export async function recoverPdfFigures(
+  ctx: StepContext,
+  store: ArtifactReads,
+  blocks: Block[],
+  deps: { readBytes?: typeof readRawBytes } = {},
+): Promise<PdfFiguresRun | undefined> {
+  const markers = pdfFigureMarkersIn(blocks);
+  if (markers.length === 0) return undefined;
+
+  /**
+   * Every marker, with one reason. The step carries on and stores the web
+   * images, of which a PDF has none — so the manifest is empty either way and
+   * the article is still readable.
+   */
+  const allFailed = (reason: PdfFigureFailure): PdfFiguresRun => {
+    const at = new Date().toISOString();
+    const entries: PdfFigureEntry[] = markers.map((marker) => ({
+      ref: marker.ref,
+      page: marker.page,
+      status: "failed",
+      reason,
+      at,
+    }));
+    return {
+      entries,
+      stored: 0,
+      failed: entries.length,
+      deduped: 0,
+      bytes: 0,
+      storageErrors: [],
+      elapsedMs: 0,
+    };
+  };
+
+  const manifest = await store.read(ctx.slug, "fetch", "raw");
+  if (manifest?.kind !== "pdf") {
+    /* Markers minted against a PDF, and a stage-1 manifest that has no PDF in
+       it. Nothing here is retryable and nothing is a fault of ours; the article
+       has to be re-fetched. */
+    plog.warn(
+      { slug: ctx.slug, step: "assets", figures: markers.length, kind: manifest?.kind ?? null },
+      `assets ${ctx.slug}: ${markers.length} PDF figure markers and no PDF to look in`,
+    );
+    return allFailed("no-source");
+  }
+
+  let pdf: Uint8Array;
+  try {
+    pdf = await (deps.readBytes ?? readRawBytes)(manifest, { slug: ctx.slug });
+  } catch (err) {
+    /**
+     * **Two failures, two reasons, and one of them was erasing the other.**
+     *
+     * Every throw here was recorded `out-of-time` with nothing logged, so a
+     * missing object, an object that does not hash to its own name and a
+     * Storage outage all reported that our clock had run out — which is the one
+     * thing that had not happened, since `readRawBytes` verifies the bytes
+     * against the hash and that verification establishes something real. GPT
+     * Sol, C-4.
+     *
+     * `RawDocumentUnavailable` is the discriminator and it is asked by type
+     * rather than by message, the rule src/fetch.ts § `overlongObject` already
+     * states: its three reasons (`no-object`, `missing`, `corrupt`) all mean the
+     * document has to be re-fetched or cleared by hand, and anything else means
+     * the bucket is unwell, which is `AssetFailure`'s own reason for keeping
+     * `storage` apart from everything transient — the two need different people.
+     *
+     * **Logged here rather than handed back**, which is the opposite of what
+     * src/collect-assets.ts does and for its stated reason: that module is not
+     * in src/log.ts's component list, and this one is the caller that owns a
+     * `pipeline` logger. Redacted through `describeStorageFailure` all the same,
+     * because a message is somebody else's and may hold a URL or a grant.
+     */
+    const ours = err instanceof RawDocumentUnavailable;
+    plog.warn(
+      {
+        slug: ctx.slug,
+        step: "assets",
+        figures: markers.length,
+        reason: ours ? err.reason : "storage",
+        why: describeStorageFailure(err),
+      },
+      `assets ${ctx.slug}: the PDF behind ${markers.length} figure markers could not be read`,
+    );
+    return allFailed(ours ? "no-source" : "storage");
+  }
+  return collectPdfFigures({ markers, pdf, signal: ctx.signal });
+}
+
+/**
  * The pipeline.
  *
  * Stage numbers here are the ones in architecture.md § Pipeline. The one that
@@ -1728,6 +1888,31 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         const html = new TextDecoder().decode(bytes);
         try {
           const result = await runExtract({ html, url, slug: ctx.slug });
+          /* **The audit line for the one step that deletes by policy.**
+             `removePlatformFurniture` (src/furniture.ts) is the only place in
+             this pipeline that removes an element *because of what the
+             publisher called it*, and a delete nothing records is a delete
+             nobody can check — so the counts go somewhere a person can read
+             them.
+
+             In the log rather than in `detail`, which is persisted with the step
+             and rendered on the reader's progress card: `.mw-editsection × 47`
+             is an operator's number, and the card is the wrong audience for a
+             CSS selector. It is also *not* in `Meta`, which would be a column
+             and a migration for a field stage D has not been built to read yet —
+             `ExtractResult.removed` says why.
+
+             Silent when nothing was removed, which is nearly every page: a line
+             saying zero on every article is how the one page that matters gets
+             lost. Selector names and integers only; nothing here can carry a
+             word of the article. */
+          const removals = Object.entries(result.removed);
+          if (removals.length > 0) {
+            plog.info(
+              { slug: ctx.slug, step: "extract", removed: result.removed },
+              `extract ${ctx.slug}: removed ${removals.map(([sel, n]) => `${n}× ${sel}`).join(", ")}`,
+            );
+          }
           return {
             parts: { extractedHtml: result.extractedHtml, meta: result.meta },
             detail: result.meta.title,
@@ -1755,6 +1940,22 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
             throw stageFailure(
               PAGE_HAS_NO_ARTICLE,
               "Readability found no article in the fetched page.",
+            );
+          }
+          /* **The same shape, one branch along** — and `blocked` for the same
+             reason: Retry never re-runs the step that fetched the bytes, so the
+             second attempt measures the identical page and refuses it
+             identically.
+
+             The count travels on the error rather than in its prose
+             (src/extract.ts § `TooLittleTextToRead`), so the reader's sentence
+             can carry the one fact about their page they can check, and the
+             diagnostic can keep the library's name for the log. */
+          if (err instanceof TooLittleTextToRead) {
+            throw stageFailure(
+              pageHadTooLittleText(err.chars),
+              "Readability returned less than its own threshold of text; the parse it disowned " +
+                "is what stage 2 used to publish.",
             );
           }
           throw err;
@@ -2136,27 +2337,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              block, so it is its own figure rather than a repair.
              src/hierarchy.ts § `collapseRestatedRungs`. */
           collapsedRungs: run.collapsedRungs,
-          /* The third thing this stage forgives, and the only one with no trace
-             in the product: a paragraph the model would not label twice running
-             is a leaf with no row, which renders as nothing rather than as an
-             error. Logged at zero like the two above, so that an article
-             quietly losing ten labels is a line somebody can see rather than an
-             absence nobody can. src/labels.ts § `droppedBudget`,
+          /* **`labelsDropped`, `labelBatches`, `labelsResumed` and `labelCalls`
+             were here until 2026-09-06** and are on the `labels` step's own log
+             line now. Not dropped: a paragraph the model would not label leaves
+             no trace in the product at all, so the count has to be logged
+             somewhere — it is just that this step no longer asks for a label.
              docs/reusable/silent-success.md. */
-          labelsDropped: run.labelsDropped,
-          /* **What the checkpoints actually bought this run**, at zero as well
-             as above it. `generateLabels` logs `{ asked, found }` at its read,
-             which is what the store returned; these two are what the stage
-             *accepted*, and the gap between them is a batch that was stored and
-             then rejected as not covering the blocks it was asked about — a
-             failure with no other symptom. Neither number was logged at all
-             until 2026-09-04:
-             docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md,
-             recommendation 2. */
-          labelBatches: run.labelBatches,
-          labelsResumed: run.labelsResumed,
-          /* What the label pass actually paid for, beside what it resumed. */
-          labelCalls: run.labelCalls,
           /* **Was the tree bought or replayed?** Until 2026-09-05 this was
              printed only by `src/hierarchy.ts`'s own `main()`, and stage E of
              docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
@@ -2203,12 +2389,26 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * writes. Under one map both halves of that reasoning are gone, and
        * `src/hierarchy.ts` now says so where it used to say the other thing.
        *
-       * **`inputHash` and nothing else.** `STAMP_SOURCE.hierarchy` is `"labels"`, so
-       * whatever is passed here is compared by `assertStampAgrees` against the
-       * labels file's own stamp. `run.inputHash` *is* `labels.sourceHash`, so it
-       * cannot clash; a `promptVersion` beside it would, because the labels file
-       * is `labels/1` and the tree is `toc/2`, and that throw fails every
-       * ingest. Verified against a real artefact rather than reasoned about.
+       * **`inputHash` and nothing else**, and the reason changed shape on
+       * 2026-09-06 without changing the answer.
+       *
+       * It used to be a *clash*: `STAMP_SOURCE.hierarchy` is `"labels"`, so
+       * `assertStampAgrees` compared whatever was passed here against the labels
+       * file's own `version` and `generator` — `labels/2` and a model — and a
+       * `promptVersion` of `toc/3` beside it threw on every ingest.
+       *
+       * This step now writes a `PendingLabelsFile`, which carries **neither**
+       * field (src/labels.ts), so `assertStampAgrees` has nothing to compare a
+       * `promptVersion` against and would no longer throw. It is still
+       * `inputHash` alone, and now for a plainer reason: a stamp is the
+       * provenance of the artefact it is read off, and this step buys no labels
+       * — recording the *tree's* prompt version in a field whose established
+       * meaning is the labels prompt would put a second pass's provenance on
+       * this one's receipt. `structureVersion` inside the manifest is where the
+       * tree's version already lives.
+       *
+       * `run.inputHash` *is* `parts.labels.sourceHash`, read off the artefact
+       * rather than recomputed here.
        *
        * The hash comes back from the stage rather than being `hashBlocks(...)`
        * here, because a second computation of "the blocks hash" is exactly how
@@ -2250,15 +2450,173 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           : run.deepen && run.deepen.targets > 0
             ? `, ${run.deepen.expanded} of ${run.deepen.targets} sections deepened`
             : "";
+      /* **The "N paragraphs unlabelled" clause left with the labels**
+         (2026-09-06). It is on `STEPS.labels`'s `detail` now, which is the card
+         the reader is watching while a label run is going; saying it here would
+         be a sentence about a pass this step did not make, and at this point in
+         an ingest **every** paragraph is unlabelled, which is not news. */
       return {
         parts: run.parts,
         stamp: { inputHash: run.inputHash },
+        detail: `${run.internal} sections over ${run.blocks} blocks${deepened}`,
+      };
+    },
+  },
+
+  /**
+   * Stage 4b — the per-paragraph navigation labels, and **the reason this whole
+   * plan exists.**
+   *
+   * It was the second half of `hierarchy` until 2026-09-06, and it was
+   * 79.5–92% of that step's wall clock: one measured call took 602 s of a 682 s
+   * pass, against a claimant deadline of 740 s. So it is its own step, off
+   * `DEFAULT_INGEST_STEPS`, bought later by a job nobody is watching.
+   * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
+   *
+   * **It produces the tree as well as the manifest**, which no other step here
+   * does with somebody else's artefact. `mergeLabels` writes the labels onto
+   * the leaves, and the merged tree is what the reading view opens — so the two
+   * are one write, or they are a tree describing labels that are not in it.
+   * `writeArtefacts` refuses a `tree` with no manifest beside it for the
+   * mirror-image reason.
+   *
+   * **A `stamp`, and deliberately no `isDone`.** The receipt is what says
+   * whether this step ran — `hasArtefacts` (src/store/artifacts-pg.ts) asks the
+   * asking step's own `revision_step_runs` row before it looks at any artefact,
+   * so an `isDone` would be a second check of a fact the row already carries.
+   * **And the stamp is not the structure-currency check.** That is the receipt
+   * *deletion* in `writeArtefacts`: a re-cut tree can only come from a tree
+   * write, a tree write always carries a manifest, and a pending manifest
+   * deletes this step's row — so a stale tree leaves nothing here to compare
+   * against. What the stamp catches is the one case the deletion cannot see, a
+   * prompt or a model bump with no `hierarchy` run behind it.
+   */
+  labels: {
+    name: "labels",
+    label: "Labelling the paragraphs",
+    /**
+     * **Both, and the tree is not incidental.** This step reads the tree
+     * `hierarchy` cut, merges the labels into its leaves and writes it back, so
+     * `tree` is genuinely one of its outputs. It is also what makes
+     * `writeArtefacts`'s refusal — a `tree` with no `labels` beside it — a rule
+     * every writer of the tree has to keep rather than one step's habit.
+     * tests/labels-step-registration.test.ts pins the pair.
+     */
+    produces: ["labels", "tree"],
+    /**
+     * The blocks these labels were written against, the prompt that wrote them
+     * and the model that ran — the same three `stampOf` reads back off the
+     * manifest's `sourceHash`, `version` and `generator`.
+     *
+     * `null` when the blocks cannot be read, which answers not-current: the
+     * safe way to be wrong here is a model call.
+     */
+    async stamp(ctx, store) {
+      const file = await store.read(ctx.slug, "hierarchy", "blocks");
+      if (!file?.blocks) return null;
+      return {
+        inputHash: hashBlocks(file.blocks),
+        promptVersion: LABELS_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+      };
+    },
+    async run(ctx, store, checkpoints) {
+      /* Stage 4's copy of the blocks, and the tree it cut them into. Both, and
+         from the same step, because the batches are cut along the tree's own
+         section boundaries — a label's job is to tell its paragraph apart from
+         its neighbours, so the model has to see the neighbours. src/labels.ts. */
+      const file = await store.read(ctx.slug, "hierarchy", "blocks");
+      const structure = await store.read(ctx.slug, "hierarchy", "tree");
+      if (!file?.blocks || !structure) {
+        throw stageFailure("ours", {
+          generic: `No tree for "${ctx.slug}" — run the hierarchy step first.`,
+        });
+      }
+      const run = await generateLabels({
+        tree: structure,
+        blocks: file.blocks,
+        slug: ctx.slug,
+        /* **The checkpoint namespace stays `hierarchy-labels`**, and that is the
+           one thing this split must not tidy. `batchFingerprint` carries no step
+           and no job identity, so every checkpoint row written before today
+           survives — but only while the key does not move. Renaming it would
+           invalidate every stored row and buy the next run nothing.
+           src/store/checkpoints.ts. */
+        checkpoints,
+        onProgress: ctx.report,
+        signal: ctx.signal,
+      });
+
+      /* The artefacts, assembled once, with every check below asked of *this*
+         object rather than of the locals it came from — the discipline
+         src/hierarchy.ts § `parts` explains at length, for the same reason: a
+         tree merged from one set of labels and returned beside another is a pair
+         that looks finished and describes two different articles. */
+      const parts = { labels: run.file, tree: mergeLabels(structure, run.file.labels) };
+
+      /* **`checkCoverage` moved here from `generateHierarchy` on 2026-09-06**,
+         and this position is the point of it: after the merge, over the tree
+         about to be written, and before anything can set `nav_label_status` to
+         `ready`. Its two per-batch siblings, `assertEveryBlockLabelled` and
+         `assertInsideCoverageFloor`, are inside `generateLabels` and travelled
+         with it for free. */
+      checkCoverage(parts.labels.labels, parts.tree, file.blocks);
+
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "labels",
+          model: CAPABLE_MODEL,
+          /* The one thing this stage forgives with no trace in the product: a
+             paragraph the model would not label twice running is a leaf with no
+             row, which renders as nothing rather than as an error. Logged at
+             zero, so that an article quietly losing ten labels is a line
+             somebody can see rather than an absence nobody can.
+             src/labels.ts § `droppedBudget`, docs/reusable/silent-success.md. */
+          labelsDropped: run.dropped.length,
+          /* **What the checkpoints actually bought this run**, at zero as well
+             as above it. `generateLabels` logs `{ asked, found }` at its read,
+             which is what the store returned; these are what the stage
+             *accepted*, and the gap between them is a batch that was stored and
+             then rejected as not covering the blocks it was asked about — a
+             failure with no other symptom.
+             docs/postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md. */
+          labelBatches: run.batches,
+          labelsResumed: run.resumed,
+          /* What it actually paid for, beside what it resumed. */
+          labelCalls: run.calls,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          ms: run.elapsedMs,
+          blocks: file.blocks.length,
+        },
+        `labels ${ctx.slug}: ${Object.keys(run.file.labels).length} paragraphs labelled`,
+      );
+
+      return {
+        parts,
+        /* Three values, and all three are read back off the manifest by
+           `stampOf`. `inputHash` comes off the artefact rather than being hashed
+           again here, for the reason src/hierarchy.ts gives at its own
+           `inputHash`: two computations of "the blocks hash" is how the two
+           sides of `assertStampAgrees` come to disagree. */
+        stamp: {
+          inputHash: run.file.sourceHash,
+          promptVersion: run.file.version,
+          model: run.file.generator,
+        },
+        /* **The reader-scale sentence, moved here with the pass it is about.**
+           It was on `hierarchy`'s `detail` until 2026-09-06, where after the
+           split it would have said "every paragraph unlabelled" on every
+           ingest. The operator's numbers stay in the log line above, which is
+           where src/jobs.ts says a step's real numbers belong. */
         detail:
-          `${run.internal} sections over ${run.blocks} blocks` +
-          (run.labelsDropped > 0
-            ? ` (${run.labelsDropped} paragraph${run.labelsDropped === 1 ? "" : "s"} unlabelled)`
-            : "") +
-          deepened,
+          `${Object.keys(run.file.labels).length} paragraphs labelled` +
+          (run.dropped.length > 0
+            ? ` (${run.dropped.length} paragraph${run.dropped.length === 1 ? "" : "s"} unlabelled)`
+            : ""),
       };
     },
   },
@@ -2273,22 +2631,37 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
 
      It reads stage 4's `blocks.json` rather than the extracted HTML, so it
      fetches exactly the URLs the reader will ask for — and so its freshness is
-     the `inputHashFor` hash the other stamped steps already use. */
+     a hash of those URLs and of the PDF figure markers beside them. */
   assets: {
     name: "assets",
     label: "Fetching the images",
     produces: ["assets"],
-    /* Two values, not three: the blocks it would be built from, and this step's
+    /* Two values, not three: what this step's inputs hash to, and this step's
        own version. **No model**, so no `generator` on the artefact and no
        `model` here — `sameStamp` compares only the fields the expected stamp
        declares, so naming one nothing writes would make every manifest look
        stale for ever. `ASSETS_VERSION` is the string the artefact carries; it
        is imported rather than spelled again here, because two copies of one
-       version string that drift show up as an artefact that never regenerates. */
+       version string that drift show up as an artefact that never regenerates.
+
+       **Not `inputHashFor`, since 2026-09-06**, and that was a live instance of
+       the family the comment on `articleInputHash` above records: `inputHashFor`
+       is `hashBlocks`, which canonicalises `id`, `text`, `role` and `treatment`
+       and **not** `block.html` (src/source-hash.ts). Adding a PDF figure marker
+       to a captioned figure changes the html and nothing else, so a
+       carried-forward empty manifest would have gone on reporting itself
+       current and this step would never have run against a PDF's figures.
+       `assetsInputHash` hashes what the step actually consumes — the image URLs
+       in the blocks and the figure refs in the blocks — which is the rule
+       `articleFingerprint` states and the three stages named above broke.
+       GPT Sol, D1-4. */
     stamp: async (ctx, store) => {
-      const inputHash = await inputHashFor(ctx, store);
-      if (!inputHash) return null;
-      return { inputHash, promptVersion: ASSETS_VERSION };
+      const file = await store.read(ctx.slug, "hierarchy", "blocks");
+      /* `null` is *"we cannot tell"* and answers not-current, exactly as
+         `inputHashFor` does — and must not be confused with a hash that fails to
+         match. Both answer not-current; only one is a stale artefact. */
+      if (!file?.blocks) return null;
+      return { inputHash: assetsInputHash(file.blocks), promptVersion: ASSETS_VERSION };
     },
     async run(ctx, store) {
       const file = await store.read(ctx.slug, "hierarchy", "blocks");
@@ -2304,6 +2677,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         signal: ctx.signal,
         onProgress: (done, total) => ctx.report(`${done}/${total} images`),
       });
+      const figures = await recoverPdfFigures(ctx, store, file.blocks);
       /* No URLs and no hostnames. A log of the images in somebody's article is
          a reading history one step removed, and the counts are what an operator
          wants: `deduped` going from sometimes to never is how you find out the
@@ -2330,11 +2704,41 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              message no longer collapses the way a name did.
              src/collect-assets.ts § `describeStorageFailure`. */
           ...(run.storageErrors.length ? { storageErrors: run.storageErrors } : {}),
+          /* Only for a PDF, and only counts — a log of which figures of which
+             paper a reader has is a reading history one step removed, exactly
+             as the image counts above are deliberately not URLs. */
+          ...(figures
+            ? {
+                figures: figures.entries.length,
+                figuresStored: figures.stored,
+                figuresMs: figures.elapsedMs,
+                ...(figures.storageErrors.length
+                  ? { figureStorageErrors: figures.storageErrors }
+                  : {}),
+              }
+            : {}),
         },
         `assets ${ctx.slug}: ${run.stored} stored, ${run.failed} failed`,
       );
       const failed = run.failed ? `, ${run.failed} left hot-linked` : "";
-      return { parts: { assets: run.assets }, detail: `${run.stored} images stored${failed}` };
+      /* **Spread onto the manifest rather than written by `collectAssets`**, so
+         that the two halves of this step stay two functions: one is a network
+         and a byte budget for URLs, the other is a PDF and a bucket, and
+         neither needs to know the other ran. `pdfFigures` is *absent* rather
+         than empty when there is nothing — for a web article, for a PDF whose
+         transcription found no figures, and for an article ingested before this
+         existed — because all three mean the same thing to the reading view and
+         only the presence of a marker makes the field worth reading at all.
+         src/assets.ts § `Assets`. */
+      const assets: Assets = {
+        ...run.assets,
+        ...(figures && figures.entries.length ? { pdfFigures: figures.entries } : {}),
+      };
+      const drawn = figures?.stored ? `, ${figures.stored} figures recovered` : "";
+      return {
+        parts: { assets },
+        detail: `${run.stored} images stored${failed}${drawn}`,
+      };
     },
   },
 
@@ -2432,8 +2836,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        D0 (docs/plans/260827aa-delete-the-importer.md). The comparison belongs in one
        place (`sameStamp`); only the three values belong to the stage. */
     stamp: async (ctx, store) => {
-      /* `articleInputHash`, not `inputHashFor`: this prompt reads the tree and
-         the metadata as well as the blocks. See that function. */
+      /* `articleInputHash`, not a blocks-only hash: this prompt reads the tree
+         and the metadata as well as the blocks. See that function. */
       const inputHash = await articleInputHash(ctx, store);
       if (!inputHash) return null;
       return { inputHash, promptVersion: TWEETS_PROMPT_VERSION, model: CAPABLE_MODEL };
@@ -2500,7 +2904,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        glossary that goes first purely because glossary is the one of the three
        that already exports its `PROMPT_VERSION` — see the note on `isDone`. */
     stamp: async (ctx, store) => {
-      /* `articleInputHash`, not `inputHashFor`: the skeleton comes from the
+      /* `articleInputHash`, not a blocks-only hash: the skeleton comes from the
          tree and the head from the metadata. See that function. */
       const inputHash = await articleInputHash(ctx, store);
       if (!inputHash) return null;

@@ -73,6 +73,29 @@ export interface PublicCollectionRouteName {
 }
 
 /**
+ * **A route about one file of one article**, at
+ * `/api/public/<name>/<slug>/<sha256>.<ext>` — the only public route whose
+ * answer is bytes rather than JSON.
+ *
+ * A third kind rather than a `slug` route with a longer pattern, and the reason
+ * is the same one `PublicRouteName` gives below for there being two: the
+ * dispatcher does something genuinely different here — it writes an image, not
+ * `JSON.stringify` — and the sweeps ask a different question of it. With a kind
+ * of its own, `servePublicApi`'s `switch` cannot serve one as the other, and a
+ * sweep that forgets this kind does not compile.
+ *
+ * `path` takes all three parts because all three are in the URL. What
+ * `pathOf` does with that is written on `pathOf`.
+ */
+export interface PublicAssetRouteName {
+  readonly kind: "asset";
+  readonly name: string;
+  /** Captures the slug, then the 64-hex hash, then the extension. */
+  readonly pattern: RegExp;
+  path(slug: string, sha256: string, ext: string): string;
+}
+
+/**
  * **One public route's identity: how to recognise it, and how to spell it.**
  *
  * A **discriminated union**, and it is one rather than `path(slug?: string)`
@@ -87,7 +110,10 @@ export interface PublicCollectionRouteName {
  * provided method enforcement, Postgres enforcement, dispatch and `send` stay
  * shared and the type stops anybody handling one kind and not the other.
  */
-export type PublicRouteName = PublicSlugRouteName | PublicCollectionRouteName;
+export type PublicRouteName =
+  | PublicSlugRouteName
+  | PublicCollectionRouteName
+  | PublicAssetRouteName;
 
 function publicRoute(name: string): PublicSlugRouteName {
   return {
@@ -114,6 +140,33 @@ function publicCollection(name: string): PublicCollectionRouteName {
   };
 }
 
+function publicAsset(name: string): PublicAssetRouteName {
+  return {
+    kind: "asset",
+    name,
+    /* The hash and the extension are narrowed here for the reason the
+       authenticated twin narrows them (src/routes.ts § the `asset` pattern):
+       not because anything downstream trusts them — both are only ever
+       *compared* with what the article's manifest says — but because a pattern
+       that accepts anything invites the next reader to think the capture is a
+       storage key. `AssetExt` in src/assets.ts is the list of three. */
+    pattern: new RegExp(`^/api/public/${name}/(${SLUG_CHARS})/([0-9a-f]{64})\\.(png|jpeg|gif)$`),
+    path: (slug, sha256, ext) => `/api/public/${name}/${slug}/${sha256}.${ext}`,
+  };
+}
+
+/**
+ * **A hash no article holds**, for a sweep that needs a well-formed address and
+ * does not care what is at it.
+ *
+ * Sixty-four zeros is a syntactically perfect SHA-256 and is not the hash of
+ * anything — the empty string hashes to `e3b0c442…`, not to this — so a sweep
+ * built on it reaches the dispatcher, runs the method check, runs the
+ * visibility query and gets an honest 404 from the manifest lookup. That is
+ * exactly the path a sweep wants to walk.
+ */
+const NO_SUCH_HASH = "0".repeat(64);
+
 /**
  * **The path a sweep should ask for**, whichever kind of route it is holding.
  *
@@ -121,9 +174,26 @@ function publicCollection(name: string): PublicCollectionRouteName {
  * ternary is the one line every one of them would otherwise write for itself.
  * It stays in the leaf so the client's path test can use it without importing
  * the readers — the whole reason this file has no imports.
+ *
+ * **An asset route gets a placeholder hash**, which is a real limit on what the
+ * sweeps prove about it rather than a detail: they visit the route and check
+ * that it refuses a write and spends nothing, and they cannot check that it
+ * *serves* anything, because no sweep knows a hash. What does check that is
+ * tests/public-asset-route.test.ts, against a manifest it wrote itself.
  */
 export function pathOf(route: PublicRouteName, slug: string): string {
-  return route.kind === "slug" ? route.path(slug) : route.path();
+  switch (route.kind) {
+    case "slug":
+      return route.path(slug);
+    case "collection":
+      return route.path();
+    case "asset":
+      return route.path(slug, NO_SUCH_HASH, "png");
+    default: {
+      const unreachable: never = route;
+      throw new Error(`Unknown public route kind: ${JSON.stringify(unreachable)}`);
+    }
+  }
 }
 
 /**
@@ -152,4 +222,17 @@ export function pathOf(route: PublicRouteName, slug: string): string {
 export const PUBLIC_ROUTE_NAMES: readonly PublicRouteName[] = [
   publicRoute("article"),
   publicCollection("library"),
+  /**
+   * **The third, and the first that is not JSON.** One picture of a shared
+   * article, out of our own bucket rather than the publisher's CDN.
+   *
+   * It is not optional and it is not an optimisation. `App` falls back to
+   * public article loading for signed-out and non-owning readers, and those
+   * readers can never reach an authenticated route — so an owner-only delivery
+   * route would leave every shared article's pictures missing (a PDF's figures)
+   * or hot-linked (a web article's images) while looking finished from the
+   * owner's chair.
+   * docs/plans/260829b-hosting-the-articles-images.md § Two readers, two paths.
+   */
+  publicAsset("asset"),
 ];

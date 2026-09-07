@@ -115,6 +115,36 @@ export async function copyArtefacts(
   for (const step of STEP_ORDER) {
     const parts = await readParts(from, slug, step);
     if (Object.keys(parts).length === 0) continue;
+    /**
+     * **A pending manifest means the `labels` step has not run, so there is
+     * nothing of it to copy.**
+     *
+     * `hierarchy` and `labels` write the same two artefacts, and a source that
+     * holds them holds them once — the fixture reader lists one `tree.json` and
+     * one `labels.json` under both steps
+     * (tests/helpers/fixture-artefacts.ts § LAYOUT), which is honest, because on
+     * disk those are the files stage 4 as a whole produced. For a completed
+     * manifest both writes are true and both happen.
+     *
+     * For a `PendingLabelsFile` (`batches: null`, src/labels.ts) the second one
+     * is a claim the artefact itself contradicts, and `writeArtefacts` refuses
+     * it outright: a labels run that produced no batches would delete the very
+     * receipt the write is holding. Because `beginStep`, `write` and
+     * `finishStep` are three store calls, that refusal lands *after* the run row
+     * is open — so before this guard, copying a legitimately pending article
+     * failed **and** left a `labels = running` row behind.
+     *
+     * **Keyed on the manifest rather than on the fixture**, which is why the
+     * guard is here rather than in the test helper: the state is a real one that
+     * stage 2a introduced, any future source can hold it, and taking `labels`
+     * out of the helper's layout would have hidden it from the copier instead of
+     * teaching the copier to carry it. Skipping is the honest answer — the
+     * pending manifest still travels, as part of `hierarchy`, where it correctly
+     * sets `nav_label_status = 'pending'` and deletes the destination's receipt.
+     * GPT Sol's F1 on stage 2a, 2026-09-06;
+     * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
+     */
+    if (step === "labels" && parts.labels?.batches === null) continue;
     /* **All of a step's products, or none of it.** Copying one of `extract`'s
        two outputs and then calling `finishStep` would record a step as having
        completed while half of what it declares is missing — and an unstamped

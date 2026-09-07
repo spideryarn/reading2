@@ -77,8 +77,9 @@ refusal text never reached the reader or Sentry.
 
 The refusal reason was in the Vercel runtime log and **nowhere else**. `sanitise`
 ([`src/monitoring-scrub.ts:213`](../../src/monitoring-scrub.ts)) withholds any error message that
-does not end in a bracketed code, which is correct — `checkTree` problems can quote nav labels, which
-are article prose ([logging.md](../project/logging.md)). But the consequence is that a `PublishRefused`
+does not end in a bracketed code, which is correct — a `PublishRefused`'s message wraps its reasons
+in the article's **slug**, which is a path segment derived from the piece's own title, and `reasons`
+is an unrestricted `string[]` ([logging.md](../project/logging.md)). But the consequence is that a `PublishRefused`
 arrives in Sentry as `message_withheld: True` and a stack trace, and two occurrences of it look like
 noise rather than one article permanently off the air.
 
@@ -105,10 +106,36 @@ PublishRefused: Refusing to publish "test-publish-guards": n0 → n1: covers its
    now the first of the three cases added.
 2. **A convention: tightening an invariant over stored data is a migration.** Either sweep the stored
    rows in the same commit, or state in the commit why not. `c8e2cc7e` knew it applied "for the ones
-   already stored" and stopped there.
+   already stored" and stopped there. **Written down 2026-09-07**, in
+   [database.md § Tightening an invariant over stored data is a migration](../project/database.md#tightening-an-invariant-over-stored-data-is-a-migration).
 3. **Reason codes on `PublishRefused`.** Enough of a bracketed code to survive `sanitise` and reach
    Sentry, without the prose. Most of this outage was invisibility rather than breakage: the fault
    was live for at least eleven hours before anybody could say what it was.
 4. **A permanent-versus-transient distinction on step failure.** `[jb-step-again]` should not be
    reachable from a refusal that cannot come out differently. This is the one that stops the *next*
    permanent failure charging a reader four times to learn nothing.
+
+## What 3 and 4 turned into, 2026-09-07
+
+Both, in one change:
+[260907a](../plans/260907a-publish-refusal-reason-kinds-permanent-vs-transient.md).
+
+`PublishRefused` now takes a `RefusalKind` — `permanent` or `transient`, required at every throw
+site so the compiler makes somebody decide — and from it declares the `failureKind` and
+`readerFailure` that `src/job-failure.ts` was already reading off every other failure in the
+pipeline. So `[jb-step-again]` is no longer reachable from this door: a permanent refusal is
+`[jb-publish-refused]`, kind `bug`, and the card withholds the button. The moved-base conflict is
+`[jb-publish-moved]`, kind `retry`, because for that one the old sentence was true all along —
+which is why this is a distinction rather than a flag. **`src/jobs.ts` needed no change at all**,
+which is the evidence that the seam was right and only the refusal was silent.
+
+**The code does not go on `Error.message`, and that is item 3 read carefully.** `authored` treats a
+registered code as proof we wrote the *whole* string, and a `checkTree` reason can quote a nav
+label — so appending one would post the reader's own prose to Sentry, which is the hole
+`src/job-failure.ts` § *The detail goes on verbatim* already records. The bracketed code goes on the
+reader's authored sentence; a `code` property carries the same slug to Sentry as a tag through
+`SAFE_PROPS`, with no prose attached. So two occurrences stop reading as noise.
+
+**The second item of *Recorded, not built* is still not built** — a preflight, so the money is not
+spent before the gate is consulted. It needs the step's planned write set, or it would block the
+very `hierarchy` step that repairs a bad tree. Named and deferred in 260907a § Deferred.

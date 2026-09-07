@@ -25,18 +25,20 @@
  *
  * The needs are the real ones, measured in Chrome against the dev server at
  * thirteen modes and sixteen buttons (see dock-fit.ts § the rungs). They are
- * illustrative rather than pinned — a new mode moves all three, which is the
+ * illustrative rather than pinned — a new mode moves all of them, which is the
  * point of the change these tests cover. Nothing here compares a rendered bar
  * against them; they are the shape of the problem, not a fixture.
  *
  * **The bar for a signed-in reader is one button wider than they describe**
  * since the experimental switch joined it on 2026-09-03, and the ladder was
- * re-measured in Chrome rather than the numbers scaled: rung 0 spells out all
- * seventeen labels down to 1550px and gives way by 1500; rung 1 holds to 1100;
- * rung 2 covers 900 and 700 with no overflow; and at 500px the bar scrolls,
- * which is the floor doing its job rather than a failure. So the first number
- * above is now roughly a hundred pixels light, and a reader on a 1440px laptop
- * sits one rung lower than they used to.
+ * re-measured in Chrome rather than the numbers scaled.
+ *
+ * **And the rungs renumbered on 2026-09-06**, when the wordmark and the
+ * Feedback button moved off the top corners into the bar and a new rung went in
+ * above the old rung 1 to shed their two words before any mode's. What was rung
+ * 1 is rung 2 and what was rung 2 is rung 3, here as everywhere else; every rung
+ * number below is the new one. dock-fit.ts § the rungs carries the measured
+ * table this was decided on.
  *
  * ## What this file cannot see, and what stands in for it
  *
@@ -52,18 +54,25 @@
  * standing where the compiler cannot is worth having even when it is cruder than
  * the real thing.
  */
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Dock, visibleModes } from "../src/web/Dock.js";
 import { MODES } from "../src/modes.js";
 import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
+import { readerCss } from "./helpers/stylesheets.js";
 import { chooseDockFit, DOCK_FIT_CLASSES } from "../src/web/dock-fit.js";
 
-/** What the row needs at each rung, in px. Rung 0 spells every label out. */
-const NEED = [1425, 814, 557];
+/**
+ * What the row needs at each rung, in px. Rung 0 spells every label out.
+ *
+ * **Four rungs since 2026-09-06**, when the wordmark and the Feedback button
+ * moved into the bar and a rung went in above the old rung 1 to shed their two
+ * words first (dock-fit.ts § the rungs). These are illustrative, as the note
+ * above says — what matters is that they descend, which is what makes walking
+ * the ladder top-down and stopping at the first fit correct.
+ */
+const NEED = [1425, 1330, 814, 557];
 
 /**
  * A `.dock` whose width you set and whose overflow follows the rung it is
@@ -118,14 +127,26 @@ describe("the bar chooses the widest rung that fits", () => {
    */
   it("drops the mode labels at two thirds of a laptop screen", () => {
     dock.setWidth(1152);
+    expect(chooseDockFit(dock.el, 0)).toBe(2);
+    expect(wearing(dock.el)).toBe(2);
+  });
+
+  /**
+   * **The rung the app cluster's two words buy**, new on 2026-09-06. A window
+   * that no longer fits the fully spelled-out row sheds `Spideryarn` and
+   * `Feedback` and keeps all fourteen mode words — which is the whole argument
+   * for the rung existing, since those two pay least.
+   */
+  it("sheds the wordmark's and Feedback's words before any mode's", () => {
+    dock.setWidth(1400);
     expect(chooseDockFit(dock.el, 0)).toBe(1);
     expect(wearing(dock.el)).toBe(1);
   });
 
   it("drops every label once even the glyphs do not fit", () => {
     dock.setWidth(700);
-    expect(chooseDockFit(dock.el, 0)).toBe(2);
-    expect(wearing(dock.el)).toBe(2);
+    expect(chooseDockFit(dock.el, 0)).toBe(3);
+    expect(wearing(dock.el)).toBe(3);
   });
 
   it("stops at the last rung and lets the row overflow — the scroll is the floor", () => {
@@ -141,7 +162,7 @@ describe("the bar chooses the widest rung that fits", () => {
    * `flex-grow` to fill whatever room is going (styles.css § a coarse pointer).
    */
   it("fits with room to spare: a bar whose buttons grow to fill it keeps its labels", () => {
-    const grown = fakeDock([0, 0, 0]); // content always fills exactly
+    const grown = fakeDock([0, 0, 0, 0]); // content always fills exactly
     grown.setWidth(1024);
     expect(chooseDockFit(grown.el, 0)).toBe(0);
   });
@@ -153,9 +174,9 @@ describe("the bar chooses the widest rung that fits", () => {
    */
   it("goes back up when the window does", () => {
     dock.setWidth(700);
-    expect(chooseDockFit(dock.el, 0)).toBe(2);
+    expect(chooseDockFit(dock.el, 0)).toBe(3);
     dock.setWidth(1600);
-    expect(chooseDockFit(dock.el, 2)).toBe(0);
+    expect(chooseDockFit(dock.el, 3)).toBe(0);
     expect(wearing(dock.el)).toBe(0);
   });
 
@@ -172,7 +193,10 @@ describe("the bar chooses the widest rung that fits", () => {
 });
 
 
-const CSS = readFileSync(path.join(import.meta.dirname, "../src/web/styles.css"), "utf8");
+/* The reading-view sheets as a set, comments and all — the assertions below
+   strip them where they need to. `src/web/styles.css` is thirty-eight
+   `@import` lines since 2026-09-06; tests/helpers/stylesheets.ts. */
+const CSS = readerCss();
 
 /** Selectors in a stylesheet that set `display: none` on a bar label. */
 function labelHiders(css: string): string[] {
@@ -244,31 +268,68 @@ describe("the stylesheet backs the ladder", () => {
 
   /**
    * The bar has two shapes — one `.dock-modes` segment on the reading view,
-   * fourteen loose `.dock-mode` links on the metadata and tweets pages. Rung 1
-   * knew only the first until GPT Sol found it, so on those pages it did nothing
-   * and the ladder went straight to rung 2, taking every label with it.
+   * fourteen loose `.dock-mode` links on the metadata and tweets pages. The
+   * mode rung knew only the first until GPT Sol found it, so on those pages it
+   * did nothing and the ladder went straight past it, taking every label with
+   * it. (Rung 1 until 2026-09-06, rung 2 since.)
    */
-  it("rung 1 knows both of the bar's shapes", () => {
-    const hiders = labelHiders(CSS).filter((x) => x.includes("dock-fit-1"));
+  it("the mode rung knows both of the bar's shapes", () => {
+    const hiders = labelHiders(CSS).filter((x) => x.includes("dock-fit-2"));
     expect(hiders.some((x) => x.includes(".dock-modes"))).toBe(true);
     expect(hiders.some((x) => x.includes(".dock-mode "))).toBe(true);
   });
 
   /**
+   * **The new rung's whole job, and the trap in it.**
+   *
+   * Rung 1 sheds the wordmark's and Feedback's words and nothing else. The
+   * mistake it invites is writing it for rung 1 alone: a bar wears exactly one
+   * rung class, so a rule scoped to rung 1 would let `Spideryarn` and
+   * `Feedback` **come back** at rung 2 — a bar that gets narrower and gains two
+   * words. dock-fit.ts § the rungs says they do not come back; this is what
+   * makes that a fact rather than an intention.
+   *
+   * Both are named at every rung below rung 0, and `.dock-home` has to be:
+   * rung 3's `.dock-btn-label` sweep catches `.dock-feedback`, which is a
+   * `.dock-btn`, and misses `.dock-home`, which deliberately is not.
+   */
+  it("the app cluster's words go at rung 1 and never come back", () => {
+    const hiders = labelHiders(CSS);
+    for (const rung of ["dock-fit-1", "dock-fit-2", "dock-fit-3"]) {
+      const here = hiders.filter((x) => x.includes(rung));
+      expect(
+        here.some((x) => x.includes(".dock-home")),
+        `${rung} does not hide the wordmark's word`,
+      ).toBe(true);
+      expect(
+        here.some((x) => x.includes(".dock-feedback") || x === `.dock.${rung} .dock-btn-label`),
+        `${rung} does not hide Feedback's word`,
+      ).toBe(true);
+    }
+  });
+
+  /**
    * **The bug a browser found and the unit tests above could not.**
-   * `.dock.dock-fit-1 .dock-btn.dock-mode .dock-btn-label` is five classes; the
+   * `.dock.dock-fit-2 .dock-btn.dock-mode .dock-btn-label` is five classes; the
    * `.always` exception is four, and lost — so Plain, the way *out* of a mode,
-   * gave up its word on the metadata page at rung 1 while keeping it at rung 2.
-   * Ties are fine, because the exception is declared last; being out-specified
-   * is not.
+   * gave up its word on the metadata page at one rung while keeping it at the
+   * next. Ties are fine, because the exception is declared last; being
+   * out-specified is not.
+   *
+   * **It also catches an `.always` rule that has not learnt a new rung.** The
+   * app cluster's hides above are four classes at every rung, so a rung missing
+   * from the exception's selector list scores zero against them and shows up
+   * here — which is what makes "on every rung" checkable rather than a claim in
+   * a comment. That is why rung 1 is in the exception's list even though
+   * nothing there hides a `keepLabel` word today.
    */
   it("the keepLabel exception is never out-specified", () => {
     expect(outSpecified(CSS)).toEqual([]);
   });
 
   /**
-   * **The mode you are in keeps its word at rung 1, and the reason is that
-   * something else stopped saying it.**
+   * **The mode you are in keeps its word at the mode rung, and the reason is
+   * that something else stopped saying it.**
    *
    * Greg, 2026-09-05: *"I think we can rely on the bottom bar to tell us what
    * mode we're in, so for example 'Summary' mode doesn't need to say `Summary`
@@ -276,7 +337,7 @@ describe("the stylesheet backs the ladder", () => {
    * docs/plans/260905d-declutter-the-reading-view-top-bars.md removed the name
    * from every band's title row on the strength of that — and the premise was
    * false at exactly the widths where it mattered, because **a band is 400px of
-   * the window and so opening one is itself what puts the bar on rung 1**,
+   * the window and so opening one is itself what puts the bar on the rung**
    * where every mode label but Plain's is hidden. Summary at 1440×900 then had
    * no "Summary" anywhere: a highlighted glyph, and a tooltip for anyone who
    * thought to hover.
@@ -286,14 +347,20 @@ describe("the stylesheet backs the ladder", () => {
    * It was found by looking at a screenshot, so what this test pins is the
    * *rule's existence*, which is the part that can silently go.
    *
-   * **Rung 1 only, deliberately, and rung 2 was measured before being dropped**:
-   * at 390×844 in a band mode the bar already overflows (`scrollWidth` 617
-   * against 390) and the word took it to 758 — 141px more of a row the reader
-   * must drag sideways, to reveal a word only legible once dragged. A bar that
-   * scrolls cannot tell you anything you have not scrolled to. If that rule
-   * ever appears for rung 2, this test should be the thing that asks why.
+   * **The mode rung only, deliberately, and the rung below it was measured
+   * before being dropped**: at 390×844 in a band mode the bar already overflows
+   * (`scrollWidth` 617 against 390) and the word took it to 758 — 141px more of
+   * a row the reader must drag sideways, to reveal a word only legible once
+   * dragged. A bar that scrolls cannot tell you anything you have not scrolled
+   * to. If that rule ever appears for the last rung, this test should be the
+   * thing that asks why.
+   *
+   * **The numbers moved by one on 2026-09-06** and the measurements did not:
+   * the rung that hides the mode labels is `dock-fit-2` now and was
+   * `dock-fit-1`, and it is the same rung. Rung 1 hides no mode label at all,
+   * so there is nothing for this rule to put back there.
    */
-  it("the open mode keeps its label at rung 1, and only there", () => {
+  it("the open mode keeps its label at the mode rung, and only below it", () => {
     /* **Comments stripped first**, which is not tidiness. `CSS` here is the raw
        file, and this stylesheet quotes its own selectors in prose constantly —
        the rule below has a twenty-line comment above it naming both
@@ -307,10 +374,10 @@ describe("the stylesheet backs the ladder", () => {
       .map((block) => block.split("{")[0] ?? "")
       .filter((sel) => sel.includes(".dock-btn.on") && sel.includes(".dock-btn-label"));
     expect(shows.length, "no rule keeps the active mode's label").toBeGreaterThan(0);
-    expect(shows.some((sel) => sel.includes("dock-fit-1"))).toBe(true);
+    expect(shows.some((sel) => sel.includes("dock-fit-2"))).toBe(true);
     expect(
-      shows.some((sel) => sel.includes("dock-fit-2")),
-      "rung 2 was measured and rejected — see this test's comment",
+      shows.some((sel) => sel.includes("dock-fit-3")),
+      "the last rung was measured and rejected — see this test's comment",
     ).toBe(false);
   });
 
@@ -350,7 +417,7 @@ describe("the stylesheet backs the ladder", () => {
 /**
  * The wiring, in both of the bar's shapes. jsdom has no layout, so the rung is
  * always 0 here — what is checked is that the ladder has something to act on:
- * the root the hook measures, the class that tells rung 1 which buttons are
+ * the root the hook measures, the class that tells the mode rung which buttons are
  * modes, the tail it measures against, and Plain's word.
  */
 describe("Dock gives the ladder something to work with", () => {
@@ -400,7 +467,7 @@ describe("Dock gives the ladder something to work with", () => {
 
   /**
    * Off the reading view the modes are loose links. Both of these were missing
-   * until GPT Sol's review: without `dock-mode` rung 1 does nothing here, and
+   * until GPT Sol's review: without `dock-mode` the mode rung does nothing here, and
    * without the `always` label Plain lost its word on the page you are most
    * likely to be looking for the way back from.
    *

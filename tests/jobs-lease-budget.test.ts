@@ -256,4 +256,36 @@ describe("the job lease and the platform's kill", () => {
         "stopped saying anything about this step",
     ).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
   });
+
+  /**
+   * **The same pair for `labels`**, which is a ceiling for the same reason and
+   * was registered with nothing checking it.
+   *
+   * `STEP_BUDGET_MS.labels` decides one thing: whether a claim that has just
+   * finished `hierarchy` starts the label pass on what is left of its window or
+   * hands back. A budget under the worst measured pass admits a step the same
+   * evidence says will not finish — `hierarchy`'s own finding, one step later —
+   * and a budget at or over the claimant's deadline is never satisfied by any
+   * claim, so the row stops deciding anything at all.
+   *
+   * The assertion is the relationship rather than the number, so re-tuning
+   * either side is free and breaking the pair is not. GPT Sol's F3 on stage 2a
+   * asked for the value to be pinned; this pins what makes the value right.
+   */
+  it("reserves more than the worst measured label pass, and still less than the deadline", () => {
+    /* MEASURED, from the runs that motivated the split: the worst whole label
+       pass on record is 682 s, of which one call was 602 s.
+       docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md. */
+    const worstMeasuredLabelPassMs = 682_000;
+    expect(
+      STEP_BUDGET_MS.labels,
+      "the walk would start `labels` with less window than the worst pass on record took",
+    ).toBeGreaterThan(worstMeasuredLabelPassMs);
+
+    expect(
+      STEP_BUDGET_MS.labels,
+      "a budget at or over the claimant's deadline can never be met, so the table has " +
+        "stopped saying anything about this step",
+    ).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
+  });
 });

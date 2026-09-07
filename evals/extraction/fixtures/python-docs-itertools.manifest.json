@@ -1,0 +1,44 @@
+{
+  "fixture": "python-docs-itertools",
+  "file": "python_docs_itertools.html",
+  "note": "THE CODE-WHITESPACE FIXTURE. Every token of the recipes section is wrapped in its own span, so a naive \\s+ collapse mangles all thirty of them — the bug stage A fixed. The needle below carries its own newline and indentation, and is therefore matched LITERALLY against the code blocks rather than against whitespace-collapsed prose: see scorecard.mts, haystackOf. Written with the collapse still in place it would have matched perfectly. STRUCTURE, CHECKED 2026-09-05: the source's 2 <h2> are 'Itertool Functions' and 'Itertools Recipes' — the whole of the page's own section structure — so 'exactly 2' is source truth and also a ceiling. All 3 <table> are the page's summary tables (infinite iterators, terminating iterators, combinatorics) and all 29 <pre> are article code, so both are floored at source truth. Nothing else is: the 6 <h3> are 'Table of Contents', 'This page' and 'Navigation' and the 4 <h4> are 'Previous topic' and 'Next topic', each appearing twice because Sphinx renders the sidebar twice, and all ten are chrome. minArticleChars 36000: the shipped extraction returns 38,330 gistable characters, the source body 39,849 including that duplicated sidebar, so 36,000 is the module reference with a margin and no truncation reaches it. ARTICLE REGION AND THE FLOOR ON IT, MEASURED 2026-09-05: section#module-itertools holds 29,949 characters against 31,244 for the source body; the difference is the sidebar Sphinx renders twice. The shipped extraction returns 29,893 — it misses only the hoisted <h1> and its pilcrow. The floor is 29,000.",
+  "mustContain": [
+    {
+      "text": "from itertools import (accumulate, batched, chain, combinations, compress,\n     count, cycle,",
+      "why": "a code sample with its own indentation; only matches if the whitespace survived"
+    },
+    {
+      "text": "This module implements a number of iterator building blocks",
+      "why": "the opening paragraph"
+    },
+    {
+      "text": "The primary purpose of the itertools recipes is educational",
+      "why": "near the end, so a tail truncation shows"
+    }
+  ],
+  "mustNotContain": [
+    {
+      "text": "Previous topic",
+      "why": "the sidebar's own onward-navigation heading"
+    }
+  ],
+  "structure": {
+    "pre": {
+      "atLeast": 29
+    },
+    "table": {
+      "exactly": 3
+    },
+    "h2": {
+      "exactly": 2
+    }
+  },
+  "maxBlockChars": 16000,
+  "articleRegion": {
+    "within": [
+      "section#module-itertools"
+    ],
+    "why": "Sphinx wraps the module reference in section#module-itertools. The six <h3> and four <h4> of the sidebar, which Sphinx renders twice, are outside it — which is why the manifest already declines to assert any heading floor but h2."
+  },
+  "minArticleChars": 29000
+}

@@ -57,10 +57,19 @@ pages as child text, because it is a promise about *them* rather than a fact abo
 
 The link for the page you are already on drops itself, decided from `useRoute()` — except on the
 two pages `App.tsx` uses as fallbacks, which have to say which page they are, and which is a trap
-worth reading the header for. `tests/site-footer.test.tsx` pins the dropping, the contact address,
-**and the inventory**: which files mount it, how many times each, and which two declare themselves.
-The inventory is there because every other test in the file is satisfied by a component nothing
-renders.
+worth reading the header for. `tests/site-footer.test.tsx` pins the dropping, **the inventory** —
+which files mount it, how many times each, and which two declare themselves — and that the row holds
+no `mailto:`. The inventory is there because every other test in the file is satisfied by a
+component nothing renders.
+
+**Every entry in the row is a page.** It carried `hello@spideryarn.com` alongside them until Greg,
+2026-09-06:
+
+> Remove the hello@spideryarn.com from the footer — just keep the Contact page, which already
+> points to that — that's sufficient.
+
+The Contact page is the one place in the chrome that spells the address, and it says the Feedback
+button is the better route anyway.
 
 ## The contact page
 

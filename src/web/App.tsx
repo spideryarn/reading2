@@ -10,6 +10,7 @@ import { ContactPage } from "./ContactPage.js";
 import { FeaturesPage } from "./FeaturesPage.js";
 import { PublicLibraryPage } from "./PublicLibraryPage.js";
 import { PricingPage } from "./PricingPage.js";
+import { PublicReadableSharingPage } from "./PublicReadableSharingPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
@@ -17,13 +18,13 @@ import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
 import { adminOnly, LIBRARY_HREF, navigate, type Route, useRoute } from "./router.js";
 import type { User } from "@supabase/supabase-js";
-import { FeedbackButton } from "./FeedbackButton.js";
+import { FeedbackHost, FeedbackTrigger } from "./FeedbackButton.js";
 import { ArticlePage } from "./article/ArticlePage.js";
 
 /**
- * **The two routes whose code is not in the reader's initial download.**
+ * **The three routes whose code is not in the reader's initial download.**
  * `LazyPage.tsx`
- * has the reasoning; these are the four loaders it takes.
+ * has the reasoning; these are the five loaders it takes.
  *
  * Named-export adapters rather than `lazy(() => import("./AdminPage.js"))`,
  * because `React.lazy` reads `module.default` and neither page has one — the
@@ -36,6 +37,11 @@ const loadAdminUsers = () => import("./AdminPage.js").then((m) => ({ default: m.
 const loadAdminFeedback = () =>
   import("./AdminPage.js").then((m) => ({ default: m.AdminFeedbackPage }));
 const loadDesign = () => import("./DesignPage.js").then((m) => ({ default: m.DesignPage }));
+/* `/changelog`'s own reason, beside `/design`'s: the parsed NDJSON file is
+   210 KB and would otherwise land in every reader's first download for a page
+   almost nobody opens — docs/project/changelog.md § The page. */
+const loadChangelog = () =>
+  import("./ChangelogPage.js").then((m) => ({ default: m.ChangelogPage }));
 
 
 
@@ -143,6 +149,13 @@ export function App() {
        landing page's "everything it does" link has to land somewhere a
        stranger can read. */
     if (route.kind === "features") return <FeaturesPage signedIn={false} />;
+    /* **The one page here whose reader may want nothing from us at all** — an
+       author who found their own writing on `/read/public`. Every other page in
+       this branch is reachable signed out because a stranger is deciding
+       whether to sign up; this one is reachable signed out because that reader
+       will never sign up, and a page they cannot open is a page that does not
+       exist. router.ts § `public-sharing`. */
+    if (route.kind === "public-sharing") return <PublicReadableSharingPage signedIn={false} />;
     /* The fifth, and the least arguable of them: a price somebody has to sign
        up to read is the thing people complain about, and this is the page one
        person sends another. */
@@ -160,6 +173,14 @@ export function App() {
        than their order in this list. Renumbering them for an insertion would
        make three comments say something none of them was claiming. */
     if (route.kind === "contact") return <ContactPage />;
+    /* Since 2026-09-06, and closer to `contact` than to any of the pages
+       above it: a changelog is a page somebody is *sent*, not one they browse
+       to, and it is about the product rather than about their account, so
+       there is nothing behind it an account would change. Bare, like every
+       other page in this branch — no shelf to send a stranger back to.
+       Lazy for the reason `design` is below: the parsed file is 210 KB.
+       LazyPage.tsx. */
+    if (route.kind === "changelog") return <LazyPage load={loadChangelog} routeKey="changelog" />;
     /* **The sixth, since 2026-09-03, and the only one that is not a page
        somebody was sent.** A stranger at an address nobody minted is exactly
        the reader this gate's default fails: the pitch at `/asdf` is a plausible
@@ -193,15 +214,29 @@ export function App() {
      client draws. **A hidden button is not a gate**, so both halves are tested
      rather than only the visible one — GPT Sol asked for that, and it is the
      difference between a rule and an appearance. See FeedbackButton.tsx and
-     docs/project/feedback.md. */
+     docs/project/feedback.md.
+
+     **The one line is now the host's mount point rather than the button's**,
+     since 2026-09-06. `FeedbackHost` holds the `open` state and the dialog and
+     wraps every signed-in page, so no navigation can destroy a half-written
+     report; the buttons that open it are placed where each page wants one. The
+     rule is unchanged and it now reaches further than a mount site can see: a
+     trigger with no host above it renders nothing, so the branches below that
+     draw one unconditionally are still drawing nothing for a stranger.
+
+     **And it stops covering `read`**, which is the route whose corners moved
+     into the bottom bar. The reading view, the metadata and tweets pages and
+     the three visitor stand-ins all mount a `Dock` and draw the trigger there
+     (Dock.tsx). `ArticlePage`'s four branches that have no `Dock` — loading,
+     error, not-shared and reauth-required — each draw the corner trigger
+     themselves, so nothing that has one today loses it. */
   return (
-    <>
+    <FeedbackHost>
       <SignedIn route={route} user={user} />
-      <FeedbackButton />
-    </>
+      {route.kind !== "read" && <FeedbackTrigger variant="corner" />}
+    </FeedbackHost>
   );
 }
-
 /**
  * The pages a signed-in reader can be on.
  *
@@ -317,11 +352,32 @@ function SignedIn({
         <FeaturesPage signedIn />
       </>
     );
+  /* Mounted signed in as well, for the owner half of its two readers: somebody
+     weighing up the sharing switch is by definition signed in, and reaches this
+     from `/privacy` or from the shelf. `signedIn` for the reason the line above
+     it carries. */
+  if (route.kind === "public-sharing")
+    return (
+      <>
+        <HomeLogo />
+        <PublicReadableSharingPage signedIn />
+      </>
+    );
   if (route.kind === "contact")
     return (
       <>
         <HomeLogo />
         <ContactPage />
+      </>
+    );
+  // Signed in, the corner logo like every other standalone page — there is a
+  // shelf here for it to link at. See the signed-out branch above for why
+  // `/changelog` is on this list at all.
+  if (route.kind === "changelog")
+    return (
+      <>
+        <HomeLogo />
+        <LazyPage load={loadChangelog} routeKey="changelog" />
       </>
     );
   if (route.kind === "pricing")

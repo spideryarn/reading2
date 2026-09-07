@@ -187,6 +187,115 @@ rather than a nice-to-have.
 
 Registered in `corpus.mts`'s `EXTRA_FIXTURES`, same as the nine above and for the same reason.
 
+## What is NOT in this directory: the shape corpus, added 2026-09-06
+
+**The thirty-five pages here cannot exercise most of what the two hard gates do.** Every blocker
+found from GPT Sol's fourth review onwards needed a page built by hand, and the fifteen shipped
+extractions between them reach **two** of the order walk's seven placement branches (`owner` and
+`page`, measured 2026-09-06 and printed by the run). So the gates'
+cases live in [../shapes.mts](../shapes.mts) instead: named source shapes, named candidate
+transformations, and each case pinning the resolution path and exposure counts rather than only
+pass/fail. `npx tsx evals/extraction/shapes.mts` prints the matrix;
+[../score.mts](../score.mts) prints a summary beside the fifteen and exits non-zero on a failure.
+
+They are **not** fixtures and must not become some: a fixture is a real page with real bytes and a
+provenance line, and a shape is a five-element document that exists to make one branch fire. Keeping
+them apart is what stops a synthetic page being quoted as evidence about the web.
+
+## The assertion manifests, added 2026-09-05
+
+Fifteen of the thirty-five now carry a `<name>.manifest.json` beside the HTML: what an extraction
+of that page has to contain, what it must not, the structure floors, the exact byline, and **which
+part of the page is the article**. The schema and the reasoning are in
+[../manifest.mts](../manifest.mts); the scorer that reads them is
+[../scorecard.mts](../scorecard.mts) and the run is [../score.mts](../score.mts).
+
+Three rules make them worth more than a prose list, and each was written because of a specific way
+this corpus has already been wrong:
+
+- **Binary per fixture, never averaged.** An arm that satisfies every declared assertion while
+  wrecking the 95% nobody declared anything about must not score well.
+- **Every needle says why it is there.** 260830at's marker rule scored 246/246 and nobody could tell
+  from the number that the corpus contained none of the content it would have deleted.
+- **Every manifest about an article says which part of the page that is** — `articleRegion`, added
+  the same day, after GPT Sol built an arm on `aaronson` out of the page's own comment thread that
+  returned **178 characters of the post, 0.542%**, and passed every metric, both gates and every
+  assertion. Provenance proves text came from somewhere on the page; it cannot tell 5,560 words of
+  post from the 52,776 words of comment underneath. `minArticleChars` is a floor on the region now,
+  and each manifest's `note` records three measured numbers — the region's own characters, the whole
+  source body's, and what the shipped extraction gives back of the region — so the region can be
+  argued with rather than trusted. `aaronson`'s region is **9.3%** of its source body;
+  `arxiv-abs`'s is 24.6%; `ar5iv-attention`'s is 99.7%, because on that page the wrapper *is* the
+  paper.
+- **Every needle has to be findable in the fixture's own bytes**, checked by
+  [../../../tests/extraction-manifests.test.ts](../../../tests/extraction-manifests.test.ts). A
+  `mustNotContain` needle that is not on the page is satisfied by an arm that deletes the article.
+  That check caught five needles on the day it was written, including one that lives only in a
+  `<meta content=>` attribute and could never have matched.
+- **And no region may credit a string the same manifest forbids**, checked over the whole corpus by
+  [../score.mts](../score.mts), which exits non-zero on it. Added 2026-09-05 after GPT Sol found
+  three: `ar5iv-attention`'s region held Google's reproduction licence, `aaronson`'s held WordPress's
+  trackback line, `plos-biology`'s held 26 repeats of *"View Article | PubMed/NCBI"*. On all three,
+  removing known junk **lowered** `articleRecall` and **raised** `exclusionPrecision` at the same
+  time, so the two numbers disagreed about what the article was and an arm could be rewarded for
+  either answer. Each has an `except` now.
+
+The fifteenth is **`pg-greatwork`**, added 2026-09-05 and worth its own line: paulgraham.com holds a
+55,000-character essay in one `<td>` as 595 `<br>` and no `<p>` in the source at all, so Readability
+builds every paragraph itself and 216 of the output's nodes have no source element of their own.
+Until that day `articleRecall` credited only *directly* stamped nodes, which meant deleting all 216
+— 81% of the output — moved the number not at all, and a **correct** extraction of the page scored
+0.115. It scores 0.924 now. Its `p: { atLeast: 200 }` floor is derived from the source's 235 `<br>`
+runs, not from what the pipeline produces, and it is what stops an arm handing the reader the whole
+essay as one undifferentiated block.
+
+A manifest records **what the reader should get, not what they do get**. `wiki-gdp-table` asserts
+three tables and the pipeline produces one; `quanta-year-physics` asserts the byline
+`Natalie Wolchover` and the pipeline produces `By Natalie Wolchover December 17, 2024`. Both fail
+today, deliberately: a manifest that wrote the bug down as the answer could never show the bug being
+fixed. **Eleven of the fifteen fail on the shipped arm as of 2026-09-05** — the four that pass are
+`shakespeare-hamlet`, `python-docs-itertools`, `negative-controls` and `pg-greatwork` — and each of
+the eleven names
+something a reader has actually lost.
+
+**Every `minArticleChars` was re-derived on 2026-09-05** when the measure changed from "gistable
+characters of output" to "characters of the declared article region that came back". Copying the old
+numbers across would have been exactly the mistake the ar5iv floors made — a floor written against
+one measure is not valid under another. Each note carries the arithmetic.
+
+**There is no per-arm judgement any more, and there was.** `score.mts --record` used to write
+`acceptable | damaged | improved` into a `labels` block here, computed from the same card those
+labels were meant to audit — and it called an arm that returned 182 characters of a 33,000-character
+article `acceptable`. What `--record` stores now is a `findings` block: whether the declared
+assertions held, whether the gates passed, which metrics fell against the shipped arm, and how many
+characters of article came back. Each gate is recorded **on its own**, because summarising two
+questions as one boolean recorded "both gates passed" for `pmc-article`, where only one of them
+could be asked. See [`manifest.mts`](../manifest.mts) § `ArmFinding`.
+
+### `synthetic/negative_controls.html` — the only page here nobody published
+
+The corpus was checked for the shapes that defeat a length-or-character-class rule, over all
+thirty-five fixtures, on 2026-09-05. It has **no scoreline block, no numeric table cell that reaches
+a block, and no symbol-only scene break that is article content rather than junk** — which is the gap
+this README already admits above, in "a page of genuinely one- and two-character article content is
+still missing here". A corpus without them cannot contradict such a rule, and 260830at's scored
+246/246 on exactly this corpus.
+
+So `synthetic/negative_controls.html` is hand-written: a short piece about a football result that
+carries a scoreline (`1–0`), a four-row table of numbers, a line of arithmetic alone on its own line,
+a `❦` scene break, two two-word lines of dialogue, and a dated `Update (11 March):`. Its manifest
+sets **`noPunctuationOnlyBlocks: false`**, and that is the sharpest thing on the page: the scene
+break *is* a punctuation-only block and *is* the author's, so the rule is not universally safe and
+the fixture says so.
+
+Being synthetic is a real cost — its damage is only what its author thought of — so it is a
+*supplement* to the real controls, not a replacement. Four of the eight shapes have a genuine home in
+a captured page: `gutenberg-pride`'s `“Not one.”`, `ar5iv-attention`'s `Encoder:`, `aaronson`'s
+`Update (Feb. 29):` and `arxiv-abs`'s whole 250-word article. It is registered in
+[../corpus.mts](../corpus.mts) as `SYNTHETIC_CONTROLS` and deliberately **not** in `ALL_FIXTURES`,
+because `provenance.mts` and `block-census.mts` publish totals from that list and `block-census.mts`
+exists because a denominator got published that nobody could reproduce.
+
 ## The case that is missing, and it is the one that would falsify the fix
 
 **A page with surviving hidden furniture.** Stage 2 now strips `aria-hidden="true"` before parsing
@@ -194,6 +303,14 @@ Registered in `corpus.mts`'s `EXTRA_FIXTURES`, same as the nine above and for th
 hidden by external CSS only — no `[hidden]`, no inline `display: none` — sitting *inside* the article
 container. GPT Sol raised it and it reproduces: thirty items, 1,370 characters admitted. Outside the
 article container link density sinks it either way.
+
+**That 1,370 is markup, and it has been misquoted since.** `navRail()` in
+[`scorecard.mts`](../scorecard.mts) reconstructs that rail for the polarity pair, and its thirty
+labels are **393 characters of text** — 422 with the spaces between them, inside 1,211 bytes of list
+markup. Every metric on the card measures text, so the polarity test spent a fortnight claiming a
+"thousand-character" mutation it was not making, by asserting against the markup length. GPT Sol
+counted it again on 2026-09-05. All three numbers are now assertions in
+`tests/extraction-scorer.test.ts` rather than sentences here.
 
 **Not one of the first fifteen contained it, and `mkdocs_tabs.html` now does** — added 2026-08-30,
 though as tabbed alternative content rather than as the nav drawer this paragraph imagined. So

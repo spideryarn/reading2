@@ -45,6 +45,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import * as schema from "../src/db/schema.js";
+import type { Assets } from "../src/assets.js";
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
 import type { RawSourceStore } from "../src/store/blobs.js";
@@ -116,6 +117,63 @@ const PASSAGES = [{ blockIds: [BLOCKS[0]], why: "the passage the answer came fro
    match the bytes or it throws `CorruptRawObject` instead. */
 const RAW_BYTES = new TextEncoder().encode("<html><body>the page as fetched</body></html>");
 const RAW_SHA256 = createHash("sha256").update(RAW_BYTES).digest("hex");
+
+/**
+ * **Both collections, because the count used to see only one.**
+ *
+ * `bundleCounts` read `assets.entries` and never `assets.pdfFigures`, so a paper
+ * with eight recovered figures and no web images reported *no images at all* —
+ * and since the counts drop their zeroes, the row vanished rather than reading
+ * 0, which is the more convincing way to be wrong. GPT Sol, 2026-09-07.
+ *
+ * One stored image, one stored figure and one **failed** figure, so the count
+ * has to be of what is really named rather than of how many entries the
+ * manifest carries. Nothing in this fixture had an `assets` column at all
+ * before, so `content/assets.json` was an unexercised file in the zip too.
+ *
+ * Typed here rather than written inline in the insert, because a bare literal
+ * widens `status` and `ext` to `string` and stops discriminating the union — the
+ * column is `jsonb` `$type<Assets>()`, and the error it produces names the row's
+ * first property rather than the offending one.
+ */
+const ASSETS: Assets = {
+  /* **A string, deliberately** — `stampOf` reads this field only when it is one,
+     so a number here is silently dropped and the step reports itself current for
+     ever. src/assets.ts says so at length. */
+  version: "assets/2",
+  sourceHash: "0".repeat(64),
+  fetchedAt: "2026-09-07T00:00:00.000Z",
+  entries: [
+    {
+      url: "https://example.test/one.png",
+      status: "stored",
+      sha256: "1".repeat(64),
+      ext: "png",
+      contentType: "image/png",
+      bytes: 128,
+    },
+  ],
+  pdfFigures: [
+    {
+      ref: "spya-fig-one",
+      page: 3,
+      status: "stored",
+      sha256: "2".repeat(64),
+      ext: "png",
+      contentType: "image/png",
+      bytes: 256,
+      width: 40,
+      height: 30,
+    },
+    {
+      ref: "spya-fig-two",
+      page: 4,
+      status: "failed",
+      reason: "no-raster",
+      at: "2026-09-07T00:00:00.000Z",
+    },
+  ],
+};
 
 /** A store that answers, for the runs that are about something else. */
 const workingStore: RawSourceStore = {
@@ -209,6 +267,7 @@ describe("the bundle is the faithful projection", () => {
             },
           },
         },
+        assets: ASSETS,
         rawSourceSha256: RAW_SHA256,
         rawSourceKind: "html",
       })
@@ -388,6 +447,30 @@ describe("the bundle is the faithful projection", () => {
     // No glossary was ever generated for this article, so there is no file.
     expect(bundled.has("augmentations/glossary.json")).toBe(false);
     expect(bundled.has("augmentations/searches.json")).toBe(false);
+  });
+
+  /**
+   * **The images the reader is told they have include the ones out of a PDF.**
+   *
+   * `bundleCounts` counted `assets.entries` only, so a paper — which has no
+   * `<img>` in its blocks at all, by construction — reported zero images named
+   * however many figures had been recovered from it. And the counts drop their
+   * zeroes, so the row disappeared entirely rather than reading `0`: the export
+   * page simply had nothing to say about eight pictures it was naming in
+   * `content/assets.json` a moment later. GPT Sol, reviewing the built code
+   * 2026-09-07.
+   *
+   * The fixture holds one stored web image, one stored figure and one **failed**
+   * figure, so the number has to be 2 — a count of what is actually named and
+   * not of how many entries the manifest happens to carry. That third entry is
+   * what makes this able to fail in the other direction.
+   */
+  it("counts the figures out of a PDF among the images it names", () => {
+    const page = bundled.get("index.html");
+    if (!page) throw new Error("no index.html");
+    const row = page.match(/<b>([0-9,]+)<\/b><span>images named<\/span>/);
+    expect(row?.[1], "index.html has no 'images named' count at all").toBeDefined();
+    expect(row?.[1]).toBe("2");
   });
 
   it("puts index.html in the zip, in the manifest, and describes every other file in it", () => {

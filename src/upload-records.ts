@@ -43,14 +43,13 @@ export { isUploadId } from "./store/uploads.js";
 /**
  * The upload store, bound here rather than in `src/store/index.ts`.
  *
- * For the reason that file's neighbour [`live.ts`](store/live.ts) gives about
- * itself: `index.ts` imports `fs.ts`, which imports half the app, and
- * `src/pipeline.ts` — which calls this module from inside a step — is in that
- * half. `npm run check` gates on cycles, so that is a red build rather than a
- * note. This module imports one leaf adapter and closes nothing.
+ * To avoid an import cycle: `index.ts` imported `fs.ts`, which imported half the
+ * app, and `src/pipeline.ts` — which calls this module from inside a step — is
+ * in that half. `npm run check` gates on cycles, so that is a red build rather
+ * than a note. This module imports one leaf adapter and closes nothing.
  *
  * It was `STORE === "postgres" ? pgUploadStore : fsUploadStore` until
- * 2026-09-05, when the flag and the filesystem store went.
+ * 2026-09-05, when the filesystem store went.
  */
 const store: UploadStore = pgUploadStore;
 

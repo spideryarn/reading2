@@ -1,7 +1,7 @@
 /**
  * The storage seam: what a store can be asked, with no hint of how it answers.
  *
- * **The shape is deliberately the existing `src/api.ts` surface, function for
+ * **The shape is deliberately the `src/api.ts` surface, function for
  * function and type for type.** That is not laziness — it is the property that
  * makes the cutover safe. If the contract were "better" than what routes.ts
  * already calls, then every route would change on the same day the store
@@ -14,10 +14,10 @@
  *
  * ## The three seams are not one seam
  *
- * Most estimates of this migration assume `src/api.ts` is the storage layer. It
- * is the **read** layer. There are three:
+ * Most estimates of this migration assumed `src/api.ts` was the storage layer. It
+ * was the **read** layer. There are three:
  *
- * 1. `ArticleReader` — everything `src/api.ts` exports. One file to reimplement.
+ * 1. `ArticleReader` — everything `src/api.ts` exported. One file to reimplement.
  * 2. `ArtifactWriter` — what the pipeline stages write. Today that is
  *    `PipelineStep.outputs(ctx): string[]`, an interface that returns **file
  *    paths**, implemented across eight stage modules. There is no single file.
@@ -38,7 +38,7 @@
  *
  * ## What is deliberately NOT in here
  *
- * `describeArticle` in src/api.ts, which turns artefacts into a `LibraryEntry`.
+ * `describeArticle` in src/library-scalars.ts, which turns artefacts into a `LibraryEntry`.
  * It is already pure and already documented as staying put "when the reads move
  * to SQL", so both adapters call the same function rather than each deriving a
  * word count its own way. Two implementations of one derivation is exactly the
@@ -46,6 +46,7 @@
  */
 
 import { isAdmin, type AdminUser } from "../admin.js";
+import type { Assets } from "../assets.js";
 import type { DocumentKind } from "../fetch.js";
 import type { SpokenTurn } from "../chat.js";
 import type { AiCallRow } from "../ai-spend.js";
@@ -301,6 +302,30 @@ export interface ArticleReader {
    * the blocks, the tree **and** the metadata (src/arc.ts § `inputFingerprint`).
    */
   loadArc(slug: string): Promise<ArcFound>;
+
+  /**
+   * **This article's image manifest, and nothing else** —
+   * docs/project/article-images.md.
+   *
+   * A read of its own rather than `loadArticle(slug).assets`, for the reason
+   * `loadArc` above is one: the route behind it (`sendArticleAsset`,
+   * src/routes.ts) runs **once per picture**, so a PDF with eight figures runs
+   * it eight times on one page load, and `loadArticle` re-reads every block and
+   * the whole tree — the cost
+   * docs/plans/260827am-glossary-read-latency.md was written about.
+   *
+   * **`undefined` is not a fault, and is not the same as a 404.** No manifest
+   * means the assets step has never run on this article — every article
+   * ingested before it existed — and the caller's answer is *this article holds
+   * no such object*, not *there is no such article*. A slug that is not this
+   * reader's, or has no current revision, still throws.
+   *
+   * There is deliberately no staleness here, unlike every artefact read above
+   * it: a manifest written against paragraphs that have since changed still
+   * describes objects that really are in the bucket, and taking a figure off
+   * the page over that would be a refusal the reader cannot act on.
+   */
+  loadAssets(slug: string): Promise<Assets | undefined>;
 }
 
 /**
@@ -309,8 +334,8 @@ export interface ArticleReader {
  *
  * Separate from `ArticleReader` because they are writes, and separate from
  * `ArtifactWriter` because the pipeline does not do them. `deleteGlossary` is
- * the odd one out in today's code too — the one write that goes through
- * `src/api.ts` — and docs/project/glossary.md says why it has to.
+ * the odd one out — it was the one write that went through `src/api.ts` — and
+ * docs/project/glossary.md says why it has to.
  */
 export interface GlossaryStore {
   /** Ask the web about one term and store the answer beside the entry. */
@@ -1066,8 +1091,8 @@ export interface RefereeCriteriaStore {
  * Against the interim stood the cost of not building it, which a cross-family
  * review put plainly: under `SPIDERYARN_STORE=postgres` — the store that
  * deploys — *"'Pull the paper's claims' cannot load, start or persist a run"*.
- * Both adapters are real now, and src/store/index.ts selects between them with
- * `guarded(...)` like every other pair.
+ * The Postgres adapter was built, and src/store/index.ts wires it with
+ * `guarded(...)` like every other seam.
  */
 export interface RefereeClaimsStore {
   /** The stored run, or `null` when this paper has never been asked. */

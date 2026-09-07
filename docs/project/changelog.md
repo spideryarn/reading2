@@ -12,8 +12,9 @@ anything.
 >
 > — Greg, 2026-09-06
 
-The page itself is not built yet. What follows is settled; the section on
-[the page](#the-page) is the part still open.
+The page has been built and the whole history has been through the process — every production deploy
+since 2026-08-24. [§ Running it](#running-it) is what *"run this doc"* means; the file's own count is
+what `changelog.ts check` prints, and is deliberately not written down here.
 
 ## A version is a deploy
 
@@ -104,9 +105,12 @@ shown.
 ```
 
 `commits` holds full shas so the page can link each one to
-`https://github.com/spideryarn/reading2/commit/<sha>`. That repo is private as of 2026-09-06 and
-[is being made public](version-control.md) — **the page must not ship its commit links before that
-lands**, or every one of them 404s for the audience they exist for.
+`https://github.com/spideryarn/reading2/commit/<sha>`. That repo **went public on 2026-09-06**, so
+the links ship. Until it did they could not: every one of them would have 404'd for exactly the
+curious reader they exist for. The confirmation was taken twice rather than once, because "is the
+repo public yet" is the sort of thing an agent will cheerfully assume — the repository page answers
+to a signed-out fetch, and Vercel's own `githubRepoVisibility` flips from `private` to `public`
+between that day's 05:29 and 09:49 production deploys.
 
 ## The four stages
 
@@ -119,9 +123,31 @@ files are the evidence for anything the finished copy claims.
 Vercel's list, joined to git. Out: one row per unwritten version — `version`, `deployment_id`, `sha`,
 `previous_sha`, and the commit list from `git log --no-merges <previous>..<sha>`.
 
-Merge commits are dropped from the trawl (they carry no change of their own here — every one of them
-is a `Merge remote-tracking branch 'origin/dev'`) but they stay in `commit_count`, which counts the
-range.
+**Merge commits are dropped, and `commit_count` counts what is left.** They carry no change of their
+own here — every one of them is a `Merge remote-tracking branch 'origin/dev'` — so counting them
+would inflate a version by however many branches happened to land in it. This paragraph said the
+opposite until 2026-09-06, when the runner was replayed against the file the first run had written
+and the two disagreed: the 68 committed lines sum to 2,047, which is the non-merge total. The file
+was right and the doc was wrong, which is the direction that matters, because a number meaning one
+thing above a line and another below it is worse than either meaning.
+
+**A commit that touches no code cannot change what a reader sees**, so it is classified without a
+model call, with its path list as the evidence. That was 1,071 of 2,066 on the first run. The paths
+that count as code are deliberately generous — `styles/` and `public/` are in, because a stylesheet
+and a favicon are both things a reader meets.
+
+**Use `git log --full-history -- <paths>` for that split.** Without it, default history
+simplification prunes side-branch commits in a merge-heavy history and the excluded set silently
+grows: the first run lost a real `src/store/pg-jobs.ts` change that way, and found it only by
+enumerating every path prefix the excluded set touched instead of trusting the filter.
+
+**An item belongs to the version containing its *last* commit** — the deploy that first shipped all
+of it. An item whose commits straddle two deploys would otherwise be duplicated or cut in half, and
+both lie about when a reader could first use the thing.
+
+**An item whose commits are in no version yet is not dropped.** Work that is committed but not
+deployed belongs to no version — check with `git merge-base --is-ancestor` against the last deployed
+sha — and the watermark picks it up on the run after it ships.
 
 ### 2. Trawl — many small agents, in parallel
 
@@ -162,8 +188,20 @@ lands in `provenance.verdict`. Hand it the diffs, not just the candidate JSON �
 [codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md), and **check a verdict actually
 arrived**, exit code *and* answer file.
 
+**The answer is checked before any of it is believed** — one ruling per user-facing item, indexes
+that name an item and name it once, a verdict from the vocabulary, and a correction on anything ruled
+`corrected`. Requiring only that the answer file *existed* was the whole gate until 2026-09-06, and a
+file ruling on one item out of two passed it: the other reached the page carrying whatever the cheap
+trawler wrote, marked `unreviewed`, with nothing failing.
+
 An item Sol rejects is dropped. An item it corrects keeps the correction and records that it was
 corrected. Its findings are not automatically right either — check the ones that surprise you.
+
+**This stage is not optional, and the numbers say why.** Across the 506 rulings of the 2026-09-06
+retrospective run it **corrected 51%** of the trawl's user-facing items, found **36 changes no
+trawler mentioned**, and moved **16 items back from invisible to visible** — those last are the
+expensive ones, because they would have vanished from the page with nothing to notice. Of the entries
+that shipped, only a third rest purely on claims the trawl got right first time.
 
 ### 4. Copy
 
@@ -187,6 +225,24 @@ agent would otherwise re-decide:
 - **A closed list of app addresses it may link to**, because a guessed one is a 404 in the one place
   a reader is most likely to click.
 
+**Re-verify every sha the copy stage emits** against the sources its own entry cites — 40 hex
+characters, present in the version's input, and belonging to an item that entry says it drew on. The
+last of those is what stops a well-formed entry attributing another change's commits to itself.
+It is a model writing them out, and on the first run one agent reported catching and correcting a
+mistyped sha in its own output, so the stage can produce one. A wrong sha is a 404 in the one place a
+reader is most likely to click.
+
+Upstream of that, **every sha on an assigned item is a commit that version actually contains**,
+checked with one `git rev-list` per version. Otherwise a forty-character typo, or a real but
+undeployed sha, rides into the copy input on the strength of whichever sha alongside it *did* map —
+and by the time the writer sees it, it is already "present in the version's input", which is all the
+writer was asking.
+
+**A version whose copy came back empty is an error, not a warning.** Verified user-facing changes
+went in; a line saying `invisible: true` came out, which reads exactly like the common quiet deploy
+and leaves nothing anywhere to notice. Dropping *some* of them is a judgment the stage is allowed to
+make — the first run dropped 15 of 504 — and the count is on `write`'s summary line.
+
 **The copy stage may not introduce a fact.** It rewrites verified items; it does not learn anything
 new about the code. Each entry carries `sources`, the indexes of the items it drew on, so an entry
 with nothing behind it is detectable rather than merely wrong — and a number that is not in an item's
@@ -208,24 +264,79 @@ starting rather than discovering at commit 900:
   ([version-control.md](version-control.md)), so they predate any deploy at all. They belong to the
   first version, whose entry is honestly just "the app existed".
 
+**So the first version is a launch note, not a change list.** On the 2026-09-06 run it held 388
+commits and 143 verified items, and nothing preceded them — there was nothing for them to be a change
+*from*. It is written as what the app could do on the day it first went live, one entry per capability
+area, and the two-headline cap is lifted for that version alone.
+
 ## The page
 
-Still open, and the decisions are small. Recorded here so the next agent decides them rather than
-inherits them:
+[`src/web/ChangelogPage.tsx`](../../src/web/ChangelogPage.tsx), at `/changelog`, linked from the
+site footer as *What's new*. Nothing about it changes the file: the file is the product of this
+process, and the page is a reader of it — through
+[`src/changelog.ts`](../../src/changelog.ts), which is also what the writer and
+`tests/changelog-file.test.ts` read it with, so the format has one definition rather than three.
 
-- **How the file reaches the browser.** Simplest first: the page imports the NDJSON with Vite's
-  `?raw` and parses it, no API route and no database. That ships with the deploy and costs one
-  request. It gets less simple as the file grows — at roughly 11 deploys a day it is a real number
+The three decisions this section used to leave open, taken on 2026-09-06 in
+[260906g](../plans/260906g-the-changelog-page-and-a-runner-that-can-be-asked-to-do-the-right-thing.md):
+
+- **The file reaches the browser through Vite's `?raw`**, parsed in the page. No API route and no
+  database. It gets less simple as the file grows — at roughly 11 deploys a day it is a real number
   within a year — so the day it stops being free, it moves behind an API route. Say so when it does.
+  **The import lives inside the lazily loaded page module**: 210 KB has no business in what a reader
+  downloads before asking for anything, so `/changelog` is the third `LazyPage` route after `/admin`
+  and `/design`, and `tests/eager-client-graph.test.ts` is what keeps it there.
+- **A run of quiet versions collapses into one line.** Hiding them outright leaves unexplained gaps
+  in a dated list; showing all 19 buries the 49 that have something to say.
 - **A version's entry lands one deploy late.** The file is committed, so the run that writes version
   N's line ships in version N+1. That is the honest ordering — the alternative is describing a deploy
-  before it happened — but the page should not imply it is live-updating.
-- **What the page shows for an invisible version.** Options are to hide them, to collapse them into a
-  "12 behind-the-scenes deploys" line, or to show the lot. Hiding is likeliest right; the data
-  supports all three.
+  before it happened — and the page does not imply otherwise.
 
-Nothing about the page changes the file: the file is the product of this process, and the page is a
-reader of it.
+## Running it
+
+**`run docs/project/changelog.md`** means this section. The deterministic stages are committed as
+`scripts/changelog/changelog.ts`, so what an agent supplies is judgment and subagents, not
+bookkeeping. Everything intermediate goes under `logs/changelog/`, which is gitignored.
+
+1. **Get the deploy list.** `mcp__vercel__list_deployments` with the ids in
+   [`scripts/deploy.ts`](../../scripts/deploy.ts) § `PROJECT_ID` / `TEAM_ID`, saved to a file. This
+   box has no `VERCEL_TOKEN` and the CLI is logged out, so the MCP tool is the way in; `plan` takes
+   either that response or a bare array.
+2. **`changelog.ts plan --deploys <file>`** — the watermark, the commit ranges, the ancestry check
+   per pair, the code/non-code split, the batches. Read what it prints: a version whose range is
+   empty or whose ancestry failed is the interesting output, not the summary line. It **refuses to
+   start on top of an earlier run's stage directories**, because the stages address each other by
+   index and file name rather than by run — pass `--fresh` to empty them, or `--work <dir>`.
+3. **Trawl.** One Sonnet subagent per batch file, briefed from
+   [`scripts/changelog/trawl-brief.md`](../../scripts/changelog/trawl-brief.md), at most 20 at once.
+   Launch each batch **once** — see § The traps.
+4. **`changelog.ts review-prompt`**, then GPT Sol per day, then **`changelog.ts verify`**. Check the
+   answer file arrived and the exit code was 0 before believing an empty finding — `verify` also
+   checks the answer itself, and **fails on a user-facing item nobody ruled on** unless
+   `--allow-unreviewed` says so. **`verify` prints
+   the regroups the review asked for and applies none of them** — merging two items or splitting one
+   is the judgment this whole stage exists for, so it is yours. Edit the file under `verified/`, then
+   `verify --reassign`, which rebuilds the assignment without undoing your edit. Skipping this is not
+   visible in the output: the first incremental run's one regroup was the difference between an entry
+   citing eight commits and citing two.
+5. **`changelog.ts copy-inputs`**, then one Opus subagent per version, briefed from
+   [`scripts/changelog/copy-brief.md`](../../scripts/changelog/copy-brief.md).
+6. **`changelog.ts write`** — validates and appends. It refuses rather than writing a bad file, and
+   it re-reads the result afterwards.
+7. **Read the new lines yourself before committing them.** They are public claims about the product,
+   written by a model, and this is the only step where a person sees them.
+
+**Not a step in [get-ready-to-deploy.md](../reusable/get-ready-to-deploy.md), and not in
+`npm run deploy`.** The obvious objection — that the deploy has not happened yet — is a
+non-problem: a run describes the deploys that *have* happened and leaves undeployed work for a later
+one. The real reason is step 7. That sweep runs unattended every three hours and exists to leave
+`dev` committed, green and pushed; a changelog step would dirty the tree afterwards, make an
+editorial decision with nobody watching, and publish reader-facing claims that have nothing to do
+with whether the deploy is ready. And a failure here does not look like a failure: the copy stage can
+strengthen *"code intended to do X"* into *"X is now available"* while every structural check passes.
+GPT Sol, asked to attack this, landed in the same place — **generate after the facts exist, review
+explicitly, publish one deploy late**
+([260906g](../plans/260906g-the-changelog-page-and-a-runner-that-can-be-asked-to-do-the-right-thing.md#the-deploy-sweep-no-and-the-reason-is-not-the-one-in-the-question)).
 
 ## The traps
 
@@ -235,6 +346,25 @@ reader of it.
   they exist because [silent success](../reusable/silent-success.md) is how most of a day's bugs go
   here. Assert on `commit_count` per version and on entries-per-1000-commits across a run; a number
   that collapses is the signal.
+- **A late agent overwriting a finished output.** Launch a stage's agents once, and before you write
+  the file check that no stage output is newer than it. On the first run two versions were re-copied
+  by agents launched twice by mistake, after the NDJSON had already been written from the earlier
+  answers, and it had to be regenerated.
+- **A check that validates against an input it helped create proves nothing.** Twice now, a stage has
+  confirmed something against a set that an earlier stage had already polluted: the writer asked
+  whether a sha was *in this version's input* when a typo had entered that input upstream, and the
+  copy validator asked whether an address was *on the allowed list* when the list itself was wrong.
+  Both passed. Both were checking agreement rather than truth. **The fix in each case was to ask
+  something outside the pipeline** — `git rev-list` for the sha, `parseRoute` for the address — and
+  that is the move to reach for whenever a check and the thing it checks share an ancestor.
+- **An address on the allowed list can still be a 404.** The closed list exists so the copy stage
+  cannot guess an address, and it worked — every link in the first run's output was on it. The list
+  itself said `/read` for *your library*, and the shelf is at `/`; a bare `/read` needs an article
+  after it and lands on the not-found page. Thirty-two entries shipped that way, past a validator
+  that checked membership rather than existence. `tests/changelog-file.test.ts` now asks
+  `parseRoute` — the router itself — about every in-app link in the file and every address on the
+  list, which also catches the version of this that has not happened yet: a route renamed under
+  entries that link to it.
 - **Never quote a commit message to a reader.** They are written for us, they name internal files,
   and several of them describe production breaking. The copy stage translates; it does not excerpt.
 - **Article prose never reaches the changelog.** Nothing in this process should touch reader data at

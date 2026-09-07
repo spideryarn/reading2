@@ -7,7 +7,20 @@
 > into one doc, and re-pointed at inline SVG plus a browser check.
 
 Explain **how a thing works** to somebody who understands the product and has never opened the
-repository. Output one self-contained HTML file to `docs/tutorials/<topic>.html`.
+repository. Output one self-contained HTML file to `docs/tutorials/`.
+
+**Name it like a planning doc** — `yyMMdd<letter>-kebab-topic.html`, so the directory sorts by the
+day the tutorial was written and you can tell at a glance how old one is:
+
+```
+$ npx tsx scripts/plan-name.ts --dir=tutorials "Import pipeline and database"
+docs/tutorials/260906a-import-pipeline-and-database.html
+```
+
+The convention and the reasoning are
+[write-planning-doc.md § File naming conventions](write-planning-doc.md#file-naming-conventions) —
+the only difference here is the extension. Tutorials written before 2026-09-06 have no prefix and
+are left alone.
 
 ## Who you are writing for
 
@@ -105,7 +118,7 @@ are on has. It is click-look-click and the screenshots are large, so keeping the
 context is worth more than the extra reasoning:
 
 ```
-Open file:///<abs path>/docs/tutorials/<topic>.html in a new tab.
+Open file:///<abs path>/docs/tutorials/<name>.html in a new tab.
 Screenshot each SVG diagram. For each one report: any overlapping or clipped text,
 any label smaller than ~12px, any arrow that does not visibly connect the two boxes
 it should, and anything unreadable against the background. Report the problems, not
@@ -181,6 +194,7 @@ contents.
 
 ## Checklist
 
+- [ ] The filename carries today's `yyMMdd<letter>` prefix
 - [ ] The exact request, the date and the sources are in the HTML comment
 - [ ] TL;DR gives the shape of the system in under five sentences
 - [ ] 2–5 mental models, before any mechanics

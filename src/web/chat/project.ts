@@ -22,6 +22,7 @@
  * discard are taken back the moment the server refuses them, so they are drawn.
  */
 import type { ChatMessage, ChatThread } from "../../types.js";
+import { shortenedSpokenLabel } from "../../spoken-label.js";
 import type { ChatState, Operation, SpokenOperation, TurnOperation } from "./model.js";
 
 /**
@@ -73,6 +74,32 @@ export function spokenMessages(
 }
 
 /**
+ * The attempted pair, immediately after the tail it claimed. Server ids and
+ * timestamps differ from provisional rows; every field the spoken request
+ * actually writes must agree. Matching prose elsewhere is not proof of this
+ * append, and metadata equality must not depend on JSON object key order.
+ */
+export function storedSpoken(thread: ChatThread | null | undefined, op: SpokenOperation): ChatMessage | null {
+  if (!thread) return null;
+  const tail = op.expectedTailId === null ? -1 : thread.messages.findIndex((m) => m.id === op.expectedTailId);
+  if (op.expectedTailId !== null && tail < 0) return null;
+  const question = thread.messages[tail + 1];
+  const answer = thread.messages[tail + 2];
+  if (!question || !answer || question.role !== "user" || answer.role !== "assistant" ||
+      question.status !== "done" || answer.status !== "done" ||
+      question.text !== op.question.text || answer.text !== op.reply.text ||
+      Boolean(answer.interrupted) !== Boolean(op.reply.interrupted)) return null;
+  const label = (text: string, requested: boolean) => requested ? shortenedSpokenLabel(text) : text;
+  const passages = (message: ChatMessage, requested = false) => (message.passages ?? []).map((p) => [p.blockIds, label(p.why, requested)]);
+  // The route stores done tools and discards client timing and call ids.
+  const tools = (message: ChatMessage, requested = false) => (message.tools ?? []).map((t) => [
+    t.name, label(t.label, requested), label(t.detail ?? "", requested), requested ? "done" : t.status,
+  ]);
+  return JSON.stringify(passages(answer)) === JSON.stringify(passages(op.reply, true)) &&
+    JSON.stringify(tools(answer)) === JSON.stringify(tools(op.reply, true)) ? answer : null;
+}
+
+/**
  * Lay one operation over the list.
  *
  * **Structural sharing is a requirement, not an optimisation.** A chat delta
@@ -99,9 +126,8 @@ function draw(threads: readonly ChatThread[], op: Operation): readonly ChatThrea
     case "spoken": {
       /* **Appended rather than written into `base`, and that is the whole of
          the 409 path.** The server refuses an append behind a conversation that
-         has moved on, and when it does, dropping this operation puts the screen
-         back — the reader's spoken words come off because they were never
-         really there. A send may write its rows into `base` instead, because
+         has moved on; its repair keeps drawing these provisional rows until
+         it learns whether they were already saved by a lost first response. A send may write its rows into `base` instead, because
          nothing takes a typed question back; this one is taken back by exactly
          one thing, and that thing happens. */
       const at = threads.findIndex((t) => t.id === op.threadId);
@@ -114,6 +140,11 @@ function draw(threads: readonly ChatThread[], op: Operation): readonly ChatThrea
         messages: spokenMessages(thread.messages, op),
       };
       return next;
+    }
+    case "repair": {
+      const spoken = op.spoken?.operation;
+      if (!spoken || storedSpoken(threads.find((t) => t.id === op.threadId), spoken)) return threads;
+      return draw(threads, spoken);
     }
     /* **A rename draws nothing**, and that is the rule rather than an
        exception: an operation projects what can still be **withdrawn**. A
@@ -128,9 +159,8 @@ function draw(threads: readonly ChatThread[], op: Operation): readonly ChatThrea
     case "rename":
     /* The load writes through `base` when it is admitted rather than drawing
        while it is in flight: what it has to say is the server's list, and until
-       it answers it has nothing. The 409's repair is the same. */
+       it answers it has nothing. A typed turn's repair is the same. */
     case "load":
-    case "repair":
     /* A delete draws by its tombstone, which is in the state and is filtered
        out below — deletions have to win over every projection, including ones
        registered after them. */

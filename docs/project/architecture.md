@@ -1,5 +1,10 @@
 # Architecture
 
+**Never read this code before?** Start with
+[docs/tutorials/architecture.html](../tutorials/architecture.html) — the same system explained
+end to end, with diagrams and one article followed all the way through, for somebody who knows
+the product and has not opened the repository. This file is the reference; that one is the way in.
+
 ## Intent
 
 From the brief (Greg, 2026-08-24), verbatim:
@@ -51,6 +56,13 @@ constraint, not an apology — keep it boring while the ideas are still moving.
  │ 4 hier-  │        │ 5 summarize  │   gist per node, bottom-up
  │ archy    │───────►│              │──►  data/<slug>/tree.json
  └──────────┘        └──────────────┘
+   │
+   ▼
+ ┌──────────┐   the navLabel on every paragraph, in parallel batches.
+ │ 4b labels│   NOT run by a plain add: it was 79.5-92% of stage 4's wall
+ │          │   clock, so it is bought later by a free successor job
+ │          │──────────────►  labels.json + tree.json (labels merged in)
+ └──────────┘
    │
    ▼
  ┌──────────┐
@@ -115,7 +127,8 @@ artefacts on disk, not by reaching into another stage's code.
 | 1 | fetch — see [fetching.md](fetching.md) | **fetch agent** ([`src/fetch.ts`](../../src/fetch.ts)); run as a step of the ingest queue, [ingest-queue.md](ingest-queue.md) | `raw.html` or `raw.pdf`, plus `raw.json` |
 | 2 | extract — **two extractors, one artefact**: Readability for a page ([content-extraction.md](content-extraction.md)), a model reading the pages for a PDF ([../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md)) | **extraction agent** | `article.html`, `meta.json` (the article's identity — [library.md](library.md#metajson-and-the-articles-identity)) |
 | 3 | **sanitize** + blocks + stable ids — see [security.md](security.md), [block-ids.md](block-ids.md) | **blocks + hierarchy agent** | `blocks.json` |
-| 4 | hierarchy — the deeply-nested table of contents, see [hierarchy.md](hierarchy.md) | **blocks + hierarchy agent** | `tree.json` (structure) |
+| 4 | hierarchy — the deeply-nested table of contents, see [hierarchy.md](hierarchy.md) | **blocks + hierarchy agent** | `tree.json` (structure), `labels.json` (**empty** — see 4b) |
+| 4b | **labels** — the `navLabel` on every paragraph ([hierarchy.md § Why they are two steps](hierarchy.md#two-steps)). Split out of stage 4 on 2026-09-06 because it was 79.5–92% of its wall clock, past what the job lease allows. **Not run by a plain add**: `hierarchy` writes an empty manifest and the reader sees *"Paragraph labels are still arriving"* until a free successor job runs. Forcing `hierarchy` sweeps it in, because re-cutting the tree is what makes a label wrong | **blocks + hierarchy agent** ([`src/labels.ts`](../../src/labels.ts)) | `labels.json`, `tree.json` (labels merged in) |
 | 4.5 | **assets** — fetch the article's own images and host them, so a hotlink cannot rot and no reader announces themselves to the publisher's CDN ([article-images.md](article-images.md)). The one stage that calls no model | **fetch agent** ([`src/collect-assets.ts`](../../src/collect-assets.ts)) | `assets.json`, plus objects in Storage |
 | 5 | summarize (gists per node) | granularity zoom | `tree.json` (gists) |
 | 5b | the arc — one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | **granularity zoom** | `arc.json` |
@@ -154,8 +167,8 @@ one article, and the `db:export` rollback it shares its queries with.
 
 **Moved, as of 2026-09-01, and since 2026-09-05 the only store there is.** A pipeline job commits
 each step's product into a draft revision and publishes it in one transaction with the job's own
-finish, rather than writing the filesystem layout below. `SPIDERYARN_STORE=files` throws
-([`src/store/live.ts`](../../src/store/live.ts)) rather than falling back to it.
+finish, rather than writing the filesystem layout below. There is no way back: neither the flag nor
+a second store exists to ask for.
 [database.md](database.md) has the mechanism;
 [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3 is the
 write-up, and [260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md) the
@@ -315,11 +328,12 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 - **Anything expensive should be cached on a content hash, and not everything is.** *Which* stages
   do it has been said three different ways in this repo — "two of seven" in `AGENTS.md`, "seven
   stages do it" here — and neither was right. Counted from
-  [`src/pipeline.ts`](../../src/pipeline.ts) on 2026-09-05, by the predicate *the step declares a
-  `stamp()` that `stepIsDone` compares against what the store holds*: **ten of the fourteen in
+  [`src/pipeline.ts`](../../src/pipeline.ts) on 2026-09-06, by the predicate *the step declares a
+  `stamp()` that `stepIsDone` compares against what the store holds*: **eleven of the fifteen in
   `STEP_ORDER`** —
-  `assets`, and the nine model modes `arc`, `tweets`, `glossary`, `quotes`, `ideas`, `timeline`,
-  `quiz`, `sketch`, `illustrated`. Copy *their* choice of hash input rather than only the idea: a
+  `labels`, `assets`, and the nine model modes `arc`, `tweets`, `glossary`, `quotes`, `ideas`,
+  `timeline`, `quiz`, `sketch`, `illustrated`. Copy *their* choice of hash input rather than only the
+  idea: a
   fingerprint covers **everything the stage's prompt reads**, which for the nine is the blocks, the
   tree and the head — and there are two head functions because there are two heads
   ([`src/source-hash.ts`](../../src/source-hash.ts)) — and for `assets` the blocks alone, because it
@@ -333,7 +347,11 @@ every id permanently, and orphans every note, highlight and gist that pointed at
     stored HTML and compares it block for block against the stored blocks. No stamp to go stale, and
     it notices a change nothing wrote a hash about.
   - `hierarchy` — **existence**. It *writes* an `inputHash` (its labels file's own `sourceHash`), and
-    nothing reads it back for freshness, because the step declares no `stamp()`.
+    nothing reads it back for freshness, because the step declares no `stamp()`. Its successor
+    `labels` is not in this group — it has a `stamp()`, over the blocks, its prompt version and its
+    model — but the thing that keeps *it* honest across a re-cut tree is not that stamp: it is
+    `writeArtefacts` deleting the step's receipt whenever a pending manifest is written
+    ([hierarchy.md § Why they are two steps](hierarchy.md#two-steps)).
   And a fifth thing that looks like it belongs on that list and does not: **`pdf` is not a step.**
   It is one branch of `extract`, and its per-chunk cache is not step freshness at all — since
   2026-09-01 it is `checkpoints` rows keyed on an `articles` row

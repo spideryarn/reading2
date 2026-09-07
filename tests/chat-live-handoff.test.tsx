@@ -13,9 +13,9 @@
  * could act on. It is also invisible in development, where everything is fast
  * and the flush usually wins the race.
  *
- * The other half is that the Live button is offered **only where there is a
- * conversation to have** — the box under the thread list starts a new one, and
- * a session there would have nothing to be seeded from and no tail to claim.
+ * Live can also start a new conversation from the list. Its status and words
+ * belong only to the thread it was started in; a failure must be visible in
+ * the actual composer, not only on the development preview.
  *
  * docs/plans/260831l-live-conversation-in-chat.md § 1d and § 4.
  */
@@ -70,6 +70,16 @@ function fakeLive(phase: LiveApi["phase"]): { api: LiveApi; finish: () => void }
     speaking: false,
     seen: {},
     placement: null,
+    inputLevel: { current: 0.5 },
+    measuringInput: true,
+    quietInput: false,
+    deviceLabel: "MacBook Pro Microphone",
+    playbackBlocked: false,
+    enableAudio: async () => { events.push("enableAudio"); },
+    thinking: false,
+    pendingTools: [],
+    notice: null,
+    hasUnsavedLines: false,
     threadId: THREAD.id,
     start: () => {},
     stop: () => {
@@ -81,7 +91,7 @@ function fakeLive(phase: LiveApi["phase"]): { api: LiveApi; finish: () => void }
   return { api, finish: () => release() };
 }
 
-function paint(live?: LiveApi, threadId: string | null = THREAD.id): void {
+function paint(live?: LiveApi, threadId: string | null = THREAD.id, threads = [THREAD], blocks = new Map<string, string>()): void {
   act(() => {
     root.render(
       createElement(ChatPanel, {
@@ -91,9 +101,9 @@ function paint(live?: LiveApi, threadId: string | null = THREAD.id): void {
         onStance: () => {},
         loaded: true,
         loadFailed: false,
-        threads: [THREAD],
+        threads,
         threadId,
-        onThread: () => {},
+        onThread: (id: string | null) => { events.push(`thread:${id}`); },
         onSend: (q: string) => {
           events.push(`send:${q}`);
         },
@@ -101,18 +111,18 @@ function paint(live?: LiveApi, threadId: string | null = THREAD.id): void {
         onSendNew: (q: string) => {
           events.push(`sendNew:${q}`);
         },
-        onDiscard: () => {},
+        onDiscard: (id: string) => { events.push(`discard:${id}`); },
         onRename: () => {},
         onDelete: () => {},
         onRetry: () => {},
         onEdit: () => {},
         onStop: () => {},
-        onJump: () => {},
+        onJump: (id: string) => { events.push(`jump:${id}`); },
         recovering: new Set<string>(),
-        blocks: new Map<string, string>(),
+        blocks,
         focusNonce: 0,
         error: null,
-        ...(live ? { live, onStartLive: () => events.push("startLive") } : {}),
+        ...(live ? { live, onStartLive: (id: string | null) => { events.push(`startLive:${id ?? "new"}`); return undefined; } } : {}),
       }),
     );
   });
@@ -142,6 +152,13 @@ function ask(question: string): void {
 
 beforeEach(() => {
   events = [];
+  // This jsdom has no localStorage; use the same seam as mic-devices.test.ts.
+  const storage = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => { storage.set(key, value); },
+    removeItem: (key: string) => { storage.delete(key); },
+  });
   host = document.createElement("div");
   document.body.appendChild(host);
   act(() => {
@@ -152,6 +169,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.unstubAllGlobals();
 });
 
 describe("Send while a live conversation is running", () => {
@@ -208,14 +226,20 @@ describe("where the button is offered", () => {
     expect(host.querySelector(".chat-live-btn")).not.toBeNull();
   });
 
-  it("is NOT under the thread list, which starts a new conversation", () => {
-    /* A live session is bound to one thread — seeded from it, appended to it —
-       so a box whose whole job is to mint a *different* one has nothing to
-       offer it. */
+  it("starts a new conversation from the list composer", () => {
     const { api } = fakeLive("idle");
     paint(api, null);
     expect(host.querySelector("textarea.chat-input"), "no box to check").not.toBeNull();
-    expect(host.querySelector(".chat-live-btn")).toBeNull();
+    const button = host.querySelector<HTMLButtonElement>(".chat-live-btn");
+    expect(button, "there is no way to begin a spoken conversation").not.toBeNull();
+    act(() => button!.click());
+    expect(events).toEqual(["startLive:new"]);
+  });
+
+  it("offers Live on an empty loaded list after an unused thread was closed", () => {
+    const { api } = fakeLive("idle");
+    paint(api, null, []);
+    expect(host.querySelector(".chat-live-btn")).not.toBeNull();
   });
 
   it("is absent entirely when the panel was given no session", () => {
@@ -223,5 +247,169 @@ describe("where the button is offered", () => {
        render a dead button. */
     paint();
     expect(host.querySelector(".chat-live-btn")).toBeNull();
+  });
+});
+
+describe("the live session in the shipping chat composer", () => {
+  it("shows an actionable failure and allows typing in the same conversation", async () => {
+    const { api } = fakeLive("failed");
+    api.error = "Microphone permission was denied. Allow access in your browser, then retry.";
+    paint(api);
+    expect(host.textContent).toContain("Microphone permission was denied");
+    const retry = [...host.querySelectorAll("button")].find((b) => b.textContent === "Retry live");
+    expect(retry).toBeDefined();
+    act(() => retry!.click());
+    expect(events).toEqual([`startLive:${THREAD.id}`]);
+    ask("continue by typing");
+    await act(async () => { await Promise.resolve(); });
+    expect(events.at(-1)).toBe("send:continue by typing");
+  });
+
+  it("shows streaming words by default, and hiding them does not stop the session", () => {
+    const { api } = fakeLive("live");
+    api.lines = [
+      { id: "u1", role: "reader", text: "What is the argument?", done: true },
+      { id: "a1", role: "companion", text: "It begins with", done: false },
+    ];
+    paint(api);
+    expect(host.querySelector(".chat-live-transcript")?.textContent).toContain("It begins with");
+    const toggle = host.querySelector<HTMLInputElement>('input[aria-label="Show live transcript"]');
+    expect(toggle?.checked).toBe(true);
+    act(() => toggle!.click());
+    expect(host.querySelector(".chat-live-transcript")).toBeNull();
+    expect(events).toEqual([]);
+  });
+
+  it("shows the acquired microphone, input meter and playback recovery action", async () => {
+    const { api } = fakeLive("live");
+    api.playbackBlocked = true;
+    api.quietInput = true;
+    paint(api);
+    expect(host.querySelector(".mic-level"), "the microphone has no local level meter").not.toBeNull();
+    expect(host.textContent).toContain("MacBook Pro Microphone");
+    expect(host.textContent).toContain("No sound detected yet");
+    const enable = [...host.querySelectorAll("button")].find((b) => b.textContent === "Enable sound");
+    expect(enable).toBeDefined();
+    await act(async () => { enable!.click(); });
+    expect(events).toEqual(["enableAudio"]);
+  });
+
+  it("reports thinking and tool work without claiming the companion is speaking", () => {
+    const { api } = fakeLive("live");
+    api.thinking = true;
+    paint(api);
+    expect(host.textContent).toContain("Thinking…");
+    api.pendingTools = [{ callId: "c1", name: "search_article_words" }];
+    paint(api);
+    expect(host.textContent).toContain("Using tools…");
+    expect(host.textContent).not.toContain("Speaking…");
+  });
+
+  it("makes the latest spoken passage pressable and excludes invented block ids", () => {
+    const { api } = fakeLive("live");
+    api.pointers = [
+      { blockIds: ["spya-older2"], why: "Earlier pointer", at: 1 },
+      { blockIds: ["spya-a2b3c4", "spya-fake77"], why: "The central distinction", at: 2 },
+    ];
+    paint(api, THREAD.id, [THREAD], new Map([
+      ["spya-a2b3c4", "The central paragraph"], ["spya-older2", "An earlier paragraph"],
+    ]));
+    const links = host.querySelectorAll<HTMLAnchorElement>(".chat-live-status .block-ref");
+    expect(links, "show_passage never puts a passage on screen").toHaveLength(1);
+    expect(links[0]?.href).toContain("at=spya-a2b3c4");
+    act(() => links[0]!.click());
+    expect(events).toEqual(["jump:spya-a2b3c4"]);
+    expect(host.querySelector(".chat-live-status")?.textContent).not.toContain("Earlier pointer");
+  });
+
+  it("remembers a replacement microphone and flushes before reconnecting", async () => {
+    const previous = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        enumerateDevices: async () => [
+          { kind: "audioinput", deviceId: "headphones", label: "USB Headphones" },
+        ],
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      },
+    });
+    try {
+      const { api, finish } = fakeLive("live");
+      paint(api);
+      await act(async () => { await Promise.resolve(); });
+      const picker = host.querySelector<HTMLSelectElement>('select[aria-label="Microphone device"]');
+      expect(picker, "there is no way to escape a silent virtual microphone").not.toBeNull();
+      act(() => {
+        picker!.value = "headphones";
+        picker!.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      expect(window.localStorage.getItem("spya.dictation.deviceId")).toBe("headphones");
+      expect(events).toEqual(["stop"]);
+      await act(async () => { finish(); });
+      expect(events).toEqual(["stop", `startLive:${THREAD.id}`]);
+    } finally {
+      if (previous) Object.defineProperty(navigator, "mediaDevices", previous);
+      else Reflect.deleteProperty(navigator, "mediaDevices");
+    }
+  });
+
+  it("does not show another conversation's live words or error", () => {
+    const { api } = fakeLive("live");
+    api.threadId = "spya-other1";
+    api.lines = [{ id: "u1", role: "reader", text: "Private words in another thread", done: false }];
+    api.error = "Error from another thread";
+    paint(api);
+    expect(host.textContent).not.toContain("Private words in another thread");
+    expect(host.textContent).not.toContain("Error from another thread");
+    expect(host.querySelector(".chat-live-status")).toBeNull();
+  });
+
+  it("offers cancellation while the session is connecting", () => {
+    const { api } = fakeLive("connecting");
+    paint(api);
+    const button = host.querySelector<HTMLButtonElement>(".chat-live-btn");
+    expect(button?.disabled, "a startup that stalls cannot be cancelled").toBe(false);
+    act(() => button!.click());
+    expect(events).toEqual(["stop"]);
+  });
+
+  it("flushes a new spoken conversation before deciding whether it is empty", async () => {
+    const { api, finish } = fakeLive("live");
+    paint(api, THREAD.id, [{ ...THREAD, messages: [] }]);
+    const leave = host.querySelector<HTMLButtonElement>('button[title="All conversations"]');
+    act(() => leave!.click());
+    expect(events, "the empty base was discarded while speech was still in flight").toEqual(["stop"]);
+    await act(async () => { finish(); });
+    expect(events).toEqual(["stop", `discard:${THREAD.id}`, "thread:null"]);
+  });
+
+  it("keeps a failed new conversation that still holds unsaved spoken words", () => {
+    const { api } = fakeLive("failed");
+    api.error = "Could not save the spoken turn.";
+    api.lines = [{ id: "u1", role: "reader", text: "Words still worth keeping", done: true }];
+    paint(api, THREAD.id, [{ ...THREAD, messages: [] }]);
+    act(() => host.querySelector<HTMLButtonElement>('button[title="All conversations"]')!.click());
+    expect(events, "discard made the only unsaved transcript unreachable").toEqual(["thread:null"]);
+  });
+
+  it("labels retained unsaved words after a retry has cleared the connection error", () => {
+    const { api } = fakeLive("live");
+    api.hasUnsavedLines = true;
+    api.lines = [{ id: "u1", role: "reader", text: "Earlier words worth keeping", done: true }];
+    paint(api);
+    expect(host.querySelector(".chat-live-transcript")?.textContent).toContain("Earlier words worth keeping");
+    expect(host.querySelector(".chat-live-transcript")?.textContent).toContain("Couldn’t confirm whether these earlier words were saved");
+  });
+
+  it("explains voice and thread continuity in a keyboard-reachable tooltip", async () => {
+    const { api } = fakeLive("idle");
+    paint(api);
+    const button = host.querySelector<HTMLButtonElement>(".chat-live-btn");
+    await act(async () => { button!.focus(); });
+    const tooltip = document.querySelector('[role="tooltip"]');
+    expect(tooltip?.textContent).toContain("Talk about the article");
+    expect(tooltip?.textContent).toContain("same conversation");
+    expect(button?.hasAttribute("title")).toBe(false);
   });
 });

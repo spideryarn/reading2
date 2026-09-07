@@ -20,6 +20,9 @@ import {
   imageSourcesIn,
   isRehostableUrl,
   matchesMagic,
+  parsePdfFigureMarker,
+  pdfFigureMarkersIn,
+  pdfFigureMarkerValue,
   sniffImage,
 } from "../src/assets.js";
 
@@ -191,7 +194,7 @@ describe("sniffImage", () => {
 
 describe("assetIndex", () => {
   const assets: Assets = {
-    version: "assets/1",
+    version: "assets/2",
     sourceHash: "abc",
     fetchedAt: "2026-08-29T00:00:00.000Z",
     entries: [
@@ -224,5 +227,115 @@ describe("assetIndex", () => {
   it("is empty for an article the step never ran on", () => {
     expect(assetIndex(undefined).size).toBe(0);
     expect(assetIndex({ ...assets, entries: [] }).size).toBe(0);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The PDF figure markers
+ * ------------------------------------------------------------------ */
+
+/** A well-formed ref, shaped exactly as `pdfFigureRef` mints one. */
+const REF = `pdffig1-${"0123456789abcdef".repeat(2)}`;
+
+describe("parsePdfFigureMarker", () => {
+  it("reads back what pdfFigureMarkerValue wrote", () => {
+    const value = pdfFigureMarkerValue({ figureRef: REF,page: 12, ordinal: 3 });
+    expect(parsePdfFigureMarker(value)).toEqual({ ref: value, page: 12, ordinal: 3 });
+  });
+
+  it("keeps page 1 figure 23 and page 12 figure 3 apart", () => {
+    /* Without a separator the two would spell the same marker, which is the
+       collision `pdfFigureRef` joins its own fields to avoid. */
+    expect(pdfFigureMarkerValue({ figureRef: REF,page: 1, ordinal: 23 })).not.toBe(
+      pdfFigureMarkerValue({ figureRef: REF,page: 12, ordinal: 3 }),
+    );
+  });
+
+  it("refuses anything that is not one of ours", () => {
+    for (const bad of [
+      "",
+      REF,
+      `${REF}.3`,
+      `${REF}.0.1`,
+      `${REF}.03.1`,
+      `${REF}.3.1.1`,
+      `${REF}.-3.1`,
+      "pdffig1-notahexdigestnotahexdigestno.3.1",
+      `${REF.toUpperCase()}.3.1`,
+      "<img src=x>",
+    ]) {
+      expect(parsePdfFigureMarker(bad), bad).toBeNull();
+    }
+  });
+
+  it("refuses a page number no document could have, rather than parsing it to Infinity", () => {
+    /* **`Number("9".repeat(400))` is `Infinity`, and `JSON.stringify(Infinity)`
+       is `null`** — so before the grammar bounded these two fields, a forged
+       attribute could put a `page: null` into a manifest whose type says
+       `number`, and out through the public DTO to a stranger. Verified by GPT
+       Sol, C-5. Six digits is the bound, which is beyond any document that
+       exists and provably inside `Number.MAX_SAFE_INTEGER`. */
+    expect(parsePdfFigureMarker(`${REF}.${"9".repeat(400)}.1`)).toBeNull();
+    expect(parsePdfFigureMarker(`${REF}.1.${"9".repeat(400)}`)).toBeNull();
+    expect(parsePdfFigureMarker(`${REF}.1234567.1`)).toBeNull();
+    /* And the bound is a bound, not a ban: the largest page it does admit still
+       parses to a safe integer. */
+    const most = parsePdfFigureMarker(`${REF}.999999.999999`);
+    expect(most?.page).toBe(999_999);
+    expect(Number.isSafeInteger(most?.ordinal)).toBe(true);
+  });
+
+  it("goes on parsing a ref whose version tag it has never seen", () => {
+    /* A `PDF_FIGURE_REF_VERSION` bump must land as a lookup that misses, not as
+       a marker nothing can read: the entry it no longer matches is the point. */
+    expect(parsePdfFigureMarker(`pdffig9-${"a".repeat(32)}.2.1`)?.page).toBe(2);
+  });
+});
+
+describe("pdfFigureMarkersIn", () => {
+  it("finds the markers a PDF's figures carry, in document order", () => {
+    const root = host(
+      `<figure data-spya-pdf-figure="${REF}.3.1"><figcaption>Fig 1</figcaption></figure>` +
+        `<p>prose</p>` +
+        `<figure data-spya-pdf-figure="${REF}.4.1"><figcaption>Fig 2</figcaption></figure>`,
+    );
+    expect(pdfFigureMarkersIn(root).map((m) => m.page)).toEqual([3, 4]);
+  });
+
+  it("ignores a forged or malformed value rather than carrying it", () => {
+    /* A web article cannot hold a figure of ours: the ref folds in a raw PDF's
+       sha256, so there is no manifest entry a forgery could match, and stage 2
+       scrubs every arriving copy anyway. This is the belt to that braces — a
+       value nothing can explain is one nothing should index by. */
+    const root = host(
+      `<figure data-spya-pdf-figure="page:3"><figcaption>x</figcaption></figure>` +
+        `<figure data-spya-pdf-figure=""><figcaption>y</figcaption></figure>`,
+    );
+    expect(pdfFigureMarkersIn(root)).toEqual([]);
+  });
+
+  it("refuses both elements when one ref is carried twice", () => {
+    /* **It kept the first until 2026-09-06**, and that is what makes this a
+       decision rather than a tidy-up: the manifest is keyed by ref, so the one
+       entry would have been looked up by both `<figure>`s and the same picture
+       would have appeared under two different captions — a fabricated claim
+       about the paper that the reader cannot detect. Refusing both leaves two
+       captions with no picture, which is visible. GPT Sol, C-5. */
+    const root = host(
+      `<figure data-spya-pdf-figure="${REF}.3.1"><figcaption>a</figcaption></figure>` +
+        `<figure data-spya-pdf-figure="${REF}.3.1"><figcaption>b</figcaption></figure>`,
+    );
+    expect(pdfFigureMarkersIn(root)).toEqual([]);
+  });
+
+  it("keeps the innocent markers around a repeated one", () => {
+    /* The refusal is per ref, not per document: a renderer bug on one figure
+       must not cost the reader the other seven. */
+    const root = host(
+      `<figure data-spya-pdf-figure="${REF}.3.1"><figcaption>a</figcaption></figure>` +
+        `<figure data-spya-pdf-figure="${REF}.3.1"><figcaption>b</figcaption></figure>` +
+        `<figure data-spya-pdf-figure="${REF}.4.1"><figcaption>c</figcaption></figure>`,
+    );
+    expect(pdfFigureMarkersIn(root).map((m) => m.page)).toEqual([4]);
   });
 });

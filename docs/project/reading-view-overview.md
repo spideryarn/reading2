@@ -56,12 +56,12 @@ of compression, down the page for position and across for detail. Read that firs
 
 ### The modes in the band
 
-**Five of the fourteen are behind the experimental-features switch** and are drawn only for a reader
-who asked for them — Quotes, Timeline, Referee, Remember and Debate. The other nine (Plain, Hierarchy,
-Outline, Summary, Glossary, Ideas, Search, Chat, Diagram) are what everybody sees, a signed-out
-visitor included. Diagram was the fifth until 2026-09-04, when the gate moved a level down: the mode
-is in everybody's bar and four of its five pictures are behind the switch instead
-([diagram.md](diagram.md), [experimental-features.md](experimental-features.md)).
+**Some of them are behind the experimental-features switch** and are drawn only for a reader who
+asked for them; the rest are what everybody sees, a signed-out visitor included. **Which is which
+lives in [experimental-features.md](experimental-features.md)**, with the reason for each — not
+here, and not counted anywhere, because the membership moves and a copy of it goes stale. Diagram is
+the one gated a level down instead: the mode is in everybody's bar and four of its five pictures are
+behind the switch ([diagram.md](diagram.md)).
 
 Hidden means hidden from the bar, not unreachable: `?mode=timeline` still works, and the bar retains
 whichever mode the URL names so the reader keeps their way back.
@@ -134,6 +134,40 @@ That is twelve of the fourteen; `plain` and `hierarchy` are the two that open no
 - **[url-state.md](url-state.md)** — every parameter, which push history and which replace, and why
   position is a *section* rather than an offset.
 
+### The command bar
+
+**⌘/Ctrl-K, or the ⌘ button in the bottom bar, and you type the name of a mode.** Enter opens it
+**exactly as pressing its Dock button does** — same activation, same generate-on-open, same cost. It
+is an *additional door*, never a replacement: the Dock keeps every button it has, and the bar lists
+exactly what the Dock lists, because the Dock hands it the list it just drew rather than computing a
+second one.
+
+It has no doc of its own because there is very little to say that is not the four decisions Greg made
+before it was written ([260906h](../plans/260906h-mode-catalog-and-a-command-bar.md) § The four
+product calls). **It is modes only.** No passage jump, no generation rows, no chat, no model call —
+each of those needs a verb this bar does not have, and the plan names every one of them as deferred
+rather than forgotten. A query that matches nothing says `No command matches.` and nothing else: no
+search fallback, no "did you mean", an honest empty state preferred to a helpful guess.
+
+Two pieces of it are worth knowing about:
+
+- **The words it will accept** are the mode's name, its description, and its **aliases** — `toc` for
+  Hierarchy, `define` and `terms` for Glossary — which live in
+  [`src/mode-catalog.ts`](../../src/mode-catalog.ts) beside the sentence each mode is described by.
+  Aliases are deliberately sparse: the cost of a loose one is not a missed match, it is the *wrong*
+  mode ranked first for somebody who typed the right thing. The ranking is five named tiers in
+  [`src/web/command-match.ts`](../../src/web/command-match.ts), and ties break in Dock order.
+- **A row that would start work says so**, in one muted trailing word: `generates`. No figure and no
+  readiness check — readers hold slots rather than paying per call, and a bar with a price on it
+  would be *more* disclosed than the button beside it, which reverses a decision Greg made on
+  2026-09-06. It is derived from `MODE_TARGET`
+  ([`src/web/activation.ts`](../../src/web/activation.ts) § `modeGenerates`), which is already total,
+  so a fifteenth mode cannot arrive unmarked. It over-warns when the artefact is already there; the
+  Dock under-warns in exactly the same case.
+
+The key itself, and the four things the chord refuses to do, are
+[keyboard.md § the one chord that is not an arrow](keyboard.md#the-one-chord-that-is-not-an-arrow).
+
 ### Getting in and out
 
 - **[library.md](library.md)** — the shelf: `/read/<slug>`, what a card says, what you can do to
@@ -141,6 +175,10 @@ That is twelve of the fourteen; `plain` and `hierarchy` are the two that open no
 - **[public-shelf.md](public-shelf.md)** — the *other* shelf: `/read/public`, every article anybody
   has shared, listed for strangers. Why it is not the owner's shelf narrowed, and what listing it
   changed about what sharing promises.
+- **[public-readable-sharing.md](public-readable-sharing.md)** — the page at
+  `/features/public-readable-sharing`, written to the author of a republished article: what we do
+  with it, which two of five briefed claims turned out to be false, and the three awkward facts we
+  name on purpose.
 - **[page-titles.md](page-titles.md)** — what the browser tab says. One rule — *what is different
   about this tab goes first* — and why assigning `document.title` announces nothing.
 - **[reader-profile.md](reader-profile.md)** — two boxes and one string telling the model who is

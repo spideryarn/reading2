@@ -1,0 +1,308 @@
+/* quotes.css — Quotes mode (QuotesPanel.tsx), and after it `.score-bar*`, the
+   model's 0–1 judgments drawn as lengths instead of digits. Those bars are
+   shared with the glossary panel — ScoreBars.tsx — so they are not Quotes' to
+   restyle on its own. */
+
+/* ---------------------------------------------------------- § quotes mode ----
+   The tenth mode: the lines worth keeping, in the article's own words —
+   docs/project/quotes.md, docs/plans/260831j-quotes-mode.md.
+
+   **The one rule that shapes all of this: the reader's eye should land on the
+   author's sentence and nothing else.** Every other panel in this band is a
+   list of things a model wrote, so its rows can be styled like UI. A row here
+   IS the article, and everything around it — the two scores, the ⓘ, the block
+   ref — is furniture that has to get out of the way. Hence the size step
+   between `.quotes-text` and its neighbours, which is bigger than anywhere else
+   in the band, and hence the scores sitting under the quote rather than beside
+   it: an 18rem column has no room for a sentence and a number on one line, and
+   the number is the one that gives way.
+
+   The head, the order buttons and the bar deliberately match `.gloss-*` rule
+   for rule. They are the same three controls doing the same three jobs, and a
+   second look for them would teach the reader they mean something else. What is
+   NOT shared is the row, which is a different thing entirely. */
+/* The title row is `.band-head`, § mode band. */
+.quotes-count { color: var(--ink-faint); font-size: 0.85rem; }
+
+.quotes-rank {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.quotes-rank-label {
+  margin-right: 0.15rem;
+  color: var(--ink-faint);
+  font-size: 0.83rem;
+  text-transform: lowercase;
+}
+.quotes-rank-btn {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+.quotes-rank-btn:hover { color: var(--ink); background: var(--surface-raised); }
+.quotes-rank-btn.on {
+  border-color: var(--rule-strong);
+  background: var(--surface-raised);
+  color: var(--highlight-ink);
+}
+.quotes-rank-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+/* The bar. Same rules as `.gloss-gate`, and the same reason for the native
+   range input: `accent-color` is one line where `::-webkit-slider-thumb` is the
+   track, the thumb, the focus ring and the dark-mode colours of all three in
+   two vendor dialects. */
+.quotes-bar {
+  padding: 0.4rem 0.7rem 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+.quotes-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.quotes-bar-label {
+  color: var(--ink-faint);
+  font-size: 0.83rem;
+  text-transform: lowercase;
+}
+.quotes-bar-value {
+  margin-left: auto;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 0.79rem;
+  white-space: nowrap;
+}
+.quotes-bar-reset {
+  display: flex;
+  align-items: center;
+  padding: 0.1rem;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.quotes-bar-reset:hover { color: var(--ink); }
+.quotes-bar-reset:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.quotes-bar-range {
+  display: block;
+  width: 100%;
+  margin: 0.3rem 0 0;
+  accent-color: var(--highlight);
+  cursor: pointer;
+}
+.quotes-bar-range:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.quotes-bar-note {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.81rem;
+  line-height: 1.35;
+}
+
+/* What the stage would not store. Quiet, above the list, and only when there is
+   something to say — the reader is entitled to know their list is shorter than
+   what the model offered, and a log line does not tell them.
+   docs/reusable/silent-success.md. */
+.quotes-discarded {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: 0.81rem;
+  line-height: 1.4;
+}
+.quotes-discarded svg { flex: none; transform: translateY(1px); }
+
+.quotes-error,
+.quotes-quiet {
+  margin: 0;
+  padding: 0.7rem;
+  color: var(--ink-faint);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.quotes-error { color: var(--highlight-ink); }
+
+.quotes-empty { padding: 0.7rem; }
+.quotes-empty p { margin: 0 0 0.5rem; font-size: 0.91rem; color: var(--ink-soft); }
+.quotes-hint { color: var(--ink-faint) !important; font-size: 0.84rem !important; line-height: 1.45; }
+.quotes-run { display: flex; flex-direction: column; gap: 0.4rem; }
+
+.quotes-stale {
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface-raised);
+}
+.quotes-stale p {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin: 0 0 0.45rem;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+.quotes-stale svg { flex: none; color: var(--highlight-ink); transform: translateY(1px); }
+
+.quotes-list { flex: 1; overflow-y: auto; }
+/* `.quotes-group`, `.quotes-group-head` and `.quotes-group-count` lived here
+   until 2026-09-03 — the "worth keeping" / "the rest" divider and the section
+   that wrapped each group. The bar hides what is below it now, so there is one
+   list and nothing to head. */
+.quotes-list-items { margin: 0; padding: 0; list-style: none; }
+
+/* One row: the sentence, and the furniture beside it. `align-items: start` so
+   the ⓘ sits level with the quote's first line rather than floating in the
+   middle of a five-line one. */
+.quotes-row {
+  display: flex;
+  align-items: start;
+  gap: 0.2rem;
+  padding: 0.1rem 0.4rem 0.1rem 0.2rem;
+  border-bottom: 1px solid var(--rule);
+}
+.quotes-row:last-child { border-bottom: none; }
+.quotes-row.on { background: var(--surface-raised); }
+
+/* The whole sentence is the target, because in an 18rem band the target wants
+   to be as big as it can be and there is nothing else in a row to press. */
+.quotes-quote {
+  flex: 1;
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.35rem 0.45rem 0.5rem;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.quotes-quote:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+
+/* The author's words, and the only thing on this panel styled as prose. The
+   left rule is the glossary's `in this piece` rule and it means the same thing
+   here — **this came from the article** — which is why it is the solid one and
+   not the dotted one the model's own contributions get. */
+.quotes-text {
+  margin: 0;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--rule-strong);
+  color: var(--ink);
+  font-family: var(--font-reading);
+  font-size: 0.93rem;
+  line-height: 1.45;
+}
+.quotes-row.on .quotes-text { border-left-color: var(--highlight); }
+
+/* Under the sentence, never beside it: there is no room for both on one line
+   and the number is the one that gives way. Mono so they line up with the bar's
+   readout, which is the same quantity. */
+/* Under the sentence, never beside it: there is no room for both on one line.
+   Indented to the quote's own left rule, so the bars start where the words do. */
+.quotes-scores {
+  margin: 0.35rem 0 0 0.5rem;
+}
+
+.quotes-row-side {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding-top: 0.5rem;
+}
+/* The model's reason, behind a press. A second button BESIDE the row's button
+   and never inside it: a button inside a button is invalid, and the browser's
+   recovery from it is not something to design against. */
+.quotes-why {
+  display: flex;
+  align-items: center;
+  padding: 0.15rem;
+  border: none;
+  border-radius: 0.3rem;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.quotes-why:hover { color: var(--ink); background: var(--surface-raised); }
+.quotes-why.on { color: var(--highlight-ink); background: var(--surface-raised); }
+.quotes-why:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+/* Wider than a spine tooltip, because this holds a sentence rather than a
+   label. */
+.quotes-why-card { max-width: 16rem; }
+.quotes-where { flex: none; }
+
+/* One child now — the rerun button — but the column and the gap stay: they cost
+   nothing and they are what a second row would land in. `.quotes-provenance`
+   was the first row, and went with the glossary's on 2026-09-05. `Foot` in
+   QuotesPanel.tsx says why. */
+.quotes-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.55rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+
+/* ------------------------------------------------------- § score bars ----
+   The model's 0–1 judgments as lengths rather than digits — Greg, 2026-08-31:
+   *"Prefer to use UI (e.g. a little sparkline/bar rather than numbers) plus
+   tooltip instead of numbers ... Same goes for Glossary etc."*
+
+   One set of rules for both panels, because they are showing the same kind of
+   thing and two looks would teach the reader it means two things. The component
+   is src/web/ScoreBars.tsx and the reasoning is there.
+
+   **The track is always the whole scale.** Nothing here normalises to the list,
+   so an article whose scores are all middling looks middling — a bar stretched
+   to make its own biggest score full-width would make every article look like
+   it had one outstanding term, and no two articles comparable. */
+.score-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 2.4rem;
+  cursor: default;
+}
+/* The track. Faint enough to read as a scale rather than as a rule, and it has
+   to be visible: a fill with no track is a bar chart with no axis, and 0.2 and
+   0.9 then look like two different things rather than two points on one scale. */
+.score-bar {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--ink-faint) 22%, transparent);
+  overflow: hidden;
+}
+.score-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ink-faint);
+}
+/* The upper bar of each pair is the load-bearing one — centrality in a
+   glossary, importance in a quote — and it takes the accent, so a column of
+   rows can be read for "what the argument rests on" without the tooltip.
+   The lower bar stays neutral. Two *positions* rather than two hues doing the
+   work, because a hue difference alone is not a difference for a reader who
+   cannot see it, and the aria-label carries the rest. */
+.score-bar-fill.centrality,
+.score-bar-fill.importance {
+  background: color-mix(in oklab, var(--highlight) 70%, var(--ink-faint));
+}
+.gloss-term.on .score-bar-fill,
+.quotes-row.on .score-bar-fill {
+  background: var(--highlight);
+}
+/* Narrow, because it holds two short lines and a wide card over a list row
+   covers the rows either side of the one being pointed at. */
+.score-bars-card { max-width: 15rem; }
+

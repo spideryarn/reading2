@@ -60,6 +60,7 @@ const ARTICLE: Article = {
     },
   ],
   assets: undefined,
+  navLabelStatus: "ready",
   tree: {
     version: "1",
     generator: "test",

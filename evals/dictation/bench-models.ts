@@ -196,9 +196,8 @@ console.log(
  *
  * Two ways a clip lands here, and the second is invisible without saying it:
  *
- * - **its article is not in this store.** Both stores are incomplete on this box
- *   in different ways, so this is a fact about the fixtures. `SPIDERYARN_STORE`
- *   decides which.
+ * - **its article is not in this store.** The store is incomplete on this box,
+ *   so this is a fact about the fixtures.
  * - **its terms come from a source nothing here supplies.** `purpose-box` says
  *   four things that live only in the "why you're reading this one" box, and no
  *   article on this machine has one — so it is unanswerable by design, for

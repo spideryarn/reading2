@@ -367,6 +367,28 @@ that changed the design are folded in above; the rest, held as build constraints
   A cap is still worth having, on the honest grounds — what the reader has to download — rather
   than on a platform limit that is not there. The largest figure measured anywhere in the corpus is
   756 KB.
+
+  **That 756 KB was the *Analog Cognition* document's number, and the corpus is worse.** Stage C
+  measured the ball-lightning paper's page-3 figure at 2067 × 1741 of photographic RGB encoding to
+  **9,355,050 bytes**, so a 4 MiB cap refused a real fixture — silently — and the cap went up to
+  16 MiB to let it through, leaving a reader fetching 9 MB for one picture.
+
+  **A cap was the wrong instrument, and Greg's call on 2026-09-06 was to fix the pixels instead:**
+
+  > downscale instead
+
+  A figure renders at roughly 700 px of CSS width in the reading view, so ~1600 px on the longest
+  side is already generous for a 2× display. `downscaleRaster` in
+  [`src/pdf-figures.ts`](../../src/pdf-figures.ts) box-filters everything above `MAX_FIGURE_EDGE`
+  down to it — alpha-weighted, because averaging colour across pixels of differing alpha puts a dark
+  fringe round every transparent edge — and it runs immediately before `encodeFigurePng`. Re-measured
+  over the corpus the same day: 9,355,050 → **2,349,789** at 1034 × 871, 2,917,234 → 985,154,
+  3,432,261 → 822,724, and every figure already inside the bound returned untouched.
+
+  `MAX_FIGURE_BYTES` becomes a backstop rather than the control, at **12 MiB** — above the
+  10,241,600 raw bytes a 1600 × 1600 RGBA raster could ever deflate from, so it cannot refuse a
+  figure the downscale allowed. The next real reduction is a lossy encoder, and that is still
+  blocked on `@napi-rs/canvas` being 34 MB of Vercel bundle.
 - **Drop the second blankness clause.** "Every pixel within tolerance of one colour" buys nothing
   the corpus needs and introduces the one false negative that matters — a near-white diagram or a
   faint grid deleted silently. Only exact transparency, only for `RGBA_32BPP`. Keeping a flat
@@ -417,6 +439,36 @@ Asked to arbitrate the product calls rather than the plumbing.
 - **`kind` 1 (`GRAYSCALE_1BPP`) exists** and must be handled or refused explicitly, never fallen
   through. The corpus only exercises 2 and 3.
 
+## The browser pass, 2026-09-06 — it works
+
+A fresh ingest of the real document on this box, job `spya-t333w9`, **$0.2868** of model spend,
+slug `analog-cognition-and-consciousness-4-28-26-spya-f03kqf`. Eight of eight figures recovered.
+
+| check | result |
+| --- | --- |
+| `.prose figure` / `.prose figure img` | **8 / 8** |
+| every image decoded | yes — `naturalWidth`/`naturalHeight` non-zero on all eight |
+| **each picture under its own caption** | **yes, all eight, checked by eye against the screenshots** |
+| the ⤢ button | present on each, opens the lightbox at full resolution |
+| the open-the-original icon | present on all eight, titled *Open page N of the PDF* for N = 3, 4, 7, 9, 11, 12, 14, 16 |
+| `/api/asset/…` | 16 requests, all **200** |
+
+Those eight page numbers are **exactly the pages the first probe in this document measured**, arrived
+at independently — the probe read them off the operator list on 2026-09-06 and the reading view got
+them from a marker minted by the model's own page field. Two routes to the same eight numbers is
+worth more than either.
+
+**One thing this plan and my brief for it were wrong about: there is no dark mode to test.** The app
+is dark-only by design — `src/web/styles/tokens.css`, *"DARK ONLY, unconditionally — no toggle, no
+`prefers-color-scheme`, no light fallback"*, Greg 2026-08-24. Forcing `data-theme="dark"` produced a
+byte-identical screenshot. The concern behind the question was still the right one and is still
+answered: `--figure-sheet` resolves to `#f4f3f0`, and every figure sits on that fixed light mat
+against the app's near-black page, so a transparent PNG of black line art is never drawn
+dark-on-dark. The mechanism was already there; this work needed none of its own.
+
+The two console errors seen are `/api/glossary/…` and `/api/library/…/open`, neither of them on this
+path — a fresh article has no glossary yet.
+
 ## Stages
 
 Each ends with the gates green and the tree safe to commit. Nothing a reader sees changes until D.
@@ -426,15 +478,339 @@ the original**.
 
 | | Stage | Lands | State |
 |---|---|---|---|
-| A | **The pure module** | `src/pdf-figures.ts` — the transparency rule, the validator, the PNG writer, the pairing gate, the ref. No pdf.js, no store. | |
-| B | **The extraction** | real XObjects out of a real PDF through `loadPdfjs`, `maxImageSize` on the document, pinned against the eight known-real and eight known-blank keys. | |
-| C | **The marker, the manifest and the step** | `data-spya-pdf-figure` in `renderHtml` and `src/reserved.ts`; `pdfFigures` on `Assets`; the assets step extended; **the freshness stamp fixed and `ASSETS_VERSION` bumped**. Nothing served yet. | |
-| D | **Delivery and the prose** | the generic asset route after `sendPlate`; `rehostImages` after `sanitizeArticle`; the muted line and its link. PDF figures only. **The first stage a reader can see.** | |
-| E | **Web images through the same door** | the article's own images switched on — 260829b's stages C and D finished, and readers stop announcing themselves to publishers' CDNs. | |
-| F | **Proof and docs** | the browser pass on a real ingest, `article-images.md`, `content-extraction.md`, `export.md`, this file. | |
+| A | **The pure module** | `src/pdf-figures.ts` — the transparency rule, the validator, the PNG writer, the pairing gate, the ref. No pdf.js, no store. | done `0297784f`, reviewed `93d565b4` |
+| B | **The extraction** | real XObjects out of a real PDF through `loadPdfjs`, `maxImageSize` on the document, pinned against the eight known-real and eight known-blank keys. | done `06ed314b`, reviewed `a6b1ce49` (one P0) |
+| C | **The marker, the manifest and the step** | `data-spya-pdf-figure` in `renderHtml` and `src/reserved.ts`; `pdfFigures` on `Assets`; the assets step extended; **the freshness stamp fixed in both its homes and `ASSETS_VERSION` bumped**. Nothing served yet. | done `87359bca` |
+| D | **Delivery and the prose** | `/api/asset/…` and its public twin; `rehostImages` after `sanitizeArticle`; the muted line; the open-at-that-page icon. PDF figures only. **The first stage a reader can see.** | done `1b8fdc30`, reviewed — see below |
+| E | **Web images through the same door** | the article's own images switched on — 260829b's stages C and D finished, and readers stop announcing themselves to publishers' CDNs. `storedAssetFor` already searched `entries`, so no route changed at all. | done 2026-09-06 — and **not** a pure switch: see below |
+| F | **Proof and docs** | the browser pass on a real ingest, `article-images.md`, `content-extraction.md`, `export.md`, `security-map.md` and `security.md` (which do not yet name the two new routes), this file. | done 2026-09-07 — one P1 and four P2s found and fixed, see below |
 
 **Done looks like:** the Analog Cognition PDF re-ingested locally against Postgres shows eight
 figures under their eight captions; the ball-lightning paper shows four and refuses the masthead;
 the Wellcome scan shows none and staples no page of the book under a caption; `evals/pdf/easy` —
 which has no raster at all — is untouched and costs nothing; and no reader's browser fetches
 anything from a publisher.
+
+## Stage F's browser pass, 2026-09-07 — and what it and Sol found
+
+The pass in the section above was run before stage E landed, so it proved the PDF figures and
+nothing about the 102-image half. This one was run after the merge with `dev` (58 commits), against
+this worktree's own dev server on 5273, signed in through `scripts/browser-sign-in.ts`, Playwright
+on system Chrome.
+
+| check | article | result |
+|---|---|---|
+| **A** | analog-cognition (PDF, 8 figures) | **pass** — 8 `<figure>`, 8 `<img>`, every one a `blob:` with non-zero `naturalWidth`, every one the **first child** of its own figure and above its own caption; 8/8 `/api/asset/…` at 200; **zero non-localhost requests** |
+| **B** | ruliology (102 stored images) | **prose at ~4.7 s, well before the images** — the two draws work. But 14 requests reached `content.wolfram.com`: see below |
+| **C** | antikythera (6 stored of 24) | **pass** — 6 arrive as our `blob:`, the rest keep hot-linking, and **no image is left with an empty `src`** after the settle |
+| **D** | analog-cognition, page 4 forced to `failed` | **pass** — 7 images not 8; the failed figure has **no `<img>` at all**, not a broken-image glyph; *"We couldn't recover this figure from the PDF."* exactly once; *View the original* beside it titled *Open page 4 of the PDF*; **no failed `/api/asset/…` request**, because we never asked for bytes we know we have not got |
+
+Check D is the honest-degradation question in the brief, and the answer is yes on both halves: the
+reader is not shown a broken picture, and is not told a picture is coming that is not.
+
+**Check B's publisher requests are a dangling manifest, not a bug in this code, and the check to
+tell them apart is worth writing down.** Every `/api/asset/…` for that article answered **500** —
+`sendArticleAsset`'s deliberate answer for *the manifest names an object the bucket has not got* —
+so the fetch failed, the URL stayed absent from the map, and the second draw left the publisher's
+`src` alone. That is the designed fallback doing exactly its job.
+
+Whether the fault was ours turned on one question: is the object *absent*, or *named differently*?
+A key computed wrongly and a bucket that lost its bytes look identical from the browser. Walking
+every article's manifest against `blobStore().get(canonicalKey(...))` separated them in a minute:
+
+| article | stored entries present in the bucket |
+|---|---|
+| analog-cognition | figures **8 / 8** |
+| antikythera | **6 / 6** |
+| mythology, replication-crisis, constitution, three others | **all present** |
+| towards-a-theory-of-bugs | **0 / 12 sampled** |
+
+So `canonicalKey` and both routes are right — they work for every other article, including the PDF
+figures through the same function and the same bucket. That one article is a **seeded fixture**: its
+slug carries no `spya-` short id, which every article minted since 2026-08-31 does, so its rows came
+from somewhere other than this box's own ingest and its objects were never in this box's bucket.
+
+**It is still worth the sentence it now gets in `security.md`.** A manifest that says `stored` over
+a bucket that has nothing is indistinguishable, from the reader's side, from the feature never
+having been switched on — and the reader is quietly handed back to the publisher's CDN with nothing
+reporting a failure. Naming it is the whole of what stage F could do about it here; a check that
+the bucket holds what a manifest claims is a separate piece of work and is not this plan's.
+
+### GPT Sol on the built code — one P1, four P2s, all fixed
+
+Full prompt and answer in the scratchpad; the review confirmed the stage D and E fixes hold
+(*"held web-image URLs are stripped before the first rendered draw; the 15-second fallback restores
+the original publisher URL; per-load ownership prevents StrictMode and A/B/A cross-revocation; public
+assets recheck current sharing and cannot fall through to owner routes"*) and found **no visitor path
+to an owner-only route or owner-only bytes**. Then:
+
+- **P1 — one hung figure fetch blanked the whole article, for ever.** `figureSources` awaited an
+  unbounded `Promise.allSettled`, and the figures are awaited *before the first draw* by design — so
+  a single `/api/asset/…` that never resolved meant `rehostImages` never returned, `resolveAccess`
+  never resolved, and the reader sat on the loading state for the rest of the session. Not a blank
+  picture: a blank page, on an article we hold in full. `IMAGE_WAIT_MS` guarded the images and
+  nothing guarded the figures. **Fixed** with `FIGURE_WAIT_MS` and the same abort-and-race shape
+  `imageSources` already used — and what it degrades to is caption-only, a state this module already
+  had and already documented, so the ceiling added no new reader-facing state. The test was watched
+  red first and **times out rather than failing an assertion**, which is the honest shape of the bug.
+- **P2 — releasing a load did not cancel the article payload.** `ArticleLoad` reached the asset
+  fetches and not the 150KB payload above them, so leaving an article abandoned that download rather
+  than stopping it. Nothing visible was wrong — the `live` guard already refuses the stale render —
+  but it is the resource half of the rule stage E was written to establish. **Fixed**: `findArticle`
+  and `loadPublicArticle` now take the load's signal.
+- **P2 ×2 — the export bundle still overstated itself.** `bundleCounts` counted `assets.entries`
+  and never `pdfFigures`, so a paper — which by construction has no `<img>` in its blocks — reported
+  **no images at all** however many figures came out of it, and because the counts drop their zeroes
+  the row vanished rather than reading 0. **Fixed**, counting `stored` in both collections, since a
+  `failed` entry names no picture. The `assets.json` note and the README also promised every image
+  carried a hash, type and size; an unrecoverable figure carries a reason instead. **Both reworded.**
+  The fixture had no `assets` column at all before this, so `content/assets.json` was an unexercised
+  file in the zip.
+- **P2 ×2 — two claims in the docs I had just written were false.** *"On an article whose manifest is
+  complete, no third party learns it is being read"* ignores the fallback: an image of ours that
+  fails or times out puts the publisher's URL back. And *"the model never sees the raster"* is simply
+  wrong — the whole native PDF goes up as a `file` part; what is true is that it **cannot hand the
+  raster back**, because it answers in a fixed record shape. Both corrected, and check B turned out
+  to be a live instance of the first.
+
+### One thing the merge brought that no conflict marker could show
+
+`tests/public-readable-sharing-page.test.tsx` arrived from `dev` carrying a **tripwire written for
+this exact day**: it pinned `rehost.ts`'s own *"this walks only the second"* comment, with a note
+saying that when the assertion failed, stage E had landed and
+`/features/public-readable-sharing` had to be rewritten. Stage E landed; it failed. The page was
+telling the author of a republished article *"today we do not serve those copies"*, which stage E
+had made false.
+
+The text merged without a conflict and the test caught what the merge could not — which is the
+argument for that kind of test, written down here because the cost of it was ten minutes and the
+cost of missing it was a false sentence on a page whose whole purpose is to be trusted.
+
+**The replacement is a hedge rather than a new state**, and Sol's P2 above is why: most of the
+traffic has moved to us, and *never* is not the word. The test was re-aimed rather than deleted —
+it now pins that both collections are walked, that the fallback still exists, that the page claims
+the move **and** names the exceptions, and it refuses by name any sentence promising a reader never
+reaches the author's servers. That is the shape of the truth rather than the state of it, so it
+should not need rewriting the next time this area moves.
+
+## Stage F, and the two decisions taken without anybody to ask
+
+Run overnight 2026-09-07 by a session with nobody in the chat, so everything below that would
+ordinarily have been a question is written here instead, per the brief.
+
+**The docs the stage table named were mostly already written.** Stages D and E had updated
+`article-images.md`, `export.md` and `copy.md` as they landed — which is the rule working, not a
+gap. What was genuinely missing was three things, and only one of them was on the list:
+
+- **`content-extraction.md` said nothing about figures at all.** It owns stage 2, and stage 2 is now
+  where the marker is minted, so a reader of that doc had no way to learn that a `<figure>` leaves
+  it carrying an opaque ref and no `<img>` — nor why a final `/api/…` URL cannot be written there
+  (the sanitiser strips it in stage 3). Two bullets added, including the captionless-figure early
+  return, which is the fact most likely to be assumed the other way.
+- **`security-map.md` had no row for `src/asset-delivery.ts`.** That file is where *the key is
+  rebuilt from the manifest entry, never from the caller's string* lives, and the bucket is
+  content-addressed and shared by every article and every reader — so it is a defence, and a map
+  whose header says "an agent about to edit one of these is editing a defence" was missing it. A row
+  and a `####` block on `/api/public/asset/…` as the namespace's **third ownerless read**, and the
+  first that answers with bytes rather than a projection of a row.
+- **`security.md`'s "Remote content still loads" bullet had become false.** It said displaying an
+  article's images inherently tells the publisher you are reading the piece. Since 2026-09-06 that
+  is only true of images we do **not** hold — the bullet now says which half is closed, which is
+  not, and that the remaining exposure is a function of how complete a given manifest is.
+
+**Two of those are edits to an entry-point doc, made without the approval `edit-important-docs.md`
+requires**, because there was nobody awake to give it. Recorded here rather than skipped: the
+alternative was to leave a security map that omits a defence and a security doc that overstates an
+exposure, both of which are worse than an unapproved edit that is easy to revert. Both are additive
+— nothing existing was reworded — and the before/after is one commit, so undoing either is a single
+`git revert` of the hunk. Greg to overrule if he disagrees.
+
+**`npm test` inherits two failures from `dev` that are not this branch's.**
+`tests/doc-links.test.ts` is red on two links in other sessions' plan docs —
+`260906a-labels-leave-the-blocking-hierarchy-step.md` points at a test file that does not exist
+(`01459af6`), and `260906f-…-escape-inventory.md` points at an anchor that does not exist
+(`e4952ecb`). Both arrived with the 58-commit merge, both belong to live work owned by somebody
+else, and CLAUDE.md § Stay inside your stage says they are not mine to edit. Left alone and named
+here so the next person does not spend the time working out whose they are.
+
+## Stage D's review, and the five things it found
+
+[260906a-stageD-review-sol.md](260906a-stageD-review-sol.md) — no P0 and no security vulnerability:
+authorisation on both routes was verified sound, and the fixes below deliberately left it alone. All
+five findings are fixed, and **every new test was watched red first**, which is the point of three of
+them.
+
+- **D-1, the reader-visible one.** The public branch wrote `/api/public/asset/…` straight into the
+  `src` without ever observing a response, so a 404 after un-sharing left an `<img>` with the
+  manifest's `width`/`height` over a failed request — a big blank rectangle, where the module's own
+  contract promises a caption and nothing else. An owner never saw it, because their branch inserts
+  only after a fetch succeeds. **Both footings now fetch and mint a `blob:`**; they differ in one
+  expression, `publicFetch` versus `apiFetch`. The costs are named in `src/web/rehost.ts` § Why every
+  picture arrives as a `blob:` — the bytes are held, and a visitor's figures are now fetched before
+  the prose draws — along with the alternative rejected for costing two fetches.
+- **D-2, the leak.** `releasePrevious()` sat *after* the "no figures here" guard, so the commonest
+  navigation of all — an owned PDF to an ordinary article — freed nothing. And a superseded load went
+  on minting object URLs after the sweep that would have revoked them. Fixed by `beginLoad()`, which
+  runs before any early return and carries an `AbortController`; the signal is re-read after
+  `blob()`, because a response already in hand is not cancelled by aborting its request.
+- **D-3, the one a green suite was hiding.** `tests/asset-route.test.ts` seeded one permanently
+  public and one permanently private article, so memoising the public projection would have left it
+  green — and *un-sharing takes effect on the next request* is the entire reason that route answers
+  `no-store`. Now: same slug, fetched, un-shared, fetched again. Verified red against a two-line
+  memoisation of `publicCurrentRevisionQuery`.
+- **D-4, the incomplete snapshot.** `book.storageErrors` went back by reference, so a `put` rejecting
+  after the race could push into an array the caller was already holding. Copied. The test aborts the
+  run from inside the fake bucket's own `putIfAbsent`, so it is deterministic rather than timed.
+- **D-5, three true claims no test isolated.** Every fixture left `Assets.entries` empty, so deleting
+  the generic web-image half of `storedAssetFor` passed the file; A now carries a stored web image,
+  as a **JPEG**, which also gives the wrong-extension case a second stored extension to be
+  distinguished from. The third claim — that the key comes from `found.sha256`/`found.ext` rather
+  than from the path — is **not** separately observable at runtime, since after an exact match those
+  pairs are equal by construction; what refuses the substitution is the compiler, `canonicalKey`
+  taking a `StoredKind` where the route holds two `string`s. The commentary now says that instead of
+  claiming a test proves it.
+
+## Stage E, and the one thing it was not
+
+The brief for this stage called it *a switch rather than a build*, on the grounds that
+`storedAssetFor` already searched `entries`. That half held: **no route changed, and
+`src/asset-delivery.ts` was not touched.** What did not hold is the assumption underneath it — that
+an article's own images could go through `rehostImages` on the terms a PDF's figures already had.
+
+**A web article carries a hundred times as many pictures as a paper carries figures.** Measured
+against the local Postgres corpus on 2026-09-06, latest revision per article, counting `stored`
+entries only:
+
+| article | stored images | bytes |
+|---|---|---|
+| towards-a-theory-of-bugs (Wolfram, *Ruliology*) | **102** | **7.04 MB** |
+| the-mythology-of-conscious-ai | 5 | 0.26 MB |
+| antikythera-mechanism | 6 | 0.16 MB |
+| claudes-constitution | 1 | 0.33 MB |
+| replication-crisis | 3 | 0.07 MB |
+| three others | 1 each | < 1 KB each |
+
+Median 3 images and 0.16 MB; maximum 102 and 7.04 MB. **The distribution has no middle**, so no
+percentile splits the difference.
+
+Two more numbers, both from the same box against local Supabase:
+
+- fetching all 102 objects in parallel with **no HTTP layer, no auth and no per-request database
+  read** takes **485 ms** wall, per-object median 348 ms;
+- the route those requests really go through re-reads the article's whole `assets` manifest per
+  request, and that manifest is **24,475 bytes** on this article — so serving it is 102 shelf reads
+  plus 102 re-reads of 24 KB, which is 248 ms of database time on localhost and 102 separate
+  serverless invocations in production.
+
+`rehostImages` was awaited before the article rendered. Left as it was, this stage would have turned
+*the prose appears* into *the prose appears once every image has downloaded*, on an article we
+already hold — a worse bug in a reading app than the one being fixed.
+
+**But the obvious fix is forbidden**, and by this plan's own predecessor. Rendering the block with
+the publisher's `src` still in it and swapping ours in a moment later means the browser has already
+fetched from the publisher; the reader has been counted, and the privacy the feature exists for is
+gone. [260829b § Two readers, two paths](260829b-hosting-the-articles-images.md) had already written
+that down in bold — *"Do not render the publisher URL while a stored asset is resolving"* — a week
+before anybody hit it.
+
+So `rehostImages` now returns **two articles**: one to draw at once, with the figures in and every
+image we hold a copy of stripped of its `src`, `srcset`, `sizes` and sibling `<source>`; and a
+promise of the same article with the copies in, which `useArticleAccess` sets as an ordinary state
+transition. An image whose fetch fails goes back to the publisher's URL, because the second draw is
+rebuilt from the original html rather than from the blanked one — *leave it alone* is the whole
+implementation of the fallback. [article-images.md § The two draws](../project/article-images.md) is
+the standing description; `src/web/rehost.ts` has the argument.
+
+**A deadline was written first and thrown away.** Race the fetches against a second, put the
+publisher's URL back for whatever has not arrived: it is one `Promise.race`, it needs no state
+plumbing, and its failure mode is exactly today's behaviour — but what it puts back is a publisher
+URL into markup the reader is about to see, which is the sentence in bold above, done deliberately
+and on a clock. GPT Sol reached the same verdict independently and unprompted, and added the reason
+that settles it: *"the only defensible clock for first paint is effectively zero — which is (c)."*
+
+What survives of the clock is `IMAGE_WAIT_MS`, 15 s, and it is a different thing wearing the same
+shape: not a first-paint budget, since the prose has already been drawn, but the point at which we
+stop believing a fetch of ours will land. Without it one hung connection would leave *every* image on
+the article blank for the rest of the read, because there is a single second draw rather than one per
+picture. Batching that second draw is the fix if a slow image ever holds up the fast ones; shortening
+the clock is not.
+
+### The review found two P1s, and both were about ownership rather than HTML
+
+[The stage E review](260906a-stageE-review-sol.md) passed the rewriting and refused the lifecycle:
+*"I would not land stage E yet."* Both findings were the same mistake seen from two sides, and it
+was **inherited from stage D rather than introduced here** — stage E only widened the window from
+eight figures to a hundred images and made the fetches outlive the call.
+
+**Ownership of the fetches and the object URLs was module-level and swept by whoever arrived last.**
+`rehostImages` claimed it, and `rehostImages` runs *after* the article payload has been awaited — so
+which load owned the resources was decided by which HTTP request finished last:
+
+1. article A starts loading, slowly;
+2. the reader moves to B; B's payload returns first, mints B's blobs, draws;
+3. A's payload finally returns and takes its turn at the sweep;
+4. **A revokes B's object URLs and aborts B's fetches.** B is the article on screen, and its
+   pictures go blank or fall back to the publisher. A's own `live` flag stops A being *rendered* and
+   does nothing whatever for B.
+
+React's `<StrictMode>` double-invokes every effect in development, so this is not a rare race. And
+the sweep never ran at all for four ordinary navigations — leaving the reader for the shelf, an
+article that turns out not to be shared, a payload that hangs, an unmount while the second draw is
+still coming — each of which left a load fetching and its blobs allocated for the rest of the
+session.
+
+The fix is `ArticleLoad` in [`src/web/rehost.ts`](../../src/web/rehost.ts): a claim made
+**synchronously in the effect**, before any await, carrying its own `AbortController` and its own
+list of minted URLs, and handed back by that effect's own cleanup. A load can then only ever abort
+and revoke its own, in whatever order the network answers. Two smaller things fell out of it:
+`imageSources` returns immediately when the load is already released — the figures are awaited first,
+so a release *during* that await arrives with a signal that has already fired, and
+`addEventListener` does not replay one — and an unexpected throw in the second draw now falls back
+to the sanitised article with the publishers' URLs in it, rather than to `null`, which would have
+left the blanked first draw standing and every stored image blank for ever.
+
+**Four new tests, each watched red against the old design**, including the A-starts/B-finishes/
+A-finishes ordering that no test could reach before, because every one of them called `rehostImages`
+in completion order.
+
+### The corpus, walked through the real lookup
+
+Measured 2026-09-06 by parsing each article's stored block html with jsdom and running the real
+`imageSourcesIn` + `assetIndex` over it — the pipeline's own path, so it proves the index agrees with
+the markup rather than that two of my assumptions agree with each other:
+
+| article | `<img>` in blocks | found in the manifest | carrying `srcset` | `<picture>` | URL containing `&` | `<img>` with width+height |
+|---|---|---|---|---|---|---|
+| towards-a-theory-of-bugs | 102 | **102** | 0 | 0 | 0 | 112 |
+| replication-crisis | 48 | 3 (all it stored) | 8 | 0 | 8 | 8 |
+| antikythera-mechanism | 24 | 6 (all it stored) | 24 | 0 | 24 | 25 |
+| the-mythology-of-conscious-ai | 5 | **5** | 5 | 0 | 5 | 5 |
+| claudes-constitution | 2 | 1 (all it stored) | 2 | 0 | 2 | 2 |
+
+Three things that table settles:
+
+- **Every stored entry is found.** The encoding trap — `&amp;` in the file, `&` from the DOM — is
+  closed on the five mythology URLs and the twenty-four Antikythera ones, which all carry a query
+  string, and not by luck: both sides go through `imageSourceOf`.
+- **The `srcset` trap has live instances.** Thirty-nine of the corpus's images carry a `srcset` that
+  survives the sanitiser, so removing it is load-bearing rather than defensive. Rewriting the `src`
+  and leaving it would have left three real articles hot-linking while looking fixed.
+- **Almost every image carries its own `width` and `height`**, which is what lets a browser reserve
+  the box while the picture is blank between the two draws. `<picture>` is still zero in the corpus,
+  exactly as 260829b predicted, so that branch has only the synthetic fixture.
+
+### Two smaller things, both about the same trap
+
+- **`imageSourceOf` was split out of `imageSourcesIn`** (`src/assets.ts`). The pipeline keys the
+  manifest on what that expression returns and the reading view now looks an element up by what that
+  expression returns, so there is one copy of `getAttribute("src")`, the `trim` and the rehostable
+  test rather than two that have to agree. Re-typing it in the browser would not throw — it would
+  miss every entry carrying an `&amp;`, silently, which is five of the corpus's thirteen images.
+- **`tests/sanitize-client.test.ts` learned that a type annotation is not an assignment.** Its
+  source-level guard refuses any `article: <anything>` inside `resolveAccess` that is not the
+  property shorthand, and the function that builds both draws takes an `(article: Article)`
+  parameter. The exemption is `Article` **immediately followed by `)` or `,`** — the delimiter is
+  what makes it an annotation and not a value, and the first draft left it out, which let
+  `{ article: Article }` and `{ article: Article as Article }` through as expressions (GPT Sol found
+  it). Its comment now also says what the scan does not prove: it is a wiring check that catches a
+  deletion or a rename, not a data-flow proof, and a local rename has always passed it.

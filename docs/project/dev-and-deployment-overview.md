@@ -43,6 +43,13 @@ is the one worth knowing unprompted: a bad tree draws a *wrong article* rather t
 
 ## The docs
 
+**If you have never done any of this here, start with the tutorial rather than the reference.**
+[260906a-deployment-and-infrastructure.html](../tutorials/260906a-deployment-and-infrastructure.html)
+explains the whole of it to somebody who has not opened the code — the four machines, `npm run
+deploy` step by step, what a serverless host takes away, and why most of the deploy script is not
+deploying but refusing to believe a green light. Open it in a browser. Everything below is the
+reference, and is authoritative wherever the two disagree.
+
 - **[setup-dev.md](setup-dev.md)** — the long version of the above: the four env variables without
   which you get a blank page, and **which model each job uses** — two tiers, and three spellings of
   a model id of which only one is a name.
@@ -85,6 +92,11 @@ is the one worth knowing unprompted: a bad tree draws a *wrong article* rather t
   operational half of it: starting one and what it costs, why the local Supabase stays shared for now
   (measured, and it is not the RAM that blocks it), and both runbooks — the trunk flip to `dev`, run
   2026-09-02, and getting the Mac out of Dropbox, done 2026-09-01.
+
+- **[cron-scheduler.md](cron-scheduler.md)** — there is no scheduler, and nothing here runs on a
+  clock. Why that keeps producing sweepers with no caller (two of them so far, both correct code that
+  is never called), the rule that follows — don't write a cleanup you cannot call — what we do
+  instead, and the four jobs that would justify a real cron if it ever gets built.
 
 Connecting to the **remote** database — which host, the SSL `pg` does not do by default, and the
 command that migrated the wrong machine while printing success — is in

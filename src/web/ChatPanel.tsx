@@ -84,9 +84,11 @@ import type {
   ToolRun,
 } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
-import { BlockRef } from "./BlockRef.js";
+import { ModeSurface } from "./ModeSurface.js";
+import { PassageLinks } from "./PassageLinks.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { LiveButton } from "./live/LiveButton.js";
+import { LiveStatus } from "./live/LiveStatus.js";
 import type { LiveApi } from "./live/useLiveConversation.js";
 import { useDictationField } from "./useDictationField.js";
 import { hostOf, isWebUrl } from "../urls.js";
@@ -109,8 +111,8 @@ interface Props {
    * same object for the life of the article.
    */
   live?: LiveApi | undefined;
-  /** Begin one, against the conversation the reader is looking at. */
-  onStartLive?: ((threadId: string) => void) | undefined;
+  /** Null creates a chat; returning its id lets the panel carry the unsent draft with it. */
+  onStartLive?: ((threadId: string | null) => string | undefined) | undefined;
   /** The open conversation, or null for the thread list. From `?thread=`. */
   threadId: string | null;
   onThread(id: string | null): void;
@@ -346,6 +348,12 @@ export function ChatPanel({
   useRenderCount("ChatPanel");
   const remember = kind === "remember";
   const open = threads.find((t) => t.id === threadId) ?? null;
+  // A stopped session retains recovery text. It must never appear in a different thread.
+  const shownLive: LiveApi | undefined = live && (live.threadId === open?.id || !live.threadId)
+    ? live
+    : live ? { ...live, phase: "idle", error: null, lines: [], tools: [], pointers: [],
+      pendingTools: [], deviceLabel: null, notice: null, placement: null, playbackBlocked: false, hasUnsavedLines: false,
+      hearing: false, speaking: false, thinking: false, threadId: null } : undefined;
 
   /**
    * What the reader has typed and not sent yet, per conversation.
@@ -418,8 +426,13 @@ export function ChatPanel({
    * open: an unsent draft is not stored anywhere, so it does not survive
    * switching modes or reloading. See `drafts` above.
    */
-  const leave = () => {
-    if (open && open.messages.length === 0 && (drafts.current.get(open.id) ?? "").trim() === "") {
+  const leave = async () => {
+    // A new spoken thread has no chat rows until its first exchange is flushed.
+    if (open && live?.threadId === open.id && live.phase !== "idle" && live.phase !== "failed") {
+      await live.stop();
+    }
+    const unsavedSpeech = live?.threadId === open?.id && (live?.lines.length ?? 0) > 0;
+    if (open && !unsavedSpeech && open.messages.length === 0 && (drafts.current.get(open.id) ?? "").trim() === "") {
       drafts.current.delete(open.id);
       onDiscard(open.id);
     }
@@ -430,37 +443,45 @@ export function ChatPanel({
     /* `mode-band` is the slot — fixed between the spine and the prose, and
        shared with the glossary. `chat` is a hook for anything only this panel
        wants; see § mode band in styles.css. */
-    <aside
-      className={`mode-band chat${remember ? " remember" : ""}`}
-      aria-label={remember ? "Remember what you took from this article" : "Chat about this article"}
-    >
-      <div className="band-head">
-        <h2>{open ? open.title : remember ? "Remember" : "Chat"}</h2>
-        {subMode}
-        {open ? (
-          <>
-            {/* The same delete the list offers, where the reader actually is.
-                Greg, 2026-08-26: *"Also add a Delete button within a chat."*
-                Asking twice rather than once, unlike the list — see ArmedDelete
-                — because in here the whole conversation is on the screen and
-                there is nothing to put it back. */}
-            <ArmedDelete key={open.id} onDelete={() => onDelete(open.id)} />
-            <button type="button" className="chat-icon" title="All conversations" onClick={leave}>
-              <X size={14} />
+    <ModeSurface
+      feature={`chat${remember ? " remember" : ""}`}
+      label={remember ? "Remember what you took from this article" : "Chat about this article"}
+      head={
+        <>
+          <h2>{open ? open.title : remember ? "Remember" : "Chat"}</h2>
+          {subMode}
+          {open ? (
+            <>
+              {/* The same delete the list offers, where the reader actually is.
+                  Greg, 2026-08-26: *"Also add a Delete button within a chat."*
+                  Asking twice rather than once, unlike the list — see
+                  ArmedDelete — because in here the whole conversation is on the
+                  screen and there is nothing to put it back. */}
+              <ArmedDelete key={open.id} onDelete={() => onDelete(open.id)} />
+              <button type="button" className="chat-icon" title="All conversations" onClick={() => void leave()}>
+                <X size={14} />
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="chat-icon"
+              title={remember ? "Start remembering" : "Start a new conversation"}
+              onClick={onNew}
+            >
+              <MessageSquarePlus size={14} />
             </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="chat-icon"
-            title={remember ? "Start remembering" : "Start a new conversation"}
-            onClick={onNew}
-          >
-            <MessageSquarePlus size={14} />
-          </button>
-        )}
-      </div>
-
+          )}
+        </>
+      }
+    >
+      {/* **No `foot`, and that is the documented exception.** Chat's composer
+          is built deep inside `Conversation`, which owns the scroller ref, the
+          stick-to-bottom logic and the draft, and returns the transcript and
+          the composer as one fragment — so `Conversation` goes into `children`
+          whole rather than being cut in half to fill a slot.
+          § There is a `foot` slot, in
+          docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md */}
       {error && <p className="chat-error">{error}</p>}
 
       {open ? (
@@ -490,11 +511,7 @@ export function ChatPanel({
           kind={open.kind}
           stance={stance}
           onStance={onStance}
-          /* **Only for the conversation that is open.** A live session is bound
-             to one thread — it is seeded from it and appends to it — so the box
-             under the list, which starts a *new* conversation, has no business
-             offering one. */
-          live={live}
+          live={shownLive}
           onStartLive={onStartLive ? () => onStartLive(open.id) : undefined}
         />
       ) : threads.length === 0 && !loaded ? (
@@ -566,37 +583,18 @@ export function ChatPanel({
               `onSendNew` mints whatever the URL says, which is the only thing
               this box ever means.
 
-              That leaves the other half, which is not about the URL at all,
-              and which is **no longer a safety rule**. It was one: `refresh` on
-              arrival used to replace the whole list with the server's snapshot,
-              taking a just-minted conversation with it — and every later frame
-              of the answer then patched a row that was not there, so the
-              reader's question disappeared off the screen while its request
-              carried on. That is fixed where it belonged, in `mergedArrival`
-              (useChat.ts), so what the guard does now is presentational: a box
-              offering to start a *second* conversation, sitting under a list
-              the reader cannot see yet, is not a thing to offer. It stays for
-              that. Hence `loaded`, and hence *both* of `loaded` and
-              `threads.length`: a non-empty list is not proof the fetch landed,
-              because pressing `+` before it does and closing the conversation
-              with a draft in it leaves a thread behind (see `leave` above) —
-              GPT-5.6 again, on the third pass, against its own suggested guard.
-              `threads.length` stays because an empty list is the state the `+`
-              and the empty panel's own button are for.
-
-              The race those two guards were keeping this box out of is closed
-              now, in `refresh` itself, where pressing `+` fast enough could
-              reach it without the box at all — `mergedArrival` and the load
-              number in useChat.ts, and
-              docs/plans/260826a-chat-mode.md § The list arriving is not allowed to
-              overwrite what the reader did.
+              `loaded` avoids offering a new conversation before the list has
+              arrived. Once loaded, an empty list gets the composer too: after
+              closing an unused thread, Live must still be available to begin
+              the first spoken conversation. `mergedArrival` in useChat already
+              protects newly created threads from an older fetch response.
 
               `focusNonce={0}` on purpose: this box must never take the caret.
               The nonce is for a reader who has just *asked* for somewhere to
               type, and arriving at a list is not that — a focused textarea
               turns the article's ↑/↓ into caret movement, and nothing on screen
               would say why. See `focusNonce` in Props. */}
-          {loaded && threads.length > 0 && (
+          {loaded && (
             <Composer
               slug={slug}
               onSend={onSendNew}
@@ -611,11 +609,19 @@ export function ChatPanel({
               kind={kind}
               stance={stance}
               onStance={onStance}
+              live={kind === "chat" ? shownLive : undefined}
+              onStartLive={kind === "chat" && onStartLive ? () => {
+                const id = onStartLive(null);
+                if (id) {
+                  drafts.current.set(id, listDraft.current);
+                  listDraft.current = "";
+                }
+              } : undefined}
             />
           )}
         </>
       )}
-    </aside>
+    </ModeSurface>
   );
 }
 
@@ -1140,6 +1146,9 @@ export function Conversation({
         {...(onStance ? { onStance } : {})}
         {...(live ? { live } : {})}
         {...(onStartLive ? { onStartLive } : {})}
+        resumeLive={thread.messages.length > 0}
+        blocks={blocks}
+        onJump={onJump}
       />
     </>
   );
@@ -1367,14 +1376,9 @@ function Turn({
         <p className="chat-stopped">You stopped this answer.</p>
       )}
       {message.interrupted && (
-        /* **Not `stopped`, and the difference is which way the row is wrong.**
-           `stopped` means the reader had read enough and what is stored is what
-           they read. This means they talked over the answer: the server
-           truncated the audio it was still playing and kept the transcript
-           whole, so the text above may run *past* what they actually heard.
-           Saying so is the only honest thing available — the transcript cannot
-           be corrected, only labelled. docs/plans/260831l-live-conversation-in-chat.md § 1c. */
-        <p className="chat-stopped">You spoke over this — it may say more than you heard.</p>
+        /* Covers speaking over the model, early hangup and provider failure.
+           The provider does not supply a transcript trimmed to played audio. */
+        <p className="chat-stopped">This spoken answer ended early. Its transcript may include words you did not hear.</p>
       )}
       {message.passages && message.passages.length > 0 && (
         /* **The pointers a spoken answer made instead of citing.**
@@ -1386,20 +1390,7 @@ function Turn({
            which is the one thing the chat contract exists to prevent — the
            reader would have the companion's word for it and no way back to the
            prose. docs/plans/260831l-live-conversation-in-chat.md § 1b. */
-        <ul className="chat-pointed">
-          {message.passages.map((passage, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: an immutable stored list
-            <li key={i}>
-              {/* The model's own few words for what is in the passage. Plain
-                  text, never HTML: this is model output about an article we do
-                  not control. */}
-              {passage.why && <span className="chat-pointed-why">{passage.why}</span>}
-              {passage.blockIds.map((id) => (
-                <BlockRef key={id} id={id as BlockId} onJump={onJump} />
-              ))}
-            </li>
-          ))}
-        </ul>
+        <PassageLinks passages={message.passages} onJump={onJump} />
       )}
       {message.citations && message.citations.length > 0 && (
         <ul className="chat-sources">
@@ -1810,6 +1801,9 @@ export function Composer({
   onStance,
   live,
   onStartLive,
+  resumeLive,
+  blocks,
+  onJump,
 }: {
   slug: string;
   onSend(question: string, useProfile: boolean): void;
@@ -1844,16 +1838,13 @@ export function Composer({
   /** The stance the next Remember answer will be asked for. Ignored in chat. */
   stance?: RememberStance;
   onStance?: ((next: RememberStance) => void) | undefined;
-  /**
-   * The live conversation this composer can hand over to, if there is one.
-   *
-   * Optional because two boxes use this component and only one of them is in a
-   * conversation: the box under the thread list starts a *new* one, and there
-   * is nothing for a live session to be seeded from or appended to there.
-   */
+  /** Optional on surfaces without a live-session owner, such as ChatDialog. */
   live?: LiveApi | undefined;
-  /** Begin one. The panel supplies the conversation; this box supplies nothing. */
+  /** Begin one. The panel supplies or creates the conversation. */
   onStartLive?: (() => void) | undefined;
+  resumeLive?: boolean | undefined;
+  blocks?: ReadonlyMap<string, string> | undefined;
+  onJump?: ((id: BlockId) => void) | undefined;
 }) {
   /* Seeded from the draft and owned here from then on. The panel keeps the map
      because it outlives this component; this keeps the value because typing
@@ -1921,6 +1912,16 @@ export function Composer({
     box,
     context: { kind: "article", slug },
   });
+
+  // A Live ticket can still be pending before Live claims the microphone.
+  // Cancel that attempt as well as any active capture; otherwise its late
+  // ticket would claim the microphone after the reader chose dictation.
+  const toggleDictation = () => {
+    void (async () => {
+      if (live && live.phase !== "idle" && live.phase !== "failed") await live.stop();
+      if (box.current) dictate.toggle();
+    })();
+  };
 
   /**
    * Send — and **hand over from the live session first, awaited.**
@@ -2069,28 +2070,28 @@ export function Composer({
              phases, the disabled-while-transcribing rule and the article's own
              glossary priming all come along unchanged. Only the label is new. */
           <span className="chat-talk">
-            <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={busy} />
+            <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} />
             <span className="chat-talk-label" aria-hidden="true">
               {dictate.dictation.armed ? "Listening…" : dictate.readOnly ? "Writing it down…" : "Talk"}
             </span>
           </span>
         ) : (
-          <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={busy} />
+          <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} />
         ))}
       {/* **Beside the microphone, not instead of it.** They are different
           things: one turns speech into text in this box, the other holds a
           conversation. Pressing either while the other is running politely ends
-          it — `mic-lock.ts` arbitrates, because WebKit supports one microphone
-          source at a time.
-          Only where there is a conversation to have: the box under the thread
-          list starts a new one, and a live session there would have nothing to
-          be seeded from. */}
+          it. The Composer cancels pending Live startup before dictation;
+          `mic-lock.ts` arbitrates captures, because WebKit supports one
+          microphone source at a time.
+          The list's control creates its own thread before connecting. */}
       {live && onStartLive && (
         <LiveButton
           live={live}
           onStart={onStartLive}
           disabled={busy || dictate.readOnly}
           labelled={remember}
+          resume={resumeLive}
         />
       )}
       {remember && onStance && (
@@ -2133,6 +2134,19 @@ export function Composer({
         disabled={busy}
       />
       <DictationStrip dictation={dictate.dictation} />
+      {live && onStartLive && <LiveStatus
+        live={live}
+        onRestart={onStartLive}
+        blocks={blocks}
+        onJump={onJump}
+        onType={() => {
+          void (async () => {
+            if (live.phase !== "idle" && live.phase !== "failed") await live.stop();
+            box.current?.focus();
+          })();
+        }}
+        onDictate={dictate.dictation.supported && !busy && !dictate.readOnly ? toggleDictation : undefined}
+      />}
     </form>
   );
 }

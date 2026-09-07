@@ -1,0 +1,220 @@
+/* quiz.css — the Quiz sub-mode of Remember (QuizPanel.tsx), and the
+   Recall | Quiz switch that sits in the band's head beside the title.
+
+   Its structural classes are the glossary band's rather than a second
+   vocabulary for the same things, so **it must stay after glossary.css**. */
+
+/* ------------------------------------------------------------------ quiz --
+   The Quiz sub-mode of Remember — docs/plans/260831al-review-quiz-sub-mode.md.
+
+   **The structural classes are the glossary band's** (`band-head`, `gloss-run`,
+   `gloss-stale`, `gloss-count`) rather than a second vocabulary saying the same
+   things. What is `quiz-*` here is only what no other band has: a question, a
+   box to answer it in, a mark, a disclosure holding an answer the reader is not
+   supposed to see yet, and the list of the other eleven.
+
+   Nothing below sets a colour of its own. Every one is a token, so the band
+   follows the theme without a second palette to keep in step — /design and
+   docs/project/design-css-overview.md. */
+
+/* Recall | Quiz, in the band's head beside the title. Two toggle buttons, and
+   the pressed one is filled — a pair where one is always on, so an outline-only
+   treatment would leave a reader guessing which half they are looking at. */
+.remember-submode {
+  display: flex;
+  gap: 1px;
+  margin-left: auto;
+  flex: none;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.remember-submode-btn {
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.81rem;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+}
+.remember-submode-btn:hover { color: var(--ink); }
+.remember-submode-btn.on {
+  background: var(--rule);
+  color: var(--ink);
+}
+
+/* The scrolling child every `.mode-band` needs. Without one the panel's own
+   content decides its height, which a fixed element cannot honour, and the
+   Previous/Next row lands under the dock — the fault the ideas panel shipped
+   with and `.tl-scroll` above records. */
+.quiz-one {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0.7rem 0.7rem;
+}
+
+.quiz-question {
+  margin: 0.4rem 0 0.7rem;
+  font-size: 1.03rem;
+  line-height: 1.45;
+}
+
+.quiz-answer {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 0.94rem;
+  line-height: 1.45;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  /* `--page`, as `.chat-input` uses. An earlier draft said `--paper`, which is
+     not a token this stylesheet defines — so the box drew with whatever was
+     behind it and looked right by accident against the band. */
+  background: var(--page);
+  color: var(--ink);
+  resize: vertical;
+}
+
+.quiz-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.5rem 0;
+}
+
+/* The mark. A left rule rather than a box, because it is the model talking
+   about what the reader just wrote and it should read as a margin note on the
+   answer rather than as a verdict handed down in its own frame. */
+.quiz-reply {
+  margin: 0.6rem 0;
+  padding: 0 0 0 0.7rem;
+  border-left: 2px solid var(--rule);
+  font-size: 0.94rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* The microphone and its word, beside the Answer button. Labelled rather than a
+   bare icon, because this band is new and an unlabelled mic in it does not say
+   that talking is expected — the same call the recall composer made. */
+.quiz-mic {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.quiz-mic-label {
+  font-size: 0.81rem;
+  color: var(--ink-faint);
+}
+
+/* Both disclosures — "Show a reference answer" and "Show all twelve". A quiet
+   text button rather than a bordered one: neither is the thing to press on this
+   screen, and drawing them as buttons would put three equal-looking controls
+   under an answer box whose only real action is Answer. */
+.quiz-disclose {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 0.83rem;
+  color: var(--ink-faint);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.quiz-disclose:hover { color: var(--ink); }
+
+.quiz-reveal {
+  margin: 0.8rem 0 0;
+}
+
+/* The reference answer, once asked for. Set apart with a rule and a tint so it
+   reads as a second voice rather than as more of the reader's own page — and
+   `--ink-faint` on the label above it, because what is in here is a fallible
+   draft and the design should not shout it. */
+.quiz-reference {
+  margin: 0.45rem 0 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px dashed var(--rule);
+  border-radius: 4px;
+  background: var(--surface-raised);
+}
+.quiz-reference-text {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.quiz-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0.45rem 0 0;
+}
+.quiz-evidence-label {
+  font-size: 0.79rem;
+  color: var(--ink-faint);
+}
+
+.quiz-step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+/* The whole ordered batch. `list-style: none` and no numbers of our own: the
+   band already says "Question 3 of 12" above, and a second numbering that has
+   to agree with it is a second source of truth. The tick column is a fixed
+   width so the questions line up whether or not they are answered. */
+.quiz-list {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+}
+.quiz-list li { margin: 0; }
+.quiz-list-row {
+  display: flex;
+  gap: 0.4rem;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  text-align: left;
+  padding: 0.4rem 0.2rem;
+  cursor: pointer;
+}
+.quiz-list-row:hover { background: var(--surface-raised); }
+.quiz-list-row.on { color: var(--ink); font-weight: 600; }
+.quiz-list-tick {
+  flex: none;
+  width: 0.9rem;
+  color: var(--ink-faint);
+}
+.quiz-list-q { flex: 1; }
+
+/* The citation chips inside a mark. Sized as the summary panel's rather than
+   chat's, for the same reason: a mark is two paragraphs about one answer and
+   the chips are punctuation in it. `white-space: normal` undoes `.quiz-reply`'s
+   `pre-wrap` for the chip alone — inside a `pre-wrap` box the space between two
+   ids in one bracket is preserved twice and the flex gap adds a third. */
+.quiz-reply .cite {
+  white-space: normal;
+  vertical-align: baseline;
+}
+.quiz-reply .cite .block-ref { font-size: 0.74rem; }
+
+.quiz-rewrite {
+  padding: 0.45rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+

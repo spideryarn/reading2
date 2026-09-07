@@ -305,6 +305,15 @@ const WIRE_ROW = {
      `available` on 2026-09-04 and the row moved column by itself.
      docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
   searches: "search",
+  /* Not a thing that crosses so much as a fact *about* one that does: where the
+     tree's paragraph nav labels are in their life (src/types.ts §
+     `NavLabelStatus`). The deepest rung of Outline is what draws them, and it
+     is the row that goes blank without them — so it is Outline's row, on the
+     same reading that gives `arc` its. A visitor gets the enum for the same
+     reason they get `tree.provisional`: without it the client cannot tell
+     *still arriving* from *this article has none*, and draws a run of blank
+     cells either way. src/web/nav-labels.ts. */
+  navLabelStatus: "outline",
 } satisfies Record<keyof PublicArticle, string>;
 
 describe("the list against the wire", () => {

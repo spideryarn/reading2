@@ -128,6 +128,17 @@ export interface Probe {
   tinyExamples: string[];
   /** Longest single block. A whole essay in one block is the opposite failure. */
   longestBlockChars: number;
+  /**
+   * **Would stage 2 publish this at all?** — the capability floor's verdict, in
+   * characters, or `null` where it does not fire.
+   *
+   * A probe is how a page is sized up before anybody adds it to the corpus or to
+   * the shelf, and every number above describes what Readability produced.
+   * Without this line those numbers read as a working extraction on a page the
+   * pipeline refuses: `medium_about.html` probes as eleven blocks of successful
+   * output. GPT Sol, reviewing C1a. src/extract.ts § `capabilityFloor`.
+   */
+  refusedAtChars: number | null;
 }
 
 /**
@@ -142,13 +153,23 @@ export interface Probe {
  * No sanitising: the splitter does its own, and the question here is what
  * Readability did, not what our policy then removes.
  */
-function extract(rawHtml: string, url: string): { html: string; title: string | null } {
-  const { article } = readArticle(rawHtml, url);
-  return { html: article?.content ?? "", title: article?.title ?? null };
+function extract(
+  rawHtml: string,
+  url: string,
+): { html: string; title: string | null; refusedAtChars: number | null } {
+  const { article, refusal } = readArticle(rawHtml, url);
+  /* The extraction is still measured in full — the numbers are what a probe is
+     for, and on a refused page they are the interesting ones. Only the verdict
+     is added beside them. */
+  return {
+    html: article?.content ?? "",
+    title: article?.title ?? null,
+    refusedAtChars: refusal?.chars ?? null,
+  };
 }
 
 export function probeHtml(rawHtml: string, url: string): Probe {
-  const { html, title } = extract(rawHtml, url);
+  const { html, title, refusedAtChars } = extract(rawHtml, url);
   const cmp = compare(rawHtml, html, url);
 
   const structureLosses = STRUCTURE.map((tag) => ({
@@ -199,6 +220,7 @@ export function probeHtml(rawHtml: string, url: string): Probe {
     tinyBlocks: tiny.length,
     tinyExamples: show(tiny, 6),
     longestBlockChars: blocks.reduce((m, b) => Math.max(m, b.text.length), 0),
+    refusedAtChars,
   };
 }
 
@@ -207,6 +229,7 @@ export async function probeUrl(url: string): Promise<Probe> {
     url, ok: false, rawBytes: 0, title: null, rawTextChars: 0, articleTextChars: 0,
     ratio: 0, droppedChars: 0, droppedBlocks: 0, biggestGap: null, structureLosses: [],
     blocks: 0, shatteredBlocks: 0, shatterExamples: [], markerBlocks: 0, markerExamples: [],
+    refusedAtChars: null,
     tinyBlocks: 0, tinyExamples: [], longestBlockChars: 0,
   };
   let res: Response;
@@ -235,6 +258,14 @@ function line(p: Probe): string {
         ? `  · biggest gap ${p.biggestGap.blocks} blocks, ${p.biggestGap.chars.toLocaleString()} ch: ${JSON.stringify(p.biggestGap.snippet)}`
         : ""),
   ];
+  if (p.refusedAtChars !== null) {
+    /* Above the rest, because it changes what every number under it means: this
+       page produces no article at all. */
+    parts.push(
+      `      STAGE 2 REFUSES THIS PAGE — ${p.refusedAtChars} characters of article text, under ` +
+        "the floor, so nothing below would ever reach a reader",
+    );
+  }
   parts.push(
     p.structureLosses.length
       ? `      structure lost: ` +

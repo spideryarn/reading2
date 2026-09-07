@@ -1,0 +1,17 @@
+{
+  "fixture": "pmc-article",
+  "file": "pmc_article.html",
+  "note": "NOT AN ARTICLE — a reCAPTCHA interstitial. 165 characters of visible text, all of it 'Checking your browser before accessing pmc.ncbi.nlm.nih.gov ...', and stage 2 returns it as an article titled 'Checking your browser - reCAPTCHA' without a murmur. This is the pure form of the bot-wall silent success: nothing downstream — not the block splitter, not the summariser, not the reader — has any way to tell this from a very short paper. Committed with no manifest until 2026-09-05 for the reason recorded in medium-about.manifest.json. IT FAILS TODAY, and that failure is the finding; stage C decides what production does about it.",
+  "mustContain": [],
+  "mustNotContain": [
+    {
+      "text": "Checking your browser before accessing",
+      "why": "the wall's own sentence — the entire article stage 2 currently believes it found"
+    },
+    {
+      "text": "Click here if you are not automatically redirected",
+      "why": "the second and last thing on the page; a fallback link, not prose"
+    }
+  ],
+  "notAnArticle": true
+}

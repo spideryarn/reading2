@@ -79,6 +79,59 @@ Read [`extraction/fixtures/README.md`](extraction/fixtures/README.md) for what e
 is meant to break, why the HTML is committed rather than fetched on the day, and why the fifteenth
 had to be added before the corpus could judge its own arm.
 
+### `extraction/score.mts` — the scorecard, and the check it is not allowed to skip
+
+```
+npx tsx evals/extraction/score.mts            # free: no model, no network
+npx tsx evals/extraction/score.mts --record   # and store what it found, per arm
+```
+
+Added 2026-09-05 for
+[260904e § B](../docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md#b--the-corpus-the-golds-and-a-scorer-that-has-been-seen-to-fail),
+and rebuilt the same day after a GPT Sol review found the card could be fooled by an arm returning
+0.55% of an article — and rebuilt **again** the same afternoon, after his review of that repair
+built an arm out of the page's own comment thread that returned **0.542% of the post** and
+passed every metric, both gates and every assertion. Provenance proves text came from somewhere
+on the page; it cannot tell the article from the thread underneath it. So a manifest now
+declares its `articleRegion` and the length measures count that. Seven pieces, and the last one
+is the point:
+
+| file | what it is |
+|---|---|
+| [`extraction/manifest.mts`](extraction/manifest.mts) | the assertion manifest — `mustContain`, `mustNotContain`, structure floors, exact byline, `maxBlockChars`, and **`articleRegion`**: the selectors whose subtree is the piece itself, which `minArticleChars` is a floor on. One JSON per fixture, beside the HTML. **Binary per fixture, never averaged** |
+| [`extraction/scorecard.mts`](extraction/scorecard.mts) | recall and exclusion reported **separately and never as an F1**, plus `bodyPurity` where a gold exists and `articleRecall` where a region and stamps do; two hard gates scored by **source-element identity** where the arm carries stamps; and `polarityPair`, which refuses the card unless it moves both ways |
+| [`extraction/corruptions.mts`](extraction/corruptions.mts) | thirteen named, reversible damage templates, each tied to a class the trawl actually observed. **Scorer conformance, never extraction quality** |
+| [`extraction/conformance-page.mts`](extraction/conformance-page.mts) | the page the corruptions are run against, built to give every metric something to hold |
+| [`extraction/arms.mts`](extraction/arms.mts) | the shipped extraction plus twelve degenerate arms — 260830at's `drop-every-short-block`, the rule that once scored 246/246; GPT Sol's `needle-collage`, which returns the manifest's own required strings and nothing else; and his `region-padded-collage`, which deletes the article and refills the space with genuine stamped elements from off it |
+| [`extraction/visible-text.mts`](extraction/visible-text.mts) | the page's visible text by a small scanner: what a manifest needle is looked for in. Not JSDOM (44 s, timed out) and not a regex chain (27 adversarial cases wrong, one of them a thrown `RangeError`) |
+| [`extraction/wcxb.mts`](extraction/wcxb.mts) | the blind holdout: a seeded selection from a CC-BY dataset nobody here has read. **Its gold is plain text, so it scores text selection only** |
+
+**Every number here is guilty until its polarity pair has passed**, and the pair is
+[`tests/extraction-scorer.test.ts`](../tests/extraction-scorer.test.ts) rather than a convention:
+one mutation restores a thousand characters of known article body and must move the card **up**,
+another glues the page's own navigation into the article and must move it **down**. A recovery-only
+card — `droppedChars`, "characters gained", recall alone — passes the first and fails the second,
+which is the mistake this repo has now made three times. Both halves were watched failing before the
+code was kept; the file says which, and when.
+
+The run prints three things and the middle one is not what it looks like: the scorecard, then
+**scorer conformance** (can the card see damage that is definitely wrong?), then the polarity pair
+per fixture. Where a fixture cannot move the card both ways it prints `POLARITY NOT ESTABLISHED`
+with the reason rather than passing quietly — a 250-word article has no thousand-character run to
+remove; a page with no `<nav>`, `<header>` or `<footer>` has no furniture to admit.
+
+**What the run does NOT print is a verdict on the article**, and it used to. `labelFor` turned the
+card into `acceptable` / `damaged` / `improved` and `--record` wrote that word into the fixture's
+manifest — computed from the same card it was meant to audit, and reporting `acceptable` for an arm
+that returned three copied strings out of a 33,000-character page. It reports four things it actually
+knows instead: assertions held, gates passed, which metrics fell against the shipped arm, and how many
+characters of article came back.
+
+[`tests/extraction-manifests.test.ts`](../tests/extraction-manifests.test.ts) is the cheap one and
+it earns its place: a `mustNotContain` needle that is not on the page is satisfied by an arm that
+deletes the article, so every needle has to be findable in the fixture's own bytes. It caught five
+on the day it was written.
+
 ## `prompt-caching.ts` — is the article actually being cached?
 
 ```
@@ -794,6 +847,130 @@ written `run.json`. Three things came out of that and are the reason to trust it
 are checked against the queue's own rule before anything is enqueued, the summaries can say *there
 was nothing here*, and a run that died says so at the top rather than in its last line.
 [260905b](../docs/postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md).
+
+## `debate/` — does the mode's reading of a page hold up, and what did the run actually buy?
+
+```
+npm run eval:debate -- check                   # free: every seam, no model, no network, no database
+npm run eval:debate -- plan --slug <slug>      # free: what a run would buy, and from where
+npm run eval:debate -- run --slug <slug>       # one live run, journalled. ~$0.15
+npm run eval:debate -- replay --run <dir>      # Layer 1, free, over a journal on disk
+npm run eval:debate -- verify --dry-run        # free: the full-page fallback, over a synthetic web
+npm run eval:debate -- verify --run <dir>      # would the FULL PAGE have held the quotations the extract lost?
+```
+
+Stage A of
+[260906b](../docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md), and so far it
+is **capture rather than scoring** — the loss-reason tables, the corpus manifest, the arms and the
+judge are Stages B onward.
+
+It exists because two live debate runs cost $0.6252 and **bought no replayable evidence**. Only
+*kept* rows reach `debate.json`, so every refused row, every raw annotation and every page extract
+the model was reading was gone the moment the step ended — and the thing worth diagnosing was
+precisely the rows that did not survive.
+
+**The runner calls `generateDebate` directly and never through the queue**, so no reader's artefact
+is clobbered and no product spend row is written against a purchase nobody made. A run lands under
+`output/debate-runs/`, which is **gitignored**, for the reason `summaries/` gives about its own:
+a journal carries whole page extracts and, through the answer text, sentences of the article.
+
+### Two events per attempted pass, never one record afterwards
+
+`attempt-started` before dispatch; `provider-response` at the gateway boundary, **before the
+`finish_reason` allowlist, the search count or `collectSearchEvidence`**; a terminal outcome in the
+`finally`. GPT Sol refused the single-record design twice (F40, F52): `runPass` throws before
+returning on an unreadable answer, a bad finish reason or a zero search count, so a record written
+after the answer would have captured the paid failure as nothing — and one immutable record cannot
+represent an abort before any answer, cannot survive process death, and cannot carry a
+classification decided later.
+
+Two rules are the point of the whole thing, and both are tested:
+
+- **An abort with no response gets metadata and an abort outcome and no invented response fields.**
+  There is no "empty response" arm to fill in.
+- **An unmatched `attempt-started` means the process died, or the outcome is unknown**, and nothing
+  may report it as captured. On 2026-09-05 an OOM kill between the two passes billed pass A and
+  wrote nothing at all.
+
+Two things it deliberately cannot capture, both `src/ai-call.ts`'s design rather than a gap here: a
+2xx body that will not parse arrives as `json: null` with the bytes gone, and a non-2xx arrives as a
+status with the body gone. The gateway keeps one key, one `Meter` and one `finally` and hands no
+caller a hook, and provider bytes on this wire are a stranger's page and the reader's article.
+Both are written up in `src/debate-journal.ts`'s header.
+
+### The cost of a run is not a number anything hands you
+
+GPT Sol's F43. `generateDebate` returns searches and elapsed time, not money; `withLedger` prints an
+aggregate it does not return; and token `Usage` prices nothing here, because a web search is billed
+**per search** and is invisible to token arithmetic. So the figure comes from the collector's own
+`SpendRecord`s through `totalSpend`, with the contributing generation ids and the ledger run id
+recorded beside it — and a **completed run must hold exactly its two search calls**. Any unpriced
+call makes the whole figure `not measured`; nothing prints `$0.0000` about money it could not
+measure.
+
+### `check` runs first, and it is free
+
+`summaries` has `--stub` and `deepen` has `--dry-run` because **a paid run that quietly measured
+nothing is this repo's commonest expensive bug**. `check` exercises journal writing, reconciliation
+(including an OOM-shaped journal that must come back *not complete*), the cost path answering
+`not measured` three different ways, and Layer 1 replay over a synthetic journal with a kept row, a
+row lost to `directnessUnverified` and an attempt whose bytes are gone. Seventeen assertions, no
+model, no network, no database, and it exits non-zero when any of them fails.
+
+The one seam it cannot cover is `generateDebate` writing the journal at all, which needs something
+at the other end of `openRouterJson`.
+[`tests/debate-journal.test.ts`](../tests/debate-journal.test.ts) covers that with the gateway
+stubbed — including that `attempt-started` really goes down *before* dispatch, which is F40 in one
+assertion.
+
+### `verify` — would the full page have rescued the rows the extract lost?
+
+The plan's two-curl experiment, and the thing that decides whether Stage F gets built:
+[`verify-fallback.ts`](debate/verify-fallback.ts). Production checks a row's quotation against the
+**search engine's page extract** — 236–4,945 characters on the one live run we have — and on that run
+it emptied group one. If the quotations are in the full page the extract is the constraint and a
+fallback fixes it; if they are not, the model paraphrased and the repair is in the prompt. **Opposite
+builds**, so the tool is written to be wrong in the cheap direction rather than the expensive one.
+
+Every quotation the **direct** pass reported — the rows production kept *and* the rows it dropped —
+is resolved against three haystacks with `findQuote(…, "spaced")`, the same matcher and mode
+production uses, so the comparison is about the haystack and nothing else:
+
+1. the **provider extract**, rebuilt from the journalled raw annotations by `admissibleSources`;
+2. **Readability's text**, the `fetchDocument` → JSDOM → Readability path `read_web_page` uses;
+3. the **whole document's visible text**, `script`/`style`/`noscript` removed.
+
+**Both 2 and 3.** Readability extracts *the article* and can discard the section a quotation lives in
+— a comment thread, an editor's note; whole-body text catches those and drags in navigation. Which
+one Stage F should use is a real design choice, and this is what decides it.
+
+The headline is **`recovered X of Y observed failures`**, and both readings of it are printed rather
+than left in a comment: *one recovery establishes that the fallback can fix the observed class; zero
+recoveries defers Stage F and does not establish that full-page fetching can never help.*
+
+Four rules keep it honest, and each is a test:
+
+- **A URL that could not be fetched is `not attempted`, in its own column** — never "not recovered".
+  Every outcome is named (`ok`, `unsupported`, `blocked`, `timed-out`, `too-big`, `not-found`,
+  `failed`, `budget-exhausted`), so a network problem cannot read as evidence about the model.
+- **A PDF is `unsupported`, never an empty page.** `FetchedDocument.text` is `null` for one, and
+  reading that as `""` would answer *"the quotation is not there"* about a document nothing opened.
+- **Fetching goes through `fetchDocument` and never a bare `fetch`** (F44), keeping HTTP(S)-only,
+  the private-address and DNS-pinning checks on every redirect, the redirect cap, byte cap, type
+  sniff and deadline — plus a whole-run concurrency, fetch, byte and elapsed budget. Fetched text is
+  a haystack and enters no prompt.
+- **A quotation is looked for only where production would look.** The extract first; only a miss
+  invokes a fetch (F53), which is Stage F's own ordering and keeps the fetch count proportionate to
+  the failures. A quotation under `isSubstantiveQuote`'s floor is counted `belowFloor` and kept out
+  of the denominator, because production drops it whatever a page says.
+
+`verify --dry-run` runs all of that over a synthetic journal and a seven-page synthetic web
+([`verify-fixture.ts`](debate/verify-fixture.ts)) with **no network at all** — the fixture is handed
+to `fetchDocument` as its own `fetchImpl` seam, so every guard still runs. Twenty-five assertions,
+including the negative ones: a page whose quotation the extract already had must **not** be fetched,
+and neither the PDF nor the 404 may appear in the *not recovered* column. The output names hosts and
+never a URL, and carries no quotation, extract or line of anybody's prose — two of the assertions
+check exactly that.
 
 ## `embedding-retrieval.ts` — which embedding model finds the right passage in *our* articles?
 

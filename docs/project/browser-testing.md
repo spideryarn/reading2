@@ -16,7 +16,7 @@ the several traps here that simply stop existing there. What the client *is*:
 [web-client.md](web-client.md). Why the feature exists:
 [granularity-zoom.md](granularity-zoom.md). If the extension isn't connected at all —
 `list_connected_browsers` comes back `[]` — that's a different problem and it lives in
-[claude-in-chrome.md](claude-in-chrome.md).
+[claude-in-chrome.md](../reusable/claude-in-chrome.md).
 
 ## Before anything, check the server is actually up
 
@@ -415,7 +415,7 @@ explicitly. A pass run against a bare `/` looks fine and exercises none of it.
 | `/?mode=hierarchy&at=spya-k6fpme` | deep link, opens scrolled to that section — [block-ids.md](block-ids.md), [url-state.md](url-state.md) |
 | `/#spya-k6fpme` | the old spelling. Should *rewrite itself* to `?at=` before the page paints; if you ever see the hash survive in the address bar, the migration in `main.tsx` broke |
 | `/?mode=hierarchy&cols=1,2` | an explicit column choice, which pins the columns and takes them off auto-fit. There is no way back to automatic from the UI — the `auto` control went on 2026-09-05 |
-| `/?mode=hierarchy&spine=0` | the rail hidden by hand. Check the article **reflows into the reclaimed 12px** rather than leaving a gutter, and that the corner wordmark clears the controls bar — that padding compensation is the one thing `--spine-w: 0` is load-bearing for ([HomeLogo.tsx](../../src/web/HomeLogo.tsx)) |
+| `/?mode=hierarchy&spine=0` | the rail hidden by hand. Check the article **reflows into the reclaimed 12px** rather than leaving a gutter. The second half of this row used to be *"and the corner wordmark clears the controls bar"*, and **there is no corner wordmark on this page since 2026-09-06** — it is `.dock-home` in the bottom bar ([260905g](../plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md)). The padding compensation `--spine-w: 0` was load-bearing for is still in the stylesheet, now holding a gutter open for nothing; stage 2 of that plan takes it out, and this row gets a number to check against then. The compensation itself still matters on every page that keeps the corner ([HomeLogo.tsx](../../src/web/HomeLogo.tsx)) |
 | `/?mode=outline&spine=0` | since 2026-09-05 the rail is **on** in outline mode, where it used to be off by default, so this is the combination that proves `?spine=` still bites |
 | `/?mode=chat&spine=0` | the rail hidden with a mode band open, which is the only way `fitMode` returns `off`. Both smallest terms of the sticky bars' `left` at once |
 | `/?slug=<slug>` | a different article; defaults to `example` |
@@ -759,8 +759,8 @@ Each of these looked right in review and was wrong on the page.
    not pinned, whatever `position` says. Written up on its own, because it is not specific to this
    project, in [css-sticky-containing-block.md](../reusable/css-sticky-containing-block.md).
 
-`styles.css` also carries three structural constraints that look arbitrary until you've hit the
-failure — `border-collapse: separate`, no `overflow-x` wrapper around the table, and the two-axis
+[`styles/table.css`](../../src/web/styles/table.css) also carries three structural constraints that
+look arbitrary until you've hit the failure — `border-collapse: separate`, no `overflow-x` wrapper around the table, and the two-axis
 sticky bars that follow. They're commented in place; read them before you tidy them.
 
 ## Two more, since Tailwind went in
@@ -770,9 +770,11 @@ class present in the DOM.
 
 **A utility that does nothing means the *layer order* is wrong, not that Tailwind failed to install.**
 Everything Tailwind emits sits inside a cascade layer, and unlayered declarations beat layered ones
-whatever the order and whatever the specificity. `styles.css` is 1,212 lines of descendant rules
-covering exactly the elements chrome components go on, so an unlayered `styles.css` outranks every
-utility, silently. The guard is the `@import "./styles.css" layer(app)` in
+whatever the order and whatever the specificity. The hand-written sheets are thousands of lines of
+descendant rules covering exactly the elements chrome components go on
+(`wc -l src/web/styles.css src/web/styles/*.css` — 15,951 over 38 files, 2026-09-06), so an
+unlayered `styles.css` outranks every utility, silently. The guard is the
+`@import "./styles.css" layer(app)` in
 [`src/web/tailwind.css`](../../src/web/tailwind.css)
 ([web-client.md § Four guards](web-client.md#four-guards-all-in-tailwindcss)). To check it, look at
 the emitted CSS, not the page:

@@ -84,9 +84,13 @@ import {
 } from "../params.js";
 import { arrivalTarget, isBlockOnScreen, scrollToBlock } from "../scroll.js";
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
+import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { bandCoversProse, fitView, offerableGists, proseVisible } from "../layout.js";
 import { navPlan, useArrowNav } from "../keynav.js";
+import { paragraphLabelNotice, paragraphLabelsReady, paragraphPill } from "../nav-labels.js";
+import { ReturnChip } from "../ReturnChip.js";
+import { ViewportProbe } from "../ViewportProbe.js";
 import { useSwipeNav } from "../swipe.js";
 import { ChatDialog, type ChatTarget } from "../ChatDialog.js";
 import { anchored, countByBlock, helpThreadFor, threadFor } from "../useChatAnchors.js";
@@ -450,7 +454,7 @@ export function Reader({
   // sideways: the rail's width is taken out of the prose column's, so hiding it
   // rewraps every paragraph in the article and every row changes height.
   const layoutKey = `${fit.columns.join(",")}|${proseOn}|${windowWidth}|${fit.modeW}|${fit.spine}`;
-  const { at, jumpTo } = useReadingPosition(sections, article.blocks, layoutKey);
+  const { at, jumpTo, rowOf } = useReadingPosition(sections, article.blocks, layoutKey);
 
   /**
    * **Tell the Feedback dialog where the reader is.** feedback-context.ts.
@@ -963,30 +967,35 @@ export function Reader({
     (c) => c.status === "pending" && c.id !== note,
   ).length;
 
+  /* ------------------------------------------ moving to a comment, twice --
+     **These were one function until 2026-09-06, and that was the bug.** The
+     drawer's list and the dialog's arrows want opposite things from the history
+     stack: choosing a question out of a list is an arbitrary jump and pushes,
+     while stepping between them is traversal and must not — twenty questions
+     cannot cost twenty presses of Back. The argument, and why the split is
+     better than either half alone, is comment-jump.ts. GPT Sol F9. */
+
+  /** The drawer's list: a jump, so there is a way back from it. */
+  const openCommentFromDrawer = useCallback(
+    (id: string) => jumpToComment(comments, id, setNote, jumpTo),
+    [comments, jumpTo, setNote],
+  );
+
   /**
-   * Step to another comment, bringing its passage into view *only if it isn't
-   * already*. Two comments in one paragraph are the common case, and jolting the
-   * page between them would lose the reader their place for no gain.
-   *
-   * It scrolls and writes no position state of its own — the listener in
-   * useReadingPosition notices and updates `?at=`, exactly as it does for a
-   * wheel. Same reasoning as keynav.ts.
+   * The dialog's arrows: traversal, writing no position state of their own —
+   * the listener in `useReadingPosition` notices the scroll and updates `?at=`,
+   * exactly as it does for a wheel. Same reasoning as keynav.ts.
    */
-  const goToComment = useCallback(
-    (id: string | null) => {
-      if (id === null) return;
-      void setNote(id);
-      const target = comments.find((c) => c.id === id);
-      if (target && !isBlockOnScreen(target.blockId)) scrollToBlock(target.blockId);
-    },
+  const stepToNeighbouringComment = useCallback(
+    (id: string | null) => stepToComment(comments, id, setNote),
     [comments, setNote],
   );
 
   /**
    * A `?note=` that arrived in the address bar brings its own passage into view.
    *
-   * The gap this closes: `goToComment` above scrolls, so stepping between
-   * questions inside the reading view was always fine — but that path needs the
+   * The gap this closes: the two above move the reader, so opening or stepping
+   * between questions inside the reading view was always fine — but they need the
    * comment in hand, and a pasted link has only an id. `/read/<slug>?note=<id>`
    * with no `?at=` beside it therefore opened a dialog about a paragraph that
    * was somewhere off screen, and which one was unguessable. That is exactly the
@@ -1000,13 +1009,14 @@ export function Reader({
    * free — and then the comment arrives and this fires once.
    *
    * **Once**, and that is the ref. After the first honoured arrival, moving
-   * between comments belongs to `goToComment`, which deliberately holds still
-   * when the next passage is already on screen. Re-running this on every change
+   * between comments belongs to `comment-jump.ts`, which on both paths
+   * deliberately holds still when the next passage is already on screen —
+   * `passageToBringIntoView`. Re-running this on every change
    * to `note` would be a second thing moving the page, and the two would
    * disagree the moment either changed.
    *
    * `isBlockOnScreen` rather than an unconditional jump, for the same reason
-   * `goToComment` uses it: when `?note=` and `?at=` agree — the passage sits in
+   * comment-jump.ts uses it: when `?note=` and `?at=` agree — the passage sits in
    * the section the link restored — the reader is already looking at it, and a
    * jolt would cost them their place to move them nowhere.
    *
@@ -1292,7 +1302,22 @@ export function Reader({
     [owner, setNote, setThread],
   );
 
-  const openCommentDialog = useCallback((id: BlockId) => void setNote(id), [setNote]);
+  /**
+   * Open a comment's dialog and **move nothing** — the third `onOpenComment`,
+   * and the one that is not a jump.
+   *
+   * `TableView`'s inline mark and gutter bookmark are controls attached to the
+   * block the reader is looking at, so the passage is on screen by
+   * construction; there is nothing to scroll to and nothing to push. The
+   * drawer's two closures go through `openCommentFromDrawer` instead, and the
+   * dialog's four arrows through `stepToNeighbouringComment` (comment-jump.ts).
+   *
+   * **`string`, not `BlockId`**: what arrives is a *comment* id, read off
+   * `data-comment`. It compiled as `BlockId` only because that is an alias for
+   * `string`, so the annotation was a lie a reader would have believed. GPT Sol
+   * F24, 2026-09-06.
+   */
+  const openCommentDialog = useCallback((id: string) => void setNote(id), [setNote]);
 
   /**
    * The whole address, subscribed to — the input to the block permalinks.
@@ -1306,6 +1331,16 @@ export function Reader({
 
   /** Whether the paragraph-level nav labels are riding beside the prose. */
   const leafOn = showText && fit.columns.includes(geometry.leafDepth);
+
+  /**
+   * What stands where the `Paragraphs` pill would be when there is nothing for
+   * it to open, or `null` in the ordinary case — nav-labels.ts owns the rule.
+   *
+   * Read once here and used twice: the bar below, and `OutlinePanel`, whose
+   * rung 5 draws the same labels and must make the same decision. `TableView`
+   * asks for itself, off the same `article`.
+   */
+  const paragraphNotice = paragraphLabelNotice(article.navLabelStatus);
 
   /** The gist columns actually on screen — the leaf column isn't one of them. */
   const shownGists = useMemo(
@@ -1447,10 +1482,22 @@ export function Reader({
             arcByRow={arcCells}
             focusRow={outlineLive.focusRow}
             /* `modeW` is 0 exactly when the band covers the prose instead of
-               sitting beside it (layout.ts), which is iPad portrait. That is the
-               condition paragraph rows are not permissible under, so it is read
-               from the layout rather than from a width guessed here. */
+               sitting beside it (layout.ts) — a phone, since 2026-09-06; it was
+               iPad portrait and below until the crossover fell to 700. That is
+               the condition paragraph rows are not permissible under, and reading
+               it from the layout rather than from a width guessed here is why
+               that move cost this line nothing but its example. */
             proseBeside={fit.modeW > 0}
+            /* **Rung 5 is the same layer the `Paragraphs` column draws**, so it
+               makes the same decision. Withheld rather than announced: nobody
+               asked for rung 5 — the panel climbs the ladder as far as the band
+               has room — so a sentence in place of it would be an answer to a
+               question the reader never put. The rungs below still draw, which is
+               what "withhold the layer" means here.
+               Sent as a boolean rather than the status, because that is exactly
+               what this panel needs and `allowParagraphs` beside it is already
+               one. src/web/nav-labels.ts. */
+            paragraphLabels={paragraphLabelsReady(article.navLabelStatus)}
             onJump={jumpTo}
           />
         );
@@ -1678,9 +1725,10 @@ export function Reader({
       /* `band-covers` is the same idea and exists for a sharper reason: it is
          the *stylesheet's* only way to know that the mode band has no room
          beside the prose and is lying over it instead. That crossover is
-         `MODE_MIN + PROSE_MIN` against the window **minus the rail**, so it
+         `MODE_MIN + MODE_PROSE_FLOOR` against the window **minus the rail**, so it
          moves with `?spine=0` — and a media query cannot see a query
-         parameter. It was one for six days (`@media (max-width: 843px)`), and
+         parameter. (It was `MODE_MIN + PROSE_MIN` until 2026-09-06, which is
+         the pair the widths below are in.) It was one for six days (`@media (max-width: 843px)`), and
          from 832 to 843 with the rail off the two disagreed: layout.ts
          squeezed the table to make room for a band the stylesheet had already
          thrown over the article.
@@ -1816,17 +1864,43 @@ export function Reader({
             ))}
             {/* The paragraph outline, beside the prose rather than instead of
                 it. Only offered in reading mode: in outline mode this column is
-                the view, and turning it off would leave nothing. */}
-            {showText && (
-              <Toggle
-                className={PILL}
-                pressed={leafOn}
-                onPressedChange={() => toggle(geometry.leafDepth)}
-                title={columnHint(geometry.leafDepth, geometry.leafDepth)}
-              >
-                {columnLabel(geometry.leafDepth, geometry.leafDepth)}
-              </Toggle>
-            )}
+                the view, and turning it off would leave nothing.
+
+                **And only while there are labels to draw.** Where there are
+                not, the control is replaced by the sentence saying why rather
+                than disabled with the sentence in its tooltip — a touch reader
+                cannot open a tooltip, which is the argument that took the pills
+                from `L3` to `Paragraphs` in the first place (tree.ts §
+                `columnLabel`). A pill that opened a column of blank cells is
+                the failure nav-labels.ts exists to prevent; a pill that opened
+                a column of one repeated notice would be worse still.
+
+                **`|| leafOn` is the door back out, and it is not a hedge.**
+                `toggle` is the only caller of `setCols` in this file, so
+                replacing the control replaces the only way to *close* the
+                column as well as the only way to open it. The leaf depth can
+                already be on without this pill — `?cols=` naming it, shared or
+                bookmarked — and such a reader was left with a wide column of
+                one repeated sentence and nothing to shut it with: for ever, if
+                the status is `failed`. So the notice stands in for the pill
+                only while the column is shut, which is the case it was written
+                for; once the column is open the pill comes back, because the
+                column itself is already carrying the sentence
+                (TableView § `withheldLeafCell`) and what the reader needs from
+                the bar is the way out. GPT Sol's F2 on stage 1, 2026-09-06. */}
+            {showText &&
+              (paragraphPill(article.navLabelStatus, leafOn) === "toggle" ? (
+                <Toggle
+                  className={PILL}
+                  pressed={leafOn}
+                  onPressedChange={() => toggle(geometry.leafDepth)}
+                  title={columnHint(geometry.leafDepth, geometry.leafDepth)}
+                >
+                  {columnLabel(geometry.leafDepth, geometry.leafDepth)}
+                </Toggle>
+              ) : (
+                <span className="pill-note">{paragraphNotice}</span>
+              ))}
           </>
         )}
         {/* Failures of the comment transport belong here rather than in the
@@ -1849,6 +1923,10 @@ export function Reader({
       </div>
       <TableView
         article={article}
+        /* The route's slug, not `article.meta.slug` — TableView.tsx § `slug`
+           has the reason, and it is the same one `Origin` gives in
+           Metadata.tsx. */
+        slug={slug}
         sections={sections}
         layoutKey={layoutKey}
         /* The permalink base — this page's whole address, including every
@@ -2023,8 +2101,8 @@ export function Reader({
           total={ordered.length}
           hasPrev={stepComment(ordered, note, -1) !== null}
           hasNext={stepComment(ordered, note, 1) !== null}
-          onPrev={() => goToComment(stepComment(ordered, note, -1))}
-          onNext={() => goToComment(stepComment(ordered, note, 1))}
+          onPrev={() => stepToNeighbouringComment(stepComment(ordered, note, -1))}
+          onNext={() => stepToNeighbouringComment(stepComment(ordered, note, 1))}
           onClose={() => void setNote(null)}
         />
       )}
@@ -2035,8 +2113,8 @@ export function Reader({
           total={ordered.length}
           hasPrev={stepComment(ordered, note, -1) !== null}
           hasNext={stepComment(ordered, note, 1) !== null}
-          onPrev={() => goToComment(stepComment(ordered, note, -1))}
-          onNext={() => goToComment(stepComment(ordered, note, 1))}
+          onPrev={() => stepToNeighbouringComment(stepComment(ordered, note, -1))}
+          onNext={() => stepToNeighbouringComment(stepComment(ordered, note, 1))}
           onClose={() => void setNote(null)}
           access={{
             kind: "owner",
@@ -2165,6 +2243,13 @@ export function Reader({
       {!owner && gap && <VisitorBand gap={gap} signedIn={signedIn} />}
       {band()}
 
+      {/* **The way back from a jump**, drawn only on an entry a jump stamped —
+          ReturnChip.tsx, which owns that rule and the words. It takes the
+          sections this component already built rather than resolving the
+          origin block itself: the label is a section title, and there must be
+          one answer to "which section is this block in" on the page. */}
+      <ReturnChip sections={sections} rowOf={rowOf} />
+
       {/* Last in the DOM as well as topmost in z-index: the bar and its drawer
           are drawn over everything, and matching source order to paint order is
           one less thing to reason about when something appears underneath
@@ -2235,7 +2320,7 @@ export function Reader({
                   // would otherwise be underneath the dim, which looks exactly
                   // like nothing happening.
                   void setPanel(null);
-                  goToComment(id);
+                  openCommentFromDrawer(id);
                 },
               }
             : /* **The same drawer, with the owner's comments in it**, since
@@ -2254,11 +2339,19 @@ export function Reader({
                 onPanel: (next) => void setPanel(next),
                 onOpenComment: (id) => {
                   void setPanel(null);
-                  goToComment(id);
+                  openCommentFromDrawer(id);
                 },
               }
         }
       />
+
+      {/* **`?probe=1` only, and `null` for everybody else** — the viewport
+          diagnostic that stage 4 of
+          docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md
+          exists to get a measurement from. Inside `.reader` because that is
+          where `--mode-w` and `--spine-w` resolve, and after the `Dock` so it
+          is over the bars it is measuring. ViewportProbe.tsx. */}
+      <ViewportProbe />
     </div>
   );
 }

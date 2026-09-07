@@ -222,7 +222,7 @@ export function safePublicCanonical(value: string): string | null {
  *
  * Returns the URL to publish, or `null` to publish none. A `null` here does
  * **not** mean the article was uploaded — that inference needs a reader who owns
- * the article, and `OriginMark` in src/web/Masthead.tsx says why.
+ * the article, and `OriginLine` in src/web/Masthead.tsx says why.
  */
 export function publicSourceUrl(value: string): string | null {
   const safe = safePublicCanonical(value);

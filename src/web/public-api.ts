@@ -56,8 +56,15 @@ export type PublicRead<T> = { kind: "ok"; body: T } | { kind: "not-shared" };
  * in this app authenticates by cookie today — Supabase hands out a bearer token
  * — but a same-origin `fetch` sends cookies by default, so if one ever appeared
  * this call would start carrying it without a line changing here.
+ *
+ * **`signal` is the only thing a caller may add**, and it is spelled as its own
+ * parameter rather than a `RequestInit` on purpose: an init bag would let a
+ * caller pass `credentials`, `headers` or a method, and the two lines above are
+ * the whole point of this function. Added 2026-09-06 for `rehostImages`, which
+ * has to be able to drop a superseded article's figure downloads
+ * (src/web/rehost.ts § the object URLs).
  */
-export async function publicFetch(path: string): Promise<Response> {
+export async function publicFetch(path: string, signal?: AbortSignal): Promise<Response> {
   /**
    * **Normalised before it is checked**, because `startsWith` tests a string
    * and the browser sends a *resolved* path.
@@ -90,7 +97,10 @@ export async function publicFetch(path: string): Promise<Response> {
   if (url.origin !== SAME_ORIGIN || !url.pathname.startsWith("/api/public/")) {
     throw new Error(`publicFetch is for the public namespace only, and this is not: ${path}`);
   }
-  return fetch(path, { credentials: "omit" });
+  /* Spread rather than `signal` straight in: `exactOptionalPropertyTypes` is on
+     (docs/project/typechecking.md), so an explicit `signal: undefined` is not
+     the same thing as no signal at all. */
+  return fetch(path, { credentials: "omit", ...(signal ? { signal } : {}) });
 }
 
 /**
@@ -101,9 +111,23 @@ export async function publicFetch(path: string): Promise<Response> {
  */
 const SAME_ORIGIN = "https://spideryarn.invalid";
 
-/** `GET /api/public/article/:slug`. */
-export async function loadPublicArticle(slug: string): Promise<PublicRead<PublicArticle>> {
-  return read<PublicArticle>(`/api/public/article/${encodeURIComponent(slug)}`);
+/**
+ * `GET /api/public/article/:slug`.
+ *
+ * **The `signal` is the article load's**, so a reader who moves on before the
+ * payload arrives stops paying for it. Added 2026-09-07: `rehostImages` had
+ * carried an `AbortController` since stage E and the *payload* fetch above it
+ * had none, so releasing a load abandoned the request rather than cancelling
+ * it — on a 150KB payload over a slow connection that is a real download for an
+ * article nobody is looking at. Nothing visible was wrong, because the `live`
+ * guard already refused the stale render; this is the resource half. GPT Sol,
+ * reviewing the built code.
+ */
+export async function loadPublicArticle(
+  slug: string,
+  signal?: AbortSignal,
+): Promise<PublicRead<PublicArticle>> {
+  return read<PublicArticle>(`/api/public/article/${encodeURIComponent(slug)}`, signal);
 }
 
 /**
@@ -134,8 +158,8 @@ export async function loadPublicLibrary(): Promise<PublicRead<PublicLibrary>> {
  * 2026-09-04, when the library listing arrived — kept as a shared helper through
  * that, which is why the second loader is two lines.
  */
-async function read<T>(path: string): Promise<PublicRead<T>> {
-  const res = await publicFetch(path);
+async function read<T>(path: string, signal?: AbortSignal): Promise<PublicRead<T>> {
+  const res = await publicFetch(path, signal);
   /* Read before the body, because `readJson` throws on a 404 and this is the
      one place a 404 is the answer rather than the problem. */
   if (res.status === 404) return { kind: "not-shared" };

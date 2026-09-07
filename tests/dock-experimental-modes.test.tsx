@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 /**
- * **Five of the fourteen modes are only drawn for a reader who asked for them.**
- *
- * Quotes, Timeline, Referee and Remember are behind the
- * experimental-features switch since 2026-09-03
- * (docs/project/experimental-features.md,
- * docs/plans/260903c-gate-unpolished-modes-behind-experimental-features.md),
- * and Debate joined them on 2026-09-05.
+ * **Some modes are only drawn for a reader who asked for them**, and which ones
+ * is `BEHIND_THE_SWITCH` below. Four of them today; the membership has moved
+ * three times since 2026-09-03 and the reason for each is in
+ * docs/project/experimental-features.md, which owns that argument
+ * (docs/plans/260903c-gate-unpolished-modes-behind-experimental-features.md is
+ * where it started).
  * Greg, looking at a shared article while signed out:
  *
  * > When a non-logged-in user reads a Public-readable article, I thin it should
@@ -19,10 +18,17 @@
  * row's end of that is tests/diagram-kind-gating.test.tsx; both ends draw by one
  * rule, src/web/experimental-visibility.ts.
  *
- * **The counts here are nine and fourteen, not eight and thirteen.** Structure —
- * the merge of Hierarchy and Outline — has not landed, so both of those are
- * today's default-visible stand-ins for it. Eight/thirteen is the shape *after*
- * that merge and must not be written down before it.
+ * **This file names members and never counts.** It used to say nine and
+ * fourteen in its assertions, its test names and this docblock, so promoting
+ * Quotes on 2026-09-06 meant editing eight numbers that no longer added up —
+ * and a count cannot tell you *which* mode escaped. Everything below compares
+ * identities against `BEHIND_THE_SWITCH`, the one literal list; the day
+ * Structure merges Hierarchy and Outline, nothing here needs a number changed.
+ * GPT Sol asked for this, weighing it against deriving the list from the table
+ * the flags actually live in — `MODES_UI` until 2026-09-07, `MODE_CATALOG`
+ * (src/mode-catalog.ts) since: either way that would assert the bar draws what
+ * the table says, which is `visibleModes`' own definition, and the canary would
+ * be gone.
  *
  * ## The two rules, and the second is the one that is easy to lose
  *
@@ -54,11 +60,25 @@ import {
   EXPERIMENTAL_SIGNED_OUT,
 } from "./helpers/experimental-fixtures.js";
 
-/** The five, by name, so a sixth cannot be added without this file saying so. */
-const BEHIND_THE_SWITCH: readonly Mode[] = ["quotes", "timeline", "referee", "remember", "debate"];
+/**
+ * **The independent copy of the policy**, by name, so that moving a mode in or
+ * out of the switch cannot be done by editing the flag alone — somebody has to
+ * say so here too. That second edit is the whole point and is not duplication
+ * to be tidied away: derive this from `MODE_CATALOG` (src/mode-catalog.ts, and
+ * `MODES_UI` before 2026-09-07) and the test asserts the bar draws what the
+ * table says, which is what `visibleModes` means.
+ */
+const BEHIND_THE_SWITCH: readonly Mode[] = ["timeline", "referee", "remember", "debate"];
 
-/** Everything else — nine of them, until Structure replaces two with one. */
-const ALWAYS: readonly Mode[] = MODES.filter((m) => !BEHIND_THE_SWITCH.includes(m));
+/**
+ * What the bar should draw with the switch off: everything not behind it, plus
+ * the mode the reader is in. The second half is rule 2 above, and stating it
+ * here rather than in each test is what lets every assertion below be an
+ * identity rather than a count.
+ */
+function expectedWhenOff(current?: Mode): readonly Mode[] {
+  return MODES.filter((m) => !BEHIND_THE_SWITCH.includes(m) || m === current);
+}
 
 let host: HTMLDivElement;
 let root: Root;
@@ -92,7 +112,7 @@ function reading(props: Record<string, unknown>): void {
   });
 }
 
-/** The bar off the reading view: fourteen loose links, or nine of them. */
+/** The bar off the reading view: fourteen loose links, or ten of them. */
 function loose(search: string, props: Record<string, unknown> = {}): void {
   history.replaceState(null, "", `/read/a-piece/metadata${search}`);
   act(() => {
@@ -131,23 +151,21 @@ function checked(): string[] {
 
 const labels = (modes: readonly Mode[]) => modes.map((m) => MODE_LABEL[m]).sort();
 
-describe("how many buttons the bar draws", () => {
-  it("nine, with the switch off", () => {
+describe("which buttons the bar draws", () => {
+  it("with the switch off, exactly the modes that are not behind it", () => {
     reading({ experimental: EXPERIMENTAL_OFF });
-    expect(radioModes()).toHaveLength(9);
-    expect([...radioModes()].sort()).toEqual(labels(ALWAYS));
+    expect([...radioModes()].sort()).toEqual(labels(expectedWhenOff()));
   });
 
-  it("fourteen, with the switch on", () => {
+  it("with the switch on, every mode there is", () => {
     reading({ experimental: EXPERIMENTAL_ON });
-    expect(radioModes()).toHaveLength(14);
     expect([...radioModes()].sort()).toEqual(labels(MODES));
   });
 
   /**
    * The signed-out reader Greg was looking at, **as far as this file can see
    * them**: the bar is handed the answer, so what is checked here is that being
-   * told *signed out, off* draws nine buttons.
+   * told *signed out, off* draws the default bar.
    *
    * It does not exercise a session, and the name used to imply it did (GPT Sol,
    * reviewing stage 2). That a signed-out session produces this answer *because
@@ -155,13 +173,13 @@ describe("how many buttons the bar draws", () => {
    * tests/experimental-store.test.tsx's, and that the reading view asks for
    * nothing on their behalf is tests/public-network-trace.test.tsx's.
    */
-  it("nine when the bar is told the reader is signed out and off", () => {
+  it("the default bar when it is told the reader is signed out and off", () => {
     reading({
       experimental: EXPERIMENTAL_SIGNED_OUT,
       visitor: true,
       marked: markedModes(NOTHING_SHARED),
     });
-    expect(radioModes()).toHaveLength(9);
+    expect([...radioModes()].sort()).toEqual(labels(expectedWhenOff()));
     expect(radioModes()).not.toContain(MODE_LABEL.timeline);
   });
 });
@@ -179,8 +197,7 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
    */
   it("a reading view in Timeline draws it, checked, with the switch off", () => {
     reading({ mode: "timeline", experimental: EXPERIMENTAL_OFF });
-    expect(radioModes()).toContain(MODE_LABEL.timeline);
-    expect(radioModes()).toHaveLength(10);
+    expect([...radioModes()].sort()).toEqual(labels(expectedWhenOff("timeline")));
     expect(checked()).toEqual([MODE_LABEL.timeline]);
   });
 
@@ -199,46 +216,68 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
    * metadata page knows which mode the reader came from.
    */
   it("the metadata page retains the mode its URL carries", () => {
-    loose("?mode=quotes");
-    expect(linkModes()).toHaveLength(10);
-    expect(linkModes()).toContain(MODE_LABEL.quotes);
+    loose("?mode=remember");
+    expect([...linkModes()].sort()).toEqual(labels(expectedWhenOff("remember")));
     expect(linkModes()).not.toContain(MODE_LABEL.timeline);
   });
 
-  it("the metadata page with no mode in its URL draws the nine", () => {
+  it("the metadata page with no mode in its URL draws the default bar", () => {
     loose("");
-    expect([...linkModes()].sort()).toEqual(labels(ALWAYS));
+    expect([...linkModes()].sort()).toEqual(labels(expectedWhenOff()));
   });
 
   it("a mode word the URL made up is ignored rather than drawn", () => {
     loose("?mode=nonsense");
-    expect([...linkModes()].sort()).toEqual(labels(ALWAYS));
+    expect([...linkModes()].sort()).toEqual(labels(expectedWhenOff()));
   });
 });
 
 /**
  * **The fit key carries the identities, not the count.** GPT Sol, finding 4:
- * retaining the current mode keeps the count unmoved while `?mode=quotes`
+ * retaining the current mode keeps the count unmoved while `?mode=timeline`
  * becomes `?mode=remember`, and those two words are not the same width — so a
  * signature counting buttons would leave the bar overflowing, or its labels
  * dropped with room to spare, until the next resize.
  */
 describe("the fit signature", () => {
   const noop = () => {};
-  /* The sixth argument is the bar's own switch, and `null` is "not drawn". What
-     it contributes has its own file — tests/dock-experimental-switch.test.tsx §
-     the fit signature — because it is about the toggle, not about the modes. */
+  /* The sixth argument is the bar's own switch, and `null` is "not drawn"; the
+     seventh is whether the bar draws a Feedback trigger, and `false` is the
+     signed-out bar. What each contributes has its own file —
+     tests/dock-experimental-switch.test.tsx § the fit signature, and
+     tests/dock-corner-controls.test.tsx § the fit signature — because they are
+     about those controls, not about the modes. */
   const sig = (on: boolean, current: Mode) =>
-    fitSignature(visibleModes(on, current), current, noop, undefined, null, null);
+    fitSignature(visibleModes(on, current), current, noop, undefined, null, null, false);
 
   it("changes when the visible identities change at a constant count", () => {
-    expect(visibleModes(false, "quotes")).toHaveLength(visibleModes(false, "remember").length);
-    expect(sig(false, "quotes")).not.toBe(sig(false, "remember"));
+    expect(visibleModes(false, "timeline")).toHaveLength(visibleModes(false, "remember").length);
+    expect(sig(false, "timeline")).not.toBe(sig(false, "remember"));
   });
 
   it("changes when the switch does", () => {
     expect(sig(false, "plain")).not.toBe(sig(true, "plain"));
   });
+
+  /**
+   * **The same modes drawn, a different one of them on.**
+   *
+   * The case above is a different *set* at the same size. This is the same set
+   * with a different member selected, and it changed the row's width on
+   * 2026-09-05 with nothing watching: styles.css § the bar's fit ladder gives
+   * the open mode its word back at rung 2, so Plain → Summary draws one more
+   * label than it did. Both are ordinary modes, so `visibleModes` returns the
+   * identical list for each — which is the point, and why the assertion checks
+   * that before checking the signatures differ. GPT Sol, S1, reviewing the
+   * built code of docs/plans/260905g-…-into-the-dock.md.
+   */
+  it("changes when the same modes are drawn and a different one is on", () => {
+    expect(visibleModes(false, "plain").map((m) => m.mode)).toEqual(
+      visibleModes(false, "summary").map((m) => m.mode),
+    );
+    expect(sig(false, "plain")).not.toBe(sig(false, "summary"));
+  });
+
 
   it("is the same string for the same bar", () => {
     expect(sig(false, "plain")).toBe(sig(false, "plain"));

@@ -17,8 +17,8 @@ not the same shape for every article.
   [`src/web/DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx), with
   [`src/web/modes/diagram/DiagramMode.tsx`](../../src/web/modes/diagram/DiagramMode.tsx)
   as the mode controller that mounts it,
-  `§ diagram mode` and `§ drift and trail` in
-  [`src/web/styles.css`](../../src/web/styles.css).
+  `§ diagram mode` in [`src/web/styles/diagram.css`](../../src/web/styles/diagram.css) and
+  `§ drift and trail` in [`src/web/styles/diagram-drift.css`](../../src/web/styles/diagram-drift.css).
 - **What the server computes for the last two** —
   [`src/projection.ts`](../../src/projection.ts) over
   [`src/article-vectors.ts`](../../src/article-vectors.ts).
@@ -145,7 +145,8 @@ wrote in:
 >
 > — a reader, 2026-09-04 (SPIDERYARN-READING2-13)
 
-So Diagram's row in `MODES_UI` is `experimental: false` and each row of
+So Diagram is `experimental: false` in
+[`MODE_CATALOG`](../../src/mode-catalog.ts) and each row of
 `KIND_UI` ([`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx)) carries the flag
 instead — Sketch false, the other four true. The chip row draws the ones that
 are not experimental **plus whichever the URL names**, which is the mode bar's
@@ -197,14 +198,19 @@ $0.20 and two minutes. Greg's rule
 
 **The picture it arms is the one `?diagram=` names**, not a fixed `sketch`, and
 that is not a nicety —
-[`activation.ts`](../../src/web/activation.ts) § `armActivationForDiagram` has the
+[`activation.ts`](../../src/web/activation.ts) § `activationForDiagram` has the
 five-step sequence a fixed target would have paid for, in which a press that
 opens Illustrated leaves a sketch token nobody claims and a later **Back** step
 spends it. `tests/modes-that-start-themselves.test.tsx` § *spends nothing on a
 Back step after opening a picture it did not arm* is the only thing in the suite
 that notices.
 
-The three geometries arm nothing, because they cost nothing. Illustrated is
+The three geometries arm nothing, because there is **no artefact behind them** to
+generate — which is not the same as costing nothing. Force buys an embedding
+through `POST /api/similar`, and Drift and Trail through `POST /api/projection`,
+on mount rather than on a press
+([`activation.ts`](../../src/web/activation.ts) § `activationForDiagram` says
+what follows from that). Illustrated is
 armed by a bar press only if it is the picture the reader is already on; with no
 Sketch drawn, that press is retired unspent by `useIllustrated`'s own gate rather
 than enqueuing a job the server would refuse.
@@ -1280,7 +1286,7 @@ heading is a thread *title* and can run to sixty characters.
 [260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) § Stage 5.) `.band-head h2` now declares `min-width: 0`, `overflow: hidden`,
 `text-overflow: ellipsis` and `white-space: nowrap` — since 2026-09-02 for
 every band's head, not only this one, which is what the single `.band-head`
-family in `styles.css` § mode band is for — and
+family in [`styles/mode-band.css`](../../src/web/styles/mode-band.css) § mode band is for — and
 [`tests/diagram-css.test.ts`](../../tests/diagram-css.test.ts) holds them there.
 `min-width: 0` is the load-bearing one: without it a flex item's automatic
 minimum is its longest word, so it never shrinks far enough for
@@ -1548,7 +1554,7 @@ positional hues through the same `--cat-rgb` indirection everything else uses.
 | the schema, the validator, the score, the acceptance boundary | [`src/sketch-scene.ts`](../../src/sketch-scene.ts) |
 | scene → drawing primitives, no DOM | [`src/sketch-paint.ts`](../../src/sketch-paint.ts) |
 | the prompt and the model call | [`src/sketch.ts`](../../src/sketch.ts) |
-| the panel | [`src/web/SketchView.tsx`](../../src/web/SketchView.tsx), [`useSketch.ts`](../../src/web/useSketch.ts), `§ sketch` in [`styles.css`](../../src/web/styles.css) |
+| the panel | [`src/web/SketchView.tsx`](../../src/web/SketchView.tsx), [`useSketch.ts`](../../src/web/useSketch.ts), `§ sketch` in [`styles/diagram-sketch.css`](../../src/web/styles/diagram-sketch.css) |
 | the harness that renders one offline | [`evals/sketch/`](../../evals/sketch/) |
 
 **One painter, two sinks.** `sketch-paint.ts` is pure and returns primitives;

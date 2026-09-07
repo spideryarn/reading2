@@ -22,9 +22,19 @@ import {
   withoutRepeats,
   wordsOf,
 } from "../src/pdf-read.js";
+import { parsePdfFigureMarker } from "../src/assets.js";
 import { memoryCheckpoints, type MemoryCheckpoints } from "./helpers/memory-checkpoints.js";
 
 const EASY = new URL("../evals/pdf/easy/source.pdf", import.meta.url);
+
+/**
+ * A raw PDF's sha256, as `renderHtml` requires one.
+ *
+ * A real-shaped hex string rather than `"x"`: `pdfFigureRef` refuses anything
+ * that is not a lowercase sha256, and it refuses it *here* rather than much
+ * later, as a lookup that never matches and a figure that never appears.
+ */
+const RAW_SHA = "a".repeat(64);
 
 /**
  * Every warning the stage wrote, because the one thing it logs is a cache entry
@@ -209,7 +219,7 @@ describe("text the chunk was only meant to look at", () => {
 
 describe("records into HTML", () => {
   it("puts the model's words in, and never the model's markup", () => {
-    const html = renderHtml([record({ text: "<script>alert(1)</script> & so on" })], "T");
+    const html = renderHtml([record({ text: "<script>alert(1)</script> & so on" })], "T", RAW_SHA);
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("<script>");
     expect(html).toContain("&amp; so on");
@@ -222,6 +232,7 @@ describe("records into HTML", () => {
         record({ page: 2, text: "and it ends.", continues: true }),
       ],
       "T",
+      RAW_SHA,
     );
     expect(html).toContain("<p>The sentence begins and it ends.</p>");
     expect(html.match(/<p>/g)).toHaveLength(1);
@@ -231,6 +242,7 @@ describe("records into HTML", () => {
     const html = renderHtml(
       [record({ type: "heading2", text: "A heading" }), record({ text: "Prose.", continues: true })],
       "T",
+      RAW_SHA,
     );
     expect(html).toContain("<h2>A heading</h2>");
     expect(html).toContain("<p>Prose.</p>");
@@ -244,18 +256,81 @@ describe("records into HTML", () => {
         record({ text: "after" }),
       ],
       "T",
+      RAW_SHA,
     );
     expect(html).toContain("<ul>\n<li>one</li>\n<li>two</li>\n</ul>");
     expect(html.match(/<ul>/g)).toHaveLength(1);
   });
 
-  it("shows a figure as its caption and nothing else", () => {
-    const html = renderHtml([record({ type: "figure", text: "Figure 3. A drawing." })], "T");
-    expect(html).toContain("<figure><figcaption>Figure 3. A drawing.</figcaption></figure>");
+  it("shows a figure as its caption, and marks where its picture would be", () => {
+    const html = renderHtml([record({ type: "figure", text: "Figure 3. A drawing." })], "T", RAW_SHA);
+    expect(html).toContain("<figcaption>Figure 3. A drawing.</figcaption></figure>");
+    /* The caption is still the whole of what a *reader* sees at this stage. The
+       picture is recovered by the `assets` step and inserted by the reading
+       view — stages C and D of
+       docs/plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md
+       — and what has to be here is the marker that lets either of them find it. */
+    expect(html).not.toContain("<img");
+    const marker = /data-spya-pdf-figure="([^"]+)"/.exec(html)?.[1];
+    expect(parsePdfFigureMarker(marker ?? "")).toEqual({ ref: marker, page: 1, ordinal: 1 });
+  });
+
+  it("does not mark a table, though it renders as a figure too", () => {
+    /* The figure record is the gate the whole recovery route stands on. A page
+       holding a figure and a table would otherwise have two claimants and be
+       refused as `ambiguous`, so a recoverable figure would be lost to a table
+       that was never going to be a bitmap. src/pdf-read.ts § `renderHtml`. */
+    const html = renderHtml([record({ type: "table", text: "Table 1. Counts." })], "T", RAW_SHA);
+    expect(html).toContain("<figure><figcaption>Table 1. Counts.</figcaption></figure>");
+  });
+
+  it("numbers the figures within a page, and starts again on the next one", () => {
+    const html = renderHtml(
+      [
+        record({ page: 3, type: "figure", text: "Figure 1. First." }),
+        record({ page: 3, type: "figure", text: "Figure 2. Second." }),
+        record({ page: 4, type: "figure", text: "Figure 3. Third." }),
+      ],
+      "T",
+      RAW_SHA,
+    );
+    const at = [...html.matchAll(/data-spya-pdf-figure="([^"]+)"/g)].map((m) =>
+      parsePdfFigureMarker(m[1] ?? ""),
+    );
+    expect(at.map((m) => [m?.page, m?.ordinal])).toEqual([
+      [3, 1],
+      [3, 2],
+      [4, 1],
+    ]);
+    /* Three markers, three refs. `pairPageFigures` throws on a repeat rather
+       than attach one picture to two captions, so a renderer minting the same
+       ref twice would take a whole document down — the right failure, and the
+       wrong place to discover it. */
+    expect(new Set(at.map((m) => m?.ref)).size).toBe(3);
+  });
+
+  it("mints a different ref for the same figure in a different PDF", () => {
+    /* The property the ref exists for: a stored asset is carried into a new
+       revision, so a ref that did not fold in the raw PDF's own hash would go
+       on matching the *previous* document's page three. GPT Sol, D1-5. */
+    const figure = [record({ type: "figure", text: "Figure 1. A drawing." })];
+    expect(renderHtml(figure, "T", RAW_SHA)).not.toBe(
+      renderHtml(figure, "T", `b${RAW_SHA.slice(1)}`),
+    );
+  });
+
+  it("leaves a captionless figure with no element and therefore no marker", () => {
+    /* v1's boundary, stated rather than discovered: `renderHtml` skips an
+       empty-text record before it builds anything, so a figure with no printed
+       caption has no block to address and nothing to re-mint. Giving those a
+       media block of their own is a separate decision. GPT Sol, I-3. */
+    const html = renderHtml([record({ type: "figure", text: "   " })], "T", RAW_SHA);
+    expect(html).not.toContain("<figure");
+    expect(html).not.toContain("data-spya-pdf-figure");
   });
 
   it("marks a block the model could not fully read, so the reader can see it", () => {
-    const html = renderHtml([record({ text: "the ⟦illegible⟧ word", uncertain: true })], "T");
+    const html = renderHtml([record({ text: "the ⟦illegible⟧ word", uncertain: true })], "T", RAW_SHA);
     expect(html).toContain('<p class="pdf-uncertain">the ⟦illegible⟧ word</p>');
   });
 
@@ -269,6 +344,7 @@ describe("records into HTML", () => {
         record({ type: "reference", text: "Smith, J. (1901)." }),
       ],
       "T",
+      RAW_SHA,
     );
     expect(html).toContain("The real title");
     expect(html).toContain("Body.");

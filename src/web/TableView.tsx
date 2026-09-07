@@ -17,15 +17,25 @@
 import {
   memo,
   type CSSProperties,
+  type ReactElement,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import type { Article, Block, BlockId, Comment, NodeId, TreeNode } from "../types.js";
+import type {
+  Article,
+  Block,
+  BlockId,
+  Comment,
+  NavLabelStatus,
+  NodeId,
+  TreeNode,
+} from "../types.js";
 import { useRenderCount } from "./perf.js";
 import { columnLabel, type Geometry } from "./tree.js";
+import { paragraphLabelNotice } from "./nav-labels.js";
 import type { Layout } from "./layout.js";
 import {
   annotateHtml,
@@ -66,6 +76,7 @@ import {
   zoomTargetOf,
   type ZoomedFigure,
 } from "./zoomable.js";
+import { hasOriginalPdf, PdfFigureNotes, pdfFigureNotesIn } from "./PdfFigureNote.js";
 
 /**
  * How long the live region stays empty between two announcements.
@@ -278,6 +289,62 @@ function applyOpen(
   return out;
 }
 
+/**
+ * **The leaf column for an article whose paragraph labels are not there**, or
+ * `null` when they are and it should draw itself as usual.
+ *
+ * One `<td>` for the whole table rather than one per paragraph, because that is
+ * the difference between saying something once and repeating it two thousand
+ * times. It carries the gist columns' own classes so it is still visibly that
+ * column, plus `labels-withheld`, which is what takes the pointer off it —
+ * there is nothing here to jump to.
+ *
+ * A free function rather than a branch inside the cell map, so the map keeps a
+ * single job. `paragraphLabelNotice` is the rule and the words
+ * (src/web/nav-labels.ts); nothing about the decision varies with the row.
+ */
+function withheldLeafCell(
+  status: NavLabelStatus,
+  columns: readonly number[],
+  leafDepth: number,
+  rows: number,
+  pinLeft: number | undefined,
+  pinRight: number | "text" | undefined,
+): ReactElement | null {
+  const notice = paragraphLabelNotice(status);
+  if (notice === null) return null;
+  /* **Only where the column would have been drawn**, and this line is a bug
+     found in a browser on 2026-09-06 rather than a precaution. `columns` is what
+     `<colgroup>` allocates a `<col>` for, and the leaf is not in it unless the
+     reader asked (`fitView` never opens it by itself). Without this test the row
+     emitted one more `<td>` than the table had columns, so the extra cell took
+     the *prose* column's width and `td.text` came out 0px wide, off the right
+     edge of the window: the whole article invisible, with nothing thrown and
+     nothing logged. Withholding a layer that is not on screen is not a thing to
+     announce. */
+  if (!columns.includes(leafDepth)) return null;
+  return (
+    <td
+      rowSpan={rows}
+      data-nav-depth={leafDepth}
+      className={[
+        "gist",
+        `depth-${leafDepth}`,
+        "leaf",
+        "labels-withheld",
+        leafDepth === pinLeft ? "pin-left" : "",
+        leafDepth === pinRight ? "pin-right" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <div className="sticky">
+        <div className="nav-label nav-label-absent">{notice}</div>
+      </div>
+    </td>
+  );
+}
+
 interface Props {
   article: Article;
   /** Built once in App, because the reading-position code needs it too. */
@@ -426,6 +493,17 @@ interface Props {
    * not have been — the thirty-sixth is covered too. BlockRef.tsx § `blockHref`.
    */
   linkBase: string;
+  /**
+   * **The article's slug, from the route** — for the *view the original*
+   * control beside a PDF's figures (PdfFigureNote.tsx).
+   *
+   * A prop rather than `article.meta.slug`, and the reason is `Origin`'s in
+   * Metadata.tsx: an address with no article of its own is answered with a
+   * fixture's meta, so the two can disagree, and a control that opens *a
+   * document* must be about the one the reader is standing on. It is also a
+   * string, so it cannot cost this memo a render.
+   */
+  slug: string;
 }
 
 /**
@@ -489,6 +567,7 @@ function TableViewInner({
   sections,
   layoutKey,
   linkBase,
+  slug,
 }: Props) {
   useRenderCount("TableView");
   const { blocks } = article;
@@ -933,6 +1012,24 @@ function TableViewInner({
    * this component re-renders on a pointer crossing from one row to the next,
    * and the answer changes only when the article does.
    */
+  /**
+   * **The figures a PDF came with, and what became of each** —
+   * PdfFigureNote.tsx.
+   *
+   * Memoised for `proseHtml`'s reason and keyed on the whole article: this
+   * component re-renders on a pointer crossing from one row to the next, and
+   * the answer changes only when the article does. `article.assets` is half the
+   * input and `article.blocks` is the other, and both arrive together.
+   *
+   * Empty for every article that did not come from a PDF, which is almost all
+   * of them, and the walk that produces it is one `String.includes` per block.
+   */
+  const figureNotes = useMemo(() => pdfFigureNotesIn(article), [article]);
+  /* One boolean for the whole article: is there an original to open at all.
+     PdfFigureNote.tsx § `hasOriginalPdf` — which is also the ownership gate,
+     and says why that is safe and where to look if it stops being. */
+  const canOpenSource = hasOriginalPdf(article);
+
   const noteStarts = useMemo(() => {
     const out = new Map<BlockId, NoteStart>();
     if (!notes) return out;
@@ -972,6 +1069,60 @@ function TableViewInner({
   // levels scroll between them.
   const pinLeft = columns[0];
   const pinRight = showText ? "text" : columns[columns.length - 1];
+
+  /**
+   * **The leaf column, for an article with no paragraph labels to put in it** —
+   * one `<td>` spanning the whole table, or `null` when the labels are there and
+   * the column draws itself as usual. nav-labels.ts owns the rule and the words.
+   *
+   * Built once, out here, rather than decided per cell, and both halves of that
+   * matter. The whole column makes **one** decision, where a per-row test could
+   * withhold some rows and draw others — the partly-drawn level `outline.ts`
+   * calls "a lie about the structure". And nothing in it varies with the row, so
+   * the body below only has to place it.
+   *
+   * The cells it stands in for are `navLabel ?? title`, and on a leaf `title` is
+   * normally `""` — so without this the column is a run of blank rows, which
+   * reads as forty paragraphs the article could not name rather than as work
+   * that has not finished (tree.ts § "a run of forty blank leaf cells"). The
+   * sticky wrapper is the gist columns' own, so the sentence stays on screen
+   * wherever the reader is standing.
+   *
+   * **Which readers see it, checked in a browser rather than assumed.** The pill
+   * offers the notice instead of the column (App.tsx), so a reader cannot open
+   * this column while the labels are missing — what is left is a `?cols=` that
+   * names the leaf depth by hand, and a reader who had it open when the labels
+   * went. The table's own outline mode (`showText` false), where this column
+   * would have been the view, is unreachable: nothing sets that flag any more
+   * and `?text=0` is rewritten to `?mode=outline`, which is the band
+   * (`OutlinePanel`) and a different feature — docs/project/browser-testing.md
+   * says so, and it was confirmed on 2026-09-06.
+   */
+  const withheldLeaf = withheldLeafCell(
+    article.navLabelStatus,
+    columns,
+    geometry.leafDepth,
+    blocks.length,
+    pinLeft,
+    pinRight,
+  );
+
+  /**
+   * The columns the cell loop still draws — every one of them, unless the leaf
+   * column has been withheld, in which case that one is not a cell loop's
+   * business at all.
+   *
+   * **Taken out here rather than branched on per cell**, and the reason is that
+   * the loop runs once per column per block: a withheld column is one fact about
+   * the article, and asking it again for every paragraph would be the same
+   * answer two thousand times. It also keeps the loop to the one job it had.
+   *
+   * The withheld cell is drawn straight after this list, which is where it
+   * belongs: `fitView` returns `[...gists, leafDepth]`, so the leaf is always
+   * the rightmost of the table's own columns (only the prose sits right of it).
+   */
+  const drawnColumns =
+    withheldLeaf === null ? columns : columns.filter((d) => d !== geometry.leafDepth);
 
   return (
     <>
@@ -1236,7 +1387,7 @@ function TableViewInner({
             onMouseEnter={() => setHoveredRow(row)}
             className={hoveredRow === row ? "row-active" : undefined}
           >
-            {columns.map((depth) => {
+            {drawnColumns.map((depth) => {
               const cell = geometry.cellAt.get(`${depth}:${row}`);
               if (!cell) return null; // covered by a rowSpan above
               const { node } = cell;
@@ -1295,6 +1446,14 @@ function TableViewInner({
                 </td>
               );
             })}
+            {/* **The leaf column, when there is nothing to put in it** — drawn
+                on the first row and spanning the rest, so it is one sentence
+                about the article rather than a blank cell per paragraph.
+                `withheldLeafCell` above says why, and `drawnColumns` is what
+                took the leaf out of the loop that would otherwise have drawn
+                it here. `null` on every other row, which is exactly what a
+                rowSpan needs from the rows it covers. */}
+            {row === 0 && withheldLeaf}
             {showText && (
               <td
                 data-nav-depth={geometry.leafDepth}
@@ -1439,6 +1598,21 @@ function TableViewInner({
                      an empty paragraph. */
                   dangerouslySetInnerHTML={proseHtml.get(block.id)?.out ?? { __html: block.html }}
                 />
+                {/* **After the prose, and outside it.** A PDF figure that could
+                    not be recovered gets one muted line here, and every PDF
+                    figure gets a way back to the page it was on. It is a sibling
+                    of `.prose` rather than markup inside the block for the
+                    reason `notes-head` above is a real element: `selection.ts`
+                    roots comment offsets at `td.text .prose`, so a generated
+                    sentence written into `block.html` would shift every anchor
+                    in that block, silently. PdfFigureNote.tsx; GPT Sol, I-4. */}
+                {figureNotes.has(block.id) && (
+                  <PdfFigureNotes
+                    notes={figureNotes.get(block.id) ?? []}
+                    slug={slug}
+                    canOpenSource={canOpenSource}
+                  />
+                )}
               </td>
             )}
           </tr>

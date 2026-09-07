@@ -149,16 +149,40 @@ function asked(): string[] {
   return calls.filter((c) => c.method === "POST").map((c) => (c.body as { question: string }).question);
 }
 
+/**
+ * Ask the band to start a conversation, and **wait for the address to catch up**.
+ *
+ * nuqs writes the URL from a module-global throttle queue on a `setTimeout` of
+ * its own, so unmounting the root does not cancel a write that is still queued.
+ * A case that returns while one is pending leaves a timer that fires after
+ * vitest has torn this file's jsdom down, and nuqs's
+ * `getSearchParamsSnapshotFromLocation` reads a `location` that is no longer
+ * there. That fails the whole run as an unhandled `ReferenceError` with **every
+ * test still reported green** — nothing to open, and it is attributed to this
+ * file only because vitest names the file that queued the timer. Measured
+ * 2026-09-06 at one run in thirty;
+ * docs/postmortems/260906c-a-url-write-outlived-the-page-that-asked-for-it.md.
+ *
+ * **Observed rather than slept through.** `vi.waitFor` polls until the write has
+ * actually landed, so nothing here depends on what nuqs's throttle is set to —
+ * the same reason the case below waits instead of taking a fixed delay.
+ */
+async function sendNew(question: string): Promise<void> {
+  const send = panel?.onSendNew as (q: string, p?: boolean) => void;
+  expect(typeof send, "the band handed the panel no way to start a conversation").toBe("function");
+  await act(async () => {
+    send(question, false);
+  });
+  await settle();
+  await vi.waitFor(() => {
+    expect(new URLSearchParams(location.search).get("thread")).toBe(sentTo().at(-1));
+  });
+}
+
 describe("the band's onSendNew", () => {
   it("sends to a conversation of its own, not the one the URL names", async () => {
     await mount(STORED.id);
-    const send = panel?.onSendNew as (q: string, p?: boolean) => void;
-    expect(typeof send).toBe("function");
-
-    await act(async () => {
-      send("Something else entirely", false);
-    });
-    await settle();
+    await sendNew("Something else entirely");
 
     expect(sentTo()).toHaveLength(1);
     expect(sentTo()[0]).not.toBe(STORED.id);
@@ -180,20 +204,19 @@ describe("the band's onSendNew", () => {
      has just left rather than the one they just started. */
   it("moves ?thread= to the conversation it started", async () => {
     await mount(STORED.id);
-    const send = panel?.onSendNew as (q: string, p?: boolean) => void;
-    await act(async () => {
-      send("Something else entirely", false);
-    });
-    await settle();
+    await sendNew("Something else entirely");
 
     expect(panel?.threadId).toBe(sentTo()[0]);
     /* nuqs writes the address on a throttle of its own rather than on the
        render, so a `setTimeout(0)` flush does not see it. Waited for rather
        than slept through: a fixed delay bakes nuqs's current 50ms into this
-       file, and would go quietly green-then-flaky if it ever changed. */
-    await vi.waitFor(() => {
-      expect(new URLSearchParams(location.search).get("thread")).toBe(sentTo()[0]);
-    });
+       file, and would go quietly green-then-flaky if it ever changed.
+
+       **That wait now lives in `sendNew`**, because every case needs it and not
+       only this one — a case that skipped it left a timer that outlived the
+       page. The property is still asserted here, where a reader looking for
+       "the URL follows the conversation" will look for it. */
+    expect(new URLSearchParams(location.search).get("thread")).toBe(sentTo()[0]);
   });
 
   /* The composer takes the caret when the nonce rises, and a reader who typed
@@ -202,11 +225,7 @@ describe("the band's onSendNew", () => {
   it("raises the focus nonce, so the caret carries into the new conversation", async () => {
     await mount(STORED.id);
     const before = panel?.focusNonce as number;
-    const send = panel?.onSendNew as (q: string, p?: boolean) => void;
-    await act(async () => {
-      send("Something else entirely", false);
-    });
-    await settle();
+    await sendNew("Something else entirely");
 
     expect(panel?.focusNonce).toBe(before + 1);
   });

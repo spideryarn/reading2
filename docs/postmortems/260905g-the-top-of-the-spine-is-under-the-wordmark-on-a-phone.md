@@ -47,7 +47,7 @@ chrome**, and the top chrome is three things, not one:
 - `.logo-home`, fixed at `top: var(--safe-top); height: var(--bar-h); z-index: 60`
 - `.fb-button`, its mirror in the other corner, same three numbers
 
-`:root[data-bars="hidden"]` in [`styles.css`](../../src/web/styles.css) drops `--bar-bottom` to
+`:root[data-bars="hidden"]` in [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css) drops `--bar-bottom` to
 `var(--safe-top)` so everything pinned beneath the bar can reclaim its 44px. **The two corner
 controls take no part in that switch** — nothing in the stylesheet moves, hides or shrinks them on
 `data-bars` — so the space they occupy is reclaimed by things that then draw underneath them.

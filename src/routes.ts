@@ -4,7 +4,7 @@
  * Connect-shaped (`req`, `res`) but not Vite-specific — vite.config.ts mounts
  * this as dev middleware today, and the standalone Node server that
  * architecture.md § Server and client defers will mount the same function. The
- * actual work stays in src/api.ts, src/comments.ts and src/explain.ts; this file
+ * actual work stays in src/store/index.ts, src/comments.ts and src/explain.ts; this file
  * is only routing, parsing and status codes.
  *
  *   GET    /api/library         every article on the shelf, for the homepage
@@ -23,6 +23,7 @@
  *   GET    /api/link-summary    `?slug=&url=&block=` → SSE: how it stands to the piece being read
  *   GET    /api/article/:slug    meta + blocks + tree, one payload
  *   GET    /api/source/:slug     the PDF an article was made from, for a reader to check it
+ *   GET    /api/asset/:slug/:hash.:ext   one picture of that article, out of our own bucket
  *   GET    /api/export/:slug     everything we hold for one article, as a zip to download
  *   GET    /api/metadata/:slug   what the pipeline wrote, and whether any of it is stale
  *   GET    /api/tweets/:slug     the article as a numbered thread, and whether it is stale
@@ -128,6 +129,7 @@ import {
   lookUpTerm,
   askAboutTerm,
   loadArc,
+  loadAssets,
   loadIdeas,
   loadQuotes,
   loadIllustrated,
@@ -144,6 +146,7 @@ import {
    turns into a 409. Nothing here touches a file, so nothing here has to know
    which store is live. Every write goes through `chatStore` above. */
 import { ChatConflict, withEdit, withRetry } from "./chat.js";
+import { shortenedSpokenLabel } from "./spoken-label.js";
 import { CommentIdTaken, NotAnExplanation, type AnswerPatch, type MarkPatch } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
 /* Referee mode's Criteria sub-mode — the model call, and the rules a request
@@ -192,7 +195,7 @@ import { mirrorStream } from "./referee-mirror.js";
    `withRetry` import above states. The palette's *size* is deliberately not in
    it: see `SearchRun.colour`. */
 import { isStorableColour } from "./searches.js";
-/* Through the store, so SPIDERYARN_STORE moves comments and articles together.
+/* Through the store, so comments and articles stay together.
    They cannot be split: a comment anchors to a block id, and leaving the
    questions on disk while the paragraphs they point at come from Postgres puts
    the two halves in stores nothing keeps in step. */
@@ -316,6 +319,7 @@ import {
 } from "./ai-spend.js";
 import { costStore } from "./store/ai-calls.js";
 import { canonicalKey, stagingKey } from "./source.js";
+import { storedAssetFor } from "./asset-delivery.js";
 import { uploadGrants } from "./store/blobs.js";
 import { uploadProblem } from "./uploads.js";
 import {
@@ -504,11 +508,9 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
      one is right whenever `ownedSlug` is right, which is the property worth
      having. The answer is discarded — it is asked as a question, not read.
 
-     **Kept even though `sourceStore.readPdf` is owner-filtered too** (the
-     Postgres half joins through `ownedSlug`). Two independent refusals on the one route that
-     hands back somebody's private document is worth the round trip, and the
-     filesystem store has no owner column at all — which is the hole
-     src/store/index.ts refuses to boot into in production, and why it does. */
+     **Kept even though `sourceStore.readPdf` is owner-filtered too** (it joins
+     through `ownedSlug`). Two independent refusals on the one route that hands
+     back somebody's private document is worth the round trip. */
   await shelfStore.read(slug);
 
   /* **The store, not the disk** — and until 2026-08-31 this was the disk.
@@ -638,6 +640,95 @@ async function sendPlate(
   /* A stranger's model drew these bytes and they are served from our origin —
      the one place a wrong content type becomes script. Same reason
      `sendSource` sets it. */
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  res.end(Buffer.from(bytes));
+}
+
+/**
+ * **One of an article's own pictures, as bytes** —
+ * docs/project/article-images.md.
+ *
+ * `sendPlate` above is the template and its comments carry the reasoning; this
+ * is the same shape pointed at a different artefact, and the differences are
+ * the only things worth reading here.
+ *
+ * ## It serves *an article's images*, not PDF figures
+ *
+ * `storedAssetFor` (src/asset-delivery.ts) searches both collections in the
+ * manifest — the article's own `<img src>`s and the figures a PDF came with —
+ * so this route is generic by construction rather than by intention. PDF
+ * figures are simply the only ones flowing through it today; **stage E of
+ * docs/plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md turns
+ * the article's own images on, and it needs no edit here.** GPT Sol, I-1.
+ *
+ * ## The rule, restated because it is the whole authorisation
+ *
+ * > **The key is rebuilt from the manifest entry, never taken from the path.**
+ *
+ * Assets are content-addressed in a bucket shared by every article and every
+ * reader (`canonicalKey`, src/source.ts), so the hash in the URL is used **only
+ * to look an entry up in this article's own manifest** and is never seen again.
+ * A hash that is a real asset of somebody else's article is a 404; **a hash
+ * that is in the bucket but not in this manifest is a 404 for the article's own
+ * owner too**, which is the case worth stating because it is the one that feels
+ * wrong: owning an article entitles you to the objects it lists, not to the
+ * bucket. GPT Sol, I-5.
+ *
+ * ## Why `loadAssets` and not `loadArticle`
+ *
+ * This runs once per picture — eight times on the PDF this was built for — and
+ * `loadArticle` re-reads every block and the whole tree each time.
+ * `ArticleReader.loadAssets` (src/store/contracts.ts) is one `jsonb` column.
+ *
+ * `blobStore()` and **not** `postgresBlobStore()`, for the reason `sendPlate`
+ * gives: the bytes were *written* through `blobStore()` (src/collect-assets.ts,
+ * src/collect-pdf-figures.ts), so selecting differently here would be a split
+ * brain by construction.
+ *
+ * **Immutable, and it can be**: the URL contains the hash of its own contents.
+ * `private` because the article is one reader's — a shared cache must not hold
+ * it. The public twin deliberately answers `no-store` instead: `sendBytes`
+ * (src/public/routes.ts) sets no `Cache-Control` at all, because `serveApi` has
+ * already set `no-store` across the whole public namespace before dispatch, and
+ * that function's header says why the two answers must differ.
+ */
+async function sendArticleAsset(
+  res: ServerResponse,
+  slug: string,
+  hash: string,
+  ext: string,
+): Promise<void> {
+  /* Ownership first, before the manifest is read and long before a byte moves —
+     `sendSource`'s rule, and the failure it was written after. `loadAssets` is
+     owner-filtered too (it goes through `ownedSlug`), and this is the same
+     belt-and-braces pair that route keeps: two independent refusals on a route
+     that hands back somebody's private picture is worth the round trip. */
+  await shelfStore.read(slug);
+
+  const found = storedAssetFor(await loadAssets(slug), hash, ext);
+  if (!found) throw httpError(404, "No such image.");
+
+  const bytes = await blobStore().get(canonicalKey(found.sha256, found.ext));
+  if (!bytes) {
+    /* The manifest names an object the store has not got. A 500 rather than a
+       404, on `sendSource`'s and `sendPlate`'s reasoning: telling a reader their
+       picture does not exist because a bucket is misconfigured is the wrong
+       sentence, and this is a dangling reference rather than an absence. */
+    throw httpError(500, "That image could not be read back.");
+  }
+
+  res.statusCode = 200;
+  /* **From the entry, not from `CONTENT_TYPE[ext]`.** The manifest records what
+     the bytes were *sniffed* to be (src/assets.ts § `sniffImage`), which is the
+     whole discipline of this feature: a name that does not describe its
+     contents is the one thing content addressing must never store. The two
+     agree today; the entry is the one that stays true. */
+  res.setHeader("Content-Type", found.contentType);
+  res.setHeader("Content-Length", String(bytes.byteLength));
+  /* A publisher's file, or a picture cut out of a stranger's upload, served
+     from our origin — the one place a wrong content type becomes script. Same
+     reason `sendSource` sets it. */
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
   res.end(Buffer.from(bytes));
@@ -3156,25 +3247,6 @@ const MAX_SPOKEN_CHARS = 20_000;
 const MAX_SPOKEN_ITEMS = 32;
 
 /**
- * The longest a label on a pointer or a tool run may be.
- *
- * These are short by construction — `show_passage` asks for "a few words naming
- * what is in the passage", and a tool's label is `searched your library for
- * "predictive processing"`. The cap is not a product rule, it is a bound on
- * what a browser can put in a column: everything on this route is a claim by
- * the browser, and the two fields with no natural length were the two with no
- * limit. Trimmed rather than refused, because a long label is a cosmetic
- * problem and throwing the whole exchange away over one would lose the reader's
- * words for it.
- */
-const MAX_SPOKEN_LABEL = 400;
-
-/** Trim rather than refuse. See `MAX_SPOKEN_LABEL`. */
-function shortened(text: string): string {
-  return text.length > MAX_SPOKEN_LABEL ? text.slice(0, MAX_SPOKEN_LABEL) : text;
-}
-
-/**
  * The passages a spoken answer pointed at, checked.
  *
  * Returns the field or **nothing**, so the caller spreads it: the two stores
@@ -3215,7 +3287,7 @@ function parseSpokenPassages(
     }
     return {
       blockIds: blockIds as string[],
-      why: typeof why === "string" ? shortened(why) : "",
+      why: typeof why === "string" ? shortenedSpokenLabel(why) : "",
     };
   });
   return passages.length > 0 ? { passages } : undefined;
@@ -3251,9 +3323,9 @@ function parseSpokenTools(x: unknown): { tools: ToolRun[] } | undefined {
     }
     return {
       name,
-      label: shortened(label),
+      label: shortenedSpokenLabel(label),
       status: "done" as const,
-      ...(typeof detail === "string" && detail !== "" ? { detail: shortened(detail) } : {}),
+      ...(typeof detail === "string" && detail !== "" ? { detail: shortenedSpokenLabel(detail) } : {}),
     };
   });
   return tools.length > 0 ? { tools } : undefined;
@@ -4392,7 +4464,7 @@ function part(m: RegExpExecArray, group: number): string {
  * docs/reusable/silent-success.md, and it is why this is written up in
  * docs/project/security.md rather than filed as a bug fix.
  *
- * That fallback is gone as of stage 1a: `candidateDirs` in src/api.ts offers
+ * That fallback is gone as of stage 1a: `candidateDirs` offered
  * `example/` for the fixture's own slug and for nothing else, so a slug with no
  * artefacts now answers 404 whether it is a typo or a traversal. The history
  * stays here because it is the reason this route validates the slug rather than
@@ -6647,7 +6719,7 @@ export async function serveAuthenticatedApi(
 
      GET *and* DELETE, which the thread does not have. Asking for the step again
      appends terms rather than replacing them (src/glossary.ts), so "start over"
-     needs a way to say so — see `deleteGlossary` in src/api.ts for why that is
+     needs a way to say so — see `deleteGlossary` in src/store/pg-glossary.ts for why that is
      two acts rather than one flag. There is still no POST: *finding* terms is a
      model call that takes tens of seconds, which is a job, not a request.
      POST /api/jobs { slug, steps: ["glossary"] } is how you ask. */
@@ -6753,6 +6825,17 @@ export async function serveAuthenticatedApi(
      and then Drift pays for one article, not two. */
   const projection = /^\/api\/projection\/([\w.%-]+)$/.exec(path);
   const source = /^\/api\/source\/([\w.%-]+)$/.exec(path);
+  /* **One of the article's own pictures, out of our bucket** —
+     `sendArticleAsset`, and `assetPath` in src/asset-delivery.ts is the same
+     line without the regex, which is what the client builds its `src` from.
+
+     The hash is spelled out as 64 hex characters and the extension as the three
+     formats we host, for `illustratedPlate`'s reason above: not because the
+     route trusts either (it does not — both are only ever *compared* with what
+     the manifest says), but because a pattern that accepts anything invites the
+     next reader to think the capture is a key. `AssetExt` in src/assets.ts is
+     the list; a fourth format there is a change here too. */
+  const asset = /^\/api\/asset\/([\w.%-]+)\/([0-9a-f]{64})\.(png|jpeg|gif)$/.exec(path);
   /* **Everything Spideryarn holds for one article, as a zip.** Its own
      namespace rather than `/api/article/:slug/export`, because it is not a
      representation of the article payload — it is a snapshot across ten tables
@@ -7154,6 +7237,15 @@ export async function serveAuthenticatedApi(
     }
     if (source && req.method === "GET") {
       await sendSource(res, slugPart(source, 1));
+      return;
+    }
+    /* `slugPart` on the slug for the reason the `source` route above gives —
+       the pattern allows `%` and `.` — and `part` is not used on the hash or the
+       extension, which the pattern has already narrowed and which are in any
+       case only ever compared, never joined onto anything. The same shape
+       `illustratedPlate` uses below. */
+    if (asset && req.method === "GET") {
+      await sendArticleAsset(res, slugPart(asset, 1), part(asset, 2), part(asset, 3));
       return;
     }
     /* `slugPart`, not `part` — the pattern above allows `%` and `.` and `part`

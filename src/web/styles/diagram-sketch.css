@@ -1,0 +1,389 @@
+/* diagram-sketch.css — the Sketch sub-mode of Diagram: colour, weight and dash
+   for the classes src/sketch-paint.ts emits, plus the card, the crumbs and full
+   screen. SketchView.tsx, docs/project/diagram.md § Sketch.
+
+   No geometry lives here, deliberately — the banner below says what that would
+   break in the offline harness. */
+
+/* --------------------------------------------------------------- § sketch ----
+ *
+ * The picture a model draws of the argument — docs/project/diagram.md § Sketch,
+ * src/web/SketchView.tsx.
+ *
+ * **Every rule here is keyed off a class `src/sketch-paint.ts` emits, and there
+ * is no geometry in this file.** That is the whole arrangement: the painter is
+ * pure and shared with the offline harness in `evals/sketch/`, so what the
+ * stylesheet owns is colour, weight and dash — and what it must never own is a
+ * position, because the harness would not see it and the two renderings would
+ * quietly diverge on the one thing they exist to agree about.
+ *
+ * **No colour is named.** A primitive carries a `tone` (0–7), `Shape` in
+ * SketchView.tsx turns it into `--cat-rgb`, and everything below reads that —
+ * the same indirection the searches and the tree already use
+ * (docs/project/colour-scales.md). `--cat-7-rgb` is the palette's neutral and
+ * the fallback everywhere, and it has to be a TRIPLET rather than a colour for
+ * the reason `.diag-card` gives at length: `rgb(oklch(…) / 0.8)` is invalid at
+ * computed-value time and drops the whole declaration silently.
+ */
+
+.sk { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+
+/* The bar over the picture: where you are, and how big to draw it. */
+.sk-bar {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  font-family: var(--font-ui); font-size: 0.81rem;
+}
+.sk-title { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The scene switcher: the overview and each zoom, as a row. Scrolls rather than
+   wraps — a second row would push the picture down by a line on exactly the
+   articles that have the most to show, and the titles are short. */
+.sk-scenes { display: flex; gap: 0.2rem; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.sk-scenes::-webkit-scrollbar { display: none; }
+.sk-scene {
+  flex: none;
+  border: 1px solid transparent; border-radius: 4px;
+  padding: 0.15rem 0.35rem;
+  color: var(--ink-faint); background: none; cursor: pointer;
+  font-family: inherit; font-size: inherit;
+  white-space: nowrap; max-width: 11rem; overflow: hidden; text-overflow: ellipsis;
+}
+.sk-scene:hover { color: var(--ink); background: var(--surface-raised); }
+/* **The open one is not truncated.** Every chip capped at 11rem meant the band
+   showed "Why We're Ter" as the name of where you are — the one label in the row
+   that has to be readable, cut off to make room for the ones that do not. The
+   row already scrolls, so this costs the others nothing. */
+.sk-scene.on { color: var(--ink); border-color: var(--rule-strong); background: var(--surface-raised); max-width: none; }
+.sk-scene:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.sk-up, .sk-crumb, .sk-zoom {
+  display: inline-flex; align-items: center; gap: 0.2rem;
+  border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  color: var(--ink-soft); background: none; cursor: pointer;
+  font-family: inherit; font-size: inherit;
+}
+.sk-zoom { margin-left: auto; }
+.sk-up:hover, .sk-crumb:hover, .sk-zoom:hover { background: var(--surface-raised); color: var(--ink); }
+.sk-up:focus-visible, .sk-crumb:focus-visible, .sk-zoom:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+/* Up sits before the scene row, not after it: it is the way out of where you
+   are, and the row is a list of where you could be. */
+.sk-up { flex: none; }
+
+/* ---- a region's name, when it opens the part it names ---- */
+
+.sk-region-open { cursor: pointer; }
+.sk-region-open .sk-region-label { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
+.sk-region-open:hover .sk-region-label { fill: rgb(var(--cat-rgb, var(--cat-7-rgb))); text-decoration-style: solid; }
+.sk-region-open:focus-visible { outline: none; }
+/* The ring goes on the hit rectangle rather than the group, because a `<g>` has
+   no box of its own for an outline to follow — it is exactly its children's
+   extent, and the text's extent is not the target's. */
+.sk-region-open:focus-visible .sk-hit { stroke: var(--highlight); stroke-width: 2; rx: 3; }
+
+/* ---- a part that opens: the mark, and the peek inside it ---- */
+
+
+/* The corner mark, beside the name. Faint until the name is hovered, then it is
+   the same colour as the name — one control, one state.
+   `vector-effect` here and on the stack: the band scales 760 canvas units into
+   under 400 pixels, so a 1.6-unit stroke arrives at three quarters of a pixel
+   and the one mark that says a part opens is a grey suggestion. Held at its
+   painted weight it is the same line in the band and at full screen, which is
+   the whole job. ⟨Sol⟩, 2026-08-30. */
+.sk-region-more {
+  fill: none;
+  stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.55);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.sk-region-open:hover .sk-region-more,
+.sk-region-open:focus-visible .sk-region-more {
+  stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)));
+}
+
+/*
+ * **The peek** — a ghost of the scene a region opens, drawn inside that region.
+ *
+ * `pointer-events: none` on the group is not a nicety: the scrim covers the
+ * boxes whose region summoned it, and a scrim that could be hovered would take
+ * the pointer off the label, unset the peek, hand the pointer back, and do it
+ * again sixty times a second.
+ */
+.sk-peek { pointer-events: none; animation: sk-peek-in 140ms ease-out; }
+@keyframes sk-peek-in { from { opacity: 0; } to { opacity: 1; } }
+/* The colour of the page, not a shade of grey: it has to *remove* what is
+   under it rather than tint it, or the ghost is drawn into a thicket.
+   `fill-opacity` rather than an alpha inside the colour: `--page` is a `var()`
+   chain ending in an `oklch()`, and `rgb(oklch(…) / 0.88)` is invalid at
+   computed-value time and drops the whole declaration without a word — the trap
+   `.diag-card` and the note at the top of this section both carry. */
+.sk-peek-scrim {
+  fill: var(--page);
+  fill-opacity: 0.88;
+  /* **A frame, because the peek reaches past the region it belongs to.** It
+     grows downward to give a portrait scene room in a landscape region
+     (`peekViewport`), so its lower part lies over the picture with nothing to
+     say where it begins — a browser pass, 2026-08-31, read that as a spill
+     rather than a panel, and noted the ghost landing over a real node and
+     momentarily looking like a highlight of it. One faint edge makes it a thing
+     laid on top rather than a hole in what is underneath. */
+  stroke: var(--rule-strong);
+  stroke-width: 1;
+}
+/*
+ * **The only thing the peek drops is the words**, and it is the one thing that
+ * cannot survive the scale: a region is a fifth of the canvas high, so 12-unit
+ * text lands at about one pixel and renders as grey dust over the shapes it is
+ * meant to be inside. Everything else — the shapes the model chose, the routed
+ * edges, the arrowheads, the dashes, the regions within — is the real painting
+ * of the real scene, because the peek is `paintScene`'s own output dropped in a
+ * nested viewport rather than a second, simpler painter. ⟨Sol⟩, 2026-08-30.
+ */
+.sk-peek text { display: none; }
+/* **And the plate the text was sitting on.** An edge label is drawn as a
+   page-coloured rectangle with the words on top, so hiding only the words left
+   a blank hole in the middle of a connector — a shape the model never drew,
+   which is the one thing the ghost is not allowed to invent. ⟨Sol⟩, 2026-08-30. */
+.sk-peek .sk-label-plate { display: none; }
+/* Strokes held at their painted weight rather than scaled down with everything
+   else: a 1.2-unit stroke inside a 4x reduction is a third of a pixel, and the
+   ghost dissolves into its own scrim. **By element, not by class** — the first
+   version listed six classes and missed `.sk-note-fold`, and a list of names is
+   a thing that goes stale every time the painter learns a new one. */
+.sk-peek :is(rect, path, ellipse, polygon) { vector-effect: non-scaling-stroke; }
+.sk-peek .sk-node { opacity: 0.85; }
+
+/*
+ * **The zoom.** Everything drawn hangs off `.sk-stage`, so the entrance has one
+ * element to move — SketchView.tsx runs it with `Element.animate`, in canvas
+ * units, which is why the origin has to be the canvas's own corner rather than
+ * the group's bounding box. `view-box` is already the default for an SVG
+ * element and it is written out because the whole animation's arithmetic
+ * silently becomes wrong if it is ever `fill-box`.
+ */
+.sk-stage { transform-box: view-box; transform-origin: 0 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* The panel checks the same query before it animates at all; this is the
+     other half, for the peek, which fades in from the stylesheet. */
+  .sk-peek { animation: none; }
+}
+
+/* ---- full screen ---- */
+
+/*
+ * The same `<dialog>` `showModal()` Lightbox.tsx uses, and for its four reasons:
+ * Escape closes it, the background goes `inert`, focus is trapped and restored,
+ * and it paints in the top layer without joining the z-index budget.
+ *
+ * **Why full screen rather than a wider band.** The band's width is the output
+ * of a negotiation in layout.ts between the rail, the band and `PROSE_MIN`, and
+ * a band that grew to fit a diagram would take that width from the article —
+ * which is what the reader is here to read. A modal takes it from nothing.
+ */
+.sk-full {
+  width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh;
+  margin: 0; padding: 0; border: none; background: transparent;
+  display: none;
+}
+.sk-full[open] { display: flex; align-items: flex-start; justify-content: center; }
+.sk-full::backdrop { background: rgb(0 0 0 / 0.72); }
+.sk-in-full {
+  /* Wide enough that a 760-unit canvas lands near 1.4x — text at 17px — and
+     capped so an ultrawide window does not scale it to something silly. */
+  width: min(94vw, 1120px);
+  height: 100dvh;
+  background: var(--page);
+  border-left: 1px solid var(--rule); border-right: 1px solid var(--rule);
+  display: flex; flex-direction: column;
+}
+/* The picture is the thing with room now, so the card can afford two more
+   lines of the sentence it was clamping. */
+.sk-in-full .sk-card { height: 7.5rem; }
+.sk-in-full .sk-card-detail { -webkit-line-clamp: 3; }
+.sk-in-full .sk-bar { padding: 0.5rem 0.8rem; font-size: 0.88rem; }
+.sk-in-full .sk-scene { max-width: 20rem; }
+/* Stops a trackpad flick inside a tall picture scrolling the article behind it
+   — the case that actually happens. Lightbox.tsx § two things `<dialog>` does
+   not do has the reasoning, including why locking `body` was rejected. */
+.sk-in-full .sk-scroll { overscroll-behavior: contain; }
+
+/* What the band says while the overlay has the picture. */
+.sk.away { justify-content: flex-start; }
+.sk-elsewhere {
+  margin: 0; padding: 0.75rem 0.7rem;
+  font-family: var(--font-ui); font-size: 0.85rem; line-height: 1.45; color: var(--ink-faint);
+}
+
+.sk-note {
+  margin: 0 0.6rem 0.3rem;
+  font-family: var(--font-ui); font-size: 0.77rem; line-height: 1.35;
+  color: var(--ink-faint);
+}
+
+/* The svg is always `width: 100%`, so there is nothing to scroll sideways and
+   `overflow-y` is what actually does the work — a tall picture in a short band.
+   `auto` on both axes anyway, because a scene may be wider than tall in the
+   overlay and a clipped edge is worse than a scrollbar. */
+.sk-scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 0.4rem; }
+.sk-svg { display: block; }
+
+/* ---- the primitives ---- */
+
+.sk-shape { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.16); stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.62); stroke-width: 1.2; }
+.sk-shape-note { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.09); stroke-dasharray: 3 3; }
+.sk-note-fold { fill: none; stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.5); stroke-width: 1; }
+
+.sk-region { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.07); stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.24); stroke-width: 1; }
+.sk-region-dashed { fill: none; stroke-dasharray: 5 4; }
+
+/* **Below `.sk-region`, and that is load-bearing.** Both are a single class, so
+   they carry the same specificity and the later one wins. Written above them —
+   where they were, next to the rest of this feature — every declaration here was
+   outvoted by the plain region's own 0.24 and 0.07, and the affordance simply
+   did not exist. Nothing errors and nothing warns; the rule is just quietly
+   overruled. Keep these two together, in this order. */
+/*
+ * **A region that opens something is drawn hotter than one that does not**, and
+ * that is the whole always-on affordance — no second shape, no glyph carrying
+ * the load.
+ *
+ * The first version was geometry: a second panel offset behind the first, a
+ * stack of cards. A browser pass on the real drawing at 288px could not see it,
+ * and could not tell which of the four regions were pressable — which is the
+ * thing this feature exists to fix. `MARK` in src/sketch-paint.ts has the
+ * finding and the arithmetic; the short version is that the band scales 760
+ * units into under 400 pixels, so every *distance* is halved and a five-unit
+ * offset is two and a half pixels.
+ *
+ * **Contrast is the one property that does not shrink.** A stroke held at
+ * 1.8px by `non-scaling-stroke` is the same line in the band as at full screen,
+ * and an alpha is an alpha at any scale. So: a brighter edge and a stronger
+ * wash, against the 0.24/0.07 an ordinary region gets above. What the reader
+ * learns is "the brighter boxes are the ones that open", and the corner mark
+ * beside the name says why, once the picture is big enough to read it.
+ */
+.sk-region-opens {
+  fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.13);
+  stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.62);
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
+}
+/* Dashed regions keep `fill: none` from `.sk-region-dashed`, which follows this
+   in the cascade only by accident of ordering — say it, so a region the model
+   asked to be an outline does not quietly acquire a wash. */
+.sk-region-opens.sk-region-dashed { fill: none; }
+.sk-region-label { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.95); font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; }
+.sk-bracket { fill: none; stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.5); stroke-width: 1.5; }
+
+.sk-edge { fill: none; stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.62); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.sk-edge-dashed { stroke-dasharray: 6 4; }
+.sk-edge-dotted { stroke-dasharray: 1.5 3.5; }
+.sk-head { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.8); stroke: none; }
+.sk-free { fill: none; stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.55); stroke-width: 1.5; }
+.sk-free-fill { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.12); stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.32); stroke-width: 1; }
+
+.sk-text { fill: var(--ink); }
+.sk-sub { fill: var(--ink-faint); }
+.sk-label { fill: var(--ink-soft); }
+.sk-label-lg { fill: var(--ink); font-weight: 600; }
+.sk-label-xs { fill: var(--ink-faint); letter-spacing: 0.06em; text-transform: uppercase; }
+.sk-edge-label { fill: var(--ink-faint); }
+/* The plate under an edge label, so the line does not read through the words.
+   `--page` rather than `--panel`: the band's own ground is what the picture
+   sits on, and a plate in the wrong grey is a visible rectangle. */
+.sk-label-plate { fill: var(--page); stroke: none; }
+
+.sk-muted { opacity: 0.5; }
+
+/* ---- the nodes, which are the only thing that can be pressed ---- */
+
+/* Invisible and on top of its own node's paint: a `bare` node has no shape at
+   all, and the middle of a diamond is mostly not the diamond. Without this the
+   hit target would be whatever the model happened to draw. */
+.sk-hit { fill: transparent; stroke: none; }
+.sk-node.links, .sk-node.opens { cursor: pointer; }
+.sk-node.links:hover .sk-shape, .sk-node.opens:hover .sk-shape {
+  fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.3);
+}
+/* A node that opens another scene gets a heavier edge, because "there is more
+   inside this" is a fact about the picture and not a state of the pointer. */
+.sk-node.opens .sk-shape { stroke-width: 2; }
+/* Where the reader is: a ring, never a fill change — the fill already means
+   which group, and a position marker must not change colour as you read.
+   The same rule the other three pictures follow (docs/project/diagram.md). */
+.sk-node.on .sk-shape { stroke: var(--highlight); stroke-width: 2.5; }
+.sk-node.focus .sk-shape { stroke: var(--highlight-ink); stroke-width: 2; }
+.sk-svg:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+
+/* ---- the card under the picture ---- */
+
+.sk-card {
+  flex: none;
+  border-top: 1px solid var(--rule);
+  border-left: 3px solid rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.8);
+  padding: 0.45rem 0.6rem 0.5rem;
+  background: var(--panel);
+  /* Fixed height, for the reason `.diag-card` gives: a card that grew with its
+     text would resize the picture above it every time the pointer crossed a box.
+     Grown with the text on 2026-09-03 (§ mode band) in the same proportion, so
+     a card that fitted before still fits. Unlike `.diag-card` this height was
+     never derived from a stated line budget — a node carrying caption, title,
+     sub, two lines of detail and the jump link overflows it and always has —
+     so this is a lift, not a fix. */
+  height: 6.9rem;
+  overflow: hidden;
+  font-family: var(--font-ui);
+}
+.sk-card.empty { border-left-color: var(--rule); }
+.sk-card-caption { margin: 0; font-size: 0.83rem; line-height: 1.4; color: var(--ink-faint); }
+.sk-card-title { margin: 0; font-size: 0.9rem; line-height: 1.3; color: var(--ink); font-weight: 500; }
+.sk-card-sub { margin: 0.1rem 0 0; font-size: 0.79rem; color: var(--ink-faint); }
+.sk-card-detail {
+  margin: 0.2rem 0 0; font-size: 0.81rem; line-height: 1.35; color: var(--ink-soft);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.sk-card-jump {
+  margin-top: 0.25rem; padding: 0;
+  background: none; border: none; cursor: pointer;
+  font-family: inherit; font-size: 0.79rem; color: var(--highlight);
+}
+.sk-card-jump:hover { text-decoration: underline; }
+
+/* ---- before there is a picture ---- */
+
+.sk-wait, .sk-empty { padding: 0.75rem 0.7rem; font-family: var(--font-ui); font-size: 0.85rem; color: var(--ink-soft); }
+.sk-wait { display: flex; align-items: center; gap: 0.4rem; }
+/* A redraw already under way, over a picture that is still readable. Above the
+   notes rather than below, because it is the one line here about *now*. */
+.sk-busy {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.15rem 0.7rem 0.3rem;
+  font-family: var(--font-ui);
+  font-size: 0.81rem;
+  color: var(--ink-faint);
+}
+/* The other end of `.sk-busy`: a redraw that came back failed.
+
+   **The same grey as every other failure in this band**, not a red. Both of the
+   diagram panel's failures — `.diag-wait`'s and the Force strip's — say what
+   went wrong in `--ink-faint` and let the words carry it, and a red here would
+   be the one message in the band shouting. It would also have to name
+   `--destructive`, which this stylesheet references six times and defines
+   nowhere: bare, the declaration is simply dropped. */
+.sk-failed {
+  margin: 0;
+  padding: 0.15rem 0.7rem 0.3rem;
+  font-family: var(--font-ui);
+  font-size: 0.81rem;
+  color: var(--ink-faint);
+}
+.sk-empty p { margin: 0 0 0.5rem; line-height: 1.45; }
+.sk-empty-why { font-size: 0.81rem; color: var(--ink-faint); }
+.sk-run { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
+

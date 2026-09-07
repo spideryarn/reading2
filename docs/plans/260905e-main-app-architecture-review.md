@@ -572,19 +572,19 @@ old code, nor that bounding the database *open* bounds nothing else, since a tra
 indefinitely behind a locked one in another tab. Both were found by GPT Sol with a real harness, and
 both would apply to any future schema change here.
 
-- [ ] Reproduce A0's two deferred-response sequences against the current cache seam. Check the
+- [x] Reproduce A0's two deferred-response sequences against the current cache seam. Check the
   introducing history and write the required bug-class postmortem before implementing the fix.
-- [ ] Choose and document the ticket scope; implement atomic eligibility and invalidation with a
+- [x] Choose and document the ticket scope; implement atomic eligibility and invalidation with a
   bounded, migration-safe metadata lifecycle. Keep offline copies readable if metadata admission
   fails or times out, while refusing to write an unfenced new response. Compare against the last
   committed successful sequence, not the last issued one; include LRU touches and whole-article
   eviction in the transactional protocol.
-- [ ] Run the cross-tab/account and invalidation acceptance cases from A0. Use old/new bodies with
+- [x] Run the cross-tab/account and invalidation acceptance cases from A0. Use old/new bodies with
   distinct values and wait for background saves; a future timestamp fixture is not the race.
-- [ ] Include actual sign-out teardown: complete `forgetUser(A)` before releasing A's paused
+- [x] Include actual sign-out teardown: complete `forgetUser(A)` before releasing A's paused
   response; it must not recreate any A body or disturb B's rows. Old tickets remain retired after
   A signs back in; newly reserved reads can save normally. Keep direct-switch partitioning policy.
-- [ ] Update the existing offline plan's implemented-state record and current owning doc signposts.
+- [x] Update the existing offline plan's implemented-state record and current owning doc signposts.
   Review and land independently; no reader refactor is needed to fix this seam.
 
 ### Stage: Establish the behavioural baseline and contain one mode failure
@@ -655,14 +655,29 @@ both would apply to any future schema change here.
 
 ### Stage: Make style ownership visible
 
-- [ ] Extract contiguous CSS sections in original order, keeping `@layer app` and one entry point.
-  Use separate commits from selector changes or visual adjustments.
-- [ ] Compare computed dimensions/positions and screenshots for Plain, Hierarchy, Outline,
-  two different bands, a modeless annotation, a true modal, visitor chrome and the shelf.
-- [ ] Preserve semantic classes used by geometry, selection and tests. Search their consumers
+**Done, 2026-09-06** — [260906d](260906d-make-style-ownership-visible-and-a-new-mode-fail-to-compile.md).
+15,489 lines became 37 sheets in cascade order, and the shipping CSS came out **byte-identical**
+(md5 `733c807548da26925bd8b120d7c026ac`, content-hash filename unchanged). The second half landed
+too: `MODE_TARGET` is a total tagged union, and a new mode now fails to compile at its
+presentation, visitor policy, label and activation.
+
+- [x] Extract contiguous CSS sections in original order, keeping `@layer app` and one entry point.
+  Use separate commits from selector changes or visual adjustments. — **nothing renamed and no
+  selector touched**; the cut points were all proved to be at brace depth 0 outside comments, a
+  check byte-concatenation cannot make.
+- [x] Compare computed dimensions/positions and screenshots for Plain, Hierarchy, Outline,
+  two different bands, a modeless annotation, a true modal, visitor chrome and the shelf. — 10
+  surfaces × 2 widths: **0 computed-style differences**, pixel diffs 0.00–0.24%. The one flagged
+  rect resolved by arithmetic: both states sum to exactly 792.00, so only content height moved.
+- [x] Preserve semantic classes used by geometry, selection and tests. Search their consumers
   before moving/renaming anything; shared stacking/token rules get a single owner.
-- [ ] Add representative real surfaces to `/design`; update the style map and remove stale
+- [x] Add representative real surfaces to `/design`; update the style map and remove stale
   inventories. Acceptance: the same cascade with files that tell an editor where a rule belongs.
+
+What it cost, recorded rather than glossed: three `noDescendingSpecificity` findings the linter can
+no longer see across file boundaries, and **nine sections that are not where their name says** —
+found by reading each sheet against its banner, and left in place, because moving them is a cascade
+change and this job was an extraction.
 
 ### Stage: Optimise annotation inputs, if measurements warrant it
 

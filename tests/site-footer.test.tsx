@@ -30,8 +30,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { type AstNode, parseSource, walkAst } from "./helpers/ts-ast.js";
-
-import { CONTACT_EMAIL } from "../src/site-text.js";
 import { SiteFooter } from "../src/web/SiteFooter.js";
 
 /* React only treats `act()` as authoritative when this is set, and without it
@@ -71,7 +69,7 @@ afterEach(() => {
  */
 function footerAt(
   pathname: string,
-  here?: "library" | "features" | "privacy" | "contact",
+  here?: "library" | "features" | "privacy" | "contact" | "changelog",
 ): string[] {
   history.replaceState(null, "", pathname);
   act(() => root.render(<SiteFooter {...(here ? { here } : {})} />));
@@ -85,41 +83,42 @@ const FEATURES = "Features → /features";
 const PRICING = "Pricing → /pricing";
 const PRIVACY = "Privacy → /privacy";
 const CONTACT = "Contact → /contact";
-const MAIL = `${CONTACT_EMAIL} → mailto:${CONTACT_EMAIL}`;
+const CHANGELOG = "What’s new → /changelog";
 
 describe("the site footer", () => {
   it("carries the whole row on a page that is not one of its own", () => {
     // The control: if this ever stops holding, every "is missing" assertion
     // below would pass over a footer that rendered nothing at all.
-    expect(footerAt("/profile")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CONTACT, MAIL]);
+    expect(footerAt("/profile")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CONTACT, CHANGELOG]);
   });
 
   it("drops Home on the shelf, which is also the landing page", () => {
-    expect(footerAt("/")).toEqual([FEATURES, PRICING, PRIVACY, CONTACT, MAIL]);
+    expect(footerAt("/")).toEqual([FEATURES, PRICING, PRIVACY, CONTACT, CHANGELOG]);
   });
 
   it("drops Features on the features page", () => {
-    expect(footerAt("/features")).toEqual([HOME, PRICING, PRIVACY, CONTACT, MAIL]);
+    expect(footerAt("/features")).toEqual([HOME, PRICING, PRIVACY, CONTACT, CHANGELOG]);
   });
 
   it("drops Privacy on the privacy page", () => {
-    expect(footerAt("/privacy")).toEqual([HOME, FEATURES, PRICING, CONTACT, MAIL]);
+    expect(footerAt("/privacy")).toEqual([HOME, FEATURES, PRICING, CONTACT, CHANGELOG]);
   });
 
-  it("drops Contact on the contact page, and keeps the address there", () => {
-    /* The one page where the two halves of this row say nearly the same thing,
-       and they still behave differently: the link drops itself, the `mailto:`
-       does not. That is the decision in SiteFooter.tsx § `LINKS`, and this is
-       what would go red if somebody later folded the address into the link. */
-    expect(footerAt("/contact")).toEqual([HOME, FEATURES, PRICING, PRIVACY, MAIL]);
+  it("drops Contact on the contact page", () => {
+    expect(footerAt("/contact")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CHANGELOG]);
   });
 
-  it("keeps the contact address on every one of them", () => {
-    // Said separately from the four above because it is a different rule with a
-    // different reason: the address is the only thing in the row that is not a
-    // page, and the only thing a reader who is stuck can actually use.
-    for (const at of ["/", "/features", "/pricing", "/privacy", "/contact", "/profile"]) {
-      expect(footerAt(at)).toContain(MAIL);
+  it("drops What's new on the changelog page", () => {
+    expect(footerAt("/changelog")).toEqual([HOME, FEATURES, PRICING, PRIVACY, CONTACT]);
+  });
+
+  it("carries no email address anywhere in the row", () => {
+    /* It carried `hello@spideryarn.com` beside the Contact link for a day, and
+       Greg, 2026-09-06: *"Remove the hello@spideryarn.com from the footer —
+       just keep the Contact page, which already points to that."* Every entry
+       in this row is now a page, which is what SiteFooter.tsx § `LINKS` says. */
+    for (const at of ["/", "/features", "/pricing", "/privacy", "/contact", "/changelog", "/profile"]) {
+      for (const link of footerAt(at)) expect(link).not.toContain("mailto:");
     }
   });
 
@@ -136,7 +135,13 @@ describe("the site footer", () => {
    * ways, which is precisely the distinction `here` was added to make.
    */
   it("believes the page over the address when the caller says which it is", () => {
-    expect(footerAt("/profile", "library")).toEqual([FEATURES, PRICING, PRIVACY, CONTACT, MAIL]);
+    expect(footerAt("/profile", "library")).toEqual([
+      FEATURES,
+      PRICING,
+      PRIVACY,
+      CONTACT,
+      CHANGELOG,
+    ]);
   });
 
   it("takes a sentence of its own above the links", () => {
@@ -253,8 +258,10 @@ describe("the pages that mount it", () => {
       .sort(),
   );
 
-  it("is exactly the eight pages that have a bottom, once each", () => {
+  it("is exactly the nine pages that have a bottom, once each", () => {
     expect(Object.fromEntries(mounts)).toEqual({
+      /* `/changelog`, since 2026-09-06 — docs/project/changelog.md. */
+      "ChangelogPage.tsx": 1,
       /* `/contact`, since 2026-09-05 — docs/plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md. */
       "ContactPage.tsx": 1,
       "FeaturesPage.tsx": 1,
@@ -266,6 +273,14 @@ describe("the pages that mount it", () => {
       "PricingPage.tsx": 1,
       "PrivacyPage.tsx": 1,
       "ProfilePage.tsx": 1,
+      /* `/features/public-readable-sharing`, since 2026-09-06. It is under
+         `/features`, so it wears that family's `variant="marketing"` row — but
+         it takes no *link* in the row, and that asymmetry is deliberate:
+         `FooterPage` does not have a `public-sharing` member, so nothing drops
+         and no page links here. It is reached from the shelf, from `/privacy`
+         and from an article's details page, which is where the reader it is for
+         will be. docs/project/public-readable-sharing.md. */
+      "PublicReadableSharingPage.tsx": 1,
       "SignInPage.tsx": 1,
     });
   });

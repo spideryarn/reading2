@@ -39,7 +39,7 @@
 import { act, createElement, useEffect, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PublicGlossary, PublicGlossaryEntry } from "../src/public-types.js";
 import type { BlockId } from "../src/types.js";
@@ -158,13 +158,14 @@ async function mount(search: string): Promise<void> {
 
 /**
  * Drag the threshold, through the control the reader actually uses, and hand
- * back control the instant the event does.
+ * back control **once the address reflects the drag** — not the instant the
+ * event does, which is what this said until 2026-09-06 and is the whole of the
+ * bug below.
  *
  * The native value setter, then an `input` event: React tracks the DOM node's
  * last value and would swallow a plain assignment as "nothing changed". This is
  * what `fireEvent.change` does, written out because this repo has no
  * testing-library.
- *
  */
 async function dragGateTo(value: number): Promise<void> {
   const slider = document.getElementById("gloss-gate") as HTMLInputElement | null;
@@ -173,6 +174,23 @@ async function dragGateTo(value: number): Promise<void> {
   await act(async () => {
     setter.call(slider, String(value));
     slider!.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  /* **Wait for the address, or leave a timer behind.** `gateParam` is
+     `debounce(200)` (src/web/params.ts), so the write waits in a per-key
+     debounce queue and only then joins nuqs's shared throttle queue — two
+     stages, and both of them live on `globalThis`, which is why no unmount
+     cancels either. A case that returns before the write lands leaves a timer
+     that fires after vitest has torn this file's jsdom down, and takes the
+     whole run down with an unhandled `ReferenceError: location is not defined`
+     while every test still reports green. Found by measuring what was still
+     queued when this file ended, not by reading it:
+     docs/postmortems/260906c-a-url-write-outlived-the-page-that-asked-for-it.md.
+
+     Polled rather than slept through, so nothing here depends on the debounce
+     staying at 200ms. */
+  await vi.waitFor(() => {
+    expect(param("gate")).toBe(value.toFixed(2));
   });
 }
 

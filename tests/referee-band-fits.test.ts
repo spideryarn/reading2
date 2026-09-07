@@ -51,12 +51,21 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+import { readerCssNoComments } from "./helpers/stylesheets.js";
+
 import {
   REFEREE_TEXT_ALREADY_SENT,
   REFEREE_TEXT_ALREADY_SENT_SHORT,
 } from "../src/messages.js";
 
-const CSS = readFileSync("src/web/styles.css", "utf8");
+/* The reading-view sheets as a set rather than one path — `src/web/styles.css`
+   has held nothing but `@import`s since 2026-09-06.
+
+   Comments stripped, and that is not cosmetic: `bodyOf` below matches raw
+   source, so a rule someone commented out would still satisfy every assertion
+   here and a deleted rule would have a second place to be found.
+   docs/reusable/silent-success.md; GPT Sol, 2026-09-07. */
+const CSS = readerCssNoComments();
 const BAND_FILE = "src/web/modes/referee/RefereeMode.tsx";
 const BAND_SOURCE = readFileSync(BAND_FILE, "utf8");
 

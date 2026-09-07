@@ -35,7 +35,6 @@ output
 docs
 evals
 tests
-test
 example
 supabase
 scratch-*

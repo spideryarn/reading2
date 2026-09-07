@@ -83,6 +83,21 @@ describe("sanitizeHtml — what must survive", () => {
     }
   });
 
+  it("keeps a PDF figure's marker, which is the one mark of ours that must survive", () => {
+    /* Every other `data-spya-*` and every annotation attribute is *forbidden*
+       here, so that a publisher cannot ship markup dressed as something we
+       vouched for. This one is the exception and has to be: the pipeline writes
+       it, the sanitiser is between the pipeline and the reading view, and the
+       reading view is what turns the marker into an `<img>`. Strip it and PDF
+       figures silently stop appearing, with nothing anywhere reporting a
+       problem. src/reserved.ts § `pdfFigure`; GPT Sol, I-2. */
+    const marker = `pdffig1-${"0123456789abcdef".repeat(2)}.3.1`;
+    const out = sanitizeHtml(
+      `<figure data-spya-pdf-figure="${marker}"><figcaption>Fig 1: x</figcaption></figure>`,
+    );
+    expect(out).toContain(`data-spya-pdf-figure="${marker}"`);
+  });
+
   it("keeps inline svg, minus its handlers", () => {
     // Greg's call, 2026-08-25: inline diagrams are worth keeping.
     const out = sanitizeHtml(`<p><svg viewBox="0 0 10 10"><circle r="5"/></svg></p>`);

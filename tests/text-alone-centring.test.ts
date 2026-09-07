@@ -23,6 +23,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readerCssNoComments } from "./helpers/stylesheets.js";
 import { DEFAULT_ROOT_PX, proseAloneMaxPx } from "../src/web/layout.js";
 
 const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), "utf8");
@@ -32,7 +33,10 @@ const stripBlockComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "")
 /** And the line comments the reading view also uses. */
 const stripLineComments = (src: string) => src.replace(/^[^\n"'`]*\/\/[^\n]*$/gm, "");
 
-const css = stripBlockComments(read("../src/web/styles.css"));
+/* The reading-view sheets as a set, not one path: since 2026-09-06 a rule can
+   move between them without changing, and a test that named the file it used to
+   be in would go green over nothing. tests/helpers/stylesheets.ts. */
+const css = readerCssNoComments();
 /* The reading view, which left `App.tsx` for src/web/reader/Reader.tsx on
    2026-09-06. The read is what fails if it moves again — an assertion pointed
    at the wrong file would simply stop finding what it is looking for. */
@@ -49,7 +53,7 @@ const reader = stripLineComments(stripBlockComments(read("../src/web/reader/Read
 function rule(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const found = new RegExp(`^${escaped}\\s*\\{([^}]*)\\}`, "m").exec(css);
-  expect(found, `no rule for \`${selector}\` in styles.css`).not.toBeNull();
+  expect(found, `no rule for \`${selector}\` in the reader stylesheets`).not.toBeNull();
   return (found?.[1] ?? "").replace(/\s+/g, " ").trim();
 }
 

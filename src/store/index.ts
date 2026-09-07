@@ -5,13 +5,14 @@
  * ## The choice is gone, and this is what that means here
  *
  * `SPIDERYARN_STORE` selected between a directory under `data/` and Postgres
- * until 2026-09-05, when the flag and the filesystem store went
+ * until 2026-09-05, when the filesystem store went
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
  * § F). Every seam below is now the Postgres adapter, unconditionally, and the
  * three refusals that used to stand in for a filesystem side — admin, sharing,
- * feedback — are gone with the side they were refusing for. What is left of the
- * flag is a tombstone in [live.ts](live.ts): unset and `postgres` pass, anything
- * else throws, until Greg takes the variable out of Vercel.
+ * feedback — are gone with the side they were refusing for. A tombstone in
+ * `src/store/live.ts` validated the variable until Greg took it out of Vercel on
+ * 2026-09-06; nothing reads the name now, and `tests/one-store-only.test.ts`
+ * says so.
  *
  * `src/routes.ts` imports the article reads from here instead of from
  * `src/api.ts`. That is a one-line change in a file several agents are editing,
@@ -28,11 +29,12 @@
  * is nothing to fall back **to**, which is the strongest form of that rule and
  * the point of having got here.
  *
- * The corollary was the `notMigrated` helper in [live.ts](live.ts): a write with
+ * The corollary was a `notMigrated` helper in `src/store/live.ts`: a write with
  * no Postgres implementation had to fail loudly rather than quietly write a file
  * the reader would never read back. **Nothing in this file refuses any more** —
  * `deleteGlossary` was the last one holding out and was built on 2026-09-03
- * (docs/plans/260903e-glossary-delete-in-postgres.md).
+ * (docs/plans/260903e-glossary-delete-in-postgres.md), so the helper had no
+ * callers left and went with its file on 2026-09-06.
  *
  * ## The other thing this file is the boundary for
  *
@@ -44,16 +46,22 @@
  * a store that can publish the article in a 500.
  */
 
-/* **The `SPIDERYARN_STORE` tombstone is not imported here, and that is the
-   correction.** It was, for about a day: this file is the reader wiring hub and
-   the obvious place. It is also only one door — `src/jobs.ts`,
-   `src/upload-records.ts` and `src/store/ai-calls.ts` all reach Postgres without
-   coming through here, so the refusal was in the program on one path of several
-   and the fix looked complete because the reported symptom went away. It lives
-   at [`src/db/client.ts`](../db/client.ts) now, which is the boundary every one
-   of them crosses, and that file says why at length.
+/* **The `SPIDERYARN_STORE` tombstone was never imported here, and the reason it
+   was not is the part worth keeping.** It was, for about a day in September
+   2026: this file is the reader wiring hub and the obvious place. It is also
+   only one door — `src/jobs.ts`, `src/upload-records.ts` and
+   `src/store/ai-calls.ts` all reach Postgres without coming through here, so the
+   refusal was in the program on one path of several and the fix looked complete
+   because the reported symptom went away. It moved to
+   [`src/db/client.ts`](../db/client.ts), the boundary every one of them crosses,
+   and was deleted from there on 2026-09-06 when Greg took the variable out of
+   Vercel (stage I).
 
-   Every seam below reaches `getDb`, so importing one of them loads it. */
+   **The rule outlived it**: a side-effecting import belongs at the narrowest
+   boundary everything must cross, not at the most obvious front door. A front
+   door is whichever door you happened to walk through. Every seam below reaches
+   `getDb`, so `src/db/client.ts` is still that boundary if anything ever needs
+   to sit at it again. */
 
 import { log } from "../log.js";
 import { makeAskAboutTerm, makeLookUpTerm } from "../term-lookup.js";
@@ -160,7 +168,7 @@ import { postgresBlobStore } from "./blobs.js";
  * because a check nobody runs is one somebody deletes.
  *
  * The store itself is discarded: the fetch and upload paths call `blobStore()`
- * for their own, following the credentials (blobs.ts § Why selection does not
+ * for their own, following the credentials (blobs.ts § Why selection never
  * read `SPIDERYARN_STORE`). Constructing one here is how the pair is checked.
  */
 if (!process.env.VITEST && process.env.NODE_ENV !== "test") {
@@ -221,6 +229,10 @@ export const loadDebate = reader.loadDebate.bind(reader);
    contracts.ts for what `null` means and what it deliberately does not. */
 export const loadSource = reader.loadSource.bind(reader);
 export const loadArc = reader.loadArc.bind(reader);
+/* The manifest on its own, for the route that serves one asset's bytes. See
+   `ArticleReader.loadAssets` in contracts.ts for why it is not
+   `loadArticle(slug).assets`, and for what `undefined` means. */
+export const loadAssets = reader.loadAssets.bind(reader);
 
 /**
  * The reader's own state: conversations, saved searches, checked terms.
@@ -240,7 +252,7 @@ export const chatStore: ChatStore = guarded("chat", pgChatStore);
 export const searchStore: SearchStore = guarded("searches", pgSearchStore);
 
 /**
- * **A referee's own criteria, run over the paper** — the same flag as the
+ * **A referee's own criteria, run over the paper** — the same store as the
  * searches beside it, and for the same reason plus one of its own.
  *
  * The general reason first: a criterion written to a file while the article it
@@ -250,7 +262,7 @@ export const searchStore: SearchStore = guarded("searches", pgSearchStore);
  *
  * The one of its own is `comments.criterion_id`. The referee's *own* placement
  * of a passage is a comment (drizzle/0043), and it carries a foreign key to
- * `(article_id, id)` on this table. Comments follow the flag; if criteria did
+ * `(article_id, id)` on this table. Comments live in Postgres; if criteria did
  * not, a referee's mark would point at a row that store cannot see.
  *
  * `guarded(...)` is not optional. The parameters Drizzle puts into a failed
@@ -370,12 +382,12 @@ export const commentStore: CommentStore = guarded("comments", pgCommentStore);
 /**
  * The shelf's write side, and the library-wide search box.
  *
- * Both follow the same flag as the article reads, and both have to. An archived
+ * Both go to the same store as the article reads, and both have to. An archived
  * flag written to a file while the shelf is being listed out of Postgres would
  * archive nothing at all — the card would come straight back on the next load,
- * having reported success. That is the exact failure `notMigrated` exists to
- * prevent above, and it is why these are wired here rather than imported
- * directly by routes.ts.
+ * having reported success. That is the exact failure the old `notMigrated`
+ * refusal existed to prevent, and it is why these are wired here rather than
+ * imported directly by routes.ts.
  */
 export const shelfStore: ShelfStore = guarded("shelf", pgShelfStore);
 
@@ -384,10 +396,10 @@ export const librarySearch: LibrarySearch = guarded("library", pgLibrarySearch);
 /**
  * The reader's global profile — "about you", not scoped to any article.
  *
- * Follows the same flag as everything above, for the same reason: a profile
- * written to `data/reader.json` while `postgres` mode serves reads out of
- * `reader_profiles` is a write nothing will ever read back — the exact
- * failure `notMigrated` exists to prevent. docs/plans/260826t-reader-profile.md.
+ * Goes to the same store as everything above, for the same reason: a profile
+ * written to `data/reader.json` while reads are served out of `reader_profiles`
+ * is a write nothing will ever read back — the exact failure the old
+ * `notMigrated` refusal existed to prevent. docs/plans/260826t-reader-profile.md.
  */
 export const readerStore: ReaderStore = guarded("reader-profile", pgReaderStore);
 
@@ -403,10 +415,10 @@ export const readerStore: ReaderStore = guarded("reader-profile", pgReaderStore)
  * before that file was deleted 2026-09-05.
  * docs/plans/260831b-finish-the-database-move.md, stage 1.
  *
- * `guarded(...)` like the reads above it, because there really are two
+ * `guarded(...)` like the reads above it, because there really were two
  * implementations: `data/<slug>/` beside the manifest naming the file, and a
- * reference to a content-addressed object in the bucket. Not `notMigrated`, not
- * a refusal — both stores can answer.
+ * reference to a content-addressed object in the bucket. Not a refusal — both
+ * stores could answer.
  */
 export const sourceStore: SourceStore = guarded("source", pgSourceStore);
 
@@ -493,17 +505,15 @@ export const fetchAllowanceStore: FetchAllowanceStore = guarded(
 /* -------------------------------------------------------- the AI ledger -- */
 
 /**
- * **Every model call this app has paid for**, in whichever store is live.
+ * **Every model call this app has paid for.**
  *
- * Selected and guarded in [ai-calls.ts](ai-calls.ts) rather than here, because
+ * Bound and guarded in [ai-calls.ts](ai-calls.ts) rather than here, because
  * `src/jobs.ts` needs it too and cannot import this file without closing a
- * cycle — the same reason `live.ts` is its own file. Re-exported so that a route
- * does not have to know where it lives.
+ * cycle. Re-exported so that a route does not have to know where it lives.
  *
- * The one thing worth saying that is not obvious from the line: **this is a
- * genuine second implementation, not the fallback the header forbids.** Nothing
- * catches a Postgres error and writes a file instead; the flag chooses at boot
- * and the other adapter is never consulted. The alternative — always Postgres,
+ * There was a second implementation until 2026-09-05, and it was a genuine one
+ * rather than the fallback the header forbids: nothing caught a Postgres error
+ * and wrote a file instead. The alternative — always Postgres,
  * warn and carry on when there is no `DATABASE_URL` — would have made the
  * **default** configuration the one that records nothing, with a warn line that
  * becomes background noise inside a week. GPT Sol's call, 2026-08-28; it
@@ -516,20 +526,12 @@ export { costStore } from "./ai-calls.js";
 /**
  * **The journal of live conversations** — issued, connected, closed.
  *
- * Selected the way `chatStore` and the rest are, with two real implementations
- * and a flag: `guarded()` is not used only because that helper is shaped for the
- * seams above it. There is nothing about a session journal a file cannot hold,
- * so this is deliberately **not** one of the filesystem *refusals* three
- * sections up — `AdminStore`, `VisibilityStore` and `FeedbackStore` refuse
- * because there is genuinely no user list, no visibility column and no feedback
- * table on a filesystem, and refusing here would only turn off a working feature
- * on every default checkout.
+ * `guarded(...)` like the seams above it.
  *
  * The row it writes is what makes a live conversation *visible* even when it
  * reports nothing at all — see `realtimeSessions` in ../db/schema.ts, and
  * docs/project/live-conversation.md. Postgres is where this belongs and where
- * production reads it; the filesystem adapter exists so the laptop default keeps
- * working.
+ * production reads it.
  */
 export const realtimeSessionStore: RealtimeSessionStore = guarded(
   "realtime-sessions",
