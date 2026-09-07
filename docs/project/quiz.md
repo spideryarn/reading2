@@ -31,7 +31,8 @@ Code: [`src/quiz.ts`](../../src/quiz.ts) (the stage, the prompt, the validation,
 [`src/routes.ts`](../../src/routes.ts) § `/api/quiz/:slug` (the GET) and `/api/quiz/:slug/mark` (the POST),
 [`src/web/useQuiz.ts`](../../src/web/useQuiz.ts),
 [`src/web/QuizPanel.tsx`](../../src/web/QuizPanel.tsx),
-[`src/web/App.tsx`](../../src/web/App.tsx) § `RememberBand`, `QuizSubBand`.
+[`src/web/modes/conversation/ConversationModes.tsx`](../../src/web/modes/conversation/ConversationModes.tsx)
+§ `RememberBand`, `QuizSubBand`.
 Types: [`src/types.ts`](../../src/types.ts) § `QuizQuestion`, `QuizEvidence`, `Quiz`, `QuizDropped`.
 Tests: [`quiz.test.ts`](../../tests/quiz.test.ts),
 [`quiz-panel.test.tsx`](../../tests/quiz-panel.test.tsx),

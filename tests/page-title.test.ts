@@ -91,6 +91,7 @@ describe("an article", () => {
          that day, and the default is the one that goes unwritten. */
       hierarchy: "Hierarchy",
       outline: "Outline",
+      structure: "Structure",
       summary: "Summary",
       glossary: "Glossary",
       ideas: "Ideas",
@@ -417,11 +418,15 @@ describe("every kind of page is actually wired up", () => {
    * this covers the one failure they cannot see.
    */
   it("and ArticlePage actually asks articleWaitTitle what to say", () => {
-    const app = readFileSync(path.join(WEB, "App.tsx"), "utf8");
-    expect(app).toContain("articleWaitTitle(");
+    /* `ArticlePage` left `App.tsx` for src/web/article/ArticlePage.tsx on
+       2026-09-06. The read is the guard: a path that no longer exists throws,
+       where an assertion pointed at the wrong file would quietly stop finding
+       the call — docs/reusable/silent-success.md. */
+    const page = readFileSync(path.join(WEB, "article", "ArticlePage.tsx"), "utf8");
+    expect(page).toContain("articleWaitTitle(");
     /* And has stopped composing the answer itself, which is the shape the call
        replaced — leaving both would put the old behaviour back on some path. */
-    expect(app).not.toContain('pageTitle({ kind: "loading" })');
+    expect(page).not.toContain('pageTitle({ kind: "loading" })');
   });
 
   it("can tell — the union really was read, and it is not empty", () => {

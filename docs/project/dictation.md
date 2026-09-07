@@ -29,7 +29,7 @@ and the change described here is planned out with its measurements and its revie
           ▼                                       ▼
    getUserMedia ──── ONE track, three readers ────┴──▶ POST /api/transcribe
           │                                                    │
-          ├──▶ AnalyserNode ────────▶ the level meter          │  gemini-3.1-flash-lite
+          ├──▶ AnalyserNode ────────▶ the level meter          │  openai/gpt-transcribe
           ├──▶ MediaRecorder ───────▶ the tape ───────────────▶┘  + this box's vocabulary
           └──▶ SpeechRecognition ──▶ live words                       │
                (Chromium only)         (decoration)                   ▼
@@ -54,16 +54,29 @@ is the article in front of the reader. The chat box, the comment follow-up and t
 have that article's glossary loaded three feet away — and the quiz box most of all, since a question
 set from the piece is asking the reader to say the piece's own words back.
 
-It cost the choice of route. OpenRouter has a purpose-built `POST /api/v1/audio/transcriptions`,
-which is cheaper and faster and would have been the obvious pick — and it ignores the field OpenAI
-provides for exactly this. It accepts `prompt`, answers `200`, and changes nothing. Confirmed by
-sending it a field called `wibble_not_a_real_field`, which also answered `200`. That is
-[silent-success](../reusable/silent-success.md) with a status code on it.
+It cost the choice of route, **for eleven days**. OpenRouter has a purpose-built
+`POST /api/v1/audio/transcriptions`, which is cheaper and faster and would have been the obvious
+pick — and on 2026-08-27 it ignored the field OpenAI provides for exactly this. It accepted
+`prompt`, answered `200`, and changed nothing. Confirmed by sending it a field called
+`wibble_not_a_real_field`, which also answered `200`. That is
+[silent-success](../reusable/silent-success.md) with a status code on it, and it is still true of
+`prompt`.
 
 **That is narrower than "it cannot be told", which is what this doc said until 2026-09-03.** Some
 providers have their own biasing parameter under `provider.options` — Deepgram's `keyterm`, up to a
-hundred terms, and Groq's own `prompt` — and nothing here has ever tried one. So the dedicated route
-is unmeasured rather than ruled out, and the plan below says what it would take to measure it.
+hundred terms, and Groq's own `prompt` — and nothing here had ever tried one. So the dedicated route
+was unmeasured rather than ruled out.
+
+**It got measured on 2026-09-07, and that sentence is why dictation is on the transcription
+endpoint today.** `openai/gpt-transcribe` takes a `keywords` array, sent through
+`provider.options.openai`, and OpenRouter forwards it: the clip that says *Spideryarn* comes back
+"Spiderrion" without it and right with it, identically through OpenRouter and through OpenAI
+directly. The evidence had to be the transcript changing rather than the `200`, for exactly the
+reason the `wibble_not_a_real_field` paragraph gives.
+[260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md); the probe is
+[`evals/dictation/probe-stt-routes.ts`](../../evals/dictation/probe-stt-routes.ts). **The rest of
+this section is about the chat route and is kept as the record of why that was the right call for
+eleven days.**
 
 ## Why not OpenAI
 
@@ -83,6 +96,18 @@ is sitting and waiting for.
 Both facts are measured, not read, and re-measuring them is a minute: `npm run
 eval:dictation-gate`. Run it before believing any leaderboard about this feature, and run it again
 if either fact changes.
+
+> **Both facts still hold, and dictation went to OpenAI anyway — through a different door.**
+> On 2026-09-07 it moved to `openai/gpt-transcribe` on **`/v1/audio/transcriptions`**, which takes
+> webm and takes a `keywords` array, so neither the transcode nor the chat endpoint's refusals apply.
+> Greg made the call the paragraph above reserves for him, and the published promise was dropped:
+> OpenRouter does not apply routing preferences or `zdr` on that endpoint, so a `zdr: true` there is
+> accepted rather than refused and backs nothing. (It does forward `provider.options`, which is how
+> the vocabulary gets through — the block is not discarded, the *routing* half of it is not applied.)
+> [260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md) and
+> [privacy.md § Where a reader's voice goes](privacy.md#where-a-readers-voice-goes). **Everything in
+> this section is about the chat endpoint and is kept because it is still true of it** — that is why
+> the transcription endpoint was worth trying at all.
 
 Among what is reachable, `gemini-3.1-flash-lite` stayed — and the finding worth carrying out of that
 plan is not about models at all. **Given its vocabulary, every candidate got every hard term right,
@@ -108,17 +133,21 @@ sounds from the transcript after `tidy()`, and the whole of its design is that *
 delete** — never add a word, never reorder one, never choose a different one — which is a property a
 test asserts rather than an intention a comment claims.
 
-The prompt was the obvious lever and is not the one taken. Read `SYSTEM` in
-[`transcribe.ts`](../../src/transcribe.ts): it is one long argument that the model is a transcriber
-and must not be helpful, and *"remove the filler words"* is an editing instruction in a prompt whose
-one job is to refuse to edit. The failure it would invite — a fluent paraphrase — is
-indistinguishable from a good transcript by any check that can be written. Meanwhile the industry
-does not use prompts for this either: Deepgram, AssemblyAI, Speechmatics and Gemini's own
-transcription API all expose it as a *parameter*, and none of those is reachable through
-OpenRouter's chat route.
+The prompt was the obvious lever and is not the one taken. The argument was written against the
+`SYSTEM` prompt this file used to send — one long argument that the model is a transcriber and must
+not be helpful, into which *"remove the filler words"* would have been an editing instruction in a
+prompt whose one job is to refuse to edit. The failure it invites — a fluent paraphrase — is
+indistinguishable from a good transcript by any check that can be written. **Since 2026-09-07 there
+is no prompt to put it in at all**, so the lever is not merely unwise, it is absent: the
+transcription request carries a model, the audio and a `keywords` array. Meanwhile the industry does
+not use prompts for this either: Deepgram, AssemblyAI, Speechmatics and Gemini's own transcription
+API all expose it as a *parameter*, and none of those was reachable through OpenRouter's chat
+route.
 
 **GPT Sol disagrees**, thinks the prompt is worth trying, and is probably right that it should be
-measured. What that needs is an audio corpus with real hesitation in it — plus controls for `err`,
+measured — though on the current route there is no prompt to try it in, so the question has become
+whether `gpt-transcribe` exposes a parameter for it, which nobody here has looked up. What that
+needs either way is an audio corpus with real hesitation in it — plus controls for `err`,
 `ER`, `uh-huh` and a deliberate *"Ah"* — and that corpus does not exist yet. It is the named next
 step in [260905c](../plans/260905c-dictation-filler-words-and-mic-offline.md), which also carries
 what is deferred: stutters, `like` and `you know`, and the fact that nothing here knows whether the
@@ -130,8 +159,9 @@ Five sources, in the order the 2,000-character cap spends on them — what it dr
 the reader is least likely to say. Three files, and the split is what makes it reusable:
 [`src/vocabulary.ts`](../../src/vocabulary.ts) is pure text functions,
 [`src/vocabulary-sources.ts`](../../src/vocabulary-sources.ts) turns a *place* into a term list, and
-[`src/transcribe.ts`](../../src/transcribe.ts) takes a vocabulary as a string and never needs to
-know where it came from. The plan, the measurements and the alternatives are in
+[`src/transcribe.ts`](../../src/transcribe.ts) takes a vocabulary as a **list of terms** and never
+needs to know where it came from — a string until 2026-09-07, when the terms moved into `keywords`
+and joining them stopped being anybody's job. The plan, the measurements and the alternatives are in
 [260828l-dictation-vocabulary.md](../plans/260828l-dictation-vocabulary.md).
 
 1. **The app's own words** — `Spideryarn`, `Greg Detre`, `granularity zoom`, a block id. Small,
@@ -317,9 +347,19 @@ That is over, deliberately, and Greg made the call with the trade put to him in 
 What is true: the recording is held in memory for one request, base64'd into one OpenRouter call,
 never written to disk by us and never logged — the same rule that keeps a reader's question and
 the article's prose out of a log line covers a transcript exactly as well
-([logging.md](logging.md)). The call sends `provider: { zdr: true }`, which restricts routing to
-zero-data-retention providers, so *"your voice is not stored"* is a claim about the whole path
-rather than only about our half of it.
+([logging.md](logging.md)).
+
+**What stopped being true on 2026-09-07 is the second half of that.** The call used to send
+`provider: { zdr: true }`, which restricted routing to zero-data-retention providers, so *"your voice
+is not stored"* was a claim about the whole path rather than only about our half of it. On
+`/v1/audio/transcriptions` OpenRouter does not apply routing preferences or `zdr` — the request is
+not refused, it succeeds, which is worse, because the promise quietly stops being backed by
+anything. (`provider.options` on the same request *is* forwarded, and is how the vocabulary reaches
+the model, so this is not a block being discarded — it is the routing half of it not being applied,
+which is the harder thing to notice.) So the claim is now about our half only, and the sentence on
+the button says so.
+[privacy.md § Where a reader's voice goes](privacy.md#where-a-readers-voice-goes) has the probe and
+the two published policies we pass on instead.
 
 One sentence says so, and it lives **on the button** —
 `DICTATION_PROMISE` in [`DictationStrip.tsx`](../../src/web/DictationStrip.tsx), rendered before
@@ -350,12 +390,18 @@ was said.
 ## The ways it fails
 
 1. **The model answers the question instead of transcribing it.** A reader dictating into the chat
-   box is *always* asking a question. A system prompt is an instruction, not a validation — and no
-   check on the shape of the words can help, because a dictated question ending in `?` is a valid
-   transcript. So the call asks for `{ transcript }` as a strict JSON schema with
-   `require_parameters: true`: a model that decides to answer has to put its answer in a field
-   labelled `transcript`, which is a much narrower failure than prose arriving where prose was
-   asked for. Residual risk, accepted knowingly.
+   box is *always* asking a question, and no check on the shape of the words can help, because a
+   dictated question ending in `?` is a valid transcript. **The defence changed on 2026-09-07 and
+   the risk did not go away.** Until then the call carried a system prompt saying three times over
+   never to answer, and asked for `{ transcript }` as a strict JSON schema with
+   `require_parameters: true` so no upstream could drop it — a model that decided to answer had to
+   put its answer in a field labelled `transcript`. The transcription endpoint offers none of those
+   controls, and it is still a generative model returning free text. What is honestly better is that
+   the exposure is *smaller*: there is no system prompt to override, and the vocabulary arrives as a
+   list of strings in a request field rather than as text beside an instruction. What stands in for
+   the schema is `MAX_TRANSCRIPT_CHARS` — a loose tripwire for an answer far longer than anything
+   that could have been said — plus the tests for dictated questions and commands. Residual risk,
+   accepted knowingly, and slightly differently shaped than it was.
 2. **Hallucination on silence.** Nothing under two seconds is sent at all, and an empty transcript
    is a success rather than an error — the box is left as it was, and the audio is offered back.
 3. **The vocabulary quietly stops being assembled.** Returns a slightly worse transcript and no
@@ -407,7 +453,8 @@ a recorder that hit its cap. They live beside the code that raises them.
 | `[mic-unplugged]` `[mic-no-start]` `[mic-full]` `[mic-empty]` `[mic-silent]` `[mic-unexpected]` | the capture and the ending, in [`useDictation.ts`](../../src/web/useDictation.ts) |
 | `[mic-no-tape]` | no recording was made at all, so there was no authoritative pass |
 | `[mic-format]` `[mic-too-long]` `[mic-slow]` `[mic-offline]` | the upload, in [`dictation-upload.ts`](../../src/web/dictation-upload.ts) |
-| `[mic-not-set-up]` `[mic-upstream]` `[mic-no-upstream]` | the server, in [`src/transcribe.ts`](../../src/transcribe.ts) — the second is a service that did not answer, the first one that answered "no" |
+| `[mic-not-set-up]` `[mic-upstream]` `[mic-no-upstream]` `[mic-unreadable]` `[mic-too-long]` | the server, in [`src/transcribe.ts`](../../src/transcribe.ts) — see below |
+| `[ai-busy]` `[ai-no-credit]` `[ai-key]` `[ai-refused]` `[ai-no-model]` `[ai-bad-request]` `[ai-upstream]` `[ai-timeout]` | also the server, but the sentences come from [`messages.ts`](../../src/messages.ts) — every provider refusal has gone through `providerHttpFailure` since 2026-09-07, so a dictation can now show the same words as any other failed model call |
 | `[ai-busy]` `[ai-no-credit]` | the exception: a 429 or a 402 from the provider borrows `providerHttpFailure` from `src/messages.ts`, because *"could not transcribe that"* reads as a verdict on the recording when the fix is to wait ten seconds |
 
 **One code, one sentence — and for a year it was not.**
@@ -418,6 +465,23 @@ recogniser losing its connection **while the reader was still talking** and the 
 **after they had stopped**, which are different problems with different fixes. It found two more
 the same way: `[mic-upstream]` (a service that refused, and a service that never answered) and
 `[mic-too-long]` (the browser's sentence and the server's, for one branch).
+
+**What each of the server's five means now**, because the split has moved twice:
+
+| code | when |
+|---|---|
+| `[mic-not-set-up]` | no `OPENROUTER_API_KEY` on this server. 503, no Retry |
+| `[mic-no-upstream]` | the service was never reached — DNS, a dropped socket, our own 90-second deadline. 502, Retry offered |
+| `[mic-unreadable]` | it *was* reached, answered 200, and the body had no `text` in it. 502, Retry offered. Added 2026-09-07: these two used to be one, and a service that answered nonsense was reported as one that could not be reached, which sends somebody to check a network that is fine |
+| `[mic-too-long]` | the recording is over the shared cap — checked in the browser, again on the server, and now a third time if the provider itself refuses the size. 413, no Retry |
+| `[mic-upstream]` | what is left: a reply far longer than anything that could have been said (`MAX_TRANSCRIPT_CHARS`). 502 |
+
+**A provider refusal no longer produces a `mic-` code at all.** It produces the `ai-` sentence for
+its status, and the status decides the Retry: `canRetry` over copy.md's `FailureKind`, so a 400 the
+service found malformed is a 503 with no button and a 429 is a 429 with one. Until 2026-09-07 only
+401, 402 and 429 got their own words and everything else became a retryable 502 saying *"could not
+transcribe that"* — which invited a reader to resend identical bytes for an identical refusal.
+[260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md).
 
 `src/messages.ts` had this check from the start and this family did not, because the family was
 defined by being *outside* that file. The rule was never file-specific;
@@ -438,7 +502,7 @@ reader actually loses a dictation to — and the recogniser's became `[mic-no-co
 | [`mic-devices.ts`](../../src/web/mic-devices.ts) | which microphone, and why the constraint is `exact` |
 | [`useAudioLevel.ts`](../../src/web/useAudioLevel.ts) · [`audio-level.ts`](../../src/web/audio-level.ts) · [`MicLevel.tsx`](../../src/web/MicLevel.tsx) | the meter |
 | [`dictation-errors.ts`](../../src/web/dictation-errors.ts) | every recogniser error code to a sentence, totally |
-| [`src/transcribe.ts`](../../src/transcribe.ts) | the server half: the vocabulary, the model call, the schema |
+| [`src/transcribe.ts`](../../src/transcribe.ts) | the server half: the vocabulary, the model call, the guards that replaced the schema |
 | [`src/dictation-limits.ts`](../../src/dictation-limits.ts) | the sizes and the containers, shared by both ends — and the one sentence for a recording that is too long |
 | [`src/dictation-fillers.ts`](../../src/dictation-fillers.ts) | the ums, deleted — and why it is not a line in the prompt |
 | [`useOnline.ts`](../../src/web/useOnline.ts) | whether the browser has a network, and which way round that may be believed |

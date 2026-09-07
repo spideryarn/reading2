@@ -203,6 +203,99 @@ in two files is a link that lands at the top of a long policy and tells nobody i
 [`tests/takedown-privacy-section.test.tsx`](../../tests/takedown-privacy-section.test.tsx) drives
 both arms of it.
 
+## Where a reader's voice goes
+
+**Added 2026-09-07, because this is the one thing on `/privacy` that got weaker rather than
+stronger**, and a page that only ever records improvements is not being kept honestly. Greg took the
+decision on 2026-09-06 knowing the cost; the work is
+[260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md).
+
+Dictation used to go to `google/gemini-3.1-flash-lite` with `provider: { zdr: true }`, and that flag
+is what let the line beside every microphone say *"and isn't stored"*. It now goes to
+`openai/gpt-transcribe` on OpenRouter's `POST /v1/audio/transcriptions`, because that is the only
+route measured to accept a **vocabulary** — the list of an article's own words that stops a
+transcriber guessing at *Spideryarn* and at author surnames, which is the entire reason the feature
+exists.
+
+### Why the guarantee could not simply be carried over
+
+Not "we forgot to set the flag" and not "the model has no zero-retention endpoint". **The flag is
+ignored on that endpoint**, which is worse, because a request carrying it succeeds:
+
+| sent to `/v1/audio/transcriptions` | answer |
+|---|---|
+| `provider: {"only": ["anthropic"]}` | **200**, with a transcript — Anthropic serves no transcriber |
+| `provider: {"zdr": true}` | **200**, for a model absent from `GET /api/v1/endpoints/zdr` |
+| the same `zdr: true` on `/v1/chat/completions` | 404, *"No endpoints found matching your data policy"* |
+
+The first row shows routing is not applied; the second and third together prove `zdr` is not
+either, because an enforced flag must 404 for a model with no qualifying endpoint, and on the chat
+endpoint it does. **Not the whole block** — `provider.options` *is* forwarded, and is how the
+vocabulary reaches the model at all. Routing and options live in one object and are treated
+completely differently by the far end.
+OpenRouter's STT guide documents the first row's half — *"Routing preferences (`order`, `only`,
+`ignore`) are not applied to transcription requests"* — and says nothing about `zdr`, so the
+measurement is the authority. It is re-runnable:
+[`evals/dictation/probe-stt-routes.ts`](../../evals/dictation/probe-stt-routes.ts).
+
+**A route that would have kept the promise exists and loses on the thing that matters.**
+`openai/whisper-large-v3` on Groq *is* on OpenRouter's ZDR list. Biasing on the Whisper family is the
+`prompt` field, 224 tokens, which OpenAI's own guide calls *"less control than the recommended
+transcription model"* and which
+[260903i](../plans/260903i-which-model-transcribes-dictation.md) measured through this very endpoint
+"answering 200 and changing nothing". Keeping zero data retention therefore means giving up the
+vocabulary, and the vocabulary is why anybody dictates here at all.
+
+### What is actually true now, with the quotations the page is written from
+
+Every clause of the reader-facing copy traces to one of these. **Check the wording against these
+before editing it**, and do not add a warmer clause that none of them supports.
+
+- **OpenRouter, on its own logging** — *"OpenRouter does not store your prompts or responses, unless
+  you opt in"*, both settings *"Off by default"*, and it stores request metadata but *"not the
+  content of your prompts or responses"*.
+  <https://openrouter.ai/docs/guides/privacy/data-collection>
+- **OpenRouter, on audio specifically** — *"We do not persist image, audio or video files beyond the
+  duration necessary to route the request, except as required for abuse detection, security,
+  billing, or legal compliance."* Their policy also names voice recordings as *"biometric
+  information"* under applicable laws. <https://openrouter.ai/privacy>
+- **OpenRouter, on whose policy governs downstream** — *"We do not control, and are not responsible
+  for, LLMs' handling of your Inputs or Outputs"*; a provider's practices are the provider's.
+  <https://openrouter.ai/privacy>
+- **OpenAI, on training** — *"data sent to the OpenAI API is not used to train or improve OpenAI
+  models (unless you explicitly opt in)"*.
+  <https://developers.openai.com/api/docs/guides/your-data>
+  **"You" there is OpenAI's API customer, which on this route is OpenRouter and not us.** The page
+  says "its API customer" for that reason: we could not opt in or out of it if we wanted to. The
+  clause where "ours" *is* the right word is OpenRouter's logging setting, and the page marks that
+  one as a commitment we hold ourselves to rather than something a reader can check.
+- **OpenAI, on retention** — the general API default is *"abuse monitoring logs … retained for up to
+  30 days"*, but their per-endpoint table gives `/v1/audio/transcriptions` an abuse-monitoring
+  retention of **None** and an application-state retention of **None**, one of only three rows in
+  the table with no retention at all. Same URL.
+
+### The gap, which is why the copy hedges
+
+**We do not know which OpenAI endpoint OpenRouter calls.** `gpt-transcribe` is listed by OpenAI
+under both `/v1/audio/transcriptions` (retention None) and `/v1/realtime/transcription_sessions`
+(30 days), and nothing OpenRouter publishes says which it uses. So the strong sentence — *"and they
+say they keep nothing"* — rests on a fact nobody outside OpenRouter can check, and this page's whole
+register is that a reader could check it. Hence *"they may keep it under their own policies"* beside the
+button, and a paragraph on `/privacy` that says what each party publishes and stops.
+
+**The two ways to close it**, neither taken here and both real, are in
+[260907c § Open questions](../plans/260907c-dictation-onto-an-openai-transcriber.md#open-questions-for-greg):
+call OpenAI directly, where the endpoint is ours to name, or apply to OpenAI's zero-data-retention
+programme.
+
+### What did not change
+
+The audio is still never written down by us. It arrives base64 in one request, goes out base64 in
+one more, and is gone when the request ends; nothing stores it and nothing logs it, and
+[`src/transcribe.ts`](../../src/transcribe.ts) logs lengths and term counts rather than words for
+the same reason it always did. The `ai_calls` row saying a dictation happened is still written, and
+still carries no content.
+
 ## What is pinned by a test, and what is not
 
 [`tests/privacy-page.test.ts`](../../tests/privacy-page.test.ts) holds the **model names** to
@@ -251,9 +344,10 @@ these moves:
 - the **regions** change, or an article's bytes start living somewhere other than
   Supabase Storage in London ([database.md](database.md))
 - **retention** changes anywhere — Sentry's 30 days, Vercel's ~1 day of request logs
-- the **zero-retention** claim: `zdr: true` is set on dictation and on nothing else
-  (`AI_JOB_ROUTE` in [`src/ai-call.ts`](../../src/ai-call.ts)), and the page says exactly that
-  rather than a blanket promise it could not keep — [ai-gateway.md § A key is not
+- the **zero-retention** claim: `zdr: true` is now set on **nothing** (`AI_JOB_ROUTE` in
+  [`src/ai-call.ts`](../../src/ai-call.ts)). It was dictation's alone until 2026-09-07 — see
+  § Where a reader's voice goes below, which is the one place on this site where we tell a reader
+  that something got weaker — [ai-gateway.md § A key is not
   access](ai-gateway.md#a-key-is-not-access-and-the-difference-is-invisible-until-a-reader-finds-it)
 - **account deletion** or **export** grows a button, which changes decision 2 above
 - **what the Archive button does** — it archives, it is called Archive since 2026-09-04, and the

@@ -55,11 +55,14 @@
  *
  *  - **the bytes are held**, up to `MAX_ARTICLE_FIGURE_BYTES`
  *    (src/collect-pdf-figures.ts) in the pathological case and about 5 MB on the
- *    worst real paper we hold. That is what an owner has always paid;
- *  - **a visitor's figures are now fetched before the prose draws**, because
- *    this is awaited on the load path. If that ever bites, the answer is to stop
- *    awaiting it — not to put an unverified URL back in the `src`, which is the
- *    bug above.
+ *    worst real paper we hold — and, since stage E, the article's own images on
+ *    top, 7.04 MB on the worst web article in the corpus. That is what an owner
+ *    has always paid for their figures;
+ *  - **a visitor's figures are fetched before the prose draws**, because that
+ *    half is awaited on the load path. It bit within the day, for the article's
+ *    own images rather than for the figures, and the answer was to stop awaiting
+ *    that half — *not* to put an unverified URL back in the `src`, which is the
+ *    bug above. See § The images are blanked before the prose draws.
  *
  * The alternative considered and rejected: keep the streamed URL and preload it
  * with `new Image()` + `decode()`. It blocks for exactly as long, and it costs
@@ -77,27 +80,92 @@
  * is therefore *not* here: it is client-owned UI beside the prose,
  * PdfFigureNote.tsx. GPT Sol, I-4.
  *
- * ## What flows through it today, and what stage E turns on
+ * ## The two halves, and why they are not symmetrical
  *
- * `Assets` holds two collections: `entries`, the article's own `<img src>`s, and
- * `pdfFigures`, the pictures a PDF came with. **This walks only the second.**
- * The route beneath it is already generic (src/asset-delivery.ts § it is about
- * an article's images), and so is everything below `rehostBlockHtml`; what is
- * PDF-specific is the *selector* and the fact that a PDF figure has no `src` to
- * replace, only an empty `<figure>` to fill.
+ * `Assets` holds two collections and this walks both. `pdfFigures` is the
+ * pictures a PDF came with, and `entries` is the article's own `<img src>`s —
+ * switched on 2026-09-06 as stage E of the figures plan, which is 260829b's
+ * stages C and D finished at last. The route beneath is generic already
+ * (src/asset-delivery.ts § it is about an article's images) and needed no edit.
  *
- * **Stage E adds the other half**: for each `<img src>` in a block, look the URL
- * up in `assetIndex(article.assets)` (src/assets.ts — written for this and
- * still uncalled), and where we hold a copy, replace the `src` **and drop
- * `srcset`, `sizes` and any sibling `<source>`**, because a browser handed a
- * rewritten `src` and an untouched `srcset` prefers the `srcset` and goes on
- * hot-linking while the page looks fixed (src/assets.ts § 2). That is the change
- * that stops readers announcing themselves to publishers' CDNs, and it is
- * deliberately not in this stage: Greg, 2026-09-06 — build the mechanism
- * generic, land it PDF-only, prove it, then flip web images on.
+ * The two are not the same job, and the difference decides three things below:
+ *
+ * |  | a PDF figure | an article's own image |
+ * |---|---|---|
+ * | in the stored html | an empty `<figure>` and a caption | a working `<img src>` at the publisher |
+ * | what we do | **insert** an `<img>` | **replace** the `src` |
+ * | if we cannot | a caption on its own | the publisher's URL, exactly as today |
+ *
+ * **So a web image always has somewhere to fall back to and a PDF figure never
+ * does**, and that is the whole argument for the two draws below.
+ *
+ * ## An image is rehosted as a unit — the trap that makes this a no-op
+ *
+ * A browser handed a rewritten `src` and an untouched `srcset` prefers the
+ * `srcset`, and **goes on hot-linking the publisher while the page looks
+ * completely fixed**. Same for a `<source>` inside a `<picture>`, which beats
+ * the `<img>` outright. So `src` is replaced and `srcset`, `sizes` and every
+ * sibling `<source>` are removed together. 260829b § trap 1, src/assets.ts § 2,
+ * and `tests/rehost.test.ts` asserts the *absence of the publisher's host*
+ * rather than the presence of ours, because a rewritten `src` proves nothing
+ * about the four other places a URL hides.
+ *
+ * The lookup goes through `imageSourceOf` (src/assets.ts) rather than a second
+ * `getAttribute` written here, for that file's § 1: `blocks.json` stores
+ * `…&amp;s=3a2bee…` and the DOM hands back `…&s=3a2bee…`, so a manifest keyed on
+ * one and read with the other misses **every** entry, in silence.
+ *
+ * ## The images are blanked before the prose draws, and filled in after
+ *
+ * This runs before the article renders, and for the images it **has** to: render
+ * a block with the publisher's `src` still in it and swap ours in a moment
+ * later, and the browser has already fetched from the publisher. The reader has
+ * already been counted; the privacy this whole feature exists for is gone, on
+ * every read, invisibly, with the feature reporting success. 260829b § Two
+ * readers, two paths says it in bold and it is the rule here:
+ *
+ * > **Do not render the publisher URL while a stored asset is resolving.** Show
+ * > a placeholder and substitute the `blob:` … when it arrives.
+ *
+ * But *awaiting* them is not available either. Measured against the local corpus
+ * on 2026-09-06, the worst real article we hold — the Wolfram *Ruliology* piece
+ * — carries **102 stored images totalling 7.04 MB**, above and below the fold
+ * alike, each one a request that re-reads the article's 24 KB manifest on the
+ * way past. Blocking on that turns *the prose appears* into *the prose appears
+ * once every image has downloaded*, which in a reading app is a worse bug than
+ * the one being fixed. (Median article: 3 images, 0.16 MB. The distribution has
+ * no middle, so no percentile splits the difference.)
+ *
+ * So `rehostImages` hands back **two** things: an article to draw now, with the
+ * PDF figures in it and every image we hold a copy of stripped of its `src`, and
+ * a promise of the same article with the copies in. A deadline was written first
+ * and thrown away: at the deadline it would have put the publisher's URL back,
+ * which is the sentence above, done deliberately. GPT Sol, 2026-09-06, and
+ * independently the plan.
+ *
+ * **The PDF figures are still awaited outright**, because the table above says
+ * they have nothing to fall back to: a figure not yet fetched is a blank space
+ * under a caption, so there is nothing to be gained by drawing sooner. They are
+ * also eight and not a hundred.
+ *
+ * The one cost of that trade, named rather than discovered: **an image we hold
+ * is blank from the moment the prose draws until its bytes arrive** — a few
+ * hundred milliseconds on the corpus, and `IMAGE_WAIT_MS` in the worst case
+ * before the publisher's URL is allowed back. The `width`/`height` the publisher
+ * wrote are left on the element precisely so a browser can reserve the box.
  */
 
-import { pdfFigureMarkersIn, type Assets, type PdfFigureEntry } from "../assets.js";
+import {
+  assetIndex,
+  imageSourceOf,
+  imageSourcesIn,
+  pdfFigureMarkersIn,
+  IMAGE_SELECTOR,
+  type AssetExt,
+  type Assets,
+  type PdfFigureEntry,
+  type StoredAsset,
+} from "../assets.js";
 import { assetPath, publicAssetPath } from "../asset-delivery.js";
 import { RESERVED_ATTRS } from "../reserved.js";
 import type { Article } from "../types.js";
@@ -119,73 +187,104 @@ type StoredFigure = Extract<PdfFigureEntry, { status: "stored" }>;
 export type RehostFooting = "owned" | "public";
 
 /**
- * Every object URL this module has minted, so it can let go of the last
- * article's when the next one arrives.
+ * **One article load's claim on the fetches it starts and the object URLs it
+ * mints**, handed out by `beginArticleLoad` and handed back by `release`.
  *
- * **Revoked at the start of the next call, not at the end of this one.** An
- * object URL keeps its blob alive, so eight figures at ~300 KB is ~2.4 MB held
- * for as long as the page holds the article — fine for the article being read,
- * a slow leak across a session of them. There is no unmount hook to hang this
- * on: `rehostImages` is a plain async function on the load path, deliberately,
- * because the alternative is an effect that runs after the first paint and the
- * reader watches the figures pop in.
+ * ## Why ownership is per-load rather than per-module, since 2026-09-06
  *
- * **Safe because of how `useArticleAccess` sequences a load** (App.tsx): the
- * effect clears the previous answer *synchronously in the render* before the
- * next `resolveAccess` is even called, so by the time this runs, nothing on
- * screen is still pointing at the URLs being revoked. If that ever stops being
- * true, the symptom is a broken image on the article you just left, which is
- * not a symptom anybody would attribute to this file — hence the paragraph.
+ * This was a module-level `minted: string[]` and `inFlight: AbortController`,
+ * swept at the top of `rehostImages` — *let go of the last article's blobs when
+ * the next one arrives*. That is wrong whenever "the next one" is decided by
+ * **which article payload happens to come back last**, and it is, because
+ * `rehostImages` runs after `findArticle` has been awaited:
+ *
+ *  1. article A starts loading, slowly;
+ *  2. the reader moves to B; B's payload returns first, mints B's blobs, draws;
+ *  3. A's payload finally returns and takes its turn at the sweep;
+ *  4. **A revokes B's object URLs and aborts B's fetches** — B is the article on
+ *     screen, and its pictures go blank or fall back to the publisher.
+ *
+ * A's own `live` flag is false by then, so nothing stale is *rendered*; the
+ * damage is done to the article that is. React's `<StrictMode>` double-invokes
+ * every effect in development, so this is not a rare race. GPT Sol, 2026-09-06.
+ *
+ * So the claim is made **synchronously in the effect**, before any await, and
+ * released by that effect's own cleanup. A load can then only ever abort and
+ * revoke its own, whatever order the network answers in — and *release on
+ * cleanup* also covers the four cases the sweep never reached at all: leaving
+ * the reader for the shelf, an article that turns out not to be shared, a
+ * payload that hangs, and an unmount while the second draw is still coming.
  */
-let minted: string[] = [];
-
-/**
- * The load this module is currently fetching for, so the one before it can be
- * dropped.
- *
- * A reader who clicks through three articles in four seconds starts three loads
- * and looks at one. Without this the other two go on downloading figures and go
- * on minting object URLs — after `releasePrevious` has already run for them, so
- * nothing will ever revoke those. That is the half of the leak a `releasePrevious`
- * in the right place does not reach. GPT Sol, D-2.
- */
-let inFlight: AbortController | null = null;
-
-function mint(blob: Blob): string {
-  const url = URL.createObjectURL(blob);
-  minted.push(url);
-  return url;
+export interface ArticleLoad {
+  /** Aborted by `release`. Every fetch this load makes carries it. */
+  readonly signal: AbortSignal;
+  /**
+   * An object URL this load owns.
+   *
+   * **Minting after release revokes immediately** rather than adding to a list
+   * that has already been swept. The callers check `signal.aborted` first and
+   * so never reach that branch today; it is here because a blob minted after
+   * the sweep is an object URL *nothing can ever revoke*, and that is too
+   * expensive a leak to leave resting on a caller remembering to ask.
+   */
+  mint(blob: Blob): string;
+  /**
+   * Stop this load's fetches and hand its blobs back. Idempotent, because an
+   * effect's cleanup and a later abort must not double-revoke.
+   */
+  release(): void;
 }
 
 /**
- * Hand the previous load's blobs back and stop its fetches; return the signal
- * this load is to be cancelled by in turn.
- *
- * **Called before anything can return early**, which is the whole of the fix:
- * `releasePrevious` used to sit after the `wanted.size === 0` guard, so leaving
- * an owned PDF for an *ordinary article* — or an old PDF with no manifest, or
- * one whose figures all failed — kept every previous blob alive for the rest of
- * the session. The common case, in other words, was the leaking one, and it
- * leaked precisely because the code path it took did nothing.
+ * Claim one load. **Call it synchronously, where the load begins** — in
+ * `useArticleAccess`'s effect, not inside an async function that has already
+ * awaited something. See `ArticleLoad` for what goes wrong otherwise.
  */
-function beginLoad(): AbortSignal {
-  inFlight?.abort();
-  for (const url of minted) URL.revokeObjectURL(url);
-  minted = [];
-  inFlight = new AbortController();
-  return inFlight.signal;
+export function beginArticleLoad(): ArticleLoad {
+  const controller = new AbortController();
+  const minted: string[] = [];
+  let released = false;
+  return {
+    signal: controller.signal,
+    mint(blob: Blob): string {
+      const url = URL.createObjectURL(blob);
+      if (released) URL.revokeObjectURL(url);
+      else minted.push(url);
+      return url;
+    },
+    release(): void {
+      if (released) return;
+      released = true;
+      controller.abort();
+      for (const url of minted) URL.revokeObjectURL(url);
+      minted.length = 0;
+    },
+  };
 }
+
+/**
+ * A start tag, whatever follows the name — `<img>`, `<img/>`, `<img src=…>`.
+ *
+ * Case-insensitive although stored html is jsdom-serialised and therefore
+ * lower-case, because the cost of the `i` is nothing and the cost of being
+ * wrong is an image that goes on hot-linking with no symptom at all.
+ */
+const IMG_TAG = /<img[\s/>]/i;
 
 /**
  * A cheap gate before the parser, in the shape `addZoomHandles` uses.
  *
- * Most blocks of most articles have no marker in them and must not reach
- * `innerHTML` at all: this runs over every block of the article on the load
- * path, and a parse-and-serialise of 360 paragraphs to change nothing is a
- * cost that only shows up on a long piece.
+ * Most blocks of most articles have neither a marker nor an image in them and
+ * must not reach `innerHTML` at all: this runs over every block of the article
+ * on the load path, and a parse-and-serialise of 360 paragraphs to change
+ * nothing is a cost that only shows up on a long piece.
+ *
+ * **The same gate is asked by the walk that decides what to fetch and by the
+ * pass that rewrites**, deliberately: two gates that disagree would fetch bytes
+ * nothing inserts, or — the silent direction — insert nothing for bytes we hold.
  */
-function mightHaveFigure(html: string): boolean {
-  return html.includes(RESERVED_ATTRS.pdfFigure);
+function mightNeedRehosting(html: string): boolean {
+  return html.includes(RESERVED_ATTRS.pdfFigure) || IMG_TAG.test(html);
 }
 
 /**
@@ -220,13 +319,65 @@ function inertHolder(): HTMLElement {
  * is pure and synchronous, and the half that fetches is somewhere a test does
  * not have to mock a network.
  */
-export function rehostBlockHtml(html: string, srcFor: (ref: string) => StoredSrc | null): string {
-  if (!mightHaveFigure(html)) return html;
+export function rehostBlockHtml(html: string, sources: RehostSources): string {
+  if (!mightNeedRehosting(html)) return html;
 
   const parsed = inertHolder();
   parsed.innerHTML = html;
-  let changed = false;
+  /* Both halves run, and `||` would not do: `fillFigures` short-circuiting
+     `swapImages` would leave a PDF-derived article's own images hot-linked. No
+     such article exists today — a PDF has no `<img>` — which is exactly the kind
+     of fact that stops being true without anybody editing this line. */
+  const filled = fillFigures(parsed, sources.figure);
+  const swapped = swapImages(parsed, sources.image);
 
+  const out = filled || swapped ? parsed.innerHTML : html;
+  parsed.textContent = ""; // don't hold an article's DOM alive between loads
+  return out;
+}
+
+/**
+ * What a block's rewrite needs to look up, and both halves are required.
+ *
+ * An object with two named members rather than a positional pair, because a
+ * second `(ref: string) => …` beside the first is two identically-typed
+ * callbacks a caller can hand over the wrong way round — and neither the
+ * compiler nor a reader would notice, since the failure is *no picture appears*
+ * rather than an exception.
+ */
+export interface RehostSources {
+  /** A PDF figure's whole marker value → where its picture is, or `null`. */
+  figure(ref: string): StoredSrc | null;
+  /** An `<img src>` as the DOM hands it back → what is to become of it. */
+  image(url: string): ImagePlacement | null;
+}
+
+/**
+ * What is to become of one `<img>` we found — **and `null` is the third answer
+ * and the commonest one.**
+ *
+ * A union rather than `string | null`, because the two non-null cases are the
+ * two halves of the rule in the header and a boolean between them would be
+ * exactly the wrong way to say it: *put our copy in* and *take the publisher's
+ * out and put nothing in yet* differ in one attribute write and in everything
+ * that attribute means.
+ *
+ * `null` — an image we hold no copy of, or one the manifest records as `failed`,
+ * or one the step never looked at — is *leave this element completely alone*.
+ * It goes on hot-linking, exactly as every image does today.
+ */
+export type ImagePlacement =
+  /** Our copy is in hand. */
+  | { kind: "ours"; src: string }
+  /** We hold a copy and are fetching it; the publisher must not be asked. */
+  | { kind: "waiting" };
+
+/** The one `waiting`, since it carries nothing. */
+const WAITING: ImagePlacement = { kind: "waiting" };
+
+/** An `<img>` into every marked `<figure>` we hold bytes for. */
+function fillFigures(parsed: HTMLElement, srcFor: (ref: string) => StoredSrc | null): boolean {
+  let changed = false;
   /* `pdfFigureMarkersIn`, not a second parser: the selection and the attribute
      read have to agree with what the pipeline did, and src/assets.ts is where
      that agreement lives. */
@@ -260,10 +411,65 @@ export function rehostBlockHtml(html: string, srcFor: (ref: string) => StoredSrc
     figure.insertBefore(img, figure.firstChild);
     changed = true;
   }
+  return changed;
+}
 
-  const out = changed ? parsed.innerHTML : html;
-  parsed.textContent = ""; // don't hold an article's DOM alive between loads
-  return out;
+/**
+ * **The publisher struck off every image we hold a copy of**, and our own copy
+ * put in where there is one to put.
+ *
+ * `imageSourceOf` reads the attribute, for src/assets.ts § 1 — the pipeline
+ * keyed the manifest through that same expression, and a `getAttribute` written
+ * out here instead would miss every entry that carries an `&amp;`, silently.
+ *
+ * **The removals are the point, and they are the same on both branches.** Three
+ * places a publisher's URL survives a rewritten `src`: `srcset`, which a browser
+ * *prefers*; `sizes`, meaningless once its `srcset` is gone and misleading left
+ * behind; and every `<source>` of an enclosing `<picture>`, which outranks the
+ * `<img>` altogether. Miss one and the page hot-links exactly as before while
+ * looking completely fixed. 260829b § trap 1.
+ *
+ * That is why `waiting` and `ours` share this loop rather than having one each:
+ * they differ in a single attribute write, and the four lines that actually
+ * close the leak must not be able to drift apart between two copies of them.
+ *
+ * **Attributes and void elements only, so not one character of rendered text
+ * moves** — `<source>` is void and contributes none, which is what makes
+ * removing it legal on a path where comment anchors are counted in characters
+ * (src/web/annotate.ts). An `<img>` we hold no copy of is not touched at all.
+ *
+ * `closest("picture")` rather than the parent, because the spec's shape — the
+ * `<img>` as a direct child — is a fact about well-formed markup rather than
+ * about the html a publisher wrote and three passes have since rewritten.
+ */
+function swapImages(
+  parsed: HTMLElement,
+  placementFor: (url: string) => ImagePlacement | null,
+): boolean {
+  let changed = false;
+  /* Static list: an element loses its `src` below and stops matching the
+     selector, which would matter if this were live. */
+  for (const img of parsed.querySelectorAll(IMAGE_SELECTOR)) {
+    const url = imageSourceOf(img);
+    if (url === null) continue;
+    const placement = placementFor(url);
+    if (placement === null) continue;
+
+    if (placement.kind === "ours") img.setAttribute("src", placement.src);
+    /* **No `src` at all, rather than an empty one or a transparent pixel.** An
+       empty `src` resolves against the document and fetches the reading view
+       itself; a placeholder pixel would be a picture we invented. The
+       publisher's own `width`/`height` are left exactly as they are, so a
+       browser can still reserve the box. GPT Sol, 2026-09-06. */
+    else img.removeAttribute("src");
+    img.removeAttribute("srcset");
+    img.removeAttribute("sizes");
+    for (const source of img.closest("picture")?.querySelectorAll("source") ?? []) {
+      source.remove();
+    }
+    changed = true;
+  }
+  return changed;
 }
 
 /** What one figure's `<img>` needs: where the bytes are, and how big they are. */
@@ -291,17 +497,17 @@ function cssEscape(value: string): string {
 /**
  * The whole article, with our own copies of its pictures in it.
  *
- * Returns the **same article object** when there is nothing to do, which is
- * every article that did not come from a PDF and every article ingested before
- * the figures step existed. That is the common case and it costs one property
- * read — **but it is no longer a case that returns before doing anything**, and
- * that is deliberate: `beginLoad` runs first, because leaving a PDF for an
- * ordinary article is exactly when the last article's blobs must go.
+ * Returns the **same article object** when there is nothing to do — an article
+ * that came from no PDF *and* holds no stored images, plus every article
+ * ingested before either step existed. It costs one property read and a walk of
+ * the blocks that have an `<img>` or a marker in them.
  *
- * **Awaited on the load path**, so the reader never sees a figure pop in after
- * the prose has settled. One parallel round of fetches, eight of them on the
- * article this was built for, and since 2026-09-06 for a visitor as well as an
- * owner — see the header for the bug that bought and what it cost.
+ * **The figures are awaited and the images are not**, which is the difference
+ * the header exists to explain. So a figure never pops in after the prose has
+ * settled; an image always does, and what stands in the meantime is an `<img>`
+ * with no `src` rather than the publisher's URL — because the publisher's URL in
+ * the markup *is* the request, and swapping it a moment later would be a moment
+ * too late.
  *
  * **A figure whose bytes will not load is left exactly as it was**: an empty
  * `<figure>` with its caption. Not an error state and not a message, because the
@@ -310,57 +516,157 @@ function cssEscape(value: string): string {
  * What *does* get a sentence is a figure the pipeline could not recover, which
  * is a different fact and is recorded in the manifest rather than discovered
  * here. PdfFigureNote.tsx.
+ *
+ * **An image whose bytes will not load is left exactly as it was too** — and for
+ * that half "exactly as it was" is the publisher's own URL, still working, which
+ * is why it needs no sentence and no state of its own. 260829b § trap 8 is the
+ * correction that a delivery failure and a pipeline failure are different
+ * things; for the article's own images they happen to have the same remedy.
  */
 export async function rehostImages(
   article: Article,
   slug: string,
   footing: RehostFooting,
-): Promise<Article> {
-  /* **First line, before any early return.** See `beginLoad`: every path out of
-     this function is a path where the previous article's blobs have to go, and
-     the path that returns soonest is the commonest one. */
-  const signal = beginLoad();
+  load: ArticleLoad,
+): Promise<Rehosted> {
+  /* **Already released**, which is the ordinary case for an article the reader
+     has moved on from before its payload came back. Nothing may be fetched and
+     nothing minted; the article goes back untouched, and the caller's own guard
+     will not render it anyway. */
+  if (load.signal.aborted) return { article, images: NOTHING_MORE };
 
-  const wanted = figuresToDraw(article);
-  if (wanted.size === 0) return article;
+  const wanted = assetsToDraw(article);
+  if (wanted.figures.size === 0 && wanted.images.size === 0) {
+    return { article, images: NOTHING_MORE };
+  }
 
-  const srcs = await sourcesFor(slug, footing, wanted, signal);
-  if (srcs.size === 0) return article;
+  /* **The figures, awaited.** Nothing to draw in their place, so drawing sooner
+     buys the reader nothing — the header's table. */
+  const figures = await figureSources(slug, footing, wanted.figures, load);
+  const figureFor = (ref: string): StoredSrc | null => figures.get(ref) ?? null;
 
-  const srcFor = (ref: string) => srcs.get(ref) ?? null;
-  return {
-    ...article,
-    blocks: article.blocks.map((b) => {
-      const html = rehostBlockHtml(b.html, srcFor);
-      return html === b.html ? b : { ...b, html };
+  const first = rebuild(article, {
+    figure: figureFor,
+    /* Every image we hold a copy of goes out blank. `wanted.images` is already
+       the intersection of *stored* and *on the page*, so `has` is the whole
+       test: a `failed` entry and a URL the step never saw are both absent from
+       it and are both left alone. */
+    image: (url) => (wanted.images.has(url) ? WAITING : null),
+  });
+
+  if (wanted.images.size === 0) return { article: first, images: NOTHING_MORE };
+
+  /* **Rebuilt from `article`, not from `first`** — the original html, with the
+     publisher's URLs still in it. That is what makes *an image whose fetch
+     failed goes back to hot-linking* fall out of the design rather than needing
+     a stash: this pass simply does not touch it. */
+  const images = imageSources(slug, footing, wanted.images, load).then((got) =>
+    rebuild(article, {
+      figure: figureFor,
+      image: (url) => {
+        const src = got.get(url);
+        return src === undefined ? null : { kind: "ours", src };
+      },
     }),
-  };
+  );
+  return { article: first, images };
 }
 
 /**
- * The stored figures this article's blocks actually point at, by ref.
+ * The article twice: one to draw now, one to draw when the pictures land.
+ *
+ * Two values rather than one because there is no honest way to make an image
+ * appear later without a later DOM change, and no honest way to make one appear
+ * *sooner* without asking the publisher for it. The caller
+ * (App.tsx § `useArticleAccess`) renders the first and replaces it with the
+ * second, as an ordinary state transition — an imperative `src` written into the
+ * live DOM would be erased the next time `TableView` re-renders a block's html,
+ * and would leave object URLs nothing revokes. GPT Sol, 2026-09-06.
+ *
+ * **What is cancellable is the render, not the work.** The caller's `live` flag
+ * suppresses a second draw the reader has moved past; what stops the *fetching*
+ * and hands the *blobs* back is `ArticleLoad.release`, and the two are separate
+ * mechanisms on purpose — one is about React, the other about resources, and
+ * conflating them is how the module-level sweep this replaced came to revoke the
+ * wrong article's URLs.
+ */
+export interface Rehosted {
+  /** The figures in, and every image we hold a copy of blanked. Draw this. */
+  article: Article;
+  /**
+   * The same article with our copies in it — including the ones that did not
+   * arrive, which go back to the publisher's URL — or `null` when there was
+   * never anything more coming.
+   */
+  images: Promise<Article | null>;
+}
+
+/** An article with no images of ours: there is no second draw. */
+const NOTHING_MORE: Promise<Article | null> = Promise.resolve(null);
+
+/**
+ * One pass of `rehostBlockHtml` over every block.
+ *
+ * **Returns the very same article when no block changed**, and the very same
+ * block object for every block that did not — `sanitizeArticle`'s property, and
+ * the thing that stops the second draw re-rendering prose nothing happened to.
+ */
+function rebuild(article: Article, sources: RehostSources): Article {
+  let changed = false;
+  const blocks = article.blocks.map((b) => {
+    const html = rehostBlockHtml(b.html, sources);
+    if (html === b.html) return b;
+    changed = true;
+    return { ...b, html };
+  });
+  return changed ? { ...article, blocks } : article;
+}
+
+/** What one load is going to fetch: a PDF's figures by ref, images by URL. */
+interface Wanted {
+  figures: Map<string, StoredFigure>;
+  images: Map<string, StoredAsset>;
+}
+
+/**
+ * Everything stored that this article's blocks actually point at.
  *
  * **The intersection, not the manifest.** A manifest is carried into a new
- * revision (src/store/pg-revisions.ts), so it can name figures whose blocks are
- * gone; fetching those would be bytes nobody will look at. Walking the blocks
- * is what makes the set the union of *what is on the page* and *what we hold*.
+ * revision (src/store/pg-revisions.ts), so it can name figures and URLs whose
+ * blocks are gone; fetching those would be bytes nobody will look at. Walking
+ * the blocks is what makes each set the union of *what is on the page* and
+ * *what we hold*.
+ *
+ * Both maps are keyed the way the reader's own lookup will be keyed — a whole
+ * marker value, and a URL as `getAttribute` returns it — so the fetch and the
+ * rewrite cannot disagree about what they are talking about.
  */
-function figuresToDraw(article: Article): Map<string, StoredFigure> {
-  const stored = storedFigures(article.assets);
-  const wanted = new Map<string, StoredFigure>();
-  if (stored.size === 0) return wanted;
+function assetsToDraw(article: Article): Wanted {
+  const figures = new Map<string, StoredFigure>();
+  const images = new Map<string, StoredAsset>();
+  const storedFigs = storedFigures(article.assets);
+  /* `assetIndex` is src/assets.ts's own map, written for this on 2026-08-29 and
+     called for the first time on 2026-09-06. Failures and unknown URLs are
+     absent from it, which is the same answer for both and the right one: leave
+     the publisher's URL exactly where it is. */
+  const index = assetIndex(article.assets);
+  if (storedFigs.size === 0 && index.size === 0) return { figures, images };
 
   const holder = inertHolder();
   for (const block of article.blocks) {
-    if (!mightHaveFigure(block.html)) continue;
+    if (!mightNeedRehosting(block.html)) continue;
     holder.innerHTML = block.html;
     for (const marker of pdfFigureMarkersIn(holder)) {
-      const entry = stored.get(marker.ref);
-      if (entry) wanted.set(marker.ref, entry);
+      const entry = storedFigs.get(marker.ref);
+      if (entry) figures.set(marker.ref, entry);
+    }
+    for (const url of imageSourcesIn(holder)) {
+      const entry = index.get(url);
+      if (entry) images.set(url, entry);
     }
   }
   holder.textContent = "";
-  return wanted;
+  return { figures, images };
 }
 
 /**
@@ -382,9 +688,79 @@ function storedFigures(assets: Assets | undefined): Map<string, StoredFigure> {
 }
 
 /**
- * Where each figure's bytes can be reached from, given who is asking.
+ * **How long an image may stay blank before the publisher's URL is allowed
+ * back.**
  *
- * The fetches go out together rather than one after another — eight sequential
+ * Not a first-paint budget — there is no longer one to spend, because the prose
+ * does not wait for any of this. This is the point at which we stop believing a
+ * fetch of ours will land: without it a single hung connection would leave every
+ * image on the article blank for the rest of the read, since the second draw
+ * happens once, when they have all settled.
+ *
+ * **Generous on purpose**, because the thing it trades away is the privacy the
+ * feature exists for, and **it is a starting point rather than a measurement.**
+ * The honest arithmetic: 7.04 MB — the worst article in the corpus, measured
+ * 2026-09-06 — is about 14.1 s at 4 Mbit/s, so 15 s does *not* comfortably cover
+ * that article; it covers it with under a second to spare for 102 round trips
+ * and the server work behind them, which is to say it does not. An earlier draft
+ * of this comment claimed it did, and GPT Sol did the division. What can be said
+ * is that the median article (3 images, 0.16 MB) is nowhere near it, that the
+ * images on a 102-image piece are overwhelmingly below the fold, and that
+ * exceeding it costs the reader nothing they can see — only privacy on the
+ * images that had not landed. Replace this number with a production p95 when
+ * there is one.
+ *
+ * The known cost, named rather than discovered: **one slow image keeps the
+ * others blank**, because there is a single second draw rather than one per
+ * picture. That is the simplest version and it is deliberate — 102 state
+ * transitions would re-render the prose 102 times. If it ever bites, the fix is
+ * to deliver the second draw in batches, not to shorten this.
+ *
+ * The owner's route answers `private, max-age=31536000, immutable`
+ * (src/routes.ts § `sendArticleAsset`), so an owner's second visit reads its
+ * copies out of the browser cache and never comes near this. A visitor's does
+ * not: the whole public namespace answers `no-store` deliberately, so that
+ * un-sharing takes effect on the next request, and a visitor pays the full cost
+ * every time.
+ */
+export const IMAGE_WAIT_MS = 15_000;
+
+/**
+ * **The ceiling on how long the prose may be held back by a figure.**
+ *
+ * The same number as `IMAGE_WAIT_MS` and a different kind of thing, which is
+ * exactly why it is a separate constant rather than a reuse: that one is a
+ * deadline on a *decoration*, and past it the reader loses privacy on a picture
+ * they already have the prose around. This one is on the **critical path of the
+ * article appearing at all**, because the figures are deliberately awaited (see
+ * `rehostImages` — there is nothing to draw in a figure's place, so drawing
+ * sooner buys the reader nothing). Past it, the reader loses the picture.
+ *
+ * **It exists because the await was unbounded until 2026-09-07**, and GPT Sol
+ * found it reviewing the built code. One `/api/asset/…` that never resolves — a
+ * stalled connection, or a response whose `blob()` never completes — meant
+ * `rehostImages` never returned, `resolveAccess` never resolved, and the reader
+ * sat on the loading state for the rest of the session. Not a blank picture: a
+ * blank page, on an article we hold in full.
+ *
+ * **A ceiling on a pathology, not a latency budget**, and the difference decides
+ * the number. The bytes come from our own bucket — measured at a ~348 ms median
+ * per object on this box, and the largest figure in the corpus is 0.76 MB — so
+ * nothing healthy comes near it. What it stops is *never*. Shortening it to
+ * something a slow connection could plausibly exceed would trade a hang nobody
+ * has for figures somebody would really lose, which is the wrong way round.
+ *
+ * **And what it degrades to is a state this file already has**: caption-only,
+ * no message, because the manifest says the picture is there and this is a
+ * transport failure the reader can do nothing about. So the bound adds a
+ * ceiling and no new reader-facing state — see `rehostImages`'s header.
+ */
+export const FIGURE_WAIT_MS = 15_000;
+
+/**
+ * The figures' bytes, by ref — **awaited, but not for ever.**
+ *
+ * The fetches go out together rather than one after another: eight sequential
  * round trips is a visible pause before the article draws, and eight parallel
  * ones is not.
  *
@@ -392,39 +768,142 @@ function storedFigures(assets: Assets | undefined): Map<string, StoredFigure> {
  * take the other seven off the page with it. **A `ref` absent from the map is
  * how a failure is spelled**, which is what leaves that figure caption-only —
  * the promise in this module's header, and until 2026-09-06 a promise only the
- * owner's branch kept.
+ * owner's branch kept. A figure the clock ran out on is absent for the same
+ * reason and means the same thing, so `FIGURE_WAIT_MS` needed no new vocabulary.
+ *
+ * **Its own `AbortController`, downstream of the load's** — the shape
+ * `imageSources` already uses below, and here for one of the same two reasons:
+ * the deadline has to stop these fetches, and the load being released still has
+ * to. Aborting rather than letting the stragglers land matters less here than it
+ * does there (nothing will look at another figure once this html is built) but
+ * leaving a dead download running is not free either.
  */
-async function sourcesFor(
+async function figureSources(
   slug: string,
   footing: RehostFooting,
   wanted: Map<string, StoredFigure>,
-  signal: AbortSignal,
+  load: ArticleLoad,
 ): Promise<Map<string, StoredSrc>> {
-  const srcs = new Map<string, StoredSrc>();
+  const figures = new Map<string, StoredSrc>();
+  if (load.signal.aborted) return figures;
 
-  await Promise.allSettled(
+  const stop = new AbortController();
+  const passOn = (): void => stop.abort();
+  load.signal.addEventListener("abort", passOn, { once: true });
+
+  const settled = Promise.allSettled(
     [...wanted].map(async ([ref, entry]) => {
-      /* The one expression the two footings differ in. A visitor has no token,
-         so `publicFetch` and not `apiFetch` — public-api.ts says why that is a
-         bare `fetch` and not the authenticated one, and the answer is the same
-         reason this branch exists at all. */
-      const res =
-        footing === "public"
-          ? await publicFetch(publicAssetPath(slug, entry.sha256, entry.ext), signal)
-          : await apiFetch(assetPath(slug, entry.sha256, entry.ext), { signal });
-      /* `res.ok` before `blob()`: an error body is perfectly good bytes, and
-         without this the reader gets a picture of a JSON error message.
-         IllustratedView.tsx § `usePlateBytes` learned that one. */
-      if (!res.ok) throw new Error(`figure ${entry.sha256} did not load (${res.status})`);
-      const blob = await res.blob();
-      /* **Superseded while the bytes were arriving.** `beginLoad` has already
-         revoked this load's URLs and there will be no second sweep, so minting
-         now would create an object URL nothing can ever revoke — the leak an
-         `AbortController` alone does not close, because a response that had
-         already arrived is not cancelled by aborting the request. */
-      if (signal.aborted) return;
-      srcs.set(ref, { src: mint(blob), width: entry.width, height: entry.height });
+      const blob = await fetchAsset(slug, footing, entry, stop.signal);
+      /* **Released, or the clock ran out, while the bytes were arriving.** A
+         response already in hand is not cancelled by aborting its request, so
+         this is the check an `AbortController` alone does not make. `mint`
+         refuses too; both, because a picture nobody is looking at should not be
+         put in a map either. */
+      if (stop.signal.aborted) return;
+      figures.set(ref, { src: load.mint(blob), width: entry.width, height: entry.height });
     }),
   );
-  return srcs;
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    settled,
+    new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        stop.abort();
+        resolve();
+      }, FIGURE_WAIT_MS);
+    }),
+  ]);
+  clearTimeout(timer);
+  load.signal.removeEventListener("abort", passOn);
+  return figures;
+}
+
+/**
+ * The images' bytes, by the URL they replace — **not awaited by the prose.**
+ *
+ * A URL absent from the answer is how a failure is spelled here too, and it
+ * means the same thing it means everywhere else in this file: leave that
+ * element as the publisher wrote it. The second draw rebuilds from the original
+ * html, so *leaving it alone* is literally all that has to happen.
+ *
+ * **Its own `AbortController`, downstream of the load's**, for two jobs at once:
+ * `IMAGE_WAIT_MS` has to stop these without stopping the figures, and the load
+ * being released still has to stop them. Aborting rather than letting the
+ * stragglers land is what keeps the leak closed: past the deadline this load's
+ * html is built and nothing will look at another picture.
+ */
+async function imageSources(
+  slug: string,
+  footing: RehostFooting,
+  wanted: Map<string, StoredAsset>,
+  load: ArticleLoad,
+): Promise<Map<string, string>> {
+  const images = new Map<string, string>();
+  /* **Released already, so start nothing** — and *nothing* is the word, rather
+     than starting them against an aborted signal and letting `fetch` refuse.
+     The figures above are awaited, so a load released *during* that await
+     arrives here with a signal that has already fired, and `addEventListener`
+     does not replay an abort that has already happened. An earlier draft
+     pre-aborted the controller below instead, which left every `apiFetch` call
+     being made for an article nobody is looking at — the test found it. GPT
+     Sol, 2026-09-06. */
+  if (load.signal.aborted) return images;
+
+  const stop = new AbortController();
+  const passOn = (): void => stop.abort();
+  load.signal.addEventListener("abort", passOn, { once: true });
+
+  const settled = Promise.allSettled(
+    [...wanted].map(async ([url, entry]) => {
+      const blob = await fetchAsset(slug, footing, entry, stop.signal);
+      if (stop.signal.aborted) return;
+      images.set(url, load.mint(blob));
+    }),
+  );
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    settled,
+    new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        stop.abort();
+        resolve();
+      }, IMAGE_WAIT_MS);
+    }),
+  ]);
+  clearTimeout(timer);
+  load.signal.removeEventListener("abort", passOn);
+  return images;
+}
+
+/**
+ * One asset's bytes, off whichever of the two routes this footing may use.
+ *
+ * **The one expression the two footings differ in.** A visitor has no token, so
+ * `publicFetch` and not `apiFetch` — public-api.ts says why that is a bare
+ * `fetch` and not the authenticated one, and the answer is the same reason this
+ * branch exists at all.
+ *
+ * Structural in its `entry` rather than taking either union, because the two
+ * things a fetch needs are the hash and the extension, and a figure's page
+ * number and an image's publisher URL are both things this must not start
+ * depending on — `StoredArticleAsset` in src/asset-delivery.ts makes the same
+ * cut on the server for the same reason.
+ */
+async function fetchAsset(
+  slug: string,
+  footing: RehostFooting,
+  entry: { sha256: string; ext: AssetExt },
+  signal: AbortSignal,
+): Promise<Blob> {
+  const res =
+    footing === "public"
+      ? await publicFetch(publicAssetPath(slug, entry.sha256, entry.ext), signal)
+      : await apiFetch(assetPath(slug, entry.sha256, entry.ext), { signal });
+  /* `res.ok` before `blob()`: an error body is perfectly good bytes, and
+     without this the reader gets a picture of a JSON error message.
+     IllustratedView.tsx § `usePlateBytes` learned that one. */
+  if (!res.ok) throw new Error(`asset ${entry.sha256} did not load (${res.status})`);
+  return await res.blob();
 }

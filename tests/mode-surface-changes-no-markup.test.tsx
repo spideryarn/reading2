@@ -82,9 +82,16 @@
  * work — but read through the whole reader, that assertion becomes "the band is
  * somewhere on the page", and Sol's F16 is the finding it exists to keep.
  *
- * Referee is mounted through `<App/>` anyway, because there is no other way:
- * `RefereeBand` is an unexported function inside `App.tsx`. Its shape carries a
- * `parent` selector instead, which catches the same wrapper one level up. That
+ * Referee is mounted through `<App/>`, and its shape carries a `parent`
+ * selector instead, which catches the same wrapper one level up.
+ *
+ * That was once forced — `RefereeBand` was an unexported function inside
+ * `App.tsx` and there was no other way to reach it. Since 2026-09-06 it is
+ * `export function RefereeBand` in
+ * [`src/web/modes/referee/RefereeMode.tsx`](../src/web/modes/referee/RefereeMode.tsx)
+ * and could be mounted directly; the harness is kept because mounting the whole
+ * reader is what makes this a check of what a reader sees, not because it is
+ * still the only door. That
  * is one harness's worth of cost for one band, and it is why the other ten do
  * not use it.
  *
@@ -577,6 +584,8 @@ const HIT: Found = {
   long: "…the utility of phrenology…",
   at: 0.3,
   whole: false,
+  /* Not a quote. See `Found.quoteTier`. */
+  quoteTier: null,
 };
 
 async function mountSearch(): Promise<void> {
@@ -1017,8 +1026,14 @@ const QUOTES: Quotes = {
       text: QUOTE_LINE,
       start: PARAGRAPH.indexOf(QUOTE_LINE),
       reason: "It is the sentence the whole chapter turns on.",
-      importance: 90,
-      striking: 80,
+      /* **0–1, not 0–100.** These were 90 and 80, which `score()` in
+         src/quotes.ts refuses outright — the fixture is hand-built and so
+         bypasses `place`, and nothing downstream read the numbers, so it sat
+         here looking plausible. It is read now: `quoteTier` drives how heavily
+         the passage is outlined in the prose, and 90 would have made this
+         fixture claim a priority no real quote can have. */
+      importance: 0.9,
+      striking: 0.8,
     },
   ],
   discarded: { unfound: 0, otherVoice: 0, wrongLength: 0, overlapping: 0, overCap: 0, malformed: 0 },
@@ -1473,7 +1488,8 @@ function mountDebate(debate: Debate | null): ReactNode {
 /**
  * Quiz, always with a `subMode` control.
  *
- * `RememberBand` in App.tsx passes one on every render, so a Quiz band with an
+ * `RememberBand` (src/web/modes/conversation/ConversationModes.tsx) passes
+ * one on every render, so a Quiz band with an
  * empty header is not a state a reader can reach — but the prop is optional, so
  * one *is* a state a refactor can create by accident. **`QUIZ_NO_SUBMODE` is
  * what guards that**; this helper pins the production shape.
@@ -1781,9 +1797,10 @@ const OUTLINE: BandShape = {
 /**
  * Referee, which is the one band that is not a component anybody can mount.
  *
- * `RefereeBand` is an unexported function inside `App.tsx`, so this shape is
- * read through the whole reader — see `mountReader` below — and `parent` stands
- * in for the whole-output check the other ten get.
+ * `RefereeBand` lives in `src/web/modes/referee/RefereeMode.tsx` (it was an
+ * unexported function inside `App.tsx` until 2026-09-06), and this shape is
+ * still read through the whole reader — see `mountReader` below — with `parent`
+ * standing in for the whole-output check the other ten get.
  */
 const REFEREE: BandShape = {
   className: "mode-band gloss referee",

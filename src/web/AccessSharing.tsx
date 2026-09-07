@@ -377,7 +377,7 @@ export function AccessSharing({
    *
    * The parent ignores a report that changes nothing, so the common case — open
    * the page, read the same value the payload already had, go back — costs no
-   * re-render. src/web/App.tsx § `OwnedArticle`.
+   * re-render. src/web/article/ArticlePage.tsx § `OwnedArticle`.
    */
   // biome-ignore lint/correctness/useExhaustiveDependencies: `report` is a fresh closure every render over a ref and a prop that do not change; listing it would re-run this on every render, and what it must fire on is what the server said and whether this card has acted
   useEffect(() => {

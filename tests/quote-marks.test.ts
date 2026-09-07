@@ -27,8 +27,8 @@
  * read, and the two must be talking about the same set.
  */
 import { describe, expect, it } from "vitest";
-import { quoteMarkKey, resolveQuotes } from "../src/web/search-hits.js";
-import { markedQuotes, QUOTE_BAR_DEFAULT } from "../src/web/QuotesPanel.js";
+import { findLiteral, quoteMarkKey, resolveQuotes } from "../src/web/search-hits.js";
+import { markedQuotes, quoteTier, QUOTE_BAR_DEFAULT } from "../src/web/QuotesPanel.js";
 import type { Block, Quote } from "../src/types.js";
 
 const block = (id: string, html: string): Block => {
@@ -58,11 +58,23 @@ const THREE: Quote[] = [
   q("qc", "spya-cccccc", "writing is thinking still", 0.95),
 ];
 
+/**
+ * `resolveQuotes` over these blocks, with the tier attached the way
+ * `QuotesMode` attaches it. The resolver takes the tier already computed —
+ * `quoteTier` lives next to `priorityOf` because that is where the thresholds
+ * belong — so the seam this file is about now has one more thing crossing it.
+ */
+const rq = (quotes: readonly Quote[]) =>
+  resolveQuotes(
+    BLOCKS,
+    quotes.map((quote) => ({ ...quote, tier: quoteTier(quote) })),
+  );
+
 describe("the quotes the prose marks", () => {
   it("marks every one of them, not only the one that is selected", () => {
     /* The whole report, in one assertion. Three quotes in the list, three
        washed passages on the page — and nobody has pressed anything. */
-    const found = resolveQuotes(BLOCKS, markedQuotes(THREE, "document", null));
+    const found = rq(markedQuotes(THREE, "document", null));
     expect(found).toHaveLength(3);
     expect(found.map((f) => f.blockId)).toEqual([
       "spya-aaaaaa",
@@ -75,7 +87,7 @@ describe("the quotes the prose marks", () => {
     /* `?rank=importance` reorders the list; it does not reorder the article.
        Nothing downstream sorts, so the ordering has to happen here — the same
        call `resolveIdea`'s caller makes, for the same reason. */
-    const found = resolveQuotes(BLOCKS, markedQuotes(THREE, "importance", null));
+    const found = rq(markedQuotes(THREE, "importance", null));
     expect(found.map((f) => f.index)).toEqual([0, 1, 2]);
   });
 
@@ -89,7 +101,7 @@ describe("the quotes the prose marks", () => {
        precise failure src/web/threshold.ts exists to prevent. */
     const marked = markedQuotes(THREE, "prioritised", 0.9);
     expect(marked.map((m) => m.id)).toEqual(["qa", "qc"]);
-    expect(resolveQuotes(BLOCKS, marked)).toHaveLength(2);
+    expect(rq(marked)).toHaveLength(2);
   });
 
   it("resolves the bar's default the way the panel does, from a null", () => {
@@ -110,7 +122,7 @@ describe("the quotes the prose marks", () => {
        Quotes are ONE source, the way the literal matcher is one source. The
        identity of the individual quote is in `key`, which is what the mark, the
        ring and the hover card read. */
-    const found = resolveQuotes(BLOCKS, markedQuotes(THREE, "document", null));
+    const found = rq(markedQuotes(THREE, "document", null));
     expect(new Set(found.map((f) => f.runId)).size).toBe(1);
     expect(new Set(found.map((f) => f.key)).size).toBe(3);
   });
@@ -121,7 +133,7 @@ describe("the quotes the prose marks", () => {
        one mark on the page. With all of them marked it is the only thing that
        distinguishes the reader's selection, and the key is computed in one
        place so the band and the resolver cannot disagree about its shape. */
-    const found = resolveQuotes(BLOCKS, markedQuotes(THREE, "document", null));
+    const found = rq(markedQuotes(THREE, "document", null));
     const key = quoteMarkKey("qb", "spya-bbbbbb");
     expect(found.map((f) => f.key)).toContain(key);
   });
@@ -131,12 +143,68 @@ describe("the quotes the prose marks", () => {
        cover the article's text, so a re-extraction leaves ids behind. One dead
        quote must not take the other two off the page with it. */
     const withGhost = [...THREE, q("qd", "spya-gone01", "A line from a paragraph that went")];
-    expect(resolveQuotes(BLOCKS, markedQuotes(withGhost, "document", null))).toHaveLength(3);
+    expect(rq(markedQuotes(withGhost, "document", null))).toHaveLength(3);
   });
 
   it("marks nothing when there are no quotes, which is the ordinary state", () => {
     /* The article acquires marks when the reader asks for them and at no other
        time — the rule `hitMarks` and `termMarks` both keep. */
-    expect(resolveQuotes(BLOCKS, markedQuotes([], "document", null))).toEqual([]);
+    expect(rq(markedQuotes([], "document", null))).toEqual([]);
+  });
+});
+
+/**
+ * **The stroke, and the priority it carries** — docs/project/quotes.md § The
+ * stroke, docs/plans/260907c-….md.
+ *
+ * A jsdom test can prove the attribute is on the element and can prove nothing
+ * about whether the page reads well; the second half is the browser pass, and it
+ * is written up in the plan. What is worth holding here is the *mapping*, which
+ * is the part a later edit could quietly change.
+ */
+describe("how heavily each quote is drawn", () => {
+  it("is heavy above the bar's default and light below it", () => {
+    /* The two controls tell one story: at the bar's resting position everything
+       on the page is heavy, and the light ones are what dragging it down
+       reveals. If this threshold and QUOTE_BAR_DEFAULT ever part company, the
+       reader gets a page where raising the bar hides a heavy stroke and leaves
+       a light one — which reads as a bug in the feature whose whole job is to
+       say what matters. */
+    expect(quoteTier(q("x", "spya-aaaaaa", "t", 0.8))).toBe(2);
+    expect(quoteTier(q("x", "spya-aaaaaa", "t", 0.95))).toBe(2);
+    expect(quoteTier(q("x", "spya-aaaaaa", "t", 0.79))).toBe(1);
+    expect(quoteTier(q("x", "spya-aaaaaa", "t", 0))).toBe(1);
+  });
+
+  it("takes the priority the bar takes, not `importance` alone", () => {
+    /* `priorityOf` is `max(importance, striking)`, and `?bar=` thresholds on it.
+       A quote that is merely striking still clears the bar, so it must also draw
+       heavy — otherwise the page and the slider disagree about the same quote. */
+    const striking: Quote = { id: "s", blockId: "spya-aaaaaa", text: "t", striking: 0.9 };
+    expect(quoteTier(striking)).toBe(2);
+  });
+
+  it("draws an unscored quote light, and still draws it", () => {
+    /* Both halves matter. A quote scored on neither axis survives every position
+       of the bar (docs/project/quotes.md § The bar hides what is below it), so
+       leaving it unmarked would be a row in the panel with nothing in the prose
+       — the precise failure threshold.ts exists to prevent. And it must be
+       light, because it has earned no emphasis. */
+    const unscored = q("u", "spya-aaaaaa", "Writing is thinking");
+    expect(quoteTier(unscored)).toBe(1);
+    expect(rq([unscored])).toHaveLength(1);
+  });
+
+  it("carries the tier onto the passage, so the prose can draw it", () => {
+    const found = rq(markedQuotes(THREE, "document", null));
+    expect(found.map((f) => f.quoteTier)).toEqual([2, 1, 2]);
+  });
+
+  it("leaves a search hit with no tier at all", () => {
+    /* `quoteTier: null` is what the stylesheet reads as "this is a wash, not an
+       outline". A search hit that acquired one would be drawn as a quote. */
+    const hits = findLiteral(BLOCKS, "thinking");
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.every((f) => f.quoteTier === null)).toBe(true);
   });
 });

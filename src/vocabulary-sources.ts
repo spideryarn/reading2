@@ -32,7 +32,9 @@
  * Add a `kind` to {@link Where}, add a line to {@link RECIPES} naming the
  * sources it wants in the order the cap should spend on them, and teach
  * {@link parseWhere} to accept it. Nothing else changes — not the model call,
- * not the fence, not the client. A source that has nothing to say in a given
+ * not the sanitiser in `vocabulary.ts` (still called `fence`, after the
+ * `<vocabulary>` tag that stopped existing on 2026-09-07), not the client. A
+ * source that has nothing to say in a given
  * place returns `[]` rather than being conditionally skipped, so a recipe is
  * only ever a list of names.
  *
@@ -58,8 +60,14 @@ import { isSlug } from "./ingest.js";
  * know. Everything else about the vocabulary is decided here.
  *
  * **Never the vocabulary itself.** A vocabulary accepted from a client is a
- * string a caller chooses landing in a model prompt, which is a prompt-injection
- * surface built on purpose for no gain — the server has the glossary already.
+ * term list a caller chooses landing in a transcription request, for no gain —
+ * the server has the glossary already. It was worse than that until 2026-09-07,
+ * when the terms went into a chat prompt and this was a prompt-injection surface
+ * built on purpose; `keywords` is a request field with no instruction beside it,
+ * so what is left is smaller and is still not nothing. A caller who picks the
+ * words is choosing what the transcriber is biased towards, and a keyword
+ * carrying an angle bracket makes the provider reject the whole request
+ * (src/transcribe.ts).
  */
 export type Where =
   /** Into one of the profile boxes. Their own words are the best hint we have. */
@@ -203,10 +211,14 @@ async function glossaryTerms(slug: string): Promise<string[]> {
  * band. The Whisper rare-word study (arXiv 2502.11572) tested biasing lists of
  * 35, 70 and 150 words and found rare-word errors rising with size, since the
  * longer list is mostly words the speaker did not say; it recommends about 70.
- * Deepgram, whose cap is 500 tokens, recommends 20–50 terms. Nobody has
- * published anything at all for a term list in a chat prompt to Gemini, which
- * is what we do, so this is 40 on top of a glossary — landing the whole list in
- * the 35–60 term range those two agree on.
+ * Deepgram, whose cap is 500 tokens, recommends 20–50 terms. Nothing has been
+ * found that publishes a count for what we actually send: a term list in a chat
+ * prompt to Gemini until 2026-09-07, and `keywords` on `openai/gpt-transcribe`
+ * since — whose documentation describes the field as hints rather than required
+ * output and names no size at all. So this is 40 on top of a glossary — landing
+ * the whole list in the 35–60 term range those two agree on. **Nobody has
+ * re-measured it against `keywords`**, and the number stands on the two
+ * published bands rather than on anything we ran.
  */
 const MAX_NAMES = 40;
 
@@ -377,29 +389,46 @@ export const RECIPES: Record<Where["kind"], readonly SourceName[]> = {
 };
 
 /**
- * The words this reader is likely to be about to say.
+ * The words this reader is likely to be about to say, **joined into one line**.
  *
  * All of a place's sources are started at once, so the reader waits for the
  * slowest rather than for their sum, and `pack` then applies the priority order
  * to whatever came back. Every one of them is bounded by
  * {@link SOURCE_DEADLINE_MS}, so the vocabulary can be worse but it cannot be
  * slow.
+ *
+ * **Nothing in `src/` sends this shape any more.** It was dictation's, while
+ * dictation was a chat completion and a chat model read a sentence; since
+ * 2026-09-07 dictation sends `keywords` and calls {@link vocabularyTermsFor}
+ * like live conversation does. The only caller left is
+ * `tests/transcribe.test.ts`, which asserts on the terms a place yields and
+ * finds a substring easier to look for than an array member; the evals that used
+ * to call it (`bench-models.ts`, `bench-vocabulary-sources.ts`) moved to the list
+ * and join for themselves where they want characters. Prefer
+ * {@link vocabularyTermsFor} in anything new: a term containing a comma does not
+ * survive this and back.
  */
 export async function vocabularyFor(where: Where): Promise<string> {
   return (await vocabularyTermsFor(where)).join(", ");
 }
 
 /**
- * The same words, as the list they were before anything joined them.
+ * The same words, as the list they were before anything joined them — **and
+ * since 2026-09-07 this is what both of this app's speech paths ask for.**
  *
- * Live conversation needs the array: OpenAI's realtime transcription takes a
- * jargon list as `keywords`, and **that field is not merely a nicer shape, it
- * is the fix for a real bug.** With the list in `prompt` instead,
+ * Live conversation needed the array first: OpenAI's realtime transcription
+ * takes a jargon list as `keywords`, and **that field is not merely a nicer
+ * shape, it is the fix for a real bug.** With the list in `prompt` instead,
  * `gpt-4o-transcribe` reads the whole vocabulary back as a transcript whenever
  * it is handed non-speech — measured on 2026-08-31, and the thing Greg noticed
  * in the first real conversation. `keywords` is documented as a hint that must
  * only appear if it was actually said, and on noise it invents nothing.
  * evals/live/hallucination-on-noise.mts, docs/plans/260831g-live-conversation.md.
+ *
+ * **Dictation joined it on 2026-09-07** and needed nothing built: moving onto
+ * `openai/gpt-transcribe`, whose `keywords` array is the parameter that made the
+ * whole switch worth making, meant swapping one call to {@link vocabularyFor}
+ * for a call to this. docs/plans/260907c-dictation-onto-an-openai-transcriber.md.
  */
 export async function vocabularyTermsFor(where: Where): Promise<string[]> {
   const wanted = RECIPES[where.kind];

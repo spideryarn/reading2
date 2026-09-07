@@ -5,8 +5,15 @@ sidebar and the [granularity zoom](granularity-zoom.md) view both render. Read
 [architecture.md § Pipeline](architecture.md#pipeline) first — stages 4 and 5 produce
 **one** `tree.json`, and it must not become two trees.
 
-Stage 4 builds the *structure* — ranges, hierarchy, titles — and, in a second batched pass, the
-`navLabel` on every gistable block ([Two passes](#two-passes)). It also writes the one-sentence
+**Since 2026-09-06 stage 4 is two pipeline steps, `hierarchy` and `labels`**, and only the first of
+them runs when somebody pastes a URL — the label pass was 79.5–92% of the wall clock, past what the
+job lease allows. [Why they are two steps](#two-steps) is the short version;
+[260906a](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md) is the long one. Read that
+before assuming a freshly ingested tree carries any navigation labels: it carries none.
+
+The `hierarchy` step builds the *structure* — ranges, hierarchy, titles — and the `labels` step adds
+the `navLabel` on every gistable block afterwards, in batched parallel calls
+([Two passes](#two-passes)). It also writes the one-sentence
 `gist` on each internal node, which [architecture.md](architecture.md#pipeline) draws as stage 5:
 they were never split into two model calls, because a tree without gists has nothing to render at
 its coarse levels and fails validation, and both would write the same artefact. The live prompt in
@@ -553,8 +560,13 @@ labels it is about; `carry` in `REVISION_CARRY_POLICY`, so it travels with `tree
 While it is not `ready` the client withholds the **whole** paragraph-label layer rather than drawing
 what happens to exist — [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) is the one rule, and it
 says why: a column of blank cells reports our unfinished work as the article's own shape, and a
-partly-drawn outline rung is worse. Stage 1 writes `ready` everywhere, so nothing visible has changed
-yet.
+partly-drawn outline rung is worse.
+
+Stage 1 wrote `ready` everywhere and changed nothing anybody could see. **Stage 2 landed the same day
+and `pending` is now the ordinary state of a newly added article** — `hierarchy` writes the empty
+manifest and the labels arrive later, from a free successor job
+([Why they are two steps](#two-steps)). So the withheld state is what a reader sees for the minutes
+between adding a piece and the labels landing, rather than a state nothing produces.
 
 ## Headings: verbatim unless genuinely uninformative
 
@@ -660,13 +672,48 @@ this was the only answer in the pipeline that **grew with the article without a 
 holds 128,000 tokens including the model's own reasoning, and nothing raises that, so past some
 length the stage simply could not work.
 
-So it is two passes now, and one pipeline step:
+So it is two passes — and, since 2026-09-06, **two pipeline steps**:
 
 1. **The structure**, in one whole-document call ([`src/hierarchy.ts`](../../src/hierarchy.ts)) — the internal
    nodes, their titles, their gists, their ranges, `sourceHeading`. Roughly 7,000 tokens of answer on
    a 360-block article, and it grows at about one node per seven blocks rather than one per block.
+   This is the `hierarchy` step.
 2. **The nav labels**, in parallel batches ([`src/labels.ts`](../../src/labels.ts)), cut along the
-   tree's own section boundaries once it exists.
+   tree's own section boundaries once it exists. This is the `labels` step.
+
+### Why they are two steps <a id="two-steps"></a>
+
+The label pass was **79.5–92% of stage 4's wall clock**, and one measured call took 602 s of a 682 s
+pass against a claimant deadline of 740 s. So it left the blocking step:
+[260906a](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md).
+
+What that means in practice:
+
+- **`labels` is not in `DEFAULT_INGEST_STEPS`.** Pasting a URL runs `hierarchy` and stops. The labels
+  are bought later, by a free successor job — so a freshly ingested article shows *"Paragraph labels
+  are still arriving"* until one runs.
+- **`hierarchy` writes an empty manifest**, a `PendingLabelsFile` — the three hashes, `labels: {}`,
+  `batches: null`, and deliberately **no `version` and no `generator`**, because no prompt and no
+  model produced it. [`src/labels.ts`](../../src/labels.ts) has the type and the argument.
+- **The tree it hands back carries no navigation labels at all.** Not "the headings but not the
+  paragraphs" — none. `buildTree` in [`src/hierarchy.ts`](../../src/hierarchy.ts) sets `navLabel`
+  from the map it is given, `generateHierarchy` gives it an empty one, and `mergeLabels` deletes the
+  key wherever the manifest has none. The free heading labels
+  [below](#heading-tree) belong to `buildHeadingTree`, which this pipeline does not use.
+  `tests/hierarchy-leaves-the-labels.test.ts` pins it, because the obvious guess is the other one.
+- **`checkCoverage` runs in the `labels` step**, after its merge and before anything can be written
+  `ready`. It asks whether every structural block carries a label, which a structure-only tree
+  guarantees to be false. `assertEveryBlockLabelled` and `assertInsideCoverageFloor` are inside
+  `generateLabels` and travelled with it.
+- **Writing a pending manifest deletes that revision's `labels` receipt**, in the same transaction as
+  the artefacts ([`writeArtefacts`](../../src/store/artifacts-pg.ts)). That deletion is this design's
+  whole structure-currency check, and it is keyed on the artefact rather than on the step's name — so
+  a `tree` written with no manifest beside it is **refused**. The reasoning, and the P0 it closes, is
+  in the plan under [Fable's arbitration](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md#fable-invalidation);
+  `tests/labels-receipt-invalidation.test.ts` is the reproduction.
+- **Forcing `hierarchy` sweeps `labels` in.** It is deliberately not in `FORCE_ONLY_WHEN_NAMED`,
+  which is the opposite call from `arc`'s in the same position: re-running `hierarchy` re-cuts the
+  tree, and that is exactly what makes a label wrong.
 
 The rule the split turns on:
 
@@ -879,11 +926,17 @@ is item **F** in [260830a-opening-an-article-before-the-toc.md](../research/2608
 
 ### Three artefacts, and what survives a failed run
 
-Stage 4 produces the tree, the blocks and the labels, and **hands all three back in one object**
-rather than writing them: `generateHierarchy` returns `TocArtefacts`, and its caller stores them together
-in a single write ([`src/hierarchy.ts`](../../src/hierarchy.ts),
+The `hierarchy` step produces the tree, the blocks and the labels manifest, and **hands all three
+back in one object** rather than writing them: `generateHierarchy` returns `HierarchyArtefacts`, and
+its caller stores them together in a single write ([`src/hierarchy.ts`](../../src/hierarchy.ts),
 [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 2). All three are
 required by the type, so a caller cannot store a tree and skip its labels.
+
+**Since 2026-09-06 the manifest it hands back is a `PendingLabelsFile`** — empty, `batches: null` —
+and the `labels` step writes the real one, together with the tree it merged them into. The store
+enforces the pairing from the other side as well: `writeArtefacts` **refuses** a `tree` written with
+no manifest beside it, so a future writer of the tree (the deepening wave is the one we know is
+coming) has to say what it did to the labels rather than remember a convention.
 
 It used to write the three files itself, in a fixed order with the tree last. That ordering was
 about three *separate* writes: `writeFile` truncates before it has anything to put there, and
@@ -898,8 +951,11 @@ whole-or-nothing write gives us "whole or not there" and not "still true". A com
 for an article that has since been re-extracted, or re-structured, looks exactly like a current one.
 The structure hash is the one that earns its place: boundaries can move without a single block
 changing, so it is taken over every node's range, parent, title and gist rather than over the outline
-the prompt shows the model, which is titles alone. **Nothing reads the structure hash yet** — the
-`hierarchy` step still has no freshness check — so today it is evidence in the file rather than a guard.
+the prompt shows the model, which is titles alone. **Nothing reads the structure hash even now**, and
+since 2026-09-06 that is a decision rather than a gap: what makes a stale tree invalidate its labels
+is the *receipt deletion* in `writeArtefacts` — a re-cut tree can only come from a tree write, and a
+tree write always carries a manifest — so no composite fingerprint is needed anywhere. It stays in
+the file as evidence.
 
 `sourceHash` is not in that category. `STAMP_SOURCE` points stage 4's stamp at `labels.json` rather
 than at the tree, which carries no such field, so that hash is what the store compares a declared

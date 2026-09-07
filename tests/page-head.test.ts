@@ -542,14 +542,20 @@ describe("the one title rule, applied by both sides", () => {
    * `MODES` is read from src/modes.ts rather than listed here, so an eleventh
    * mode arrives in this loop without anybody remembering to add it.
    */
-  it("agrees with the client in every one of the fourteen modes", () => {
-    /* Ten on one side of the 2026-08-31 merge and eleven on the other, because
-       `plain` and `quotes`/`timeline` were added in parallel. Twelve was both;
-       thirteen is that plus `referee`, added the same night
-       (docs/plans/260831an-referee-mode-for-peer-reviewers.md). Fourteen is
-       that plus `debate`, added 2026-09-05
-       (docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md). */
-    expect(MODES.length, "a mode was added or removed; check this still covers them").toBe(14);
+  it("agrees with the client in every mode there is", () => {
+    /* **This asserted `MODES.length === 14` until 2026-09-07, and the number
+       came out rather than being incremented.** The loop below is already total
+       over `MODES`, so the count could never catch a mode the loop had missed —
+       it only ever caught somebody adding one, and made them edit arithmetic to
+       say so. That is the bookkeeping docs/project/new-mode.md § Moving a mode
+       in or out of the switch measured at eight places for one line of
+       behaviour, one of which had already drifted wrong and gone on passing.
+
+       What the count *did* do incidentally is worth keeping, so it is kept
+       directly: a loop over an empty or truncated `MODES` passes vacuously, and
+       this says it did not. A floor rather than an identity, so it survives the
+       next mode without an edit. */
+    expect(MODES.length, "MODES is empty or truncated — the loop below proves nothing").toBeGreaterThan(5);
     for (const mode of MODES) {
       const d = doc(composeShell(SHELL, head({ title: "A shared piece" }), mode));
       const client = pageTitle({ kind: "read", title: "A shared piece", view: "article", mode });

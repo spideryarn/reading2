@@ -1,5 +1,12 @@
 /**
- * **That `App.tsx` is wired the way the hooks assume.**
+ * **That the reading view is wired the way the hooks assume.**
+ *
+ * The subjects live in several files since 2026-09-06 — `OwnedReader` is in
+ * `src/web/article/`, `Reader` is in `src/web/reader/`, the mode controllers are
+ * under `src/web/modes/` — so each assertion reads the file that owns it. **They are
+ * read separately and never concatenated**: one synthetic "App" source would
+ * make `indexOf` anchors ambiguous again, which is the whole reason `hookBody`
+ * exists.
  *
  * `tests/glossary-one-fetch.test.tsx` proves the hooks share one read. It
  * cannot prove that the reading view *uses* them that way, because it stands in
@@ -23,22 +30,45 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const app = await readFile(path.join(ROOT, "src/web/App.tsx"), "utf8");
+/* Both halves of the reading view left `App.tsx` on 2026-09-06: `OwnedReader`,
+   which mounts the owner-only hooks, into `article/`, and `Reader` itself into
+   `reader/`. Named separately, and the reads are the guard — a subject that
+   moves again fails here rather than in an assertion against the wrong file. */
+const articlePage = await readFile(path.join(ROOT, "src/web/article/ArticlePage.tsx"), "utf8");
+const reader = await readFile(path.join(ROOT, "src/web/reader/Reader.tsx"), "utf8");
+const glossaryMode = await readFile(
+  path.join(ROOT, "src/web/modes/glossary/GlossaryMode.tsx"),
+  "utf8",
+);
+const quotesMode = await readFile(path.join(ROOT, "src/web/modes/quotes/QuotesMode.tsx"), "utf8");
+const searchMode = await readFile(path.join(ROOT, "src/web/modes/search/SearchMode.tsx"), "utf8");
+/* The three passage rules the quotes and search bands used to hold copies of,
+   and have called through since 2026-09-06 — so the "before the paint" half of
+   the assertions below is now a fact about this file. */
+const lifecycle = await readFile(path.join(ROOT, "src/web/passage-lifecycle.ts"), "utf8");
+/* And which slot the page is drawing from, which left `Reader` as a pair of
+   ternary chains and arrived here as one total function on the same day. */
+const passages = await readFile(path.join(ROOT, "src/web/reader/passages.ts"), "utf8");
 const glossaryPanel = await readFile(path.join(ROOT, "src/web/GlossaryPanel.tsx"), "utf8");
 const quotesPanel = await readFile(path.join(ROOT, "src/web/QuotesPanel.tsx"), "utf8");
 const searchPanel = await readFile(path.join(ROOT, "src/web/SearchPanel.tsx"), "utf8");
 
 describe("the reading view's glossary wiring", () => {
   it("reads the glossary exactly once", () => {
-    const calls = app.match(/useGlossaryRead\(/g) ?? [];
+    /* `OwnedReader` is the one caller. Counted across the composition as well,
+       because "exactly one" is only a fact about the reading view if both of
+       the files it is now spread over are asked — a second read added in
+       `Reader` would otherwise be invisible. */
+    const calls = articlePage.match(/useGlossaryRead\(/g) ?? [];
     expect(calls).toHaveLength(1);
+    expect(reader.match(/useGlossaryRead\(/g) ?? []).toHaveLength(0);
   });
 
   it("hands that read to the band rather than letting it fetch its own", () => {
     /* `useGlossary` takes the read as its second argument. A call with one
        argument is the old shape, which fetched again. */
-    expect(app).toMatch(/read=\{glossaryRead\}/);
-    expect(app).not.toMatch(/useGlossary\(slug\)/);
+    expect(reader).toMatch(/read=\{glossaryRead\}/);
+    expect(glossaryMode).not.toMatch(/useGlossary\(slug\)/);
   });
 
   it("draws the prose's underlines from that same read", () => {
@@ -51,10 +81,12 @@ describe("the reading view's glossary wiring", () => {
        no glossary and no endpoint to ask for one. Optional in the pattern, not
        required, so this still fails if the local disappears altogether — which
        is the regression it is about. docs/plans/260827ai-public-read-only-access.md. */
-    expect(app).toMatch(/glossaryRead\??\.glossary\?\.entries/);
+    expect(reader).toMatch(/glossaryRead\??\.glossary\?\.entries/);
     /* The prop or the call, not the word — the comment in `GlossaryBand`
-       explaining why the prop is gone would otherwise fail this. */
-    expect(app).not.toMatch(/onEntries\s*[=(]/);
+       explaining why the prop is gone would otherwise fail this. Both files,
+       because the prop would have to come back at both ends of the seam. */
+    expect(reader).not.toMatch(/onEntries\s*[=(]/);
+    expect(glossaryMode).not.toMatch(/onEntries\s*[=(]/);
   });
 });
 
@@ -72,20 +104,24 @@ describe("the reading view's glossary wiring", () => {
  * docs/plans/260903c-threshold-sliders-hide-below-threshold-items.md § Stage 2.
  */
 /**
- * One top-level function out of `App.tsx`, from its `function` line to whatever
- * comes next at the top level.
+ * One top-level function out of the file that owns it, from its `function` line
+ * to whatever comes next at the top level.
  *
  * Not `indexOf("\n}")`: a destructured props object closes on its own line, so
  * that boundary cuts a hook off at its own signature and the assertion under it
  * passes or fails on nothing.
+ *
+ * **The source is a parameter, and `where` names it**, because a subject that
+ * has moved to another file must fail loudly rather than slice from the end of
+ * the wrong one and assert about an empty string — docs/reusable/silent-success.md.
  */
-function hookBody(name: string): string {
-  const start = app.indexOf(`function ${name}`);
-  expect(start, `${name} must exist in App.tsx to be checked`).toBeGreaterThan(-1);
+function hookBody(source: string, where: string, name: string): string {
+  const start = source.indexOf(`function ${name}`);
+  expect(start, `${name} must exist in ${where} to be checked`).toBeGreaterThan(-1);
   const ends = ["\n/**", "\nfunction ", "\nexport function "]
-    .map((mark) => app.indexOf(mark, start + 1))
+    .map((mark) => source.indexOf(mark, start + 1))
     .filter((at) => at > -1);
-  return app.slice(start, ends.length > 0 ? Math.min(...ends) : app.length);
+  return source.slice(start, ends.length > 0 ? Math.min(...ends) : source.length);
 }
 
 describe("the threshold wiring", () => {
@@ -94,8 +130,14 @@ describe("the threshold wiring", () => {
        panel goes to the prose, so a row in the list and a mark on the paragraph
        can never be a different set. A filter in `SearchPanel` would hide a row
        and leave its wash on the article. */
-    expect(app.match(/keepAbove\(/g) ?? []).toHaveLength(1);
+    expect(searchMode.match(/keepAbove\(/g) ?? []).toHaveLength(1);
     expect(searchPanel).not.toMatch(/keepAbove/);
+    /* And nowhere else in the reading view either — the count above is only
+       "exactly one" within the file that owns it, so the reader composition has
+       to be asked separately. `SearchMode.tsx` moved out of `App.tsx` on
+       2026-09-06 and this assertion moved with it; `Reader` followed the same
+       day, so the composition to ask is src/web/reader/Reader.tsx. */
+    expect(reader).not.toMatch(/keepAbove\(/);
   });
 
   it("lowers the gate before opening a term the bar is hiding, and only then", () => {
@@ -109,7 +151,13 @@ describe("the threshold wiring", () => {
        it would set a threshold the reader never saw), and it can only do that
        if the caller hands it the sort. What the function then decides is
        covered properly in tests/glossary.test.ts § the threshold slider. */
-    const open = app.slice(app.indexOf("const openTermInGlossary"));
+    const at = reader.indexOf("const openTermInGlossary");
+    /* **The guard, not a convenience.** `indexOf` returns -1 when the subject
+       has moved to another file, `slice(-1)` hands back the last character, and
+       the two assertions below then pass against nothing at all —
+       docs/reusable/silent-success.md. */
+    expect(at, "openTermInGlossary must exist in Reader.tsx to be checked").toBeGreaterThan(-1);
+    const open = reader.slice(at);
     const body = open.slice(0, open.indexOf("\n  );"));
     expect(body).toMatch(/gateToReveal\(terms, id, sort,/);
     expect(body).toMatch(/setGate\(/);
@@ -127,14 +175,26 @@ describe("the threshold wiring", () => {
        paint the panel without the row. tests/glossary-band-selection.test.tsx
        mounts the band and asserts that ordering for real; this is the cheap
        companion that also covers the quotes band. */
-    expect(app).toMatch(/hiddenSelection[\s\S]{0,400}setTermId\(null\)/);
-    expect(app).toMatch(/hiddenSelection[\s\S]{0,400}setQuoteId\(null\)/);
-    for (const band of ["useGlossaryMode", "useQuotesMode"]) {
-      expect(
-        hookBody(band),
-        `${band} must hand its selection up in a layout effect`,
-      ).toMatch(/useLayoutEffect\(\(\) => \{\s*on(Selected|Found)\(/);
-    }
+    expect(glossaryMode).toMatch(/hiddenSelection[\s\S]{0,400}setTermId\(null\)/);
+    expect(quotesMode).toMatch(/hiddenSelection[\s\S]{0,400}setQuoteId\(null\)/);
+    /* Glossary hands its selection up itself: `termSelections` is a different
+       currency from `Found[]`, with no push-up to `Reader` and no cleanup, so it
+       is deliberately not one of the six producers on the shared hook. */
+    expect(
+      hookBody(glossaryMode, "GlossaryMode.tsx", "useGlossaryMode"),
+      "useGlossaryMode must hand its selection up in a layout effect",
+    ).toMatch(/useLayoutEffect\(\(\) => \{\s*onSelected\(/);
+    /* Quotes hands its up through `usePassageLifecycle`, which is where the
+       layout effect went on 2026-09-06 — so the assertion is in two halves: the
+       band delegates, and the hook it delegates to publishes before the paint. */
+    expect(
+      hookBody(quotesMode, "QuotesMode.tsx", "useQuotesMode"),
+      "useQuotesMode must hand its selection up through the shared lifecycle",
+    ).toMatch(/usePassageLifecycle\(\{/);
+    expect(
+      lifecycle,
+      "passage-lifecycle.ts must publish in a layout effect, not a passive one",
+    ).toMatch(/useLayoutEffect\(\(\) => \{\s*onFound\(found\);/);
   });
 
   it("keeps the order buttons and the slider on screen when everything is hidden", () => {
@@ -205,7 +265,7 @@ describe("the threshold wiring", () => {
  */
 describe("the quotes band's marks", () => {
   it("resolves the list the panel is showing, not the selected row", () => {
-    const body = hookBody("useQuotesMode");
+    const body = hookBody(quotesMode, "QuotesMode.tsx", "useQuotesMode");
     /* One function answers "what is the panel showing", and the hook and the
        panel both call it. Two expressions computing it is how a row comes to be
        hidden with its wash still on the paragraph. */
@@ -223,9 +283,73 @@ describe("the quotes band's marks", () => {
        of another — the ordering argument the ideas and referee bands both make.
        And `Reader` must be holding it, or there is nothing for `hitMarks` to
        compare a key against. */
-    expect(hookBody("useQuotesMode")).toMatch(
-      /useLayoutEffect\(\(\) => \{\s*onFound\(found\);\s*onOpenKey\(/,
+    /* Two halves since 2026-09-06, because the effect itself moved into
+       `usePassageLifecycle`: the band must ask for the `derived` shape, and that
+       shape is the one that writes both fields in a single layout effect. A
+       band that asked for `keyed` instead would compile, would publish its
+       marks, and would never ring anything. */
+    expect(hookBody(quotesMode, "QuotesMode.tsx", "useQuotesMode")).toMatch(
+      /usePassageLifecycle\(\{ kind: "derived", found, openKey,/,
     );
-    expect(app).toMatch(/mode === "quotes"\s*\?\s*quoteOpenKey/);
+    expect(lifecycle).toMatch(
+      /useLayoutEffect\(\(\) => \{\s*onFound\(found\);\s*if \(kind === "derived"\) onOpenKey\(/,
+    );
+    /* **`Reader` holds the key, and the marks it goes with come from the same
+       slot.** Since 2026-09-06 that is two files: `Reader` puts the pair into
+       one `quotes` slot, and `selectPassages` hands that whole slot back for
+       quotes mode. It was a pair of ternary chains until then —
+       `mode === "quotes" ? quoteOpenKey : …` beside `… ? quoteFound : …` — which
+       is the shape this used to match and the shape that let the ring and the
+       washes come from different bands. Both halves are asserted, because
+       either one alone is satisfied by a `Reader` that builds the slot and a
+       selection that never reads it. */
+    expect(reader).toMatch(/quotes:\s*\{ found: quoteFound, openKey: quoteOpenKey \}/);
+    expect(passages, "selectPassages must answer quotes mode with the quotes slot").toMatch(
+      /case "quotes":\s*return slots\.quotes;/,
+    );
+  });
+});
+
+/**
+ * **The two things in the band dispatch that only a compiler and a switch can
+ * hold, asserted here as well.**
+ *
+ * The seventeen sibling `&&` expressions at the bottom of `Reader` became one
+ * `switch (mode)` on 2026-09-06 (260906c § Stage 4b). The `never` default is
+ * what makes a fifteenth mode a compile error instead of an empty band nobody
+ * notices, and `plain` and `hierarchy` say `return null` in their own arms
+ * rather than falling off the end — both are the point of the change rather
+ * than decoration, so both get an assertion.
+ *
+ * Same honest label as the blocks above: it reads source text. The typecheck is
+ * the real gate for the `never`; this is here so somebody running the suite
+ * alone still finds out.
+ *
+ * **What is deliberately not asserted: `key={mode}` on `ConversationBand`.** A
+ * first draft of this block did assert it, on the strength of a mutation that
+ * deleted the key and left every test green. GPT Sol showed the mutation was
+ * green because the key is inert — chat and Remember return different top-level
+ * component types, so React discards the outgoing subtree either way — and a
+ * guard on a no-op is a guard that will one day be defended for the wrong
+ * reason. The history, and the condition that would make the key matter again,
+ * are in `reader/Reader.tsx` at the `case "chat"` arm.
+ */
+describe("the band dispatch", () => {
+  it("makes a fifteenth mode a compile error rather than an empty band", () => {
+    /* The `never` default, which is the whole reason the seventeen `&&`
+       expressions became a switch. Asserted here as well as by the typecheck
+       because a `default:` that returned `null` would compile forever and open
+       an empty band for the mode nobody wrote a case for. */
+    const at = reader.indexOf("function band(): ReactNode");
+    expect(at, "band() must exist in Reader.tsx to be checked").toBeGreaterThan(-1);
+    const body = reader.slice(at, reader.indexOf("\n  return (", at));
+    expect(body).toMatch(/switch \(mode\) \{/);
+    expect(body).toMatch(/const unhandled: never = mode;/);
+    /* And the two modes that deliberately have no band say so in their own case
+       rather than falling through to the default. Each is asked for separately,
+       because whether they share one arm or take two is a formatting choice and
+       this is not a test about formatting. */
+    expect(body).toMatch(/case "plain":[\s\S]{0,60}return null;/);
+    expect(body).toMatch(/case "hierarchy":[\s\S]{0,60}return null;/);
   });
 });

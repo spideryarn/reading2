@@ -541,6 +541,13 @@ describe("reassembling meta and raw from their columns", () => {
       url: "https://example.test/landed",
       fetchedAt: "2026-03-04T05:06:07.000Z",
       excerpt: "Two sentences of it.",
+      /* **`raw_filename`, since 2026-09-07.** Present here because the fixture
+         sets one; it is `null` for anything fetched, and this reader has to
+         surface it because `metaFrom` (src/store/pg.ts) does — a `Meta` rebuilt
+         for the pipeline and a `Meta` read for the owner must not disagree about
+         a field. That they did was found by a GPT Sol review hunting siblings of
+         the `manifest.origin` bug. docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md. */
+      filename: "The Reader's Own Name.html",
       /* **And no `rawSha256`**, which this asserted until 2026-08-29 with a
          comment saying stage 2 writes it "so that 'is this the same document?'
          has an answer". Stage 2 writes no such thing for a web page: the field
@@ -1185,6 +1192,14 @@ describe("writing artefacts into a draft", () => {
         url: "https://example.test/landed",
         fetchedAt: "2026-03-04T05:06:07.000Z",
         rawSha256: NETWORK_SHA,
+        /* **`raw_filename` is one of them, and this assertion blessed its
+           absence until 2026-09-07.** It is stage 1's fact like the three
+           above, and the owner-facing `metaFrom` (src/store/pg.ts) has always
+           been going to surface it — so a `Meta` rebuilt here without it
+           disagreed with a `Meta` read there about the same article. Found by a
+           GPT Sol review looking for siblings of the `manifest.origin` bug,
+           which is exactly what this is. */
+        filename: "The Reader's Own Name.html",
       });
     });
   });

@@ -2,8 +2,9 @@
 
 **Status: stages A and B are done. C is under way — rewritten 2026-09-06 into C0–C5 after review by
 Fable and GPT Sol and a re-measurement that found one of its six items already fixed and two of them
-misdescribed; C0 is done and on `dev` (C0.1 the order-gate fix, C0.2 the shape corpus), and C1a
-is in progress. D is not started. Scope narrowed after review.** The model repair pass Greg asked for is
+misdescribed. On `dev`: C0.1 the order-gate fix, C0.2 the shape corpus, C1a the capability floor,
+C4a the narrow delete class. C1 is deferred until a long-wall fixture exists — C1a took its argument
+away, and its own § says so. Left: C2, C3, C4b, C5. D is not started. Scope narrowed after review.** The model repair pass Greg asked for is
 **not** in this plan — GPT Sol's review found its operation layer not yet designable, and it moves to
 its own plan with the preconditions named in
 [What this plan deliberately does not build](#what-this-plan-deliberately-does-not-build-the-model-repair-pass).
@@ -2145,10 +2146,35 @@ ruler's five recorded preconditions, which are conditions on **how stage C may u
   the 3.6 GB is the fifteen fixtures', not the corpus's. The headroom is thinner than the fix
   narrative implies.
 
-- **C1 — the bot wall.** The biggest reader-visible win per hour, and Fable found the reason it
-  outranks everything else: **a published wall consumes a paying reader's slot**, where a failed
-  ingest is free ([billing.md](../project/billing.md)). So the silent success costs the reader money
-  and the loud failure costs a sentence.
+- **C1 — the bot wall. REPRIORITISED 2026-09-06, after C1a landed and took its argument away.**
+  It was *the biggest reader-visible win per hour*, on Fable's reasoning that **a published wall
+  consumes a paying reader's slot** where a failed ingest is free
+  ([billing.md](../project/billing.md)). **C1a now refuses both walls in the corpus**, so that
+  premise no longer holds and the priority that rested on it does not either. Measured rather than
+  assumed, on the merged tree:
+
+  | fixture | wall markup | the floor refuses it | chars |
+  |---|---|---|---|
+  | `pmc-article` | yes | **yes** | 130 |
+  | `medium-about` | no | **yes** | 185 |
+  | `acx` | *matches a phrase* | no | 133,669 |
+
+  **So a markup registry would change no publish/refuse outcome on any page we have** — only the
+  reason code and the reader's sentence, which is real but is not what "biggest win per hour" was
+  about. Its actual remaining value is a class we cannot demonstrate: **a wall long enough to clear
+  the floor**. There is no such fixture, and until there is, C1's counterfactual — *disabled it
+  publishes, enabled it refuses* — cannot be run on anything. Building a recogniser whose effect
+  nothing can witness is the shape this plan exists to refuse (§ P2-C08, the exposure ladder).
+
+  **So C1 does not ship until a long-wall fixture does**, and it moves behind C4 and C5. Getting
+  the fixture is a stage-1 errand — fetch a few known-walled addresses and keep what comes back —
+  and it costs far less than the recogniser.
+
+  **The corpus turns out to hold the adversary already, and for free.** `acx.html` — a real 133,669
+  character Astral Codex Ten essay — contains the phrase *"just a moment"* twice, in ordinary prose.
+  Any recogniser keyed on visible challenge wording false-positives on it. That is the plan's
+  *"never on visible text"* rule with a real page behind it rather than an argument, found while
+  measuring the above, and it is the negative control C1 should be built against when it is built.
 
   **Decided behaviour — a typed hard refusal.** Refuse the extraction; publish no article; run no
   downstream AI stage; keep the fetched bytes for diagnosis; mark it non-retryable *for those bytes*;
@@ -2435,6 +2461,136 @@ ruler's five recorded preconditions, which are conditions on **how stage C may u
   instrument goes red for the correct reason and somebody spends a day on it — Sol P1-C02 arriving as
   a practical consequence.
 
+  ##### What landed, 2026-09-06 — **C4a, the delete class, is done. The marking half is not.**
+
+  [`src/furniture.ts`](../../src/furniture.ts) § `removePlatformFurniture`, called first in
+  `prepareDocument` ([src/extract.ts](../../src/extract.ts)), with
+  [`tests/extract-furniture.test.ts`](../../tests/extract-furniture.test.ts) as the gate. Four
+  entries and nothing else: `span.mw-editsection`, `.mw-empty-elt`, `a.headerlink`, `ul.reflinks`.
+  `Block` gained no field and no consumer learned anything, which is the whole of why this half could
+  ship on its own.
+
+  **Caption toggles and skip-links were not built.** No scored fixture contains one, and a recogniser
+  nobody can measure is a recogniser nobody can tell is wrong — this stage's own rule.
+
+  ###### The guard C4 specified is a floor, not a proof, and eleven author-text deletions got past it
+
+  `el.querySelector(BLOCK_DESCENDANTS)` asks about **descendants**. It therefore says nothing about
+  the matched element's own tag or its own direct text, and `td`, `th`, `li` and `dd` cannot be added
+  to the list — a data table is rows of cells and a list is items, so declining anything containing
+  one would decline `ul.reflinks` and every `<tr>` outright. Two holes were found by walking the
+  corpus, one by us, and **eight by two GPT Sol reviews**, each reproduced through jsdom and
+  Readability. Every one is a named test, watched red and then green.
+
+  | The shape | What the guard then said | The narrowing |
+  |---|---|---|
+  | `<p class="mw-editsection">author prose</p>`, `<tr class="mw-editsection"><td>19,373,586</td></tr>` | no block descendants — delete | selector is `span.mw-editsection` |
+  | `<p>The <span class="mw-editsection">author's own analysis</span> matters.</p>` | it is a span — delete | `isSectionEditControl`: a `div.mw-heading` parent that holds a heading, **and an `action=edit` link inside** |
+  | `<span class="mw-editsection"><a href="/donate">Support this article</a></span>` in a heading wrapper | right place — delete | the same `action=edit` condition |
+  | `<tr class="mw-empty-elt"><td>China</td>…` — **a real one is in `wiki_gdp_table.html`** | delete, out of the one table this plan exists to rescue | `isEmptyOfWords`: the class name read literally |
+  | `<img class="mw-empty-elt" alt="a chart">`, `<span class="mw-empty-elt" role="img" aria-label="…">` | `textContent` is blank — delete | `matches` as well as `querySelector`, for media and for an accessible name |
+  | `<span class="mw-empty-elt" title="Correction details">`, `… aria-labelledby="diagram-label">` | still blank — delete | `title`, `aria-labelledby` and `aria-describedby` join that list; no corpus instance has one |
+  | `<p>See <a class="headerlink" href="#methods">the methods and their caveats</a>.</p>` | a fragment anchor — delete | the anchor must hang off a heading or a `<dt>` |
+  | `<h2 id="overview">Overview — see <a class="headerlink" href="#methods">methods</a></h2>` | in a heading — delete | the fragment must **name the host or something it is inside**; 29 of 32 name the host, Sphinx's other 3 name the section |
+  | `<ul class="reflinks"><li><a>Smith J (2020), the whole title</a></li></ul>` | one bare link per item — delete | `isControlStripBesideContent`: the parent `<li>` must still say something once the strip is out |
+  | `<li><span class="label">1.</span><ul class="reflinks"><li><a>Smith J, the complete title</a>…` | an ordinal counts as "beside content" — delete | every anchor must carry `target`; all 75 PLOS control links do, a citation would not |
+  | `<ul class="reflinks">Smith J (2019)…<li><a>View Article</a></li></ul>` | `Element.children` cannot see text nodes — delete | the list's own loose text is checked as well as its items' |
+
+  **The shape of the second round is the lesson.** Restricting `.mw-editsection` to a `<span>` and
+  `a.headerlink` to a heading proved *where* an element sits and said nothing about *what it is for*
+  — so an edit span used mid-sentence and a cross-reference inside a heading both still went. The
+  narrowings that hold ask the second question: a link into the edit form, a fragment that names its
+  own heading, a button that opens elsewhere.
+
+  **Not one of these narrowings changes a single count on the corpus** — the same 47, 56, 26, 39, 30,
+  1, 24, 8 and 26 removals before and after, and the same output characters to the byte.
+
+  **What is claimed, and what is not.** No shape anybody has constructed gets an author's words past
+  these guards, and every one that did is pinned. Deletion is *not* claimed to be structurally
+  impossible, and `ul.reflinks` is the entry where it cannot be: in markup, a *View Article* button
+  and a citation whose every word is inside its link are the same thing. Three conditions bound it —
+  beside a citation that still says something, one bare link per item, every link opening elsewhere —
+  and the module says plainly that they bound it rather than close it.
+
+  ###### The exposure ladder
+
+  source candidates → accepted → removed → survivors → blocks → assertion. Every candidate in the
+  corpus passes, so accepted equals removed throughout: `span.mw-editsection` 47 + 56,
+  `.mw-empty-elt` 26 + 39 + 30 + 1, `a.headerlink` 24 + 8, `ul.reflinks` 26. The counterfactual both
+  ways, against a checkout of HEAD: recogniser **off**, 19 `[edit]` strings, 23 Sphinx pilcrows and
+  26 *View Article* / 23 *PubMed/NCBI* / 26 *Google Scholar* reach the reader; **on**, all zero. Six
+  of thirty-five fixtures change a block and twenty-nine do not; `acx.html`, the 133,669-character
+  free adversary, is byte-identical.
+
+  **The gates needed no exclusions declared, and that was checked rather than assumed.** Sol P1-C02
+  was right about the risk and wrong about this shape: `prepareDocument` runs *before*
+  `stampSourceIds`, so a removed control is absent from the stamped source and from Readability's
+  output alike, and the order and provenance gates have nothing to notice. The corpus run confirms
+  it — run census `owner` 14,062 → 13,964 with every other branch at its previous number, no gate
+  flips, `wiki-gdp-table`'s rows byte-identical, and `python-docs-itertools` still `PASS`.
+  `plos-biology` *gains*: exclusionPrecision 0.33 → 0.67, regionPrecision 0.94 → 0.98, and its
+  `View Article` / `PubMed/NCBI` complaints leave the report. It also **stops being polarity-blind**
+  — 7/15 fixtures could not exercise the pair, now 6/15, because with the strips gone its reference
+  list is finally a thousand-character run of body and nothing else.
+
+  ###### The thing nobody was looking for: `.mw-editsection` was costing 28 of a Wikipedia article's 47 headings
+
+  Ablated one selector at a time on `wiki_transformer.html`. Removing `.mw-editsection` alone takes
+  the article from **h2 1, h3 12, h4 6** to **h2 10, h3 25, h4 12** — 19 headings to 47, exactly the
+  number of edit links on the page. Removing `.mw-empty-elt` alone changes nothing at all (−15
+  characters, no structural difference), on this page or on `wiki-gdp-table`, whose scorecard is
+  byte-identical either way.
+
+  The mechanism is Readability's, not ours: Parsoid puts the edit link in the heading's own
+  `div.mw-heading` wrapper, and a wrapper of one heading plus one link scores as navigation. **So
+  every MediaWiki article in the library has been arriving with three-quarters of its section
+  headings missing**, and the hierarchy and the ToC have been built on what was left. That is much
+  the larger effect here — the `[edit]` strings themselves were 19 blocks.
+
+  ###### The regression that came with it, and why it is not in the shipped version
+
+  Readability wraps the whitespace an emptied wrapper leaves, so the first version of this turned
+  `wiki_transformer.html` from 1 empty block into **95**. Sol found it and was right about why it
+  mattered: `gistable: false` is not invisible, `src/web/TableView.tsx` draws one row per block
+  whatever the block holds, and 94 blank rows at the prose row floor is about 3,700 pixels of nothing
+  to scroll past.
+
+  `hoistEmptiedHeadingWrapper` is the answer, and it deletes nothing: when a `div.mw-heading` is left
+  holding only its heading, the heading takes the wrapper's place. With it, `wiki_transformer` is 1
+  empty block again, 367 blocks against a 358 baseline, and all 47 headings still come back.
+
+  **The fix needed a fix, and Sol found that too.** `replaceWith` throws away everything the wrapper
+  had, so `<div class="mw-heading admonition" id="topic" lang="ar" dir="rtl">` became a bare `<h2>` —
+  losing its fragment target, its language, its direction, and (Sol ran the callout pass and
+  confirmed it) its classification as a callout, because `canonicaliseCallouts` runs after this and
+  knows a box by its container's classes. So the hoist is narrow five ways: only `div.mw-heading`,
+  only when the wrapper's **one and only attribute is `class`** and every class on it is one of
+  MediaWiki's own, only when one element child is left and it is a heading, only when the wrapper
+  carries no words of its own. All 103 wrappers in the corpus carry `class` and nothing else.
+
+  ###### Re-extracting an article already in the library churns some ids
+
+  `exactKey` matches on text, and `History[edit]` is not `History`. Measured with `idChurn` over the
+  real before-and-after: `wikipedia-transformer` 28 reminted / 19 lost of 358, `wiki_ar_ai` 55 / 3 of
+  557, `plos-biology` 1 / 76 of 178. Read those two columns rather than their sum: the reminted are
+  the recovered headings, which did not exist to be annotated, and the lost are the `[edit]`
+  paragraphs and the 75 PLOS reference-list controls § C4 counted — the furniture, leaving.
+  **Sphinx and MkDocs churn nothing**: `¶` folds to nothing, so `foldedKey`'s second pass carries
+  every id, 152/152 and 53/53. `acx` and `wiki-gdp-table` are untouched. Nobody is affected until an
+  article is re-extracted, which is always an explicit act — but a *bulk* re-extraction of MediaWiki
+  or PLOS articles should wait for somebody to have looked at what is anchored to those blocks.
+
+  ###### The audit line is a log line, and that is a deferral rather than the design
+
+  C4 asks for the counts in the extraction's `meta`. `Meta` is persisted as **columns** on
+  `article_revisions` (`metaColumns` in [src/store/artifacts-pg.ts](../../src/store/artifacts-pg.ts),
+  `metaFrom` in [src/store/pg.ts](../../src/store/pg.ts)), so that is a migration, two mapping
+  functions and the export round-trip for a field whose only reader — stage D's audit line — is not
+  built. So the counts ride on `ExtractResult` and reach the log, and **the honest statement of the
+  consequence is Sol's: there is no historical audit until an article is re-extracted.** Stage D is
+  where that trade stops being premature, and it should land the column then rather than discover
+  the gap.
+
 - **C5 — the admonition join**, ArchWiki adapter first, per correction 2 above.
 
 **Deferred out of stage C, deliberately:**
@@ -2448,7 +2604,10 @@ ruler's five recorded preconditions, which are conditions on **how stage C may u
   handles mixed-direction text with no schema field at all. The schema version waits for a reader who
   needs it.
 - **Paul Graham's footnotes**, per correction 3.
-- **Furniture deletion**, to stage D, per C4.
+- **Furniture *marking***, to stage D, per C4 — and this line said "furniture deletion" until
+  2026-09-06, which is now the wrong half. C4a shipped the delete class; what waits for stage D is
+  the `Block` representation for classified furniture and every consumer learning it. See § C4's
+  *What landed*.
 
 #### The one place the reviewers disagreed — decided, not left open
 

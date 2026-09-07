@@ -374,6 +374,23 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      job resumes from its artefacts, the same reason `jb-gone` is. See
      `STEP_STOPPED`. */
   "jb-stopped": "retry",
+  /* **The two ways a publication is refused**, and the pair exists because the
+     difference between them is money. `PublishRefused` (src/store/pg-revisions.ts)
+     carried free text and no kind until 2026-09-07, so every refusal fell
+     through to `retry` — and on 2026-09-05 one article was refused four times in
+     thirteen minutes, each attempt completing and paying for its model call
+     before meeting the identical, deterministic refusal, and each telling the
+     reader that trying again was worth a go.
+
+     `jb-publish-refused` is `bug` because the reader has no move: the remedy —
+     re-running the `hierarchy` step — belongs to whoever runs the app, and a
+     *retry* is not it, since a retry skips every step that finished and reads
+     the same artefacts back. `jb-publish-moved` is `retry` because for that one
+     the old sentence was true all along: another publication landed first, and
+     the next attempt starts from where the article now is. See
+     `PUBLICATION_REFUSED` below. */
+  "jb-publish-refused": "bug",
+  "jb-publish-moved": "retry",
   /* **The steps that know why they stopped** — seven when this note was
      written, eight since the capability floor joined them on 2026-09-06, and
      all but one `blocked`: see § the steps that know why they stopped below for
@@ -412,6 +429,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "pdf-damaged": "blocked",
   "ai-pdf-cut-off": "bug",
   "ai-pdf-filtered": "blocked",
+  "ai-pdf-incomplete": "retry",
   /* The two token-budget failures, split from their own diagnostics on
      2026-09-03. `ai-too-long` is arithmetic done before the call and
      `ai-over-room` is the call coming back cut off; both withhold the button,
@@ -926,6 +944,86 @@ export const STEP_STOPPED: ReaderFacingFailure = {
     "again picks up from there rather than beginning over. [jb-stopped]",
 };
 
+/**
+ * **The work was done, and the store would not take it** — and it will not take
+ * it next time either.
+ *
+ * `PublishRefused` (src/store/pg-revisions.ts) is the last gate before a draft
+ * becomes the article: it refuses a draft with no blocks, no tree, a tree
+ * `checkTree` rejects, a `hierarchy` run that did not finish or ran against
+ * different blocks, or a revision that is not this article's to publish. Until
+ * 2026-09-07 it carried a list of free-text reasons and nothing else, so
+ * `failureKindOf` (src/job-failure.ts) found nothing to read and fell through
+ * to `retry`.
+ *
+ * What that cost is the whole of
+ * docs/postmortems/260905f-a-tightened-tree-rule-wedged-every-article-that-already-broke-it.md.
+ * A `checkTree` rule tightened over already-stored trees took roughly one
+ * article in twenty off the air permanently, and each attempt to publish
+ * *anything* for one of them — glossary, quotes, debate — completed its model
+ * call, paid for it, and was then refused at the door. Four times on one
+ * article in thirteen minutes, one of them $0.2454, every one of them shown
+ * this file's `retry` sentence: *"a step that stops like this often comes out
+ * differently on a second attempt — so trying again is worth a go"*.
+ *
+ * **`bug`, not `blocked`.** `blocked` is the one non-retryable kind that admits
+ * a way out, and there is none here that a reader can take: the remedy is
+ * re-running the `hierarchy` step, which is an instruction for whoever runs the
+ * app. And note that a **retry** is not that re-run — Retry skips every step
+ * that finished, so it reads the identical tree back and stops in the same
+ * place (src/job-failure.ts § `stageFailure`).
+ *
+ * **It does not say which reason it was**, and that is deliberate rather than
+ * lazy. The reasons name node ids, block indices and hashes: a diagnostic for
+ * whoever runs the app, addressed to somebody who cannot run anything. They go
+ * to the log instead (src/jobs.ts § `endAsStorageFailure`), and thirteen
+ * sentences, twelve of which say the same thing to a reader, is not the fix.
+ *
+ * **What it does not claim, and why the first draft claimed both.** ⟨Sol,
+ * 2026-09-07⟩ It opened *"This finished its work"* and promised *"Nothing was
+ * published and your library is unchanged"*. The first is false for the two
+ * refusals raised while the draft is being **opened**, before a single step
+ * runs; the second is false for the branch that refuses a revision which is
+ * *already published*, where the work is on the shelf already. One sentence
+ * stands in for eight throw sites, so it may only claim what is true at all of
+ * them — the ordinary hazard of shared copy, and the reason to write the
+ * narrow claim rather than the vivid one.
+ */
+export const PUBLICATION_REFUSED: ReaderFacingFailure = {
+  kind: "bug",
+  message:
+    "The app would not save this article's latest result — it found something about the article " +
+    "it will not publish. It has been recorded and needs fixing here; asking again would stop in " +
+    "the same place. [jb-publish-refused]",
+};
+
+/**
+ * **The other publication refusal, and the one where another go is the answer.**
+ *
+ * A draft may only replace the revision it was copied from
+ * (`publishRevisionIn`, src/store/pg-revisions.ts). When the article has moved
+ * on underneath it, publishing now would discard whatever landed first — so it
+ * is refused, and nothing is lost by refusing it.
+ *
+ * `retry`, and it means it: the next attempt begins a fresh draft from what the
+ * article is serving now, so the identical work over the newer base is exactly
+ * what happens. This is the case that makes the refusal a **distinction** rather
+ * than a blanket "never retry a publication" — get this one wrong in the other
+ * direction and the fix for `PUBLICATION_REFUSED` is a second bug, withholding
+ * a button that would have worked.
+ *
+ * It says *something else finished* rather than naming revision ids, for
+ * `PUBLICATION_REFUSED`'s reason: the ids are the diagnostic and belong in the
+ * log.
+ */
+export const PUBLICATION_MOVED_ON: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "Something else finished for this article while this was working, so saving now would have " +
+    "thrown that away. Nothing was published and your library is unchanged. Starting this again " +
+    "picks up from where the article is now. [jb-publish-moved]",
+};
+
 /* --------------------------------------- the steps that know why they stopped -- */
 
 /**
@@ -1272,6 +1370,19 @@ export function pdfPagesFiltered(pages: readonly number[]): ReaderFacingFailure 
       `document, so there is no transcription of them to build the article from. It decides that ` +
       `on the words it is shown rather than on anything you did, and shown the same pages it will ` +
       `most likely answer the same way. [ai-pdf-filtered]`,
+  };
+}
+
+/** A bounded structural recovery could not establish which source page the records belong to. */
+export function pdfPagesIncomplete(pages: readonly number[]): ReaderFacingFailure {
+  const noun = pages.length === 1 ? "page" : "pages";
+  return {
+    kind: "retry",
+    message:
+      `The AI could not produce a complete, correctly ordered reading of ${noun} ${pages.join(", ")} ` +
+      `of this PDF, even when ${noun === "page" ? "it was" : "they were"} read separately. No ` +
+      `article was built from the incomplete result. Trying again may produce a usable reading. ` +
+      `[ai-pdf-incomplete]`,
   };
 }
 
@@ -1738,19 +1849,27 @@ export const UPLOAD_TOO_BIG: ReaderFacingFailure = {
 };
 
 /**
- * The bytes are not a PDF, whatever the file is called.
+ * The bytes are neither a PDF nor a web page, whatever the file is called.
  *
  * `blocked` for the same reason: renaming a file does not change what is in it.
  * Phrased around the *contents* rather than the name, because a `.pdf` that is
  * really something else is exactly the case this catches, and telling somebody
  * their PDF is not a PDF without saying why reads like a bug.
+ *
+ * **Two kinds since 2026-09-07** (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md).
+ * The constant was `UPLOAD_NOT_A_PDF`, and the rename is worth the churn because
+ * the compiler does it for free. **The `[up-pdf]` code and the `"not-a-pdf"`
+ * `RejectReason` did not move**, and those are the two that matter: a code is
+ * what a reader quotes back to us (docs/project/copy.md), and the reason is a
+ * string already written into `uploads.reason` rows that a rename would orphan
+ * for nothing. Neither is a spelling anybody but us reads.
  */
-export const UPLOAD_NOT_A_PDF: ReaderFacingFailure = {
+export const UPLOAD_UNREADABLE_FILE: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "That file isn't a PDF inside, whatever its name says. Sending it again will not help, " +
-    "because it will be the same file — but if it opens in a PDF reader, saving it again from " +
-    "there usually produces one this app can read. [up-pdf]",
+    "That file isn't a PDF or a web page inside, whatever its name says. Sending it again will " +
+    "not help, because it will be the same file — but if it opens in a PDF reader or a browser, " +
+    "saving it again from there usually produces one this app can read. [up-pdf]",
 };
 
 /**
@@ -2366,7 +2485,7 @@ export const SESSION_UNCONFIRMED_CHIP = "sign-in unconfirmed";
  * The action beside `SESSION_UNCONFIRMED`, and the label is the honest one.
  *
  * Signed out at `/read/:slug` the app does not show sign-in — it goes straight
- * back through `ArticlePage` with no reader (src/web/App.tsx), so on a shared
+ * back through `ArticlePage` with no reader (src/web/article/ArticlePage.tsx), so on a shared
  * article this reload returns the reader to this same page as an ordinary
  * visitor. Calling it *"sign in again"* would be a button that does not do what
  * it says; GPT Sol caught exactly that in the first draft of this fix.
@@ -3714,6 +3833,18 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   debate:
     "What we went looking for on the open web: replies to this piece, and the argument around " +
     "the claims it makes.",
+  /* **The same three words as `hierarchy` and `outline` do the work here** —
+     "where there are gists" — for the reason those two carry it: a provisional
+     tree has none, and this row is read about articles that have not finished
+     ingesting (src/public/dto.ts § `provisional`).
+
+     It says "again" on purpose. This mode adds no content to what an owner is
+     about to publish; it is a third arrangement of the two things the rows
+     above already named, and a row implying otherwise would over-state what
+     sharing hands over. */
+  structure:
+    "Those same headings and gists again, arranged as two linked columns — the parts, and the " +
+    "sections of the one you are reading, where there are gists.",
 };
 
 /* ---------------------------------------------------------------- timeline --

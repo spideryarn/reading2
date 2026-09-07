@@ -156,6 +156,34 @@ mark.cmt.term {
    to advertise our annotation is the small version of the thing vision.md
    refuses. */
 mark.hit {
+  /* **`background: none`, and it is load-bearing rather than tidy.** The UA
+     sheet paints every `<mark>` a solid yellow (`background-color: Mark`), and
+     this rule used to override it by accident — it set a background
+     unconditionally. Since the wash moved to `[data-wash]` below, a quote-only
+     mark sets none, and without this line the browser's yellow comes back:
+     every quote in the article drawn as a highlighter pen, which is precisely
+     the treatment this change exists to replace. Found by a probe page that
+     rendered exactly that, 2026-09-07. `mark.cmt` and `mark.term` each carry the
+     same line for the same reason. */
+  background: none;
+  color: inherit;
+  border-radius: 2px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* **The wash, and everything that hangs off it, is the SEARCH half of `hit`.**
+   Until 2026-09-07 these were unconditional on `mark.hit`, which was fine while
+   every hit was a search hit. Quotes are hits too — they share the machinery so
+   the rail packs one lane and the pressed ring works — so a quote arrived
+   wearing a fill, and "the boundary but not the fill" was impossible to build
+   on top of it.
+
+   `data-wash` is written by annotate.ts when at least one mark covering the run
+   actually wants search painting. The tier and the wash are independent: a
+   passage that is both a quote and a search hit carries both attributes and
+   draws both, which is the case the two channels were split for. */
+mark.hit[data-wash] {
   /* The default, overridden per mark by the inline `--hit-a` annotate.ts sets.
      Declared here so a mark with no strength is a *full* one rather than an
      invisible one — the failure of a missing custom property should be a mark
@@ -172,8 +200,6 @@ mark.hit {
      overlapping search cannot make the words underneath it any harder to read
      than one does. */
   background-color: rgb(var(--hit-wash-rgb) / calc(var(--hit-a) * 0.3));
-  color: inherit;
-  border-radius: 2px;
   /* Room for the rules, taken out of the **leading** rather than out of the
      layout: padding on an inline box grows its background downward without
      changing the line box, so switching a search on cannot reflow the article.
@@ -202,9 +228,112 @@ mark.hit {
      that `100%` with a pixel width, `slice` starts mattering and the bug is
      conditional on a line break, which is the kind that hides. Untested in
      Safari and Firefox, where `box-decoration-break` has a history of
-     diverging; that is the other reason to keep it rather than tidy it away. */
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
+     diverging; that is the other reason to keep it rather than tidy it away.
+
+     It is declared on `mark.hit` above rather than here, so that it applies to
+     a quote-only mark too — and § quote strokes below overrides it to `slice`
+     for quotes, which is the one place the two modes genuinely differ. */
+}
+
+/* ------------------------------------------------------- quote strokes ----
+   **A quote is drawn as an outline; a search hit is drawn as a fill.** The one
+   channel nothing else in the prose was using, so quotes got their own visual
+   language without taking anything away from search — Greg's call, 2026-09-06,
+   deciding a question quotes.md had carried as open. docs/project/quotes.md
+   § The stroke, and the plan is 260907c.
+
+   **`box-shadow`, not `border`, and not `outline`.** A border costs inline
+   width on every fragment, and with quotes on a slider the prose would shift on
+   every drag of the bar; `outline` is the focus ring, and borrowing it for a
+   permanent decoration collides with the one indicator a keyboard reader
+   depends on. A zero-blur `box-shadow` reserves no space at all — measured in
+   Chrome on 2026-09-07, the paragraph height, line count, fragment widths and
+   the x of the first character after the mark are identical to three decimal
+   places with the ring on and off. That is the property this whole treatment
+   rests on. It is also the repo's existing idiom for a stroke that must not
+   reflow — `td.text.has-hit` draws the paragraph rail the same way.
+
+   **Four edges, four offset shadows.** Each is the mark's own box translated by
+   the stroke width, so the visible part is a band of exactly that width on one
+   side. Written separately rather than as a single spread ring because the
+   inline caps have to be switchable per fragment — which is the next paragraph,
+   and the reason this design works at all.
+
+   **The caps are the hard-won part.** `annotateHtml` emits one `<mark>` per text
+   node and splits again at every annotation boundary, so ONE quote containing an
+   `<em>` is three sibling elements. A wash hides that completely; four closed
+   rings do not — one sentence reads as three separate quotes. So the rules above
+   and below are drawn on **every** fragment and the inline caps only on the two
+   carrying `data-quote-start` / `data-quote-end`, and the outline runs
+   continuously across the joins. Measured: no gap at the seam, only a 14%
+   antialias dip visible at 4×. `box-decoration-break` cannot do this job — it
+   governs fragments of one box, never separate elements.
+
+   **`slice`, overriding the `clone` above.** Within a single element that wraps,
+   `slice` is what draws the caps at the true ends only rather than on every
+   line — the same rule at the smaller scale.
+
+   **What that costs a mark that is ALSO a search hit is measured, not
+   reasoned.** `clone` and `slice` were found pixel-identical for the hue band
+   on 2026-08-26 — but that was in Chrome, on one fixture, and the *explanation*
+   offered for it at the time (percentages resolve per fragment, so the two
+   modes have nothing to disagree about) is contrary to the spec, which says
+   `slice` uses the unbroken box's geometry and then slices it
+   (CSS Fragmentation §5.4). GPT Sol, 2026-09-07. So the honest statement is the
+   observation and not the theory: **in this Chrome, on a wrapped quote that is
+   also a hit, the band renders the same either way; in Firefox and Safari it is
+   untested.** If a wrapped quote-over-search ever looks wrong there, this line
+   is the first suspect. It is not reachable in the reader today — one mode's
+   marks are on the page at a time — which is why it is recorded rather than
+   engineered around. */
+mark.hit[data-quote] {
+  --quote-stroke-width: 1px;
+  --quote-edge-top: 0 calc(-1 * var(--quote-stroke-width)) 0 0 var(--quote-stroke-color);
+  --quote-edge-bottom: 0 var(--quote-stroke-width) 0 0 var(--quote-stroke-color);
+  /* **Inset**, so two abutting quotes stay two. Drawn outside, the facing caps
+     of adjacent quotes overlap and weld the word space shut into one solid
+     column — measured 2026-09-07: two 3px caps across 5.35px of space, leaving
+     zero background pixels, so the pair reads as a single long quote. Inset
+     leaves 6px of clean page between them. It also stops a quote that begins a
+     line hanging its cap into the left margin and breaking the column edge. */
+  --quote-edge-start: inset var(--quote-stroke-width) 0 0 0 var(--quote-stroke-color);
+  --quote-edge-end: inset calc(-1 * var(--quote-stroke-width)) 0 0 0 var(--quote-stroke-color);
+  box-shadow: var(--quote-edge-top), var(--quote-edge-bottom);
+  -webkit-box-decoration-break: slice;
+  box-decoration-break: slice;
+}
+/* **`data-quote-start` is a logical end, and a shadow offset is a physical
+   one.** `box-shadow` has no logical form, so in a right-to-left block the
+   quote's first fragment would draw its cap on the *left* — which is where that
+   fragment abuts the rest of the quote, not where the quote begins. A quote
+   split across an `<em>` would then be capped on its two internal seams and
+   left open at both ends: exactly inside out. A single-fragment quote hides it
+   completely, because it carries both caps and looks right either way, which is
+   what makes this the kind of bug that survives a browser pass.
+
+   Untested in a real RTL article — this repo has none — so it is written from
+   the geometry rather than from a screenshot, and a specimen is the thing to
+   add if an RTL piece ever arrives. GPT Sol, 2026-09-07. */
+mark.hit[data-quote]:dir(rtl) {
+  --quote-edge-start: inset calc(-1 * var(--quote-stroke-width)) 0 0 0 var(--quote-stroke-color);
+  --quote-edge-end: inset var(--quote-stroke-width) 0 0 0 var(--quote-stroke-color);
+}
+/* The heavy tier. Two tiers and not three: blind pairwise, three at 1/2/3px
+   scored 13/20 — chance — while 1px against 3px scored 12/12 at both device
+   scale factors. Everything involving a middle tier is what fails. See
+   `QuoteTier` in src/types.ts for the numbers and the reasoning. */
+mark.hit[data-quote="2"] {
+  --quote-stroke-width: 3px;
+}
+mark.hit[data-quote][data-quote-start] {
+  box-shadow: var(--quote-edge-top), var(--quote-edge-bottom), var(--quote-edge-start);
+}
+mark.hit[data-quote][data-quote-end] {
+  box-shadow: var(--quote-edge-top), var(--quote-edge-bottom), var(--quote-edge-end);
+}
+mark.hit[data-quote][data-quote-start][data-quote-end] {
+  box-shadow: var(--quote-edge-top), var(--quote-edge-bottom), var(--quote-edge-start),
+    var(--quote-edge-end);
 }
 
 /* ------------------------------------------------------- stacked hues ----
@@ -302,8 +431,15 @@ mark.hit[data-hues="6"] {
    own, so it wears the one fixed search hue — which is what every hit wore
    before the palette existed. Written as its own rule rather than as a
    fallback value on `--h0`, so that the words matcher does not depend on a
-   custom property resolving to something sensible when it is absent. */
-mark.hit:not([data-hues]) {
+   custom property resolving to something sensible when it is absent.
+
+   **`[data-wash]` is doing real work in this selector**, not just matching the
+   rules around it. A quote has no `data-hues` either — quotes contribute no hue
+   stripe, because their slot means "one source called Quotes" rather than "a
+   search whose colour this is" — so a bare `:not([data-hues])` would give every
+   quote in the article the fixed search-blue band under it, which is a search's
+   colour on a passage no search found. */
+mark.hit[data-wash]:not([data-hues]) {
   background-image: linear-gradient(var(--hit), var(--hit));
   background-position: 0 100%;
   background-repeat: no-repeat;
@@ -424,9 +560,32 @@ mark.cmt.hit[data-mark-end][data-dir="mixed"]::after {
    means *this is the row you pressed*, which is a different fact from which
    search found it, and a ring that borrowed a hue would be a fourth thing
    wearing a colour that already means something. */
-mark.hit[data-hit-open] {
+mark.hit[data-wash][data-hit-open] {
   background-color: rgb(var(--hit-wash-rgb) / calc(var(--hit-a) * 0.55));
   box-shadow: 0 0 0 1px rgb(var(--hit-wash-rgb) / 0.8);
+}
+/* **A pressed quote changes colour rather than getting thicker**, and that took
+   three attempts to get right. The first two added pixels to the ring — a
+   stroke, a 1px gap, then a halo — and both failed the only test that matters:
+   at device scale factor 1 the entire distinguishing signal came out as a single
+   grey hairline, so a pressed quote read as *a slightly thicker, dirtier ring*
+   rather than as a different state. Worse, since thickness already means
+   priority, more thickness is the one channel that was not free to borrow: it
+   would have said "more important" where it meant "you pressed this".
+
+   So: the stroke goes white and a faint wash appears inside it. Two channels
+   change at once, which is what makes it unmissable on a fast click or under a
+   finger. White rather than the annotation orange — orange was just as visible
+   and read as *"this passage is a comment"*, teaching the reader that one colour
+   means two unrelated things.
+
+   **The wash here does not undo "quotes outline, search fills".** It is a
+   button's `:active` background: momentary, tied to the one row the reader is
+   pointing at, gone when they move on. The resting state of every quote on the
+   page is still an outline and nothing else. Judged in Chrome, 2026-09-07. */
+mark.hit[data-quote][data-hit-open] {
+  --quote-stroke-color: #ffffff;
+  background-color: rgb(var(--quote-stroke-rgb) / 0.18);
 }
 /* A comment over a hit keeps its underline: it is the one you can click, and
    losing the affordance to a wash would make it look inert. Same call
