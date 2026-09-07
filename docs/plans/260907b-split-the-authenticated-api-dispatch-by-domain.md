@@ -1,6 +1,6 @@
 # The authenticated API's dispatch becomes enumerable — and the matrix test that has to come first
 
-Status as of 2026-09-07: **reviewed; stages 1, 1b and 2 landed, stage 3 not started.** Evidence gathered at `d4b503b4`;
+Status as of 2026-09-07: **reviewed; stages 1, 1b, 1c and 2 landed, stage 3 not started.** Evidence gathered at `d4b503b4`;
 `src/routes.ts` is byte-identical at the worktree HEAD, so every line number below is live. Design
 input from GPT 6 Astra (high) and Fable, and a plan review from GPT Sol
 ([review](260907b-split-the-authenticated-api-dispatch-by-domain-review-sol.md),
@@ -300,7 +300,17 @@ coincidence to rely on silently.
 
 ## Stages
 
-**Stage 1 — the route contract, checked against the source.** The prerequisite Sol named in
+**Stage 1 — the route contract, checked against the source. ✅ Landed, `31cfcbcc` + `ee920a86`.**
+`tests/authenticated-api-route-contract.test.ts`, 304 cases, unit lane, no database.
+[Reviewed](260907b-stage1-code-review-sol-073600.md): **no P0, no P1.** Sol independently
+re-derived the inventory from the AST and got exactly what the test asserts — 69 declarations (67
+matchers, the request destructure, the admin namespace), 82 top-level `if`s (81 guards and the
+gate), 4 calls, 1 terminal return, **0 unsupported statement kinds** — and confirmed the negative
+matrix cannot send a request the source would handle. Four small findings went to stage 1c. Its
+verdict on stopping here: *"a valuable, independent inventory and fail-closed syntax reader without
+changing production behavior… not worse than not starting"*, but it does not complete the refactor.
+
+The prerequisite Sol named in
 [260826m § 3.1](260826m-simplification-audit.md) and 260902e named again, asked for four times over
 five weeks and never built. **It is worth landing on its own merits whether or not stage 2 or 3 ever
 happens**, and Sol agrees stopping here would be a defensible finish.
@@ -340,14 +350,16 @@ swap is an equivalent mutation and would pin an implementation detail rather tha
 `tests/authenticated-api-route-contract.test.ts` goes from 296 cases to 304.
 
 - **Disjointness, instead of order** (P1-ORDER-CONTRACT). The contract is written in declaration
-  order and compared as a set, which records the order without asserting it. Asserting the order
+  order and compared as a set, which does **not** record the order — the layout is for a human
+  reader and nothing asserts it (corrected in stage 1c). Asserting the order
   would be wrong for the reason the paragraph above gives, so the test asserts **the property that
   makes order irrelevant**: no two of the 81 guards accept the same `(method, path)`. The two
   documented intersections are *allowed* — `/api/library/search` GET vs PATCH,
   `/api/chat/:slug/live-tool` POST vs PATCH/DELETE — and each is asserted to be a real intersection
   resolved by the method, so it cannot pass by the paths having drifted apart. `jobAction`'s
-  `(cancel|retry)` against `jobAdvance`'s `advance` is *shown* disjoint by running both rather than
-  argued. **Honest about its reach:** regex intersection is undecidable in general and this does not
+  `(cancel|retry)` against `jobAdvance`'s `advance` had a case of its own; stage 1c deleted it and
+  left the three job paths in the overlap probes, where the collision check already asks about them.
+  **Honest about its reach:** regex intersection is undecidable in general and this does not
   attempt it — the question is asked over the witness corpus plus the named overlap probes, so two
   matchers meeting only at a path no witness spells would pass unnoticed. What keeps it from being
   empty is that every contract row must carry a witness, so a new matcher arrives with a path of its
@@ -363,6 +375,33 @@ swap is an equivalent mutation and would pin an implementation detail rather tha
   produce by accident — failed two cases (*expected 500 to be 400*, *expected 500 not to be 500*),
   and was reverted by editing the text back.
 - **The five source readers classified** (P1-SOURCE-INVENTORY) — constraint 8's new table.
+
+**Stage 1c — the four corrections from Sol's review of the built code**
+([review](260907b-stage1-code-review-sol-073600.md): no P0, no P1). Test-only; `src/routes.ts`
+untouched. 304 cases to 305.
+
+- **The safety model's scope, asserted rather than relied on** (P2-SAFETY-SCOPE). `sourceAccepts()`
+  models `serveAuthenticatedApi` only, but `call()` enters through `handleApi`, which dispatches the
+  public namespace (`:6347`) and the Stripe webhook (`:6371`) above it. A new case asserts every
+  witness and overlap probe is outside both, using the dispatcher's own `isPublicNamespace` and
+  `WEBHOOK_PATH`. Sol's alternative — have the negative matrix call `serveAuthenticatedApi` directly
+  — was **declined**: going through `handleApi` is what makes this exercise the real entry path.
+  **Watched red** with a contract row for `/api/public/mutation`: 7 failed, and four of them were
+  refusal cases that *sent* their requests and got *No public API route for …* while
+  `sourceAcceptsIt` said `false` — the hole, demonstrated.
+- **`METHOD_UNIVERSE` closed explicitly** (P2-METHOD-UNIVERSE). Pair equality catches a verb added on
+  one side; a verb added to *both* would be skipped by everything that walks the universe. A new case
+  asserts every source and contract method is one of the five. HEAD and OPTIONS stay out, and stay a
+  matter for the refusal policy. **Watched red** with a `HEAD` arm on `billingUsage` plus the
+  matching contract row and canary bump: **1 failed**, 304 passed, which is the finding.
+- **Two comments made true** (P2-DISJOINTNESS-CLAIM, P3-OVERLAP-COMMENT). A set does not *record*
+  order; and "fourteen matchers overlap" was wrong — fourteen have more than one method, while only
+  two pairs of distinct matchers intersect. The disjointness section now also says that an
+  intentional matcher change needs a fresh intersection review by hand, since this corpus cannot
+  justify a later reordering on its own.
+- **The job-family case deleted.** It ran three sample paths that `OVERLAP_PROBES` already feeds to
+  the collision check, so it earned nothing the corpus check does not. The library and chat cases
+  stay: they assert intersections are *kept*, which a collision check cannot see.
 
 **Stage 2 — fix the one source-text test that is genuinely silent. ✅ Landed, `3fd9e5c1`.**
 Narrowed by Sol (P2-R4) from four files to one. `ROUTELESS_KINDS` names the eight `SHAPE` kinds that

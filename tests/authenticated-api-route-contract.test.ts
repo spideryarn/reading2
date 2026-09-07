@@ -64,9 +64,12 @@
  *
  * ## Why the order of the 81 guards is not asserted
  *
- * The chain is written in one order and compared here as a **set**, which
- * records the order without asserting it. Sol raised that (review §
- * P1-ORDER-CONTRACT), and asserting the order would still be the wrong answer:
+ * The chain is written in one order and compared here as a **set**, which does
+ * not record the order at all. The literal below is typed out in declaration
+ * order for whoever reads it next to the source, and that is the whole of what
+ * that ordering does: nothing here asserts it, and a later reordering of either
+ * would go unnoticed. Sol raised the omission (review § P1-ORDER-CONTRACT), and
+ * asserting the order would still be the wrong answer:
  * no two guards accept the same method-and-path pair, so every reordering is an
  * equivalent mutation and a test that reddened for one would be pinning an
  * implementation detail. What is asserted instead is **the property that makes
@@ -106,6 +109,30 @@
  *    the text back; `src/routes.ts` is byte-identical
  *    (`ce53795…`, `git diff HEAD` empty).
  *
+ * The two assertions added in stage 1c are mutated in the **contract** rather
+ * than the source, because each is about what this file asks rather than about
+ * what the dispatcher does. Green unmutated at 305 — the two cases added, the
+ * job-family case deleted for earning nothing (§ below).
+ *
+ * 7. **A contract row under the public namespace** — a row for `literal
+ *    /api/public/mutation`, the mistake § `asks only about paths the
+ *    authenticated dispatcher is the first to see` exists to catch. **7
+ *    failed**: both directions of the matcher/pair comparison, the new case
+ *    (*expected `["/api/public/mutation"]` to deeply equal `[]`*) — and, the
+ *    point of it, four refusal cases that **sent their requests** and were
+ *    answered by the public dispatcher, *expected 'No public API route for POST
+ *    …'*, while `sourceAcceptsIt` had said `false` all four times.
+ * 8. **A sixth verb, agreed on both sides** — a `HEAD` arm on `billingUsage`,
+ *    `HEAD` added to that contract row, and the guard canary moved to 82: a
+ *    coordinated change, of the kind pair equality is blind to by design.
+ *    **1 failed**, § `uses no verb outside the five this file asks about`
+ *    (*expected `["HEAD"]` to deeply equal `[]`*), and nothing else — 304
+ *    passed, including every collision and refusal case, none of which had asked
+ *    a HEAD question. Then the source half reverted and the contract half left
+ *    in place: **2 failed**, the pair comparison and the contract branch of the
+ *    same case. `src/routes.ts` is byte-identical again (md5 `182e2de…`,
+ *    `git diff HEAD` empty).
+ *
  * The disjointness check has a **control rather than a mutation**: a real
  * overlap cannot be introduced into `src/routes.ts` without also failing the
  * pair-set comparison, so `would notice if two guards did overlap` feeds two
@@ -128,7 +155,9 @@ import { describe, expect, it } from "vitest";
 
 import { isAdmin } from "../src/admin.js";
 import type { Verifier, VerifyResult } from "../src/auth.js";
+import { WEBHOOK_PATH } from "../src/billing/webhook.js";
 import { loadEnvLocal } from "../src/env.js";
+import { isPublicNamespace } from "../src/public/routes.js";
 import { handleApi } from "../src/routes.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
 import { type AstNode, lineOf, parseSource } from "./helpers/ts-ast.js";
@@ -1024,8 +1053,13 @@ function matches(match: MatchSpec, witness: string): boolean {
 
 /**
  * Every method the **written contract** accepts for a path — the union across
- * every row that matches it, because fourteen matchers overlap and a method one
- * row refuses another may take.
+ * every row that matches it, because two pairs of distinct matchers do both
+ * reach one path (library-search/shelf-entry and chat-thread/live-tool), and a
+ * method one of the pair refuses the other may take.
+ *
+ * Not to be confused with the other count: fourteen matchers accept more than
+ * one method each, which is a fact about rows rather than about paths and is not
+ * why this unions.
  */
 function contractAccepts(witness: string): Set<string> {
   const accepted = new Set<string>();
@@ -1093,10 +1127,11 @@ const SOURCE_GUARDS: SimpleGuard[] = parsed.guards.map((g) => {
  * Paths the disjointness question is asked about, over and above every witness
  * the contract already carries.
  *
- * The two documented intersections and the one pair that has to be *shown*
- * disjoint rather than assumed. All five happen to be witnesses already; they
- * are named again here so that deleting a witness cannot quietly stop the
- * question being asked about the cases we know are interesting.
+ * The two documented intersections, and the one pair near enough to colliding
+ * that the corpus is made to ask about it rather than assume it. All five happen
+ * to be witnesses already; they are named again here so that deleting a witness
+ * cannot quietly stop the question being asked about the cases we know are
+ * interesting.
  */
 const OVERLAP_PROBES = [
   /* GET is the library search; PATCH is the shelf entry for a slug that happens
@@ -1209,6 +1244,33 @@ describe("the authenticated API's route contract", () => {
       expect(parsed.terminal404Line).toBeGreaterThan(Math.max(...lines));
     });
 
+    it("uses no verb outside the five this file asks about", () => {
+      /* `METHOD_UNIVERSE` is the universe every question here is asked over —
+         the negative matrix and the collision check both iterate it — and it is
+         five verbs. HEAD and OPTIONS are deliberately not among them: this
+         dispatcher has no handling for either, and that stays a matter for the
+         refusal policy in § `a method no matcher accepts is the terminal 404`
+         rather than a pair to fire at every witness.
+
+         Pair equality already catches a verb that appears on one side only. What
+         it cannot catch is a verb added to the source *and* the contract
+         together — deliberate, agreed, and then silently skipped by everything
+         that walks the universe (Sol, review § P2-METHOD-UNIVERSE). So closing
+         the universe here makes adding a sixth verb a deliberate edit to this
+         line rather than an omission nobody sees. */
+      const universe = new Set<string>(METHOD_UNIVERSE);
+      const outside = (methods: string[]): string[] =>
+        sorted([...new Set(methods.filter((m) => !universe.has(m)))]);
+      expect(
+        outside(parsed.guards.map((g) => g.method)),
+        "a guard in src/routes.ts uses a verb METHOD_UNIVERSE does not list, so no refusal or collision case asks about it — add it there deliberately",
+      ).toEqual([]);
+      expect(
+        outside(EXPECTED_AUTH_ROUTES.flatMap((r) => r.methods)),
+        "a contract row names a verb METHOD_UNIVERSE does not list — add it there deliberately",
+      ).toEqual([]);
+    });
+
     it("gives every contract row at least one method and one honest witness", () => {
       /* A witness that does not match its own row would test some other row, or
          nothing, and would look exactly the same from here. */
@@ -1227,7 +1289,8 @@ describe("the authenticated API's route contract", () => {
    * instead of the order itself.
    *
    * The chain is *written* in one order and compared above as a *set*, which
-   * records the order without asserting it. Pinning the order would be wrong:
+   * does not record the order — the contract literal is laid out in declaration
+   * order for a human reader and nothing asserts it. Pinning it would be wrong:
    * no two guards accept the same method-and-path pair, so every reordering is
    * an equivalent mutation, and a test that reddened for one would be
    * defending an implementation detail — the same reason the plan refuses the
@@ -1246,6 +1309,17 @@ describe("the authenticated API's route contract", () => {
    * new guard that shadows an existing one at its own witness is caught; one
    * that shadows it only somewhere else is not. This is a corpus check wearing
    * the word "property", and it should be read that way.
+   *
+   * **So an intentional matcher change needs a fresh intersection review, by
+   * hand.** Today's disjointness is not only this corpus's word for it: Sol read
+   * the pinned patterns independently on 2026-09-07 and found exactly two
+   * intersecting pairs of distinct matchers — library-search/shelf-entry and
+   * chat-thread/live-tool, both separated by method — with job action and job
+   * advance disjoint (review § P2-DISJOINTNESS-CLAIM). That audit is what makes
+   * the current order non-behavioural. It does not carry over to a pattern
+   * somebody widens later: this test asks only where we thought to look, so its
+   * staying green is not evidence that such a change kept the guards disjoint,
+   * and it cannot on its own justify a reordering made afterwards.
    */
   describe("no two guards accept the same method and path", () => {
     it("has nothing to resolve by order", () => {
@@ -1297,18 +1371,15 @@ describe("the authenticated API's route contract", () => {
       expect(patch[0]?.match).toEqual(del[0]?.match);
     });
 
-    it("shows jobAction and jobAdvance disjoint rather than assuming it", () => {
-      /* Same method, same prefix, both `POST`. `(cancel|retry)` and `advance`
-         cannot spell each other — but that is an argument about two regexes,
-         and this is the same argument made by running them. */
-      for (const witness of ["/api/jobs/w1/cancel", "/api/jobs/w1/retry"]) {
-        expect(acceptors("POST", witness), witness).toHaveLength(1);
-      }
-      const action = acceptors("POST", "/api/jobs/w1/cancel");
-      const advance = acceptors("POST", "/api/jobs/w1/advance");
-      expect(advance).toHaveLength(1);
-      expect(action[0]?.match).not.toEqual(advance[0]?.match);
-    });
+    /* There is deliberately no job-family case here. `jobAction` and
+       `jobAdvance` are the pair most likely to collide — same method, same
+       prefix — and their three paths are in `OVERLAP_PROBES`, so `has nothing to
+       resolve by order` above already asks the question about them. A case that
+       ran the same three paths through `acceptors` would have demonstrated three
+       samples, not proved two regex languages disjoint, and would have earned
+       nothing the corpus check does not (Sol, review § P2-DISJOINTNESS-CLAIM).
+       The two cases above are different: they assert intersections are *kept*,
+       which a collision check cannot see, because a narrowing leaves it green. */
   });
 
   describe("a method no matcher accepts is the terminal 404", () => {
@@ -1317,6 +1388,35 @@ describe("the authenticated API's route contract", () => {
        *accepted* pairs are left to the suites that own each route. */
     it("has refusals to make", () => {
       expect(REFUSALS.length).toBeGreaterThan(200);
+    });
+
+    /**
+     * Every path this file asks about has to be one `serveAuthenticatedApi`
+     * sees first — otherwise the model that decides whether sending is safe is
+     * not a model of the code that would run.
+     *
+     * `sourceAccepts()` reads the authenticated dispatcher's guards and nothing
+     * else, but `call()` enters through `handleApi`, which dispatches the public
+     * namespace (src/routes.ts:6347) and the Stripe webhook (:6371) *above* the
+     * authenticated chain. A witness under either would be answered up there
+     * while `sourceAcceptsIt` said `false` — request sent, outer handler run,
+     * and nothing here had modelled it.
+     *
+     * Safe today only because no witness lies in either namespace, which was a
+     * fact nobody had written down (Sol, review § P2-SAFETY-SCOPE). Asserted
+     * rather than relied on, so a contract row mistakenly placed under one of
+     * those paths fails here instead of executing an outer handler. Asked with
+     * the two predicates the dispatcher itself uses, so a namespace that widens
+     * later widens this with it.
+     */
+    it("asks only about paths the authenticated dispatcher is the first to see", () => {
+      const outside = DISJOINTNESS_CORPUS.filter(
+        (witness) => isPublicNamespace(witness) || witness === WEBHOOK_PATH,
+      );
+      expect(
+        outside,
+        "handleApi answers these above serveAuthenticatedApi, so sourceAccepts() does not model what a request would reach",
+      ).toEqual([]);
     });
 
     it.each(REFUSALS.map((r) => [r.method, r.witness, r.sourceAcceptsIt] as const))(
