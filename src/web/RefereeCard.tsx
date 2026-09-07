@@ -71,7 +71,7 @@
  * So it went from half again the height of the tool it explains to three
  * quarters of it. The rule it broke is the one written in the line above.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { X } from "lucide-react";
 import { howCardDismissed, rememberHowCard } from "./referee-card.js";
 
@@ -94,10 +94,53 @@ import { howCardDismissed, rememberHowCard } from "./referee-card.js";
  * be improved by noticing — a `storage` listener here would make an explanation
  * appear or vanish under somebody mid-sentence.
  */
-export function useHowCard(): { open: boolean; show(open: boolean): void } {
+export function useHowCard(): {
+  open: boolean;
+  show(open: boolean): void;
+  /**
+   * Put on `RefereeHowButton`, so that closing the card can hand the reader
+   * back to it. Here rather than in either component for the same reason the
+   * open/shut bit is: the two are in different parts of the DOM, and the hook
+   * is the one place that sees both.
+   */
+  buttonRef: RefObject<HTMLButtonElement | null>;
+} {
   const [open, setOpen] = useState(() => !howCardDismissed());
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * ## Closing the card gives the keyboard back
+   *
+   * The card's own ✕ is inside the card, so pressing it unmounts the element
+   * the reader is standing on and focus falls to `<body>` — the next Tab then
+   * starts again from the top of the document. Invisible with a mouse, and this
+   * card is **open by default** until it is dismissed once, so closing it is
+   * close to the first thing a keyboard referee does.
+   *
+   * **The `activeElement` test is the part that matters**, and it is
+   * `EditableTitle`'s, in TitleEditor.tsx § the pencil and the input swap:
+   * rescue only the case where focus went nowhere. A reader who dismissed the
+   * card by pressing the header button is already standing on that button, and
+   * one who clicked a link in the paper has gone somewhere real — grabbing
+   * focus back in either case would be worse than the bug.
+   *
+   * Found by GPT Sol (F41, 2026-09-07) in a focus inventory that had **excluded
+   * this card for being in flow**. Being in flow removes the requirement to trap
+   * Tab; it does not remove the requirement to give focus back.
+   * docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-focus-inventory.md
+   */
+  const was = useRef(open);
+  useEffect(() => {
+    const closed = was.current && !open;
+    was.current = open;
+    if (!closed) return;
+    const at = document.activeElement;
+    if (at === null || at === document.body) buttonRef.current?.focus();
+  }, [open]);
+
   return {
     open,
+    buttonRef,
     show(next: boolean) {
       setOpen(next);
       /* **Both ways.** Reopening clears the dismissal rather than opening it for
@@ -118,9 +161,24 @@ export function useHowCard(): { open: boolean; show(open: boolean): void } {
  * `aria-expanded` and no `aria-controls`: the card is not rendered while it is
  * shut, so `aria-controls` would name an element that is not there.
  */
-export function RefereeHowButton({ open, onToggle }: { open: boolean; onToggle(): void }) {
+export function RefereeHowButton({
+  open,
+  onToggle,
+  buttonRef,
+}: {
+  open: boolean;
+  onToggle(): void;
+  /** From `useHowCard`. Optional so the button still works anywhere it is used alone. */
+  buttonRef?: RefObject<HTMLButtonElement | null> | undefined;
+}) {
   return (
-    <button type="button" className="ref-how-btn" aria-expanded={open} onClick={onToggle}>
+    <button
+      type="button"
+      ref={buttonRef}
+      className="ref-how-btn"
+      aria-expanded={open}
+      onClick={onToggle}
+    >
       How this works
     </button>
   );

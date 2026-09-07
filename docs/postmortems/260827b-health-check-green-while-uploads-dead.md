@@ -283,6 +283,28 @@ Four things it still does not reach:
    *Checked 2026-09-03: `ANTHROPIC_API_KEY` left `EXPECTED` on 2026-08-31 — by hand, which is the
    point — and `SPIDERYARN_OWNER_ID` is still read by `src/owner.ts` and still absent from it. **The
    test is still not built.***
+   ***Checked 2026-09-07: still not built, and now with a measurement instead of an estimate.*** It
+   was built and **twice refused in review** — nine established ways for an environment read to be
+   silently skipped rather than refused, which disqualifies a check whose entire job is not to fail
+   open. What the attempt produced is worth more than the estimate it replaces:
+
+   - **The drift is 36 names, not a handful.** A sweep resolved 50 distinct reads under `src/`; 36
+     were in neither `EXPECTED` nor any deliberate exclusion. **Six are now in `EXPECTED`** (all
+     `breaks: null`), including `SPIDERYARN_OWNER_ID` above, so the specific drift this entry names
+     is closed even though the general check is not.
+   - **Three variables nobody had inventoried anywhere**: `SPIDERYARN_ENV_PINNED` (read two hops
+     from `process.env`, via `applyEnvFile` into `pinnedNames`), `VITE_SENTRY_DSN` and
+     `VITE_VERCEL_ENV`.
+   - **"Every `process.env.X`" is the wrong target.** Sixteen names arrive through computed reads —
+     `MODEL_ENV_VAR[task]` and four module-local constants — and a check blind to those is worse
+     than none. Resolving them soundly turned out to need lexical binding analysis, which is where
+     the nine holes came from.
+
+   The design that would hold this, a cheaper alternative that makes the *reads* literal instead of
+   the check clever, and the nine executed attacks any rebuild must go red on first, are all in
+   [260907e](../plans/260907e-small-uncontested-postmortem-preventions-batch.md) § Stage 4. See also
+   § *Derive the contract instead of restating it* below, whose claim about this check turned out to
+   be false.*
 2. **It only sees the API function's runtime environment.** `VITE_SUPABASE_URL` and
    `VITE_SUPABASE_PUBLISHABLE_KEY` are compiled into the browser bundle at build time — and missing
    them produced a blank site on the same day, a different failure of the same class. They are in
@@ -318,8 +340,23 @@ Four things it still does not reach:
   what breaks without it, which environments require it — imported by both the code that reads it
   and the health check, so a variable cannot gain a consumer without gaining an entry. Failing that,
   a static test asserting every `process.env.X` under `src/` appears in `EXPECTED` (with a named
-  allowlist for the deliberate omissions) would have gone red at `2405408` and is a few lines. It
+  allowlist for the deliberate omissions) ~~would have gone red at `2405408`~~ and is a few lines. It
   fits beside the project-wide checks in [`scripts/check.ts`](../../scripts/check.ts).
+
+  ***Checked 2026-09-07 — and the struck-out claim above was wrong, which is the more useful half of
+  this entry.*** `SUPABASE_SERVICE_ROLE_KEY` was already in `EXPECTED` at `4dcc580`, before
+  `src/store/blobs.ts` began reading it, and it was still there at `2405408`. A membership test
+  therefore stays **green** straight through the commit that introduced this bug. What went wrong
+  was not a missing name: it was a *reported* variable silently changing from optional to required
+  without gaining a `breaks` consequence — which is the first bullet in this same list, deriving the
+  contract, and is still not built.
+
+  So this check is worth having for the drift it does catch — `SPIDERYARN_OWNER_ID` was read by
+  `src/owner.ts` and absent from `EXPECTED` for eleven days, exactly as item 1 above says — but it is
+  **not** the check that would have caught this incident, and a postmortem that overstates its own
+  fix sends the next sweep down a blind alley. Found by GPT Sol while reviewing the plan to build it;
+  the history was then checked by hand.
+  [260907e](../plans/260907e-small-uncontested-postmortem-preventions-batch.md) § Stage 4.
 - **Compare the two lists by machine.** `.env.prod` exists precisely as "a record of what production
   needs" and is read by nothing. Diffing its names against `vercel env ls production` is what found
   this, done by hand, a day late. It belongs next to `check-production-gate.sh`.
