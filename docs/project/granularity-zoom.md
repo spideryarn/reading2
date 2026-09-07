@@ -139,6 +139,14 @@ Two consequences worth stating, because they are easy to get wrong:
   the leaf column say so in one sentence, because there the reader asked for the layer by name;
   outline mode's rung 5 simply does not climb that far, because nobody asked.
 
+  **`pending` is the ordinary state of a newly added article, since 2026-09-06**, and that is worth
+  knowing before you read the withheld state as a fault. The label pass left the blocking `hierarchy`
+  step — it was 79.5–92% of its wall clock — so pasting a URL gets you the tree and no paragraph
+  labels at all, and a free successor job buys them afterwards
+  ([hierarchy.md § Why they are two steps](hierarchy.md#two-steps)). Until it runs the tree carries
+  **no** `navLabel` on any leaf, not merely on some, so there is nothing partial for a surface to be
+  tempted to draw.
+
 ### The supplement node
 
 One node breaks the "every internal node carries a gist" rule, on purpose. Greg, 2026-08-28:
@@ -206,6 +214,16 @@ Bottom-up, one pass, precomputed for the whole article and cached.
 
 (The leftmost step writes leaves' `navLabel`s — the Hierarchy rows for individual paragraphs. Leaves have
 no `gist`; the first *gists* appear one level up. See [Node shape](#node-shape).)
+
+**Two things about that diagram are aspiration rather than description, and both matter.** It reads
+left to right as a dependency order, and the labels are actually written *last*: the batches are cut
+along the finished tree's own section boundaries, because a label's job is to tell its paragraph
+apart from its neighbours and the model has to see which neighbours those are
+([hierarchy.md § Two passes](hierarchy.md#two-passes)). And since 2026-09-06 the leaf labels are
+**not precomputed at ingest at all** — they are their own pipeline step, off `DEFAULT_INGEST_STEPS`,
+bought by a free successor job minutes later, because that pass was 79.5–92% of stage 4's wall clock
+([hierarchy.md § Why they are two steps](hierarchy.md#two-steps)). The gists still arrive with the
+tree. What the diagram is right about is the compression relation, which is the paragraph below.
 
 Each parent is written from its children's gists and titles, not from the raw text underneath it.
 This is what makes the zoom *feel* coherent: level N genuinely is a compression of level N+1, so

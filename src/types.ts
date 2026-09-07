@@ -2348,7 +2348,16 @@ export interface Comment {
  * docs/project/glossary.md.
  */
 export type StepName =
-  | "fetch" | "extract" | "blocks" | "hierarchy" | "assets" | "arc" | "tweets" | "glossary"
+  | "fetch" | "extract" | "blocks" | "hierarchy"
+  /* The per-paragraph navigation labels, which left the `hierarchy` step on
+     2026-09-06 because they were 79.5–92% of its wall clock and one measured
+     call took 602s of a 682s pass — past what the job lease allows.
+     `hierarchy` now writes a `PendingLabelsFile` (src/labels.ts) and this step
+     writes the real one, later, in a free successor job. **It is deliberately
+     NOT in `DEFAULT_INGEST_STEPS`**, which is the whole of the change.
+     docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md. */
+  | "labels"
+  | "assets" | "arc" | "tweets" | "glossary"
   /* The lines worth keeping, in the article's own words — docs/project/quotes.md.
      Beside `glossary` because the two send byte-identical article bytes at the
      same effort and share one cached prefix. */

@@ -10,8 +10,9 @@
  * > be only visible to people who have experimental features on, because they
  * > don't work so well yet.
  *
- * So `MODES_UI`'s Diagram row is `experimental: false` and `KIND_UI`'s rows
- * carry the flag instead, and both rows of controls are drawn by one rule —
+ * So Diagram is `experimental: false` in `MODE_CATALOG` (src/mode-catalog.ts)
+ * and `KIND_UI`'s rows carry the flag instead, and both rows of controls are
+ * drawn by one rule —
  * src/web/experimental-visibility.ts. This file is that rule seen from the chip
  * row's end; tests/dock-experimental-modes.test.tsx is the bar's end.
  *

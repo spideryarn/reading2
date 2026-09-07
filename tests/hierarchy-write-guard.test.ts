@@ -153,7 +153,7 @@ beforeAll(async () => {
   blocks = JSON.parse(await readFile(path.join(DIR, "blocks.json"), "utf8")).blocks;
   ({ generateHierarchy } = await import("../src/hierarchy.js"));
   const { isStructural } = await import("../src/block-policy.js");
-  const { hashBlocks } = await import("../src/source-hash.js");
+  ({ hashBlocks, structureHash } = await import("../src/source-hash.js"));
   const { blocksArtefact } = await import("../src/blocks.js");
   labelsFor = Object.fromEntries(
     blocks.filter((b) => isStructural(b)).map((b) => [b.id, `Label for ${b.id}`]),
@@ -190,6 +190,14 @@ const wholeArticle = (over: Record<string, unknown> = {}) => ({
  * and the four tests it is the control for went on passing.
  */
 let generateHierarchy!: typeof import("../src/hierarchy.js")["generateHierarchy"];
+/* Hoisted out of `beforeAll`, where it was a local, so the case at the foot of
+   this file can ask the same question of the returned artefacts that the stage
+   asks of them internally. */
+let hashBlocks!: typeof import("../src/source-hash.js")["hashBlocks"];
+/* Beside `hashBlocks` and for the identical reason: the case at the foot of this
+   file asks whether the manifest's structure hash describes the tree that came
+   back with it. */
+let structureHash!: typeof import("../src/source-hash.js")["structureHash"];
 
 async function run(): Promise<{ threw: Error | null; run?: HierarchyRun }> {
   try {
@@ -349,16 +357,32 @@ describe("generateHierarchy refuses to hand back an invalid tree", () => {
     }
   });
 
-  /* **The control, and it has to come first for the same reason as the one at
-     the top of this block.** "The labels were not generated" is satisfied just
-     as well by a harness where the mock is never reached at all — a broken
-     import, a throw earlier in the stage. This proves the counter moves. */
-  it("pays for labels when the structure is sound", async () => {
+  /**
+   * **This asserted the opposite until 2026-09-06, and it was the control for
+   * the case below.** It read *"pays for labels when the structure is sound"*,
+   * with a comment saying the control had to come first because *"the labels
+   * were not generated" is satisfied just as well by a harness where the mock is
+   * never reached at all*.
+   *
+   * That control has stopped being available, because the thing it controlled
+   * for is now **true by construction**: the label pass left `generateHierarchy`
+   * with docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md, so this
+   * function never reaches `generateLabels` on any path at all.
+   *
+   * **So read the case below as vacuous, and this one as what replaced it.**
+   * "Does not pay for labels when the tree is invalid" is now a special case of
+   * "does not pay for labels", and the saving it protected is structural rather
+   * than guarded. The live version of that guard is
+   * `tests/labels-step-registration.test.ts`, which pins `labels` out of
+   * `DEFAULT_INGEST_STEPS`, and the store rule in
+   * `tests/labels-receipt-invalidation.test.ts`.
+   */
+  it("buys no labels at all, however sound the structure is", async () => {
     labelCalls = 0;
     modelTree = wholeArticle();
     const { threw } = await run();
     expect(threw).toBeNull();
-    expect(labelCalls).toBe(1);
+    expect(labelCalls).toBe(0);
   });
 
   /* The finding from job spya-v2f7b3. Everything `checkTree` complains about
@@ -397,7 +421,13 @@ describe("generateHierarchy refuses to hand back an invalid tree", () => {
     expect(stats?.repairedRanges).toBe(0);
   });
 
-  it("does not pay for labels when the structure call already produced an invalid tree", async () => {
+  /* **Vacuous on the label half since 2026-09-06 — see the case above.** The
+     `labelCalls` line cannot fail any more, because this function has no path to
+     `generateLabels`. Kept rather than deleted because the *other* two
+     assertions are not vacuous: an invalid tree still throws, and it still
+     stores nothing, which is the finding from job spya-v2f7b3 that this block
+     exists for. */
+  it("stores nothing when the structure call already produced an invalid tree", async () => {
     labelCalls = 0;
     modelTree = wholeArticle({ gist: undefined });
     const result = await run();
@@ -417,21 +447,50 @@ describe("generateHierarchy refuses to hand back an invalid tree", () => {
    * (`reasonsNotToPublish`). Disagreeing quietly means every article becomes
    * unpublishable, from runs that all reported success.
    *
-   * The label pass is mocked here, so this is the one place that state can be
-   * made at all — and it is exactly the state a future change to what
-   * `generateLabels` is handed (the body alone, say) would create for real.
+   * **The negative can no longer be provoked from here, and saying so is the
+   * point.** Until 2026-09-06 the mocked label pass supplied `sourceHash`, so
+   * setting it to a wrong value forced the guard to fire and this case asserted
+   * the throw. `generateHierarchy` now writes that field itself — it is
+   * `hashBlocks(blocks)` on the argument, computed a few lines from
+   * `hashBlocks(parts.blocks.blocks)` on what is returned — so nothing this file
+   * can reach makes the two disagree.
+   *
+   * The guard is still live and still worth having: the two arrays are equal
+   * only because `blocksArtefact` maps one to one and rewrites `html` alone,
+   * which `hashBlocks` does not read, and either half of that could move. What
+   * has changed is that provoking it now means mocking `hashBlocks` itself,
+   * which would be a test of the mock. So this asserts the property in the
+   * direction that is still reachable — the hash the run reports is the one on
+   * the artefact, and it describes the blocks actually handed back — and the
+   * failing direction is named here rather than pretended at.
+   * docs/reusable/silent-success.md, applied to a test rather than to code.
    */
-  it("throws when the labels were written against different blocks", async () => {
-    const good = labelsSourceHash;
-    labelsSourceHash = "deadbeefdeadbeef";
-    try {
-      modelTree = wholeArticle();
-      const result = await run();
-      expect(result.threw).not.toBeNull();
-      expect(result.threw!.message).toContain("different blocks");
-      expect(produced(result)).toEqual([]);
-    } finally {
-      labelsSourceHash = good;
-    }
+  it("reports a hash that is read off the manifest and describes the blocks it returns", async () => {
+    modelTree = wholeArticle();
+    const result = await run();
+    expect(result.threw).toBeNull();
+    expect(result.run?.inputHash).toBe(result.run?.parts.labels.sourceHash);
+    expect(result.run?.inputHash).toBe(hashBlocks(result.run!.parts.blocks.blocks));
+  });
+
+  /**
+   * **And the manifest's `structureHash` describes the tree it comes back
+   * beside** — one of the two claims `writeArtefacts` began refusing writes over
+   * on 2026-09-07 (GPT Sol's F2 on stage 2a). This is that writer, driven, rather
+   * than the reduction of it: the stage computes the hash off `structure` and
+   * returns `mergeLabels(structure, {})`, and only the stage knows whether those
+   * two are still the same tree by the time they are handed over together.
+   *
+   * The other writer is the `labels` step, whose two halves are pinned where
+   * they are: `generateLabels` stamps `structureHash(opts.tree)`
+   * (tests/labels-batching.test.ts § *records the manifest that lets a stale
+   * complete set be spotted*), and `mergeLabels` leaves that hash alone (same
+   * file, § `mergeLabels`).
+   */
+  it("reports a structureHash that describes the tree it returns", async () => {
+    modelTree = wholeArticle();
+    const result = await run();
+    expect(result.threw).toBeNull();
+    expect(result.run?.parts.labels.structureHash).toBe(structureHash(result.run!.parts.tree));
   });
 });

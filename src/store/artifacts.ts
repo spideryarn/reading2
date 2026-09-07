@@ -758,6 +758,26 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
   extract: null,
   blocks: null,
   hierarchy: "labels",
+  /**
+   * **The same artefact as `hierarchy` above, and two steps really can read
+   * their stamp off one file.**
+   *
+   * It looks like the clash `assertStampAgrees` exists to refuse, and it is not:
+   * `hasArtefacts` (src/store/artifacts-pg.ts) asks the **asking step's own**
+   * `revision_step_runs` row before it looks at any artefact, so doneness is
+   * keyed on the receipt rather than on the file. Two steps sharing a site is a
+   * shape this project already had — `STORAGE` maps both `blocks`/`blocks` and
+   * `hierarchy`/`blocks` to the same rows — and
+   * tests/shared-site-run-row-gate.test.ts pins it on that existing pair.
+   *
+   * The difference between the two rows is what each step *declares*.
+   * `hierarchy` declares an `inputHash` alone, because the manifest it writes is
+   * a `PendingLabelsFile` with no `version` and no `generator`. This step
+   * declares all three, because it bought them.
+   * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md
+   * § the question that had to be settled first.
+   */
+  labels: "labels",
   assets: "assets",
   arc: "arc",
   tweets: "tweets",

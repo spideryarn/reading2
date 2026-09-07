@@ -46,6 +46,22 @@ export const STEP_ORDER = [
   "extract",
   "blocks",
   "hierarchy",
+  /* **Immediately after `hierarchy`, and its position here is not load-bearing
+     the way `quotes`, `timeline`, `quiz` and `illustrated` are.** It is in no
+     article-cache group — the label prompt sends an outline and a batch of
+     paragraphs, not the article the way `articleText` or `articleWithIds` do —
+     so it breaks no contiguity wherever it goes, and it is here because it is
+     the second half of stage 4 and reads the tree that step just cut.
+
+     **Not in `DEFAULT_INGEST_STEPS`** (src/pipeline.ts), which is the entire
+     point of the split: `hierarchy` writes a pending manifest and the labels
+     are bought later by a free successor job, so pasting a URL no longer waits
+     on the 79.5–92% of stage 4 that this pass was.
+
+     **And not in `FORCE_ONLY_WHEN_NAMED`** either, which is the opposite
+     decision from the one `arc` made in the same position — see the note there.
+     docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md. */
+  "labels",
   /* After `hierarchy` because it reads stage 4's `blocks.json` — the copy the reader
      will actually render, and the one its own freshness stamp is computed from
      (`assetsInputHash`, src/collect-assets.ts), so freshness comes from the

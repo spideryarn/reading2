@@ -276,6 +276,27 @@ describe("unrunnableStepPlan", () => {
     expect(unrunnableStepPlan(["fetch", "extract"])).toBeUndefined();
     expect(unrunnableStepPlan(["tweets"])).toBeUndefined();
   });
+
+  it("allows `labels` alone, which is the whole shape of the successor job", () => {
+    /* **The one step list this rule must never grow an opinion about.** Since
+       2026-09-06 the labels are their own step, bought by a free job enqueued
+       after publication with exactly this plan — `{ steps: ["labels"] }` and
+       nothing else (docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md).
+       A refusal here would not fail visibly: `enqueue` would 400, the successor
+       would never exist, and every article would sit at "Paragraph labels are
+       still arriving" for ever with nothing anywhere saying why.
+
+       It is also correct on this rule's own terms. What `unrunnableStepPlan`
+       refuses is a plan that leaves the article *unpublishable*, and that is
+       `blocks` without `hierarchy` — the tree checked against blocks it was not
+       built from. Labels are not in that chain: `reasonsNotToPublish` does not
+       look at them, and an article with none publishes and reads. */
+    expect(unrunnableStepPlan(["labels"])).toBeUndefined();
+    /* And the two shapes either side of it: the step that produces its input,
+       and the pair a forced re-cut produces. */
+    expect(unrunnableStepPlan(["hierarchy", "labels"])).toBeUndefined();
+    expect(unrunnableStepPlan(orderSteps(["labels", "hierarchy"]))).toBeUndefined();
+  });
 });
 
 describe("cascadeForce", () => {
@@ -289,6 +310,17 @@ describe("cascadeForce", () => {
       "extract",
       "blocks",
       "hierarchy",
+      /* **`labels` IS swept in, and this is the one entry where that is the
+         interesting answer rather than the obvious one** (2026-09-06). Every
+         other step in `FORCE_ONLY_WHEN_NAMED` is out of the cascade because
+         nothing reads what it writes and its inputs did not move. Re-running
+         `hierarchy` moves exactly the input the labels are judged against: the
+         tree. A label written to tell a paragraph apart from *the wrong set of
+         neighbours* is wrong in the one way stage 4b exists to prevent
+         (src/labels.ts § `structureHash`), so sweeping them in is correct and
+         not a wasted call. src/pipeline.ts § FORCE_ONLY_WHEN_NAMED says so
+         under its own heading. */
+      "labels",
       /* `assets` IS swept in, unlike the four steps after `arc`, and the reason
          is the one the cascade encodes: a refresh from source is a request to
          get this article again, and the article's figures are part of it.
@@ -307,6 +339,9 @@ describe("cascadeForce", () => {
     expect([...cascadeForce([...STEP_ORDER], new Set(["arc", "blocks"]))]).toEqual([
       "blocks",
       "hierarchy",
+      /* Swept in by position since 2026-09-06 — see the note in the case above
+         for why that is the right answer for this one step. */
+      "labels",
       "assets",
       "arc",
     ]);
@@ -341,6 +376,12 @@ describe("cascadeForce", () => {
     /* `arc` is absent here for the same reason `tweets` is, as of 2026-08-29 —
        both can now judge their own freshness. */
     expect([...cascadeForce(["hierarchy", "arc", "tweets"], new Set(["hierarchy"]))]).toEqual(["hierarchy"]);
+    /* And with `labels` in the job, forcing `hierarchy` takes it too — the one
+       step the cascade still speaks for after `hierarchy`. */
+    expect([...cascadeForce(["hierarchy", "labels", "arc"], new Set(["hierarchy"]))]).toEqual([
+      "hierarchy",
+      "labels",
+    ]);
   });
 
   it("does not sweep `glossary` in by position either, and this one appends", () => {
@@ -368,6 +409,9 @@ describe("cascadeForce", () => {
        because it never left. */
     expect([...cascadeForce([...STEP_ORDER], new Set(["hierarchy", "tweets"]))]).toEqual([
       "hierarchy",
+      /* In the cascade since 2026-09-06, and deliberately: forcing `hierarchy`
+         re-cuts the tree, which is the one input that makes a nav label wrong. */
+      "labels",
       "assets",
       "tweets",
     ]);
@@ -393,8 +437,17 @@ describe("cascadeForce", () => {
        one thing the stamp cannot answer. A rotated imgix signature changes
        nothing about the blocks. */
     expect(FORCE_ONLY_WHEN_NAMED.has("assets")).toBe(false);
+    /* **And `labels` is out of the set for a fourth reason, which is the
+       opposite of `arc`'s** (2026-09-06). `arc` left the cascade the day it
+       gained a freshness check, because its position had been the only signal
+       it had. `labels` has a `stamp` too and stays in, because here the
+       position is telling the truth: the step immediately before it rewrites
+       the tree the labels were written against. src/pipeline.ts §
+       FORCE_ONLY_WHEN_NAMED. */
+    expect(FORCE_ONLY_WHEN_NAMED.has("labels")).toBe(false);
     expect([...cascadeForce([...STEP_ORDER], new Set(["hierarchy"]))]).toEqual([
       "hierarchy",
+      "labels",
       "assets",
     ]);
   });

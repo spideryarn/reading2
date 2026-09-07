@@ -173,6 +173,7 @@ import {
   PenLine,
   RefreshCw,
   ScanLine,
+  Tag,
   Target,
   TriangleAlert,
   Undo2,
@@ -251,6 +252,12 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   extract: FileText,
   blocks: Blocks,
   hierarchy: ListTree,
+  /* A luggage tag: the short label each paragraph is given so it can be told
+     apart from its neighbours. Beside the tree it is written onto, and
+     deliberately not another tree glyph — the two are one stage of the pipeline
+     and two steps, and the rows have to be distinguishable at a glance.
+     docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md. */
+  labels: Tag,
   assets: Image,
   arc: Waypoints,
   tweets: ListOrdered,
