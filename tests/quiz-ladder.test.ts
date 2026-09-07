@@ -3,7 +3,7 @@
  * allowed to change.
  *
  * Pure: no model, no network, no React. That is the point of putting the rule
- * in src/quiz-ladder.ts rather than inside the panel — a walk over a batch is
+ * in src/web/quiz-ladder.ts rather than inside the panel — a walk over a batch is
  * simulatable, so the plan's worked trace and these tests read the same code
  * the reader does.
  *
@@ -149,7 +149,7 @@ describe("the value ordering inside a band is the server's, never ours", () => {
    * the amended invariant states.
    *
    * The stronger rule — *the client must never sort at all* — is a code-level
-   * tripwire that no test can express, so it is stated in src/quiz-ladder.ts
+   * tripwire that no test can express, so it is stated in src/web/quiz-ladder.ts
    * and enforced by reading. Don't mistake this green for covering it.
    */
   it("meets every band's questions in the server's order, whatever the path", () => {

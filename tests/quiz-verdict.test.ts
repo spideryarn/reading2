@@ -7,7 +7,7 @@
  * every case here a case about *not* making a fuss: the contract is that a
  * refusal, a timeout, a model that answers in prose, or a reader who navigated
  * away all produce `undefined`, and `undefined` means the ladder holds its band
- * (src/quiz-ladder.ts).
+ * (src/web/quiz-ladder.ts).
  *
  * The reason to test that so heavily is docs/reusable/silent-success.md pointed
  * the other way. Everywhere else in this app a swallowed failure is a bug; here

@@ -267,14 +267,23 @@ on-screen question's own attempt.
 
 ## Shape of the change
 
-**`src/quiz-ladder.ts`** — new, pure, no React and no fetch, so the eval can import it. Exports the
-verdict type, the band table, and one function `(questions, seenIds, fromBand, verdict) → next
-question | undefined`. Deterministic; no clock, no randomness.
+**`src/web/quiz-ladder.ts`** — new, pure, no React and no fetch. Exports the band table and one
+function `(questions, seenIds, fromBand, verdict) → next question | undefined`. Deterministic; no
+clock, no randomness.
+
+> **It was `src/quiz-ladder.ts` until the suite said otherwise.** This plan put it beside
+> `src/quiz.ts` so a node harness could import it — and `tests/client-imports.test.ts` failed the
+> moment the panel imported it, because the client may not reach out into `src/`: *"one `import type`
+> away from a node module is one careless edit away from a broken browser bundle."* That test's
+> header is explicit that the fix is **never** the allowlist but to move the shared thing into a
+> module that imports nothing. Nothing on the server walks the ladder, so the only genuinely shared
+> piece is `QuizVerdict`, which moved to `src/types.ts`; the ladder is plain client code and moved
+> into `src/web/`. Purity was never the issue — placement was.
 
 **`src/quiz-verdict.ts`** — new. The classifier: its prompt, its one-token parse, its short deadline,
 and its refusal to throw. Returns `"right" | "wrong" | undefined`, never rejects.
 
-**Changed:** `src/types.ts` (`verdict?` on `QuizMarkResult`), `src/quiz-mark.ts` (call the classifier
+**Changed:** `src/types.ts` (`QuizVerdict`, and `verdict?` on `QuizMarkResult`), `src/quiz-mark.ts` (call the classifier
 after the stream completes, put it on `done`), `src/routes.ts` (pass the field through),
 `src/web/useQuiz.ts` (read it onto the attempt), `src/web/QuizPanel.tsx` (`seen`/`cursor` in place of
 `at`; `QuestionList` keyed by id rather than index), `docs/project/quiz.md` (the amended invariant,
@@ -444,7 +453,7 @@ easier and that nothing on the page says so.
 
 ## Stages
 
-1. `src/quiz-ladder.ts` + tests. Pure, no UI, no model.
+1. `src/web/quiz-ladder.ts` + tests. Pure, no UI, no model.
 2. `src/quiz-verdict.ts` + tests, then the labelled-case measurement. **The design's veto point.**
 3. Wire the verdict onto `done` through the route and the hook.
 4. The panel: `seen`/`cursor` replacing `at`.

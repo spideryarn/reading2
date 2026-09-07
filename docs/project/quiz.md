@@ -28,7 +28,7 @@ in `converse` — [referee-mode.md § 4](referee-mode.md).)
 
 Code: [`src/quiz.ts`](../../src/quiz.ts) (the stage, the prompt, the validation, the sort),
 [`src/quiz-mark.ts`](../../src/quiz-mark.ts) (the marking prompt and its stream),
-[`src/quiz-ladder.ts`](../../src/quiz-ladder.ts) (which question comes next, and it never sorts),
+[`src/web/quiz-ladder.ts`](../../src/web/quiz-ladder.ts) (which question comes next, and it never sorts),
 [`src/quiz-verdict.ts`](../../src/quiz-verdict.ts) (whether they got it right, asked in private),
 [`src/routes.ts`](../../src/routes.ts) § `/api/quiz/:slug` (the GET) and `/api/quiz/:slug/mark` (the POST),
 [`src/web/useQuiz.ts`](../../src/web/useQuiz.ts),
@@ -133,7 +133,7 @@ paid for nine good questions carrying one `hard`, and the number is gone rather 
 answer is that *it is not a control*: the reader never learns what `band` or `value` mean, and never
 has to tune anything to get a quiz pitched at them. The plan, the edges and the measurements are
 [260907d](../plans/260907d-make-the-quiz-adaptive.md);
-[`src/quiz-ladder.ts`](../../src/quiz-ladder.ts) is the rule.
+[`src/web/quiz-ladder.ts`](../../src/web/quiz-ladder.ts) is the rule.
 
 **Nothing on screen says it is happening**, and that is a hard rule rather than a preference. No
 "here's a harder one", no pips, no level, no change to the "Question 3 of 12" line — for the reason

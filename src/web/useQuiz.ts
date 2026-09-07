@@ -158,7 +158,7 @@ export interface Attempt {
    * **Whether they got it right — and it is never rendered.**
    *
    * The adaptive ladder reads this to choose the next question
-   * (src/quiz-ladder.ts). `QuizPanel` must not print it, hint at it, or change
+   * (src/web/quiz-ladder.ts). `QuizPanel` must not print it, hint at it, or change
    * a word of copy because of it: docs/project/quiz.md is explicit that quoting
    * a difficulty at a reader hands them a token with nothing behind it, and a
    * verdict is worse — it is the grade the whole marking prompt refuses to give.

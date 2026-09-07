@@ -39,7 +39,7 @@
  *
  * Every failure — a refusal, a timeout, an unparseable answer, an ill-posed
  * question the model declines to call — returns `undefined`, which
- * src/quiz-ladder.ts treats as *hold the band*. So the worst thing a broken
+ * src/web/quiz-ladder.ts treats as *hold the band*. So the worst thing a broken
  * classifier can do to a reader is offer them another question at the same
  * level. Nothing goes red, nothing is retried, and the mark they are reading is
  * entirely unaffected: this call happens after the marking stream is complete.

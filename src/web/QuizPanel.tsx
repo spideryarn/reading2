@@ -204,7 +204,7 @@ export function QuizPanel({
     /* The walk starts at the front of the server's array. Not "an easy one":
        `orderQuestions` puts the highest-value question of the *lowest band
        present* first, which is usually easy but need not be — a batch below
-       `SPREAD_FROM` is exempt from the spread rule entirely. src/quiz-ladder.ts
+       `SPREAD_FROM` is exempt from the spread rule entirely. src/web/quiz-ladder.ts
        § firstQuestion. */
     const opening = firstQuestion(questions);
     setSeen(opening ? [opening.id] : []);
@@ -326,7 +326,7 @@ export function QuizPanel({
    *
    * Only a mark that reached `done` for *this* question carries a verdict, so
    * skipping, a failed mark and an abandoned stream all come out `undefined` —
-   * which src/quiz-ladder.ts reads as *hold the band*. That is the designed
+   * which src/web/quiz-ladder.ts reads as *hold the band*. That is the designed
    * outcome rather than an error path, and it is why nothing here needs a
    * fallback.
    *
@@ -768,7 +768,7 @@ function ReferenceAnswer({
  * since the quiz went adaptive, when it stopped being the order the reader meets
  * the questions in. `orderQuestions` in src/quiz.ts has done it once, against
  * bands and values this component never sees, and it remains the sole authority
- * for the static ranking (src/quiz-ladder.ts § the amended invariant). The
+ * for the static ranking (src/web/quiz-ladder.ts § the amended invariant). The
  * consequence is worth knowing: a reader who opens this list part-way through
  * will find their ticks scattered down it rather than gathered at the top.
  *
