@@ -488,6 +488,12 @@ survives:
 
 ## The next slice, so the fifth sweep inherits a queue
 
+> **Claimed, 2026-09-07 21:30.** `searches` is **taken by 260907b** (`worktree-api-dispatch-by-domain`),
+> which asked before starting. 260907e is on an 8-hour wait and would have held the slice idle until
+> 05:17; handing it to the session that is awake is worth more than keeping the queue tidy. **The next
+> unclaimed slice is `chat`**, and whoever takes it should re-measure rather than trust this line —
+> that is how `searches` came to be claimed in the first place.
+
 **`searches` — four guards, `:8271`–`:8318`**, immediately above referee, and adjacent to the table
 once referee is gone.
 
@@ -504,6 +510,26 @@ The queue after that, bottom-up: `comments` (6), `sketch/illustrated/arc/similar
 friends (9), `reader/shelfOpen` (3), `models/transcribe/feedback` (3), `library/shelf` (4) — and
 **the admin gate last, or never.** It is a gate rather than a route, `security-map.md` names it, and
 it should not be moved as part of a mechanical sweep.
+
+**One standing gap, agreed with 260907b on 2026-09-07 — a queue line, not a stage.** No new
+per-domain lifetime oracle is needed for a migration: Sol ruled it is once, not per domain, and the
+decomposition holds. Lifetime risk lives in exactly two places, and both are covered — inside the
+handler body, where the normalised body diff catches `await` → `void` (they are different tokens and
+none of the normaliser's four transforms touches them), and in the dispatcher's await, which is
+shared machinery the referee slice already tested. The referee oracle is not a migration artefact:
+it tests a pre-existing lifetime property nothing tested, and was worth writing whether or not
+referee ever moved. The migration was the occasion, not the reason.
+
+What is left over is real. **The body diff proves a move and then evaporates** — it is a one-off
+script, not a standing test. `assertHandlersAwaited` cannot close it: it calls
+`findFunction(statements, TABLE_DISPATCHER)` and walks only `dispatchAuthRoute`'s own body, so it is
+blind by construction to a `void` inside a row's handler closure. That is not a defect in the check;
+it answers a different question. But it means a moved domain has **no standing guard** against a
+future dropped `await` in a row handler, and referee has one only incidentally.
+
+The cheap shape, if someone takes it deliberately: **a static assertion that no promise-returning
+call inside any `AUTH_ROUTES` handler body is left un-awaited** — the same AST machinery the contract
+reader already has, and no database. Do not build it during a migration.
 
 Two corrections to carry forward, both from Sol:
 
@@ -584,17 +610,33 @@ publicly and we both read it. **Their test passes unchanged against the moved ro
 here, 13 files / 616 tests green together), which is itself corroboration: two independently written
 lifetime oracles agree that the move preserved the lifetime.
 
-What to do about it is a judgement for whoever reads this next, and it is deliberately not made
-unilaterally at 20:45:
+**Resolved, 2026-09-07 21:30 — by them, which is the right way round.** 260907b merged `dev`, found
+the end states matched to the row, and **removed `tests/streaming-route-request-lifetime.test.ts`** in
+favour of this one, on the grounds that it covers all three streaming routes rather than criteria
+alone and asserts lock *release* as well as holding. So the reference above is to a file that no
+longer exists on `dev`; it is kept here because deleting it would hide the episode, which is the part
+worth remembering.
 
-- The files overlap on criteria POST and are not identical in reach: mine also covers **claims** and
-  **mirror**, and both lock releases; theirs is one route in more depth.
-- The honest resolution is probably to keep one file, fold in whatever the other covers that it does
-  not, and delete the loser — but that is a change to somebody else's committed work, and the rule
-  here is that a conflict is a proposal before it is an edit.
+The judgement was deliberately left open above rather than made unilaterally, because folding two
+files into one is a change to somebody else's committed work and a conflict is a proposal before it
+is an edit. The owner making the call from their side is exactly the resolution that rule is for.
 
-**If you are picking this up:** read both files before merging them, and note that the duplication is
-a coordination failure worth its own line in the next sweep, not a defect in either file.
+Two things their merge turned up that outlive this slice:
+
+- **The merge was clean and the file was wrong.** Both sessions had added the same eight rows in
+  places whose text did not collide, so git took *both* — 29 rows where there should be 21, every
+  referee route declared twice — and marked only five hunks of comment wording as conflicts. The
+  contract test caught it seven ways. **After any merge that touches `src/routes.ts`, run
+  `tests/authenticated-api-route-contract.test.ts` immediately rather than trusting a clean merge.**
+- **A "pick the match" extractor hides a mutation.** Their first AST rewrite of the scan-route
+  extractor kept whichever matching row came *last*, so with the block duplicated it inspected copy
+  two while the mutation sat in copy one, and went green. It now refuses more than one match
+  (`tests/referee-scan-route.test.ts:393`). "More than one" is a fact to fail on, not one to resolve
+  by picking — [silent-success.md](../reusable/silent-success.md).
+
+The duplication itself is a coordination failure worth its own line in the next sweep, not a defect
+in either file. Neither of us announced before starting, and both of us had read the same public
+queue. The fix is one message: 260907b asked before taking the next slice, and that cost nothing.
 
 ## The baseline, so a later red is attributable
 

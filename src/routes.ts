@@ -6610,8 +6610,8 @@ type AuthRoute = ExactAuthRoute | PatternAuthRoute;
  * module-scope constant that both rows name. Spelling a regex out twice would
  * compile, run identically today, and let the copies drift apart tomorrow —
  * tests/authenticated-api-route-contract.test.ts § `names each matcher once` is
- * what refuses that, and it counts declaration *sites*, so these six are six
- * matchers and not twelve.
+ * what refuses that, and it counts declaration *sites*, so each of these is one
+ * matcher and not two.
  *
  * A matcher used by exactly one row is written into that row instead: there is
  * nothing to keep in step, and a constant named from one place is a name to
