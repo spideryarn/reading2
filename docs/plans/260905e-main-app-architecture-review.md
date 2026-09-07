@@ -618,7 +618,7 @@ both would apply to any future schema change here.
   anchored conversations, detached operation handling and live-conversation lifecycle.
 - [x] Replace mode dispatch with an exhaustive switch and add the narrow passage lifecycle/paired
   selection from A3. Retain separate slots unless a tested single-owner alternative is simpler.
-- [ ] Sweep tests/docs/imports for each old exported band name and filename. Remove temporary
+- [x] Sweep tests/docs/imports for each old exported band name and filename. Remove temporary
   re-exports after the caller census is empty. Assert feature files cannot import `App.tsx`.
 - [x] Update [new-mode](../project/new-mode.md), [web-client](../project/web-client.md),
   [URL state](../project/url-state.md) and feature signposts. Acceptance: adding a fixture mode

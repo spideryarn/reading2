@@ -41,22 +41,25 @@ import { TimelinePanel } from "../../TimelinePanel.js";
  * reader looks at stays one `TimelinePanel` with its data injected.
  * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1.
  *
- * ## The five effects below are a second copy of `useIdeasMode`'s, deliberately
+ * ## The passage rules are `usePassageLifecycle`'s, and no longer copied here
  *
- * They are the same five rules — push the resolved passages up before paint,
- * drop an `openKey` that is no longer in the list, stand on the first passage,
- * spend the press's intention to jump once the list exists, and clear
- * everything on the way out — and every one of them was got wrong once in the
- * ideas panel before it was got right. Two copies of a rule is exactly what
- * this repo does not want.
+ * This block used to describe five effects of its own, a second copy of
+ * `useIdeasMode`'s, and to say that **a fix to one of these belongs in all
+ * three** — the copies having become three when `CriteriaPanel` grew a partial
+ * one on 2026-08-31. It ended by naming the fix: a shared hook over
+ * `{ found, openKey, onFound, onOpenKey, onJump }`, *"a follow-up worth doing
+ * on a quiet file"*.
  *
- * They were not merged today because the merge is an edit through the middle of
- * `useIdeasMode`, and App.tsx is being rewritten by another session while this
- * lands; a shared hook over `{ found, openKey, onFound, onOpenKey, onJump }` is
- * the right shape and is a follow-up worth doing on a quiet file. Until then
- * **a fix to one of these belongs in all three** — `CriteriaPanel`'s cleanup
- * became a third partial copy on 2026-08-31 and was half of this one until
- * 2026-09-02 — which is written here rather than left to be discovered.
+ * That follow-up landed on 2026-09-06. The three rules the six producers
+ * genuinely share live in
+ * [`src/web/passage-lifecycle.ts`](../../passage-lifecycle.ts) — publish before
+ * paint, drop an `openKey` that names nothing, and clear on the way out — and
+ * this band calls it like the other five. Read that file for the rules and for
+ * the one that had to change phase to be correct; there is nothing to keep in
+ * step by hand here any more.
+ *
+ * What stayed local is what was never shared: standing on the first passage,
+ * and spending the press's intention to jump once the list exists.
  *
  * The one real difference is that there are no colour slots. Timeline paints no
  * lane down the rail — deferred with the marks — so `resolveTimelineEvent`

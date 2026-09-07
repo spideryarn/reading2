@@ -483,7 +483,7 @@ describe("leaving a passage mode clears the open key as well as the marks", () =
     expect(state().openKey).toBe("none");
   });
 
-  it("Timeline — the second copy of the same five effects", async () => {
+  it("Timeline — the same three rules, from the same hook", async () => {
     history.replaceState(null, "", `/read/${SLUG}?mode=timeline&event=${EVENT}`);
     show("timeline");
     await flush();

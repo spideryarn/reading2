@@ -533,7 +533,117 @@ claim is real, all four memos key on it; and the article-access and position fil
 | F21 | P2 — a non-literal dynamic import bypasses **every** import guard. `const target = "../../App.js"; void import(target);` in `IdeasMode.tsx` passed all three direction tests and Vite built it — a hole in the guard that is this job's acceptance criterion. | `refuseUntraceableImports` in `tests/helpers/ts-ast.ts`: any dynamic `import()` whose specifier is not a string literal (or a substitution-free template) fails the guard by name and line. Wired into `reader-import-direction`, `eager-client-graph`, `referee-copy-is-about-the-model`, `client-imports` and `helpers/import-graph`. All four guards now refuse Sol's line at `IdeasMode.tsx:262`; a repo-wide scan found exactly one non-literal dynamic import in 1,369 files, in a store test no graph guard reads, so there is no allowlist. |
 | F22 | P2 — the footer mount inventory counted commented-out JSX; `{/* <SiteFooter /> */}` left all fifteen tests green. | It counts `JSXOpeningElement` nodes now. Red on the same mutation: *"expected { …(6) } to deeply equal { …(7) }"*. |
 | F23 | P2 — the `ADMIN_EMAIL` guard only recognised named imports; `import * as reviewAdmin from "../admin.js"` walked past it. | An AST walk resolving what each import of `admin.js` binds, then asking whether the module reaches the constant under any name. Named, aliased, namespace-plus-member and re-export all caught; a namespace import that never reads it is not. Both the namespace and the aliased spellings proved red. |
-| F24 | P3 — three stale facts. | Stage 3 was one commit, not several. **The stale Search frame was stage 4a's to remove, not 4b's** — seven places corrected, above. `TimelineMode.tsx`'s "five effects below" and its siblings: outstanding, see below. |
+| F24 | P3 — three stale facts. | Stage 3 was one commit, not several. **The stale Search frame was stage 4a's to remove, not 4b's** — seven places corrected, above. The "five effects" claim was stale in **four** places, not one: `TimelineMode.tsx`'s own section (which named the shared hook as the follow-up worth doing — that follow-up is `usePassageLifecycle`, and it landed in stage 4a), `IdeasMode.tsx`'s cross-reference to it, `DebateMode.tsx`'s reason for having none, and the name of a test in `tests/passage-mode-cleanup.test.tsx`. All four now point at `passage-lifecycle.ts` and say three rules. |
+
+## Merging `dev` — the proposal, before the edit
+
+**Status: proposed, not applied.** Nothing in the working tree has been merged.
+`docs/reusable/git-resolve-merge-conflicts.md` says *"Make a proposal. Don't make changes yet"*, and
+this one is big enough to deserve that: 198 commits landed on `dev` while this branch sat, against 8
+here. Merge base `0977d6f6`. Greg asked for the pull on 2026-09-06 — *"pull the latest changes to
+avoid a big merge conflict at the end"* — so the intent is to merge; what needs agreeing is how.
+
+Reviewed by GPT Sol: [prompt](260906c-merge-resolution-prompt.md),
+[answer](260906c-merge-resolution-sol.md). It corrected the proposal in four places and those
+corrections are folded in below.
+
+### Ten of the eleven conflicts are one shape
+
+`git merge-tree` reports 11 conflicting files. In ten, **both sides improved different halves of the
+same statement** and the resolution is to keep both halves:
+
+- **A10** split `src/web/styles.css` into ~38 sheets and added `tests/helpers/stylesheets.ts`, so
+  tests now read the reading-view sheets *as a set* (`readerCss()`, `readerCssNoComments()`).
+- **This branch** moved the subject out of `App.tsx` into `reader/`, `article/` and `modes/`.
+
+| File | Resolution |
+|---|---|
+| `docs/project/diagram.md` | my `DiagramMode.tsx` citation **+** dev's `styles/diagram.css`, `styles/diagram-drift.css` |
+| `docs/project/quotes.md` | my `QuotesMode.tsx` citation **+** dev's `styles/quotes.css`. Dev's half asserts `QuotesBand` is in `App.tsx`, which this branch made false, so mine wins there outright |
+| `docs/project/summaries.md` | my `SummaryMode.tsx` citation **+** dev's `styles/summary.css` |
+| `docs/project/new-mode.md` | union of rows: mine (`band()`'s switch, `selectPassages`) **+** dev's (`MODE_TARGET`, `SPENDS`/`DRAWS`) **+** dev's better `BAND_SAYS` wording |
+| `docs/project/url-state.md` | dev's section whole — it documents a jump-history feature that postdates mine — **then correct its closing citation**. It says the push override is in `App.tsx`; **it is `src/web/reader/useReadingPosition.ts` § the jump write, not `Reader.tsx`**. My first draft said `Reader` and Sol caught that it was wrong |
+| `tests/aimed-column.test.ts` | dev's `readerCssNoComments()` **+** my `reader/Reader.tsx` read; drop dev's `app` |
+| `tests/referee-band-fits.test.ts` | **`readerCssNoComments()`**, not dev's `readerCss()` — its `bodyOf()` is a regex source scan, and retained comments give a deleted rule a second place to match (Sol) — **+** my `RefereeMode.tsx` read |
+| `tests/text-alone-centring.test.ts` | dev's `readerCssNoComments()` **+** my `reader` binding; drop dev's `app` |
+| `tests/sanitize-client.test.ts` | dev's exemption and docblock **+** my `ACCESS` source and anchor assertions. See the caveat below — this one is not a clean union |
+| `tests/site-footer.test.tsx` | keep my `ts-ast` import, drop `CONTACT_EMAIL`: dev moved the address off the footer, and the auto-merge already removed the `MAIL` constant. Verified zero remaining references |
+
+### The eleventh, `src/web/App.tsx`, is a port and not a merge
+
+Raw, it is one conflict hunk of 5,543 lines: dev edited a file whose body this branch moved into
+sixteen others. Measured instead of eyeballed — every top-level declaration parsed out of base
+`App.tsx`, dev's `App.tsx` and my sixteen files, then 3-way merged one declaration at a time:
+
+- dev's 64 diff hunks touch **12 declarations** and add 3; it removes none;
+- **11 of the 12 merge with no conflict at all** into the file that now owns them — `App`,
+  `SignedIn`, `loadAdminHome`, `loadDesign` (`App.tsx`); `ArticlePage`, `OwnedArticle`
+  (`article/ArticlePage.tsx`); `useArticleAccess`, `resolveAccess`, `findArticle`
+  (`article/access.ts`); `ConversationBand` (`modes/conversation/ConversationModes.tsx`);
+  `useReadingPosition` (`reader/useReadingPosition.ts`);
+- **`Reader` is the only real conflict**, in one place: the seventeen sibling `&&` expressions that
+  stage 4b collapsed into `{band()}`. 13 of dev's 14 `Reader` hunks merge clean. The 14th is two
+  changes to `OutlinePanel` — a comment whose layout example moved to phone/700px, and a new prop
+  `paragraphLabels={paragraphLabelsReady(article.navLabelStatus)}` — to be hand-ported into
+  `case "outline"`.
+
+**This is only tractable because the split was a verbatim move.** The brief's rule — *move functions
+without changing interfaces first* — is what makes 11 of 12 declarations merge by machine.
+
+Then: place dev's three new declarations (`loadChangelog` → `App.tsx`; `ResolvedAccess`,
+`NO_SECOND_ANSWER` → `article/access.ts`), and let the typechecker and the import-direction guards
+place dev's 8 new imports.
+
+### What conflicts do not tell you, and what the sweep found
+
+A conflict names what git could not merge; it is silent about what it merged. Sweeping every
+`.ts`/`.tsx` on `dev` for references to `App.tsx` and its moved declarations, and subtracting what
+this branch already retargeted:
+
+| File | New on dev | What breaks | Fix |
+|---|---|---|---|
+| `tests/conversation-band-live.test.tsx` | yes | `await import("../src/web/App.js")` for `ConversationBand` — a **dynamic** import, which is why a static scan misses it, and exactly F21's class | retarget to `modes/conversation/ConversationModes.js` |
+| `tests/rehost.test.ts` | yes | `readFileSync("src/web/App.tsx")` then slices `useArticleAccess`/`resolveAccess`. **Would pass over an empty slice** — silent success on an image-loading guard | retarget to `article/access.ts` **with start/end anchor assertions** |
+| `docs/project/article-images.md` | yes | cites `useArticleAccess` at `src/web/App.tsx` (line 70–71) | retarget to `article/access.ts` |
+| `tests/public-readable-sharing-page.test.tsx` | yes | reads `App.tsx` for *"both of App.tsx's arms"* — routes **did** stay in `App.tsx`, so this is probably correct as written | verify after merge, change nothing yet |
+| `comment-jump.ts`, `comment-jump.test.ts`, `jump-history.test.ts`, `dock-corner-controls.test.tsx`, `mode-surface-changes-no-markup.test.tsx`, `every-mode-draws-its-surface.test.tsx` | yes | live explanatory comments naming `App.tsx` as the home of moved code; `mode-surface-changes` also says *"`RefereeBand` is an unexported function inside `App.tsx`"*, now false twice over | follow the moved owner |
+
+Every pre-existing file that reads `App.tsx` as source was already retargeted by this branch —
+checked by counting real `readFileSync`/`path.join`/`new URL` reads rather than mentions, since the
+mentions are this branch's own *"which left `App.tsx` for …"* comments.
+
+### Two open questions Sol raised that are not merge mechanics
+
+- **`tests/sanitize-client.test.ts` is not a clean union.** Dev's exemption
+  `article:\s*(?!article\b|Article[,)])\S` does not distinguish a parameter annotation from an
+  object property: `{ article: Article, other: 1 }` is exempted too, so the docblock's claim that
+  the delimiter separates declarations from value expressions is false for the comma arm. Only the
+  type-only import of `Article` makes it safe today, which is an accident a security guard should
+  not lean on. Sol's advice is to replace the property scan with an AST check now, `ts-ast.ts` being
+  already in hand. **Recommend doing it — but as its own commit after the merge, not inside it.**
+- **Three totals over `Mode` now exist**, written by two people who could not see each other:
+  `band()`'s switch and `selectPassages` here, `DRAWS` in `every-mode-draws-its-surface.test.tsx` on
+  dev. Sol's answer to whether they should be cross-checked is **no** — `DRAWS` already challenges
+  `band()` behaviourally by driving each mode through a mounted `<App/>`, and `selectPassages` is a
+  different policy rather than a third spelling (nine modes legitimately draw a band and publish no
+  marks). The duplication is the check; a fourth static table would derive the expectation from the
+  implementation it is meant to test. **Accepted — no new assertion.**
+
+### Verification the merge must pass, beyond the gates
+
+1. `npm run typecheck` — catches a semantic conflict git cannot see.
+2. The stage-4b JSX-feature multiset checker, **re-baselined against `origin/dev:src/web/App.tsx`**
+   rather than the base. Its old "241 features, zero diffs" predates these changes and the count
+   *should* move — dev added Feedback, ReturnChip, ViewportProbe, public sharing and label markup.
+   A zero diff against the old baseline would be the wrong answer, not a good one (Sol).
+3. A provenance ledger: each of the 64 hunks gets a destination file or a stated reason it vanished.
+4. Targeted first, suite second: `conversation-band-live`, `conversation-band-send-new`, `rehost`,
+   `sanitize-client`, `jump-history`, `comment-jump`, `dock-corner-controls`,
+   `paragraph-labels-withheld`, `every-mode-draws-its-surface`,
+   `the-marks-in-the-prose-belong-to-the-mode-showing`.
+5. The seam Sol flags as most likely to lose half a feature silently: a dev feature whose JSX
+   survived but landed under the wrong gate — a Feedback trigger outside its host, an owner-only
+   band that lost its `owner &&`. Compilation cannot see either.
 
 ## What this deliberately does not do
 

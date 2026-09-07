@@ -25,13 +25,15 @@ import { DebatePanel } from "../../DebatePanel.js";
  * open.
  *
  * **The shortest band in this file, and that is the design rather than a stub.**
- * The five passage-mode effects its neighbours carry are about marks in the
- * prose, and Debate has none: a row is a page on the web, not a passage in the
- * article, so there is no `Found` to resolve, no `openKey` to keep in step and
- * no colour slot to assign. What it does hand down is `onJump`, because a
- * group-two row names the block whose claim it answers and has to offer the way
- * there. Marks are the first thing to add — the plan's § Deliberately not in v1
- * — and adding them is what would bring the five effects with it.
+ * The passage rules its neighbours follow — `usePassageLifecycle`, three of
+ * them — are about marks in the prose, and Debate has none: a row is a page on
+ * the web, not a passage in the article, so there is no `Found` to resolve, no
+ * `openKey` to keep in step and no colour slot to assign. It is also why Debate
+ * answers `NO_FOUND` in `selectPassages` (reader/passages.ts) rather than
+ * carrying a slot. What it does hand down is `onJump`, because a group-two row
+ * names the block whose claim it answers and has to offer the way there. Marks
+ * are the first thing to add — the plan's § Deliberately not in v1 — and adding
+ * them is what would bring the hook and a passage slot with it.
  *
  * **Owner-only, so there is one of these and not two**, until Stage 4 builds
  * the public contract. See the branch above.
