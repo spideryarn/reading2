@@ -261,37 +261,52 @@ Archive was a speed bump, not a boundary.
 
 Independent of everything else and useful on its own. **Rewritten after Sol's F2** — the first draft
 stamped the price at charge time, which is the design
-[`billing.md`](../project/billing.md#L617) explicitly rejects: *"charging half at add time misses the
+[`billing.md`](../project/billing.md#a-public-article-counts-half) explicitly rejects: *"charging half at add time misses the
 article you decide to share three weeks later, which is most of them."* Usage must stay live while
 the article exists, and freeze only when it stops existing.
 
-- [ ] Failing tests first, all three, watched red:
+- [x] Failing tests first, all three, watched red:
       - charge an `ingest_event` for a public article, delete the article, assert usage unchanged;
       - charge it private, then **share** it — usage must still fall;
       - charge it public, then **unshare** it — usage must still rise.
       The last two are the regression Stage B could so easily introduce.
-- [ ] Migration: add nullable `ingest_events.article_visibility_at_delete`. It is null for every
+- [x] Migration: add nullable `ingest_events.article_visibility_at_delete`. It is null for every
       existing row and for every live article, so it is not a second source of truth — it is only
       ever read once the article it described is gone.
-- [ ] Stamp it in a `BEFORE DELETE` trigger on `articles` rather than in the application, so it holds
+- [x] Stamp it in a `BEFORE DELETE` trigger on `articles` rather than in the application, so it holds
       for every deletion path including a future admin one or a hand-run statement.
-- [ ] `usageSql` ([`src/store/pg-billing.ts:396`](../../src/store/pg-billing.ts)) and the admin
+- [x] `usageSql` ([`src/store/pg-billing.ts:396`](../../src/store/pg-billing.ts)) and the admin
       public/private split ([`src/store/pg-admin.ts:533`](../../src/store/pg-admin.ts)) both become:
 
       coalesce(a.visibility, e.article_visibility_at_delete, 'private') = 'public'
 
       The live column still wins wherever there is one.
-- [ ] Update [`docs/project/billing.md`](../project/billing.md) and the note at `schema.ts:4272`,
-      which currently says no delete path exists.
-- [ ] `npm test`, `npm run typecheck`, `npm run check`. Mutate the new column's read and check the
+      **The two spellings are now one**, exported as `isPublicPrice` from `pg-billing.ts` and
+      imported by `pg-admin.ts`: the constant was already there so the usage query and the offer
+      query could not disagree about what "public" means, and that argument does not stop at the file
+      boundary.
+- [x] Update [`docs/project/billing.md`](../project/billing.md) (§ *Deleting an article freezes its
+      price rather than moving it*) and the note at `schema.ts:4272`, which said no delete path
+      exists.
+- [x] `npm test`, `npm run typecheck`, `npm run check`. Mutate the new column's read and check the
       suite notices.
 - [ ] Sol review. Commit.
+
+**What landed, 2026-09-06.** `drizzle/20260906193737_ingest_events_freeze_price_at_delete.sql` — the
+nullable column, a CHECK matching `articles_visibility`, and
+`spideryarn.ingest_events_freeze_article_price()` on a `BEFORE DELETE` row trigger. The trigger is
+drift drizzle's snapshot cannot see, the same class as the guards in `0001`, so
+`tests/db-schema.test.ts` § *deleting an article freezes what it cost onto its charged rows* is its
+guard. Behaviour is pinned in `tests/billing-half-units.test.ts` § *deleting an article freezes what
+it cost, rather than repricing it*; the two spellings of the predicate in
+`tests/billing-quota-sql.test.ts` and `tests/admin-queries.test.ts` § *the ingest ledger's half-price
+split*.
 
 ### Stage C — the store method and the route
 
 No UI. The whole of the destruction, reachable only by an API call.
 
-- [ ] Failing tests first, in the established places:
+- [x] Failing tests first, in the established places:
       - `tests/owner-isolation.test.ts` § *one owner's article, asked for by another* — "cannot be
         deleted by them": rejects 404 **and** re-select the row to prove it is still there. Keep the
         positive control at `:1176` honest by putting the owner-can-delete case in
@@ -303,7 +318,7 @@ No UI. The whole of the destruction, reachable only by an API call.
       - **And the one that broke the first draft (Sol F3): a `queued` job with `draft_revision_id`
         still null, charged.** Assert 409, and assert the article, the job, the reservation and the
         computed usage are every one of them unchanged.
-- [ ] `ShelfStore.destroy(slug)` in [`src/store/contracts.ts`](../../src/store/contracts.ts),
+- [x] `ShelfStore.destroy(slug)` in [`src/store/contracts.ts`](../../src/store/contracts.ts),
       implemented in [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) beside `patch`, following
       `pgGlossaryStore.deleteGlossary` exactly:
       1. `requireSlug(slug)` before any query.
@@ -322,11 +337,12 @@ No UI. The whole of the destruction, reachable only by an API call.
          collision too, since the reader stops the import and then deletes. Terminal rows
          (`done`/`error`) are inert — Stage A measured that — and stay as history; the cascade nulls
          their `article_id`. `queue_state.running_job_id` needs no clearing: its FK is already
-         `on delete set null` (`schema.ts:2223`). Delete the `uploads` row — but see Stage E, which
-         now owns its staging object rather than abandoning it.
+         `on delete set null` (`schema.ts:2223`). **Leave the `uploads` row alone** — the first
+         draft said to delete it, and deleting it destroys the only durable mapping to the staging
+         key (`pg-uploads.ts:221`), which Stage E needs. See *What landed* below.
       6. `delete(articles).where(ownedSlug(slug))` — **one statement**, children left to the cascade.
       7. Return something the client can act on; never the deleted entry as though it still existed.
-- [ ] **Close the enqueue race (Sol F4).** Today the bare-slug ownership check happens before the
+- [x] **Close the enqueue race (Sol F4).** Today the bare-slug ownership check happens before the
       job is built (`src/jobs.ts:2965`, `:3066`) and `enqueueOrGet` never locks the article
       (`src/store/pg-jobs.ts:704`). So: enqueue checks the article exists, delete commits, enqueue
       inserts, and the worker calls `lockOrCreateArticle` — which is documented to *create the row
@@ -335,12 +351,134 @@ No UI. The whole of the destruction, reachable only by an API call.
       and insert the job in one transaction, re-reading absence after the lock and returning 404
       rather than inserting. A barrier test must allow both legal orders and forbid
       "delete succeeded **and** the article later exists".
-- [ ] `DELETE /api/library/:slug` in `serveAuthenticatedApi`, reusing the existing `shelfEntry`
+- [x] `DELETE /api/library/:slug` in `serveAuthenticatedApi`, reusing the existing `shelfEntry`
       pattern beside the PATCH at [`src/routes.ts:7106`](../../src/routes.ts). `slugPart`, no body,
       no ownership check in the route. Update the route index comment at the top of the file.
-- [ ] `npm test`, `npm run typecheck`, `npm run check`. Then mutate the finished code — drop the
+- [x] `npm test`, `npm run typecheck`, `npm run check`. Then mutate the finished code — drop the
       `for update`, drop the owner clause — and check the suite goes red for each.
 - [ ] Sol review. Commit.
+
+#### What landed, 2026-09-06
+
+`ShelfStore.destroy(slug)` ([`src/store/contracts.ts`](../../src/store/contracts.ts),
+[`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts)), `DELETE /api/library/:slug`
+→ `{ destroyed: slug }` ([`src/routes.ts`](../../src/routes.ts)), and the article lock in
+`tryEnqueue` ([`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts)) that closes F4. No UI.
+
+Three things the plan did not say, found while building:
+
+- **`lockBillingAccount` cannot be the first statement after all.** It *creates* the reader's
+  billing row, so taking it before establishing the article is theirs means a request that is about
+  to be refused writes a row on its way out — and for an owner id with no `auth.users` row that
+  comes back as `23503` wearing a 500 rather than the 404 it is. Watched doing exactly that. The fix
+  keeps the lock order intact: an **unlocked** `SELECT` refuses first, and a plain read takes no row
+  lock, so it is outside the order and cannot be half of a cycle. The locked re-read after
+  `lockBillingAccount` is still the authorising one.
+- **The `uploads` row is left alone**, where step 5 said to delete it. Deleting it destroys the only
+  durable mapping to the staging key ([`pg-uploads.ts`](../../src/store/pg-uploads.ts) § `forget`),
+  and `uploads.slug` has no foreign key and no unique index, so a stale one dangles harmlessly.
+  **Stage E therefore inherits a live `uploads` row rather than a cleanup task**: it must find the
+  article's staging objects by asking `uploads` for rows whose `slug` names an article that no
+  longer exists, and retire the row once the object is gone.
+- **F4 is closed for the shape that needed it and deliberately not for the others.**
+  `ticket.requiresArticle` is true only for `{ slug, steps }` — *run something on the article I
+  already have*. A URL or an upload is a request to **have** an article, so `lockOrCreateArticle`
+  creating the row is correct for those, and insisting on it would break a simultaneous double-paste
+  that legitimately adopts a name from an in-flight job before any article row exists. Every enqueue
+  still *takes* the lock; only that one shape refuses on absence.
+
+#### Sol's Stage B code review, 2026-09-06 — passed, with three P2s
+
+[The answer](260906h-delete-an-article-permanently-stage-b-review-sol.md). *"No refusal: I found no
+established P0/P1. The supported lifecycle preserves live repricing and freezes the correct value at
+deletion."* It could not break either charging invariant through supported operations — concurrent
+visibility changes serialise on the article row, a rolled-back delete rolls back the stamp, and it
+found no reverse lock path closing a cycle with Stage C's order.
+
+| ID | Finding | Severity | Disposition |
+|----|---------|----------|-------------|
+| F7 | The trigger's `UPDATE` and the FK's `SET NULL` both scan `ingest_events` unindexed — Postgres does not index the referencing side of a foreign key. Each delete scans the unbounded ledger twice; eventually deletion exceeds the runtime role's two-minute statement timeout | P2 | **Take it.** Partial index on `article_id where article_id is not null` |
+| F8 | A plain `update ingest_events set article_id = null` loses the price without passing through the trigger. Not reachable from any TypeScript path today | P2 | **Take it.** A child-table trigger refusing non-null→null unless the price is already frozen — so if the article trigger ever drifts away, deletion fails loudly instead of quietly changing the bill |
+| F9 | *"Not a second source of truth"* is tested, not enforced: the CHECK restricts the vocabulary only, so a live public article's row may carry a frozen `'private'`. No wrong bill today because the live value wins | P2 | **Take it.** Freeze *and* unlink in the same statement, then `check (article_id is null or article_visibility_at_delete is null)` makes the invariant structural rather than conventional |
+
+F9 is the one worth reading twice: the plan claimed the two columns are never both readable, and that
+claim was true of the code and not of the database. Making the trigger do both writes in one statement
+is what turns a description into a constraint.
+
+Explicitly *not* findings, having been put to it as suspicions: `SQLWrapper` is broad but both call
+sites' generated predicates are tested; the behavioural test is an adequate trigger-drift guard
+against a freshly migrated database; and **no safe backfill exists** for rows whose article was
+deleted before the migration — their article identity is gone and slug is mutable, so full price is
+the only non-gameable answer.
+
+#### One mutation the behavioural tests do not catch, 2026-09-06
+
+Dropping the owner clause from the `DELETE` statement itself — leaving everything else in
+`destroy` intact — turns exactly **one** test red, and it is the static guard
+*"so no store module resolves a slug without one"*, not any behavioural case.
+
+That is not a defect, but it is worth writing down. `destroy` refuses a non-owner at the locked
+re-read *before* it reaches the delete, so ownership is already established by the time the
+statement runs; the `ownedSlug` on the delete is the second of two independently sufficient
+layers, and a behavioural test cannot reach past the first to see it go. The static guard is
+therefore the only thing holding that layer in place. **Do not delete that guard for looking
+like a test of nothing**, and do not read "the isolation tests still pass" as evidence the
+statement is still owner-scoped — it is not evidence, and this mutation is why.
+
+#### Sol's Stage C code review, 2026-09-06 — refused
+
+> "Refuse. No P0 found, but F20 is an established P1 and violates the 'must stay happened'
+> contract."
+
+The full review is
+[260906h-delete-an-article-permanently-stage-c-review-sol.md](260906h-delete-an-article-permanently-stage-c-review-sol.md).
+It cleared the things Stage C was built to get right — the early unlocked read is safe, both
+owner predicates should stay, leaving `uploads` for Stage E is the right call, and there is no
+lock cycle because enqueue takes only `articles` and never asks for `billing_accounts`
+afterwards. What it found instead is that **Stage C's F4 fix guards the wrong seam**.
+
+| ID | Severity | Finding | Disposition |
+|----|----------|---------|-------------|
+| F20 | P1, established | A retained terminal job can resurrect the article after deletion, via retry | Confirmed by me; **fix as proposed is wrong**, see below |
+| F21 | P1, reasoned | Fresh URL adoption has the same hole: `requiresArticle` is derived from the request's shape, not from what the slug allocation *means* | Accepted |
+| F22 | P2, established | The delete test asserts three child tables out of fourteen direct FKs and calls it "every child table" | Accepted |
+
+##### F20, verified
+
+`retryJob` copies the failed attempt's `url` or `upload` into the new request
+([src/jobs.ts:3885](../../src/jobs.ts)), and `requiresArticle` is
+`!request.url && !request.upload` ([src/jobs.ts:3084](../../src/jobs.ts)) — so **every retry of a
+URL or upload ingest declares that it does not need an article**. `slugForRetry` deliberately
+keeps the failed attempt's own slug, so the retry lands on exactly the destroyed name, `enqueueIn`
+inserts it, and the worker's `lockOrCreateArticle` makes the row again.
+
+`jobs` has **no `article_id` column at all** — jobs are keyed by slug — so nothing about deleting
+an article touches its terminal jobs, and Stage C deliberately does not delete them (that is the
+F3 fix). The reader can therefore do this sequentially, at leisure. It is not a race.
+
+##### But Sol's fix (b) is not safe as written
+
+The proposed closure is `requiresArticle: request.retryOf !== undefined || (!request.url && !request.upload)`
+— i.e. *every* retry insists on an article. That collides with the case `slugForRetry`'s own
+comment describes: **"a failed first ingest is neither"** on the shelf nor a live job
+([src/jobs.ts:3529](../../src/jobs.ts)). `slugAlreadyHolding` asks exactly those two questions
+([src/jobs.ts:3632](../../src/jobs.ts)), so an ingest that failed before its article existed mints
+the old name with no article behind it — and under Sol's fix its retry would 404. Retrying a
+first ingest that fell over is the commonest retry there is.
+
+F21's remedy does not rescue this either. Preserving allocation provenance answers "adopted from
+the shelf, so the article must be there", but a retry after a delete allocates as **minted** —
+nothing holds the URL any more — which is the branch that is allowed to have no article.
+
+So the discriminator both findings actually need is neither "is this a retry" nor "how was the
+slug allocated", but **did the attempt this repeats ever get as far as creating an article** —
+and, if it did, is that article still there. Before adopting any of this, settle whether an
+`articles` row always exists by the time a job can reach `error` (`openOrBeginJobDraft` runs from
+`pg-session.ts` when a stage's store is built, so a job that fails while `queued` may have none).
+If it always exists, Sol's one-line fix is correct and cheap. If it does not, the honest fix
+records on the job whether it created the article.
+
+**Stage C does not commit until this is closed.**
 
 ### Stage D — the control on the metadata page
 
@@ -435,10 +573,12 @@ worse: they have **no catalogue row at all**, only `assets` and `illustrated` ma
       never a discarded logged orphan. Every object class gets a task: the raw source, every stored
       asset and PDF figure, every successful illustrated plate
       ([`schema.ts:851`](../../src/db/schema.ts),
-      [`src/illustrated-image.ts:107`](../../src/illustrated-image.ts)), and the upload staging key —
-      which Stage C must therefore hand over rather than abandon, since deleting the `uploads` row
-      destroys the only mapping to it ([`pg-uploads.ts:221`](../../src/store/pg-uploads.ts)). Staging
-      keys wait for the existing upload-grant sweep predicate to say removal is safe.
+      [`src/illustrated-image.ts:107`](../../src/illustrated-image.ts)), and the upload staging key.
+      **Stage C hands that one over by not touching it**: the `uploads` row survives the delete with
+      its `slug` naming an article that no longer exists, which is the mapping to the staging key
+      ([`pg-uploads.ts:221`](../../src/store/pg-uploads.ts)) and is exactly the predicate this stage
+      can sweep on. Retire the row once the object is gone; staging keys wait for the existing
+      upload-grant sweep predicate to say removal is safe.
 - [ ] **Backfill by scanning the manifests** — that is what scanning is for. It is a migration and a
       consistency check, never the live arbitration mechanism.
 - [ ] **The barrier test is the point of the stage.** Race a second owner's reference commit against
