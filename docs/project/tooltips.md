@@ -193,10 +193,12 @@ Three things about it are not true of any other set here.
 - **The same fourteen modes are drawn by two different components**, and only one of them had a
   card. On the reading view they are a `role="radiogroup"` segment; on the metadata and tweets pages
   they are loose `DockLink`s, and those carried a `title` attribute while the segment had a panel.
-  `DockLink`'s hover is now a two-member union rather than a `title: string`, so the arm a link takes
-  is a choice the compiler sees — and the three buttons in the bar that are *not* modes (Comments,
-  Tweets, Metadata) sit visibly in the `title` arm, which is the debt written into the type rather
-  than into a comment.
+  `DockLink`'s hover became a two-member union rather than a `title: string` so that the arm a link
+  took was a choice the compiler could see, with the three buttons that are *not* modes sitting
+  visibly in the `title` arm — the debt written into the type rather than into a comment. **That
+  lasted one day**: the three took cards on 2026-09-07 too (below), the arm emptied, and the union
+  went with them. A discriminant with nothing on one side of it is a shape the next author has to
+  read before finding out it decides nothing.
 - **The visitor's sentence goes above the description**, as `ControlTip`'s `state`. It was a third
   paragraph while the card had two; with the second paragraph added it would have been third of
   three, burying the one line saying why the button is drawn dimmed under two about a mode the
@@ -204,11 +206,36 @@ Three things about it are not true of any other set here.
   why the button is dimmed rather than `aria-disabled`. That widened `state`, which until then had
   meant *this switch is mid-flight or broken*; what the two share is that somebody who opened the
   card because the control looked wrong wants that answered before they are told what it is for.
+- **And the three buttons in the bar that are not modes** — Comments, Tweets and Metadata — took the
+  same two-paragraph card later the same day. Their copy is `NOT_A_MODE` in
+  [`Dock.tsx`](../../src/web/Dock.tsx) rather than `MODE_CATALOG`, because a record keyed by `Mode`
+  is the wrong home for three things that are not modes and never will be. They are in a
+  `TooltipGroup` of their own, so running along the end of the bar is instant after the first card;
+  the experimental switch stays outside it, being the adjacent account-level control — a setting
+  rather than a view of this article.
+  Two buttons in the bar still carry a `title`, `DockHome` and `DockCommands`, and neither goes
+  through `DockLink`.
+
+  Comments is the one that repaid the pass. It is **two** buttons — a `DockTab` opening the drawer on
+  the reading view, a `DockLink` back to it everywhere else — and a visitor's copy on it had gone
+  stale in a way only reading both could show: the drawer's *comments belong to whoever added this
+  article* notice was retired on 2026-09-04, when a shared link started carrying them
+  ([260904c](../plans/260904c-more-modes-on-a-shared-link.md)), and the button went on saying half of
+  it. Both arms read one string now. `COMMENTS_GAP` and the `readers-own` variant behind it are
+  still in [`visitor.ts`](../../src/web/visitor.ts) with no live consumer; retiring them is a
+  separate change.
 
 Five of the fourteen second paragraphs were drafted, checked against the source and thrown away for
 being **plausible and false** — the same failure the shelf's row produced four of, and the reason
 this page keeps saying so. All five are named in the plan, and four of them were caught by re-reading
 the set as a group rather than by any check in the diff: each looked right on its own line.
+
+Then three of the three non-mode buttons' six sentences went the same way, and their shared cause is
+worth more than the count: **each was inherited from a project doc or a module header that had itself
+gone stale.** *Nothing on the metadata page is generated* came from `Metadata.tsx`'s own docblock,
+and the page opens with the hierarchy's gist and summary on it. Copy written from a doc inherits the
+doc's staleness with none of its dating, so a sentence a reader will act on gets checked against the
+code even when a doc already says it.
 
 **A `title` attribute is not a small version of this**, and that is the argument for every one of
 them: it waits about a second, cannot be styled, truncates at the OS's idea of a line, and does not
@@ -246,9 +273,11 @@ was an unlabelled icon on exactly the widths where no tooltip can be opened eith
 replaced it, pinned by the same test — and nothing on a wide screen, where the visible word names
 the button perfectly well, would ever have shown that it was missing.
 
-### Two things about testing a card in jsdom
+### Three things about testing a card in jsdom
 
-Both were measured rather than reasoned about, and both make a test that looks right assert nothing.
+All three were measured rather than reasoned about. The first two make a test that looks right assert
+nothing; the third makes one fail loudly for a reason that is not in the code it is testing, which
+costs an hour in a different way.
 
 - **Opening and closing do not take the same event.** A native `mouseenter` dispatched on the trigger
   opens it — `useHover` binds that listener to the reference node rather than going through React, so
@@ -259,6 +288,23 @@ Both were measured rather than reasoned about, and both make a test that looks r
   render between them: the close delay sets `open` false, and only the render that follows schedules
   the transition's unmount. Inside a single `act` the queued update is not applied until the block
   exits, so the card is still in the DOM however long that block waits.
+- **Re-hovering the same control inside a `TooltipGroup` needs a *third* `act` block.** Two blocks
+  close the card and unmount it; the third is not part of closing at all, and waits out the group
+  instead. `FloatingDelayGroup` waits its `timeoutMs` after a close before clearing the current group
+  member — 400ms in the bottom bar — and that timer starts at the close *render*, so two 300ms waits
+  do not outlast it. Hover the same control again while it is pending and the card opens instantly
+  (the group is in its instant phase) and the stale timer's close lands in the same `act`: it opens
+  and shuts inside one block, and the assertion reads zero. One more wait fixes it, and
+  [`tests/dock-mode-tooltips.test.tsx`](../../tests/dock-mode-tooltips.test.tsx)'s `cardFor` is the
+  copy to take.
+
+  **This was diagnosed wrongly first**, and the wrong diagnosis is instructive: the symptom is *a
+  control opens its card once per mount*, which is what three probes appeared to show — an identical
+  re-render between the hovers, a prop-changing one, and no render at all, all failing the same way.
+  That reading blamed the element and was remounted around. `useHover` keeps no one-shot state; it
+  was the group's timer the whole time, and the same element reopens three times running once the
+  timer is allowed to finish. A reproduction that fails three ways can still be failing for a fourth
+  reason. GPT Sol found it, 2026-09-07.
 
 A card left open is the failure that matters, because the panel is portalled to `<body>` rather than
 into the test's host: the next control's assertion then reads the previous control's words. Assert

@@ -62,6 +62,40 @@ interface Handler {
   param: string;
   /** `"file:line — error.name"`, one per forbidden read. */
   reads: string[];
+  /**
+   * **How the handler declares what it caught**, as the annotation's own
+   * spelling — `"unknown"`, `"Error"`, or `null` for no annotation at all.
+   *
+   * React's own types say `componentDidCatch(error: Error, …)` and the runtime
+   * does not enforce a word of it, so the parameter's type is a claim nothing
+   * checks. Written as `Error` it makes `error.name` **compile**, and the only
+   * thing standing between that and a `TypeError` thrown out of the handler is
+   * the sweep below — a check that has to be kept in sync, and that a fourth
+   * boundary written tomorrow joins only if somebody remembers this file.
+   *
+   * Written as `unknown` the compiler refuses the read outright, which is the
+   * same guarantee held one layer lower and by a mechanism that cannot be
+   * forgotten. So this is the belt to the sweep's braces, and it is the half
+   * that scales.
+   */
+  declared: string | null;
+}
+
+/** The annotation's spelling, for the assertion and for the message. */
+function declaredType(param: AstNode | undefined): string | null {
+  const annotation = (param?.typeAnnotation as AstNode | undefined)?.typeAnnotation as
+    | AstNode
+    | undefined;
+  if (!annotation) return null;
+  if (annotation.type === "TSUnknownKeyword") return "unknown";
+  if (annotation.type === "TSTypeReference") {
+    const name = annotation.typeName as AstNode | undefined;
+    return name?.type === "Identifier" ? ((name.name as string) ?? "?") : "?";
+  }
+  /* Anything else — `any`, a union, an intersection — is neither the safe
+     spelling nor the known-bad one, so it is reported as itself rather than
+     quietly passed. */
+  return typeof annotation.type === "string" ? annotation.type : "?";
 }
 
 /** Is `node` the identifier `param`, read as a value? */
@@ -81,12 +115,63 @@ function staticProperty(node: AstNode): string | null {
   return property.type === "Identifier" ? ((property.name as string) ?? null) : null;
 }
 
+/**
+ * The expression under any wrapper that does not change what is being read.
+ *
+ * **`(error as Error).name` is the bypass this closes**, and it is the one a
+ * reader reaches for the moment the parameter becomes `unknown` — the cast is
+ * how you make the compiler stop complaining, and it puts the hazard back
+ * exactly as it was. A parenthesised expression and a `!` are the same move
+ * spelled differently. GPT Sol, 2026-09-07, F7.
+ */
+function unwrap(node: unknown): unknown {
+  let current = node;
+  for (;;) {
+    const n = current as AstNode | null;
+    if (!n || typeof n !== "object") return current;
+    if (
+      n.type === "TSAsExpression" ||
+      n.type === "TSTypeAssertion" ||
+      n.type === "TSNonNullExpression" ||
+      n.type === "ParenthesizedExpression"
+    ) {
+      current = n.expression;
+      continue;
+    }
+    return current;
+  }
+}
+
 /** `error.name` and `error?.["message"]`, as a complaint or `null`. */
-function memberRead(node: AstNode, param: string): string | null {
+function memberRead(node: AstNode, params: readonly string[]): string | null {
   if (node.type !== "MemberExpression" && node.type !== "OptionalMemberExpression") return null;
-  if (!isParam(node.object, param)) return null;
+  const object = unwrap(node.object);
+  const param = params.find((name) => isParam(object, name));
+  if (param === undefined) return null;
   const property = staticProperty(node);
   return property !== null && FORBIDDEN.has(property) ? `${param}.${property}` : null;
+}
+
+/**
+ * The names that are the caught value: the parameter, and anything simply
+ * assigned from it.
+ *
+ * **One level, and deliberately no further.** `const caught = error;` then
+ * `caught.name` is the other bypass Sol demonstrated, and it costs ten lines to
+ * close. Following the value through calls, properties or reassignment is
+ * data-flow analysis, which is a different and much larger thing; this test is
+ * the belt to `strict`'s braces and does not need to be a compiler. What it
+ * must not do is *claim* more than it checks — see the assertion's own note.
+ */
+function aliasesOf(body: unknown, param: string): string[] {
+  const names = [param];
+  walkAst(body, (node) => {
+    if (node.type !== "VariableDeclarator") return;
+    const id = node.id as AstNode | undefined;
+    if (id?.type !== "Identifier") return;
+    if (names.some((name) => isParam(unwrap(node.init), name))) names.push(id.name as string);
+  });
+  return names;
 }
 
 /** `const { name } = error`, which reads exactly the same field. */
@@ -115,8 +200,25 @@ function handlers(): Handler[] {
     walkAst(parseSource(source), (node) => {
       if (node.type !== "ClassMethod" && node.type !== "ClassProperty") return;
       const key = node.key as AstNode | undefined;
-      if (key?.type !== "Identifier" || key.name !== "componentDidCatch") return;
-      const first = (node.params as AstNode[] | undefined)?.[0];
+      /* **A quoted or computed key is the same method.** `"componentDidCatch"(…)`
+         and `["componentDidCatch"](…)` are both legal and both were invisible
+         here until 2026-09-07 — a handler that the sweep does not find is a
+         handler the sweep says nothing about, which looks exactly like a clean
+         one. GPT Sol, F7. */
+      const named =
+        (key?.type === "Identifier" && key.name === "componentDidCatch") ||
+        (key?.type === "StringLiteral" && key.value === "componentDidCatch");
+      if (!named) return;
+      /* A class *property* holding an arrow function keeps its parameters on the
+         value, not on the node. Reading both means an arrow-spelled handler is
+         examined rather than silently reported as having no parameter. */
+      const value = node.value as AstNode | undefined;
+      const params =
+        (node.params as AstNode[] | undefined) ??
+        (value?.type === "ArrowFunctionExpression" || value?.type === "FunctionExpression"
+          ? (value.params as AstNode[] | undefined)
+          : undefined);
+      const first = params?.[0];
       /* No named first parameter means nothing to read it off. A destructured
          one — `componentDidCatch({ name })` — is the bug written differently,
          and is caught by the pattern check below rather than by this. */
@@ -126,15 +228,30 @@ function handlers(): Handler[] {
         reads.push(`${file}:${lineOf(first)} — destructured in the parameter list`);
       }
       if (param !== null) {
-        walkAst(node.body, (inner) => {
-          const member = memberRead(inner, param);
+        /* The body is the method's, or the arrow's when the handler is written
+           as a class property. */
+        const body =
+          node.body ??
+          (value?.type === "ArrowFunctionExpression" || value?.type === "FunctionExpression"
+            ? value.body
+            : undefined);
+        const names = aliasesOf(body, param);
+        walkAst(body, (inner) => {
+          const member = memberRead(inner, names);
           if (member !== null) reads.push(`${file}:${lineOf(inner)} — ${member}`);
-          for (const { at, what } of destructuredReads(inner, param)) {
-            reads.push(`${file}:${lineOf(at)} — ${what}`);
+          for (const name of names) {
+            for (const { at, what } of destructuredReads(inner, name)) {
+              reads.push(`${file}:${lineOf(at)} — ${what}`);
+            }
           }
         });
       }
-      found.push({ file, param: param ?? "(not an identifier)", reads });
+      found.push({
+        file,
+        param: param ?? "(not an identifier)",
+        reads,
+        declared: declaredType(first),
+      });
     });
   }
   return found;
@@ -158,5 +275,33 @@ describe("no error boundary reads the value it caught", () => {
        what it did — the fix is `nameOfThrown(error)` from
        src/web/log-buffer.ts, and there is no case for a second one. */
     expect(found.flatMap((handler) => handler.reads)).toEqual([]);
+  });
+
+  it("declares what it caught as `unknown`, so the compiler refuses the read", () => {
+    /* **What this buys, said exactly, because the tempting phrasing is wrong.**
+       It is *not* that the typechecker replaces the sweep: this assertion runs
+       off the same `handlers()` walk as the one above, so a boundary the walk
+       cannot see is a boundary neither of them says anything about. The
+       sequence is — the sweep finds a conventional handler, this forces its
+       parameter to be literally `unknown`, and only then does `strict` refuse an
+       un-narrowed `.name` anywhere inside it, including in code no assertion
+       here inspects. The last step is the one that scales; the first two are
+       still this file's job. GPT Sol, 2026-09-07, F8.
+
+       And this checks a **spelling**, not a resolved type. `error: Thrown` where
+       `type Thrown = unknown` is rejected though it is sound, which is the safe
+       direction. A cast (`(error as Error).name`) and a one-step alias are
+       handled in `memberRead` and `aliasesOf`; a value carried further than that
+       is not, and `strict` is what catches it.
+
+       Named rather than counted, and reported with the spelling that was found,
+       because "expected 3 to be 0" sends somebody to the wrong question. The fix
+       is one word: `error: unknown`. Nothing else in the handler changes —
+       `nameOfThrown` and `captureClientFailure` both already take `unknown`. */
+    expect(
+      found
+        .filter((handler) => handler.declared !== "unknown")
+        .map((handler) => `${handler.file} — ${handler.param}: ${handler.declared ?? "(none)"}`),
+    ).toEqual([]);
   });
 });

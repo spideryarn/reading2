@@ -33,9 +33,26 @@
  *    the first thing they want and the last thing they would reach.
  *
  * The hover mechanics — a native `mouseenter` to open, both leave events and
- * two `act` blocks to close — are lifted from tests/shelf-action-tooltips.test.tsx,
+ * three `act` blocks to close — are lifted from tests/shelf-action-tooltips.test.tsx,
  * which lifted them from tests/referee-tooltips.test.tsx, which measured them.
- * docs/project/tooltips.md § Two things about testing a card in jsdom.
+ * The third `act` block is this file's own addition and `cardFor` says why.
+ * docs/project/tooltips.md § Three things about testing a card in jsdom.
+ *
+ * ## And the three buttons in the bar that are *not* modes
+ *
+ * Comments, Tweets and Metadata took cards on 2026-09-07 too, and their block
+ * is at the foot of this file. They are here rather than in a file of their own
+ * for the reason the components sit beside each other in `Dock.tsx`: the claim
+ * being made is about *the bar*, and a reader checking whether every button in
+ * it explains itself should not have to know there are two files. The harness
+ * above is the same harness, which is the other half of it — a fourth copy of
+ * these hover mechanics is not worth a tidier filename.
+ *
+ * **The name stayed narrow deliberately.** Five places point at this file and
+ * several of them — src/mode-catalog.ts, docs/project/new-mode.md — are telling
+ * the author of a *fifteenth mode* where their test is. `dock-mode-tooltips` is
+ * the right name for them, and renaming it would make those pointers vaguer to
+ * make this paragraph unnecessary.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -143,10 +160,28 @@ async function cardFor(el: Element): Promise<{ head: string; paras: string[] }> 
      synthetic `onMouseLeave`, synthesised from a *bubbling* `mouseout`. */
   el.dispatchEvent(new MouseEvent("mouseleave"));
   el.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
-  /* Two waits and not one long one: closing is two timers in series with a
+  /* **Three waits, and not one long one.** Closing is timers in series with a
      render between them, and inside a single `act` the queued update is not
-     applied until the block exits. */
-  for (const _ of [0, 1]) {
+     applied until the block exits — so a single long block leaves the card in
+     the DOM however long it waits. The first two get it shut.
+
+     **The third is the group's cleanup**, and it is why this file can hover the
+     same button twice. `TooltipGroup` is `FloatingDelayGroup`, which waits its
+     `timeoutMs` — 400ms in the bar — after a close before it clears the current
+     group member, and that timer only starts at the close *render*. With two
+     300ms waits it is still pending when the next `mouseenter` arrives: the
+     reopen is instant (the group is in its instant phase) and the stale timer's
+     close lands in the same `act`, so the card opens and shuts inside one block
+     and the assertion reads zero.
+
+     That failure says *"hovering this control opened no card"*, which reads as
+     the tooltip having been lost and sends you to `Dock.tsx`. It was diagnosed
+     as *the element only opens once per mount* on 2026-09-07 and remounted
+     around — wrong: `useHover` keeps no one-shot state, and the same element
+     reopens three times running once the group timer is allowed to finish
+     (GPT Sol, and measured both ways).
+     docs/project/tooltips.md § Three things about testing a card in jsdom. */
+  for (const _ of [0, 1, 2]) {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 300));
     });
@@ -366,5 +401,188 @@ describe("a mode a visitor cannot have", () => {
       expect(paras[1]).toBe(flat(MODE_CATALOG[mode].description));
       expect(paras[2]).toBe(flat(MODE_CATALOG[mode].how));
     }
+  });
+});
+
+/* ------------------------------------- and the three that are not modes ---- */
+
+/**
+ * **Comments, Tweets and Metadata**, which sit in the same bar and were the last
+ * three buttons in it wearing a `title` attribute — the OS box, which waits a
+ * second, cannot be styled, and does not exist on a touch device at all.
+ *
+ * A closed set of three, written out rather than derived, because unlike
+ * `MODES` there is no table to walk and no fourth arriving. If one does, this
+ * list is where it is noticed.
+ *
+ * Two of them are one button each. **Comments is two** — a `DockTab` opening
+ * the drawer on the reading view, a `DockLink` back to it everywhere else — and
+ * that pair is what matters most here: the drawer's visitor notice was retired
+ * on 2026-09-04 and this button went on saying half of it, because nothing
+ * compared the two. `NOT_A_MODE` is one copy for both arms now, and these tests
+ * read it back through the rendered card rather than by importing it, so what
+ * is asserted is what a reader is shown.
+ */
+const NOT_MODES = ["Comments", "Tweets", "Metadata"] as const;
+
+/** The bar's button with this accessible name, in whichever arm is rendered. */
+function barControl(label: string): HTMLElement {
+  const hit = [...host.querySelectorAll<HTMLElement>(".dock .dock-btn")].filter(
+    (el) => el.getAttribute("aria-label") === label,
+  );
+  expect(hit, `no single bar button named ${label}`).toHaveLength(1);
+  return hit[0] as HTMLElement;
+}
+
+/**
+ * The reading view **with a drawer**, which is the arm where Comments is a
+ * `DockTab` rather than a link. `reading()` above deliberately mounts without
+ * one, because the modes do not care; this button is the only thing in the bar
+ * that changes component when the drawer appears.
+ */
+function withDrawer(drawer: Record<string, unknown> = {}): void {
+  reading({
+    drawer: {
+      comments: [],
+      loaded: true,
+      loadFailed: false,
+      panel: null,
+      onPanel: () => {},
+      onOpenComment: () => {},
+      ...drawer,
+    },
+  });
+}
+
+describe("the three buttons in the bar that are not modes", () => {
+  it("each open a card of two paragraphs, headed with their own name", async () => {
+    withDrawer();
+    for (const label of NOT_MODES) {
+      const { head, paras } = await cardFor(barControl(label));
+      expect(head, `${label}'s card is headed with somebody else's name`).toBe(label);
+      expect(paras.length, `${label}'s card is not two paragraphs`).toBe(2);
+      for (const p of paras) expect(p, `${label} has an empty paragraph`).not.toBe("");
+    }
+  });
+
+  /**
+   * The check that makes the card worth its 300ms. It catches a copy and not a
+   * paraphrase — `restates` above says why that is still worth having — and
+   * this is where the temptation is strongest: all three of these had a single
+   * sentence for a fortnight, and the cheapest way to grow a second paragraph
+   * is to say the first one again.
+   */
+  it("do not say the first paragraph twice, or the button's own word back", async () => {
+    withDrawer();
+    for (const label of NOT_MODES) {
+      const { paras } = await cardFor(barControl(label));
+      const [what, how] = paras as [string, string];
+      expect(restates(what, how), `${label}: the second paragraph is the first again`).toBe(false);
+      expect(restates(label, what), `${label}: the first paragraph is the label again`).toBe(false);
+    }
+  });
+
+  /**
+   * The same product decision the modes are under: the command bar marks a
+   * generating row with the word `generates` and no number, so a `$` here would
+   * be that decision reversed by accident. Tweets is the one that would attract
+   * a price, being the only button of the three that can start a paid run.
+   */
+  it("carry no currency-symbol figure", async () => {
+    withDrawer();
+    for (const label of NOT_MODES) {
+      const { paras } = await cardFor(barControl(label));
+      expect(paras.join(" "), `${label} names a price`).not.toMatch(/[$£€]\s*\d/);
+    }
+  });
+
+  it("carry no `title` attribute, in either arm of the bar", () => {
+    for (const render of [withDrawer, loose]) {
+      render();
+      const titled = NOT_MODES.map(barControl).filter((el) => el.hasAttribute("title"));
+      expect(titled.map((el) => el.getAttribute("aria-label"))).toEqual([]);
+    }
+  });
+
+  /**
+   * **The arm that drifts.** Off the reading view all three are `DockLink`s, and
+   * Comments changes shape entirely: there is no drawer to open, so the button
+   * goes back to the article with it already open. The card has to say so —
+   * exactly as the loose mode links say *back in the article itself* — and
+   * everything else in it must be the same words.
+   */
+  it("give Comments the same card off the reading view, plus where the press lands", async () => {
+    withDrawer();
+    const onReadingView = await cardFor(barControl("Comments"));
+    loose();
+    const offIt = await cardFor(barControl("Comments"));
+
+    expect(offIt.head).toBe("Comments");
+    expect(offIt.paras.length, "the loose Comments card is not two paragraphs").toBe(2);
+    expect(offIt.paras[0]).toContain(onReadingView.paras[0]);
+    expect(offIt.paras[0]).toContain("back in the article they are about");
+    expect(offIt.paras[1], "the second paragraph differs between the arms").toBe(
+      onReadingView.paras[1],
+    );
+  });
+});
+
+describe("Comments, read by somebody who did not add the article", () => {
+  /**
+   * **A visitor may open every one of the owner's marks and may add none**, and
+   * that is the one thing about this button they could not have guessed. It
+   * goes in `state`, above the description, for the reason a mode's does: the
+   * line explaining why a button behaves unlike its neighbours is the first
+   * thing wanted and the last thing reached.
+   *
+   * **Not `readersOwnWork("Comments")`**, which is what this button said half
+   * of until today. That sentence ends *a shared link carries the piece, never
+   * anybody's notes about it*, and it stopped being true on 2026-09-04 when a
+   * shared link started carrying them (260904c § Stage 3). The drawer dropped
+   * the notice that day and the button kept it.
+   *
+   * So this asserts the *shape*, and one clause of the claim, and deliberately
+   * not the sentence — pinning the wording is how the old one survived a
+   * rewrite of everything around it.
+   */
+  it("says whose they are first, above what a comment is", async () => {
+    withDrawer({ visitor: true });
+    const { head, paras } = await cardFor(barControl("Comments"));
+    expect(head).toBe("Comments");
+    expect(paras.length, "the visitor's card is not three paragraphs").toBe(3);
+    expect(paras[0], "the visitor's sentence is not first").toMatch(/whoever added this article/i);
+
+    /* And under it, the two the owner gets — unchanged, and in the same order.
+       Read from a second render rather than written out, so this compares what
+       two readers are shown rather than comparing one of them with a copy of
+       its own words. Hovering the same button twice is fine now that `cardFor`
+       waits out the group's cleanup timer; it was not before, and the note
+       there says why. */
+    withDrawer();
+    const owner = await cardFor(barControl("Comments"));
+    expect(paras.slice(1)).toEqual(owner.paras);
+  });
+
+  /**
+   * **And in the drawerless arm, which is the one that drifted.** Off the
+   * reading view the button is a `DockLink` and its footing comes from a
+   * different prop — `isVisitor` rather than `own` — so the two are separate
+   * wiring to the same string, and a regression deleting one of them is
+   * invisible to the other's test. That is not hypothetical: this arm is
+   * exactly where *"Your comments…"* survived the 2026-08-28 correction of the
+   * drawer heading, and where the retired *belong to whoever added this
+   * article* notice survived 2026-09-04.
+   *
+   * GPT Sol found the gap in the first draft of these tests, which covered the
+   * `DockTab` arm only.
+   */
+  it("says it in the drawerless arm too, where the footing comes from another prop", async () => {
+    loose({ visitor: true });
+    const { paras } = await cardFor(barControl("Comments"));
+    expect(paras.length, "the loose visitor's card is not three paragraphs").toBe(3);
+    expect(paras[0], "the visitor's sentence is not first").toMatch(/whoever added this article/i);
+    expect(paras[1], "the loose arm has lost where the press lands").toContain(
+      "back in the article they are about",
+    );
   });
 });
