@@ -117,6 +117,37 @@
  * a scripted scroll, which is nothing. Call `resetGeometryCost()` between
  * measured windows rather than leaving one running for an hour.
  *
+ * ## `frames`, and why a sample has to say which frame it was in
+ *
+ * `frames` runs alongside `samples`, one entry per timed call, and it carries
+ * the **frame the call ran in**. Without it the harness cannot answer the
+ * question the decision rule actually asks.
+ *
+ * The rule is *"the p50 **scroll frame** spends ≥ 4ms in the two pilot
+ * samplers"*, and a frame is where the two samplers meet: each runs at most
+ * once in one, in its own rAF callback, knowing nothing about the other. The
+ * first version of the harness approximated that by dividing a repetition's
+ * total by its call count and taking percentiles across five such **means** —
+ * which is a distribution of repetitions, not of frames, and it averages away
+ * precisely the sparse expensive frame the rule was written to catch (GPT Sol's
+ * F11 on the Stage 1 review). With a frame id on every sample the harness can
+ * add the two sites *within* a frame and take p50/p95/max over the frames
+ * themselves.
+ *
+ * **The id is the `DOMHighResTimeStamp` `requestAnimationFrame` passes its
+ * callback** — an *argument*, not a clock read. That matters twice over. It is
+ * free, and it is exactly the pairing wanted: the browser hands every callback
+ * due in one frame the identical timestamp, so two samplers land on the same id
+ * without either being told about the other. And reading `performance.now()` to
+ * synthesise one would be the F14 defect all over again — a probe that consumes
+ * a clock value the page can also see
+ * (docs/postmortems/260907a-a-probe-that-read-the-same-clock-twice.md). Do not.
+ *
+ * A call that did **not** run inside a rAF callback — a sampler's `measure()`
+ * at effect setup, a gesture-rate leaf — carries `NO_FRAME`, and the harness
+ * treats each of those as a frame of its own. Merging them would invent a frame
+ * that never happened and make it look expensive.
+ *
  * ## What the counts are and are not
  *
  * `calls` is honest: it includes calls that took a fast path — `measure` during
@@ -198,6 +229,15 @@ interface GeometryTally {
   /** Per-call ms, in order, so the harness can take p50/p95/max itself. One
    *  entry per *timed* call, so this is empty wherever `ms` is 0. */
   samples: number[];
+  /**
+   * Which frame each of those samples ran in — `samples[i]` was measured in
+   * `frames[i]`, and the two arrays are pushed together or not at all.
+   *
+   * The rAF timestamp, or `NO_FRAME` for a call outside a frame callback. See
+   * the header: this is what lets the harness add the two pilot samplers
+   * *within* one frame instead of taking percentiles over repetition means.
+   */
+  frames: number[];
 }
 
 /**
@@ -229,17 +269,32 @@ export type GeometryCost = Readonly<Record<GeometrySite, Readonly<GeometryTally>
  */
 export const NO_GEOMETRY_CLOCK = -1;
 
+/**
+ * The frame id that means "this call did not run inside a rAF callback".
+ *
+ * A sampler's `measure()` at effect setup is the everyday case — a column
+ * toggle reflows every row without the reader scrolling, and that call is a
+ * real cost that belongs to no frame. **Each such call is its own frame** to
+ * whoever reads these numbers; they are not one shared bucket, and adding them
+ * together would manufacture a frame that never happened.
+ *
+ * Negative, because a `DOMHighResTimeStamp` never is — so no real frame can
+ * collide with it. A sentinel rather than an `undefined` for the same reason
+ * `NO_GEOMETRY_CLOCK` is one: the hot path stays monomorphic in `number`.
+ */
+export const NO_FRAME = -1;
+
 const zero = (): Record<GeometrySite, GeometryTally> => ({
-  readingPosition: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [] },
-  columnContext: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [] },
-  diagramReaderRow: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [] },
-  contextPanelPlace: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [] },
-  spineMeasure: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [] },
-  spineApply: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [] },
-  barVisibility: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [] },
-  stickyOffset: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [] },
-  safeAreaInsets: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [] },
-  measureRow: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [] },
+  readingPosition: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [], frames: [] },
+  columnContext: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [], frames: [] },
+  diagramReaderRow: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [], frames: [] },
+  contextPanelPlace: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [], frames: [] },
+  spineMeasure: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [], frames: [] },
+  spineApply: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [], frames: [] },
+  barVisibility: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [], frames: [] },
+  stickyOffset: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [], frames: [] },
+  safeAreaInsets: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [], frames: [] },
+  measureRow: { calls: 0, reads: 0, writes: 0, ms: 0, samples: [], frames: [] },
 });
 
 let mode: GeometryCostMode = "off";
@@ -340,8 +395,20 @@ export function parentGeometryClockFrom(now: number): number {
  * does patch. A hand-counted integer is a number somebody has to keep in step
  * with the code — the cost of that is a comment at each call site saying what
  * the count is, and a test that pins it.
+ *
+ * `frame` is **last and optional** so that adding it changed no existing call
+ * site's meaning: the eight sites that do not pass one go on recording exactly
+ * what they recorded before, tagged `NO_FRAME`. Pass the timestamp
+ * `requestAnimationFrame` handed the callback — never a fresh
+ * `performance.now()`, which is the F14 defect and is explained in the header.
  */
-export function noteGeometry(site: GeometrySite, t0: number, reads: number, writes = 0): void {
+export function noteGeometry(
+  site: GeometrySite,
+  t0: number,
+  reads: number,
+  writes = 0,
+  frame: number = NO_FRAME,
+): void {
   const tally = counters[site];
   tally.calls += 1;
   tally.reads += reads;
@@ -349,7 +416,11 @@ export function noteGeometry(site: GeometrySite, t0: number, reads: number, writ
   if (t0 === NO_GEOMETRY_CLOCK) return;
   const ms = performance.now() - t0;
   tally.ms += ms;
+  /* Pushed together, always, and nothing between them: the harness pairs the
+     two arrays by index, so one push without the other would shift every later
+     sample into somebody else's frame and still produce a plausible number. */
   tally.samples.push(ms);
+  tally.frames.push(frame);
 }
 
 /**
@@ -399,14 +470,22 @@ export function resetGeometryCost(): void {
 }
 
 /**
- * The numbers so far, copied out — `samples` included, so a caller holding two
- * snapshots cannot find the older one growing under it.
+ * The numbers so far, copied out — `samples` and `frames` included, so a caller
+ * holding two snapshots cannot find the older one growing under it.
+ *
+ * Both arrays are copied, and for the same reason: a snapshot whose `samples`
+ * were detached while its `frames` went on growing would pair sample `i` with
+ * some later frame, which is a wrong answer rather than a missing one.
  *
  * Read `mode` first, and read the header before summing anything: the `reads`
  * column adds up, the `ms` column does not.
  */
 export function geometryCost(): GeometryCost {
-  const copy = (t: GeometryTally): GeometryTally => ({ ...t, samples: [...t.samples] });
+  const copy = (t: GeometryTally): GeometryTally => ({
+    ...t,
+    samples: [...t.samples],
+    frames: [...t.frames],
+  });
   return {
     mode,
     readingPosition: copy(counters.readingPosition),

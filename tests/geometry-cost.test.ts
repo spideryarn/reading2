@@ -58,6 +58,7 @@ import {
   type GeometryCost,
   GEOMETRY_LEAVES,
   type GeometrySite,
+  NO_FRAME,
   resetGeometryCost,
   setGeometryCostMode,
   startGeometryCost,
@@ -151,6 +152,13 @@ function tallyIsSane(cost: GeometryCost, site: GeometrySite): void {
   expect(t.samples.length, `${site} has more samples than calls`).toBeLessThanOrEqual(t.calls);
   const summed = t.samples.reduce((a, b) => a + b, 0);
   expect(summed, `${site}: the samples do not add up to ms`).toBeCloseTo(t.ms, 6);
+  /* One frame id per timed sample, in step. The harness pairs the two by index
+     to build its per-frame vector (Sol F11), so a `frames` that is one entry
+     short would silently shift every sample after it into the wrong frame —
+     and the numbers would still look entirely reasonable. */
+  expect(t.frames.length, `${site}: a timed sample went without a frame id`).toBe(
+    t.samples.length,
+  );
 }
 
 /**
@@ -253,6 +261,7 @@ it("records nothing at all while it is off", () => {
       writes: 0,
       ms: 0,
       samples: [],
+      frames: [],
     });
   }
 
@@ -280,6 +289,10 @@ it("stops recording again, and reset returns it to zero without switching it off
   expect(totals(cleared)).toEqual({ calls: 0, reads: 0, writes: 0, ms: 0 });
   for (const site of SITES) {
     expect(cleared[site].samples, `${site} kept its samples through a reset`).toEqual([]);
+    /* And the frame ids with them: a `frames` that survived a reset while
+       `samples` did not would pair every later sample with a frame from the
+       previous measured window. */
+    expect(cleared[site].frames, `${site} kept its frame ids through a reset`).toEqual([]);
   }
   expect(cleared.mode, "reset must not switch the probe off — that is stop's job").toBe("full");
 
@@ -607,6 +620,120 @@ describe("the gist column's per-frame sampler", () => {
       cost.columnContext.reads,
       "two unresolvable sections were charged a rect read each",
     ).toBe(cost.columnContext.calls * (2 + ROWS));
+  });
+
+  /**
+   * **The tag the percentiles are taken over.**
+   *
+   * Sol's F11: the harness used to divide a repetition's total pilot ms by its
+   * call count and take p50/p95 across five such *means*, which is not the
+   * distribution of frame costs and flattens exactly the sparse expensive frame
+   * the precommitted rule exists to catch. The fix needs each timed sample to
+   * say which frame it ran in, so the two pilot samplers' costs can be added
+   * *within* a frame and the percentiles taken over that vector.
+   *
+   * The identity is the `DOMHighResTimeStamp` `requestAnimationFrame` hands its
+   * callback, and it is an **argument, not a clock read** — reading the clock a
+   * second time is the F14 defect
+   * (docs/postmortems/260907a-a-probe-that-read-the-same-clock-twice.md). What
+   * makes it the right identity is that the browser hands *every* callback due
+   * in one frame the *same* timestamp, so two samplers that ran in the same
+   * frame pair up without either of them knowing about the other.
+   *
+   * So the rAF stand-in here batches, as a real one does: callbacks scheduled
+   * before a flush all run in that flush and all receive its stamp. Two hook
+   * instances stand in for the two pilot sites — this file cannot reach
+   * `useReadingPosition`, which lives inside App.tsx and is not exported — and
+   * the property under test is the same one: same frame, same id.
+   */
+  it("tags each timed sample with the rAF timestamp of the frame it ran in", async () => {
+    /** A batching rAF: nothing runs until `flush`, and everything that was
+     *  queued then runs with the one stamp. Ids start at 1 — the hooks store
+     *  the handle in a `frame` variable they test for truthiness, so a 0 would
+     *  read as "nothing scheduled" and every later scroll would be dropped. */
+    const queued = new Map<number, (t: number) => void>();
+    let nextId = 1;
+    const realRaf = globalThis.requestAnimationFrame;
+    const realCancel = globalThis.cancelAnimationFrame;
+    (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = (
+      cb: (t: number) => void,
+    ) => {
+      const id = nextId++;
+      queued.set(id, cb);
+      return id;
+    };
+    (globalThis as unknown as { cancelAnimationFrame: unknown }).cancelAnimationFrame = (
+      id: number,
+    ) => {
+      queued.delete(id);
+    };
+    const flushFrame = async (stamp: number): Promise<number> => {
+      const due = [...queued.values()];
+      queued.clear();
+      await act(async () => {
+        for (const cb of due) cb(stamp);
+      });
+      return due.length;
+    };
+
+    try {
+      startGeometryCost();
+      /* Two independent samplers on the same page, as `useReadingPosition` and
+         `useColumnContext` are on a real article. */
+      function TwoSamplers({ sections }: { sections: Section[] }) {
+        useColumnContext({ sections, depths: NO_DEPTHS, enabled: true, layoutKey: "a" });
+        useColumnContext({ sections, depths: NO_DEPTHS, enabled: true, layoutKey: "b" });
+        return null;
+      }
+      await act(async () => {
+        root.render(createElement(TwoSamplers, { sections: sectionsOf(ROWS) }));
+      });
+
+      /* Each effect calls `measure()` once directly, outside any rAF callback.
+         Those are real costs and are charged — with the sentinel, because there
+         is no frame they belong to and merging them would invent one. */
+      const mounted = geometryCost();
+      expect(mounted.columnContext.calls, "neither sampler measured on mount").toBe(2);
+      expect(
+        mounted.columnContext.frames,
+        "a call made outside a rAF callback was given a frame it did not run in",
+      ).toEqual([NO_FRAME, NO_FRAME]);
+
+      /* One frame, both samplers: the pairing the whole correction rests on. */
+      act(() => {
+        window.dispatchEvent(new Event("scroll"));
+      });
+      const ranInFirst = await flushFrame(1234.5);
+      expect(ranInFirst, "the scroll scheduled no frame callback").toBe(2);
+
+      const first = geometryCost();
+      expect(first.columnContext.calls).toBe(4);
+      expect(
+        first.columnContext.frames.slice(2),
+        "two samplers in one frame did not record the same frame id, so their costs cannot be added within it",
+      ).toEqual([1234.5, 1234.5]);
+
+      /* The changed-input control, and it is the one that matters: a tag that
+         was a constant — or a `performance.now()` read at `noteGeometry` time —
+         would satisfy the assertion above and fail this one. */
+      act(() => {
+        (window as unknown as { scrollY: number }).scrollY = 300;
+        window.dispatchEvent(new Event("scroll"));
+      });
+      await flushFrame(9876.5);
+
+      const second = geometryCost();
+      expect(second.columnContext.calls).toBe(6);
+      expect(
+        second.columnContext.frames.slice(4),
+        "the next frame's samples carry the previous frame's id — the tag is not the callback's argument",
+      ).toEqual([9876.5, 9876.5]);
+      tallyIsSane(second, "columnContext");
+    } finally {
+      (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = realRaf;
+      (globalThis as unknown as { cancelAnimationFrame: unknown }).cancelAnimationFrame =
+        realCancel;
+    }
   });
 });
 

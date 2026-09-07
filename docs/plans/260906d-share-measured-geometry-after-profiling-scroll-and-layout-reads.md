@@ -914,8 +914,42 @@ scoped follow-up that is plausibly worth more than everything else in this plan.
    — two reads of one value, which agree only when nothing moves between them. A clock never does.
    **One consequence for the data:** `barVisibility`'s write count in § "Stage 1 result" was taken
    from a page that only exists while the probe is running, so it re-runs with the rest.
-2. **F11 + F13 + F12**, the harness corrections, then **re-run the three sessions**. Until that lands
-   every number in § "Stage 1 result" is provisional and is marked so.
+2. ~~**F11 + F13 + F12**, the harness corrections~~ **— code done, 2026-09-07; the re-run is still
+   owed.** Until the three sessions are re-run, every number in § "Stage 1 result" stays provisional
+   and is marked so.
+
+   - **F11.** `GeometryTally` gains `frames`, parallel to `samples`, carrying the
+     `DOMHighResTimeStamp` that `requestAnimationFrame` hands its callback — an **argument**, never a
+     clock read, which is the whole of F14's postmortem applied to its own fix. `noteGeometry` takes
+     it as a trailing optional so the eight untouched sites record exactly what they did. The harness
+     builds a real per-frame vector (`pilotFrameMs`: group by id, sum the two non-overlapping pilot
+     sites, `NO_FRAME` calls each their own frame) and takes p50/p95/max over *that*. A build that
+     publishes `samples` without `frames` is refused rather than silently averaged.
+     `pilotMsPerSamplingFrame` survives with a docstring saying what it is — a mean, across which no
+     percentile may be taken.
+   - **F12.** `Population` gains `pathname`, `docTitle` and a `resolvedSections` count read from the
+     DOM rather than from the counters, so the gate and the thing it gates do not share an assumption.
+     `FIXED_WORKLOADS` records the three articles' fingerprints and the run refuses a wrong pathname,
+     a wrong block count or depth, missing gist columns, or a section count out of range — with the
+     identity check *before* the baseline early return, and re-checked after `discreteRun`'s own
+     navigation.
+   - **F13.** `PINNED_TOLERANCE_PX = 1` replaces the 80% band, and now refuses **overshoot** as well
+     as shortfall — the old rule could not express that at all, so a repetition that travelled 3,400px
+     of a pinned 3,000 was quoted as pinned. `MIN_WARMED_REPETITIONS = 5` is enforced before any
+     summary is printed, in the cross-session table too, so there is no back door.
+
+   **Verified rather than accepted:** typecheck clean, 51 tests green across the three geometry
+   suites, biome clean on all five files, and my own mutation — `PINNED_TOLERANCE_PX` 1 → 600 and
+   `MIN_WARMED_REPETITIONS` 5 → 1 — turned 4 tests red and then green again on restore.
+
+   **Two things carried forward rather than solved.** `resolvedSections` is a different DOM query from
+   `sectionCells` but not a third independent mechanism, and when no gist column is drawn it is
+   legitimately 0 — so the phone configuration is still gated only on identity, not on the section
+   tree, because nothing rendered in the DOM witnesses that tree with the column off. And
+   `FIXED_WORKLOADS` hardcodes local-corpus numbers with ±2–3% bands: a dated fact about this
+   machine's database, in a gate that fails loudly. That is the right trade — a re-imported corpus
+   *should* stop the run — but it is a maintenance cost now owned, and `replication-crisis`'s range is
+   327 DOM cells rather than 51 sections, which is easy to misread later.
 3. **F10's counterfactual**, which is the gate on Stage 3 and cannot be skipped by doing Stage 3 and
    calling Stage 4's A/B the discharge — that is the ordering error F10 names.
 4. **F15's seam**, which Stage 3 wants anyway.

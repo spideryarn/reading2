@@ -244,7 +244,7 @@ import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
 import { SmallScreenHint } from "./SmallScreenHint.js";
 import { ViewportProbe } from "./ViewportProbe.js";
 import { useRenderCount } from "./perf.js";
-import { NO_GEOMETRY_CLOCK, noteGeometry, parentGeometryClock } from "./geometry-cost.js";
+import { NO_FRAME, NO_GEOMETRY_CLOCK, noteGeometry, parentGeometryClock } from "./geometry-cost.js";
 import { rowsForBlockIds } from "./rows.js";
 import {
   REFEREE_DECLARE_IT,
@@ -1755,7 +1755,18 @@ function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: str
        resolved. Once per effect, outside the timed frame. */
     const resolved = rows.reduce((n, el) => (el ? n + 1 : n), 0);
     let frame = 0;
-    const measure = () => {
+    /* `at` is the `DOMHighResTimeStamp` `requestAnimationFrame` hands its
+       callback, and it is used for nothing but labelling this call's timed
+       sample in geometry-cost.ts — so the harness can add this sampler's cost
+       to `useColumnContext`'s *within one frame*, which is the unit the plan's
+       decision rule is written in, instead of taking percentiles over
+       per-repetition means (Sol F11). Two callbacks due in the same frame get
+       the identical timestamp, which is the pairing that makes the sum right.
+       It is an argument: nothing here reads a clock to obtain it, which is the
+       whole of docs/postmortems/260907a-a-probe-that-read-the-same-clock-twice.md.
+       The `measure()` below runs at effect setup, inside no frame at all, and
+       takes the `NO_FRAME` default — each of those is a frame of its own. */
+    const measure = (at: number = NO_FRAME) => {
       frame = 0;
       const t0 = parentGeometryClock();
       /* Every rule this makes is in position.ts, and it is pure so that the one
@@ -1797,7 +1808,7 @@ function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: str
          skip above working and is itself worth seeing in the data. The two
          `stickyOffset()` calls are charged to their own leaf. */
       if (t0 !== NO_GEOMETRY_CLOCK)
-        noteGeometry("readingPosition", t0, 1 + (jumpInFlight ? 0 : resolved));
+        noteGeometry("readingPosition", t0, 1 + (jumpInFlight ? 0 : resolved), 0, at);
       if (next === null) return;
       synced.current = next.at;
       void setAt(next.at);

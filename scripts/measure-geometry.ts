@@ -66,6 +66,44 @@
  * anything. `assertSiteKinds` re-checks the partition at run time so a future
  * edit that widens a union still fails loudly.
  *
+ * ## A frame is the unit, and it has to be reassembled from two samplers
+ *
+ * The decision rule is written in **frames** — *"the p50 scroll frame spends
+ * ≥ 4ms in the two pilot samplers"* — and neither sampler knows about the
+ * other: they are two rAF callbacks on the same scroll, each running at most
+ * once per frame. So a frame's cost has to be put back together afterwards, and
+ * `src/web/geometry-cost.ts` tags every timed sample with the rAF timestamp of
+ * the frame it ran in for exactly that. Two callbacks due in one frame receive
+ * the identical timestamp; `pilotFrameMs` groups on it and adds.
+ *
+ * The first version of this file did not have that and divided each
+ * repetition's pilot total by its call count instead, then took p50/p95 across
+ * five such **means** and published them as "per SCROLL frame". Sol's F11: a
+ * mean has no tail, so that number could not contain the sparse expensive frame
+ * the whole distribution was being kept for. Every statistic here now names the
+ * denominator it actually has, and the mean survives only as a stability check
+ * under its own label.
+ *
+ * ## What it refuses to publish, and why refusing is the feature
+ *
+ * Three gates, all of them added after a review found the instrument agreeing
+ * with itself (findings F11–F13):
+ *
+ * - **the wrong page.** `populationVerdict` asserts the final pathname, the
+ *   article's fixed fingerprint where it has one, and an **independent**
+ *   count of resolved section rows read out of the DOM rather than off the
+ *   counters. A page whose section tree failed to render still records a
+ *   `readingPosition` call and its one `scrollY` read on every frame, and a
+ *   redirect to a different valid article renders beautifully.
+ * - **an unpinned gesture.** `scrollVerdict` allows one pixel of rounding, not
+ *   20% of the distance. A 2,900px repetition is a 29-wheel gesture.
+ * - **too few repetitions.** `publicationVerdict` refuses below the five warmed
+ *   repetitions the plan committed to before it measured anything.
+ *
+ * In every case the raw per-repetition vectors are still printed. Refusing to
+ * publish a median is not refusing to show what was measured — and a run that
+ * is refused says which repetition spoiled it.
+ *
  * ## Which buckets may decide (Sol F4)
  *
  * Seven parent sites are instrumented; **two** may authorise Stage 3 —
@@ -90,8 +128,10 @@
  * The **achieved** cadence is reported next to the requested one, because a
  * CDP round trip per wheel is not free and the honest number is the one that
  * happened. A repetition that did not travel the pinned distance — the article
- * ran out — is marked suspect and kept out of every median: it is not the
- * pinned gesture, so it is not comparable with one.
+ * ran out, or a wheel was swallowed — is marked suspect and kept out of every
+ * median: it is not the pinned gesture, so it is not comparable with one. The
+ * tolerance is **one pixel**, which is rounding; it was 20%, and 20% of this
+ * gesture is six wheels (Sol F13).
  *
  * ## Population before timing, and a control before any zero
  *
@@ -99,11 +139,14 @@
  * like a page where geometry is free. A7 lost time to signing in as the wrong
  * owner, which gives a 404 that renders fast and reports beautiful numbers for
  * a page that does not exist. So before anything is timed this prints, out of
- * the **loaded page**: the `tr[data-block]` count, the gist column headers
- * present, the tree's leaf depth and the section depth derived from it, the
- * section cells on screen, and whether `window.__perf.geometryCost` exists —
- * and it **refuses to report at all** if the blocks are zero or the instrument
- * is missing.
+ * the **loaded page**: the pathname it actually landed on and the title in the
+ * tab, the `tr[data-block]` count, the gist column headers present, the tree's
+ * leaf depth and the section depth derived from it, the section cells on
+ * screen, the section rows the samplers would resolve, and whether
+ * `window.__perf.geometryCost` exists — and it **refuses to report at all**
+ * unless the page is the article that was asked for, has the shape that
+ * article is known to have, and rendered the section tree the pilot exists to
+ * measure.
  *
  * Then a **control**: a short scroll that must move `readingPosition.calls`.
  * A zero is not a result until something that must move has moved
@@ -158,6 +201,14 @@ import { chromium } from "playwright-core";
 import type { Browser, BrowserContext, CDPSession, Page } from "playwright-core";
 
 import { isMain } from "../src/is-main.js";
+/* The one value this file takes from the instrument rather than restating: the
+   sentinel a sample carries when it did not run inside a rAF callback. The site
+   tuples and the tally shape below are deliberately restated — the *browser
+   build* may be older than this tree, and a mismatch there has to be visible as
+   a missing bucket rather than hidden by a shared type. A sentinel is different
+   in kind: if the two copies ever disagreed, every untagged sample would be
+   silently folded into one invented frame, and nothing would say so. */
+import { NO_FRAME } from "../src/web/geometry-cost.js";
 import { chromePath } from "./browser-sign-in.js";
 import { localMagicLink } from "./seed-local-session.js";
 
@@ -213,6 +264,20 @@ export interface GeometryTally {
   writes: number;
   ms: number;
   samples: number[];
+  /**
+   * The frame each sample ran in — `samples[i]` was measured in `frames[i]`.
+   *
+   * The rAF timestamp the browser handed the callback, or `NO_FRAME` for a call
+   * that ran outside one. It is what makes `pilotFrameMs` possible: two
+   * samplers due in the same frame receive the identical timestamp, so their
+   * costs can be added *within* that frame. Without it the best this file could
+   * do is a mean over a whole repetition, which is what Sol's F11 rejected.
+   *
+   * A build that predates the tagging publishes `samples` and no `frames`;
+   * `frameTagVerdict` refuses such a run rather than quietly deriving a
+   * plausible number from it.
+   */
+  frames: number[];
 }
 
 /** The snapshot. `mode` first, always — it says whether the rest means
@@ -222,7 +287,14 @@ export type GeometryCost = Record<GeometrySite, GeometryTally> & {
   since?: number;
 };
 
-const EMPTY_TALLY: GeometryTally = { calls: 0, reads: 0, writes: 0, ms: 0, samples: [] };
+const EMPTY_TALLY: GeometryTally = {
+  calls: 0,
+  reads: 0,
+  writes: 0,
+  ms: 0,
+  samples: [],
+  frames: [],
+};
 
 /**
  * The partition, re-checked at run time.
@@ -298,10 +370,110 @@ export function pilotMs(cost: GeometryCost, sites: readonly PilotSite[] = PILOT_
   return ms;
 }
 
-/** Per-call ms for the pilot pair, concatenated — the vector p50/p95/max come
- *  from. Concatenated rather than summed: they are separate calls. */
+/** Per-call ms for the pilot pair, concatenated — a *call* distribution, not a
+ *  frame one. Concatenated rather than summed: they are separate calls. */
 export function pilotSamples(cost: GeometryCost): number[] {
   return PILOT_SITES.flatMap((s) => tally(cost, s).samples);
+}
+
+/**
+ * **What a scroll frame cost in the two pilot samplers** — one entry per frame,
+ * and the vector every published p50/p95/max is taken over.
+ *
+ * The plan's clause 1 is written in frames: *"the p50 **scroll frame** spends
+ * ≥ 4ms in the two pilot samplers"*. A frame is where the two samplers meet —
+ * each runs at most once in one, in its own rAF callback, neither knowing about
+ * the other — so a frame's cost is the sum of whichever of them ran in it.
+ *
+ * **Summing two `ms` here does not break "ms is inclusive".** That rule
+ * forbids adding a bucket to a bucket that *contains* it: `stickyOffset` runs
+ * inside `readingPosition`'s interval, so adding those double-counts. These two
+ * are separate top-level callbacks with no containment either way, which is why
+ * `pilotMs` is allowed to add them across a gesture and why this is allowed to
+ * add them within a frame. The type of `PILOT_SITES` is what keeps a leaf out.
+ *
+ * **What this replaces, and why** (Sol F11): the report used to take p50/p95
+ * across five per-repetition **means** — each repetition's pilot total divided
+ * by its call count — and label them "per SCROLL frame". A mean has no tail. It
+ * averaged away exactly the sparse expensive frame that F6 required the
+ * distribution be kept for, because `longtask` cannot see anything under 50ms
+ * and a comfortable median is the shape of a page that stutters.
+ *
+ * A sample tagged `NO_FRAME` ran outside any frame callback — a sampler's
+ * `measure()` at effect setup — and **each one is its own frame**. They are
+ * real costs and are kept; merging them would invent a frame that never
+ * happened and then report it as the expensive one.
+ *
+ * Throws on a snapshot whose `frames` does not line up with its `samples`,
+ * which is what an older browser bundle produces. `frameTagVerdict` is the
+ * polite form, and `report` asks it first so that an expensive run is refused
+ * in a sentence rather than a stack trace.
+ */
+export function pilotFrameMs(cost: GeometryCost): number[] {
+  const byFrame = new Map<number, number>();
+  /* Kept apart from the map: every one of these is its own frame, so they must
+     not share a key — and `NO_FRAME` is one key. */
+  const outsideAnyFrame: number[] = [];
+  for (const site of PILOT_SITES) {
+    const t = tally(cost, site);
+    const frames = t.frames ?? [];
+    if (frames.length !== t.samples.length) {
+      throw new Error(
+        `${site} published ${t.samples.length} samples and ${frames.length} frame ids — ` +
+          "this browser build does not tag its samples with the frame they ran in, and a " +
+          "per-frame figure cannot be derived from it. Rebuild with the current " +
+          "src/web/geometry-cost.ts.",
+      );
+    }
+    for (let i = 0; i < t.samples.length; i++) {
+      const ms = t.samples[i] ?? 0;
+      const frame = frames[i] ?? NO_FRAME;
+      if (frame === NO_FRAME) {
+        outsideAnyFrame.push(ms);
+        continue;
+      }
+      byFrame.set(frame, (byFrame.get(frame) ?? 0) + ms);
+    }
+  }
+  return [...byFrame.values(), ...outsideAnyFrame];
+}
+
+/**
+ * Whether these snapshots can answer the per-frame question at all, in words.
+ *
+ * The failure it catches is a stale `dist/`: a bundle built before the frame
+ * tagging landed publishes `samples` and no `frames`, every derived number
+ * looks entirely reasonable, and it is the *wrong* number — the one the review
+ * sent this instrument back for. So it is a refusal rather than a fallback.
+ */
+/**
+ * `pilotFrameMs`, or an empty vector for a snapshot that cannot supply one.
+ *
+ * Only for the raw per-repetition table, which is printed **before** the gates
+ * so that a refused run still shows what it measured — and which therefore must
+ * not be the thing that throws on an untagged build. An empty vector formats as
+ * `—`, which is the honest cell: the number does not exist, rather than being
+ * zero. The refusal itself is `report`'s, a few lines later, in words.
+ */
+function pilotFrameMsOrNone(cost: GeometryCost): number[] {
+  return frameTagVerdict([cost]) ? [] : pilotFrameMs(cost);
+}
+
+export function frameTagVerdict(costs: readonly GeometryCost[]): string | null {
+  for (const cost of costs) {
+    for (const site of PILOT_SITES) {
+      const t = tally(cost, site);
+      const frames = t.frames ?? [];
+      if (frames.length === t.samples.length) continue;
+      return (
+        `${site} published ${t.samples.length} timed samples and ${frames.length} frame ids.\n` +
+        "  This build does not tag samples with the frame they ran in, so the only per-frame\n" +
+        "  figure available would be a mean over the repetition — which is exactly what Sol's\n" +
+        "  F11 rejected. Rebuild (`npm run build`) and re-run; there is deliberately no fallback."
+      );
+    }
+  }
+  return null;
 }
 
 /**
@@ -324,18 +496,24 @@ export function pilotMsPerFrame(cost: GeometryCost, framesServed: number): numbe
 }
 
 /**
- * The same quantity over the frames the samplers actually ran in, rather than
- * over every frame the browser served.
+ * **A mean, and nothing but a mean**: one repetition's whole pilot cost divided
+ * by the number of frames its samplers ran in.
  *
- * Both are reported and neither is dropped, because the clause says *"the p50
- * **scroll** frame"* and the two denominators disagree about what that is. The
- * settling half-second after the last wheel serves frames in which nothing
- * scrolls and the samplers do not run, so dividing by served frames dilutes
- * the figure; dividing by sampler calls answers "what does a frame *in which
- * the reader is scrolling* cost", which is the clause's plain reading and the
- * stricter of the two. A rAF-batched sampler runs at most once per frame, so
- * this can only ever be the larger number — quote it, and print the other one
- * beside it so the dilution is visible rather than argued about.
+ * *What it is.* The average cost of a sampling frame over one repetition —
+ * roughly a hundred and fifty of them — with the settling half-second, in which
+ * the samplers do not run, correctly left out of the denominator.
+ *
+ * *What it is not, and this is the correction.* It is **not** a frame, and no
+ * percentile may be taken across a set of these. Doing that was Sol's F11: the
+ * report took p50/p95 over five per-repetition means and published them as
+ * "per SCROLL frame", which is a distribution of repetitions and has no tail at
+ * all — a mean cannot represent the one frame in two hundred that cost 40ms,
+ * and that frame is the entire reason F6 asked for the distribution rather than
+ * a scalar. `pilotFrameMs` is the vector the decision rule is applied to now.
+ *
+ * It is kept, and still printed per repetition, because it is a cheap
+ * stability check: five means that agree say the repetitions were alike, which
+ * is a different and useful thing to know from what a frame cost.
  */
 export function pilotMsPerSamplingFrame(cost: GeometryCost): number {
   const calls = Math.max(...PILOT_SITES.map((s) => tally(cost, s).calls));
@@ -543,6 +721,34 @@ export interface Population {
    * gap is the collapsing rather than a fault in either witness.
    */
   sectionCells: number;
+  /**
+   * **The section rows the sampler would actually find**, counted in the DOM.
+   *
+   * The rows carrying those section cells — `tr[data-block]` ancestors, counted
+   * distinctly — which is the element list both pilot samplers build with
+   * `rowsForBlockIds` and read one rect from each of. `sectionCells` counts
+   * `<td>`s and this counts the *rows* they sit in, so a tree that rendered
+   * cells into rows with no block id shows up as a gap between the two.
+   *
+   * **Independent of the instrument on purpose** (Sol F12). The gate must not
+   * be able to pass because the thing it is gating agrees with it: the counters
+   * would report a busy `readingPosition` on a page with no sections at all —
+   * one call and one `scrollY` read per frame — and a gate that asked *them*
+   * whether the page rendered would be asking the wrong witness.
+   */
+  resolvedSections: number;
+  /**
+   * Where the browser actually ended up, and what the tab says.
+   *
+   * A redirect to a *different valid article* renders perfectly, counts blocks,
+   * runs both samplers and answers a question nobody asked; nothing in the old
+   * gate could see it, because it never recorded which page it was on. The
+   * pathname is the cheap check and `docTitle` is the corroborating one — it
+   * comes from the article's own metadata rather than from the URL, so the two
+   * disagreeing is itself informative.
+   */
+  pathname: string;
+  docTitle: string;
   /** The reading table's own class list, and every `<th>` in its head with the
    *  attributes the two geometry consumers key off. Printed because "no gist
    *  columns" has two very different causes — the fit dropped them, or the page
@@ -578,6 +784,15 @@ const POPULATION = `JSON.stringify((() => {
     who = localStorage.getItem('spideryarn.lastUser');
   } catch (e) { who = null; }
   const g = window.__perf && window.__perf.geometryCost;
+  /* The rows those section cells sit in, counted distinctly — the element list
+     the two pilot samplers build and read a rect from each of. Counted from the
+     rows rather than from the cells so that it is a second witness of the same
+     thing and not a restatement of the first. */
+  const sectionRows = new Set();
+  for (const td of document.querySelectorAll('td[data-nav-depth="' + sectionDepth + '"]')) {
+    const tr = td.closest('tr[data-block]');
+    if (tr) sectionRows.add(tr.getAttribute('data-block'));
+  }
   return {
     blocks: document.querySelectorAll('tr[data-block]').length,
     totalNodes: document.querySelectorAll('*').length,
@@ -585,6 +800,9 @@ const POPULATION = `JSON.stringify((() => {
     leafDepth,
     sectionDepth,
     sectionCells: document.querySelectorAll('td[data-nav-depth="' + sectionDepth + '"]').length,
+    resolvedSections: sectionRows.size,
+    pathname: location.pathname,
+    docTitle: document.title,
     commentMarks: document.querySelectorAll('mark[data-comment]').length,
     tableClass: document.querySelector('table.zoom')?.className ?? '(no table.zoom)',
     headCells: [...document.querySelectorAll('thead th')].map((th) =>
@@ -598,19 +816,197 @@ const POPULATION = `JSON.stringify((() => {
 })())`;
 
 /**
+ * One of the three articles the plan pins the verdict to, and the shape it has.
+ *
+ * These are **recorded fingerprints, not guesses**: every session in the Stage 1
+ * logs printed the same population line for the same slug — 2,046 blocks and
+ * 1,237 section cells for `m1-kuhn` on a 1280×900 desktop, and so on. They are
+ * a dated fact about a local database rather than a durable one, which is
+ * exactly why they belong in a gate that fails loudly: if the corpus is
+ * re-imported and these move, that is something the next person must be told
+ * about before a number is quoted, not something they discover afterwards.
+ *
+ * The ranges are wide enough for a re-extraction that shifts a few blocks and
+ * far too narrow for a different article.
+ */
+export interface FixedWorkload {
+  blocks: readonly [number, number];
+  /** `geometry.leafDepth`, exactly — the tree shape the plan chose it for. */
+  leafDepth: number;
+  /** Resolved section rows, the DOM's own count. */
+  sections: readonly [number, number];
+  /** Gist column headers that must be on screen where sections are required. */
+  minGistColumns: number;
+}
+
+export const FIXED_WORKLOADS: Readonly<Record<string, FixedWorkload>> = {
+  /* The heavy, wide, shallow one: 1,237 sections over 2,046 blocks. */
+  "m1-kuhn-spya-a2zrjb": {
+    blocks: [2000, 2100],
+    leafDepth: 3,
+    sections: [1200, 1280],
+    minGistColumns: 2,
+  },
+  /* The deeper shape, so a verdict is not earned on one tree (Sol F7). */
+  "evaldeepen-e5aq8o9s-book-spya-yynkqz": {
+    blocks: [2500, 2640],
+    leafDepth: 4,
+    sections: [1130, 1200],
+    minGistColumns: 3,
+  },
+  /* The ordinary-size control, which must NOT fire clause 1 — so a page that
+     quietly rendered a tenth of it would be the most convenient possible
+     mistake, and is the one this table is most needed for. 51 sections, but
+     327 cells: `buildSections` collapses a run of supplements into one
+     section and the DOM keeps all of them (position.ts). The DOM count is what
+     is asserted here, because the DOM is the witness. */
+  "replication-crisis-spya-hrjamq": {
+    blocks: [520, 580],
+    leafDepth: 3,
+    sections: [300, 350],
+    minGistColumns: 2,
+  },
+};
+
+/**
+ * What the run asked for, so the gate has something to check the page against.
+ *
+ * Passed to `populationVerdict` rather than looked up inside it: the same
+ * article is a different *workload* on a phone, and the difference is not a
+ * property of the article.
+ */
+export interface Expectation {
+  /** The article the run asked for — the pathname must be `/read/<slug>`. */
+  slug: string;
+  /**
+   * Whether this configuration draws a section column at all.
+   *
+   * False is a legitimate and deliberate state, not a degraded one: `plain`
+   * empties the gist columns outright (App.tsx § `plainCols`) and a 390px
+   * viewport drops them, so `useColumnContext` never runs and half the pilot is
+   * a zero that means what it says. Refusing those runs would be the
+   * mirror-image error to the one F12 found — and the phone run is where the
+   * plan learned that sharing buys nothing there.
+   */
+  requireSections: boolean;
+  /** Its fingerprint, when it is one of the three fixed workloads. */
+  fixed: FixedWorkload | null;
+}
+
+/**
+ * The width at which the app fits gist columns on screen, near enough for a
+ * gate.
+ *
+ * Not a threshold the app declares — layout.ts fits columns to the window and
+ * the number of them depends on the article — so this is calibrated against
+ * what actually happened: every recorded 1280×900 session showed columns and
+ * every 390×844 one showed none. It decides only whether their **absence** is
+ * suspicious.
+ */
+const GIST_COLUMN_MIN_WIDTH = 1000;
+
+export function expectationFor(
+  o: { slug: string; view: string; cols: string },
+  viewport: Viewport,
+): Expectation {
+  /* `--cols` forces a list on, which is how a phone-sized viewport is made to
+     show columns it would otherwise drop; `plain` overrides everything and has
+     none whatever the width. */
+  const forced = o.cols !== "auto";
+  const requireSections = o.view !== "plain" && (forced || viewport.width >= GIST_COLUMN_MIN_WIDTH);
+  return { slug: o.slug, requireSections, fixed: FIXED_WORKLOADS[o.slug] ?? null };
+}
+
+/**
  * Refuse, in words, when the page cannot carry a measurement.
  *
  * Pure, so the refusals can be reasoned about without a browser — and so the
  * one that matters most, *the instrument is not there*, is a sentence rather
  * than a stack trace.
+ *
+ * **Two kinds of check, in two blocks, and the order is deliberate.** First,
+ * everything about the *page*: is it the right article, did its tree render,
+ * is it the shape the workload is named for. Those hold in a `--baseline` run
+ * too, because a calibration taken over the wrong page is as void as a
+ * measurement over it. Only then the instrument's own state, which a baseline
+ * run has none of.
+ *
+ * The page block is Sol's F12, and every clause in it is a page that used to
+ * pass: the gate refused only zero blocks, a missing instrument and mode
+ * `"off"`, so an article whose section tree failed to render still recorded
+ * `readingPosition` calls — one call and one `scrollY` read per frame, over
+ * nothing — and a redirect to another valid article passed in silence.
  */
-export function populationVerdict(p: Population, baseline: boolean): string | null {
+export function populationVerdict(
+  p: Population,
+  baseline: boolean,
+  expect: Expectation,
+): string | null {
   if (p.blocks === 0 || p.totalNodes === 0) {
     return (
       `the page rendered ${p.blocks} blocks and ${p.totalNodes} nodes — refusing to time ` +
       "anything over it. A signed-out page, or one signed in as the wrong owner, renders " +
       "a 404 fast and reports beautiful numbers for a page that does not exist."
     );
+  }
+  const wantedPath = `/read/${expect.slug}`;
+  if (p.pathname !== wantedPath) {
+    return (
+      `this is not the article the run asked for: the browser is at ${p.pathname} and the ` +
+      `workload is ${wantedPath} (the tab says ${JSON.stringify(p.docTitle)}). A redirect to ` +
+      "another valid article renders perfectly and measures something nobody asked about."
+    );
+  }
+  const fixed = expect.fixed;
+  if (fixed) {
+    if (p.blocks < fixed.blocks[0] || p.blocks > fixed.blocks[1]) {
+      return (
+        `${expect.slug} is a fixed workload of ${fixed.blocks[0]}–${fixed.blocks[1]} blocks and ` +
+        `this page rendered ${p.blocks}. Either the corpus changed under the plan — in which ` +
+        "case every number recorded against this slug is about a different article — or this " +
+        "is not it."
+      );
+    }
+    if (p.leafDepth !== fixed.leafDepth) {
+      return (
+        `${expect.slug} is a fixed workload of leaf depth ${fixed.leafDepth} and this page ` +
+        `reports ${p.leafDepth}. The tree shape is half of why this article is in the plan ` +
+        "(Sol F7: a verdict earned on one shape is a weaker verdict)."
+      );
+    }
+  }
+  if (expect.requireSections) {
+    if (p.gistColumns.length === 0) {
+      return (
+        "this configuration draws gist columns and none are on screen — so `useColumnContext` " +
+        "is not running, half the pilot would be a zero for having been switched off rather " +
+        "than for being cheap, and the section tree may not have rendered at all. Measure " +
+        "`plain` or a phone deliberately, as its own run, rather than arriving here."
+      );
+    }
+    if (p.resolvedSections === 0) {
+      return (
+        "the page has gist columns but no section rows the samplers could resolve " +
+        `(${p.sectionCells} section cells, ${p.resolvedSections} rows carrying one). ` +
+        "`readingPosition` still records a call and its one `scrollY` read on every frame of " +
+        "a page like this, so the pilot would come back cheap and mean nothing."
+      );
+    }
+    if (fixed && (p.resolvedSections < fixed.sections[0] || p.resolvedSections > fixed.sections[1])) {
+      return (
+        `${expect.slug} resolves ${fixed.sections[0]}–${fixed.sections[1]} section rows and ` +
+        `this page resolved ${p.resolvedSections}. The per-frame rect loop is the cost being ` +
+        "measured, so a page with a fraction of the sections is a different measurement."
+      );
+    }
+    if (fixed && p.gistColumns.length < fixed.minGistColumns) {
+      return (
+        `${expect.slug} shows ${fixed.minGistColumns} gist columns on this viewport and this ` +
+        `page shows ${p.gistColumns.length} [${p.gistColumns.join(", ")}] — the columns are ` +
+        "where `useColumnContext` reads its rectangles, so a dropped one changes what is " +
+        "being measured."
+      );
+    }
   }
   if (baseline) return null;
   if (!p.perf) {
@@ -683,24 +1079,83 @@ export const pinnedDistance = (s: Pick<PinnedScroll, "deltaY" | "steps">): numbe
   s.deltaY * s.steps;
 
 /**
+ * How far a repetition may miss the pinned distance and still be the pinned
+ * gesture: **one pixel, which is rounding**.
+ *
+ * It was 20% (Sol F13), which is not a tolerance, it is a different gesture —
+ * a 2,400px repetition reads a quarter less geometry over a quarter less page
+ * and was going into the same median as the 3,000px one. The logs say what the
+ * real distribution is: exactly 3000 almost always, exactly 2900 when a wheel
+ * was swallowed, once 2976. Nothing legitimate needs more slack than this, and
+ * `scrollY` is a CSS-pixel double, so a fractional device pixel ratio can
+ * genuinely land a hair short.
+ *
+ * Rejecting the near misses is the point and not a side effect: it leaves some
+ * recorded sessions with four valid repetitions, which is below the bar
+ * `MIN_WARMED_REPETITIONS` sets, and those sessions have to be run again.
+ */
+export const PINNED_TOLERANCE_PX = 1;
+
+/**
  * A repetition of the scroll that is not the pinned gesture, or null.
  *
- * The article running out is the case this catches: the wheels are dispatched,
- * the page stops moving, and the repetition is shorter than the one before it.
- * That is a different gesture, so it is kept out of every median rather than
- * averaged with the real ones.
+ * The article running out is the commonest case: the wheels are dispatched, the
+ * page stops moving, and the repetition is short. **Overshoot is refused too**,
+ * which the old rule had no way to express at all — momentum or a smooth-scroll
+ * carry-over travels further than the gesture asked for, and a repetition that
+ * covered twice the page is no more comparable than one that covered half of
+ * it.
+ *
+ * Either way the repetition is kept out of every median rather than averaged
+ * with the real ones. Two runs of a workload that varied are not two runs of
+ * one workload.
  */
 export function scrollVerdict(travelled: number, wanted: number): string | null {
   if (travelled <= 0) {
     return `the page did not move (${travelled}px) — the wheel reached nothing scrollable`;
   }
-  if (travelled < wanted * 0.8) {
+  if (travelled < wanted - PINNED_TOLERANCE_PX) {
     return (
-      `travelled ${Math.round(travelled)}px of the pinned ${wanted}px — the article ran out, ` +
-      "so this is not the same gesture as the other repetitions"
+      `travelled ${Math.round(travelled)}px of the pinned ${wanted}px (tolerance ` +
+      `±${PINNED_TOLERANCE_PX}px) — a wheel was swallowed or the article ran out, so this is ` +
+      "not the same gesture as the other repetitions"
+    );
+  }
+  if (travelled > wanted + PINNED_TOLERANCE_PX) {
+    return (
+      `travelled ${Math.round(travelled)}px, past the pinned ${wanted}px (tolerance ` +
+      `±${PINNED_TOLERANCE_PX}px) — momentum or a smooth-scroll carry-over, so this is not ` +
+      "the same gesture as the other repetitions"
     );
   }
   return null;
+}
+
+/**
+ * How many warmed, valid repetitions there must be before any statistic is
+ * published.
+ *
+ * The plan precommitted to `--repeats 6 --warmup 1`, so five. The report used
+ * to print a median off **one** surviving repetition (Sol F13), which is a
+ * number with the same name and none of the standing — and on a box this
+ * contended, one repetition is an anecdote about the load average.
+ */
+export const MIN_WARMED_REPETITIONS = 5;
+
+/**
+ * Whether this gesture may publish anything, in words.
+ *
+ * Deliberately not clamped to `--repeats`: a caller who asks for three
+ * repetitions gets three raw vectors and no statistics, which is the honest
+ * answer rather than a rule that quietly lowers itself to whatever was run.
+ */
+export function publicationVerdict(warmed: number, attempts: number): string | null {
+  if (warmed >= MIN_WARMED_REPETITIONS) return null;
+  return (
+    `${warmed} warmed valid repetition(s) out of ${attempts} — the rule this plan committed ` +
+    `to before measuring is ${MIN_WARMED_REPETITIONS} (--repeats 6 --warmup 1), so nothing ` +
+    "here may be quoted. The raw vectors above are printed anyway; run the session again."
+  );
 }
 
 /**
@@ -1321,11 +1776,26 @@ export function report(run: GestureRun, warmup: number, budgetMs: number): strin
   console.log(`  requires: ${run.declared}`);
 
   const c = classify(run.attempts, warmup, run.wantedPx);
+  /* The raw vectors are printed **before** any gate, always. Refusing to
+     publish a median is not refusing to show what was measured, and the
+     per-repetition table is how a reader sees *why* a run was refused — which
+     repetition travelled 2,900px, which one saw no frames. */
   printVectors(run, c);
   printProblems(run, c);
-  if (c.warmed.length === 0) {
-    console.log(`  NOTHING QUOTABLE out of ${run.attempts.length} repetitions.`);
-    return `nothing quotable out of ${run.attempts.length} repetitions`;
+  /* Sol F13: this used to publish on one surviving repetition. */
+  const tooFew = publicationVerdict(c.warmed.length, run.attempts.length);
+  if (tooFew) {
+    console.log(`  NOT PUBLISHED: ${tooFew}`);
+    return tooFew;
+  }
+  /* And F11: without frame tags the only per-frame number available is a mean
+     over the repetition, which is the figure the review sent this back for. */
+  const untagged = frameTagVerdict(
+    c.warmed.map((s) => s.cost).filter((x): x is GeometryCost => x !== null),
+  );
+  if (untagged) {
+    console.log(`  NOT PUBLISHED: ${untagged}`);
+    return untagged.split("\n")[0] ?? untagged;
   }
   printSummary(c.warmed, budgetMs);
   const parts: string[] = [];
@@ -1341,7 +1811,16 @@ function printVectors(run: GestureRun, c: Classified): void {
   const rows: readonly (readonly [string, (s: Sample) => string])[] = [
     ["end-to-end ms", (s) => num(s.ms, 1)],
     ["pilot ms", (s) => (s.cost ? num(pilotMs(s.cost)) : "—")],
-    ["pilot ms/scrollfrm", (s) => (s.cost ? num(pilotMsPerSamplingFrame(s.cost)) : "—")],
+    /* The per-frame distribution, per repetition — the quantity the decision
+       rule is applied to, summarised here twice so that a repetition whose tail
+       is unlike the others is visible in the raw table rather than only in the
+       pooled percentile. */
+    ["pilot frm p50 ms", (s) => (s.cost ? num(median(pilotFrameMsOrNone(s.cost))) : "—")],
+    ["pilot frm max ms", (s) => (s.cost ? num(maxOf(pilotFrameMsOrNone(s.cost))) : "—")],
+    /* A **mean**, kept as a stability check and labelled as one: five that
+       agree say the repetitions were alike. No percentile is taken across
+       these — that was Sol's F11. */
+    ["pilot mean/frm ms", (s) => (s.cost ? num(pilotMsPerSamplingFrame(s.cost)) : "—")],
     ["pilot ms/anyframe", (s) => (s.cost ? num(pilotMsPerFrame(s.cost, s.frames.length)) : "—")],
     ["pilot duty %", (s) => (s.cost ? num(pilotDutyCycle(s.cost, s.ms), 1) : "—")],
     ["frame p50 ms", (s) => num(median(s.frames), 1)],
@@ -1438,7 +1917,16 @@ function printSites(warmed: Sample[]): void {
   const mode = costs[costs.length - 1]?.mode ?? "?";
   const missing = new Set<string>();
   const pilotVec = costs.flatMap(pilotSamples);
-  const perFrame = warmed
+  /* **One entry per scroll frame, pooled across every warmed repetition** —
+     the vector the decision rule is applied to (Sol F11). Pooled at the frame
+     level rather than at the repetition level: a percentile over per-repetition
+     summaries is a percentile over summaries, which is the mistake being
+     corrected. Frames are grouped inside a repetition only, because the
+     counters are reset between them and two repetitions' timestamps name
+     different frames. */
+  const frameVec = costs.flatMap(pilotFrameMs);
+  /* Kept and printed, as a stability check and under its own name. */
+  const meanPerFrame = warmed
     .filter((s) => s.cost !== null)
     .map((s) => pilotMsPerSamplingFrame(s.cost as GeometryCost));
   const perServed = warmed
@@ -1451,12 +1939,22 @@ function printSites(warmed: Sample[]): void {
     "  PILOT (readingPosition + columnContext — the only pair that may authorise Stage 3):",
   );
   console.log(
-    `      DECISION per SCROLL frame ms p50/p95/max ${num(median(perFrame))}/` +
-      `${num(pct(perFrame, 95))}/${num(maxOf(perFrame))}` +
+    `      DECISION per SCROLL frame ms p50/p95/max ${num(median(frameVec))}/` +
+      `${num(pct(frameVec, 95))}/${num(maxOf(frameVec))}` +
+      `   over ${frameVec.length} frames` +
       "   [plan clause 1: optimise at p50 >= 4 or p95 >= 8]",
   );
   console.log(
-    `      the same over every served frame, settling included: p50 ${num(median(perServed))}` +
+    "        one entry per frame, the two samplers' costs added within it — not a mean over" +
+      " repetitions, which is what the p95 above used to be (Sol F11).",
+  );
+  console.log(
+    `      per-repetition MEAN of that, as a stability check only: p50 ${num(median(meanPerFrame))}` +
+      `  min–max ${num(Math.min(...meanPerFrame))}–${num(maxOf(meanPerFrame))}` +
+      "   [a mean has no tail; do not quote a percentile of it]",
+  );
+  console.log(
+    `      the pilot over every served frame, settling included: p50 ${num(median(perServed))}` +
       `  p95 ${num(pct(perServed, 95))}`,
   );
   console.log(
@@ -1575,8 +2073,13 @@ function printPopulation(p: Population, cadence: Cadence, url: string): void {
   console.log(`\nPOPULATION  ${url}`);
   console.log(
     `  blocks=${p.blocks}  nodes=${p.totalNodes}  leafDepth=${p.leafDepth}` +
-      `  sectionDepth=${p.sectionDepth}  section cells on screen=${p.sectionCells}`,
+      `  sectionDepth=${p.sectionDepth}  section cells on screen=${p.sectionCells}` +
+      `  resolved section rows=${p.resolvedSections}`,
   );
+  /* Where the browser actually ended up, and what the tab says it is. A
+     redirect to a different valid article is invisible in every other line
+     here — Sol F12, and the reason this one exists. */
+  console.log(`  landed at ${p.pathname}  title=${JSON.stringify(p.docTitle)}`);
   console.log(`  table.zoom class="${p.tableClass}"  thead: ${p.headCells.join("  ") || "(empty)"}`);
   console.log(
     `  gist column headers present: [${p.gistColumns.join(", ") || "none"}]` +
@@ -1607,7 +2110,12 @@ async function oneSession(
   const population = await landAndCount(page, url, "tr[data-block]");
   const cadence = await refreshCadence(page, viewport.name);
   printPopulation(population, cadence, url);
-  const refusal = populationVerdict(population, o.baseline);
+  /* What this configuration is *supposed* to have landed on — the article, and
+     whether a section column is part of the workload at all. Built from the
+     options and the viewport rather than looked up from the slug alone,
+     because the same article on a phone is a different workload. */
+  const expect = expectationFor(o, viewport);
+  const refusal = populationVerdict(population, o.baseline, expect);
   if (refusal) throw new Error(refusal);
   if (o.populationOnly) return { cadence, population, control: EMPTY_CONTROL, runs: [] };
   if (!o.baseline && o.mode === "full") {
@@ -1699,13 +2207,28 @@ async function discreteRun(
   };
   const refused = g.refuseIf(population);
   if (refused) return { ...base, refused, attempts: [] };
+  /* **This is a second navigation**, to the same article with the gesture's own
+     query — and a navigation is where a redirect happens. The scroll's identity
+     check said nothing about this page, so it is re-checked here rather than
+     assumed to have landed where the last one did (Sol F12). Its population is
+     recorded on the run either way, so a reader can see what it pressed on. */
+  let landed: Population;
   try {
-    await landAndCount(page, readUrl(o, g.query), g.waitFor);
+    landed = await landAndCount(page, readUrl(o, g.query), g.waitFor);
   } catch (e) {
     /* Its own refusal rather than a fatal: the scroll numbers taken before it
        are the expensive ones and must survive a press that had nowhere to
        land. */
     return { ...base, refused: (e as Error).message.split("\n")[0] ?? "did not land", attempts: [] };
+  }
+  const wantedPath = `/read/${o.slug}`;
+  if (landed.pathname !== wantedPath) {
+    return {
+      ...base,
+      population: landed,
+      refused: `landed at ${landed.pathname} rather than ${wantedPath} — a press timed on the wrong page`,
+      attempts: [],
+    };
   }
   /* Set **after** the navigation: a fresh load re-runs startPerf(), which puts
      the mode back to "counts", so setting it before goto() is a no-op that
@@ -1739,6 +2262,10 @@ function crossSession(all: Everything, warmup: number): void {
   console.log("\n════ ACROSS SESSIONS ════════════════════════════════════════");
   console.log("Medians per session. A spread wider than the effect is the box, not the code —");
   console.log("the spike behind this plan needed three sessions to see through it.");
+  console.log(
+    `A session with fewer than ${MIN_WARMED_REPETITIONS} warmed valid repetitions prints — ,` +
+      " for the reason its own report gave.",
+  );
   const keys = new Map<string, GestureRun[]>();
   for (const r of all.results) {
     for (const run of r.runs) {
@@ -1749,6 +2276,13 @@ function crossSession(all: Everything, warmup: number): void {
   for (const [k, runs] of keys) {
     const per = runs.map((run) => {
       const warmed = classify(run.attempts, warmup, run.wantedPx).warmed;
+      /* The same bar `report` applies, applied here too — this table is the
+         other place a statistic gets published, and a rule that held in one of
+         them and not the other would be a rule with a way round it. A session
+         that fell short prints `—` rather than a median of three. */
+      if (publicationVerdict(warmed.length, run.attempts.length)) {
+        return { e2e: Number.NaN, pilot: Number.NaN, layout: Number.NaN, frame95: Number.NaN };
+      }
       return {
         e2e: median(warmed.map((s) => s.ms)),
         pilot: median(warmed.map((s) => (s.cost ? pilotMs(s.cost) : Number.NaN))),

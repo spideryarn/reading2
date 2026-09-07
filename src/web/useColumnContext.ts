@@ -18,7 +18,7 @@
  * had already left.
  */
 import { useEffect, useState } from "react";
-import { NO_GEOMETRY_CLOCK, noteGeometry, parentGeometryClock } from "./geometry-cost.js";
+import { NO_FRAME, NO_GEOMETRY_CLOCK, noteGeometry, parentGeometryClock } from "./geometry-cost.js";
 import { activeSectionIndex, type Section } from "./position.js";
 import { rowsForBlockIds } from "./rows.js";
 
@@ -153,7 +153,20 @@ export function useColumnContext({
       [...heads.values()].reduce((n, th) => (th ? n + 1 : n), 0) +
       (pin ? 1 : 0);
 
-    const measure = () => {
+    /**
+     * `at` is the `DOMHighResTimeStamp` `requestAnimationFrame` hands its
+     * callback, and it is only ever used as a **label**: geometry-cost.ts tags
+     * this call's timed sample with it, so the harness can add this sampler's
+     * cost to `useReadingPosition`'s *within the same frame* rather than taking
+     * percentiles over per-repetition means (Sol F11).
+     *
+     * Two callbacks due in one frame receive the identical timestamp, which is
+     * exactly the pairing wanted — and it arrives as an argument, so nothing
+     * here reads a clock to get it. `measure()` is also called directly at
+     * effect setup, and that call belongs to no frame: it defaults to
+     * `NO_FRAME`, and each such call counts as a frame of its own.
+     */
+    const measure = (at: number = NO_FRAME) => {
       frame = 0;
       const t0 = parentGeometryClock();
       /* **One `innerHeight` per frame, not two.** The focus line and
@@ -190,12 +203,12 @@ export function useColumnContext({
          layout work as one that did — and only counting the frames that
          published would report a sampler doing a fraction of its real work. */
       if (same) {
-        if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("columnContext", t0, readsPerMeasure);
+        if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("columnContext", t0, readsPerMeasure, 0, at);
         return;
       }
       last = { focusRow, rects, viewportH, stableH, clipLeft };
       setLive(last);
-      if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("columnContext", t0, readsPerMeasure);
+      if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("columnContext", t0, readsPerMeasure, 0, at);
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(measure);
