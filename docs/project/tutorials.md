@@ -22,6 +22,11 @@ diagram actually looked at in a browser rather than trusted from the markup.
   — the odd one out: it explains **somebody else's tool**, not ours. `beads` gives coding agents a
   dependency graph instead of a markdown plan, and its one real query is "what can start now". Read
   it for the idea, and for the section on what an 80/20 version of it would be — we do not use it.
+- [260907a-agent-communication-and-orchestration.html](../tutorials/260907a-agent-communication-and-orchestration.html)
+  — the other odd one out: **not about Spideryarn at all**, but about the machine we build it on.
+  How Claude Code sessions discover, message, watch, wake and stop each other, measured live rather
+  than recalled — the registry and sockets underneath it, the three ways addressing fails silently,
+  reading a peer's context use straight off disk, and what all that means for an Orchestrator.
 
 ## Naming
 
