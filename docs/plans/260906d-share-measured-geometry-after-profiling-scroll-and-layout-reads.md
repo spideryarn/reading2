@@ -809,7 +809,19 @@ scoped follow-up that is plausibly worth more than everything else in this plan.
 
 ### What this costs, in order
 
-1. **F14 first**, because it is a live behaviour change in committed code, and a postmortem with it.
+1. ~~**F14 first**, because it is a live behaviour change in committed code, and a postmortem with
+   it.~~ **Done, 2026-09-07.** `geometry-cost.ts` gains `parentGeometryClockFrom(now)`; `apply` reads
+   `performance.now()` once a frame and uses the one value for both the quiet-window comparison and
+   the timer. Red first:
+   [tests/probe-does-not-change-the-page.test.ts](../../tests/probe-does-not-change-the-page.test.ts)
+   fails on the old code, passes on the new, and carries two controls so it cannot pass by never
+   running the listener. Swept the other eight instrumented files: none of them reads a clock at all,
+   so `apply` was the only instance. The postmortem is
+   [260907a-a-probe-that-read-the-same-clock-twice.md](../postmortems/260907a-a-probe-that-read-the-same-clock-twice.md),
+   and its finding is that this job had already fixed the *harmless* form of the same class in Stage 2
+   — two reads of one value, which agree only when nothing moves between them. A clock never does.
+   **One consequence for the data:** `barVisibility`'s write count in § "Stage 1 result" was taken
+   from a page that only exists while the probe is running, so it re-runs with the rest.
 2. **F11 + F13 + F12**, the harness corrections, then **re-run the three sessions**. Until that lands
    every number in § "Stage 1 result" is provisional and is marked so.
 3. **F10's counterfactual**, which is the gate on Stage 3 and cannot be skipped by doing Stage 3 and

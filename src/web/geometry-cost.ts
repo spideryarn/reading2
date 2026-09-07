@@ -297,6 +297,34 @@ export function parentGeometryClock(): number {
 }
 
 /**
+ * The same thing for a parent that has **already read the clock itself**, and
+ * must not read it twice.
+ *
+ * `performance.now()` looks like a free observation and is not one: it is a
+ * shared, monotonically advancing value, and a site that compares it against a
+ * deadline is making a decision out of it. Calling it once for the timer and
+ * again for the decision means the decision is taken marginally later whenever
+ * the probe is on — and at the boundary, "marginally later" is the other side
+ * of the branch. `scroll.ts § apply` did exactly that: with counting on, a
+ * frame inside the bar's quiet window could fall outside it, hide the bar, and
+ * write to `documentElement.dataset` in the middle of a gesture. GPT Sol found
+ * it reviewing Stage 1 as F14; docs/postmortems/260907a-a-probe-that-read-the-same-clock-twice.md
+ * has the class and what catches it.
+ *
+ * So: read `performance.now()` once at the top of the frame, use that one value
+ * for the site's own logic, and pass it here for the timer. The saving is not
+ * the call — it is that there is only one clock value in the frame, and
+ * therefore only one page the measurement can be describing.
+ *
+ * `tests/probe-does-not-change-the-page.test.ts` pins it, by running the same
+ * gesture against the same scripted clock with the probe off and on and
+ * requiring the same result.
+ */
+export function parentGeometryClockFrom(now: number): number {
+  return mode === "off" ? NO_GEOMETRY_CLOCK : now;
+}
+
+/**
  * Charge one call to `site`: `reads` layout reads and `writes` layout writes,
  * having started its clock at `t0` — or at `NO_GEOMETRY_CLOCK` for a call that
  * is counted but not timed.

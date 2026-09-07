@@ -16,7 +16,7 @@ import {
   leafGeometryClock,
   NO_GEOMETRY_CLOCK,
   noteGeometry,
-  parentGeometryClock,
+  parentGeometryClockFrom,
 } from "./geometry-cost.js";
 import { blockRow } from "./rows.js";
 import { safeAreaInsets } from "./safe-area.js";
@@ -338,11 +338,21 @@ export function watchBarVisibility(): () => void {
    */
   const apply = () => {
     pending = 0;
-    const t0 = parentGeometryClock();
+    /* **One clock read for the whole frame**, and the timer takes its start
+       from that same value rather than reading again. This used to be a
+       `parentGeometryClock()` followed by a separate `performance.now()` below,
+       which meant the quiet-window comparison happened one clock read later
+       whenever the probe was on — and at the boundary that flipped the branch,
+       so counting could hide the bar mid-jump when not counting left it alone.
+       geometry-cost.ts § `parentGeometryClockFrom` has the reasoning; Sol's F14
+       and docs/postmortems/260907a-a-probe-that-read-the-same-clock-twice.md
+       have how it got in. */
+    const now = performance.now();
+    const t0 = parentGeometryClockFrom(now);
     // A jump we started is not the reader scrolling, and chrome that answers to
     // it would move the ground under a destination already calculated. See
     // `markOurScroll`.
-    if (performance.now() < quietUntil) {
+    if (now < quietUntil) {
       from = window.scrollY;
       if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("barVisibility", t0, 1);
       return;
