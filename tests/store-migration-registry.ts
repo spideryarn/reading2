@@ -992,6 +992,28 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "may only leave this map once `store-migration-witness.json` is re-run at the end of stage " +
       "B, so the reason says the work is done rather than the verdict being re-labelled.",
   },
+  /**
+   * **A new arrival, 2026-09-07**, and it arrived by gaining an import rather
+   * than by being written: the stage 2a review's F1 was that `copyArtefacts`
+   * cannot carry an article whose labels are still pending, and the case that
+   * reproduces it calls `copyArtefacts` — which is the only name left in
+   * `TARGETS`. `evidence: "static-only"` for the reason the four link-preview
+   * entries above give: the file is newer than the stored `touched` map, and
+   * re-running witness 2 is what upgrades it.
+   */
+  "tests/labels-receipt-invalidation.test.ts": {
+    category: "database-integration",
+    evidence: "static-only",
+    reason:
+      "Born on Postgres and could not be anywhere else: its subject is what one transaction does " +
+      "to `article_revisions.nav_label_status` and a `revision_step_runs` row when a labels " +
+      "manifest lands beside a tree — `writeArtefacts`'s receipt deletion, its two refusals, and " +
+      "the `stepIsDone` answers that follow. It drives `beginStep`/`write`/`finishStep` through " +
+      "`pgArtifactsIn` inside a real claim, and rolls the transaction back. `copyArtefacts` is " +
+      "reached by one describe block, which copies into that same Postgres store; there is no " +
+      "filesystem side of any of this to have migrated from. " +
+      "docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md#stage2a-review.",
+  },
   "tests/load-article-serialisation.test.ts": {
     category: "database-integration",
     reason:

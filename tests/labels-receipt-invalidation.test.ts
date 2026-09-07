@@ -88,7 +88,9 @@ import { mintId } from "../src/ids.js";
 import type { CompletedLabelsFile, PendingLabelsFile } from "../src/labels.js";
 import { STEPS, stepIsDone } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
-import { hashBlocks } from "../src/source-hash.js";
+import { hashBlocks, structureHash } from "../src/source-hash.js";
+import { copyArtefacts } from "../src/store/copy-artefacts.js";
+import type { ArtifactKind, ArtifactMap, ArtifactSource } from "../src/store/artifacts.js";
 import { pgArtifactsIn, readsPgArtifacts, stampForStep } from "../src/store/artifacts-pg.js";
 import type { JobDraftRef } from "../src/store/artifacts-pg.js";
 import { mintAttempt } from "../src/store/jobs.js";
@@ -150,13 +152,39 @@ function treeSaying(labelled: boolean): Tree {
   } as unknown as Tree;
 }
 
+/**
+ * **A tree that cuts the article somewhere else** — the same two blocks, a
+ * different section title, so `structureHash` disagrees. What a re-cut looks
+ * like to the store.
+ */
+function aDifferentTree(): Tree {
+  const other = treeSaying(false) as unknown as { nodes: Record<string, { title: string }> };
+  other.nodes.n0!.title = "Somewhere else entirely";
+  return other as unknown as Tree;
+}
+
+/**
+ * **The hash of the tree this file's manifests are written beside.**
+ *
+ * Taken off the *unlabelled* tree and used beside the *labelled* one, which is
+ * exactly what the `labels` step does: `generateLabels` stamps
+ * `structureHash(opts.tree)` into the manifest and the step writes
+ * `mergeLabels(structure, …)` beside it. `structureHash` hashes id, parent,
+ * range, title and gist (and `treatment`) and not `navLabel`, so the two are
+ * equal — pinned as a property of `mergeLabels` in tests/labels-batching.test.ts
+ * and end to end on the `hierarchy` writer in tests/hierarchy-write-guard.test.ts.
+ * It read `"hash-of-the-tree"` until 2026-09-07, when `writeArtefacts` started
+ * checking the claim.
+ */
+const STRUCTURE_HASH = structureHash(treeSaying(false));
+
 /** What a real label run leaves behind: provenance, and the calls that made it. */
 const DONE: CompletedLabelsFile = {
   version: "labels/2",
   generator: "claude-sonnet-5",
   slug: SLUG,
   sourceHash: BLOCKS_HASH,
-  structureHash: "hash-of-the-tree",
+  structureHash: STRUCTURE_HASH,
   structureVersion: "toc/3",
   labels: { [B1]: "the opening", [B2]: "the close" },
   batches: [],
@@ -165,6 +193,14 @@ const DONE: CompletedLabelsFile = {
 /**
  * What `generateHierarchy` writes now: the hashes it knows, and nothing a model
  * produced. `batches: null` is the discriminant.
+ *
+ * **Its `structureHash` is deliberately not the tree's**, and that is a fixture
+ * rather than an oversight: the structure check `writeArtefacts` gained on
+ * 2026-09-07 asks only of a `CompletedLabelsFile`. A pending manifest claims
+ * nothing about currency — it *deletes* the receipt — so there is nothing for a
+ * stale hash on one to falsify. Every `runHierarchyStep` below therefore writes
+ * a mismatched pending manifest and is accepted, which is what keeps that
+ * exclusion deliberate.
  */
 function pendingOver(sourceHash: string): PendingLabelsFile {
   return {
@@ -483,6 +519,179 @@ describe("a tree with no manifest beside it", () => {
         store.write(SLUG, "hierarchy", { tree: treeSaying(true) }, { inputHash: BLOCKS_HASH }),
       ).rejects.toThrow(/tree was written with no labels manifest/);
       void attempt;
+    });
+  });
+});
+
+/**
+ * **A manifest that IS there, and is about some other tree.**
+ *
+ * The refusal above closes the case where a tree arrives with nothing beside
+ * it. It does not close the one where a tree arrives beside a **completed**
+ * manifest that was written against different boundaries: the receipt survives
+ * (`batches` is not null, so nothing is deleted), the status goes to `ready`,
+ * and `STEPS.labels.stamp` compares blocks, prompt and model — never structure
+ * — so `isCurrent` and `stepIsDone` both go on saying the labels are fine. The
+ * article then renders labels written to tell each paragraph apart from a set
+ * of neighbours it no longer has.
+ *
+ * GPT Sol's F2 on stage 2a, 2026-09-06: the claimed invariant was stronger than
+ * the enforced one. No production path reaches it today — both writers of the
+ * tree compute the manifest's `structureHash` off the very structure they merge
+ * into the tree — which is why it was a P2 and not a P0. The store asks anyway,
+ * because "no writer does this today" is the argument the tree-without-manifest
+ * refusal already declined to accept.
+ */
+describe("a completed manifest about a different tree", () => {
+  it("is refused, naming what disagreed and that nothing was written", async () => {
+    await withClaim(async (tx, claimed) => {
+      await runBlocksStep(tx, claimed);
+      const store = pgArtifactsIn(claimed, tx);
+      const attempt = await store.beginStep(SLUG, "labels");
+      await expect(
+        store.write(
+          SLUG,
+          "labels",
+          /* `DONE` is stamped with the hash of `treeSaying(…)`; this write hands
+             over a tree cut somewhere else. Everything else about the write is
+             correct, which is the point — the stamp agrees, the blocks agree,
+             and only the structure does not. */
+          { labels: DONE, tree: aDifferentTree() },
+          { inputHash: BLOCKS_HASH, promptVersion: DONE.version, model: DONE.generator },
+        ),
+      ).rejects.toThrow(/labels manifest was written against a different tree/);
+      void attempt;
+    });
+  });
+
+  it("leaves nothing behind — not the status, not the receipt", async () => {
+    await withClaim(async (tx, claimed) => {
+      await runBlocksStep(tx, claimed);
+      await runHierarchyStep(tx, claimed);
+      expect(await statusOf(tx)).toBe("pending");
+      const store = pgArtifactsIn(claimed, tx);
+      await store.beginStep(SLUG, "labels");
+      await expect(
+        store.write(
+          SLUG,
+          "labels",
+          { labels: DONE, tree: aDifferentTree() },
+          { inputHash: BLOCKS_HASH, promptVersion: DONE.version, model: DONE.generator },
+        ),
+      ).rejects.toThrow();
+      /* The refusal sits with the stamp checks, above `lockStepRun` and above
+         every write — the same "check everything before writing anything"
+         position the tree-without-manifest throw gives its reasons for. A
+         refusal that had already set `ready` would be worse than no refusal:
+         the caller's transaction is what rolls it back today, and that is not a
+         thing to depend on. */
+      expect(await statusOf(tx)).toBe("pending");
+      expect((await runRow(tx, "labels"))?.status).not.toBe("done");
+    });
+  });
+
+  it("does not refuse the two writers the pipeline actually has", async () => {
+    /* The premise, and the thing that would make this whole describe a trap if
+       it were false: a manifest written the way the real writers write it is
+       accepted. Both of them stamp `structureHash(structure)` and hand over
+       `mergeLabels(structure, …)`, and `mergeLabels` touches `navLabel` alone. */
+    expect(structureHash(treeSaying(true))).toBe(STRUCTURE_HASH);
+    await withClaim(async (tx, claimed) => {
+      await runBlocksStep(tx, claimed);
+      await runHierarchyStep(tx, claimed);
+      await runLabelsStep(tx, claimed);
+      expect(await statusOf(tx)).toBe("ready");
+    });
+  });
+});
+
+/**
+ * **Copying an article whose labels have not been bought yet.**
+ *
+ * `copyArtefacts` (src/store/copy-artefacts.ts) walks `STEP_ORDER` and copies
+ * every step the source holds, `beginStep` … `write` … `finishStep`, exactly as
+ * the runner does. The fixture reader lists `tree.json` and `labels.json` under
+ * **both** `hierarchy` and `labels` (tests/helpers/fixture-artefacts.ts § LAYOUT),
+ * because on disk the corpus predates the split and those really are the files
+ * stage 4 as a whole produced.
+ *
+ * For a *completed* manifest that is right, and both writes are the truth. For a
+ * **pending** one it is not: the pending manifest arrives a second time as the
+ * `labels` step, which is the one write `writeArtefacts` refuses outright — a
+ * labels run that produced no batches would delete the very row it is holding.
+ * And because `beginStep`, `write` and `finishStep` are three store calls, the
+ * refusal lands *after* the `labels` run row has been opened, leaving a
+ * `running` receipt behind on a copy that failed.
+ *
+ * Nothing in production calls `copyArtefacts` and the committed corpus is all
+ * completed manifests, which is why this was GPT Sol's F1 rather than a P0. It
+ * is still an article shape the copier cannot carry, and the shape is the one
+ * stage 2a introduced.
+ *
+ * The source here is written out rather than taken from the fixture reader, so
+ * that the case does not need a pending article committed to the corpus — and so
+ * that it says, in one object, exactly which `(step, kind)` pairs create the
+ * problem.
+ */
+describe("copying an article whose labels are still pending", () => {
+  /** The tree, the pending manifest and the blocks — under both steps, as the fixture reader lists them. */
+  function pendingArticle(): ArtifactSource {
+    const held: { [S in string]?: Partial<Record<ArtifactKind, unknown>> } = {
+      hierarchy: {
+        tree: treeSaying(false),
+        labels: pendingOver(BLOCKS_HASH),
+        blocks: { blocks: BLOCKS },
+      },
+      labels: { tree: treeSaying(false), labels: pendingOver(BLOCKS_HASH) },
+    };
+    return {
+      read: async <K extends ArtifactKind>(_slug: string, step: string, kind: K) =>
+        (held[step]?.[kind] ?? null) as ArtifactMap[K] | null,
+      stampFor: async (_slug: string, step: string) =>
+        step === "hierarchy" ? { inputHash: BLOCKS_HASH } : {},
+    } as ArtifactSource;
+  }
+
+  it("copies the tree once, as hierarchy, and does not claim the labels step ran", async () => {
+    await withClaim(async (tx, claimed) => {
+      const copied = await copyArtefacts(pendingArticle(), pgArtifactsIn(claimed, tx), SLUG);
+      expect(copied).toEqual(["hierarchy"]);
+      expect(await statusOf(tx)).toBe("pending");
+    });
+  });
+
+  it("leaves no half-open labels receipt behind", async () => {
+    await withClaim(async (tx, claimed) => {
+      await copyArtefacts(pendingArticle(), pgArtifactsIn(claimed, tx), SLUG);
+      /* The damage the refusal used to do: `beginStep` had already committed a
+         `running` row by the time `write` threw, so the copy failed *and* left a
+         receipt saying the labels step was in progress. */
+      expect(await runRow(tx, "labels")).toBeUndefined();
+    });
+  });
+
+  it("still carries a completed manifest under both steps, which is the case the corpus has", async () => {
+    /* The premise, and the thing that stops the skip above being a skip of
+       everything: a real labels run is copied as a labels run, receipt and all. */
+    const done: ArtifactSource = {
+      read: async <K extends ArtifactKind>(_slug: string, step: string, kind: K) => {
+        const held: Record<string, Partial<Record<ArtifactKind, unknown>>> = {
+          hierarchy: { tree: treeSaying(true), labels: DONE, blocks: { blocks: BLOCKS } },
+          labels: { tree: treeSaying(true), labels: DONE },
+        };
+        return (held[step]?.[kind] ?? null) as ArtifactMap[K] | null;
+      },
+      stampFor: async () => ({
+        inputHash: BLOCKS_HASH,
+        promptVersion: DONE.version,
+        model: DONE.generator,
+      }),
+    } as ArtifactSource;
+    await withClaim(async (tx, claimed) => {
+      const copied = await copyArtefacts(done, pgArtifactsIn(claimed, tx), SLUG);
+      expect(copied).toEqual(["hierarchy", "labels"]);
+      expect(await statusOf(tx)).toBe("ready");
+      expect((await runRow(tx, "labels"))?.status).toBe("done");
     });
   });
 });

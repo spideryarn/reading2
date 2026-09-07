@@ -6,8 +6,19 @@
  * the label pass out of `hierarchy` and made it a step. Most of what that
  * requires is compiler-enforced — `StepName`, `STEP_ORDER`, `STEPS`,
  * `STEP_BUDGET_MS`, `STORAGE`, `STEP_STORAGE`, `STAMP_SOURCE`, `STAGE_ICONS` are
- * all total records, and `npm run typecheck` names the one you forgot. Three
- * things are not, and each of them fails silently:
+ * all total records, and `npm run typecheck` names the one you forgot.
+ *
+ * **A total record asks for a row and never asks what the row says**, which is
+ * the gap GPT Sol's F3 on this stage named: every value here was right and only
+ * its presence was checked. So the two tables whose contents are a claim about
+ * this step — `STORAGE` and `STEP_STORAGE` — are read below, derived from
+ * `produces` so that the next writer of the tree is inside the claim.
+ * `STEP_BUDGET_MS.labels` and `STEP_TIMING.labels` are numbers argued from
+ * measurements, and they are pinned where their evidence lives:
+ * tests/jobs-lease-budget.test.ts and tests/job-state.test.ts.
+ *
+ * Three more things are not compiler-enforced at all, and each of them fails
+ * silently:
  *
  * - **`DEFAULT_INGEST_STEPS` must NOT hold it.** That is the whole change: a
  *   reader pasting a URL no longer waits on the 79.5–92% of stage 4 the label
@@ -47,6 +58,7 @@ import {
 } from "../src/pipeline.js";
 import { STAMP_SOURCE } from "../src/store/artifacts.js";
 import { STORAGE } from "../src/store/artifacts-pg.js";
+import { STEP_STORAGE } from "../src/store/pg.js";
 import type { StepName } from "../src/types.js";
 
 describe("every writer of the tree", () => {
@@ -81,6 +93,28 @@ describe("every writer of the tree", () => {
     for (const name of writesTree) {
       expect(STORAGE[name].tree).toEqual({ at: "column", column: "tree" });
       expect(STORAGE[name].labels).toEqual({ at: "column", column: "labels" });
+    }
+  });
+
+  /**
+   * **And the metadata page says the same two columns**, which is a second
+   * hand-kept table over the same fact.
+   *
+   * `STEP_STORAGE` (src/store/pg.ts) is what `/read/:slug/metadata` prints under
+   * *stored in*, and it is a `Record<StepName, string[]>` — so the compiler asks
+   * for a row and cannot ask what the row says. A step that writes the tree and
+   * lists somewhere else is a page confidently naming the wrong column, which
+   * reads as a finding rather than as the typo it is. Derived from `writesTree`
+   * rather than written out, so the deepening wave inherits the claim.
+   *
+   * GPT Sol's F3 on stage 2a: the values were right and only their presence was
+   * checked.
+   */
+  it("says so on the metadata page too, in the same two columns", () => {
+    for (const name of writesTree) {
+      expect(new Set(STEP_STORAGE[name])).toEqual(
+        new Set(["article_revisions.tree", "article_revisions.labels"]),
+      );
     }
   });
 });

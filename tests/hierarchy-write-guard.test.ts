@@ -153,7 +153,7 @@ beforeAll(async () => {
   blocks = JSON.parse(await readFile(path.join(DIR, "blocks.json"), "utf8")).blocks;
   ({ generateHierarchy } = await import("../src/hierarchy.js"));
   const { isStructural } = await import("../src/block-policy.js");
-  ({ hashBlocks } = await import("../src/source-hash.js"));
+  ({ hashBlocks, structureHash } = await import("../src/source-hash.js"));
   const { blocksArtefact } = await import("../src/blocks.js");
   labelsFor = Object.fromEntries(
     blocks.filter((b) => isStructural(b)).map((b) => [b.id, `Label for ${b.id}`]),
@@ -194,6 +194,10 @@ let generateHierarchy!: typeof import("../src/hierarchy.js")["generateHierarchy"
    this file can ask the same question of the returned artefacts that the stage
    asks of them internally. */
 let hashBlocks!: typeof import("../src/source-hash.js")["hashBlocks"];
+/* Beside `hashBlocks` and for the identical reason: the case at the foot of this
+   file asks whether the manifest's structure hash describes the tree that came
+   back with it. */
+let structureHash!: typeof import("../src/source-hash.js")["structureHash"];
 
 async function run(): Promise<{ threw: Error | null; run?: HierarchyRun }> {
   try {
@@ -467,5 +471,26 @@ describe("generateHierarchy refuses to hand back an invalid tree", () => {
     expect(result.threw).toBeNull();
     expect(result.run?.inputHash).toBe(result.run?.parts.labels.sourceHash);
     expect(result.run?.inputHash).toBe(hashBlocks(result.run!.parts.blocks.blocks));
+  });
+
+  /**
+   * **And the manifest's `structureHash` describes the tree it comes back
+   * beside** — one of the two claims `writeArtefacts` began refusing writes over
+   * on 2026-09-07 (GPT Sol's F2 on stage 2a). This is that writer, driven, rather
+   * than the reduction of it: the stage computes the hash off `structure` and
+   * returns `mergeLabels(structure, {})`, and only the stage knows whether those
+   * two are still the same tree by the time they are handed over together.
+   *
+   * The other writer is the `labels` step, whose two halves are pinned where
+   * they are: `generateLabels` stamps `structureHash(opts.tree)`
+   * (tests/labels-batching.test.ts § *records the manifest that lets a stale
+   * complete set be spotted*), and `mergeLabels` leaves that hash alone (same
+   * file, § `mergeLabels`).
+   */
+  it("reports a structureHash that describes the tree it returns", async () => {
+    modelTree = wholeArticle();
+    const result = await run();
+    expect(result.threw).toBeNull();
+    expect(result.run?.parts.labels.structureHash).toBe(structureHash(result.run!.parts.tree));
   });
 });

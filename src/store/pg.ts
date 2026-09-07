@@ -1459,7 +1459,11 @@ function metaFrom(
  * is. Exhaustive over `StepName` means adding a step to the pipeline fails the
  * typecheck here instead. Found in a review of the built seam, 2026-08-26.
  */
-const STEP_STORAGE: Record<StepName, string[]> = {
+/* **Exported for tests/labels-step-registration.test.ts alone**, which asks that
+   every step producing `tree` lists both columns here. The compiler asks for a
+   row; it cannot ask that the row names the right site, and a row naming the
+   wrong one is a metadata page confidently pointing at the wrong column. */
+export const STEP_STORAGE: Record<StepName, string[]> = {
   /* The fetched document's facts — `RAW_COLUMNS` in src/store/artifacts-pg.ts —
      of which `raw_source_sha256` names the object holding the bytes. That object
      is in the `sources` bucket, which is not a table; `raw_sources` is the row

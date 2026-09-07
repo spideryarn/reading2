@@ -69,6 +69,7 @@ import {
 import { CONTENT_TYPE } from "./blobs.js";
 import type { DocumentKind, RawManifest } from "../fetch.js";
 import { log } from "../log.js";
+import { structureHash } from "../source-hash.js";
 import type { Block, Meta, NavLabelStatus, StepName } from "../types.js";
 import {
   StepRunNotHeld,
@@ -1343,6 +1344,58 @@ export async function writeArtefacts(
     );
   }
 
+  /**
+   * **And the manifest it hands over has to be about the tree it hands over
+   * with it.**
+   *
+   * The refusal above asks the writer to *say something* about the labels. On
+   * its own that is weaker than the design claims, because a writer can answer
+   * with a `CompletedLabelsFile` describing some **other** tree and every later
+   * check agrees with it: `batches` is not null so the receipt is not deleted,
+   * the status goes to `ready`, and `STEPS.labels.stamp` compares the blocks,
+   * the prompt and the model — never the structure. The article then renders
+   * labels written to tell each paragraph apart from a set of neighbours it no
+   * longer has, which is the one failure stage 4b exists to prevent
+   * (src/labels.ts § `structureHash`). GPT Sol's F2 on stage 2a, 2026-09-06.
+   *
+   * **Both writers already satisfy it**, which is why this closes a hole rather
+   * than changing behaviour: `hierarchy` stamps `structureHash(structure)` beside
+   * `mergeLabels(structure, {})`, the `labels` step stamps the same hash (through
+   * `generateLabels`) beside `mergeLabels(structure, run.file.labels)`, and
+   * `mergeLabels` touches `navLabel` alone — which `structureHash` does not hash.
+   * Pinned as a property in tests/labels-batching.test.ts, end to end on the
+   * `hierarchy` writer in tests/hierarchy-write-guard.test.ts, and here in
+   * tests/labels-receipt-invalidation.test.ts.
+   *
+   * **Only of a `CompletedLabelsFile`.** A pending manifest makes no claim to be
+   * current — it deletes the receipt — so a stale `structureHash` on one has
+   * nothing to falsify.
+   *
+   * **And only when the manifest carries one**, which is the same rule
+   * `assertStampAgrees` follows a few lines above: an absent field is not a
+   * clash, it is the absence of a claim. The type requires `structureHash`, so
+   * no compiled writer can omit it; what can is a legacy artefact arriving
+   * through the deliberately shallow shape check — `data/constitution/labels.json`
+   * in the committed corpus is exactly that file, written before stage 4
+   * recorded any of the three hashes, and `copyArtefacts` puts it through here
+   * (tests/store-parity.test.ts § LEGACY_SLUG). Refusing it would turn a fixture
+   * the publish guard already handles correctly into a copy that cannot happen.
+   */
+  if (parts.tree !== undefined && parts.labels !== undefined && parts.labels.batches !== null) {
+    const declared: unknown = parts.labels.structureHash;
+    const actual = structureHash(parts.tree);
+    if (typeof declared === "string" && declared !== actual) {
+      throw new Error(
+        `${step} for "${slug}": the labels manifest was written against a different tree ` +
+          `than the one beside it (manifest structureHash ${declared}, tree ${actual}). ` +
+          `A label tells its paragraph apart from its neighbours, so labels carried onto ` +
+          `re-cut boundaries are wrong in the way src/labels.ts § structureHash describes — ` +
+          `write a PendingLabelsFile instead and let the labels step buy them again. ` +
+          `Nothing has been written.`,
+      );
+    }
+  }
+
   /* **The step-run row is locked here, before any artefact table is touched.**
      It used to be taken at the end, with the stamp, and the transaction made
      that *safe* — a late `StepRunNotHeld` rolls everything back. It was still
@@ -1388,7 +1441,9 @@ export async function writeArtefacts(
    *   deleted.**
    * - **a real `batches`** — a run happened, so `ready`.
    * - **a `tree` with no manifest beside it** — refused, up with the stamps,
-   *   before anything is written.
+   *   before anything is written. So is a `tree` beside a *completed* manifest
+   *   whose `structureHash` is about some other tree, which is the same rule
+   *   asked of the answer rather than of its presence.
    *
    * ## Why the deletion is not optional
    *

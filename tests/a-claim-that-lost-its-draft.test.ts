@@ -57,7 +57,7 @@ import type { AdvanceParts } from "../src/jobs.js";
 import type { LabelsFile } from "../src/labels.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEPS, type PipelineStep, type StepProduct } from "../src/pipeline.js";
-import { hashBlocks } from "../src/source-hash.js";
+import { hashBlocks, structureHash } from "../src/source-hash.js";
 import type { ArtifactKind } from "../src/store/artifacts.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { Block, Job, JobStep, Quotes, StepName, Timeline, Tree } from "../src/types.js";
@@ -156,7 +156,13 @@ function labelsFor(slug: string, blocks: Block[]): LabelsFile {
     generator: "fixture",
     slug,
     sourceHash: hashBlocks(blocks),
-    structureHash: "fixture-structure",
+    /* **The tree beside it, not a constant.** `writeArtefacts` has refused a
+       completed manifest whose `structureHash` is about some other tree since
+       2026-09-07 — labels carried onto re-cut boundaries are the failure stage
+       4b exists to prevent, and a fixture is not exempt from the invariant it is
+       standing in for.
+       docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md#stage2a-review. */
+    structureHash: structureHash(treeFor(slug, blocks)),
     structureVersion: "toc/1",
     labels: Object.fromEntries(blocks.map((b) => [b.id, "A paragraph"])),
     /* `[]`, not `null`, and since 2026-09-06 that is the difference between a

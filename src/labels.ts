@@ -539,15 +539,28 @@ export interface CompletedLabelsFile extends LabelsManifest {
    * and no `generator` — so "labels recovered from a tree, provenance known,
    * batch records lost" is a state this type can no longer express.
    * `example/labels.json` is in exactly that state and therefore matches
-   * **neither** member. It is safe today because nothing loads it: the
-   * filesystem store went on 2026-09-05, `candidateDirs` stopped falling back
-   * to `example/` before that, and no `src/` reader opens the directory —
-   * checked across all 11 committed `labels.json` files, and it is the only
-   * one. If anything ever reads it as a `LabelsFile` it will narrow to
-   * *pending* and report a fully-labelled article as unbought, so give it
-   * `batches: []` and a comment at that point rather than widening this field:
-   * widening it would put a `null` on both sides of the discriminant and take
-   * the union's only guarantee away.
+   * **neither** member — checked across all 11 committed `labels.json` files,
+   * and it is the only one.
+   *
+   * **It is safe because no `src/` reader opens the directory**, which is a
+   * narrower claim than the one that stood here until 2026-09-07. That one said
+   * *nothing loads it*, and GPT Sol was right that this is not literally true:
+   * the filesystem store did go on 2026-09-05 and `candidateDirs` did stop
+   * falling back to `example/` before that, but five suites copy the directory
+   * and `memoryArtefactsFrom` (tests/helpers/memory-artefacts.ts, through
+   * `fixtureArtefacts`) parses this file and plants it as a `LabelsFile` —
+   * the artefact shape check is deliberately shallow, so a `batches: null`
+   * carrying a `version` and a `generator` goes through it unremarked.
+   *
+   * So the narrowing below is not hypothetical: it happens today, in
+   * `tests/quiz-step-registration.test.ts` and its four siblings, and it is
+   * harmless there only because not one of them asks the manifest anything
+   * except its stamp — `stampOf` reads `sourceHash`, `version` and `generator`,
+   * all three of which this file has. **Anything that reads it as a `LabelsFile`
+   * will narrow to *pending* and report a fully-labelled article as unbought**,
+   * so give it `batches: []` and a comment at that point rather than widening
+   * this field: widening it would put a `null` on both sides of the
+   * discriminant and take the union's only guarantee away.
    */
   batches: LabelBatchRecord[];
 }

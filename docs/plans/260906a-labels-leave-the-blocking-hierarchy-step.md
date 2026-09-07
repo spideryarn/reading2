@@ -559,6 +559,105 @@ deletion's own arm is the *throw*: with a carried row stamped against the old bl
 manifest carrying the new hash, `stampForStep` raises `StampDisagrees` rather than answering. Two
 block sets later, the mutation reddens three cases and the last of them is that throw.
 
+### What the stage 2a review found <a id="stage2a-review"></a>
+
+GPT Sol, 2026-09-06, at `high`, closed against commit `94b9c32b`. **No P0 and no P1 — it would have
+shipped the stage as it stood.** Three P2s, all real when checked and all fixed on 2026-09-07.
+
+- **F2 — the claimed invariant was stronger than the enforced one.** `writeArtefacts` refuses a
+  `tree` written with no manifest beside it, and § [Fable's arbitration](#fable-invalidation) says
+  that is what makes the next writer of the tree *say what it did to the labels*. But when a manifest
+  **was** present the store asked only `batches === null`. It never asked whether a **completed**
+  manifest was about the tree it arrived with — so a re-cut tree handed over beside an old
+  `CompletedLabelsFile` kept the receipt, set `ready`, and went on reading current, because
+  `STEPS.labels.stamp` compares blocks, prompt and model and never structure.
+
+  Closed in [`artifacts-pg.ts`](../../src/store/artifacts-pg.ts), with the other pre-write checks:
+  a completed manifest's `structureHash` must equal `structureHash(parts.tree)`.
+  Watched red before the guard existed —
+
+  ```
+  × a completed manifest about a different tree > is refused, naming what disagreed…
+    → promise resolved "undefined" instead of rejecting
+  × a completed manifest about a different tree > leaves nothing behind…
+    → promise resolved "undefined" instead of rejecting
+  ```
+
+  **The review's claim that both writers already agree is true, and was checked rather than
+  trusted.** It reduces to one property — `mergeLabels` touches `navLabel` and `structureHash` does
+  not hash it — which is now pinned in
+  [`tests/labels-batching.test.ts`](../../tests/labels-batching.test.ts) on both of `structureHash`'s
+  canonical forms, watched red by adding `navLabel` to the hashed row. `hierarchy`'s half is pinned
+  end to end in [`tests/hierarchy-write-guard.test.ts`](../../tests/hierarchy-write-guard.test.ts);
+  the `labels` step's half was already pinned, in `generateLabels`'s manifest case.
+
+  **Two corrections the code made to the brief.** First, the check has to be *"where the manifest
+  carries a hash"* rather than unconditional: `data/constitution/labels.json` in the committed corpus
+  has **no** `sourceHash`, `structureHash` or `structureVersion` at all — it predates all three, and
+  it is kept precisely because the publish guard refuses it (§ LEGACY_SLUG in
+  [`tests/store-parity.test.ts`](../../tests/store-parity.test.ts)). An unconditional compare would
+  have made a fixture the design already handles into a copy that cannot happen. Absent-is-not-a-clash
+  is also exactly what `assertStampAgrees` does ten lines above, so the rule is the file's own rather
+  than a concession. Second, the check is on `CompletedLabelsFile` alone: a pending manifest deletes
+  the receipt, so a stale hash on one has nothing to falsify.
+
+- **F1 — `copyArtefacts` could not copy a legitimately pending article.** The fixture reader lists
+  `tree.json` and `labels.json` under **both** `hierarchy` and `labels`, so a pending manifest
+  arrived twice: once correctly as `hierarchy`, and once as `labels`, where `writeArtefacts` refuses
+  it outright. Because `beginStep`, `write` and `finishStep` are three store calls, the refusal
+  landed after the run row was open. Reproduced exactly that way:
+
+  ```
+  × copying an article whose labels are still pending > copies the tree once, as hierarchy…
+    → Error: labels for "…": the labels step wrote a PENDING manifest (batches: null).
+      That would delete the very run row this write is holding.
+  × copying an article whose labels are still pending > leaves no half-open labels receipt behind
+    → the same throw
+  ```
+
+  **Fixed in [`copy-artefacts.ts`](../../src/store/copy-artefacts.ts) rather than in the fixture
+  helper**, which was the other option offered. Taking `labels` out of the helper's layout would have
+  hidden the state from the copier instead of teaching the copier to carry it: the pending manifest is
+  a real article state this stage introduced, any future source can hold it, and the helper's layout
+  is honest about what is on disk. So the copier skips the `labels` step when the manifest it would
+  copy says the labels have not been bought — keyed on the manifest, the same way the store's rule is.
+  The pending manifest still travels, as part of `hierarchy`, where it sets `pending` and deletes the
+  destination's receipt.
+
+- **F3 — the registration values were right and only their presence was checked.** A total
+  `Record<StepName, …>` asks for a row and never asks what the row says. Four things pinned, each
+  where its evidence lives, and each watched red by mutating the value it is about:
+
+  | pinned | where | mutation that reddened it |
+  | --- | --- | --- |
+  | `STEP_BUDGET_MS.labels` | [`jobs-lease-budget`](../../tests/jobs-lease-budget.test.ts) | `700_000` → `600_000` |
+  | `STEP_TIMING.labels` | [`job-state`](../../tests/job-state.test.ts) | the row deleted |
+  | `STEP_STORAGE.labels` | [`labels-step-registration`](../../tests/labels-step-registration.test.ts) | the columns renamed |
+  | `isCurrent("labels")` | [`store-carry-forward`](../../tests/store-carry-forward.test.ts) | the arm made `return true` |
+
+  Two of the four are the shape rather than one more hand-kept list. `job-state`'s threshold case
+  **claimed** to pin every threshold and named two of the four in `STEP_TIMING` plus the fallback, so
+  `labels` and `illustrated` could have moved by any amount under a heading saying they could not; it
+  is now a `Record<StepName, number>` the compiler asks to be total, checked either side of each
+  number. `STEP_STORAGE` is read for **every** step that produces `tree`, derived from `produces`, so
+  the deepening wave is inside the claim without editing the file. The two numbers are pinned as
+  relationships to their evidence rather than as literals — `STEP_BUDGET_MS.labels` must exceed the
+  worst measured pass (682 s) and stay under the claimant's 740 s deadline — so re-tuning is free and
+  breaking the pair is not. `isCurrent`'s arm is driven through `articleMetadata` on a real published
+  revision, one field of the stamp moved at a time, with the *current* row asserted first so the three
+  `false`s cannot be a check that never says yes.
+
+**And one correction to a comment, which the review was right about.** `CompletedLabelsFile.batches`
+in [`labels.ts`](../../src/labels.ts) said `example/labels.json` was safe because *"nothing loads
+it"*. That is not literally true: five suites copy `example/` and `memoryArtefactsFrom`
+([`tests/helpers/memory-artefacts.ts`](../../tests/helpers/memory-artefacts.ts), through
+`fixtureArtefacts`) parses the file and plants it as a `LabelsFile` — the artefact shape check is
+deliberately shallow, so a `batches: null` carrying a `version` and a `generator` goes through
+unremarked. The narrowing the note warns about therefore happens **today**, and is harmless only
+because not one of those suites asks the manifest anything but its stamp. The sentence now says no
+`src/` reader opens the directory and names the helper that does, since the point of the note is that
+the next person can trust it.
+
 ## Groundwork for stage 2, established before any code <a id="stage2-groundwork"></a>
 
 Researched 2026-09-06, against the code rather than from memory. Read this before starting stage 2;
