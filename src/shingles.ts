@@ -47,7 +47,23 @@
  * the panel reach it if it ever needs to (tests/client-imports.test.ts).
  */
 
-import { quoteFinder } from "./quote-match.js";
+import { findQuote, quoteFinder } from "./quote-match.js";
+import type { BlockKind } from "./types.js";
+
+/**
+ * **One block of the article, as the shingler needs it** — its words, and *what
+ * it is*.
+ *
+ * The kind is here rather than inferred, because the one rule below that needs
+ * it — a heading is naming evidence and never text evidence — has to be a fact
+ * about the block and not a guess from its length or a comparison against the
+ * title. A subtitle, a running head and a title repeated as a section heading
+ * are all headings and none of them equals `article.title`.
+ */
+export interface ArticleBlockText {
+  text: string;
+  kind: BlockKind;
+}
 
 /**
  * **How many consecutive words make a window**, and **how many characters it
@@ -92,7 +108,11 @@ export interface ArticleWindow {
  */
 export interface ArticleShingles {
   windows: readonly ArticleWindow[];
-  /** The block texts themselves, which is what density asks its question of. */
+  /**
+   * The block texts themselves, which is what density asks its question of —
+   * **the same prose the windows came from**, headings excluded, so that one
+   * rule about what a heading is holds on both sides of this file.
+   */
   blocks: readonly ArticleWindow[];
 }
 
@@ -140,13 +160,31 @@ export function shingleWindows(text: string): string[] {
  * **Shingle the article once**, from the same `blockText` map the group readers
  * already hold — so a window carries the id of the block it came from and a
  * `quoted` signal can point at a real passage.
+ *
+ * **Text evidence is over prose, and headings are not prose** (GPT Sol's F1,
+ * 2026-09-06). A title of eight words reaching forty characters is itself a
+ * window, so a page that merely repeats the title earned `quoted` — clearing the
+ * default bar, and putting a 2026 successor at a different address on screen as
+ * reception of the 2023 piece. That is precisely the failure this file exists to
+ * prevent, arriving through the signal built to prevent it. A page repeating a
+ * heading is evidence of *naming*, which `named` already covers, so nothing is
+ * lost and the two levels stop overlapping.
+ *
+ * **One rule, both sides.** The first draft dropped headings from `windows` and
+ * kept them in `blocks`, on the reasoning that a mirror reproduces the headings
+ * too — and Sol found the contradiction that follows: a title long enough to
+ * carry five windows made an extract that is *only* the title read as 100%
+ * article words, so the same page the quotation rule had just been taught to let
+ * through was dropped as a copy, and the reader told a second false thing about
+ * it. A heading is naming evidence and nothing else, on every side of this file.
  */
-export function articleShingles(blockText: ReadonlyMap<string, string>): ArticleShingles {
+export function articleShingles(blockText: ReadonlyMap<string, ArticleBlockText>): ArticleShingles {
   const windows: ArticleWindow[] = [];
   const blocks: ArticleWindow[] = [];
-  for (const [blockId, text] of blockText) {
-    blocks.push({ blockId, text });
-    for (const window of shingleWindows(text)) windows.push({ text: window, blockId });
+  for (const [blockId, block] of blockText) {
+    if (block.kind === "heading") continue;
+    blocks.push({ blockId, text: block.text });
+    for (const window of shingleWindows(block.text)) windows.push({ text: window, blockId });
   }
   return { windows, blocks };
 }
@@ -208,6 +246,41 @@ export function shingleOverlap(article: ArticleShingles, extract: string): Shing
  */
 export function isCopy(overlap: ShingleOverlap): boolean {
   return overlap.extractWindows >= COPY_MIN_WINDOWS && overlap.density >= COPY_DENSITY;
+}
+
+/**
+ * **Are these the article's own words?** — the second signal the copy refusal
+ * asks for, over one passage rather than a ratio.
+ *
+ * `isCopy` judges the **search extract**, and an extract is whatever the engine
+ * chose: a long blockquote and one short rebuttal is what a *fisking* looks
+ * like, and it reads as 50% density (GPT Sol's F2, 2026-09-06, with a
+ * 22-window reproduction). The overlapping windows make the five-window floor
+ * weaker than it looks, too — five matches can come from one contiguous twelve
+ * words rather than five independent passages.
+ *
+ * So the caller asks this of the row's own verified `sourceQuote` as well. **A
+ * mirror has no words of its own**, so the words it engages with must be the
+ * article's; a fisking's are its own rebuttal sentence. Two independent signals
+ * both pointing at "this is a copy", rather than one.
+ *
+ * **Over the blocks joined, which is the one place in this file that is** —
+ * corrected 2026-09-06 after Sol found the hole. Density is asked per block
+ * because a join would *invent* windows across a boundary and inflate the copy
+ * ratio with text nobody wrote. This question is the other way round: the
+ * extract of a copy is the article's blocks with the breaks between them, the
+ * spaced matcher reads straight across one, and a model that picked a
+ * `sourceQuote` spanning two paragraphs took a mirror past the refusal. Across a
+ * break the words are still the article's, so joining can only refuse *more*
+ * copies — and a reply's own rebuttal sentence is no more findable in the joined
+ * article than in any one block of it.
+ */
+export function isArticleText(article: ArticleShingles, quote: string): boolean {
+  if (quote.trim() === "") return false;
+  /* Document order, because `blockText` is built from the block array and a Map
+     keeps its insertion order — so this is the article as it reads. */
+  const whole = article.blocks.map((b) => b.text).join("\n\n");
+  return findQuote(whole, quote, undefined, "spaced") !== null;
 }
 
 /** Zero rather than `NaN` for the empty case, which is a real one: a 70-character extract. */

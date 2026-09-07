@@ -1482,6 +1482,8 @@ function mountDebate(debate: Debate | null): ReactNode {
   return createElement(DebatePanel, {
     access: { kind: "owner", owner: debateOwner(debate) },
     onJump: noop,
+    level: null,
+    onLevel: noop,
   });
 }
 
@@ -1682,12 +1684,24 @@ const TIMELINE_LOADING: BandShape = {
  * The icon's signature is long because `lucide-react` writes its presentation
  * attributes onto the `<svg>`. Recorded rather than trimmed — an icon that
  * stopped being `aria-hidden` is exactly the sort of change this file is for.
+ *
+ * `.dbt-bar` is the identification threshold, and it sits **above the scroller
+ * and outside it**, where every other threshold in this app sits. It is drawn
+ * only when group one has rows, which is why `DEBATE_LOADING` below has no
+ * trace of it — a slider over an empty group is a control that cannot change
+ * anything. See `NameBar` in `src/web/DebatePanel.tsx`.
  */
 const DEBATE_SHAPE: BandShape = {
   className: "mode-band gloss dbt",
   label: "Debate",
   head: true,
-  children: ["div.band-head", "p.dbt-frame", "div.dbt-scroll", "div.dbt-again"],
+  children: [
+    "div.band-head",
+    "p.dbt-frame",
+    "div.dbt-bar",
+    "div.dbt-scroll",
+    "div.dbt-again",
+  ],
   headChildren: [
     "svg.lucide.lucide-globe.band-head-icon[aria-hidden,fill,height,stroke,stroke-linecap,stroke-linejoin,stroke-width,viewBox,width,xmlns]",
     "h2",
