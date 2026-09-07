@@ -162,6 +162,13 @@ const MANIFEST = [
   "narrow-window.css",
   "lightbox.css",
   "outline-mode.css",
+  /* Straight after Outline, and the position is a claim rather than a
+     convenience: the two sheets share no selector — `.mode-band.struct` against
+     `.mode-band.outln` — so the cascade cannot decide anything between them,
+     and putting them adjacent is what says the pair is meant to be read
+     together and deleted together when the comparison they exist for is over.
+     docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md. */
+  "structure-mode.css",
   "quotes.css",
   "timeline.css",
   "debate.css",

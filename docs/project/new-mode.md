@@ -292,6 +292,30 @@ list is the checklist above with a compiler behind it. Measured 2026-09-06, on
 | [`src/web/reader/passages.ts`](../../src/web/reader/passages.ts) § `selectPassages` | the passage slot, or `NO_FOUND` |
 | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) § `BAND_SAYS` | what a visitor's band says, asserted against the network |
 
+**Re-measured 2026-09-07, adding `structure`: seven source errors and four test errors.** The list
+above is unchanged and still complete for `src/`; what moved is the test half, because two tables
+written since have the same shape and the same purpose:
+
+| Also red | What it is asking for |
+|---|---|
+| [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx) § `SPENDS` **and** § `DRAWS` | two errors, not one — what the press buys, and what the band draws |
+| [`tests/command-bar.test.tsx`](../../tests/command-bar.test.tsx) § `GENERATES` | whether the bar marks the row `generates`, checked against `MODE_TARGET` from the other side |
+
+That is the mechanism working rather than drifting: each new table is an independently written
+`Record<Mode, …>`, so every one of them adds a place a fifteenth mode has to be decided rather than
+defaulted. **The count is the thing to re-measure, never the thing to trust** — it is a fact about
+today's tables, not a rule, which is why it is written with its date each time.
+
+**And four more tests go red that the typecheck cannot see**, because their tables are keyed on
+`string` or written as a `case` list rather than as a `Record<Mode, …>`. Running the suite is the
+only way to find them, so run it before believing the compiler was the whole checklist:
+
+| Also red, without a type error | What it is asking for |
+|---|---|
+| [`tests/visitor-gaps.test.ts`](../../tests/visitor-gaps.test.ts) § `ALWAYS_FREE` **and** the gap walk | two failures — whether a visitor is short of anything, said twice from two directions |
+| [`tests/page-title.test.ts`](../../tests/page-title.test.ts) § `named` | the word the tab says, checked against `MODE_LABEL` from the other side |
+| [`tests/styles-entry-is-imports-only.test.ts`](../../tests/styles-entry-is-imports-only.test.ts) § `MANIFEST` | **where in the cascade the mode's stylesheet loads**, if it has one. The order *is* the cascade, so a new sheet has to say where it goes and what it sits between |
+
 One test also goes red without the typecheck being run at all:
 [`tests/every-mode-says-which-passages-it-marks.test.ts`](../../tests/every-mode-says-which-passages-it-marks.test.ts)
 walks `MODES` and requires the new mode to be named a producer or a non-producer — which is the
