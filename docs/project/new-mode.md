@@ -65,6 +65,31 @@ Then the residue, which is why this page exists:
   for the modes already in it, and since 2026-09-06
   [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx)
   § `SPENDS` for a new one — an independently written table of what each press buys.*
+- **The band itself**: render it with
+  [`ModeSurface`](../../src/web/ModeSurface.tsx), which owns the `<aside class="mode-band">`, its
+  **required** `aria-label`, the optional `head` and `foot` slots, and nothing else. Do not
+  hand-write the `<aside>` — twelve panels did until 2026-09-07, and the four places that still do
+  are documented exceptions rather than precedents: `FeatureBoundary`'s fallback (a deliberate
+  circuit breaker — read the comment there before you touch it), the `/design` band specimen, and
+  the two demo shells in `preview-sketch.tsx` and `preview-chat-markdown.tsx`.
+  **Decide whether your header row is meant to persist when it has nothing in it**, because
+  `ModeSurface` renders no header element at all for an absent, `null` or boolean `head`:
+  - a row that should **stay put while its contents come and go** — because something below it
+    would otherwise shift, or because it is the only line that cannot wrap — takes an
+    always-present fragment, `head={<>{artefact && <X/>}</>}`;
+  - a header that genuinely **should not exist** in a state takes the conditional directly,
+    `head={artefact && <X/>}`, and no empty row is drawn.
+
+  Five existing bands are in the first camp and it is not obvious from their code: Glossary, Ideas,
+  Quotes and Timeline all empty their header while the artefact loads, and **Diagram's is empty in
+  its ordinary state** — its only header child is a caveat that draws on the projected pictures,
+  while Sketch is the default. Those five were migrated as fragments to keep exactly the row they
+  already had. Do not copy the fragment by reflex; copy the question.
+  [260906f](../plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md).
+  *[`tests/mode-surface-changes-no-markup.test.tsx`](../../tests/mode-surface-changes-no-markup.test.tsx),
+  which pins each band's **surface shape** — its root, its ordered direct children, its header's
+  children — against what it was before the surface existed. Not a full-DOM oracle: it does not see
+  descendants below a direct child, attribute values on children, or a branch no fixture mounts.*
 - **The band's chrome**: the scroller is documented in
   [`styles/mode-band.css`](../../src/web/styles/mode-band.css) § mode band. A `.band-head` title row is **optional, and
   the default is not to have one** — since 2026-09-05 it must not carry the mode's own name, because

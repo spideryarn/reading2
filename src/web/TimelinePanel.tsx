@@ -69,6 +69,7 @@ import {
   TIMELINE_THIN,
 } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
+import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
 
 /**
@@ -364,17 +365,57 @@ export function TimelinePanel({
   );
 
   return (
-    <aside className="mode-band gloss timeline" aria-label="Timeline">
-      <div className="band-head">
-        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
-            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-            stays for the event count below it. */}
-        {timeline && (
-          <span className="gloss-count">
-            {events.length} {events.length === 1 ? "event" : "events"}
-          </span>
-        )}
-      </div>
+    <ModeSurface
+      label="Timeline"
+      feature="gloss timeline"
+      /* **A fragment, because the count is this row's only child.** Gated on
+          `timeline`, so the header is empty while the events are coming —
+          `head={timeline && …}` would hand the surface `null` and no
+          `.band-head` would be drawn at all. */
+      head={
+        <>
+          {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+              docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+              stays for the event count below it. */}
+          {timeline && (
+            <span className="gloss-count">
+              {events.length} {events.length === 1 ? "event" : "events"}
+            </span>
+          )}
+        </>
+      }
+      /* Below the list: this is what you reach for after reading it and
+          disagreeing, not before. Pinned under the scroller through `foot`,
+          carrying the same guard it had as a trailing child.
+
+          **`events.length > 0` is load-bearing and was missing.** The empty
+          state below says the piece has no chronology and deliberately offers
+          no retry, because running it again would find the same nothing and
+          cost another model call — and this button rendered underneath it
+          anyway, contradicting that in the one place a reader would act on.
+          Found in a browser, 2026-08-31; invisible from the code, where "the
+          panel is ready" and "the panel has something to show" are two
+          perfectly reasonable conditions that happen to look identical here.
+
+          A *stale* empty timeline still gets a button — the banner's own.
+          Nothing-to-re-run is a statement about this article, and a stale
+          artefact is by definition about a different one.
+
+          `owner !== null` first, and it is not redundant with `run` returning
+          null: the wrapper `<div className="tl-again">` would otherwise render
+          empty for a visitor, which is a stray gap under the last row rather
+          than nothing. */
+      foot={
+        timeline &&
+        (owner === null || owner.status === "ready") &&
+        owner !== null &&
+        events.length > 0 &&
+        !owner.stale &&
+        !owner.outdated ? (
+          <div className="tl-again">{run("Read it again", true)}</div>
+        ) : null
+      }
+    >
 
       {owner?.error && <p className="gloss-error">{owner.error}</p>}
 
@@ -504,33 +545,9 @@ export function TimelinePanel({
               );
             })}
           </div>
-
-          {/* Below the list: this is what you reach for after reading it and
-              disagreeing, not before.
-
-              **`events.length > 0` is load-bearing and was missing.** The empty
-              state above says the piece has no chronology and deliberately
-              offers no retry, because running it again would find the same
-              nothing and cost another model call — and this button rendered
-              underneath it anyway, contradicting that in the one place a reader
-              would act on. Found in a browser, 2026-08-31; invisible from the
-              code, where "the panel is ready" and "the panel has something to
-              show" are two perfectly reasonable conditions that happen to look
-              identical here.
-
-              A *stale* empty timeline still gets a button — the banner's own.
-              Nothing-to-re-run is a statement about this article, and a stale
-              artefact is by definition about a different one. */}
-          {/* `owner !== null` first, and it is not redundant with `run`
-              returning null: the wrapper `<div className="tl-again">` would
-              otherwise render empty for a visitor, which is a stray gap under
-              the last row rather than nothing. */}
-          {owner !== null && events.length > 0 && !owner.stale && !owner.outdated && (
-            <div className="tl-again">{run("Read it again", true)}</div>
-          )}
         </>
       )}
-    </aside>
+    </ModeSurface>
   );
 }
 

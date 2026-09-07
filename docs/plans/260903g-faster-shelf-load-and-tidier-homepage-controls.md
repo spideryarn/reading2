@@ -379,7 +379,7 @@ and returned **do not ship**, twice rightly:
   Now 661 px / **306 px** / **236 px** at 1280 / 390 / 320, `scrollWidth - clientWidth` still 0 at
   all three. It costs 43 px at 390 — the whole difference between the 180 px this first measured and
   the 223 px above — and no breakpoint, because the shelf has none
-  ([design-css-overview.md § Narrow windows](../project/design-css-overview.md#narrow-windows-wrap-do-not-shrink)).
+  ([narrow-windows.md](../project/narrow-windows.md#narrow-windows-wrap-do-not-shrink)).
 - **The title promised a bigger target than existed.** *"drop one anywhere on this box"*, while the
   handlers covered only the form. A PDF let go on the disclosure line or a job row fell through to
   the browser, which opens it over the page — a worse failure than the old dashed box's, because the

@@ -134,6 +134,7 @@ import {
 } from "./debate-levels.js";
 import { hiddenNote, type ThresholdNoun, type ThresholdResult } from "./threshold.js";
 import { JobProgress } from "./JobProgress.js";
+import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip } from "./Tooltip.js";
 import { useHoverCard } from "./useHoverCard.js";
 import { useRenderCount } from "./perf.js";
@@ -799,16 +800,41 @@ export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Pro
   );
 
   return (
-    <aside className="mode-band gloss dbt" aria-label="Debate">
-      <div className="band-head">
-        <Globe size={14} className="band-head-icon" />
-        <h2>Debate</h2>
-        {debate && (
-          <span className="gloss-count">
-            {pages} {pages === 1 ? "page" : "pages"}
-          </span>
-        )}
-      </div>
+    <ModeSurface
+      label="Debate"
+      feature="gloss dbt"
+      /* **The one header that cannot come out empty** — the globe and the
+          `<h2>` are unconditional and only the count is gated — which is what
+          makes Debate the control for the five bands whose headers do empty
+          out. A fragment all the same, so the shape here reads the same as
+          theirs rather than looking like a second pattern. */
+      head={
+        <>
+          <Globe size={14} className="band-head-icon" />
+          <h2>Debate</h2>
+          {debate && (
+            <span className="gloss-count">
+              {pages} {pages === 1 ? "page" : "pages"}
+            </span>
+          )}
+        </>
+      }
+      /* Below the lists: this is what you reach for after reading them and
+          wanting a fresher answer, not before. Pinned under the scroller
+          through `foot` rather than at the end of it — `debate.css` says so of
+          `.dbt-again` in as many words.
+
+          Offered even when both groups are empty, and that is the difference
+          from Timeline's equivalent — an empty timeline is a fact about the
+          article, which running it again cannot change, while an empty debate
+          is a fact about *one search on one day*, which is exactly what running
+          it again does change. */
+      foot={
+        debate && owner.status === "ready" && !owner.stale && !owner.outdated ? (
+          <div className="dbt-again">{run("Search again", true)}</div>
+        ) : null
+      }
+    >
 
       {owner.error && <p className="gloss-error">{owner.error}</p>}
 
@@ -934,16 +960,6 @@ export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Pro
             <p className="dbt-verified">{DEBATE_EXTRACTS_ONLY}</p>
           </div>
 
-          {/* Below the lists: this is what you reach for after reading them and
-              wanting a fresher answer, not before. Offered even when both
-              groups are empty, and that is the difference from Timeline's
-              equivalent — an empty timeline is a fact about the article, which
-              running it again cannot change, while an empty debate is a fact
-              about *one search on one day*, which is exactly what running it
-              again does change. */}
-          {!owner.stale && !owner.outdated && (
-            <div className="dbt-again">{run("Search again", true)}</div>
-          )}
         </>
       )}
 
@@ -971,7 +987,7 @@ export function DebatePanel({ access, onJump, level: chosenLevel, onLevel }: Pro
           </div>
         </FloatingPortal>
       )}
-    </aside>
+    </ModeSurface>
   );
 }
 
