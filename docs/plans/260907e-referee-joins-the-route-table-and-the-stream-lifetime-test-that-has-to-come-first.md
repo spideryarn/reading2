@@ -371,6 +371,40 @@ and its three assertions — `shelfStore.read(slug)` before `scanArticleSource(s
 `withSpendAttribution` — are kept exactly, because they are an owner-isolation control, not a
 formatting detail.
 
+#### Stage 2, as built — and the purity evidence
+
+`src/routes.ts` 8,482 → 8,540 lines. **The file got longer, and that is expected**: 260907b says so
+plainly — the payoff is an enumerable dispatch contract and fewer simultaneous editors in one region,
+not a smaller file. `serveAuthenticatedApi`'s chain lost 122 lines; the table gained more, because a
+row carries a `kind`, a `method` and a `pattern` where a guard carried an `if`.
+
+**The purity evidence, mechanical rather than asserted:**
+
+- the eight handler bodies, normalised (the permitted substitutions applied, comments and whitespace
+  collapsed) and captured from the chain **before** the move and from the table rows **after** it:
+  `diff` is **empty**. 150, 180, 333, 137, 179, 121, 138 and 114 characters, unchanged on both sides.
+- exported names before and after: **identical**, 13 of them.
+- `EXPECTED_AUTH_ROUTES` — the 81 `(method, match)` pairs — **not touched**. The contract test's own
+  header says that is the whole evidence the move was behaviour-preserving, and that a domain which
+  cannot move without editing it is a finding about the move rather than a line to edit.
+
+**Three tests went red, all three by design, and none of them is the contract:**
+
+| Test | Why, and what was done |
+|---|---|
+| `referee-scan-route` § *whose manuscript this is* | Predicted by 260907b to the line. It cut the handler with the closing brace **pinned at four spaces** — the guard's indentation inside the chain — so a two-space table row returns `""` and its presence control fires. Re-anchored on the row's `pattern:`, since a row has no binding name. Its three assertions are unchanged. |
+| contract § *answers the moved domains from the table* | The list of which domains have moved. Its own comment: *"Editing it is what a stage does; `EXPECTED_AUTH_ROUTES` is what a stage may not touch."* Eight rows added, and `/api/referee` added to the moved-prefix check that proves no moved route is also still a guard. |
+| contract § *keeps the table in the chain's order* | Same eight rows, **prepended**, which is what that case exists to enforce. |
+
+**Mutation 4, the acceptance test for the move itself:** `await` → `void` in the *moved* criteria
+closure. `tests/referee-stream-lifetime.test.ts` goes **red** — *"the request answered while the
+stream was still running"* — while `tests/authenticated-api-route-contract.test.ts`, including
+`assertHandlersAwaited`, stays **green**. That is the syntax tripwire failing to see a real
+launch-and-resolve, measured rather than argued, and it is the reason Stage 1 had to exist before
+Stage 2. Reverted; the normalised bodies diff clean again afterwards.
+
+Ten files / 587 tests green together, `npm run typecheck` clean.
+
 ### Stage 3 — the contract test earns the property the security map relies on
 
 One case added to `tests/authenticated-api-route-contract.test.ts`: `requireUser` is called **exactly

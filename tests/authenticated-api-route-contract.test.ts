@@ -1839,6 +1839,15 @@ describe("the authenticated API's route contract", () => {
       expect(sorted(parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match))))
         .toEqual(
           sorted([
+            // referee, 260907e
+            "GET regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
+            "PATCH regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+            "DELETE regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+            "GET regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
+            "GET regex /^\\/api\\/referee\\/scan\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/referee\\/mirror\\/([\\w.%-]+)$/",
             // jobs and uploads, stage 3b
             "GET literal /api/jobs",
             "POST literal /api/uploads",
@@ -1856,7 +1865,7 @@ describe("the authenticated API's route contract", () => {
             "GET literal /api/billing/usage",
           ]),
         );
-      const moved = ["/api/billing", "/api/jobs", "/api/uploads"];
+      const moved = ["/api/billing", "/api/jobs", "/api/uploads", "/api/referee"];
       expect(
         parsed.guards.filter(
           (g) => !g.fromTable && moved.some((p) => describeMatch(g.match).includes(p)),
@@ -1889,6 +1898,14 @@ describe("the authenticated API's route contract", () => {
         parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match)),
         "the table's rows are the bottom of the chain in the order it had them; a domain is prepended, never appended, and the interleave inside jobs/uploads is not to be tidied",
       ).toEqual([
+        "GET regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)$/",
+        "PATCH regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+        "DELETE regex /^\\/api\\/referee\\/criteria\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/referee\\/scan\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/referee\\/mirror\\/([\\w.%-]+)$/",
         "GET literal /api/jobs",
         "POST literal /api/uploads",
         "DELETE regex /^\\/api\\/uploads\\/([\\w-]+)$/",
