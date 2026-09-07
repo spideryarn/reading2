@@ -105,7 +105,7 @@ describe("the two rules the stylesheet is written under", () => {
     expect(used.filter((n) => !defined.has(n))).toEqual([]);
   });
 
-  it("gives every animated pseudo-element a resting transform", () => {
+  it("gives every transform-animating pseudo-element a real resting transform", () => {
     /* **This class of bug has now happened three times in this one file.**
        Under the motion guard an animation runs for 0.01ms and fills nothing, so
        a `::before` whose only `transform` lives in its keyframes reverts to
@@ -114,14 +114,45 @@ describe("the two rules the stylesheet is written under", () => {
        spider, sitting perfectly still. Two of the three shipped that way and
        were caught by reading rather than by anything automatic.
 
-       `spya-type`'s cursor animates `opacity` rather than `transform` and
-       carries an explicit `transform: none` so that this can stay a flat rule
-       with no exception in it. */
-    const blocks = [...RULES.matchAll(/::(?:before|after)\s*\{([^}]*)\}/g)].map(
-      (m) => m[1] as string,
+       **The first version of this test accepted `transform: none`**, which is
+       exactly the broken state it exists to forbid — so it would have waved all
+       three through (GPT Astra, 2026-09-07). It now reads the keyframes the
+       block actually runs: a pseudo-element that animates `transform` needs a
+       static one that is not `none`; one that animates something else needs
+       nothing. The cursor and the radius overlay are in the second group and
+       keep an explicit `transform: none` as a convention. */
+    const keyframes = new Map(
+      [...RULES.matchAll(/@keyframes\s+([a-z0-9-]+)\s*\{([\s\S]*?)\n\}/g)].map(
+        (m) => [m[1] as string, m[2] as string] as const,
+      ),
     );
-    const offenders = blocks.filter((b) => /animation:/.test(b) && !/(^|;)\s*transform:/.test(b));
+    const offenders: string[] = [];
+    for (const m of RULES.matchAll(/([^{}]*::(?:before|after))\s*\{([^}]*)\}/g)) {
+      const selector = (m[1] as string).trim();
+      const block = m[2] as string;
+      const name = block.match(/animation:\s*([a-z][a-z0-9-]*)/)?.[1];
+      if (!name) continue;
+      if (!/transform/.test(keyframes.get(name) ?? "")) continue;
+      const resting = block.match(/(?:^|;)\s*transform:\s*([^;]+)/)?.[1]?.trim();
+      if (!resting || resting === "none") offenders.push(selector);
+    }
     expect(offenders).toEqual([]);
+  });
+
+  it("keeps the letters positioned, so a pseudo-element resolves against one", () => {
+    /* Take `position: relative` off the letters and every other guard here
+       stays green while three animations quietly hang their pseudo-element off
+       the 136px anchor instead of the 8px letter (GPT Astra, 2026-09-07). A
+       syntactic check for a geometric fact is a poor substitute for a browser,
+       and it is still the difference between catching that regression and
+       shipping it. */
+    const base = RULES.match(/\.spya-anim \.logo-letter\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(base).toMatch(/position:\s*relative/);
+  });
+
+  it("keeps the mark's wrapper positioned, for the same reason", () => {
+    const base = RULES.match(/\.spya-anim \.logo-mark\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(base).toMatch(/position:\s*relative/);
   });
 });
 
@@ -186,10 +217,28 @@ function logo(): HTMLAnchorElement {
  * pair rather than from listeners on the element, so both the type name and
  * `pointerType` have to be supplied by hand.
  */
-function pointer(type: string, init: { pointerType?: string; button?: number } = {}) {
+function pointer(
+  type: string,
+  init: { pointerType?: string; button?: number; pointerId?: number } = {},
+) {
   const e = new MouseEvent(type, { bubbles: true, button: init.button ?? 0 });
   Object.defineProperty(e, "pointerType", { value: init.pointerType ?? "mouse" });
+  Object.defineProperty(e, "pointerId", { value: init.pointerId ?? 1 });
   return e;
+}
+
+/**
+ * End a press the way the browser does: on `window`.
+ *
+ * **Not on the element**, and that is the whole point of the listener the hook
+ * installs. A press that starts on the wordmark and finishes anywhere else —
+ * a hand that drifted, a finger the browser decided was scrolling — fires no
+ * `pointerup` on the link at all, so a hook that waited for one would never
+ * learn that the gesture was over. Dispatching here is what makes these tests
+ * about the real end of a gesture rather than about the convenient one.
+ */
+function release(type: "pointerup" | "pointercancel", pointerId = 1) {
+  window.dispatchEvent(pointer(type, { pointerId }));
 }
 
 /** The animation class currently on the anchor, or null. */
@@ -275,7 +324,7 @@ describe("the long press", () => {
 
     const click = new MouseEvent("click", { bubbles: true, cancelable: true });
     act(() => {
-      bare().dispatchEvent(pointer("pointerup", { pointerType: "touch" }));
+      release("pointerup");
       bare().dispatchEvent(click);
     });
     /* The point of the whole gesture: a reader who held the wordmark down to
@@ -291,12 +340,103 @@ describe("the long press", () => {
     });
     act(() => void vi.advanceTimersByTime(400));
     act(() => {
-      bare().dispatchEvent(pointer("pointerup", { pointerType: "touch" }));
+      release("pointerup");
     });
     /* Still running while the reader looks at it — a finger has no un-hover, so
        something has to end it. */
     expect(bare().className).toContain("spya-anim");
     act(() => void vi.advanceTimersByTime(5000));
+    expect(bare().className).not.toContain("spya-anim");
+  });
+
+  it("keeps the suppression when the pointer leaves and comes back mid-hold", () => {
+    /* Hold past the threshold, slip a pixel outside the control, come back
+       while still holding, and release. The earlier version cleared its
+       suppression flag on `pointerleave`, so this navigated — a reader who held
+       the wordmark to watch it, moved a hair, and let go was sent home.
+       Leaving ends the *hover*; only the release ends the *gesture*.
+       GPT Astra, 2026-09-07. */
+    if (LOGO_ANIMATIONS.length === 0) return;
+    act(() => root.render(<Bare />));
+    act(() => {
+      bare().dispatchEvent(pointer("pointerdown"));
+    });
+    act(() => void vi.advanceTimersByTime(400));
+    act(() => {
+      bare().dispatchEvent(pointer("pointerout"));
+      bare().dispatchEvent(pointer("pointerover"));
+    });
+
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    act(() => {
+      release("pointerup");
+      bare().dispatchEvent(click);
+    });
+    expect(click.defaultPrevented).toBe(true);
+  });
+
+  it("ignores a second pointer, so it cannot erase the first one's gesture", () => {
+    /* One finger holds past the threshold; a second brushes the wordmark and
+       lifts; the first lets go. Without an owning `pointerId` the second press
+       reset the timers and cleared the first's suppression, and the release
+       navigated. GPT Astra, 2026-09-07. */
+    if (LOGO_ANIMATIONS.length === 0) return;
+    act(() => root.render(<Bare />));
+    act(() => {
+      bare().dispatchEvent(pointer("pointerdown", { pointerType: "touch", pointerId: 1 }));
+    });
+    act(() => void vi.advanceTimersByTime(400));
+    act(() => {
+      bare().dispatchEvent(pointer("pointerdown", { pointerType: "touch", pointerId: 2 }));
+      release("pointerup", 2);
+    });
+
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    act(() => {
+      release("pointerup", 1);
+      bare().dispatchEvent(click);
+    });
+    expect(click.defaultPrevented).toBe(true);
+  });
+
+  it("starts the touch linger when the finger lifts, not when the hold begins", () => {
+    /* Hold for five seconds and let go. The first version started the 4.5s
+       linger at the long-press threshold, so the animation ran out under the
+       reader's own finger and lifting it gave them nothing at all. */
+    if (LOGO_ANIMATIONS.length === 0) return;
+    act(() => root.render(<Bare />));
+    act(() => {
+      bare().dispatchEvent(pointer("pointerdown", { pointerType: "touch" }));
+    });
+    act(() => void vi.advanceTimersByTime(5000));
+    expect(bare().className).toContain("spya-anim");
+    act(() => {
+      release("pointerup");
+    });
+    act(() => void vi.advanceTimersByTime(3000));
+    expect(bare().className).toContain("spya-anim");
+    act(() => void vi.advanceTimersByTime(2000));
+    expect(bare().className).not.toContain("spya-anim");
+  });
+
+  it("does not leave an animation orphaned by a tap during the linger", () => {
+    /* Long-press, release, then tap again during the linger and release
+       without a click or a cancel. The second press cancelled the linger timer
+       and scheduled no replacement, so the animation stayed up for good. */
+    if (LOGO_ANIMATIONS.length === 0) return;
+    act(() => root.render(<Bare />));
+    act(() => {
+      bare().dispatchEvent(pointer("pointerdown", { pointerType: "touch" }));
+    });
+    act(() => void vi.advanceTimersByTime(400));
+    act(() => {
+      release("pointerup");
+    });
+    act(() => {
+      bare().dispatchEvent(pointer("pointerdown", { pointerType: "touch" }));
+      release("pointerup");
+    });
+    act(() => void vi.advanceTimersByTime(10_000));
     expect(bare().className).not.toContain("spya-anim");
   });
 
@@ -313,14 +453,16 @@ describe("the long press", () => {
       bare().dispatchEvent(pointer("pointerdown"));
     });
     act(() => void vi.advanceTimersByTime(400));
+    /* Leave the control and release out there — the release the element never
+       sees, which is why the hook listens on `window` for it. */
     act(() => {
       bare().dispatchEvent(pointer("pointerout"));
+      release("pointerup");
     });
+    act(() => void vi.advanceTimersByTime(500));
 
     const later = new MouseEvent("click", { bubbles: true, cancelable: true });
     act(() => {
-      bare().dispatchEvent(pointer("pointerdown"));
-      bare().dispatchEvent(pointer("pointerup"));
       bare().dispatchEvent(later);
     });
     expect(later.defaultPrevented).toBe(false);
@@ -337,7 +479,7 @@ describe("the long press", () => {
     });
     act(() => void vi.advanceTimersByTime(400));
     act(() => {
-      bare().dispatchEvent(pointer("pointerup", { pointerType: "touch" }));
+      release("pointerup");
     });
     act(() => void vi.advanceTimersByTime(500));
 
@@ -356,7 +498,7 @@ describe("the long press", () => {
     act(() => void vi.advanceTimersByTime(120));
     const click = new MouseEvent("click", { bubbles: true, cancelable: true });
     act(() => {
-      bare().dispatchEvent(pointer("pointerup"));
+      release("pointerup");
       bare().dispatchEvent(click);
     });
     expect(click.defaultPrevented).toBe(false);

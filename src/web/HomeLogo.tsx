@@ -109,7 +109,9 @@ export function HomeLogo() {
       {/* `alt=""` and not "Spideryarn": the wordmark beside it already says the
           name, and a screen reader reading it twice is how a decorative image
           becomes noise. The link's own text is the accessible name. */}
-      <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
+      <span className="logo-mark">
+        <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
+      </span>
       <span className="logo-text">
         {"Spideryarn".split("").map((ch, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: fixed string, rebuilt whole

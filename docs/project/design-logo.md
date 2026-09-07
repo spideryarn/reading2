@@ -104,9 +104,11 @@ consequences here are that **no animation may use the variable weight axis** —
 ## What a phone sees
 
 **On a narrow screen there is no word at all.** `.logo-text` is `display: none` below 731px
-([`narrow-window.css`](../../src/web/styles/narrow-window.css)) and `.dock-btn-label` goes at the
-bar's tightest rungs ([`dock-fit.css`](../../src/web/styles/dock-fit.css) § the fit ladder). Both
-copies of the wordmark become the 20px spider and nothing else.
+([`narrow-window.css`](../../src/web/styles/narrow-window.css)), and the dock's `.dock-btn-label`
+goes at **rung 1** — the *first* thing the bar's fit ladder gives up, not the last
+([`dock-fit.css`](../../src/web/styles/dock-fit.css) § the fit ladder), because the wordmark is one
+of the two words that pay least. Both copies become the 20px spider and nothing else, and they do it
+early.
 
 That is why **six of the thirteen animate the mark alone** — a ratio, not an accident. An animation
 that lives entirely in the ten letters is a hover that does nothing for every reader on a phone, and
@@ -199,15 +201,21 @@ fault specific to Geist is one only the reading view will show you.
 - **`--i` is not set in the JSX.** The letter index is ten `:nth-child` rules in the base block; a
   stagger written as `calc(var(--i) * 34ms)` without them resolves to an invalid value and the whole
   declaration is dropped, silently.
-- **A padding change to the wordmark is a change to `--logo-pad`.** Two animations seat a
-  pseudo-element at the spider's centre from that token, which is declared once in the base block
-  for each of the four boxes the wordmark is drawn in — the corner, the dock, the dock at its
-  tightest rung, and `/design`'s gallery. Change one of those paddings without it and the thread and
-  the sweep drift silently. The gallery drew a second spider for exactly this reason before its
-  padding was matched to the corner's.
-- **The vertical budget is 8px and it is genuinely the ceiling.** The dock is 40px tall and clips;
-  the letter box is 20.3px and centred, so its bottom sits at 30.2px. A letter may drop 8px and the
-  mark may drop 8px; at 10px both are cut off square.
+- **Anything drawn *at* the spider hangs off `.logo-mark`, never off a padding.** That wrapper is a
+  box exactly the size of the image, so `inset: 0` on it is the mark wherever a layout has put it.
+  The version before it derived the mark's position from the anchor's left padding, which is simply
+  false on a touch device — under `pointer: coarse` the dock's wordmark grows and **centres its
+  contents** ([`narrow-window.css`](../../src/web/styles/narrow-window.css)), so the spider moves
+  right while a padding-derived offset stays at the edge. It drew a second, offset spider on a
+  tablet, and was 2.8px out even with no growth at all.
+- **The vertical budget is 8px and the margin is about half a pixel.** Measured in the bar rather
+  than calculated, after three separate estimates of it (five pixels, then 1.8, then "an estimate")
+  all turned out to be arithmetic from the keyframe's plateau that ignored the spring easing in
+  front of it. The dock is 40px and clips; Abseil's drop overshoots to **8.78px** before settling,
+  and at that peak the letter's box clears by **0.55px**. Dragline's clears by 0.60px. What clips is
+  rendered pixels rather than boxes, so the visible ink has more room than that — but do not raise
+  8px without measuring it in the bar again. `/design` cannot answer it: its cells clip a whole card
+  rather than a 40px strip, and the coarse-pointer bar is 52px, a different question again.
 - **A pseudo-element on a letter needs the letter to be positioned**, or `left: 100%` means 100% of
   the 136px anchor rather than of the 8px letter. Three animations hang one off a letter and all
   three were written without it; the base block now gives every letter `position: relative`, which
@@ -227,8 +235,11 @@ fault specific to Geist is one only the reading view will show you.
 - **No user setting.** There is one already, and it is the operating system's:
   `prefers-reduced-motion` collapses each of these to a **still** through the global guard in
   [`tailwind.css`](../../src/web/tailwind.css) — not to nothing, which is what a reader expects and
-  is not what they get. Most land on the base style; The Settle holds its lift, the seam stays
-  parted with its thread drawn, and the `i` stays a pixel high. The stylesheet names the still each
+  is not what they get. The guard shortens durations and iteration counts; it does not touch delays
+  and it does not touch fill modes, so what a reader is left with is the underlying style, or a
+  `forwards` 100% frame, or a transitioned pose, depending on the animation. Most land on the base
+  style; The Settle holds its lift, the seam stays parted with its thread drawn, the `i` stays a
+  pixel high, and Radius Sweep sits as a two-tone spider. The stylesheet names the still each
   animation lands on, per animation, and that is the contract a fourteenth has to meet.
 - **No weighting, no rarity, no context.** The wildcard list proposed animations that appear one time
   in fifty, that know the time of day, or that behave differently on a second hover. Some are good

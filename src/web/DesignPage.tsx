@@ -1220,7 +1220,9 @@ function LogoAnimations() {
 function LogoGlyph({ wrapper }: { wrapper: "logo-text" | "dock-btn-label" }) {
   return (
     <>
-      <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
+      <span className="logo-mark">
+        <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
+      </span>
       <span className={wrapper}>
         {"Spideryarn".split("").map((ch, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: fixed string, rebuilt whole

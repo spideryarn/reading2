@@ -296,11 +296,15 @@
    the shipping wordmark broke, which is the exact failure this page exists to
    catch. These three rules supply nothing but the grid.
 
-   The cells are `overflow: hidden`, which is not tidiness: the reading view's
-   `.dock` clips its wordmark the same way (`overflow-y: hidden`, dock.css), so
-   an animation that hangs a thread below the mark is cut off there and must be
-   seen cut off here too. A gallery with generous bleed would show every
-   animation at its best and none of them as it ships. */
+   The cells are `overflow: hidden` so that nothing escapes a card into its
+   neighbour. **That is not the dock's clip and this page cannot stand in for
+   it** — a claim made here for an hour and worth correcting rather than
+   deleting, because it is the mistake the next person will make. The reading
+   view's bar clips at 40px (52px under a coarse pointer) around a 20px mark;
+   a cell here is a whole card with a caption under it, so a letter may fall
+   eight pixels and meet nothing at all. **Dock clearance is verified in the
+   dock**, not here. Nor can this page show a Geist-specific fault: it draws the
+   corner copy's face. GPT Astra, 2026-09-07. */
 .design-logo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
@@ -329,16 +333,6 @@
    no gallery.
 
    `align-self` on the wordmark rather than `align-items` on the cell, so the
-   caption and the class name below it still fill the width and wrap normally.
-
-   **And the corner copy's own padding, which is not cosmetic.** Two animations
-   seat a pseudo-element at `--logo-pad` — the anchor's left padding, which is
-   how they find the spider's centre — and this gallery's `.logo` is neither of
-   the two real copies, so it inherited the token's 0.7rem default while having
-   no padding at all. The result was `spya-radius` drawing its overlay 11px to
-   the right of the image (a second, two-tone spider beside the first) and
-   `spya-dragline` hanging its thread in front of the `S`. Both were seated
-   correctly in the app; the gallery, which is the review surface, was lying
-   about exactly the two expensive ones. Fable's review, 2026-09-07. */
-.design-logo-cell .logo { align-self: flex-start; padding: 0 0.7rem; }
+   caption and the class name below it still fill the width and wrap normally. */
+.design-logo-cell .logo { align-self: flex-start; }
 .design-logo-row { display: flex; gap: 2rem; align-items: center; flex-wrap: wrap; }

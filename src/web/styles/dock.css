@@ -537,6 +537,19 @@
   -webkit-touch-callout: none;
   user-select: none;
 }
+/* **`.logo-mark` is a wrapper around the image and nothing else**, and it is
+   here rather than in styles/logo-animations.css because it is part of the
+   wordmark's structure — HomeLogo.tsx, Dock.tsx § DockHome and DesignPage.tsx §
+   LogoGlyph all render it. It exists so that the two animations which draw
+   something *at* the spider have a box that is exactly the spider, in every
+   layout that can move it — including the grown, centred one a tablet gives the
+   dock's wordmark, where the anchor's padding is not where the image starts.
+   docs/project/design-logo.md § The traps.
+
+   `display: flex` so it hugs the block-level image with no inline leading, and
+   so it is a flex item of `.logo` in its own right — which is the whole point:
+   whatever moves the mark moves this with it. */
+.logo-mark { display: flex; }
 .logo-image { display: block; }
 
 /* The way home, fixed in the very top-left of the window — HomeLogo.tsx.

@@ -182,6 +182,31 @@ const CLICK_SUPPRESSION_MS = 400;
  * Spread onto the link, not onto a wrapper: both copies of the wordmark are
  * already anchors with their own positioning, and a wrapper around a
  * `position: fixed` element is a layout change dressed up as a refactor.
+ *
+ * ## The gesture is owned, and it ends where it ends
+ *
+ * Two properties are load-bearing here, and the first version of this hook had
+ * neither. Both were found by walking the state machine adversarially rather
+ * than by using it (GPT Astra, 2026-09-07).
+ *
+ * **One pointer owns the gesture at a time.** Without an owner, a second finger
+ * landing on the wordmark restarted the timers and wiped the first finger's
+ * click suppression, so a two-finger fumble on a phone could send the reader
+ * home from a long press that was meant to show them a spider. Every event
+ * below that could end or alter a gesture is now ignored unless it carries the
+ * owning `pointerId`.
+ *
+ * **A press ends on `window`, not on the link.** A press that starts on the
+ * wordmark and finishes anywhere else fires no `pointerup` on the element at
+ * all — so the first version cleared its suppression flag on `pointerleave`
+ * instead, which was both too eager and not enough: leaving and coming back
+ * while still holding lost the suppression and the release then navigated,
+ * while a release that happened off the control after a *quick* leave was never
+ * seen. Listening on `window` for the owning pointer's `pointerup` and
+ * `pointercancel` makes "the gesture ended" a fact rather than an inference,
+ * and it is also when the touch linger is allowed to start — which the first
+ * version began at the long-press threshold, so a five-second hold expired
+ * under the reader's own finger.
  */
 export function useLogoAnimation() {
   const [active, setActive] = useState<string | null>(null);
@@ -189,20 +214,23 @@ export function useLogoAnimation() {
      the clear on pointer-leave, or the exclusion in `pickLogoAnimation` would
      be reset by every un-hover and stop excluding anything. */
   const last = useRef<string | null>(null);
+  /**
+   * The press in progress: which pointer owns it, whether it is a finger, and
+   * whether it has passed the long-press threshold.
+   *
+   * `null` between gestures. A ref rather than state throughout this hook,
+   * because every one of these is read inside an event handler or a timer
+   * during the gesture — a re-render is not guaranteed to have happened by
+   * then, and a stale read here is a swallowed click.
+   */
+  const press = useRef<{ id: number; touch: boolean; held: boolean } | null>(null);
+  /** Set by a completed long press, read and cleared by the click that follows. */
+  const suppressClick = useRef(false);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lingerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /* Set when a long press fires, read and cleared by the click that follows it.
-     A ref rather than state because the click handler must see the value from
-     *this* gesture, and a state update scheduled during pointerdown is not
-     guaranteed to have been applied by then. */
-  const suppressClick = useRef(false);
-  /* Clears `suppressClick` shortly after the finger or button comes up. See
-     `onPointerUp` for why the flag cannot simply wait to be read. */
   const flagTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /* Whether the press in progress came from a finger, read by `onContextMenu`.
-     A ref for the same reason as the flag: the context menu arrives during the
-     gesture, not after a re-render. */
-  const pressedByTouch = useRef(false);
+  /** Removes the two `window` listeners the press in progress installed. */
+  const detach = useRef<(() => void) | null>(null);
 
   const clearTimers = useCallback(() => {
     if (pressTimer.current !== null) clearTimeout(pressTimer.current);
@@ -213,13 +241,47 @@ export function useLogoAnimation() {
     flagTimer.current = null;
   }, []);
 
-  useEffect(() => clearTimers, [clearTimers]);
+  /** Everything a gesture leaves behind, undone. Safe to call at any point. */
+  const endGesture = useCallback(() => {
+    detach.current?.();
+    detach.current = null;
+    press.current = null;
+    if (pressTimer.current !== null) clearTimeout(pressTimer.current);
+    pressTimer.current = null;
+  }, []);
+
+  useEffect(
+    () => () => {
+      clearTimers();
+      detach.current?.();
+      detach.current = null;
+    },
+    [clearTimers],
+  );
 
   const roll = useCallback(() => {
     const next = pickLogoAnimation(last.current);
     if (!next) return;
     last.current = next.id;
     setActive(next.id);
+  }, []);
+
+  /**
+   * The flag stands for a moment after the gesture ends, then goes.
+   *
+   * A click does not always follow a long press — iOS cancels it, and so does a
+   * release the browser decides was a drag — and a flag left standing then eats
+   * the reader's *next* ordinary press on the way home, once, for no visible
+   * reason. A real click arrives within a few milliseconds of the release and
+   * clears the flag itself; this is only the backstop for when none does.
+   */
+  const expireSuppression = useCallback(() => {
+    if (!suppressClick.current) return;
+    if (flagTimer.current !== null) clearTimeout(flagTimer.current);
+    flagTimer.current = setTimeout(() => {
+      flagTimer.current = null;
+      suppressClick.current = false;
+    }, CLICK_SUPPRESSION_MS);
   }, []);
 
   return {
@@ -229,10 +291,11 @@ export function useLogoAnimation() {
      * **Two classes, not one.** The animation's own id carries its keyframes;
      * the bare `spya-anim` carries the handful of rules every animation needs
      * and none of them should have to remember — `display: inline-block` on the
-     * letters so a `transform` applies at all, and the `position: relative` that
-     * lets a pseudo-element be placed against the mark. Writing those into each
-     * animation instead is how the twelfth one ships without them and nobody
-     * can see why it does nothing.
+     * letters so a `transform` applies at all, the `position: relative` that
+     * lets a pseudo-element be placed against a letter, and the same on
+     * `.logo-mark` so one can be placed against the spider. Writing those into
+     * each animation instead is how the fourteenth one ships without them and
+     * nobody can see why it does nothing.
      */
     className: active ? `spya-anim ${active}` : "",
     /** The id currently running, for a test or a caller that wants to assert on it. */
@@ -254,11 +317,16 @@ export function useLogoAnimation() {
       },
       onPointerLeave: (e: ReactPointerEvent) => {
         if (e.pointerType === "touch") return;
-        clearTimers();
-        /* The gesture left the control, so no click is coming to read this.
-           Leaving it set would swallow the reader's *next* press instead. */
-        suppressClick.current = false;
+        /* **The animation stops; the gesture does not.** Leaving ends the
+           hover, so the animation goes — but a button still held down is still
+           a gesture, and it may come back. Touching `suppressClick` here is
+           what made a small excursion across the edge and back navigate on
+           release. The gesture ends on `window`, where it actually ends. */
         setActive(null);
+        if (press.current === null) {
+          clearTimers();
+          suppressClick.current = false;
+        }
       },
       onContextMenu: (e: ReactMouseEvent) => {
         /* **Android, and only during a touch long press.**
@@ -268,75 +336,99 @@ export function useLogoAnimation() {
            the animation the reader has just asked for. `user-select: none`
            does not stop it either.
 
-           Guarded on the ref rather than applied always, because a right-click
-           on a link should still offer the menu: that is a reader asking for
-           the link, not for the spider. Not verified on a device — there is no
-           Android here — so it is written to fail open. */
-        if (pressedByTouch.current) e.preventDefault();
+           Guarded on the press in progress rather than applied always, because
+           a right-click on a link should still offer the menu: that is a reader
+           asking for the link, not for the spider. Not verified on a device —
+           there is no Android here. */
+        if (press.current?.touch) e.preventDefault();
       },
       onPointerDown: (e: ReactPointerEvent) => {
         /* Only the primary button. A right-click opens the context menu and a
            middle-click opens a tab; neither is a request to be entertained. */
         if (e.button !== 0) return;
+        /* **A second pointer is not a second gesture.** It used to restart the
+           timers and clear the first pointer's suppression, so one finger
+           brushing the wordmark while another held it sent the reader home. */
+        if (press.current !== null) return;
+
+        /* A new press takes over from a lingering animation rather than leaving
+           it orphaned: cancelling the linger timer without this is how an
+           animation could stay up indefinitely after a second tap. */
+        if (lingerTimer.current !== null) {
+          clearTimeout(lingerTimer.current);
+          lingerTimer.current = null;
+          setActive(null);
+        }
+        if (flagTimer.current !== null) {
+          clearTimeout(flagTimer.current);
+          flagTimer.current = null;
+        }
+        suppressClick.current = false;
+
         /* Read off the event now, not inside the timeout. React stopped pooling
            synthetic events in 17 so `e` would survive, but a handler that keeps
            a live event alive across a timer is the kind of thing that is true
            until someone changes the React version underneath it. */
-        const pointerType = e.pointerType;
-        clearTimers();
-        suppressClick.current = false;
-        pressedByTouch.current = pointerType === "touch";
+        const id = e.pointerId;
+        const touch = e.pointerType === "touch";
+        press.current = { id, touch, held: false };
+
+        const finish = (ev: PointerEvent) => {
+          if (ev.pointerId !== id) return;
+          const held = press.current?.held ?? false;
+          endGesture();
+          if (held) {
+            expireSuppression();
+            /* **The linger starts here, on release, and not at the threshold.**
+               Started at the threshold it ran out under the reader's own
+               finger: a five-second hold finished the animation before they
+               had lifted, and lifting gave them nothing. */
+            if (touch) {
+              lingerTimer.current = setTimeout(() => {
+                lingerTimer.current = null;
+                setActive(null);
+              }, TOUCH_LINGER_MS);
+            }
+          }
+        };
+        const cancel = (ev: PointerEvent) => {
+          if (ev.pointerId !== id) return;
+          endGesture();
+          clearTimers();
+          suppressClick.current = false;
+          setActive(null);
+        };
+        window.addEventListener("pointerup", finish);
+        window.addEventListener("pointercancel", cancel);
+        detach.current = () => {
+          window.removeEventListener("pointerup", finish);
+          window.removeEventListener("pointercancel", cancel);
+        };
+
         pressTimer.current = setTimeout(() => {
           pressTimer.current = null;
+          if (press.current?.id !== id) return;
+          press.current.held = true;
           /* The hold *is* the request, so it re-rolls even mid-hover: a mouse
              user who liked the look of one and wants another holds the button
              down. That is the only way to ask for a second draw without
              leaving the corner and coming back. */
           suppressClick.current = true;
           roll();
-          if (pointerType === "touch") {
-            lingerTimer.current = setTimeout(() => {
-              lingerTimer.current = null;
-              setActive(null);
-            }, TOUCH_LINGER_MS);
-          }
         }, LONG_PRESS_MS);
-      },
-      onPointerUp: () => {
-        pressedByTouch.current = false;
-        if (pressTimer.current !== null) {
-          clearTimeout(pressTimer.current);
-          pressTimer.current = null;
-        }
-        /* **The flag has to expire, not merely wait to be read.** A click does
-           not always follow a long press — iOS cancels it, and so does a
-           release that lands after the pointer has moved — and a flag left
-           standing then eats the reader's *next* ordinary press on the way
-           home, once, for no visible reason. A real click arrives within a few
-           milliseconds of this and clears the flag itself; this is only the
-           backstop for when none does. */
-        if (suppressClick.current) {
-          if (flagTimer.current !== null) clearTimeout(flagTimer.current);
-          flagTimer.current = setTimeout(() => {
-            flagTimer.current = null;
-            suppressClick.current = false;
-          }, CLICK_SUPPRESSION_MS);
-        }
-      },
-      onPointerCancel: () => {
-        clearTimers();
-        suppressClick.current = false;
-        pressedByTouch.current = false;
-        setActive(null);
       },
       onClick: (e: ReactMouseEvent) => {
         /* A long press asked to *see* something, not to leave. Navigating home
            the instant the animation started would make the gesture worse than
            useless — the reader would lose the page they were on to watch a
-           spider for a tenth of a second. `Link` checks `defaultPrevented`
-           before it navigates, so this is enough to stop it. */
+           spider for a tenth of a second. `Link` calls this before it checks
+           `defaultPrevented`, so this is enough to stop it. */
         if (suppressClick.current) {
           suppressClick.current = false;
+          if (flagTimer.current !== null) {
+            clearTimeout(flagTimer.current);
+            flagTimer.current = null;
+          }
           e.preventDefault();
         }
       },
