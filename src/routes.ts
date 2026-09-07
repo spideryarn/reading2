@@ -6632,6 +6632,10 @@ const JOB_PATTERN = /^\/api\/jobs\/([\w.%-]+)$/;
 const CRITERIA_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)$/;
 const ONE_CRITERION_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)\/([\w.%-]+)$/;
 const REFEREE_CLAIMS_PATTERN = /^\/api\/referee\/claims\/([\w.%-]+)$/;
+/* Search: the runs of one article, and one run of one article. Two rows apiece,
+   so both are named here rather than spelled into the rows twice. */
+const SEARCHES_PATTERN = /^\/api\/search\/([\w.%-]+)$/;
+const ONE_RUN_PATTERN = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/;
 
 /**
  * **The ordered table `serveAuthenticatedApi`'s `if` chain is being moved into,
@@ -6650,11 +6654,12 @@ const REFEREE_CLAIMS_PATTERN = /^\/api\/referee\/claims\/([\w.%-]+)$/;
  * Because the move is incremental and must reorder nothing. What is here is the
  * **bottom of the chain, taken upward**: billing was its last four guards, jobs
  * and uploads the nine immediately above those, referee the eight above them,
- * and asking the table after every remaining guard and before the terminal 404
- * puts each of the twenty-one in exactly the position it already had.
+ * search the four above *those*, and asking the table after every remaining
+ * guard and before the terminal 404 puts each of the twenty-five in exactly the
+ * position it already had.
  *
  * **So the rows are in chain order, and prepending is how a domain arrives.**
- * The next slice up goes above the referee rows, not below them — the table's
+ * The next slice up goes above the search rows, not below them — the table's
  * order *is* the chain's order, continued. Taking the slice contiguously is also what
  * preserves the one interleave here for free: `/api/uploads` and
  * `/api/uploads/:id` sit *between* `GET /api/jobs` and `POST /api/jobs`, which is
@@ -6680,6 +6685,79 @@ const REFEREE_CLAIMS_PATTERN = /^\/api\/referee\/claims\/([\w.%-]+)$/;
  * **No `g` or `y` flag**, refused by `assertDispatchableRoutes` below.
  */
 const AUTH_ROUTES: readonly AuthRoute[] = [
+  /* **Search — the runs list, and one run.** The chain's last four guards
+     before this table was consulted, moved here on 2026-09-07 in the order they
+     had, and therefore still answering from the position they answered from.
+     docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md.
+
+     **`POST /api/search/:slug` streams and holds a lock** — `search()` marks the
+     run `searching` and writes SSE — so, like referee's three, this handler
+     returns its promise for `dispatchAuthRoute` to await. A closure that
+     launched the call and resolved would end the request mid-stream with the run
+     still locked. The lock and the stream both live inside `search()`, which
+     this move does not touch. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: SEARCHES_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      send(res, 200, { runs: await sweepSearches(slug) });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: SEARCHES_PATTERN,
+    handler: async ({ request: { req, res } }, captures) => {
+      /* The third endpoint in this file that does not answer with JSON — see
+         `answer`, which writes its own headers and ends the response. It is
+         still reached through `send` for its *failures*: validation throws
+         before a header is written, so a bad request is an ordinary 400. */
+      const searchBody = await readBody(req);
+      await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () =>
+        search(slugPart(captures, 1), searchBody, res),
+      );
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: ONE_RUN_PATTERN,
+    handler: async ({ request: { req, res } }, captures) => {
+      // Slug becomes a directory; the run id is only ever matched against a list.
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      /* Checked before it is destructured — see `objectBody`, which is where
+         the reasoning and the other four callers now live. The sentence this
+         comment used to carry, that "the same hole is latent in the other
+         PATCH routes here", stayed true for as long as it was the only thing
+         enforcing itself. */
+      const { colour } = objectBody(await readBody(req));
+      /* `null` is a real value here — it is how the reader says "put this row
+         back on whatever colour it would have had". So the check cannot be a
+         truthiness one, and it cannot be `!colour` either: slot **0** is a
+         colour, and every `if (!colour)` in this route would have refused the
+         first hue in the palette while accepting the other seven. */
+      if (colour !== null && !isStorableColour(colour)) {
+        throw httpError(400, "Expected { colour } to be null or a small whole number");
+      }
+      send(res, 200, { runs: await searchStore.recolour(slug, id, colour) });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "DELETE",
+    pattern: ONE_RUN_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      // The slug becomes a directory; the id is only ever matched against a list.
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      send(res, 200, { runs: await searchStore.remove(slug, id) });
+    },
+  },
+
   /* **Referee — criteria, claims, scan, mirror.** The chain's last eight guards
      before this table was consulted, moved here on 2026-09-07 in the order they
      had, and therefore still answering from the position they answered from.
@@ -7658,14 +7736,12 @@ export async function serveAuthenticatedApi(
   const liveSessionConnected = /^\/api\/live\/([\w-]+)\/connected$/.exec(path);
   const liveSessionUsage = /^\/api\/live\/([\w-]+)\/usage$/.exec(path);
   const liveSessionClose = /^\/api\/live\/([\w-]+)\/close$/.exec(path);
-  const searches = /^\/api\/search\/([\w.%-]+)$/.exec(path);
-  const oneRun = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/.exec(path);
-  /* The referee, jobs, uploads and billing matchers used to be declared here and
-     handled at the very end of the chain. They are the rows of `AUTH_ROUTES`
-     above, in that same order, and the table is consulted after every guard
-     below and before the terminal 404 — the position they already had, so the
-     move reorders nothing. `oneRun` is now the last matcher this chain declares,
-     and `searches` is the next slice up. */
+  /* The search, referee, jobs, uploads and billing matchers used to be declared
+     here and handled at the very end of the chain. They are the rows of
+     `AUTH_ROUTES` above, in that same order, and the table is consulted after
+     every guard below and before the terminal 404 — the position they already
+     had, so the move reorders nothing. `liveSessionClose` is now the last
+     matcher this chain declares, and chat's threads are the next slice up. */
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
@@ -8450,55 +8526,13 @@ export async function serveAuthenticatedApi(
       });
       return;
     }
-    if (searches && req.method === "GET") {
-      const slug = slugPart(searches, 1);
-      send(res, 200, { runs: await sweepSearches(slug) });
-      return;
-    }
-    if (searches && req.method === "POST") {
-      /* The third endpoint in this file that does not answer with JSON — see
-         `answer`, which writes its own headers and ends the response. It is
-         still reached through `send` for its *failures*: validation throws
-         before a header is written, so a bad request is an ordinary 400. */
-      const searchBody = await readBody(req);
-      await withSpendAttribution({ articleSlug: slugPart(searches, 1) }, () =>
-        search(slugPart(searches, 1), searchBody, res),
-      );
-      return;
-    }
-    if (oneRun && req.method === "PATCH") {
-      // Slug becomes a directory; the run id is only ever matched against a list.
-      const [slug, id] = [slugPart(oneRun, 1), part(oneRun, 2)];
-      /* Checked before it is destructured — see `objectBody`, which is where
-         the reasoning and the other four callers now live. The sentence this
-         comment used to carry, that "the same hole is latent in the other
-         PATCH routes here", stayed true for as long as it was the only thing
-         enforcing itself. */
-      const { colour } = objectBody(await readBody(req));
-      /* `null` is a real value here — it is how the reader says "put this row
-         back on whatever colour it would have had". So the check cannot be a
-         truthiness one, and it cannot be `!colour` either: slot **0** is a
-         colour, and every `if (!colour)` in this route would have refused the
-         first hue in the palette while accepting the other seven. */
-      if (colour !== null && !isStorableColour(colour)) {
-        throw httpError(400, "Expected { colour } to be null or a small whole number");
-      }
-      send(res, 200, { runs: await searchStore.recolour(slug, id, colour) });
-      return;
-    }
-    if (oneRun && req.method === "DELETE") {
-      // The slug becomes a directory; the id is only ever matched against a list.
-      const [slug, id] = [slugPart(oneRun, 1), part(oneRun, 2)];
-      send(res, 200, { runs: await searchStore.remove(slug, id) });
-      return;
-    }
 
     /**
      * **The table, asked after every guard above and before the 404 below.**
      *
-     * Referee, jobs, uploads and billing live in `AUTH_ROUTES` (above
+     * Search, referee, jobs, uploads and billing live in `AUTH_ROUTES` (above
      * `serveAuthenticatedApi`) rather than in this chain. They were its last
-     * twenty-one guards, immediately above the terminal 404, so consulting the
+     * twenty-five guards, immediately above the terminal 404, so consulting the
      * table exactly here leaves each of them where it already was and reorders
      * nothing — the property that makes each increment a rearrangement rather
      * than a behaviour change.
