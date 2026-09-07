@@ -1,149 +1,66 @@
-The per-domain function shape is right; a route table is not. But the plan is not ready to build: Stage 1’s oracle and the ordering analysis need correction first.
+Do not build the draft as written. The ordered closure table itself is defensible—and I prefer it to fourteen `Promise<boolean>` dispatchers—but Stage 1 does not yet prove what it claims, and the staging inventory contains material errors.
 
-I would land the corrected route-contract test as a complete result, then extract two or three domains and reassess. I would not pre-commit to extracting all domains.
+Greg’s newer explicit request supersedes the old “Tier 3 / refused” decision, so I would not abandon the work altogether.
 
 ## Findings
 
-### P1-R1 — Stage 1 is circular and unsafe as written
+- **P1-ORACLE-LIVE — The all-path proof is incomplete.** The frozen AST manifest can establish selection equivalence for every path string, but only if the live implementation is reduced to the same manifest and the production dispatcher demonstrably uses exactly those fields: unchanged `path`, strict method equality, exact predicate or identical regex source/flags, and raw captures. The draft specifies extraction from the frozen original but not the equivalent live-table comparison. The finite corpus cannot fill that gap.
 
-“Derived from the matchers” cannot also be the independent oracle for whether a matcher was deleted. A count is only a canary: deleting one guard while adding another still passes it.
+  The proof also assumes—and should assert—that all guards are top-level, every handled arm terminates, matcher bindings are not reassigned or shadowed, and method mismatch continues. Those facts are true today.
 
-Nor should a generic matrix execute every accepted pair. Several accepted POSTs write data, spend money, contact providers, open SSE streams, or create Stripe objects. Testing their “answer today” is the responsibility of their existing route suites, not a dispatcher inventory.
+- **P1-HANDLER-IDENTITY — The handler-swap mutation is erased by the proposed instrumentation.** Replacing each body with an observation generated from its guard identity means swapped bodies still report their original guard identities. An `id` beside an inline closure has the same weakness. Either define independent handler provenance/body comparison, or remove that mutation and state honestly that the harness proves selection and captures, not that the right semantic body remains attached.
 
-Use this instead:
+- **P1-ORDER-CONTRACT — “Original guard order” and domain grouping conflict.** `shelfOpen` is declared with library at [routes.ts](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:6626) but handled after models, feedback, and reader at [routes.ts](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:7184). Jobs/uploads are likewise interleaved. Conversely, reader GET and PATCH are already consecutive; the original plan’s claimed reader interleave was false. Either preserve global order or explicitly permit permutations after proving every reordered same-method predicate pair disjoint.
 
-1. Hand-write a reviewed `EXPECTED_AUTH_ROUTES` contract with one row per matcher:
+- **P1-LIFETIME-CONTROL — The highest-risk async regression is untested.** `[LIFETIME]` is correct: the collector surrounds awaited `serveApi` at [routes.ts](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:6258), which awaits authenticated dispatch at [routes.ts](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:6401). But body replacement erases whether real closures forward their promises. Add a deferred-handler test proving dispatch remains pending until the selected handler settles; watch removal of the dispatcher `await` go red. `similar` and `projection` deserve explicit coverage because their unusual returns are at [routes.ts](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:7477) and [routes.ts](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:7515).
 
-   ```ts
-   {
-     match: { kind: "literal", path: "/api/models" }
-       // or { kind: "regex", source: "^\\/api\\/chat\\/([\\w.%-]+)$", flags: "" }
-     methods: ["GET"]
-     witnesses: ["/api/models"]
-   }
-   ```
+- **P1-DECODE-CONTROL — `[DECODE]` is right but Stage 1 cannot protect it.** I reproduced without Postgres:
 
-   Do not pin binding names; renaming `timeline` to `timelineRoute` is behavior-neutral.
+  - malformed JSON plus `PUT /api/article/%/visibility` → 400, body parsing wins;
+  - the same malformed inputs with `PATCH /api/library/%` → 500 `URI malformed`, slug decoding wins.
 
-2. Parse [src/routes.ts](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:6555) with the already-installed Babel parser, following the repo’s existing precedent. Extract and normalize:
+  Add those two cases and mutate the order. Moving bodies into closures is exactly when this observable distinction could change.
 
-   - 67 path matchers;
-   - 81 matcher/method guards;
-   - the separate admin gate;
-   - whether every handled arm terminates.
+- **P1-SOURCE-INVENTORY — Stage 2 inventories the wrong problem.** There are five relevant source readers, not four. Only `cacheable-covers-artefact-routes` silently shrinks its universe via `.filter(...)` at [cacheable-covers-artefact-routes.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/tests/cacheable-covers-artefact-routes.test.ts:132). `referee-scan-route`, `owner-isolation`, and `source-store` already have loud presence controls; the latter two inspect `sendSource`, not dispatch syntax. The omitted fifth reader is [embedding-route-failures.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/tests/embedding-route-failures.test.ts:103). Stage 2 should classify all five and say how each survives Stage 3, ideally consuming the new registry/manifest rather than adding more greps.
 
-3. Compare the parsed contract bidirectionally with the hand-written contract. Exact set equality is the oracle; `67` and `81` are only loud failure controls. Reject unsupported guard or matcher syntax rather than omitting it.
+- **P2-SHAPE-OVERRIDE — The reading of 260906h is not fair.** It explicitly rejected a per-route table; it did not reserve “table” for declarative shared behavior. A closure registry is still a table driving selection. Present this as an intentional override justified by Greg’s request and by one centralized handled/miss protocol. The public dispatcher’s `false` warning concerns a security-boundary fallthrough, so it is not exactly the same risk, though fourteen boolean protocols remain unattractive.
 
-4. Black-box only the safe negative matrix: for each witness, call every method not accepted by any matcher that matches that witness and require the exact terminal 404 plus no `Allow` header. This reaches no handler and therefore needs no database.
+- **P2-STATIC-CONTRACT — Specify the table’s actual type.** Static handlers cannot close over per-request `user`, `req`, `res`, `query`, or match arrays. Use a discriminated exact/regex entry type, pass a request context and raw `RegExpExecArray`, perform no decoding in dispatch, and require `await handler(...)` followed by unconditional return. Registration construction must be side-effect-free.
 
-5. Keep positive dispatch behavior in the existing per-route tests, with `/api/models` as the inexpensive harness control.
+- **P2-STATE-STAGING — The lock rationale names the wrong domains.** Relevant registries are comments `answering`, chat `streaming` and `turnOrder`, search `searching`, referee `refereeing`, and claims `pullingClaims`: six, not four. None makes an in-file table conversion materially harder because the existing helpers continue using the same module state; they matter during a later file split. Reassess after one easy domain and one streaming/stateful domain, not merely after two easy transcriptions.
 
-This catches deletion, addition, matcher changes, method changes, unknown syntax, and accidental acceptance of a wrong method. It still does not cover handler behavior, URL restoration, query parsing, streaming completion, or arbitrary regex intersections; the existing focused tests retain those jobs.
+- **P2-HTTP-SCOPE — The 404 claim needs qualification.** After authentication and authorization, method mismatch reaches the sent 404 at [routes.ts](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:8178), with no 405 or `Allow`. A non-admin request under `/api/admin[/…]` gets 403 first, and an anonymous request gets 401. Public routes and the Stripe webhook have separate 405 behavior.
 
-### P1-R2 — The plan’s ordering model is wrong
+- **P2-ISOLATION-SCOPE — Constraint 9 overstates its test.** `owner-isolation` examines `serveApi` with the authenticated handoff removed; it does not inspect `serveAuthenticatedApi`, nor module-scope registration evaluation. Preserve the existing guard, but add the separate invariant that building the static registry invokes no handler or imported service.
 
-I parsed all top-level dispatcher guards. The result is:
+- **P3-METRIC — “27 conditionals” is imprecise.** It is exactly 27 nested `if` statements; there are also seven conditional expressions. This does not affect the routing conclusions.
 
-- Exactly 81 guards have the simple form `matcher && req.method === "VERB"`.
-- The admin namespace gate is the only other dispatch-level condition.
-- Every arm terminates. `similar` and `projection` have an extra nested block, but ultimately `return withSpendAttribution(...)`.
-- No two guards currently accept the same method/path pair.
+## Verified claims
 
-There are two path overlaps:
+The central inventory is correct: 67 endpoint matchers—51 unflagged regexes and 16 exact predicates—and 81 guards. Every guard is exactly `matcher && req.method === "<literal>"`, and every arm terminates.
 
-- `/api/library/search` matches both `librarySearchRoute` and `shelfEntry`, but their methods are GET and PATCH.
-- `/api/chat/:slug/live-tool` matches both `chatLiveTool` and `oneThread`, but their methods are POST versus PATCH/DELETE.
+The universal overlap claim is also correct. The only intersections between distinct matchers are:
 
-Consequently, swapping either overlapping pair does not change behavior. The Stage 1 acceptance criterion “reordering two overlapping guards makes it red” would pin an implementation detail, not behavior.
+- `/api/library/search`: GET search versus PATCH shelf entry.
+- `/api/chat/:slug/live-tool`: POST live tool versus PATCH/DELETE thread.
 
-This also means “literal routes must precede slug routes” is not currently true as a path-level policy. Today:
+The same-method `jobAction`/`jobAdvance` shapes are disjoint because `cancel|retry` cannot equal `advance`. Therefore swapping the library guards is behaviorally equivalent and useless as a mutation control.
 
-- `PATCH /api/library/search` is the shelf-entry route for the article named `search`.
-- `PATCH` or `DELETE /api/chat/foo/live-tool` is the thread route for the thread named `live-tool`.
-
-A domain helper must return `false` after a path-only match with the wrong method. It is handled only when the complete matcher-and-method guard succeeds.
-
-The plan also missed an actual interleave: `shelfOpen` is declared with the library matchers but handled at [src/routes.ts:7184](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:7184), after models, transcription, feedback, and the reader routes. Therefore library extraction reorders unrelated guards just as jobs extraction does. Conversely, the reader GET and PATCH guards are already consecutive; no unrelated handler separates them.
-
-Other declaration/first-use reorderings occur around:
-
-- article versus link preview/summary;
-- source/asset/export versus metadata through projection;
-- quiz mark versus debate;
-- comment subroutes versus `one`;
-- most chat subroutes versus `oneThread`;
-- referee scan versus mirror.
-
-They are harmless today because matcher evaluation is pure and the complete accepted pairs are unique.
-
-### P1-R3 — The helper contract is underspecified
-
-`tryXRoutes(req): Promise<boolean>` cannot literally mean `IncomingMessage`. Domains need the full `ApiRequest`: `res`, `path`, `query`, and sometimes `rawUrl`. The feedback route additionally needs the verified `user` at [src/routes.ts:7103](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:7103).
-
-Specify top-level same-module functions along these lines:
-
-```ts
-async function tryChatRoutes(request: ApiRequest): Promise<boolean>
-async function tryMiscRoutes(user: VerifiedUser, request: ApiRequest): Promise<boolean>
-```
-
-Each handled arm must await all work—including streams—before returning `true`; the helper returns `false` only after every full matcher/method pair misses. The caller then proceeds to the next domain or the one terminal 404.
-
-`noImplicitReturns` helps, but it cannot prevent someone from starting a stream without awaiting it and immediately returning `true`.
-
-### P2-R4 — Stage 2 incorrectly treats four source tests as the same defect
-
-The silent shrink is real in [cacheable-covers-artefact-routes.test.ts:132](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/tests/cacheable-covers-artefact-routes.test.ts:132): `bindingOf(...) === null` is filtered away.
-
-The other named tests already fail loudly:
-
-- [owner-isolation.test.ts:1306](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/tests/owner-isolation.test.ts:1306) asserts both operands exist.
-- [referee-scan-route.test.ts:342](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/tests/referee-scan-route.test.ts:342) explicitly refuses an empty match.
-- [source-store.test.ts:84](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/tests/source-store.test.ts:84) has a positive control on the extracted function body.
-
-The referee test’s exact source shape will need adapting when that guard moves, but it is not silently passing today. Stage 2 should fix the cacheable derivation and update source-location assumptions only when their domains move. Ideally, the cacheable test should reuse Stage 1’s checked parser rather than introducing another grep.
-
-### P2-R5 — The plan conflates same-file extraction with eventual module extraction
-
-Same-file top-level functions are a good, cheap first step. They lower the dispatcher’s complexity and colocate a domain’s matchers with its handlers, reducing shared-hunk collisions.
-
-They do not yet provide file ownership, import isolation, or a smaller module. Therefore the lock registries are not materially harder for Stage 3: handler helpers continue closing over exactly the same module state.
-
-The inventory is also incomplete. There are at least six relevant registries in `routes.ts`, not four:
-
-- `answering` at [src/routes.ts:1010](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:1010)
-- `streaming` at [src/routes.ts:2069](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:2069)
-- `turnOrder` at [src/routes.ts:2120](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:2120)
-- `searching` at [src/routes.ts:3800](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:3800)
-- `refereeing` at [src/routes.ts:3970](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:3970)
-- `pullingClaims` at [src/routes.ts:4211](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:4211)
-
-`streaming` and `turnOrder` are the particularly important omissions. They become a real cost only during a later file split, when their ownership and `processSingleton` identities must move atomically with the helpers that use them.
-
-### P2-R6 — The 404 claim needs narrower wording
-
-Within `serveAuthenticatedApi`, for an authorized user, a matching path with the wrong method falls through to the terminal 404 at [src/routes.ts:8178](/home/greg/code/spideryarn2/.claude/worktrees/api-dispatch-by-domain/src/routes.ts:8178). No authenticated guard sets 405 or `Allow`.
-
-Two qualifications:
-
-- A non-admin requesting any `/api/admin` namespace path gets 403 before method dispatch—even with the wrong method.
-- The overall `serveApi` surface does contain 405s in the public dispatcher and Stripe webhook. “No 405 anywhere on this surface” is correct only if “surface” means the authenticated dispatcher after its admin authorization gate.
-
-## The other stated costs
-
-The outer `try`/`catch` remains in `serveApi`, so ordinary awaited helper boundaries do not change error mapping or logging. `AsyncLocalStorage` explicitly survives awaited function calls, so owner and spend attribution remain intact. Monitoring context likewise does not care about a normal function boundary.
-
-SSE is the sharp edge: do not return `true` until the existing streaming function has completed. Starting it and returning would move remaining spend outside the request snapshot and allow the outer lifecycle to finish early.
+`[URL]`, `[DECODE]`, `[LIFETIME]`, `[RETURN]`, and `[REGEX]` are substantively correct. `[GATE]` needs the nuance that all matchers are currently computed before the admin refusal; only route selection happens afterwards.
 
 ## Recommendation
 
-Proceed, but revise the plan to:
+Keep the static ordered closure table, but revise Stage 1 to:
 
-1. Build the hand-authored, AST-checked route contract plus safe negative-method sweep.
-2. Fix only the genuinely silent cacheable derivation.
-3. Extract two or three same-file domains—billing first is a good control—then reassess.
-4. Treat a later move into per-domain files as a separate, materially harder decision.
+1. Materialize a generated frozen baseline manifest rather than depending indefinitely on `git show`.
+2. Extract the live table into the same normalized representation.
+3. Compare matcher, method, captures, identity, and permissible ordering bidirectionally.
+4. Test the generic dispatcher with synthetic same-method overlaps and a deferred handler.
+5. Add the two decode-order cases.
+6. Remove the impossible body-swap mutation unless handler provenance is independently defined.
 
-Stopping after Stage 1 would be a defensible successful finish. Greg’s new explicit request is enough to override the earlier “Tier 3, do not start” decision, but it does not make extracting every domain automatically worthwhile.
+A corrected Stage 1 is a defensible successful stopping point, though it would not itself complete Greg’s refactoring request. For Stage 3, one-domain-per-commit remains sensible; reassess after one simple and one genuinely awkward domain.
 
-No P0 findings. I modified nothing. The offline `public-dispatch` suite passed 28/28; a targeted private-lane route suite could not start because the sandbox forbids its Postgres loopback, so I am not claiming a database-backed test result.
+I ran the offline `public-dispatch` suite: 28/28 passed. No database-backed result is asserted, and I do not need additional Postgres output for this review.
+
+One workspace warning: while I was reviewing, another process committed a rewritten plan as `c916e1b5` and left `tests/cacheable-covers-artefact-routes.test.ts` modified. Neither I nor my review agents changed files. The rewritten plan accepts several corrections above, but its unordered hand-written route set loses route order/identity and still needs review before being treated as green.

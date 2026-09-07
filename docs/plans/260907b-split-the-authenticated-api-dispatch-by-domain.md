@@ -62,38 +62,72 @@ Three independent opinions, and they did not agree:
 - **Fable**, asked only to arbitrate scope — *"per-area route modules each contributing an ordered
   slice."*
 
-**Settled: per-domain functions in the same module, as 260906h said.** I initially settled this the
-other way — an ordered list of static entries — and Sol's review sent it back. Recording both, since
-the reasoning matters more than the verdict:
+**Settled: a static ordered table of closures.** This section was written three times and the middle
+version was wrong for a process reason worth recording, because the mistake is more instructive than
+the answer.
 
-- My argument was that 260906h's objection is to a *data-driven* table (behaviour derived from data,
-  as in `src/public/routes.ts`) and that an ordered list of closures is not that; and that a boolean
-  protocol creates fourteen instances of the fallthrough hazard this repo already documented at
-  `src/public/routes.ts:361` — *"a `false` returned from here is one `if` away from being a
-  fallthrough into the authenticated table."*
-- **Sol's answer**, which I accept: the boolean hazard is real but bounded and specifiable — each
-  handled arm must await all its work, streams included, before returning `true`, and a helper
-  returns `false` only after every *complete* matcher-and-method pair has missed. A table, meanwhile,
-  buys nothing here that same-module functions do not, and same-module functions are the smaller
-  change.
-- **Astra dissents** and would have taken the table, on the grounds that no-return-value dispatch
-  cannot be got wrong the way a boolean can. Overruled because Sol and this repo's own settled
-  decision agree against it, and because `noImplicitReturns` plus an explicit await rule covers the
-  failure Astra names. Its residual point stands and goes in the stage 3 brief: *`noImplicitReturns`
-  cannot stop someone starting a stream without awaiting it and returning `true`.*
+I first settled on the table. Then a Sol review arrived saying per-domain functions were right and a
+table was not, so I reversed. **That review was answering the previous draft of this plan** — the
+first review process was killed and relaunched against a rewritten prompt, but its `codex` grandchild
+survived the kill and wrote its answer to the same output path eight minutes later. I read it,
+believed it was the new review, and reversed a design decision on it. The real review of the actual
+plan overwrote it afterwards and says the opposite. See § *What the mis-read review cost* below.
 
-The signature is **not** `(req: IncomingMessage)`. Domains need the whole `ApiRequest` — `res`,
-`path`, `query`, sometimes `rawUrl` — and the feedback route at `:7103` additionally needs the
-verified user:
+The live opinions, all on the plan as it actually stands:
 
-```ts
-async function tryChatRoutes(request: ApiRequest): Promise<boolean>
-async function tryMiscRoutes(user: VerifiedUser, request: ApiRequest): Promise<boolean>
-```
+- **Sol** — *"The ordered closure table itself is defensible — and I prefer it to fourteen
+  `Promise<boolean>` dispatchers."*
+- **Astra** — the table, with method mismatch meaning *continue* and gates outside it.
+- **Fable** — per-area modules contributing ordered slices.
+- **[260906h § T3.1](260906h-improve-the-codebase-fourth-sweep.md)** — per-domain functions, and
+  against a table.
+
+**This is an intentional override of 260906h, not a reinterpretation of it.** My earlier framing —
+that 260906h only meant to reject a *data-driven* table, so a closure list was never in scope — was
+not fair to it, and Sol says so (P2-SHAPE-OVERRIDE): *"It explicitly rejected a per-route table; it
+did not reserve 'table' for declarative shared behavior. A closure registry is still a table driving
+selection."* The override is justified by Greg's explicit request, which supersedes the older "Tier 3,
+refused", and by one centralised handled/miss protocol instead of fourteen boolean ones. Sol also
+narrows my supporting argument: `public/routes.ts:361`'s `false` warning is about a *security-boundary*
+fallthrough, so it is not the same risk — though fourteen boolean protocols remain unattractive.
+
+**The type, per Sol (P2-STATIC-CONTRACT).** Static handlers cannot close over per-request state, so
+the entry is a discriminated exact/regex type, the request context and the raw `RegExpExecArray` are
+*passed in*, dispatch does no decoding, and the dispatcher does `await handler(...)` followed by an
+unconditional return. Registration construction must be side-effect-free — and that is a new
+invariant to assert, because `owner-isolation` does not cover it (P2-ISOLATION-SCOPE).
 
 Moving each domain into its own **file** is a further, materially harder change — it is where
-ownership, import isolation and the `processSingleton` identities below actually have to move — and
-it is Greg's call, not this plan's.
+ownership, import isolation and the `processSingleton` identities actually have to move — and it is
+Greg's call, not this plan's.
+
+## What the mis-read review cost, and the check that would have caught it
+
+Recorded because the failure is a *class*, and the class has no existing guard.
+
+**What happened.** A review process was killed and relaunched against a rewritten prompt, reusing the
+same `--output` path. `kill` plus `pkill -P` took the `tsx` wrapper and its direct children; the
+`codex` grandchild survived, finished, and wrote the **old** review to that path. The relaunched run
+wrote the real one over it later.
+
+**Why the standing check did not fire.** [codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md)
+says to confirm *a verdict actually arrived — exit code and answer file*, because a review that
+returned nothing looks exactly like one that found nothing. Both were true here. The file existed and
+was 148 lines of substantive, correct-looking review. What was false is that it answered **the prompt
+I sent**, and nothing in the recipe asks that.
+
+**The cost.** One design decision reversed on it, one plan rewrite, and two commits (`c916e1b5`,
+`2eed75d2`) whose reasoning is sound but whose verdict is now overturned. Nothing built was wrong:
+stage 1 and stage 2 are consistent with *both* reviews, because the two agreed on everything except
+the shape — which is the one thing not yet built. It was caught only because the file showed as
+modified in `git status` afterwards and I looked at why.
+
+**The check to add**, and it is cheap: *reusing an `--output` path across runs makes a stale answer
+indistinguishable from a fresh one.* Either give every run a unique output path, or delete the file
+before launching and treat its reappearance as the completion signal. Better still, have the review
+prompt ask the reviewer to echo a nonce, and refuse an answer that does not carry it — the same
+argument as [silent-success.md](../reusable/silent-success.md), one level up: here the *verification*
+succeeded loudly at the wrong artefact.
 
 ## The constraints anything here must respect
 
