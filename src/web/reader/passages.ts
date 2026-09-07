@@ -31,9 +31,9 @@
  *   painted frame of Search's marks on the way into Plain until 2026-09-06,
  *   when `usePassageLifecycle` made every producer's unmount clear a *layout*
  *   cleanup — so **the frame was already gone before this file existed**. What
- *   was left is worse-wearing than a frame: nine modes that are correct only
+ *   was left is worse-wearing than a frame: the modes that are correct only
  *   because a producer in another file says goodbye properly. The switch below
- *   answers `NOTHING` for those nine, so they no longer depend on it.
+ *   answers `NOTHING` for each of them, so they no longer depend on it.
  *
  * The `never` default is the idiom in visitor.ts § `visitorGap`: a fifteenth
  * mode is a compile error here rather than a mode that quietly shows the last
@@ -87,7 +87,7 @@ export interface PassageSlots {
  * `NO_SEARCHES`, and the same rule the empty slots in reader-capability.ts
  * follow.
  *
- * Exported so a test can assert the nine non-producers share it *by identity*,
+ * Exported so a test can assert that every non-producer shares it *by identity*,
  * which is the only way that property can be checked at all.
  */
 export const NO_FOUND: Found[] = [];
@@ -115,10 +115,10 @@ export function selectPassages(mode: Mode, slots: PassageSlots): PassageSlot {
     case "referee":
       return slots.referee;
     /* **Named rather than fallen into**, which is the whole change: this arm
-       used to be the end of a ternary chain, and nine other modes reached it. */
+       used to be the end of a ternary chain, and every other mode reached it. */
     case "search":
       return slots.search;
-    /* The nine with nothing to mark. `plain` and `hierarchy` have no band at
+    /* The ones with nothing to mark. `plain` and `hierarchy` have no band at
        all; `chat`, `glossary`, `summary`, `diagram`, `remember`, `outline` and
        `debate` have one that publishes no passages — verified rather than
        assumed for chat and remember when they moved

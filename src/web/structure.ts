@@ -66,7 +66,7 @@ export const RUNGS_B: readonly RungB[] = [1, 2, 3, 4, 5];
  * paragraphs than this gets **none of them and an honest total instead** — never
  * a truncated list, which would say the section ends where the list does, and
  * never a centred window, which would say we know which paragraph the reader is
- * on. See `PARAGRAPHS_HAVE_NO_CENTRE`.
+ * on. See `PARAGRAPH_IS_NEVER_CURRENT`.
  */
 export const PARAGRAPH_CAP = 8;
 
@@ -90,7 +90,7 @@ export const PARAGRAPH_CAP = 8;
  * `focusRow` means, so those two may be windowed and counted. GPT Sol's review
  * of the plan, finding 3, 2026-09-07.
  */
-const PARAGRAPHS_HAVE_NO_CENTRE = true;
+const PARAGRAPH_IS_NEVER_CURRENT = false;
 
 export type RowKind = "part" | "section" | "paragraph";
 
@@ -121,6 +121,15 @@ export interface StructureColumn {
    * Rows the window left off each end, as counts to draw — "12 earlier",
    * "9 later". Zero means there is nothing hidden, not that the count is
    * unknown; a column with no window has both at zero.
+   *
+   * **`rows.length + earlier + later` is the number of *drawable* siblings, not
+   * the number of children in the tree**, and the two differ by however many
+   * `rowText` dropped for having no title and no navLabel. A browser pass found
+   * this as an off-by-one — 1,118 against a tree node with 1,119 children
+   * (2026-09-07) — and it is the right answer rather than a defect: a node with
+   * nothing to say cannot be counted as a row the reader could have seen, since
+   * there is no wording that would put it on screen. Counting it would make the
+   * counter a promise the panel can never keep.
    */
   earlier: number;
   later: number;
@@ -138,7 +147,7 @@ export interface StructureProjection {
    * `null` when they *are* drawn, or when the rung never reached them, or when
    * the section is small enough that the number says nothing. A number here is
    * the honest half of what a centred window would have claimed —
-   * `PARAGRAPHS_HAVE_NO_CENTRE`.
+   * `PARAGRAPH_IS_NEVER_CURRENT`.
    */
   paragraphTotal: number | null;
   rungA: RungA;
@@ -172,6 +181,21 @@ const contains = (n: SummaryNode, row: number) => row >= n.startRow && row <= n.
 function makeRow(
   entry: SummaryNode,
   kind: RowKind,
+  /**
+   * **Handed in, never recomputed.** This argument is the whole of the "one
+   * selection model" claim in the docblock above, and until 2026-09-07 it was
+   * not: `makeRow` ran its own `contains(entry, focusRow)` here, which is a
+   * *second* answer to the question the walk below already asked.
+   *
+   * On a well-formed tree the two agree, which is exactly why the test named
+   * "from one selection" passed over the old code — GPT Sol's code review,
+   * finding 4. On a tree with overlapping sibling ranges they do not: the walk
+   * picks the first containing part while this marked every containing part, so
+   * the panel could light two rows and `windowed()` would then centre on the
+   * wrong one. A comment claiming an invariant the code does not have is worse
+   * than no comment.
+   */
+  here: boolean,
   focusRow: number,
   gist: string | undefined,
 ): StructureRow | null {
@@ -200,7 +224,7 @@ function makeRow(
     startRow: entry.startRow,
     endRow: entry.endRow,
     ...(gist !== undefined && { gist }),
-    here: kind === "paragraph" && PARAGRAPHS_HAVE_NO_CENTRE ? false : contains(entry, focusRow),
+    here,
     before: entry.endRow < focusRow,
     supplement,
   };
@@ -214,15 +238,36 @@ function makeRow(
  * middle would drift away from the reader as they moved through a long part, and
  * the counts would describe a list nobody is in.
  *
- * `limit` is `null` when the column has room for everything, which is the case
- * on the corpus at ordinary window heights; the window exists for the short
- * viewport and the long part, where the base rung has no lower rung to fall to
- * (GPT Sol, finding 5). With no current row — the reader is past the last part —
- * it keeps the head of the list rather than an arbitrary middle.
+ * `limit` is `null` when the column has room for everything. With no current row
+ * — the reader is past the last part — it keeps the head of the list rather than
+ * an arbitrary middle.
+ *
+ * **The window is not a nicety, and a browser said so.** The plan claimed the
+ * corpus fits at ordinary heights and that a level which will not fit is handled
+ * by the ladder not climbing to it. Both were wrong: the sibling levels are
+ * mandatory, so there is no lower rung to fall to (GPT Sol's plan review,
+ * finding 5), and on a 22-part article the band clipped **62,737px** of column B
+ * with no scrollbar and nothing to say so — measured in Chrome, 2026-09-07.
+ * `StructurePanel` measures the real rows and hands the capacity in.
+ *
+ * Exported so the panel can apply it to rows it has already measured, rather
+ * than re-running the projection with a limit and drawing a *different* list
+ * from the one the measurement was taken on.
  */
-function windowed(rows: StructureRow[], limit: number | null): StructureColumn {
-  if (limit === null || limit >= rows.length || limit <= 0) {
-    return { rows, earlier: 0, later: 0 };
+export function windowed(rows: StructureRow[], limit: number | null): StructureColumn {
+  if (limit === null || limit >= rows.length) return { rows, earlier: 0, later: 0 };
+  /* **Zero capacity draws zero rows, and it used to draw all of them.** `limit
+     <= 0` fell into the no-limit branch above, so a column measured as having
+     room for nothing produced the *maximum* overflow — the failure mode exactly
+     inverted, and silent, because the panel clips. `null` is the no-limit
+     sentinel and a number is a number. GPT Sol's code review, finding 3. */
+  if (limit <= 0) {
+    /* Split at the reader rather than calling the whole level "later", so the
+       two counters still say which side of them the reader is on — the only
+       thing left to say once no row fits. */
+    const centre = rows.findIndex((r) => r.here);
+    const at = centre === -1 ? 0 : centre;
+    return { rows: [], earlier: at, later: rows.length - at };
   }
   const centre = rows.findIndex((r) => r.here);
   const start =
@@ -243,7 +288,7 @@ export interface StructureInput {
    * Which row the reader is at — `LiveContext.focusRow`.
    *
    * **Section-granular, and every consumer here has to know that**; see
-   * `PARAGRAPHS_HAVE_NO_CENTRE`.
+   * `PARAGRAPH_IS_NEVER_CURRENT`.
    */
   focusRow: number;
   rungA: RungA;
@@ -278,9 +323,21 @@ export function structureProjection({
     return { columnA: empty, columnB: empty, ofPart: null, paragraphTotal: null, rungA, rungB };
   }
 
-  /* ---- the one selection model. Everything below reads these two. ---- */
+  /* ---- the one selection model. Everything below reads these three. ---- */
   const parts = root.children;
-  const currentPart = parts.find((p) => contains(p, focusRow)) ?? null;
+  const selectedPart = parts.find((p) => contains(p, focusRow)) ?? null;
+  /**
+   * **A part with no text of any kind is not a part the reader can be in.**
+   *
+   * `rowText` drops such a node from column A — a blank row in a list whose
+   * whole promise is "this is the shape of the document" is a hole nothing
+   * reports. But the *selection* used to keep it, so column B would list its
+   * sections under a header that was not drawn, beside a column A with nothing
+   * marked: the right-hand column as the inside of a row that is not there.
+   * GPT Sol's code review, finding 4. One `currentPart` for both columns, and
+   * it is `null` when the part cannot be shown.
+   */
+  const currentPart = selectedPart !== null && rowText(selectedPart) !== null ? selectedPart : null;
   const currentSection =
     currentPart?.children.find((s) => contains(s, focusRow)) ?? null;
 
@@ -295,49 +352,85 @@ export function structureProjection({
     const wantsGist =
       !supplement &&
       (rungA >= 4 || (rungA >= 2 && isCurrent) || (rungA >= 3 && isNear(parts, part, currentPart)));
-    const row = makeRow(part, "part", focusRow, wantsGist ? part.gist : undefined);
+    const row = makeRow(part, "part", isCurrent, focusRow, wantsGist ? part.gist : undefined);
     if (row) aRows.push(row);
   }
 
-  /* ---- column B: the current part's sections ---- */
-  const bRows: StructureRow[] = [];
+  /* ---- column B: the current part's sections, then its detail ----
+
+     **The sibling sections are built and windowed on their own, and the current
+     section's paragraphs are spliced in afterwards.** That ordering is the whole
+     of GPT Sol's code review finding 3, and the version before it was wrong in
+     two ways at once: paragraphs went into the same list as the sections and the
+     combined list was windowed, so with a capacity a *higher* rung could draw
+     *fewer* sections than a lower one — the mandatory level losing rows to an
+     optional one — and the paragraph run itself could be cut in half, which is
+     precisely the truncation `PARAGRAPH_CAP`'s comment promises never happens.
+     `earlier`/`later` also stopped being counts of sections and became counts of
+     a mixture, which is a number about nothing.
+
+     So: sections are the level, and the window is over the level. Paragraphs are
+     detail hung off one of its rows, and they go in whole or not at all. */
   let paragraphTotal: number | null = null;
   /* **No current part means no column B, and that is a state rather than a
      failure**: the reader is above the first part or below the last, or the tree
      covers less than the article. Drawing the first part's sections there would
      be a guess presented as an answer. */
   const sections = currentPart && currentPart.supplement !== true ? currentPart.children : [];
+  const sectionRows: StructureRow[] = [];
   for (const section of sections) {
     const isCurrent = section === currentSection;
     const wantsGist =
       rungB >= 5 || (rungB >= 2 && isCurrent) || (rungB >= 4 && isNear(sections, section, currentSection));
-    const row = makeRow(section, "section", focusRow, wantsGist ? section.gist : undefined);
-    if (!row) continue;
-    bRows.push(row);
+    const row = makeRow(
+      section,
+      "section",
+      isCurrent,
+      focusRow,
+      wantsGist ? section.gist : undefined,
+    );
+    if (row) sectionRows.push(row);
+  }
 
-    if (!isCurrent || rungB < 3) continue;
-    const kids = section.children;
-    if (kids.length === 0) continue;
-    if (!allowParagraphs || kids.length > PARAGRAPH_CAP) {
-      /* **The honest half of what a window would have claimed.** Only worth
-         saying when it is news: a section with three paragraphs is not something
-         the reader needs a number for, and the number is drawn at all only
-         because the alternative — a section whose 26 paragraphs are invisible —
-         looks exactly like a section with none. Suppressed when the layer is
-         withheld for a reason that is not about size (`allowParagraphs`), since
-         then the count would explain the wrong absence. */
-      if (allowParagraphs && kids.length > PARAGRAPH_CAP) paragraphTotal = kids.length;
-      continue;
-    }
-    for (const para of kids) {
-      const p = makeRow(para, "paragraph", focusRow, undefined);
-      if (p) bRows.push(p);
+  const columnB = windowed(sectionRows, limitB);
+
+  /* The paragraph rung, spliced under the current section if it is still on
+     screen after the window and if the whole run fits in what is left. */
+  if (rungB >= 3 && currentSection !== null) {
+    const at = columnB.rows.findIndex((r) => r.here);
+    const kids = currentSection.children;
+    if (at !== -1 && kids.length > 0) {
+      const paraRows = kids
+        .map((p) => makeRow(p, "paragraph", PARAGRAPH_IS_NEVER_CURRENT, focusRow, undefined))
+        .filter((p): p is StructureRow => p !== null);
+      const room = limitB === null ? Number.POSITIVE_INFINITY : limitB - columnB.rows.length;
+      const fits = allowParagraphs && kids.length <= PARAGRAPH_CAP && paraRows.length <= room;
+      if (fits) {
+        columnB.rows = [
+          ...columnB.rows.slice(0, at + 1),
+          ...paraRows,
+          ...columnB.rows.slice(at + 1),
+        ];
+      } else if (allowParagraphs) {
+        /* **The honest half of what a window would have claimed**, and it now
+           covers both size reasons: more paragraphs than the cap, and more than
+           the column has room for. Both are "this section is bigger than what
+           you can see", which is the question the number answers.
+
+           Withheld when `allowParagraphs` is false, because that absence is
+           about the *page* — the band covers the prose, or stage 5's labels are
+           not written — and a count there would explain the wrong thing: the
+           reader would read "26 paragraphs" as the reason they cannot see them.
+           And withheld below the cap on a roomy column, where the number is not
+           news: a section with three paragraphs needs no figure. */
+        if (kids.length > PARAGRAPH_CAP || paraRows.length > room) paragraphTotal = kids.length;
+      }
     }
   }
 
   return {
     columnA: windowed(aRows, limitA),
-    columnB: windowed(bRows, limitB),
+    columnB,
     ofPart:
       currentPart === null
         ? null

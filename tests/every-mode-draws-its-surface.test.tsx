@@ -1198,10 +1198,11 @@ const DRAWS: Record<Mode, Draws> = {
      a two-part tree and reads both columns by position. GPT Sol's review of the
      plan, finding 8.
 
-     Structure also draws **no measuring copies**, unlike Outline, so there is no
-     `aria-hidden` duplicate for a raw `textContent` read to be satisfied by —
-     the trap documented on `BAND_SAYS` in tests/public-network-trace.test.tsx.
-     Stage 2 adds them, and this row's scope already survives that. */
+     Structure draws `aria-hidden` measuring copies of both its columns, exactly
+     as Outline does, so this row depends on `readable()` stripping them — the
+     trap documented on `BAND_SAYS` in tests/public-network-trace.test.tsx. Read
+     raw, a `textContent` assertion here would be satisfied by a panel whose
+     visible columns rendered nothing at all. */
   structure: { kind: "band", where: ".mode-band.struct", says: OUTLINE_ROW },
   /* The root's own gist, drawn as the band rather than as a column. */
   summary: { kind: "band", where: ".mode-band.summ", says: ROOT_GIST },

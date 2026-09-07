@@ -26,6 +26,23 @@
    **Stage 1 draws both columns at a fixed rung.** The measured ladders, the
    reserved-height wells and the row window on a short viewport are stage 2. */
 .mode-band.struct {
+  /* **The query container is the band, NOT the grid**, and this one line was a
+     real bug for the length of one commit.
+
+     `container-type` was on `.struct-grid` with `@container (min-width: 364px)`
+     restyling `.struct-grid` — and **an element is never its own query
+     container**, so that rule could never match at any width. What made it look
+     right was the *descendant* query below: `.struct-inner` really is inside
+     `.struct-grid`, so the bracket flipped correctly between a left border and a
+     top border while the grid stayed stubbornly one column. A stacked layout
+     decorated as though it were side by side, on every screen.
+
+     Nothing in the test suite could see it: jsdom performs no layout and
+     evaluates no container query, so the panel tests pass identically either
+     way. It took a browser — docs/reusable/silent-success.md, and the reason
+     docs/project/browser-testing.md exists. GPT Sol's code review and the
+     browser pass found it independently, 2026-09-07. */
+  container-type: inline-size;
   overflow: hidden;
   /* The browser adjusts a scroll container's position to keep visible content
      still when content above it resizes — which is every part boundary here.
@@ -42,20 +59,22 @@
   padding: 0.75rem 0.75rem 0.5rem;
 }
 
-/* **Two tracks, or one, and the switch is `container-type` rather than a width
+/* **Two tracks, or one, and the switch is a container query rather than a width
    read off `--mode-w`.**
 
    `fitMode` reports `modeW: 0` when the band *covers* the prose, while the CSS
    expands the band to the whole viewport (narrow-window.css) — so a query on
    `--mode-w` would stack the columns on the one screen where the band is
    widest. A container query asks the element how wide it actually is, which is
-   the only question with a true answer here. Sol, finding 6.
+   the only question with a true answer here. Sol's plan review, finding 6.
 
-   364px is the content width two 176px tracks and a 12px gutter need; the
-   band's own padding is already outside it, because the query is on this
-   element's content box. */
+   **364px is measured against the BAND's content box**, which is the band's
+   width less its 1px right border and its 24px of horizontal padding — the
+   grid's own box, since the grid has no padding of its own. Two `GIST_MIN` (176)
+   tracks and a 12px gutter need 364, so the band has to be 389px wide, which
+   fits inside `MODE_IDEAL` 400 and not inside `MODE_MIN` 288. Both of those are
+   deliberate: widest is two columns, narrowest is one. */
 .struct-grid {
-  container-type: inline-size;
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.5rem;
@@ -78,6 +97,45 @@
 
 .struct-side {
   min-width: 0;
+}
+
+/* **The measuring copies: laid out, measured, never seen.**
+
+   The rule `OutlinePanel` learned and this copies: a hidden candidate must be
+   laid out at EXACTLY the width the real list gets, or its height is a
+   measurement of something else. So it is `position: absolute` inside the grid
+   with `inset: 0` and the same two-track template — out of flow, so it adds no
+   height and cannot make the panel it is measuring taller, but the same width
+   per column as the real thing.
+
+   `visibility: hidden` and NOT `display: none`: a `display: none` subtree has no
+   layout at all and every `offsetHeight` in it reads 0, which would silently
+   make every column look infinitely roomy — a measurement that cannot fail,
+   which docs/reusable/silent-success.md says is not a measurement.
+
+   `pointer-events: none` because the copies contain buttons. */
+.struct-measure {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  visibility: hidden;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+@container (min-width: 364px) {
+  .struct-measure {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+}
+
+/* The grid is the positioning context for the copies above. It has no other
+   reason to be positioned, so this line belongs to them. */
+.struct-grid {
+  position: relative;
 }
 
 /* The bracket, and the whole of the connector in v1: column B is drawn as the
@@ -128,9 +186,10 @@
 
 /* A count standing in for the rows a window left off. Sized and spaced like a
    row so the level's shape is unbroken, but plainly not one: no hover, no
-   pointer, and italic. It is `aria-hidden` in the markup — a screen reader
-   moving through the list wants the rows, and "12 earlier" is a fact about the
-   drawing rather than about the document. */
+   pointer, and italic. It is **not** `aria-hidden` — it is the only thing that
+   says the level is bigger than what is on screen, so a reader hearing four
+   parts and no counter would be told this article has four parts
+   (StructurePanel.tsx § `Elided`). */
 .struct-elided {
   padding: 0.15rem 0.3rem;
   color: var(--ink-faint);
@@ -203,6 +262,27 @@
   color: var(--ink);
   font-weight: 600;
   background: var(--surface-raised);
+}
+
+/* **The other half of the connector, and the plan promised it before the code
+   had it** (GPT Sol's code review, finding 5). Column B carries a bracket down
+   its left edge; this is the matching mark on the column A row that bracket
+   belongs to, in the same tint and the same 2px, so the eye pairs them. Without
+   it the bracket is a divider between two lists rather than a line from a row to
+   its contents.
+
+   Drawn inside the row's own box, so it lands hard against the gutter between
+   the columns and cannot be clipped by the band's `overflow: hidden`. */
+.struct-side:not(.struct-inner) .struct-row[aria-current] {
+  box-shadow: inset -2px 0 0 0 var(--rule-strong);
+}
+
+/* Stacked, the two columns are above and below rather than left and right, so
+   the marker moves to the bottom edge to point the way the bracket now points. */
+@container (max-width: 363.98px) {
+  .struct-side:not(.struct-inner) .struct-row[aria-current] {
+    box-shadow: inset 0 -2px 0 0 var(--rule-strong);
+  }
 }
 
 /* The number is an address, so it is tabular and it does not wrap: "10" and "9"

@@ -94,60 +94,104 @@ const ALL = {
   allowParagraphs: true,
 } as const;
 
-/** Two parts, the second with three sections; the reader is in section 2.2. */
+/**
+ * **Five parts, and the middle one has five sections.** The reader is in part 3,
+ * section 3.3 — the middle of the middle.
+ *
+ * Five and not three, and that is GPT Sol's code review finding 7: with three
+ * parts, "the current one and its two neighbours" is *everybody*, so rungs 3 and
+ * 4 are indistinguishable and an implementation that made them identical passed
+ * all sixteen tests. The same held for column B. Five is the smallest size at
+ * which "near" and "all" are different answers, on both sides.
+ */
 function corpus() {
   return root([
-    node({ title: "Openings", number: "1", startRow: 0, endRow: 9, gist: "How it starts." }),
+    node({ title: "P1", number: "1", startRow: 0, endRow: 9, gist: "g1" }),
+    node({ title: "P2", number: "2", startRow: 10, endRow: 19, gist: "g2" }),
     node({
-      title: "Middles",
-      number: "2",
-      startRow: 10,
-      endRow: 39,
-      gist: "The long bit.",
+      title: "P3",
+      number: "3",
+      startRow: 20,
+      endRow: 69,
+      gist: "g3",
       children: [
-        node({ title: "First", number: "2.1", startRow: 10, endRow: 19, gist: "One." }),
+        node({ title: "S1", number: "3.1", startRow: 20, endRow: 29, gist: "s1" }),
+        node({ title: "S2", number: "3.2", startRow: 30, endRow: 39, gist: "s2" }),
         node({
-          title: "Second",
-          number: "2.2",
-          startRow: 20,
-          endRow: 29,
-          gist: "Two.",
-          children: paras(3, 20),
+          title: "S3",
+          number: "3.3",
+          startRow: 40,
+          endRow: 49,
+          gist: "s3",
+          children: paras(3, 40),
         }),
-        node({ title: "Third", number: "2.3", startRow: 30, endRow: 39, gist: "Three." }),
+        node({ title: "S4", number: "3.4", startRow: 50, endRow: 59, gist: "s4" }),
+        node({ title: "S5", number: "3.5", startRow: 60, endRow: 69, gist: "s5" }),
       ],
     }),
-    node({ title: "Ends", number: "3", startRow: 40, endRow: 49, gist: "How it stops." }),
+    node({ title: "P4", number: "4", startRow: 70, endRow: 79, gist: "g4" }),
+    node({ title: "P5", number: "5", startRow: 80, endRow: 89, gist: "g5" }),
   ]);
 }
 
+/** The reader is in P3 / S3 — the middle of the middle. */
+const IN_S3 = 42;
+
 describe("structureProjection", () => {
   it("puts every part in column A and only the current part's sections in column B", () => {
-    const p = structureProjection({ root: corpus(), focusRow: 22, ...ALL });
+    const p = structureProjection({ root: corpus(), focusRow: IN_S3, ...ALL });
 
-    expect(p.columnA.rows.map((r) => r.text)).toEqual(["Openings", "Middles", "Ends"]);
+    expect(p.columnA.rows.map((r) => r.text)).toEqual(["P1", "P2", "P3", "P4", "P5"]);
     /* **The sections of the part the reader is in, and no others.** This is the
        claim the mode's whole card makes — "the right-hand column is always the
        inside of the row marked in the left" — so it is asserted as an identity
        rather than as a `toContain`, which would pass over a column that had
        every section in the article. */
     expect(p.columnB.rows.filter((r) => r.kind === "section").map((r) => r.text)).toEqual([
-      "First",
-      "Second",
-      "Third",
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S5",
     ]);
-    expect(p.ofPart?.text).toBe("Middles");
-    expect(p.ofPart?.number).toBe("2");
+    expect(p.ofPart?.text).toBe("P3");
+    expect(p.ofPart?.number).toBe("3");
+  });
+
+  it("points every row at its own first block", () => {
+    /* **The jump target, which nothing asserted until GPT Sol replaced every
+       `blockId` with one wrong constant and all 22 tests stayed green** (code
+       review, finding 7). A row that jumps somewhere else is the worst kind of
+       bug this mode can have — it looks entirely correct until you press it, and
+       then it silently moves the reader. Ids come from the fixture's own nodes,
+       so this compares the projection against the tree rather than against a
+       list retyped here. */
+    const tree = corpus();
+    const p = structureProjection({ root: tree, focusRow: IN_S3, ...ALL });
+
+    const expectedA = tree.children.map((c) => c.node.range[0]);
+    expect(p.columnA.rows.map((r) => r.blockId)).toEqual(expectedA);
+    /* And they are all different, or a projection handing every row the same id
+       would satisfy the line above on a one-part tree. */
+    expect(new Set(expectedA).size).toBe(expectedA.length);
+
+    const part3 = tree.children[2];
+    expect(p.columnB.rows.filter((r) => r.kind === "section").map((r) => r.blockId)).toEqual(
+      part3?.children.map((c) => c.node.range[0]),
+    );
+    expect(p.columnB.rows.filter((r) => r.kind === "paragraph").map((r) => r.blockId)).toEqual(
+      part3?.children[2]?.children.map((c) => c.node.range[0]),
+    );
   });
 
   it("marks the same part in A and the same section in B, from one selection", () => {
-    const p = structureProjection({ root: corpus(), focusRow: 22, ...ALL });
+    const p = structureProjection({ root: corpus(), focusRow: IN_S3, ...ALL });
 
     /* The two columns agreeing is the property, not two separate facts: a
        projection computing "current" twice can mark part 2 on the left while
        listing part 3's sections on the right, and nothing errors. */
-    expect(p.columnA.rows.filter((r) => r.here).map((r) => r.text)).toEqual(["Middles"]);
-    expect(p.columnB.rows.filter((r) => r.here).map((r) => r.text)).toEqual(["Second"]);
+    expect(p.columnA.rows.filter((r) => r.here).map((r) => r.text)).toEqual(["P3"]);
+    expect(p.columnB.rows.filter((r) => r.here).map((r) => r.text)).toEqual(["S3"]);
   });
 
   it("re-fills column B when the reader crosses into another part", () => {
@@ -156,16 +200,16 @@ describe("structureProjection", () => {
       structureProjection({ root: tree, focusRow: 5, ...ALL }).columnB.rows.map((r) => r.text),
     ).toEqual([]);
     expect(
-      structureProjection({ root: tree, focusRow: 35, ...ALL })
+      structureProjection({ root: tree, focusRow: 55, ...ALL })
         .columnB.rows.filter((r) => r.kind === "section")
         .map((r) => r.text),
-    ).toEqual(["First", "Second", "Third"]);
+    ).toEqual(["S1", "S2", "S3", "S4", "S5"]);
     /* Column A is the same list at both, which is the half of the design that
        makes the pair readable: the document does not move, only what you are
        looking inside does. */
     expect(
-      structureProjection({ root: tree, focusRow: 35, ...ALL }).columnA.rows.map((r) => r.text),
-    ).toEqual(["Openings", "Middles", "Ends"]);
+      structureProjection({ root: tree, focusRow: 55, ...ALL }).columnA.rows.map((r) => r.text),
+    ).toEqual(["P1", "P2", "P3", "P4", "P5"]);
   });
 
   it("draws no column B and says so when the reader is between parts", () => {
@@ -177,29 +221,106 @@ describe("structureProjection", () => {
     expect(p.columnB.rows).toEqual([]);
     /* And column A is still the whole document — the positive control, without
        which this test would pass over a projection that returned nothing. */
-    expect(p.columnA.rows).toHaveLength(3);
+    expect(p.columnA.rows).toHaveLength(5);
     expect(p.columnA.rows.some((r) => r.here)).toBe(false);
   });
 
+  it("draws no column B for a current part that has no text to name it", () => {
+    /* Otherwise the right-hand column is the inside of a row that is not on
+       screen and is not marked: column A drops a titleless part (`rowText`), so
+       the selection has to drop it too or the two disagree. GPT Sol's code
+       review, finding 4. */
+    const p = structureProjection({
+      root: root([
+        node({
+          title: "",
+          number: "1",
+          startRow: 0,
+          endRow: 19,
+          children: [node({ title: "S", number: "1.1", startRow: 0, endRow: 19 })],
+        }),
+        node({ title: "P2", number: "2", startRow: 20, endRow: 29 }),
+      ]),
+      focusRow: 5,
+      ...ALL,
+    });
+    expect(p.columnA.rows.map((r) => r.text)).toEqual(["P2"]);
+    expect(p.columnA.rows.some((r) => r.here)).toBe(false);
+    expect(p.ofPart).toBeNull();
+    expect(p.columnB.rows).toEqual([]);
+  });
+
   describe("the rungs", () => {
-    it("gives gists to nobody, the current row, its neighbours, then everybody", () => {
+    it("gives column A gists to nobody, the current row, its neighbours, then everybody", () => {
       const withGists = (rungA: 1 | 2 | 3 | 4) =>
-        structureProjection({ root: corpus(), focusRow: 22, rungA, rungB: 1, allowParagraphs: true })
+        structureProjection({ root: corpus(), focusRow: IN_S3, rungA, rungB: 1, allowParagraphs: true })
           .columnA.rows.filter((r) => r.gist !== undefined)
           .map((r) => r.text);
 
       expect(withGists(1)).toEqual([]);
-      expect(withGists(2)).toEqual(["Middles"]);
+      expect(withGists(2)).toEqual(["P3"]);
       /* Both neighbours, not one: "near" is a quantity of extra detail spent on
          either side of the reader, so an asymmetric answer would be a bug that
          reads as a design. */
-      expect(withGists(3)).toEqual(["Openings", "Middles", "Ends"]);
-      expect(withGists(4)).toEqual(["Openings", "Middles", "Ends"]);
+      expect(withGists(3)).toEqual(["P2", "P3", "P4"]);
+      /* **And rung 4 is more than rung 3**, which needed five parts to be able to
+         say: with three, "the current one and its neighbours" is everybody, so an
+         implementation with rung 4 identical to rung 3 passed. Sol's finding 7. */
+      expect(withGists(4)).toEqual(["P1", "P2", "P3", "P4", "P5"]);
+    });
+
+    it("gives column B gists on the same ladder, one rung later", () => {
+      /* Never asserted at all before Sol's finding 7 — column B's rungs 4 and 5
+         were entirely uncovered, and deleting their behaviour left every test
+         green. */
+      const withGists = (rungB: 1 | 2 | 3 | 4 | 5) =>
+        structureProjection({ root: corpus(), focusRow: IN_S3, rungA: 1, rungB, allowParagraphs: true })
+          .columnB.rows.filter((r) => r.kind === "section" && r.gist !== undefined)
+          .map((r) => r.text);
+
+      expect(withGists(1)).toEqual([]);
+      expect(withGists(2)).toEqual(["S3"]);
+      expect(withGists(3)).toEqual(["S3"]);
+      expect(withGists(4)).toEqual(["S2", "S3", "S4"]);
+      expect(withGists(5)).toEqual(["S1", "S2", "S3", "S4", "S5"]);
+    });
+
+    it("never draws less at a higher rung, on either column", () => {
+      /* **Monotonicity, as a property rather than as five examples.** A ladder
+         whose higher rung draws fewer rows is the failure mode this design is
+         most exposed to — two columns, two ladders and a window between them —
+         and it is exactly what the combined section-and-paragraph window used to
+         do (Sol's finding 3). */
+      const count = (rungA: 1 | 2 | 3 | 4, rungB: 1 | 2 | 3 | 4 | 5) => {
+        const p = structureProjection({
+          root: corpus(),
+          focusRow: IN_S3,
+          rungA,
+          rungB,
+          allowParagraphs: true,
+          limitB: 6,
+        });
+        return {
+          a: p.columnA.rows.filter((r) => r.gist !== undefined).length,
+          sections: p.columnB.rows.filter((r) => r.kind === "section").length,
+          rows: p.columnB.rows.length,
+        };
+      };
+
+      for (const rungA of [2, 3, 4] as const) {
+        expect(count(rungA, 1).a, `A rung ${rungA}`).toBeGreaterThanOrEqual(count(1, 1).a);
+      }
+      /* The mandatory sibling level never shrinks as the optional detail above it
+         is switched on — the specific inversion the old code had. */
+      for (const rungB of [2, 3, 4, 5] as const) {
+        expect(count(1, rungB).sections, `B rung ${rungB}`).toBe(count(1, 1).sections);
+        expect(count(1, rungB).rows, `B rung ${rungB}`).toBeGreaterThanOrEqual(count(1, 1).rows);
+      }
     });
 
     it("adds the current section's paragraphs at rung 3 and not before", () => {
       const paragraphs = (rungB: 1 | 2 | 3 | 4 | 5) =>
-        structureProjection({ root: corpus(), focusRow: 22, rungA: 1, rungB, allowParagraphs: true })
+        structureProjection({ root: corpus(), focusRow: IN_S3, rungA: 1, rungB, allowParagraphs: true })
           .columnB.rows.filter((r) => r.kind === "paragraph")
           .map((r) => r.text);
 
@@ -210,14 +331,57 @@ describe("structureProjection", () => {
     it("puts the paragraphs under their own section and nowhere else", () => {
       /* The order matters: a flat column that appended every paragraph at the end
          would satisfy a `toContain` and be a different mode. */
-      const rows = structureProjection({ root: corpus(), focusRow: 22, ...ALL }).columnB.rows;
+      const rows = structureProjection({ root: corpus(), focusRow: IN_S3, ...ALL }).columnB.rows;
       expect(rows.map((r) => `${r.kind}:${r.text}`)).toEqual([
-        "section:First",
-        "section:Second",
+        "section:S1",
+        "section:S2",
+        "section:S3",
         "paragraph:p1",
         "paragraph:p2",
         "paragraph:p3",
-        "section:Third",
+        "section:S4",
+        "section:S5",
+      ]);
+    });
+
+    it("drops the whole paragraph rung rather than truncating it when the column is tight", () => {
+      /* **The inversion Sol's finding 3 names, from the other side.** With the
+         combined list windowed, a five-section column with a limit of five and
+         the paragraph rung on would replace sections S4 and S5 with paragraphs
+         p1 and p2 — a higher rung drawing less of the mandatory level, and a
+         paragraph run cut in half despite the "all or none" promise. */
+      const p = structureProjection({
+        root: corpus(),
+        focusRow: IN_S3,
+        rungA: 1,
+        rungB: 3,
+        allowParagraphs: true,
+        limitB: 5,
+      });
+      expect(p.columnB.rows.map((r) => r.text)).toEqual(["S1", "S2", "S3", "S4", "S5"]);
+      expect(p.columnB.rows.filter((r) => r.kind === "paragraph")).toEqual([]);
+      /* And the counts stay counts of *sections*, which is the level the window
+         is over. Nothing is hidden here, so both are zero. */
+      expect(p.columnB.earlier).toBe(0);
+      expect(p.columnB.later).toBe(0);
+    });
+
+    it("draws the paragraphs when there is room for the whole run", () => {
+      /* The positive control for the test above: with one more row of budget the
+         rung comes back whole, so that test is about *tightness* rather than
+         about paragraphs never drawing. */
+      const p = structureProjection({
+        root: corpus(),
+        focusRow: IN_S3,
+        rungA: 1,
+        rungB: 3,
+        allowParagraphs: true,
+        limitB: 8,
+      });
+      expect(p.columnB.rows.filter((r) => r.kind === "paragraph").map((r) => r.text)).toEqual([
+        "p1",
+        "p2",
+        "p3",
       ]);
     });
   });
@@ -327,6 +491,20 @@ describe("structureProjection", () => {
       expect(p.columnA.rows).toHaveLength(11);
       expect(p.columnA.earlier).toBe(0);
       expect(p.columnA.later).toBe(0);
+    });
+
+    it("draws no rows at all for a capacity of zero, and says which side of you they are on", () => {
+      /* **A capacity of zero used to draw everything.** `limit <= 0` fell into
+         the no-limit branch, so a column measured as having room for nothing
+         produced the *maximum* overflow — the failure inverted, and silent,
+         because the panel clips rather than scrolls. GPT Sol's code review,
+         finding 3. The counts split at the reader rather than calling all eleven
+         "later", which is the only thing left to say once no row fits. */
+      const p = structureProjection({ root: many, focusRow: 52, ...ALL, limitA: 0 });
+      expect(p.columnA.rows).toEqual([]);
+      expect(p.columnA.earlier).toBe(5);
+      expect(p.columnA.later).toBe(6);
+      expect(p.columnA.earlier + p.columnA.later).toBe(11);
     });
   });
 

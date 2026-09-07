@@ -1,5 +1,64 @@
 # Structure mode, as a third mode behind the experimental switch
 
+## Status, 2026-09-07: stage 1 built and landed. One known defect, and it is written down.
+
+**Done enough to stop here.** The mode exists, it is behind the switch, an ordinary reader's bar is
+unchanged, and the three structural views can be flipped between. What remains is real and optional.
+
+| | |
+|---|---|
+| Built | The word and every table; `structureProjection` and both columns; the measured window; the CSS bracket and the edge marker; two test files and rows in nine others |
+| Reviewed | GPT Sol on the plan (8 findings) and on the code (8 more); **four browser passes**, which found six defects between them that no test could see |
+| Green | `npm run typecheck`, `npm run check` (all gates), and 799 of 800 test files — the one red was `tests/step-failure-seam.test.ts` timing out under load and passing alone, the contention pattern `docs/project/testing.md` describes |
+| **Not right yet** | [Column B over-draws its budget on one part](#the-open-defect-column-bs-budget-on-a-1119-section-part) |
+| Deferred, deliberately | The rung ladder, the focus wells, the drawn taper, ticks, adaptive depth, the hover card — [What is deferred](#what-is-deferred-and-why) |
+| **The most valuable follow-on**, and it is not this mode | [Flipping modes does not keep your place](#the-comparison-does-not-keep-your-place-and-here-is-the-measurement) |
+
+### The open defect: column B's budget on a 1,119-section part
+
+**What happens.** On `m1-kuhn`'s part 22 — 1,119 sections, every row carrying a long gist at 170px
+wide — column B draws rows that sum to more than the budget the same code computed for it, so the
+band clips the last row mid-sentence and the trailing "N later" counter with it. **The panel then
+reads as though the sections stop where the screen does**, which is the failure this whole window
+exists to prevent.
+
+**How much and how often.** Three of sixteen scroll positions on that one article; two of nine
+viewport cases (1280×900 at 82%, and 1280×500). Column B's excess is +64 and +52 in those two, and
++2/+11/+20/+46 across the sweep. **Column A's excess is ≤ 0 in every case measured** — typically
+−27 — and every other part of that same article is clean with 4–543px of slack. Two stacked cases
+(800×900 and 700×900) pass by **+1px**, which is the part of this that should not be left: those are
+ordinary window sizes, one line of text from failing.
+
+**What is known, so the next person does not re-derive it.** Measured in Chrome, 2026-09-07:
+
+- Row heights measured against rendered: **zero mismatches**, both columns. The measurement is exact.
+- `counterH` measures 22px and the gap 2px. Both correct.
+- Column B's budget by the code's own rule is `gridBottom(852) − listTop(108)` = **744**; after the
+  counter reservation, **696**. Rows drawn sum to **751**, four gaps 8, total **759**.
+- The walk's own test (`used + h + gap <= budget`) would have refused the fifth row at 593 ≤ 696 and
+  759 > 696. **So it took a row its own arithmetic forbids**, which means the `available` reaching
+  `capacityFrom` is roughly 60px larger than the 744 measured off the DOM afterwards. That is the
+  thread to pull: it is not the counter reservation, not the gap, and not the measurement.
+
+**Why it is being left rather than chased further.** Three fixes have already gone in against this
+number and each one fixed a real, different bug; this residual is a fourth cause, confined to one
+part of one article, and the panel is correct everywhere else. Guessing at it without a browser in
+the loop is how the previous two guesses were wrong. **The cheap containment, if it recurs before the
+cause is found**, is to make `.struct-elided` `position: sticky` inside its column: the counters then
+cannot be the element that falls off, and a clipped *row* is a much smaller lie than a vanished
+count.
+
+### One product question nobody has decided
+
+Turning the switch **off while in Structure leaves the reader in Structure for the rest of that
+page-load** — the mode is in the router's in-memory state and the bar keeps drawing whichever mode
+the URL names, which is the documented rule. A reload clears it.
+[experimental-features.md](../project/experimental-features.md) says the reader stays where they are
+when the switch goes off mid-flight, so this is that rule working; whether it should also survive a
+navigation is a call Greg has not been asked to make.
+
+---
+
 **Status: plan, 2026-09-07. Written before any code.** It builds
 [260903b](260903b-one-structure-mode-hierarchy-and-outline-merged.md)'s *design* while deliberately
 not taking its *conclusion* — see [The decision](#the-decision-and-what-it-supersedes) — and it
@@ -214,7 +273,10 @@ crossing.
 
 **v1 is CSS and no geometry**: the current part's row in column A carries a right-edge marker,
 column B carries a matching left-edge bracket in the same tint, and column B's quiet header is the
-part's number and nothing else. That answers *these rows belong to that row* — the whole of what the
+part's number **and its title**. (The first draft said "the number and nothing else"; the number
+alone is an address with nothing to say what it addresses, and column A may have windowed that row
+off the screen — Sol read the discrepancy off the code.) That answers *these rows belong to that
+row* — the whole of what the
 indicator is for — with no SVG, no measurement and no resize path. The drawn taper stays available
 as a follow-on once we know the mode is worth keeping.
 
@@ -413,7 +475,24 @@ trees rather than against `data/`, which is gitignored and is the fixture cut in
 both columns from it, without the measured ladders. The doc corrections and additions, and
 `src/modes.ts`'s two entries.
 
-**Stage 2 — the ladders, the wells, and the fit.** One Structure-local measuring hook called twice
+**What actually landed in stage 1, and why more than was planned.** The measured window was stage
+2's, and a browser moved it: on a 22-part article the band clipped **62,737px** of column B with no
+scrollbar and nothing to say so, and clipping is silent by construction because the panel does not
+scroll. A mode that unusable is not an instrument, so the *measurement* half of stage 2 came forward
+— the hidden full-list copies, the per-row heights, the capacity walk and the counters — while the
+*ladder* half (climbing rungs to spend leftover height) stayed behind. Stage 1 therefore draws at a
+fixed rung and never overflows; stage 2 makes the rung a choice.
+
+Three defects in that measuring code were found only by running it, and every one of them was
+invisible to the test suite because jsdom performs no layout: the container query was written
+against its own container so two columns never appeared at any width; both columns were handed the
+full band height when stacked, so the stacked layout overflowed by up to 379px; and the counter
+reservation was taken against the *tallest* row — the gisted current one — so a short band drew four
+counters and no rows at all, including not the row the reader was standing in.
+[browser-testing.md](../project/browser-testing.md) and
+[silent-success.md](../reusable/silent-success.md) are why that pass exists.
+
+**Stage 2 — the ladders, the wells, and the rest of the fit.** One Structure-local measuring hook called twice
 (Sol: one hook, two calls, not two copies), with the traps `OutlinePanel` documents — candidates
 laid out at exactly the real column's width and padding, one observer per candidate, a re-measure on
 font change, and equal heights breaking toward the *lower* rung. The reserved-height wells, the
@@ -452,6 +531,55 @@ Recorded rather than asked, and each has an assumption this plan proceeds under.
 4. **The icon.** Picked from `lucide-react` in stage 1 and named in the commit, so it is one line to
    change.
 
+## The one place a switch-off reader does see Structure
+
+**The sharing inventory.** `sharedInventory()` ([`shared-inventory.ts`](../../src/web/shared-inventory.ts))
+walks every member of `MODES` and never consults the experimental switch, so an owner opening
+*Access & Sharing* now sees a **Structure** row whether their switch is on or off — GPT Sol's code
+review, finding 8.
+
+**Left as it is, and the claim narrowed instead.** That row is *true*: the visitor policy is
+`available` and `?mode=structure` on a shared link genuinely works, so a reader really can be shown
+this. An inventory that hid it would be a disclosure lying about what publishing hands over, which
+is a worse fault than a row somebody did not expect. The switch is about clutter in the **controls**
+([experimental-features.md](../project/experimental-features.md)), and the inventory is not a
+control.
+
+So the claim this plan makes, everywhere it makes it, is *"an ordinary reader's **bar** is
+unchanged"* — which is exactly true and is what
+[`tests/dock-experimental-modes.test.tsx`](../../tests/dock-experimental-modes.test.tsx) checks. It
+is **not** "a reader without the switch is unaffected anywhere", which is false.
+
+## The comparison does not keep your place, and here is the measurement
+
+Taken in Chrome on the box, 2026-09-07, on `m1-kuhn` (2,046 blocks, 22 parts, a 359,060px document)
+at 1280×900, scrolled to 55%, pressing the bar's buttons rather than editing the URL:
+
+| Step | `?at=` | first visible block | where the step-1 block went |
+|---|---|---|---|
+| Hierarchy (start) | `spya-hcnshb` | `13.6. Chalmers's panpsychism` | — |
+| Outline | `spya-e8xrzv` | *thirteen blocks later* | **−1,815px, off the top** |
+| Structure | `spya-e8xrzv` | the same as Outline | **−1,815px** |
+| Hierarchy (back) | `spya-mghr0v` | `13.6. Chalmers's panpsychism` | +32px |
+
+**`scrollY` is byte-identical in all four rows.** Nothing restores by block: the browser keeps the
+*pixel* offset while the prose re-wraps from 1268px to 868px and the document loses 3,587px. The
+drift is proportional to depth — the same trip on a short article moved three blocks — and `?at=` is
+overwritten three times on the way. The round trip landing back on the right words is an accident of
+determinism, not a restore.
+
+**Structure inherits this whole and adds nothing to it**: Outline and Structure land on exactly the
+same block at exactly the same offset. It is a defect in the reader's position machinery, shared by
+every mode that opens a band, and it predates this work.
+
+**It is not fixed here, and that is a scoping decision rather than a verdict.** The fix — capture a
+block and its viewport offset before the mode changes, restore it after the new layout commits, hold
+the scroll spy off until then — is a change to
+[`useReadingPosition.ts`](../../src/web/reader/useReadingPosition.ts), which every one of the fifteen
+modes depends on and which interacts with jump history and nuqs's writes. That deserves its own plan
+and its own review, not a late edit riding along inside a mode. **It is the top follow-on**, and
+until it is done, the comparison Structure exists for is only honest near the top of a piece.
+
 ## What the plan review changed
 
 GPT Sol reviewed this before a line of the mode was written
@@ -470,7 +598,7 @@ here so the reasoning survives the edit:
 | 5. Corpus maxima wrong | They were, twice over — and Sol's replacements are measurements of the *fixture* cut, so the plan now cites 260903b's documented figures and claims no measurement. The structural half of the finding — a base rung has no lower rung to fall to — is built. |
 | 6. Box arithmetic | 193.5px not 194, threshold 365 not 364, padding raises it, and the layout choice must come from the measured grid rather than `--mode-w`, which reads 0 on the screen where the band is widest. |
 | 7. Decision 2's stated reason was false; decision 5 half-deferred without saying so | Both rewritten as declared deviations with honest reasons. |
-| 8. The public fixture cannot tell a two-column band from a one-column one | Its tree has a root and one part and no section, so a `BAND_SAYS` assertion on the part title passes with column B absent. The fixture gains a section and the assertion observes both columns. |
+| 8. The public fixture cannot tell a two-column band from a one-column one | Its tree has a root and one part and no section, so a `BAND_SAYS` assertion on the part title passes with column B absent. **The shared fixtures were left alone** — both are read by fourteen other modes' assertions in the same run, and a new depth-2 node changes what Hierarchy, Outline and Summary draw. The risk belongs to this mode, so `tests/structure-panel-draws-both-columns.test.tsx` carries it: a two-part tree, both columns read by position. |
 
 Two findings were checked and **not** taken as recommended: the anchoring in finding 1 is measured
 before it is built, and the corpus numbers in finding 5 are not adopted. Both are argued where they

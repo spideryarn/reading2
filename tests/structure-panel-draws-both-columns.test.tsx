@@ -32,7 +32,7 @@
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StructurePanel } from "../src/web/StructurePanel.js";
 import { buildGeometry, buildSummaryTree } from "../src/web/tree.js";
 import type { Block, BlockId, NodeId, Tree, TreeNode } from "../src/types.js";
@@ -145,9 +145,25 @@ function render(focusRow: number) {
   return band;
 }
 
-/** The two columns, as the text of their rows, read from the DOM by position. */
+/**
+ * The two columns, as the text of their rows, read from the DOM by position.
+ *
+ * **`:scope > .struct-side` and not `.struct-side`**, and the difference is the
+ * whole reason this helper has a comment. The panel also renders `aria-hidden`
+ * measuring copies of both columns — the full, unwindowed lists, laid out at the
+ * real column width so their heights are real — inside a `.struct-measure`
+ * wrapper. Those come FIRST in the DOM, so an unscoped `.struct-side` query
+ * returns the hidden copies and every assertion in this file would pass over a
+ * panel whose visible columns drew nothing.
+ *
+ * This is Outline's trap arriving in a second mode: `readable()` in
+ * tests/every-mode-draws-its-surface.test.tsx and `visibleText()` in
+ * tests/public-network-trace.test.tsx both strip `[aria-hidden="true"]` for
+ * exactly this reason, and this file needs its own answer because it reads by
+ * position rather than by text.
+ */
 function columns(band: Element) {
-  const sides = band.querySelectorAll(".struct-side");
+  const sides = band.querySelectorAll(".struct-grid > .struct-side");
   const textsIn = (el: Element | undefined) =>
     el === undefined
       ? []
@@ -159,11 +175,24 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.appendChild(host);
   reactRoot = createRoot(host);
+  /* jsdom has no ResizeObserver, and the panel installs one to re-measure its
+     columns. A no-op stands in, exactly as `outline-panel.test.tsx` does: the
+     effect's first `measure()` is synchronous, and in jsdom every height is 0
+     anyway, so the capacity stays unmeasured and both columns draw whole —
+     which is the state these tests are about. */
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
 });
 
 afterEach(() => {
   act(() => reactRoot.unmount());
   host.remove();
+  vi.unstubAllGlobals();
 });
 
 describe("the Structure band", () => {
@@ -188,7 +217,11 @@ describe("the Structure band", () => {
 
   it("marks the current part in A and the current section in B, and nothing else anywhere", () => {
     const band = render(IN_SECTION_0);
-    const marked = [...band.querySelectorAll("[aria-current]")].map(
+    /* Scoped past the measuring copies, which carry the mark too — see
+       `columns()`. Unscoped this reads four marks and the assertion below would
+       have to be loosened to accommodate a duplicate, which is how a test stops
+       being able to see the thing it is about. */
+    const marked = [...band.querySelectorAll(".struct-grid > .struct-side [aria-current]")].map(
       (n) => n.querySelector(".struct-text")?.textContent ?? "",
     );
     /* Exactly two marks, one per column. Three would mean the two columns
@@ -213,6 +246,52 @@ describe("the Structure band", () => {
     expect(band.querySelector(".struct-of")?.textContent).toContain("PART ONE TITLE");
     expect(columns(band).b).toEqual([]);
     expect(band.textContent).toContain("not divided into sections");
+  });
+
+  it("presses a row and hands out that row's own block id", () => {
+    /* **Nothing checked the jump target until GPT Sol replaced every `blockId`
+       with one wrong constant and all six of these passed** (code review,
+       finding 7). A row that renders correctly and jumps somewhere else is the
+       worst bug this panel can have: it looks right until you press it. The
+       expected id comes out of the fixture tree rather than being retyped, so
+       this compares the panel against the article rather than against itself. */
+    const jumps: string[] = [];
+    act(() => {
+      reactRoot.render(
+        <StructurePanel
+          root={summaryRoot}
+          focusRow={IN_SECTION_0}
+          allowParagraphs={true}
+          onJump={(id) => jumps.push(id)}
+        />,
+      );
+    });
+    const band = host.querySelector(".mode-band.struct");
+    if (!band) throw new Error("no band");
+
+    const press = (side: number, row: number) => {
+      const sides = band.querySelectorAll(".struct-grid > .struct-side");
+      const buttons = sides[side]?.querySelectorAll<HTMLButtonElement>(".struct-row") ?? [];
+      act(() => buttons[row]?.click());
+    };
+
+    press(0, 1); // column A, PART TWO
+    press(1, 2); // column B, SECTION 2
+    expect(jumps).toEqual([tree.nodes["n-p2"]?.range[0], tree.nodes["n-s2"]?.range[0]]);
+    /* And the two are different ids, or one wrong constant would satisfy the
+       line above. */
+    expect(jumps[0]).not.toBe(jumps[1]);
+  });
+
+  it("puts the current rows' gists on screen, not just in the projection", () => {
+    /* The projection tests assert a `gist` field; nothing asserted it reached the
+       DOM, and removing the gist from the renderer left all six panel tests green
+       (Sol, finding 7). Scoped past the measuring copies for the usual reason. */
+    const band = render(IN_SECTION_0);
+    const gists = [...band.querySelectorAll(".struct-grid > .struct-side .struct-gist")].map(
+      (n) => n.textContent ?? "",
+    );
+    expect(gists).toEqual(["What part two establishes.", "What section 0 establishes."]);
   });
 
   it("draws no band-head, because the Dock is already saying the mode's name", () => {
