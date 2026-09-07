@@ -62,9 +62,21 @@
  * and the request is never made — so a drifted contract cannot be the thing
  * that fires a live POST at Stripe. See `REFUSALS`.
  *
+ * ## Why the order of the 81 guards is not asserted
+ *
+ * The chain is written in one order and compared here as a **set**, which
+ * records the order without asserting it. Sol raised that (review §
+ * P1-ORDER-CONTRACT), and asserting the order would still be the wrong answer:
+ * no two guards accept the same method-and-path pair, so every reordering is an
+ * equivalent mutation and a test that reddened for one would be pinning an
+ * implementation detail. What is asserted instead is **the property that makes
+ * the order irrelevant** — see § `no two guards accept the same method and
+ * path`, which is honest about being a corpus check rather than a proof.
+ *
  * ## Mutations watched, 2026-09-07
  *
- * Green unmutated: 296 passed. Each mutation was then applied to
+ * Green unmutated: 296 passed at first landing, 304 with the disjointness and
+ * decode-order cases below. Each mutation was then applied to
  * `src/routes.ts`, run, and edited back; `src/routes.ts` is byte-identical to
  * the commit this file landed on.
  *
@@ -86,6 +98,20 @@
  *    module scope, before a single case ran: *serveAuthenticatedApi: an `if`
  *    whose left conjunct is not a binding at line 8157*. `Tests: no tests`,
  *    `Test Files: 1 failed` — a whole red file, not a quietly shorter list.
+ * 6. **The decode order swapped** — `PUT /api/article/:slug/visibility` made to
+ *    decode its slug into a `const` before reading its body, which is exactly
+ *    the shape stage 3's move of handler bodies into closures could produce by
+ *    accident. **2 failed**: *parses the body first … expected 500 to be 400*,
+ *    and the pairwise case, *expected 500 not to be 500*. Reverted by editing
+ *    the text back; `src/routes.ts` is byte-identical
+ *    (`ce53795…`, `git diff HEAD` empty).
+ *
+ * The disjointness check has a **control rather than a mutation**: a real
+ * overlap cannot be introduced into `src/routes.ts` without also failing the
+ * pair-set comparison, so `would notice if two guards did overlap` feeds two
+ * synthetic same-method guards to the same function instead. Reordering the
+ * real guards is deliberately *not* a control — it is an equivalent mutation,
+ * which is the whole point of the section above.
  *
  * Not the library-guard swap, and not
  * "reorder two overlapping guards": no two guards accept the same
@@ -941,8 +967,16 @@ async function call(
   method: string | undefined,
   url: string,
   verify: Verifier = acceptAny,
+  body?: string,
 ): Promise<Reply> {
-  const req = Object.assign((async function* () {})(), {
+  /* `readBody` (src/routes.ts) reads the request by iterating it, so a body is
+     a generator that yields one chunk. Omitting it yields nothing, which is
+     what every case above wants and is byte-for-byte the empty generator this
+     used to build. */
+  async function* chunks(): AsyncGenerator<Buffer> {
+    if (body !== undefined) yield Buffer.from(body, "utf8");
+  }
+  const req = Object.assign(chunks(), {
     method,
     url,
     headers: AUTHED_HEADERS,
@@ -1037,6 +1071,73 @@ for (const route of EXPECTED_AUTH_ROUTES) {
   }
 }
 
+/* ------------------------------------------------------------ disjointness */
+
+/**
+ * A guard reduced to the only two things that decide whether it takes a
+ * request, plus somewhere to point when two of them both do.
+ */
+interface SimpleGuard {
+  method: string;
+  match: MatchSpec;
+  where: string;
+}
+
+const SOURCE_GUARDS: SimpleGuard[] = parsed.guards.map((g) => {
+  const match = SOURCE_MATCH_BY_NAME.get(g.matcher);
+  if (match === undefined) throw new Error(`guard at line ${g.line} names no matcher`);
+  return { method: g.method, match, where: `${describeMatch(match)} at line ${g.line}` };
+});
+
+/**
+ * Paths the disjointness question is asked about, over and above every witness
+ * the contract already carries.
+ *
+ * The two documented intersections and the one pair that has to be *shown*
+ * disjoint rather than assumed. All five happen to be witnesses already; they
+ * are named again here so that deleting a witness cannot quietly stop the
+ * question being asked about the cases we know are interesting.
+ */
+const OVERLAP_PROBES = [
+  /* GET is the library search; PATCH is the shelf entry for a slug that happens
+     to read `search`. */
+  "/api/library/search",
+  /* POST is the live tool; PATCH and DELETE are the thread whose id happens to
+     read `live-tool`. */
+  "/api/chat/w1/live-tool",
+  /* `jobAction`'s `(cancel|retry)` against `jobAdvance`'s `advance` — same
+     method, same prefix, and disjoint only because the alternation cannot spell
+     `advance`. */
+  "/api/jobs/w1/cancel",
+  "/api/jobs/w1/retry",
+  "/api/jobs/w1/advance",
+];
+
+const DISJOINTNESS_CORPUS = sorted([
+  ...new Set([...EXPECTED_AUTH_ROUTES.flatMap((r) => r.witnesses), ...OVERLAP_PROBES]),
+]);
+
+/** Which guards would take this method and path — in dispatch order. */
+const acceptorsIn = (guards: SimpleGuard[], method: string, candidate: string): SimpleGuard[] =>
+  guards.filter((g) => g.method === method && matches(g.match, candidate));
+
+/** Every (method, path) in the corpus that more than one guard would take. */
+function collisionsIn(guards: SimpleGuard[], corpus: string[]): string[] {
+  const found: string[] = [];
+  for (const candidate of corpus) {
+    for (const method of METHOD_UNIVERSE) {
+      const hits = acceptorsIn(guards, method, candidate);
+      if (hits.length > 1) {
+        found.push(`${method} ${candidate} → ${hits.map((h) => h.where).join(" then ")}`);
+      }
+    }
+  }
+  return sorted(found);
+}
+
+const acceptors = (method: string, candidate: string): SimpleGuard[] =>
+  acceptorsIn(SOURCE_GUARDS, method, candidate);
+
 describe("the authenticated API's route contract", () => {
   describe("the source says what the contract says", () => {
     it("declares the matchers the contract names, and no others", () => {
@@ -1121,6 +1222,95 @@ describe("the authenticated API's route contract", () => {
     });
   });
 
+  /**
+   * The property that makes the order of the 81 guards irrelevant — asserted
+   * instead of the order itself.
+   *
+   * The chain is *written* in one order and compared above as a *set*, which
+   * records the order without asserting it. Pinning the order would be wrong:
+   * no two guards accept the same method-and-path pair, so every reordering is
+   * an equivalent mutation, and a test that reddened for one would be
+   * defending an implementation detail — the same reason the plan refuses the
+   * library-guard swap as a control. So this asserts the reason instead. **If
+   * this ever fails, order has become load-bearing**: the earlier guard wins,
+   * and moving guards into per-domain helpers (stage 3) stops being a
+   * rearrangement and starts being a behaviour change.
+   *
+   * **What it does not cover, and it is a lot.** Regex intersection is
+   * undecidable in general and this does not attempt it. The question is asked
+   * over a finite corpus: every witness in `EXPECTED_AUTH_ROUTES`, plus
+   * `OVERLAP_PROBES`. Two matchers whose languages meet only at some path no
+   * witness spells would pass here unnoticed. What stops that from making this
+   * empty is that every contract row must carry at least one witness (asserted
+   * above), so a *new* matcher arrives with at least one path of its own — a
+   * new guard that shadows an existing one at its own witness is caught; one
+   * that shadows it only somewhere else is not. This is a corpus check wearing
+   * the word "property", and it should be read that way.
+   */
+  describe("no two guards accept the same method and path", () => {
+    it("has nothing to resolve by order", () => {
+      expect(
+        collisionsIn(SOURCE_GUARDS, DISJOINTNESS_CORPUS),
+        "two guards accept the same method and path, so the earlier one wins and the order of the chain is now behaviour — say so in this test and in the plan before reordering anything",
+      ).toEqual([]);
+    });
+
+    it("would notice if two guards did overlap", () => {
+      /* The control. Without it a green result above is equally consistent with
+         `collisionsIn` never finding anything — the corpus and the guard list
+         are both real, but the comparison between them is not exercised by a
+         passing case. Two synthetic same-method entries over the same path. */
+      const synthetic: SimpleGuard[] = [
+        { method: "GET", match: { kind: "literal", path: "/api/x" }, where: "first" },
+        { method: "GET", match: { kind: "regex", source: "^\\/api\\/x$", flags: "" }, where: "second" },
+      ];
+      expect(collisionsIn(synthetic, ["/api/x"])).toEqual(["GET /api/x → first then second"]);
+      /* And it is the *method* that separates them, not the path. */
+      expect(collisionsIn([synthetic[0]!, { ...synthetic[1]!, method: "PUT" }], ["/api/x"])).toEqual(
+        [],
+      );
+    });
+
+    it("allows /api/library/search twice, because the methods differ", () => {
+      /* Both halves asserted, and asserted to be *different* guards: if the
+         shelf-entry matcher stopped reaching this path the pair would be
+         trivially disjoint and this corner would stop being tested at all,
+         which would look exactly like passing. */
+      const get = acceptors("GET", "/api/library/search");
+      const patch = acceptors("PATCH", "/api/library/search");
+      expect(get).toHaveLength(1);
+      expect(patch).toHaveLength(1);
+      expect(get[0]?.match).not.toEqual(patch[0]?.match);
+    });
+
+    it("allows /api/chat/:slug/live-tool three times, because the methods differ", () => {
+      const post = acceptors("POST", "/api/chat/w1/live-tool");
+      const patch = acceptors("PATCH", "/api/chat/w1/live-tool");
+      const del = acceptors("DELETE", "/api/chat/w1/live-tool");
+      expect(post).toHaveLength(1);
+      expect(patch).toHaveLength(1);
+      expect(del).toHaveLength(1);
+      /* The live tool is one matcher; the thread is another, and it is the
+         thread that answers both PATCH and DELETE — two guards, one matcher,
+         which is why these compare matchers rather than guards. */
+      expect(post[0]?.match).not.toEqual(patch[0]?.match);
+      expect(patch[0]?.match).toEqual(del[0]?.match);
+    });
+
+    it("shows jobAction and jobAdvance disjoint rather than assuming it", () => {
+      /* Same method, same prefix, both `POST`. `(cancel|retry)` and `advance`
+         cannot spell each other — but that is an argument about two regexes,
+         and this is the same argument made by running them. */
+      for (const witness of ["/api/jobs/w1/cancel", "/api/jobs/w1/retry"]) {
+        expect(acceptors("POST", witness), witness).toHaveLength(1);
+      }
+      const action = acceptors("POST", "/api/jobs/w1/cancel");
+      const advance = acceptors("POST", "/api/jobs/w1/advance");
+      expect(advance).toHaveLength(1);
+      expect(action[0]?.match).not.toEqual(advance[0]?.match);
+    });
+  });
+
   describe("a method no matcher accepts is the terminal 404", () => {
     /* The safe half of the black box. Every pair here reaches no handler at
        all — which is why there is no database in this file, and why the
@@ -1180,6 +1370,58 @@ describe("the authenticated API's route contract", () => {
       const reply = await call("PUT", "/api/models?fresh=1");
       expect(reply.status).toBe(404);
       expect(reply.body.error).toBe("No API route for PUT /api/models?fresh=1");
+    });
+  });
+
+  /**
+   * Which happens first — reading the body or decoding the slug — differs per
+   * route, and the difference is visible from outside as two different status
+   * codes for the same two malformed inputs.
+   *
+   * The plan's § [DECODE], and GPT Sol reproduced both without Postgres. It is
+   * not a policy anybody chose; it is what argument evaluation order does with
+   * two lines written in the order they were written. It is recorded rather
+   * than tidied because **stage 3 moves these handler bodies into closures**,
+   * and that is exactly the edit that could swap them without anybody noticing.
+   * Nothing else in the tree watches this.
+   *
+   * Neither case reaches a store: the throw happens before the handler's first
+   * call, which is why they belong in this database-free file.
+   *
+   * If a later change makes these agree with each other, that is a decision to
+   * take deliberately — edit these two cases and say so — not a green suite.
+   */
+  describe("body-read and slug-decode order is per route, and observable", () => {
+    /* One malformed body, one undecodable slug, sent to both routes. `%` alone
+       is not a valid escape, so `decodeURIComponent` throws `URI malformed`;
+       the body is not JSON. Whichever the route does first is the error the
+       client gets. */
+    const MALFORMED_BODY = "{not json";
+
+    it("parses the body first on PUT /api/article/:slug/visibility, so it is a 400", async () => {
+      const reply = await call("PUT", "/api/article/%/visibility", acceptAny, MALFORMED_BODY);
+      expect(reply.status).toBe(400);
+      expect(reply.body.error).toBe("Request body is not valid JSON");
+    });
+
+    it("decodes the slug first on PATCH /api/library/:slug, so it is a 500", async () => {
+      /* A 500 for a malformed request, and it stays one on purpose: the plan's
+         § [DECODE] again — authenticated `part` lets `decodeURIComponent`
+         throw, while the public dispatcher's `slugFrom` turns the same throw
+         into a 400 (src/public/routes.ts). Copying the public helper here would
+         be a behaviour change, so this asserts what is, not what is tidy. */
+      const reply = await call("PATCH", "/api/library/%", acceptAny, MALFORMED_BODY);
+      expect(reply.status).toBe(500);
+      expect(reply.body.error).toBe("URI malformed");
+    });
+
+    it("sends the two different answers to the same two malformed inputs", async () => {
+      /* The pair, asserted as a pair. Either case alone could go green because
+         both routes started answering the same way — which is precisely the
+         regression this is here for. */
+      const visibility = await call("PUT", "/api/article/%/visibility", acceptAny, MALFORMED_BODY);
+      const shelf = await call("PATCH", "/api/library/%", acceptAny, MALFORMED_BODY);
+      expect(visibility.status).not.toBe(shelf.status);
     });
   });
 

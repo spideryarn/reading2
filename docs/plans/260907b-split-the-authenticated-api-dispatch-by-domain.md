@@ -1,6 +1,6 @@
 # The authenticated API's dispatch becomes enumerable — and the matrix test that has to come first
 
-Status as of 2026-09-07: **reviewed, stages 1 and 2 building.** Evidence gathered at `d4b503b4`;
+Status as of 2026-09-07: **reviewed; stages 1, 1b and 2 landed, stage 3 not started.** Evidence gathered at `d4b503b4`;
 `src/routes.ts` is byte-identical at the worktree HEAD, so every line number below is live. Design
 input from GPT 6 Astra (high) and Fable, and a plan review from GPT Sol
 ([review](260907b-split-the-authenticated-api-dispatch-by-domain-review-sol.md),
@@ -158,7 +158,8 @@ Numbered so the review and the implementation briefs can quote them.
    reading its body at `:7089`. POST chat/search/criteria read bodies first (`:7645`, `:7745`,
    `:7794`). **One global decoding policy cannot preserve both orders.** Also: authenticated `part`
    lets `decodeURIComponent` throw → outer catch → 500, while public `slugFrom` converts it to 400
-   (`src/public/routes.ts:347`). Copying the public helper changes behaviour.
+   (`src/public/routes.ts:347`). Copying the public helper changes behaviour. **Both orders now have
+   a test**, and the swap was watched red — stage 1b, § Stages below.
 5. **[LIFETIME] Awaiting the handler is part of correctness.** The catch/finally lives in `serveApi`,
    which awaits at `:6401`. Streaming handlers must stay awaited to completion — the spend collector
    depends on it at `:6246`. The dispatcher must neither call `send` nor end the response after a
@@ -169,8 +170,9 @@ Numbered so the review and the implementation briefs can quote them.
 7. **[REGEX] Reject `global` and `sticky` patterns at registration.** All 51 literals currently have
    no flags and are freshly constructed per request, so hoisting them to module scope is safe today.
    A future `/g` would make matching depend on the previous request via `lastIndex`.
-8. **[TEXT] One test reads `src/routes.ts` as a string and fails silently — and three others
-   already learned that lesson.** Corrected twice: by Sol (P2-R4) and then by stage 2 building it.
+8. **[TEXT] One test reads `src/routes.ts` as a string and fails silently — and four others
+   already learned that lesson.** Corrected three times: by Sol (P2-R4), then by stage 2 building
+   it, then by Sol again (P1-SOURCE-INVENTORY) counting **five** readers rather than four.
    `tests/cacheable-covers-artefact-routes.test.ts:105–140` derives every artefact route by grepping
    for `const (\w+) = /^\/api\/<kind>\/([\w.%-]+)$/.exec(path)` and then for
    `if (<binding> && req.method === "GET")`; a miss was **`filter`ed out rather than asserted** — the
@@ -186,6 +188,28 @@ Numbered so the review and the implementation briefs can quote them.
    hoist constraint 7 contemplates for stage 3** — dropped that route from the test's universe, ran
    19 tests instead of 20, and left both pre-existing controls green. Stage 2 closed it; stage 3 must
    not reopen it.
+
+   ### All five source readers, and how each meets stage 3
+
+   Sol counted five, not four (P1-SOURCE-INVENTORY); the omitted one was `embedding-route-failures`.
+   The question worth answering is not *is it loud today* — four of the five already are — but **what
+   each does when stage 3 moves guards into per-domain helpers and constraint 7 hoists regex literals
+   to module scope**. Two of them read *dispatch syntax* and are exposed; three read a *helper
+   function* or a *whole-file count* and are not.
+
+   | Reader | Reads | Can it go quiet today? | Stage 3 |
+   |---|---|---|---|
+   | `cacheable-covers-artefact-routes.test.ts:105–140` | dispatch syntax: `const (\w+) = /^\/api\/<kind>\/([\w.%-]+)$/.exec(path)`, then `if (<binding> && req.method === "GET")`, greped **file-wide** | It could, and did — the `.filter(…)` at `:132` dropped an unresolved kind. **Closed in stage 2** by `ROUTELESS_KINDS`, which requires the unresolved set to be *exactly* the eight pipeline-stage kinds | **Loud.** Hoisting a matcher to module scope is precisely the mutation stage 2 watched: the kind stops resolving, leaves the eight, and is named. Because the grep is file-wide, moving a guard into `tryArtefactRoutes` unchanged keeps it green — correctly. One residual, left open deliberately in stage 2: a *currently routeless* kind that gained a route in an unsupported form stays unbound and stays green |
+   | `referee-scan-route.test.ts:342` | dispatch syntax, and the most brittle of the five: it cuts the arm with `if \(refereeScan && req\.method === "GET"\) \{[\s\S]*?\n {4}\}` — **the closing brace pinned at four spaces**, the guard's current indentation inside `serveAuthenticatedApi` | No. `expect(whole, "the route is not in src/routes.ts under that name").not.toBe("")` fires before any ordering is compared | **Loud, and it will fire.** A top-level `async function tryRefereeRoutes` puts the arm at two spaces, the extraction returns `""`, and the file goes red. That is a deliberate one-line edit at the moment the guard moves — the plan already says so — not a defect now. It is the only one of the five that stage 3 *must* touch |
+   | `owner-isolation.test.ts:1306` | a **helper**, `async function sendSource(…)`, and the order of two calls inside it | No. Both operands are asserted present before their order is compared (two `-1`s satisfy `<`), and `not.toContain("fsLocations(slug)")` proves the comment-stripping still does something | **Untouched.** `sendSource` is a top-level helper, not a guard; moving the `if (source && …)` arm that calls it changes nothing here. Only a later *file* split moves the declaration, and then the extraction is empty and every assertion fails at once |
+   | `source-store.test.ts:84` | the same `sendSource` cut, plus more of its body | No. It has an explicit presence control — *"has a body this test can actually read"* — asserting `res.statusCode = 200` before anything else | **Untouched**, for the same reason as `owner-isolation`. The two are deliberate duplicates: this one restates the security ordering outside a `describe.skip` that needs a database |
+   | `embedding-route-failures.test.ts:103` | neither: a **whole-file count**, `throw embeddingHttpError(` exactly twice, and no inline `[emb\d]` | Not in the direction that usually bites. Losing a call makes it `expected 1 to be 2`. **Its blind spot is location, not shrinkage**: the count is file-wide, so a third caller appearing while `similar` or `projection` stopped using the helper still reads 2 | **Survives unchanged** while stage 3 stays in one file — the two throws move with their handler bodies and the count holds. A later file split takes it to 0 and it says so loudly. Stage 1's inventory does not close its blind spot either: that is a fact about handler *bodies*, which stage 1 explicitly does not cover |
+
+   **The one thing to carry into stage 3:** `referee-scan-route` breaks on the *first* domain
+   extraction that includes referee, loudly and by design; `cacheable-covers-artefact-routes` breaks
+   only if regexes are hoisted, loudly and by design; nothing else in this list moves. Sol's
+   suggestion that these eventually consume stage 1's checked inventory rather than adding more greps
+   stands for the first two and is inapplicable to the last three.
 9. **[ISOLATION]** `tests/owner-isolation.test.ts` cuts the dispatcher's *anonymous region* and
    asserts it names no table and imports nothing outside a short pinned list. A rewrite must not
    widen it.
@@ -206,6 +230,10 @@ documented overlaps are resolved by the method, not by the order:
 Verified by hand at `:7081`/`:7088` and `:7656`/`:7715`. So the comment at `:6620` — *"Before the
 `:slug` pattern below, and it has to be"* — describes a hazard the method check currently prevents
 independently. Keep the comment and its history; add the qualification.
+
+**This is now asserted rather than recorded** — stage 1b's § *no two guards accept the same method
+and path*, and if it ever goes red, everything in this section stops being true and the order becomes
+behaviour.
 
 **The trap this sets for stage 1:** swapping the two library guards is an **equivalent mutation
 today**. Using it as the positive control would prove nothing while looking like proof. The general
@@ -306,6 +334,34 @@ accepted method; feed it syntax the parser does not understand. **Not** the libr
 not "reorder two overlapping guards" — no two guards accept the same method/path pair, so any such
 swap is an equivalent mutation and would pin an implementation detail rather than behaviour.
 
+**Stage 1b — three things stage 1 left out**, all three from Sol's review of the plan.
+`tests/authenticated-api-route-contract.test.ts` goes from 296 cases to 304.
+
+- **Disjointness, instead of order** (P1-ORDER-CONTRACT). The contract is written in declaration
+  order and compared as a set, which records the order without asserting it. Asserting the order
+  would be wrong for the reason the paragraph above gives, so the test asserts **the property that
+  makes order irrelevant**: no two of the 81 guards accept the same `(method, path)`. The two
+  documented intersections are *allowed* — `/api/library/search` GET vs PATCH,
+  `/api/chat/:slug/live-tool` POST vs PATCH/DELETE — and each is asserted to be a real intersection
+  resolved by the method, so it cannot pass by the paths having drifted apart. `jobAction`'s
+  `(cancel|retry)` against `jobAdvance`'s `advance` is *shown* disjoint by running both rather than
+  argued. **Honest about its reach:** regex intersection is undecidable in general and this does not
+  attempt it — the question is asked over the witness corpus plus the named overlap probes, so two
+  matchers meeting only at a path no witness spells would pass unnoticed. What keeps it from being
+  empty is that every contract row must carry a witness, so a new matcher arrives with a path of its
+  own. Its control is synthetic, because a real overlap cannot be introduced without also failing the
+  pair-set comparison. **If it ever fails, order has become load-bearing** and stage 3 stops being a
+  rearrangement.
+- **The two decode-order cases** (P1-DECODE-CONTROL), which is constraint 4 given a test. Malformed
+  JSON plus an undecodable slug, sent twice: `PUT /api/article/%/visibility` → **400 Request body is
+  not valid JSON** (body parsing wins), `PATCH /api/library/%` → **500 URI malformed** (slug decoding
+  wins), and a third case asserting the two differ, because either alone could go green by both
+  routes converging. Neither reaches a store. **Watched red:** decoding the visibility slug into a
+  `const` before its body read — the shape stage 3's move of handler bodies into closures could
+  produce by accident — failed two cases (*expected 500 to be 400*, *expected 500 not to be 500*),
+  and was reverted by editing the text back.
+- **The five source readers classified** (P1-SOURCE-INVENTORY) — constraint 8's new table.
+
 **Stage 2 — fix the one source-text test that is genuinely silent. ✅ Landed, `3fd9e5c1`.**
 Narrowed by Sol (P2-R4) from four files to one. `ROUTELESS_KINDS` names the eight `SHAPE` kinds that
 are pipeline stages rather than URLs, and one new assertion requires the unresolved kinds to be
@@ -320,11 +376,11 @@ exists, this test should drop its grep and use it. Sol confirms the failure that
 hoisting an *existing* regex reddens the new assertion, and changing a GET guard's form reddens the
 old one, so stage 3 cannot quietly lose an artefact route — it will have to adapt this test on
 purpose. `tests/cacheable-covers-artefact-routes.test.ts:132` filters away a `null`
-binding, so a route that stops matching vanishes from the test's universe. The other three
-(`owner-isolation.test.ts:1306`, `referee-scan-route.test.ts:342`, `source-store.test.ts:84`)
-already assert their extraction was non-empty and need nothing. `referee-scan-route`'s exact source
-shape will need adapting when its guard moves in stage 3 — that is a stage 3 edit, not a defect now.
-Ideally the cacheable test eventually reuses stage 1's checked parser instead of a second grep.
+binding, so a route that stops matching vanishes from the test's universe. The other four already
+assert their extraction was non-empty, or count over the whole file, and need nothing — **constraint
+8's table** names all five and says how each meets stage 3, which is the piece Sol asked for
+(P1-SOURCE-INVENTORY) and stage 1b wrote. Ideally the cacheable test eventually reuses stage 1's
+checked parser instead of a second grep.
 
 **Stage 3 — extract two or three same-module domains, then reassess.** Top-level
 `async function tryXRoutes(request: ApiRequest): Promise<boolean>` in the same file, gates outside,
