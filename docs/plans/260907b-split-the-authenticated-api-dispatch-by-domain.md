@@ -708,7 +708,19 @@ in the chain, plus the admin gate and the one table call. Biome on `serveAuthent
 234 → 183 → 164**. `npm run check` EXIT=0 at each stage, all seven hard checks clean.
 
 The next slice up is **search** (`searches`, `oneRun`), and it has no prerequisite left to pay: the
-referee slice paid the only one.
+referee slice paid the only one. Sol confirmed that in the stage 4b review — *"Search has no
+remaining prerequisite… I found no other test reading the `searches` or `oneRun` dispatch syntax"* —
+and gave the recipe: four ordered pair-keys added red-first, two shared module-scope matcher
+constants, four handlers prepended in GET/POST/PATCH/DELETE order, bodies compared while normalising
+**both** `slugPart` and `part` uses, `EXPECTED_AUTH_ROUTES` and the lifetime oracle untouched.
+
+**It is now a contiguous suffix, which it was not when 260907e queued it.** That plan's § *The next
+slice* warns search is "not adjacent to the table" because referee's eight guards sat between them;
+referee has since moved, so the four search guards (`:8453`–`:8489`) run straight into the table call
+at `:8519`. It is the plain bottom-upward move again, with no slice-dispatch needed.
+
+**Whoever takes it should check `ListAgents` first.** Both plans queue this slice and either session
+could read it as an invitation; that is exactly how referee got built twice. Asking costs nothing.
 
 Referee was **the one slice with a real prerequisite** — but not the start of an expensive stretch,
 which is how this section first read. See § *Fable settles the end-state, and corrects the price*
