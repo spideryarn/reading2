@@ -183,11 +183,7 @@ import {
    record. See `ModeUi` below. */
 import { MODE_LABEL } from "../title-text.js";
 import type { Comment } from "../types.js";
-import {
-  armActivationForDiagram,
-  armActivationForMode,
-  armActivationForTweets,
-} from "./activation.js";
+import { armActivationForMode, armActivationForTweets } from "./activation.js";
 import { useDockFit } from "./dock-fit.js";
 /* Type only: the bar is *handed* the switch, it does not subscribe to the store
    — see the `experimental` prop. A type import cannot become a subscription. */
@@ -255,7 +251,7 @@ interface Props {
    * They differ for the committed fixture, whose meta.json names the full
    * article it is an excerpt of — so building a link out of the meta slug would
    * send you to a different article, and one that exists, so nothing would look
-   * broken. See src/api.ts § FIXTURE_SLUG.
+   * broken.
    */
   slug: string;
   /** Which of the article's pages this bar is sitting on. */
@@ -1621,9 +1617,12 @@ function DockModes({
    * **Which picture a press on Diagram would land on** — `?diagram=`, or
    * `sketch` where the address bar is silent, which is `diagramParam`'s default.
    *
-   * Read here rather than a `MODE_TARGET` row because the answer is not fixed,
-   * and arming a fixed one leaves a token that a later Back step can spend:
-   * activation.ts § `armActivationForDiagram` has the sequence.
+   * Read here rather than baked into a **fixed** `MODE_TARGET` row, because the
+   * answer is not fixed, and arming a fixed one leaves a token that a later Back
+   * step can spend: activation.ts § `activationForDiagram` has the sequence.
+   * Since 2026-09-06 Diagram *does* have a row — a `delegated` one, whose
+   * target function consumes exactly this value, which is why it is still a
+   * prop.
    *
    * **Already degraded** — `diagramInSearch` in params.ts, which applies the
    * same rule `diagramParam` does, so an unrecognised `?diagram=` arrives here
@@ -1730,13 +1729,13 @@ function DockModes({
                    nobody has paid for yet, and this is what tells that panel
                    the difference between a press and a pasted link.
                    src/web/activation.ts. */
-                /* **The picture, not the mode**, for Diagram — see `diagram`
-                   on the props above, which is where the reasoning is. */
-                if (m.mode === "diagram") {
-                  armActivationForDiagram(slug, diagram);
-                } else {
-                  armActivationForMode(slug, m.mode);
-                }
+                /* **One call for all fourteen.** Diagram had an `if` of its own
+                   here until 2026-09-06; the table it needed the branch for is
+                   now total and executes its own row, so what the bar hands over
+                   is what it knows — the picture a Diagram press would land on.
+                   activation.ts § `MODE_TARGET`, and see `diagram` on the props
+                   above. */
+                armActivationForMode(slug, m.mode, { diagram });
                 onMode(m.mode);
                 // A real click leaves the keyboard to the article; Enter and
                 // Space (detail 0) leave focus where the reader put it. See the

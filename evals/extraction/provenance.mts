@@ -86,7 +86,7 @@ export interface ProvenanceRow {
   worstFanout: number;
   /** Extracted **HTML** byte-identical with the stamps removed and without them. */
   inert: boolean;
-  /** Readability declined the page. */
+  /** Stage 2 refused the page — Readability declined it, or the capability floor did. */
   refused: boolean;
 }
 
@@ -98,8 +98,20 @@ export function provenanceOf(name: string, rawHtml: string, url: string): Proven
     name, sourceElements: 0, outputElements: 0, direct: 0, viaDescendant: 0,
     viaAncestor: 0, unmapped: 0, distinctIds: 0, worstFanout: 0, inert: true, refused: false,
   };
-  const { article, source, sourceHtml, stampedElements } = readArticleWithProvenance(rawHtml, url);
-  if (!article?.content) return { ...blank, sourceElements: stampedElements, refused: true };
+  const { article, refusal, source, sourceHtml, stampedElements } = readArticleWithProvenance(
+    rawHtml,
+    url,
+  );
+  /* **The floor counts as a refusal here too, since 2026-09-06.** This row is a
+     claim about the extraction the pipeline *publishes*, and `live` below
+     divides its totals by the rows that produced one. Counting a page stage 2
+     refuses reports provenance for output no reader can ever be shown — which it
+     did on `medium-about` and `pmc-article`, the second of them as the worst
+     direct-rate page in the table. GPT Sol, reviewing C1a.
+     src/extract.ts § `capabilityFloor`. */
+  if (!article?.content || refusal) {
+    return { ...blank, sourceElements: stampedElements, refused: true };
+  }
 
   /* The inertness check runs the *shipping* function on the same bytes, so what
      is compared is the stamped arm against the code that actually runs — not

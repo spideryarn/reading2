@@ -1,6 +1,5 @@
 /**
- * In `postgres` mode, a chat or search write must reach Postgres and **must not
- * touch the disk**.
+ * A chat or search write must reach Postgres and **must not touch the disk**.
  *
  * ## The bug this is the regression test for
  *

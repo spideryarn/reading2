@@ -872,10 +872,14 @@ export function DiagramPanel({
      what it will do. So the gate is narrow on purpose: `force`, which is the
      picture Greg asked to put the dotted lines on, and nothing else. See
      useSimilar.ts. */
-  /* **`owns &&` first, and it is the gate rather than a belt.** Force is the
-     default picture, so merely opening `?mode=diagram` fires this POST — it is
-     the one fetch in the reading view a reader can start without pressing
-     anything that says what it will do. A visitor must issue it never. The
+  /* **`owns &&` first, and it is the gate rather than a belt.** Force is no
+     longer the default picture — `params.ts` § `DEFAULT_DIAGRAM` is Sketch, and
+     diagram.md § "why Force was the default and why Sketch is now" says why —
+     so opening a bare `?mode=diagram` does *not* fire this POST any more. It
+     fires when a reader picks Force, which is still the one fetch in the
+     reading view that can start without a press naming its cost, because the
+     picker does not say that Force is the paid one. A visitor must issue it
+     never. The
      picture is still drawn: `similar.pairs` stays the shared empty array while
      the hook is idle, and `buildGraph` takes it as an argument, so what a
      visitor loses is the dotted semantic layer and nothing else. */

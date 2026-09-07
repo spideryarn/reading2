@@ -86,8 +86,8 @@ Code: [`src/quotes.ts`](../../src/quotes.ts) (stage 5h — the prompt, the call,
 [`src/web/QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx),
 [`src/web/useQuotes.ts`](../../src/web/useQuotes.ts), `resolveQuotes` in
 [`src/web/search-hits.ts`](../../src/web/search-hits.ts), `QuotesBand` in
-[`src/web/App.tsx`](../../src/web/App.tsx), and `§ quotes mode` at the end of
-[`src/web/styles.css`](../../src/web/styles.css). Tests:
+[`src/web/App.tsx`](../../src/web/App.tsx), and `§ quotes mode` in
+[`src/web/styles/quotes.css`](../../src/web/styles/quotes.css). Tests:
 [`tests/quotes.test.ts`](../../tests/quotes.test.ts) (the stage),
 [`tests/quotes-panel.test.ts`](../../tests/quotes-panel.test.ts) (the orders and the bar),
 [`tests/quote-marks.test.ts`](../../tests/quote-marks.test.ts) (what the prose marks).

@@ -54,3 +54,15 @@ Two ways to answer it, and neither should be guessed at:
 
 Recorded in
 [260905f](../plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md).
+
+## Answered 2026-09-06: nothing changes
+
+Greg was shown both readings above and chose the first — *"Nothing — close it"*. So this note is the
+answer, the spinner stays exactly as it shipped on 2026-09-01, and the row comes off
+[awaiting-approval.md](awaiting-approval.md).
+
+**No minimum visible duration.** Holding a spinner for ~300ms when the response beats it is
+deliberate added latency on a path that has none, and there is no evidence yet that anyone needs it —
+the one report is compatible with having simply seen a fast send work. If it comes up again, the
+useful report is *"I pressed Send and nothing happened"* on a **slow** connection, which would be a
+different bug from this one and would have evidence behind it.

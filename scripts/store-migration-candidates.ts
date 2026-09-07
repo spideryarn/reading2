@@ -16,7 +16,7 @@
  *   - `subject`              the test imports a condemned module itself.
  *   - `fixture`              it reaches through a `tests/helpers/…` module —
  *                            the test's own fixture machinery.
- *   - `app-survives-flag`    it reaches through `src/…` only.
+ *   - `app`                  it reaches through `src/…` only.
  *   - `type-only`            reachable only across erased `import type` edges,
  *                            so nothing executes. Listed, never counted as a reach.
  *
@@ -27,7 +27,9 @@
  * the plan above, so no module reads it, the cut removes nothing, and every
  * bucket boundary lands exactly where it landed with the cut in place. The
  * dimension went rather than staying as a field reporting zero for ever about a
- * file that is no longer on disk.
+ * file that is no longer on disk. **`app-survives-flag` was renamed `app` at the
+ * same time**, for the same reason: it named a comparison nothing performs any
+ * more.
  *
  * `src/store/index.ts` alone is **not** the wiring hub — that hypothesis was
  * tested against this data and fails. Only 23 of 192 reaching tests go
@@ -253,7 +255,7 @@ const missingTargets = TARGETS.filter((t) => !targets.has(t));
 const none: ReadonlySet<string> = new Set();
 const hub: ReadonlySet<string> = new Set([WIRING_HUB]);
 
-const BUCKETS = ["subject", "fixture", "app-survives-flag", "type-only"] as const;
+const BUCKETS = ["subject", "fixture", "app", "type-only"] as const;
 type Bucket = (typeof BUCKETS)[number];
 
 type Report = {
@@ -285,7 +287,7 @@ for (const file of testFiles) {
       ? "subject"
       : [...hits.values()].some((p) => p.slice(1, -1).some((n) => n.startsWith("tests/")))
         ? "fixture"
-        : "app-survives-flag";
+        : "app";
   reports.push({
     file,
     bucket,

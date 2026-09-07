@@ -45,6 +45,37 @@ the leak, patched their own table, and left it running.
 So the first stage is not cosmetic, and it is worth more than the rest of the plan put together:
 **scope the two rules to `table.zoom`**. Everything after it is the actual request.
 
+## Where it stands — built and on `dev`, 2026-09-06
+
+**All four stages landed**, in `601a550a` and `8ec4072c` (merged as `6d93b0b8`). Both reviews are
+in: [the plan review](260906g-shelf-table-review-sol.md) before it was built, and
+[the code review](260906g-shelf-table-code-review-sol.md) after, which found no runtime regression.
+The postmortem is
+[260906g](../postmortems/260906g-an-unscoped-element-selector-in-styles-css-reached-every-table-in-the-app.md).
+
+Measured before and after, on the real shelf:
+
+| | before | after |
+|---|---|---|
+| header ↔ first-row overlap | 32.5px, at scroll 0 and 400 | **0** |
+| `td` right border | 1px on every cell | none |
+| article column at 390px | 53px | **224px**, table scrolls |
+| view toggle hit target | 24px, native `title` | 28px in a 32px track, `ControlTip`, `role="radiogroup"` |
+
+The strongest single piece of evidence is a **computed-style diff of the branch against the
+unchanged primary**: the only difference anywhere was the leak vanishing from non-`.zoom` tables.
+`th.pin-left` kept `z-index: 35` and `td.pin-right` kept `border-right: 0`, so the reading view is
+provably untouched.
+
+**One thing is outstanding, and it is a check rather than a change:** `npm run check` has never
+completed a clean run here. It was killed twice by box load (average 222 at one point) and once by
+memory. What *did* run green: 32 test files across two batches, `npm run typecheck` (clean for
+`src/web`), `biome` on every touched file, and the four browser passes above. A wake-up is armed for
+02:13 to run the full gate on a quiet box.
+
+**Pre-existing and not ours:** `tests/dock-corner-controls.test.tsx` has two typecheck errors from
+another agent's `navLabelStatus` addition to the `Article` type, in a file this work never touched.
+
 ## What the research said, and the one place we are not taking its advice
 
 A Sonnet web-research pass ([third-party-library-selection.md](../reusable/third-party-library-selection.md))

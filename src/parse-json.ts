@@ -620,9 +620,9 @@ export function parseJsonAnswer<T>(raw: string, source: string): T {
  * regenerate anyway, and for them an unreadable file is worth exactly what an
  * absent one is worth: nothing.
  *
- * **Not for callers who need to tell those apart**, and one in the tree does, so
- * check before reaching for this. `readJson` in src/api.ts collects the
- * unreadable paths so the shelf can say which article broke. (There were two
+ * **Not for callers who need to tell those apart**, and one in the tree did, so
+ * check before reaching for this. `readJson` in src/api.ts collected the
+ * unreadable paths so the shelf could say which article broke. (There were two
  * until 2026-09-01: `readJson` in src/store/import.ts returned `undefined` for
  * `ENOENT` only and let a genuinely corrupt file throw, and went with that
  * file.) Folding that reader into this would turn a reported failure into a silent

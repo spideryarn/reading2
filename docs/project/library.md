@@ -513,7 +513,7 @@ switching between panels of content. Radix's `RadioGroup` brings the roving tabi
 keys — note that it moves focus in a `setTimeout` and the focus is what selects, so a synchronous
 test of the arrow keys sees nothing and reads exactly like a control that has none.
 
-### The table shows fifty, and then asks
+### Both views show a first few, and then ask
 
 > the table should by default only show the top 50? or so Articles, with a button at the bottom to
 > show all. Eventually we might consider paging, but probably that's overkill for now
@@ -526,8 +526,17 @@ counts meaning different things is worse than either. The cap lives in
 [`Library.tsx`](../../src/web/Library.tsx), sliced after both `sinkLast` passes, **not** in
 `DataTable` — the cap is caller policy, and `DataTable`'s other consumer is `/admin`'s list of
 accounts, which cannot use a label about articles. `expanded` is component state on the page rather
-than in the table, so switching to cards and back does not quietly reset it. The cards view is
-uncapped.
+than in the table, so switching to cards and back does not quietly reset it.
+
+**The cards view is capped too, at twenty rather than fifty.** The cap is a page-height budget, not
+a row count: a card carries a title, a byline, a blurb and five buttons, so fifty of them is a page
+five times longer than the fifty rows the cap exists to prevent. `SHELF_ROW_CAP` is therefore keyed
+by view rather than being one number. Nothing on screen says either number — the button prints the
+*total* — so switching views never changes a count; all a reader sees is that a shelf of thirty
+articles offers the button in cards and not in the table. One `expanded` flag covers both views,
+because they are the same list painted twice ([url-state.md](url-state.md)) and a per-view flag
+would quietly make the view switch a filter as well. The fifty is Greg's; the twenty is Fable's,
+2026-09-06, and is the one to move first.
 
 Not pagination and not infinite scroll: NN/g's framing is that infinite scroll suits homogeneous
 feeds with no particular goal, and hurts anything you need to *find or return to*. A shelf is the
@@ -921,7 +930,7 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`tests/store-shelf-reads.test.ts`](../../tests/store-shelf-reads.test.ts) | **how many questions the shelf asks, and about what** — two, whatever it holds, and neither about a block |
 | [`tests/table-sort.test.ts`](../../tests/table-sort.test.ts), [`tests/relative-time.test.ts`](../../tests/relative-time.test.ts) | the URL round-trip and `sinkLast`; and where "days ago" stops helping |
 
-Styling is Tailwind utilities, not a block in [`styles.css`](../../src/web/styles.css). That is the
+Styling is Tailwind utilities, not a block under [`src/web/styles/`](../../src/web/styles/). That is the
 rule rather than a preference: this page is chrome, and chrome is what shadcn and Tailwind were
 adopted for ([web-client.md § Tailwind and shadcn](web-client.md#tailwind-and-shadcn-components)).
 The reading view stays hand-written, because its geometry is not something utilities can say. Every

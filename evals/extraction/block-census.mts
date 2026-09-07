@@ -69,7 +69,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ALL_FIXTURES } from "./corpus.mjs";
-import { ReadabilityRefused, runExtract } from "../../src/extract.js";
+import { ReadabilityRefused, TooLittleTextToRead, runExtract } from "../../src/extract.js";
 import { runBlocks } from "../../src/blocks.js";
 import { isMain } from "../../src/is-main.js";
 
@@ -101,7 +101,7 @@ export interface CensusRow {
   blocks: number;
   /** Of those, the `<pre>` blocks — the population `codeText` changed. */
   code: number;
-  /** Readability declined the page, so there is nothing to count. */
+  /** Stage 2 refused the page — no article, or too little text — so there is nothing to count. */
   refused: boolean;
 }
 
@@ -115,7 +115,13 @@ export async function censusOf(
   try {
     ({ extractedHtml } = await runExtract({ html: rawHtml, url, slug: name }));
   } catch (err) {
-    if (err instanceof ReadabilityRefused) {
+    /* **Both refusals, since 2026-09-06.** `TooLittleTextToRead` is stage 2's
+       capability floor (src/extract.ts § `capabilityFloor`), and it fires on
+       `medium-about` and `pmc-article` — which are in `all`, so catching only
+       the older one turned a census of the whole corpus into a crash. A page
+       with no article contributes no blocks either way; which refusal it was is
+       the row's business and not the count's. */
+    if (err instanceof ReadabilityRefused || err instanceof TooLittleTextToRead) {
       return { row: { name, blocks: 0, code: 0, refused: true }, blocks: [] };
     }
     throw err;

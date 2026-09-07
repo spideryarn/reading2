@@ -204,9 +204,8 @@ describe("a single-step job on an instance that never ingested the article", () 
    * src/jobs.ts built `fsStoreSession({ artifacts: fsArtifacts })`, a deployment
    * rooted that store at the same job-scoped `/tmp` as the directory, so these
    * cases were *the stage being ready for a store that can see the article, not
-   * evidence that one exists*. `claimSession` returns `openPgStoreSession` under
-   * `SPIDERYARN_STORE=postgres` now — commit `c42c940`,
-   * docs/plans/260830aq-late-steps-read-the-store.md — and
+   * evidence that one exists*. `claimSession` returns `openPgStoreSession` now
+   * — commit `c42c940`, docs/plans/260830aq-late-steps-read-the-store.md — and
    * tests/claim-session-postgres.test.ts is the end-to-end case that says so.
    *
    * The two stages here are the two that failed in production. The other five

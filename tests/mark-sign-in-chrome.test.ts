@@ -25,10 +25,9 @@
  * answer the question.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 
 import { chromePath } from "../scripts/browser-sign-in.js";
+import { readerCss } from "./helpers/stylesheets.js";
 
 /** Whether this machine can answer the question at all. */
 const chrome = (() => {
@@ -39,10 +38,10 @@ const chrome = (() => {
   }
 })();
 
-const CSS = readFileSync(
-  path.resolve(import.meta.dirname, "..", "src", "web", "styles.css"),
-  "utf8",
-);
+/* The reading-view sheets as a set, concatenated in cascade order — which is
+   what has to be inlined into the page, and what `src/web/styles.css` stopped
+   being on 2026-09-06. tests/helpers/stylesheets.ts. */
+const CSS = readerCss();
 
 /**
  * The markup `annotateHtml` produces for these three cases, written out rather
