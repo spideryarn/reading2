@@ -1,7 +1,7 @@
 # The authenticated API's dispatch becomes enumerable — and the matrix test that has to come first
 
-Status as of 2026-09-07: **reviewed; stages 1, 1b, 1c, 2 and 3a landed; the table exists and billing
-is the only domain in it.** Evidence gathered at `d4b503b4`;
+Status as of 2026-09-07: **reviewed; stages 1, 1b, 1c, 2, 3a and 3b landed; the table holds the
+bottom thirteen guards of the chain — jobs, uploads and billing — and referee is the next slice up.** Evidence gathered at `d4b503b4`;
 every line number below was live at `d4b503b4` and stage 3a has since moved them — the four billing
 guards are gone from the chain and roughly 280 lines were added above `serveAuthenticatedApi`, so
 read a line number as "which statement", not "which line". Design
@@ -471,6 +471,49 @@ harder — helper functions go on closing over exactly the same module state. Th
 only at a later *file* split, where their ownership and `processSingleton` identities have to move
 atomically with the helpers that use them. So the plan's earlier claim that chat/live/jobs are
 "materially harder" was wrong for this stage and right for the one after it.
+
+**Stage 3b — jobs and uploads join it, prepended. ✅ Landed.** The nine guards
+`allJobs` GET · `uploads` POST · `upload` DELETE · `upload` GET · `allJobs` POST · `job` GET ·
+`job` DELETE · `jobAction` POST · `jobAdvance` POST — taken as **one contiguous slice** from
+immediately above the table call and put **above** the billing rows in that same order. So the
+table now reads bottom-of-the-chain-upward, one dispatch call, unchanged position. All nine handler
+bodies moved verbatim; the only edits inside them are `part(upload, 1)` → `part(captures, 1)` and
+each arm's trailing `return;` dropped, and a script checked the nine bodies character for character
+against the arms they came from.
+
+This is [Sol's prescription](260907b-stage3a-code-review-sol-0923.md) (P2-STAGE3B-ORDER) and the
+reason it is a *slice* rather than a *domain*: `uploads` and `upload` sit **between** `allJobs` GET
+and `allJobs` POST, so taking the range contiguously preserves that interleave for free, where
+grouping by domain name would silently reorder it. The order is not to be tidied.
+
+**`EXPECTED_AUTH_ROUTES` is unchanged again** — md5 still `c36bdcb…`, not one row and not one
+witness. 316 cases → 319.
+
+Three things this stage hit that billing did not:
+
+- **Shared matchers.** `upload`, `allJobs` and `job` each serve two rows, and the reader refused
+  `pattern: SOME_IDENT` on purpose — stage 3a left the note saying what the right shape would be.
+  It is a module-scope `const` both rows name (`JOBS_PATH`, `UPLOAD_PATTERN`, `JOB_PATTERN`), and
+  the reader now resolves an identifier **only** to a top-level `const` holding a string or regex
+  literal, which keeps the no-effects-at-construction whitelist exactly as tight. `ParsedTableEntry`
+  gained a `site`, so two rows naming one constant are one matcher and two guards — what a chain
+  binding read by two guards already is — while two rows spelling the same literal out twice are two
+  matchers and § *names each matcher once* fails on them. 67 and 81 both held.
+- **The order is now asserted, for the table only.** New case § *keeps the table in the chain's
+  order, newest domain first*. The chain's order is deliberately not asserted because its guards are
+  disjoint; the table's order **is** the chain's order carried across, and nothing else recorded
+  that. It is the only thing the interleave mutation reddened.
+- **Sol's trap has a rail, and it is absolute.** A second `dispatchAuthRoute(AUTH_ROUTES, …)` earlier
+  in the chain is refused by `readTableDispatch` at module scope — `Tests: no tests`. The same rail
+  would refuse a *slice* dispatched at its old position, which is Sol's sanctioned move for a domain
+  that is not a contiguous suffix; teaching it that is a deliberate edit at the stage that needs one.
+
+Also done here, since the file was open: **P3-CAPTURE-CONTRACT**. `PatternAuthRoute`'s comment said
+the pattern arm necessarily captures; `/^\/api\/x$/` is a legal row. The comment now says regex
+route and names what the type does not promise. No stronger type was built.
+
+`npm run check` at EXIT=0. `referee-scan-route.test.ts` is still green, as expected — referee is the
+next slice up and its four-space brace is untouched. That is the test that breaks next, by design.
 
 **Not in scope**, named as passed over: moving domains into separate files (Greg's call, and the
 place the registries actually bite); anything inside the 81 handler bodies; the eager-matcher cost;

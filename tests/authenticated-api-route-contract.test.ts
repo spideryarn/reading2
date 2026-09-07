@@ -36,10 +36,12 @@
  * ## Two shapes, one contract
  *
  * Since stage 3a the dispatch is written two ways. Most of it is still
- * `if (matcher && req.method === "VERB")` in the chain; billing's four routes are
- * rows of `AUTH_ROUTES`, a static ordered table of closures that
- * `serveAuthenticatedApi` consults after every remaining guard and before its
- * 404. The reader below normalises both into the same `(method, match)` pair, so
+ * `if (matcher && req.method === "VERB")` in the chain; the bottom of that chain
+ * — billing's four routes, and since stage 3b the nine jobs and uploads guards
+ * that stood immediately above them — are rows of `AUTH_ROUTES`, a static ordered
+ * table of closures that `serveAuthenticatedApi` consults after every remaining
+ * guard and before its 404. The reader below normalises both into the same
+ * `(method, match)` pair, so
  * **`EXPECTED_AUTH_ROUTES` did not change by one row or one witness** when they
  * moved — which is the whole evidence that the move was behaviour-preserving. If
  * a later domain cannot be moved without editing the contract, that is a finding
@@ -184,6 +186,40 @@
  *     tests` again. Billing opens no stream, so nothing about billing would have
  *     gone red; this is the check that has to exist **before** the domain that
  *     does.
+ *
+ * ### Stage 3b, 2026-09-07 — the nine jobs/uploads guards become table rows
+ *
+ * Green unmutated at **319**: 316 plus the two cases the shared-matcher
+ * resolution brings and the one that pins the table's order. `EXPECTED_AUTH_ROUTES`
+ * was not touched for any of these either, and the block is still byte-identical
+ * to stage 1c's (md5 `c36bdcb…`).
+ *
+ * 13. **A table row deleted** — the `DELETE /api/jobs/:id` entry removed. **4
+ *     failed:** *contract rows with no guard in src/routes.ts*, the canary
+ *     (*expected 80 to be 81*), § `answers the moved domains from the table` and
+ *     § `keeps the table in the chain's order`. Note the **matcher** set stayed
+ *     green, correctly: `JOB_PATTERN`'s other row still names it, exactly as a
+ *     chain binding survives one of its two guards being deleted.
+ * 14. **A table row's method changed** — `GET /api/jobs` made `PUT`. **4
+ *     failed:** the pair set (*guards in src/routes.ts that no contract row
+ *     allows*), both table cases, and the negative matrix refusing to send
+ *     `PUT /api/jobs` because the source now answers it.
+ * 15. **The interleave tidied** — `POST /api/uploads` moved above `GET /api/jobs`,
+ *     which is the reorder the domain-shaped move would have made by accident.
+ *     **1 failed**, and only one: § `keeps the table in the chain's order`. That
+ *     is the honest reach of the rest of this file — a reorder is an *equivalent*
+ *     mutation for the pair set, the collision corpus and the negative matrix
+ *     alike, which is § *Why the order of the 81 guards is not asserted*
+ *     working as designed. The table is the one place order is recorded, because
+ *     it is the one place order was *carried across* rather than merely observed.
+ * 16. **A second dispatch of the whole table**, earlier in the chain — GPT Sol's
+ *     named trap (stage 3a review § P2-STAGE3B-ORDER): billing would then answer
+ *     from the top of the chain instead of the bottom. Refused at module scope,
+ *     before a case ran: *serveAuthenticatedApi: a second table dispatch at line
+ *     8454*. `Tests: no tests`, `Test Files: 1 failed`. The rail is
+ *     `readTableDispatch`, and it is absolute: a *slice* dispatched at its old
+ *     position — Sol's sanctioned move for a domain that is not a contiguous
+ *     suffix — would also have to be taught here, deliberately.
  *
  * The disjointness check has a **control rather than a mutation**: a real
  * overlap cannot be introduced into `src/routes.ts` without also failing the
@@ -1121,6 +1157,15 @@ interface ParsedTableEntry {
   line: number;
   match: MatchSpec;
   method: string;
+  /**
+   * The one place in the source that decides what this row matches: `const NAME`
+   * for a matcher two rows share, `line N` for one written into the row.
+   *
+   * Two rows naming the same constant are **one** matcher, exactly as two chain
+   * guards reading the same binding are; two rows spelling out the same literal
+   * are two, and § `names each matcher once` fails on them, because copies drift.
+   */
+  site: string;
 }
 
 const ENTRY_KEYS: Record<"exact" | "pattern", string[]> = {
@@ -1128,11 +1173,48 @@ const ENTRY_KEYS: Record<"exact" | "pattern", string[]> = {
   pattern: ["kind", "method", "pattern", "handler"],
 };
 
-function readTableEntry(element: unknown): ParsedTableEntry {
-  if (!isNode(element) || nodeType(element) !== "ObjectExpression") {
-    if (isNode(element)) refuse(element, `an ${ROUTE_TABLE} entry that is not an object literal`);
-    throw new UnsupportedDispatchSyntax(`${ROUTE_TABLE}: an entry that is not a node`);
+/**
+ * Where a row's `path` or `pattern` really is: the value written into the row,
+ * or the module-scope `const` it names.
+ *
+ * **Resolution is deliberately this narrow.** Only a top-level
+ * `const NAME = "…"` or `const NAME = /…/` — the whole point of the whitelist is
+ * that reading the table can have no effects to have, and a string or regex
+ * literal has none wherever it is written. An identifier naming anything else,
+ * or naming nothing this file declares, stays a refusal rather than a silently
+ * shorter inventory.
+ */
+function resolveMatchValue(
+  value: unknown,
+  constants: Map<string, AstNode>,
+): { node: AstNode; site: string } | undefined {
+  if (!isNode(value)) return undefined;
+  const name = identName(value);
+  if (name === undefined) return { node: value, site: `line ${lineOf(value)}` };
+  const target = constants.get(name);
+  return target === undefined ? undefined : { node: target, site: `const ${name}` };
+}
+
+/** Every top-level `const NAME = <string or regex literal>`, by name. */
+function literalConstants(statements: unknown[]): Map<string, AstNode> {
+  const found = new Map<string, AstNode>();
+  for (const statement of statements) {
+    if (!isNode(statement) || nodeType(statement) !== "VariableDeclaration") continue;
+    for (const raw of statement.declarations as unknown[]) {
+      if (!isNode(raw)) continue;
+      const name = identName(raw.id);
+      const init = raw.init;
+      if (name === undefined || !isNode(init)) continue;
+      if (nodeType(init) === "StringLiteral" || nodeType(init) === "RegExpLiteral") {
+        found.set(name, init);
+      }
+    }
   }
+  return found;
+}
+
+/** A row's plainly-named properties, by name — a computed or exotic one refuses. */
+function entryProperties(element: AstNode): Map<string, AstNode> {
   const byKey = new Map<string, AstNode>();
   for (const raw of element.properties as unknown[]) {
     if (!isNode(raw) || nodeType(raw) !== "ObjectProperty" || raw.computed === true) {
@@ -1145,6 +1227,15 @@ function readTableEntry(element: unknown): ParsedTableEntry {
     }
     byKey.set(key, value);
   }
+  return byKey;
+}
+
+function readTableEntry(element: unknown, constants: Map<string, AstNode>): ParsedTableEntry {
+  if (!isNode(element) || nodeType(element) !== "ObjectExpression") {
+    if (isNode(element)) refuse(element, `an ${ROUTE_TABLE} entry that is not an object literal`);
+    throw new UnsupportedDispatchSyntax(`${ROUTE_TABLE}: an entry that is not a node`);
+  }
+  const byKey = entryProperties(element);
 
   const kind = stringValue(byKey.get("kind"));
   if (kind !== "exact" && kind !== "pattern") {
@@ -1167,23 +1258,27 @@ function readTableEntry(element: unknown): ParsedTableEntry {
   if (method === undefined) refuse(element, `an ${ROUTE_TABLE} entry with no literal method`);
 
   const line = lineOf(element);
+  /* A literal, or a module-scope `const` holding one — `resolveMatchValue` above
+     for why those two and nothing else. Jobs brought the first matchers two rows
+     share (`/api/jobs`, `/api/uploads/:id`, `/api/jobs/:id`), and a chain binding
+     read by two guards has no table equivalent but a named constant. */
   if (kind === "exact") {
-    const path = stringValue(byKey.get("path"));
-    if (path === undefined) refuse(element, `an ${ROUTE_TABLE} entry with no literal path`);
-    return { line, method, match: { kind: "literal", path } };
+    const resolved = resolveMatchValue(byKey.get("path"), constants);
+    const path = resolved === undefined ? undefined : stringValue(resolved.node);
+    if (resolved === undefined || path === undefined) {
+      refuse(element, `an ${ROUTE_TABLE} entry whose \`path\` is not a string literal`);
+    }
+    return { line, method, site: resolved.site, match: { kind: "literal", path } };
   }
-  const pattern = byKey.get("pattern");
-  /* A regex *literal*, not an identifier naming one. When a domain arrives whose
-     two methods share a pattern, the right shape is a module-scope `const` named
-     from both entries — one matcher site, two guards, exactly as the chain does
-     it — and teaching this to resolve that identifier is the edit that goes with
-     it. Until then an identifier is a refusal rather than a silent omission. */
-  if (pattern === undefined || nodeType(pattern) !== "RegExpLiteral") {
+  const resolved = resolveMatchValue(byKey.get("pattern"), constants);
+  if (resolved === undefined || nodeType(resolved.node) !== "RegExpLiteral") {
     refuse(element, `an ${ROUTE_TABLE} entry whose \`pattern\` is not a regex literal`);
   }
+  const pattern = resolved.node;
   return {
     line,
     method,
+    site: resolved.site,
     match: { kind: "regex", source: pattern.pattern as string, flags: (pattern.flags as string) ?? "" },
   };
 }
@@ -1205,7 +1300,8 @@ function readRouteTable(statements: unknown[], name: string): ParsedTableEntry[]
   if (literal === undefined) {
     throw new UnsupportedDispatchSyntax(`${name} is not a top-level const`);
   }
-  return (literal.elements as unknown[]).map(readTableEntry);
+  const constants = literalConstants(statements);
+  return (literal.elements as unknown[]).map((element) => readTableEntry(element, constants));
 }
 
 /**
@@ -1281,9 +1377,17 @@ function extractAuthDispatch(source: string): ParsedDispatch {
       );
     }
     assertHandlersAwaited(statements);
+    /* One matcher per *site*, not per row — § `site` on `ParsedTableEntry`. Two
+       rows naming `UPLOAD_PATTERN` are one matcher and two guards, which is what
+       a chain binding read by two guards already is; two rows spelling the same
+       regex out twice are two matchers, and § `names each matcher once` says so. */
+    const seen = new Set<string>();
     for (const entry of table) {
-      const where = `${describeMatch(entry.match)} in ${ROUTE_TABLE} at line ${entry.line}`;
-      matchers.push({ line: entry.line, match: entry.match, where });
+      const where = `${describeMatch(entry.match)} in ${ROUTE_TABLE} at ${entry.site}`;
+      if (!seen.has(entry.site)) {
+        seen.add(entry.site);
+        matchers.push({ line: entry.line, match: entry.match, where });
+      }
       guards.push({
         match: entry.match,
         method: entry.method,
@@ -1646,24 +1750,82 @@ describe("the authenticated API's route contract", () => {
       expect(parsed.terminal404Line).toBeGreaterThan(parsed.tableDispatchLine);
     });
 
-    it("answers the billing routes from the table, not from the chain", () => {
+    it("answers the moved domains from the table, not from the chain", () => {
       /* Otherwise everything above could be green because the parser is still
-         reading four `if`s and the move never happened — the two forms are
+         reading thirteen `if`s and the move never happened — the two forms are
          normalised to the same pair, which is the whole idea and also the way
-         this could pass while proving nothing. */
+         this could pass while proving nothing.
+
+         **This list grows by one domain per commit**, and it is the only place
+         that records which domains have moved. Editing it is what a stage does;
+         `EXPECTED_AUTH_ROUTES` is what a stage may not touch. */
       expect(sorted(parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match))))
         .toEqual(
           sorted([
+            // jobs and uploads, stage 3b
+            "GET literal /api/jobs",
+            "POST literal /api/uploads",
+            "DELETE regex /^\\/api\\/uploads\\/([\\w-]+)$/",
+            "GET regex /^\\/api\\/uploads\\/([\\w-]+)$/",
+            "POST literal /api/jobs",
+            "GET regex /^\\/api\\/jobs\\/([\\w.%-]+)$/",
+            "DELETE regex /^\\/api\\/jobs\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/jobs\\/([\\w.%-]+)\\/(cancel|retry)$/",
+            "POST regex /^\\/api\\/jobs\\/([\\w.%-]+)\\/advance$/",
+            // billing, stage 3a
             "POST literal /api/billing/checkout",
             "POST literal /api/billing/portal",
             "POST literal /api/billing/confirm",
             "GET literal /api/billing/usage",
           ]),
         );
+      const moved = ["/api/billing", "/api/jobs", "/api/uploads"];
       expect(
-        parsed.guards.filter((g) => !g.fromTable && describeMatch(g.match).includes("/api/billing")),
-        "a billing route is still a guard in the chain as well as a row in the table",
+        parsed.guards.filter(
+          (g) => !g.fromTable && moved.some((p) => describeMatch(g.match).includes(p)),
+        ),
+        "a moved route is still a guard in the chain as well as a row in the table",
       ).toEqual([]);
+    });
+
+    /**
+     * **One dispatch of the table, and the rows in the order the chain had
+     * them.**
+     *
+     * Sol's named trap for every stage after 3a (stage 3a review §
+     * P2-STAGE3B-ORDER): dispatching the *complete* table at a second, earlier
+     * position would let billing — the bottom of the chain — answer from the top
+     * of it. `readTableDispatch` refuses a second `dispatchAuthRoute` outright,
+     * at module scope, so that half never reaches a case; this asserts the half
+     * a refusal cannot see, which is that the rows are still written bottom-slice
+     * order and a new domain was prepended rather than appended.
+     *
+     * It is an ordering assertion about the *table*, which the § above declines
+     * to make about the chain — and for the opposite reason. The chain's order is
+     * not behaviour because its guards are disjoint over the corpus; the table's
+     * order **is** the chain's order, carried across, and the evidence that the
+     * move preserved it is that it was taken as a contiguous slice. Nothing else
+     * records that.
+     */
+    it("keeps the table in the chain's order, newest domain first", () => {
+      expect(
+        parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match)),
+        "the table's rows are the bottom of the chain in the order it had them; a domain is prepended, never appended, and the interleave inside jobs/uploads is not to be tidied",
+      ).toEqual([
+        "GET literal /api/jobs",
+        "POST literal /api/uploads",
+        "DELETE regex /^\\/api\\/uploads\\/([\\w-]+)$/",
+        "GET regex /^\\/api\\/uploads\\/([\\w-]+)$/",
+        "POST literal /api/jobs",
+        "GET regex /^\\/api\\/jobs\\/([\\w.%-]+)$/",
+        "DELETE regex /^\\/api\\/jobs\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/jobs\\/([\\w.%-]+)\\/(cancel|retry)$/",
+        "POST regex /^\\/api\\/jobs\\/([\\w.%-]+)\\/advance$/",
+        "POST literal /api/billing/checkout",
+        "POST literal /api/billing/portal",
+        "POST literal /api/billing/confirm",
+        "GET literal /api/billing/usage",
+      ]);
     });
 
     it("gives every contract row at least one method and one honest witness", () => {
@@ -1712,11 +1874,45 @@ describe("the authenticated API's route contract", () => {
       /* The positive half: without it every refusal below is equally consistent
          with a reader that refuses everything. */
       expect(read(`{ kind: "exact", method: "GET", path: "/api/x", ${HANDLER} }`)).toEqual([
-        { line: 1, method: "GET", match: { kind: "literal", path: "/api/x" } },
+        { line: 1, method: "GET", site: "line 1", match: { kind: "literal", path: "/api/x" } },
       ]);
       expect(read(`{ kind: "pattern", method: "GET", pattern: /^\\/api\\/x$/, ${HANDLER} }`)).toEqual(
-        [{ line: 1, method: "GET", match: { kind: "regex", source: "^\\/api\\/x$", flags: "" } }],
+        [
+          {
+            line: 1,
+            method: "GET",
+            site: "line 1",
+            match: { kind: "regex", source: "^\\/api\\/x$", flags: "" },
+          },
+        ],
       );
+    });
+
+    /**
+     * The other positive half, and the shape jobs needed: a matcher two rows
+     * share is a module-scope `const` they both name.
+     *
+     * A regex literal held in a `const` is still a literal, so nothing about
+     * "building the table calls nothing" is loosened — what is gained is that
+     * the two rows are read as **one** matcher site, so § `names each matcher
+     * once` goes on being the check that two copies would fail.
+     */
+    it("resolves a matcher two rows share, and counts it once", () => {
+      const source = `const P = /^\\/api\\/x\\/(\\w+)$/;
+const Q = "/api/x";
+const ${ROUTE_TABLE}: readonly AuthRoute[] = [
+  { kind: "pattern", method: "GET", pattern: P, ${HANDLER} },
+  { kind: "pattern", method: "DELETE", pattern: P, ${HANDLER} },
+  { kind: "exact", method: "POST", path: Q, ${HANDLER} },
+];`;
+      const rows = readRouteTable(parseSource(source).program.body as unknown[], ROUTE_TABLE);
+      expect(rows.map((r) => `${r.method} ${describeMatch(r.match)}`)).toEqual([
+        "GET regex /^\\/api\\/x\\/(\\w+)$/",
+        "DELETE regex /^\\/api\\/x\\/(\\w+)$/",
+        "POST literal /api/x",
+      ]);
+      expect(rows.map((r) => r.site)).toEqual(["const P", "const P", "const Q"]);
+      expect(new Set(rows.map((r) => r.site)).size).toBe(2);
     });
 
     it.each([
@@ -1724,12 +1920,28 @@ describe("the authenticated API's route contract", () => {
       ["a call builds the row", `buildRoute("/api/x")`],
       ["the row is spread in", `...MORE_ROUTES`],
       ["the handler is named elsewhere", `{ kind: "exact", method: "GET", path: "/api/x", handler: billingUsageHandler }`],
-      ["the pattern is named elsewhere", `{ kind: "pattern", method: "GET", pattern: USAGE, ${HANDLER} }`],
+      /* An identifier is resolved only against a module-scope `const` holding a
+         string or regex literal, so one this file does not declare — or one
+         holding anything a call could have built — is still a refusal. */
+      ["the pattern names nothing declared here", `{ kind: "pattern", method: "GET", pattern: USAGE, ${HANDLER} }`],
       ["a key is computed", `{ [KIND]: "exact", method: "GET", path: "/api/x", ${HANDLER} }`],
       ["a key nobody expects is added", `{ kind: "exact", method: "GET", path: "/api/x", cache: "no-store", ${HANDLER} }`],
       ["the method is not a literal", `{ kind: "exact", method: verb, path: "/api/x", ${HANDLER} }`],
     ])("refuses a row where %s", (_why, rows) => {
       expect(() => read(rows)).toThrow(UnsupportedDispatchSyntax);
+    });
+
+    it("refuses a pattern named by a `const` that a call built", () => {
+      /* The resolution's own limit, and the reason it is a whitelist rather than
+         a lookup: `new RegExp(…)` at module scope runs at import, which is the
+         one thing this section exists to rule out. */
+      const source = `const P = new RegExp("^/api/x$");
+const ${ROUTE_TABLE}: readonly AuthRoute[] = [
+  { kind: "pattern", method: "GET", pattern: P, ${HANDLER} },
+];`;
+      expect(() =>
+        readRouteTable(parseSource(source).program.body as unknown[], ROUTE_TABLE),
+      ).toThrow(UnsupportedDispatchSyntax);
     });
   });
 
