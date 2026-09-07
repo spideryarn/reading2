@@ -813,10 +813,18 @@ completing Stage 5 is not."* That is right, and it is the F13 move I would other
 
    **This step is a focus-restore fix, not a focus-on-open one**, and confusing the two is what makes
    `{1}` look right.
-7. **Write the modal/modeless contract down** where a reader of the code meets it — the tier table
-   in [keyboard.md](../project/keyboard.md) gained Escape's order in stage 3 and this is its
-   sibling. Not a new rule: a statement of the one the code already follows, so the next surface has
-   something to be consistent with instead of a precedent to guess at.
+7. **Write the modal/modeless contract down** where a reader of the code meets it —
+   [keyboard.md § Tab, and the surfaces it walks through](../project/keyboard.md). Not a new rule: a
+   statement of the one the code already follows, so the next surface has something to be consistent
+   with instead of a precedent to guess at. It says what a modeless surface owes *in exchange for*
+   not trapping, which is the thing the three defects in this stage all failed to do, and it carries
+   the jsdom caveat so the next person does not write a trap test that asserts a fake.
+
+   **An earlier draft of this step said keyboard.md "gained Escape's order in stage 3". It did
+   not** — stage 3 put the tier order in the escape inventory and left the reader-facing doc alone,
+   and the sentence was written from memory rather than from the file. Found while checking that an
+   anchor this step wanted to link to existed; it did not either. Both corrected, and the section now
+   links to the escape inventory rather than to a heading nobody wrote.
 8. **A real-Chrome traversal check** for one native modal and one modeless surface, on the
    `mark-sign-in-chrome` pattern. Sol's F45 offered an alternative ending — declare it unreliable
    and record a manual pass instead — and **that escape hatch is closed, because the feasibility was
