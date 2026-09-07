@@ -1,44 +1,57 @@
 /**
  * **Which model should transcribe a reader's voice?**
  *
- *   npm run eval:dictation-models                    # 3 runs; $0.1283 on 2026-09-03
+ *   npm run eval:dictation-models                    # 3 runs
  *   RUNS=5 npm run eval:dictation-models
  *
  * The sibling of [`bench-vocabulary-sources.ts`](bench-vocabulary-sources.ts),
  * which holds the model fixed and varies the vocabulary. This one holds the
- * vocabulary fixed — the shipped composition, `vocabularyFor` — and varies the
- * model, because that is the question that has never actually been asked.
+ * vocabulary fixed — the shipped composition, `vocabularyTermsFor` — and varies
+ * the model, because that is the question that has never actually been asked.
  *
- * ## The question the first bake-off could not answer
+ * **The `$0.1283 on 2026-09-03` that used to be on the line above is gone with
+ * the chat endpoint.** `/v1/audio/transcriptions` reports `usage.cost: 0` on
+ * every call — measured at 3 seconds and at 22 on 2026-09-07 — so a run's spend
+ * is not something this file can be told. It comes from the account:
+ * `npm run cost -- --reconcile`.
+ *
+ * ## The question the first bake-off could not answer, and the one it answered wrong
  *
  * [260827x](../../docs/plans/260827x-dictation-two-pass.md) picked
- * `gemini-3.1-flash-lite` and its table is the reason it is still the default.
- * But that table compared **Gemini models with a vocabulary against everybody
- * else's without one** — the nineteen dedicated transcribers have nowhere to
- * put a term list, which is the finding that chose the route. So it settled
- * *route*, and it never settled *model*: no non-Google model has ever been
- * scored on this app's own request. `openai/gpt-transcribe` bare (3.6% WER)
+ * `gemini-3.1-flash-lite` and its table was the reason it stayed the default for
+ * ten days. But that table compared **Gemini models with a vocabulary against
+ * everybody else's without one** — the nineteen dedicated transcribers were held
+ * to have nowhere to put a term list, which is the finding that chose the route.
+ * So it settled *route*, and it never settled *model*: no non-Google model was
+ * ever scored on this app's own request. `openai/gpt-transcribe` bare (3.6% WER)
  * matched Gemini bare (3.6–7.3%), and nothing followed that up.
  *
+ * **The finding that chose the route was wrong**, and it said so itself: it
+ * ruled the transcribers out on `prompt`, while noting that nothing had tried a
+ * provider's own biasing parameter. `openai/gpt-transcribe` takes a `keywords`
+ * array, and dictation moved onto `POST /v1/audio/transcriptions` on 2026-09-07
+ * (docs/plans/260907c-dictation-onto-an-openai-transcriber.md). So the arms
+ * below are transcribers now, and every Gemini row in the git history of this
+ * file was a measurement of a door the app has stopped using.
+ *
  * Run [`gate-models.ts`](gate-models.ts) first. It is the cheap half of this
- * one: a candidate that cannot be routed under `zdr` and `require_parameters`
- * is not a candidate, and finding that out here costs an hour of rows marked
- * "lost" instead of a minute.
+ * one: a candidate that cannot be routed is not a candidate, and finding that
+ * out here costs an hour of rows marked "lost" instead of a minute.
  *
  * ## Every arm sends the app's own request
  *
- * Through `transcribeWith`, with `model` as an option — so the system prompt,
- * the JSON schema, `require_parameters`, the truncation and refusal checks and
- * `tidy()` are the shipped ones. The option exists for this file and the
- * comment on it in [`src/transcribe.ts`](../../src/transcribe.js) says why: the
- * other benchmark's `MODEL` was a label, not a parameter, so a results file
- * could name one model and have measured another.
+ * Through `transcribeWith`, with `model` as an option — so the endpoint, the
+ * `keywords` block, the refusal handling and `tidy()` are the shipped ones. The
+ * option exists for this file and the comment on it in
+ * [`src/transcribe.ts`](../../src/transcribe.js) says why: the other benchmark's
+ * `MODEL` was a label, not a parameter, so a results file could name one model
+ * and have measured another.
  *
  * ## What is here that the other benchmark does not have
  *
- * - **`answeredBy` is counted, not asserted.** `zdr` routing means OpenRouter
- *   chooses an upstream under a constraint, and an arm scored while a fallback
- *   answered is an arm nobody measured. Every answer is tallied by the name it
+ * - **`answeredBy` is counted, not asserted.** OpenRouter may serve a request
+ *   from somewhere other than the model it was addressed to, and an arm scored
+ *   while a fallback answered is an arm nobody measured. Every answer is tallied by the name it
  *   gave, `(none)` included — the first version checked `if (got.answeredBy &&
  *   …)`, so a response naming no model at all passed the test and the run still
  *   announced a clean bill of health.
@@ -69,7 +82,13 @@
  */
 import fs from "node:fs";
 import { loadEnvLocal } from "../../src/env.js";
-import { transcribeWith, vocabularyFor } from "../../src/transcribe.js";
+import { transcribeWith } from "../../src/transcribe.js";
+/* **The terms, not the joined line.** `transcribeWith` takes the list, because
+   `keywords` is an array and joining only to split again would turn a term
+   containing a comma into two. `vocabularyFor` — which this file used to call —
+   is this function with a `.join(", ")` on the end; where a line is still wanted
+   it is derived below, so there is one vocabulary here rather than two. */
+import { vocabularyTermsFor } from "../../src/vocabulary-sources.js";
 /* **What came back, against what was sent**, shared with the other benchmark
    so neither can report a clean run over an arm that answered nothing. */
 import { callCounts, coverageLines, coverageOf, exitCodeFor } from "./coverage.js";
@@ -89,35 +108,32 @@ if (!Number.isInteger(RUNS) || RUNS < 1) {
 }
 
 /**
- * The models worth an hour, and the reason each survived the gate.
+ * The candidates, and **not yet the survivors of a gate run**.
  *
- * Every model OpenRouter lists as taking audio input was gated on 2026-09-03
- * (`gate-models.ts`). **Eight of fifteen answered**; the seven that did not are
- * in the plan, and the two that matter are OpenAI's, which cannot be reached
- * from here at all — not on capability, on our own routing.
+ * This list used to be three Gemini models, chosen from the eight of fifteen
+ * that answered a chat-endpoint gate on 2026-09-03, with the five slower ones
+ * dropped on one call each. All of that is now history: dictation left the chat
+ * endpoint on 2026-09-07, and not one of those fifteen appears among the models
+ * OpenRouter documents as serving `/v1/audio/transcriptions`.
  *
- * The five survivors that are not here were dropped on the gate's latency,
- * which is one call each: weak evidence about a *model*, strong evidence about
- * an *order of magnitude*, and 2.2s to 28s against the lite tier's 1.3s is an
- * order of magnitude, for a person sitting in front of a microphone button.
- * Naming that plainly because it is a latency filter applied before a
- * capability comparison, which is the opposite of the stated priority — the
- * defence is that `3.8-flash` below is the newest and largest of them, so the
- * flash tier's ceiling is represented rather than assumed.
+ * What is here instead is [`gate-models.ts`](gate-models.ts)'s candidate list,
+ * hand-collected on 2026-09-07 from OpenRouter's zero-data-retention endpoint
+ * list and its speech-to-text guide. **Nobody has gated it.** So this is a list
+ * of models believed to be reachable, not a list measured to be — run the gate
+ * first and cut this to what answered, or the first thing this benchmark
+ * produces is an hour of rows marked "lost". Five models is also two more than
+ * the table has ever carried: at ten clips, three runs and two vocabulary
+ * conditions that is 330 calls, and thinning on the gate is what keeps it
+ * honest rather than merely long.
  */
 const MODELS = [
-  /** The incumbent. */
-  "google/gemini-3.1-flash-lite",
-  /** One generation newer, same tier, same gate latency, and never measured. */
-  "google/gemini-3.5-flash-lite",
-  /**
-   * The capability probe, and the only reason a slow model is in this table.
-   * "Capability first, then latency" means somebody has to check whether the
-   * lite tier is leaving accuracy on the floor. If this is no better, the
-   * question is closed; if it is much better, it is a decision for Greg rather
-   * than for the benchmark.
-   */
-  "google/gemini-3.8-flash",
+  /** The incumbent since 2026-09-07 — the one arm that is about what we ship. */
+  "openai/gpt-transcribe",
+  /** The open baseline, and the model most other transcribers are compared to. */
+  "openai/whisper-large-v3",
+  "mistralai/voxtral-mini-transcribe",
+  "microsoft/mai-transcribe-2",
+  "fish-audio/transcribe-1",
 ] as const;
 
 interface Utterance {
@@ -148,8 +164,12 @@ const ARMS: Arm[] = [
   ...MODELS.map((model) => ({ name: `${short(model)} bare`, model, vocabulary: false })),
   { name: `${short(MODELS[0])} +vocab (again)`, model: MODELS[0], vocabulary: true },
 ];
+/* Any vendor prefix, rather than a list of the two vendors that used to be in
+   the table — a name that keeps its `mistralai/` because nobody updated a regex
+   is a column that no longer lines up, and the arm names are what the results
+   file is keyed by. */
 function short(model: string) {
-  return model.replace(/^google\//, "").replace(/^openai\//, "");
+  return model.replace(/^[^/]+\//, "");
 }
 
 /* --------------------------------------------------------------------- main */
@@ -163,15 +183,21 @@ for (const u of utterances) {
 
 /* **Built once, and shared by every arm.** The vocabulary is the thing this
    benchmark is *not* varying, so it must be identical across models rather than
-   rebuilt per call — `vocabularyFor` reads `data/`, and another agent's test
-   fixture landing mid-run would otherwise show up as a model difference. */
-const vocabularyOf = new Map<string, string>();
+   rebuilt per call — `vocabularyTermsFor` reads `data/`, and another agent's
+   test fixture landing mid-run would otherwise show up as a model difference. */
+const vocabularyOf = new Map<string, string[]>();
 for (const u of utterances) {
   vocabularyOf.set(
     u.id,
-    await vocabularyFor(u.slug ? { kind: "article", slug: u.slug } : { kind: "profile" }),
+    await vocabularyTermsFor(u.slug ? { kind: "article", slug: u.slug } : { kind: "profile" }),
   );
 }
+/* **The same list as the line it would be if it were joined**, for the two
+   things that still want characters: the size report below, whose threshold is
+   in characters because `packTerms` budgets in characters, and `invented`,
+   which takes the joined form. Derived from the terms rather than kept
+   alongside them, so the two cannot drift. */
+const joined = (terms: readonly string[]) => terms.join(", ");
 
 console.log(
   `${ARMS.length} arms, ${utterances.length} clips, ${RUNS} runs — ${ARMS.length * utterances.length * RUNS} calls.\n`,
@@ -213,15 +239,17 @@ console.log(
  */
 const UNSUPPLIED = new Set<string>();
 console.log("Vocabulary characters/terms per clip, shared by every arm:");
-const baseline = Math.min(...[...vocabularyOf.values()].map((v) => v.length));
+const baseline = Math.min(...[...vocabularyOf.values()].map((v) => joined(v).length));
 for (const u of utterances) {
-  const v = vocabularyOf.get(u.id) as string;
+  const v = vocabularyOf.get(u.id) as string[];
   /* `purpose-box` by name: its terms are in no store on any machine, so no
-     length threshold can catch it. The others by measurement. */
-  if (u.hard.length && (u.id === "purpose-box" || (u.slug !== null && v.length <= baseline)))
+     length threshold can catch it. The others by measurement — in characters,
+     which is what `packTerms` spends its budget in, so the comparison is
+     against the same quantity the cap bounded. */
+  if (u.hard.length && (u.id === "purpose-box" || (u.slug !== null && joined(v).length <= baseline)))
     UNSUPPLIED.add(u.id);
   console.log(
-    `  ${u.id.padEnd(22)} ${v ? `${v.length}/${v.split(", ").length}` : "0"}${UNSUPPLIED.has(u.id) ? "   ← scored without the terms it exists to say" : ""}`,
+    `  ${u.id.padEnd(22)} ${v.length ? `${joined(v).length}/${v.length}` : "0"}${UNSUPPLIED.has(u.id) ? "   ← scored without the terms it exists to say" : ""}`,
   );
 }
 /** The clips a difference between models may honestly be read from. */
@@ -230,6 +258,13 @@ console.log(
   `\n  ${UNSUPPLIED.size} of ${utterances.length} clips were scored without the vocabulary they need:\n  ${[...UNSUPPLIED].join(", ")}. Read the second table, not the first.\n`,
 );
 
+/* **No `usd` here, and the absence is the finding.** It held OpenRouter's own
+   per-call figure so the headline total could be re-summed from the file (GPT
+   Sol's second review item 7, then its third review item 2). The transcription
+   endpoint answers `cost: 0` for every call, so keeping the field would have
+   stored an array of zeroes, summed it, and printed a total that was wrong by
+   the whole of what the run cost. `npm run cost -- --reconcile` asks the account,
+   which is now the only thing that knows. */
 interface Row {
   words: number[];
   edits: number[];
@@ -237,7 +272,6 @@ interface Row {
   recallTotal: number;
   invented: string[];
   ms: number[];
-  usd: number[];
   transcripts: string[];
 }
 const results = new Map<string, Map<string, Row>>();
@@ -251,7 +285,6 @@ for (const a of ARMS) {
       recallTotal: 0,
       invented: [],
       ms: [],
-      usd: [],
       transcripts: [],
     });
   }
@@ -266,13 +299,12 @@ for (const a of ARMS) {
 const lost: string[] = [];
 /** Per arm, what each answering model called itself and how often — `(none)` included. */
 const whoAnswered = new Map<string, Map<string, number>>();
-let spent = 0;
 let done = 0;
 for (let run = 0; run < RUNS; run++) {
   for (const [clipIndex, u] of utterances.entries()) {
     for (let k = 0; k < ARMS.length; k++) {
       const arm = ARMS[(k + clipIndex + run) % ARMS.length] as Arm;
-      const vocabulary = arm.vocabulary ? (vocabularyOf.get(u.id) as string) : "";
+      const vocabulary = arm.vocabulary ? (vocabularyOf.get(u.id) as string[]) : [];
       const row = (results.get(arm.name) as Map<string, Row>).get(u.id) as Row;
 
       /* Five attempts, then recorded as lost and the run continues — the same
@@ -318,14 +350,15 @@ for (let run = 0; run < RUNS; run++) {
       row.words.push(scored.words);
       row.edits.push(scored.edits);
       row.ms.push(got.ms);
-      row.usd.push(got.usd ?? 0);
       row.transcripts.push(got.text);
-      spent += got.usd ?? 0;
       for (const term of u.hard) {
         row.recallTotal++;
         if (has(got.text, term)) row.recallHit++;
       }
-      if (vocabulary) row.invented.push(...invented(vocabulary, u.text, got.text));
+      /* `invented` reads the joined line, because it is shared with the other
+         benchmark and that one still composes its conditions as text. */
+      if (vocabulary.length)
+        row.invented.push(...invented(joined(vocabulary), u.text, got.text));
       done++;
       if (done % 20 === 0) process.stdout.write(`${done} `);
     }
@@ -387,23 +420,26 @@ for (const a of ARMS) {
   );
 }
 
-console.log("\n=== Latency and cost ===");
+/* **Latency only. There was a `$/call` column here and it had to go**: this
+   endpoint reports `usage.cost: 0` on every call, so the column would have been
+   `$0.00000` beside every arm — a number that looks measured, is not, and would
+   have gone into a plan as "the challenger is free". The spend for a run is
+   `npm run cost -- --reconcile`, which asks the account rather than the response. */
+console.log("\n=== Latency ===");
 console.log("p90 is the call a reader remembers. One sitting, one network — read the");
 console.log("spread, not the median.\n");
 console.log(
-  `${"arm".padEnd(30)} ${"p50".padStart(8)} ${"p90".padStart(8)} ${"max".padStart(8)} ${"$/call".padStart(9)}`,
+  `${"arm".padEnd(30)} ${"p50".padStart(8)} ${"p90".padStart(8)} ${"max".padStart(8)}`,
 );
 for (const a of ARMS) {
-  const rows = rowsOf(a.name);
-  const ms = rows.flatMap((r) => r.ms);
-  const usd = rows.flatMap((r) => r.usd);
+  const ms = rowsOf(a.name).flatMap((r) => r.ms);
   console.log(
-    `${a.name.padEnd(30)} ${`${quantile(ms, 0.5)}ms`.padStart(8)} ${`${quantile(ms, 0.9)}ms`.padStart(8)} ${`${Math.max(...ms)}ms`.padStart(8)} ${`$${(mean(usd) || 0).toFixed(5)}`.padStart(9)}`,
+    `${a.name.padEnd(30)} ${`${quantile(ms, 0.5)}ms`.padStart(8)} ${`${quantile(ms, 0.9)}ms`.padStart(8)} ${`${Math.max(...ms)}ms`.padStart(8)}`,
   );
 }
 
 console.log(
-  `\nspent $${spent.toFixed(4)}, lost ${lost.length} calls${lost.length ? `: ${lost.join(", ")}` : ""}`,
+  `\nlost ${lost.length} calls${lost.length ? `: ${lost.join(", ")}` : ""}. What it cost: npm run cost -- --reconcile`,
 );
 
 /* **Who answered, counted rather than asserted.** A row that is anything but
@@ -448,7 +484,13 @@ fs.writeFileSync(
       ranAt: new Date().toISOString(),
       runs: RUNS,
       arms: ARMS,
-      spentUsd: spent,
+      /* **`spentUsd: null`, rather than a number or a missing key.** It was a
+         sum of OpenRouter's per-call figures, and on this endpoint every one of
+         those is 0 — so the honest value is "this file does not know", said out
+         loud. Dropping the key entirely would let a reader of an old results
+         file and a new one both think they were looking at a total. Ask the
+         account: `npm run cost -- --reconcile`. */
+      spentUsd: null,
       /* **The plan and the outcome, each under its own name.** `attempted` is
          what the run set out to make and `answered` is what came back, so a
          thinned run cannot be read as a full one by anybody holding only this
@@ -466,6 +508,10 @@ fs.writeFileSync(
          a plan. Their lengths are what a re-run needs to check it built the
          same prompt. */
       vocabularyChars: Object.fromEntries(
+        [...vocabularyOf].map(([id, v]) => [id, joined(v).length]),
+      ),
+      /** And the count, which is now the shape the request is actually in. */
+      vocabularyTerms: Object.fromEntries(
         [...vocabularyOf].map(([id, v]) => [id, v.length]),
       ),
       results: Object.fromEntries(

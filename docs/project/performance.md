@@ -733,6 +733,17 @@ which is item 1 below, addressed as a side effect.
   DOM mutations during a scroll named the real cause in one step, and `18,734 / 551 = 34.0` is what
   turned a suspicious number into a mechanism.
 
+  **That exoneration was spent on 2026-09-07**, which is the use a measurement like this is for.
+  `watchBarVisibility` used to attach its scroll listener only on a small device, on the argument
+  that a laptop should not pay for an attribute no rule there read — and the argument cited this
+  page. When the bar started hiding at every width
+  ([260907b](../plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md)) the gate went,
+  and the reason it was safe to go is the paragraph above: the listener is passive, coalesced into
+  one `requestAnimationFrame` per painted frame, and its body is `stepBar` — arithmetic on three
+  numbers with no DOM read in it. The 36% was never its own. The page also already installs a scroll
+  listener at every width for the fisheye panels ([`useColumnContext.ts`](../../src/web/useColumnContext.ts)),
+  and *that* one measures rects.
+
 ## Scrolling re-rendered the whole reading view, 2026-09-04
 
 The day after, and the same shape one level up: nothing was rebuilding the DOM any more, but

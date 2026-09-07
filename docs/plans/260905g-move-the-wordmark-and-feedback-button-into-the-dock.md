@@ -38,6 +38,7 @@ landed:
 |---|---|
 | phones | the bar already leaves on scroll — nothing to gain |
 | Hierarchy | the bar stays, it has the pills — nothing to gain |
+| *(both rows above were rewritten by [260907b](260907b-the-top-bar-leaves-while-you-read-at-every-width.md), 2026-09-07: the bar now leaves on scroll at **every** width, so "the bar already leaves" is true of a laptop too and the Hierarchy row's "the bar stays" is only true at rest. What stage 3 still buys is the strip **at rest**, and the reader who never scrolls back.)* | |
 | band modes | `.mode-band` is `top: var(--bar-bottom)`; remove the bar and you either leave a hole above the band or pad it back — nothing to gain |
 | Plain, above ~1080px | 44px of page background: **the only real win** |
 | Plain, 732–1080px | the centred column reaches the left edge, so the wordmark's 136px lands on the top line of prose — **worse than before** |
@@ -496,7 +497,18 @@ What actually found them: measuring the thing the reader sees (the title against
 prose, the pill against the title) rather than the thing the rule sets. That is now three assertions
 in `tests/prose-centred-in-its-cell.test.ts`, each with a mutation on record showing it can fail.
 
-**Stage 3 — the top bar stops being drawn when it has nothing in it.** This is stage 4 of
+**Stage 3 — the top bar stops being drawn when it has nothing in it.**
+
+> [!NOTE]
+> **Still worth doing after [260907b](260907b-the-top-bar-leaves-while-you-read-at-every-width.md),
+> and worth slightly less.** That change (2026-09-07) makes the bar leave on scroll at every width,
+> so the 44px is already back for anybody reading forwards. What stage 3 still buys is the strip **at
+> rest** — the top of the article, and a reader who scrolls back — and it buys it without the bar
+> having to move at all. The two compose; nothing here needs rewriting except the table above.
+> One thing 260907b makes *easier*: its `stickyDestination`/`stickyOffset` split already handles a bar
+> that is absent, so this stage's "no bar" case is covered by tests that exist.
+
+This is stage 4 of
 [260905d](260905d-declutter-the-reading-view-top-bars.md), which was abandoned because the bar was
 holding two controls up. It is not any more. `.controls` renders only when it has content —
 which, `inMode` being `mode !== "hierarchy"`, means Hierarchy for the granularity pills and a

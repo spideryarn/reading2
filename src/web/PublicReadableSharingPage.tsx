@@ -35,10 +35,16 @@
  * The two that would have been outright false, kept here because they are the
  * ones somebody will try to add back:
  *
- *  - **"Zero-data-retention models."** `zdr: true` is set on dictation and on
- *    nothing else (`AI_JOB_ROUTE`, src/ai-call.ts), and live conversation does
- *    not go through the gateway at all. What this page claims is the
- *    no-training commitment, carrying the same hedge `/privacy` gives it.
+ *  - **"Zero-data-retention models."** `zdr: true` is now set on **nothing**
+ *    (`AI_JOB_ROUTE`, src/ai-call.ts), and live conversation does not go through
+ *    the gateway at all. It was set on dictation alone until 2026-09-07, when
+ *    dictation moved to `/v1/audio/transcriptions`, where OpenRouter does not
+ *    apply routing preferences or `zdr` (it does forward `provider.options`,
+ *    which is how the vocabulary gets through) —
+ *    docs/plans/260907c-dictation-onto-an-openai-transcriber.md. So the claim
+ *    this page declined to make has gone from *misleading* to *flatly false*,
+ *    which is a good argument for having declined it. What this page claims is
+ *    the no-training commitment, carrying the same hedge `/privacy` gives it.
  *  - **"The SEO canonical points search engines at your page."** The canonical
  *    is real (src/public/page-head.ts § `tags`) and no search engine ever reads
  *    it, because every response is `noindex, nofollow` and `robots.txt` is

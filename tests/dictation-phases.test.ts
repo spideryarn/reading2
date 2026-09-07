@@ -217,8 +217,11 @@ let transcribeFails = false;
  *
  * A number rather than a boolean, because *which* failure it is decides whether
  * a Retry is offered at all — `retryable` in `dictation-upload.ts`. 502 is a
- * service that broke and is worth another go; 503 from this endpoint is only
- * ever a server with no API key, which no amount of pressing will fix.
+ * service that broke and is worth another go; 503 is the family that pressing
+ * cannot fix — a server with no API key, and, since 2026-09-07, every provider
+ * refusal that would be refused identically next time (a malformed request, a
+ * declined one, a model this app cannot reach). `src/transcribe.ts` decides
+ * which is which from copy.md's `FailureKind`, not from a list of statuses.
  */
 let transcribeStatus = 502;
 /**
@@ -687,11 +690,12 @@ describe("one microphone, shared or not at all", () => {
   });
 
   it("offers no retry for a failure that pressing a button cannot fix", async () => {
-    /* A 503 here is `[mic-not-set-up]` — this server has no API key. copy.md
-       calls that the `ours` kind: nothing the reader can do, and offering a
-       Retry is the mistake that file singles out, because they press it five
-       times and conclude the app is broken. The audio is still kept and still
-       downloadable; it is the button that is wrong, not the keeping. */
+    /* A 503 here is `[mic-not-set-up]` — this server has no API key — or any of
+       the provider refusals that map to it since 2026-09-07. copy.md calls those
+       the `ours`, `bug` and `blocked` kinds: nothing the reader can do, and
+       offering a Retry is the mistake that file singles out, because they press
+       it five times and conclude the app is broken. The audio is still kept and
+       still downloadable; it is the button that is wrong, not the keeping. */
     transcribeFails = true;
     transcribeStatus = 503;
     const h = drive();
