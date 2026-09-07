@@ -1,7 +1,9 @@
 # Small, uncontested postmortem preventions — a batch
 
-**Status as of 2026-09-07: planned, nothing built yet.** Evidence for each item's "still unbuilt"
-verdict is in § Verification below, gathered before any edit.
+**Status as of 2026-09-07: Stages 1–3 built and on `dev`. Stage 4 built, twice refused in review, and
+deliberately not landed** — six `EXPECTED` entries and two postmortem corrections landed from it, the
+check did not. Evidence for each item's "still unbuilt" verdict is in § Verification below, gathered
+before any edit; what actually happened to each is in § What landed.
 
 ## Goal
 
@@ -540,6 +542,182 @@ One finding, and it was against my prose rather than the code:
   Sol also checked the wider tree: three more calls outside `src/` pass literals, and one eval passes
   a slug-plus-repeat label — permitted log metadata, but not a project-authored constant, so worth
   knowing.
+
+### Stage 4 — built, twice refused, and NOT landed
+
+`tests/env-names-are-inventoried.test.ts` (new) and five `breaks: null` entries in
+`src/vercel-health.ts`. It resolves 43 names across 69 read sites, including all six indirect reads,
+and fails closed on anything it cannot enumerate. **Red first was free, as predicted:** 31 names
+unaccounted for before anything was added, `SPIDERYARN_OWNER_ID` at `src/owner.ts:271` among them.
+
+**Review** — [260907e-stage4-review-sol.md](260907e-stage4-review-sol.md). ***Do not land yet: four
+established P1 holes allow environment reads to remain silently uninventoried.*** Every one is the
+failure this whole batch is about, in the check built to prevent it: **the check agreed with the code
+by not looking.** Three were verified by hand before acting on them.
+
+- **F10 — `import.meta.env` is completely invisible.** `src/web/monitoring.ts:72,79` reads
+  `VITE_SENTRY_DSN` and `VITE_VERCEL_ENV`, and neither is in either door.
+- **F11 — the exact-text prefilter drops whole spellings.** `process?.env.X`, `process["env"].X`,
+  `const { env } = process` are skipped before the parser sees them, and
+  `globalThis.process.env.X` passes the filter and is then dropped by the recogniser. Sol's sharpest
+  point is procedural: the existing fixtures call `sweepFile()` directly, **so they bypass the gate
+  that has the bug and cannot catch this class**. The controls have to run through the real
+  file-selection path.
+- **F12 — the reporter exemption does not defend its own premise.** It rests on "every caller
+  derives its argument from `EXPECTED`" and nothing checks that, so `value("NEW_VARIABLE")` would
+  read a new variable through the already-exempted node with the exemption count still exactly one.
+  And `src/vercel-health.ts:475` is `value(expected.with)` — a **third door into `EXPECTED`** that
+  the parser never read, safe today only because the current `with` value happens to duplicate
+  another entry's `name`.
+- **F13 — the `src/env.ts` whole-object exemption hides a genuinely missed variable.**
+  `process.env` is passed to `applyEnvFile()`, which reads `env[PINNED]` where `PINNED` is
+  `"SPIDERYARN_ENV_PINNED"` (`src/env.ts:370`). That name is in neither door. **This is exactly the
+  drift the check exists to catch, missed by the check.**
+- **F14 (P2) — `SPIDERYARN_BASE_URL` should not be in `EXPECTED`.** The subagent had already flagged
+  it as the weakest entry; Sol found the better evidence in
+  [deployment.md](../project/deployment.md), which says it **must stay unset in production**.
+  Reporting a permanently-false, deliberately-forbidden setting is noise. Moving to the allowlist.
+- **F15 (P3) — three allowlist justifications are literally false.** `PGAPPNAME` *is* read when a
+  deployed pool is created; `SENTRY_FORCE_LOCAL` *is* evaluated by deployed monitoring; the
+  module-level `SPIDERYARN_OWNER_EMAIL` expression *is* evaluated whenever `owner.ts` loads. The
+  classification is right and the reason was wrong — reworded to "not actionable health-report
+  settings".
+
+Sol confirmed the safety rule held: all five entries are `breaks: null`, so they add only boolean
+names to the public `env` object and **cannot add a warning or change `ok`**. It also agreed
+`SPIDERYARN_OWNER_ID` should get a `breaks` clause once Greg decides, and that leaving it
+report-only tonight is correct under this stage's constraint.
+
+**What this stage has already earned, whatever happens to it.** `SPIDERYARN_ENV_PINNED` and two
+`VITE_*` names are real variables that no inventory knew about, found only because something tried
+to enumerate them.
+
+#### The four P1s, closed
+
+- **F10** — the sweep covers `import.meta.env` as well as `process.env`, direct and computed.
+- **F11** — **the exact-text prefilter is deleted**; all 530 files are parsed, in 2.6 s. The
+  recogniser works from the *root object*, so `process` or `globalThis.process` appearing anywhere
+  but as the object of a recognised read is a **refusal** rather than a miss. A tree-wide survey
+  found zero bare `process` uses, so it costs nothing today.
+- **F12** — every reference to `value` in `src/vercel-health.ts` is traced: its argument must be
+  derived from `EXPECTED`, or the check goes red. `with` is collected and treated as a **read that
+  must itself be inventoried**, not as a third door.
+- **F13** — the file-wide `src/env.ts` exemption is replaced by two named-function entries plus
+  **alias-following to a fixed point**, so an environment bound to a `const`, spread, or passed to a
+  local function is followed and its reads swept. Writes and `delete` are excluded.
+
+**The evidence that matters is F11's, and it is the review's procedural point demonstrated.** With
+the old prefilter restored, six controls went red — *including the three fixture ones*, because they
+now enter at `sweepTree` instead of calling `sweepFile` directly. Under the old structure all three
+would have stayed green while the gate they were meant to test was broken. The sweep had been
+opening 44 of 530 files.
+
+**Where the subagent overrode the brief, and was right.** I told it to file `VITE_VERCEL_ENV` with
+the platform-set group. It is not platform-set: Vercel writes `VERCEL_ENV`, Vite exposes only
+`VITE_*`, and nothing in this repo bridges them — verified, its sole occurrence is the read itself.
+Filing it there would have given it the false justification that F15 is about. It is in `EXPECTED`
+with `breaks: null`, and the near-miss is documented in the platform group's comment so nobody moves
+it back. It also found better evidence than I had for F14: `deployment.md` says `SPIDERYARN_BASE_URL`
+*"must stay unset here, and it is listed so nobody adds it"*, which makes reporting it worse than
+noise — an invitation to set what production forbids.
+
+**And a note on my own verification.** My first independent mutation edited the wrong line, so
+nothing changed and the suite stayed green — which for a moment read as "the check does not
+discriminate". **A mutation that silently fails to apply is indistinguishable from a passing check**,
+which is [silent-success.md](../reusable/silent-success.md) arriving one level up, in the technique
+this batch uses to validate everything else. Re-run against the right line it goes red naming
+`src/env.ts:373`. Worth doing what the red-first rule does: check the mutation actually landed
+before believing what the suite says about it.
+
+#### Round 2 refused it too, and that settled the question
+
+[260907e-stage4-review-sol-2.md](260907e-stage4-review-sol-2.md). ***Do not land.*** Five more
+established P1s — `globalThis.process` bound to a `const`; `process.env.X ||= …` and `X++` treated as
+write-only when both read the old value; an `EXPECTED` entry using a spread or a computed key; a
+shadowed `expected` binding; an alias followed into the wrong same-named nested function — plus two
+P2s. Each was demonstrated with an executed mutation. I verified F17 by reading the code:
+`if (node.type === "AssignmentExpression") writeTargets.add(node.left)`, with no operator check, so a
+compound assignment is filed as a write and the read vanishes.
+
+**Nine P1s in two rounds, all of one class**, and the class is the one this stage exists to prevent:
+a read that is *silently skipped* rather than refused. The cause is not carelessness. The check had
+grown into lexical binding analysis, scope resolution and alias-following on a Babel walker — Sol's
+round-1 note reads differently in hindsight: *"substantial complexity resolving special cases after
+an unsound entry gate."* Each round closed the named holes and opened new ones of the same shape,
+because the surface of "which AST shapes are a read" is unbounded.
+
+**Decision: Stage 4 does not land.** Not an overrule — I agree with the reviewer. Landing a check
+whose entire purpose is not to fail open, while it fails open in five ways, would mark this
+postmortem "built" over a hole, which is precisely the decay this batch exists to fight. Arbitrated
+by Fable, since reducing-versus-deferring was a genuinely balanced call and
+[engineering-manager.md](../reusable/engineering-manager.md) sends those to Fable before I commit to
+one.
+
+**What did land** — because it stands on its own without the check:
+
+- **Six `EXPECTED` entries** in `src/vercel-health.ts`, all `breaks: null`, reviewed by Sol as unable
+  to add a warning or change `ok`. So the *specific* drift the postmortem names is closed —
+  `SPIDERYARN_OWNER_ID` is reported — even though the general check is not built. Their comment now
+  says there is no test holding the line, rather than describing one that does not exist.
+- **The postmortem corrected twice**: the false claim about `2405408`, and item 1 restated as *still
+  not built*, with the measurement replacing the estimate.
+- **The candidate parked** as [260907e-stage4-candidate.ts.txt](260907e-stage4-candidate.ts.txt),
+  1,754 lines, non-executing. Both reviews cite it by line number and it would otherwise die with
+  this worktree. Its thirty allowlist entries and their reasons — the classification work, which is
+  sound and was never what the reviews objected to — are in it verbatim.
+
+### Stage 4, as a brief for whoever picks it up
+
+Written as a brief rather than a paragraph, because *filed at the finish line is filed and never
+done*, and this postmortem has now asked twice and waited eleven days.
+
+**The one question for Greg, and it decides the rest.** Two ways to make this checkable:
+
+- **Make the tree literal, not the check clever** *(Fable's recommendation, and mine)*. Of the
+  non-literal read sites under `src/` — `env.ts:85/113/194/287`, `jobs.ts:441`,
+  `hierarchy-deepen.ts:1641/1747/1896`, `fetch.ts:602`, `models.ts:1092`, `web/lib/supabase.ts:34`,
+  `vercel-health.ts:518` — only **two** are inherently computed: `MODEL_ENV_VAR[task]` (twelve names,
+  all `SPIDERYARN_*_MODEL`, allowlistable by prefix) and the reporter's own `value(name)`. The rest
+  are `process.env[CONST]` where `CONST` is a string literal, or a three-call formatting helper.
+  Rewriting those as `process.env.SPIDERYARN_…` is mechanical, and it **deletes the entire
+  resolution problem**: what remains is a ~150-line check with two named exemptions and no
+  alias-following at all. It touches four files across stage boundaries, which is why it is a
+  decision rather than a task.
+- **Sign off the read sites instead.** Keep `src/` as it is; inventory only the trivially sound forms
+  and **refuse every other read** against a small explicit table naming, per site, the names a human
+  verified it yields. This is *not* the original drift one layer up **provided each row is verified
+  rather than trusted** — "every call of `seen` in `fetch.ts` must be `seen("LITERAL")` and the
+  literal set must equal the row" is fifteen lines and no machinery.
+
+**Whichever is built, it must go red on these nine first.** This is the control spec, and it is the
+most valuable thing the two failed rounds produced — nine ready-made red-first cases, executed
+against a real implementation, that cost nothing to keep:
+
+```ts
+const p = globalThis.process; const x = p.env.NEW_FROM_GLOBAL;   // F16
+import proc from "node:process"; proc.env.MISSED_IMPORT_ALIAS;   // F16
+process.env.NEW_COMPOUND ||= "fallback";                          // F17 — reads the old value
+process.env.NEW_UPDATE++;                                         // F17 — likewise
+const EXTRA = { with: "MISSED_SPREAD" };
+const EXPECTED = [{ name: "SAFE", breaks: "x", ...EXTRA }];       // F18
+const EXPECTED = [{ name: "SAFE", ["with"]: "MISSED_COMPUTED" }]; // F18
+function injected(expected: { name: string }) { value(expected.name); }  // F19 — shadowed binding
+function wrapper() { function consume(e) { return e.MISSED_LOCAL; } return consume(process.env); }  // F20
+new.target.env.NOT_AN_ENV;                                        // F21 — must NOT be a read
+```
+
+Plus round 1's silently-skipped spellings: `process?.env.X`, `process["env"].X`,
+`const { env } = process`, `Reflect.get(process, "env").X`, `import.meta.env[name]`.
+
+**And two rules for the rebuild**, both learned the expensive way here:
+
+1. **Controls must enter through the real file-selection path.** The candidate's fixtures called
+   `sweepFile()` directly, so when the *file gate* was the thing with the bug they stayed green.
+   Restoring the old prefilter turned six controls red including all three fixtures — that is the
+   shape of evidence to demand.
+2. **Every "this gate is now sound" claim in this stage has been wrong.** F11's root-object refusal
+   became F16 the moment somebody tested it. Prefer a design where soundness needs no such claim:
+   refuse by default, resolve only what is trivially literal.
 
 ## Assumptions and decisions, for the record
 
