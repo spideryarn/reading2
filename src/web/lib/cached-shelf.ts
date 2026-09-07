@@ -36,13 +36,58 @@
  * A rename or an archive patches the React list, not the saved body — so the
  * first paint after either can show the old title, or a card the reader deleted,
  * for as long as the live answer takes. Counts and order can jump for the same
- * reason. That is accepted rather than overlooked: renames are cosmetic and
- * Delete is archive, so nothing here can lose anything. Said out loud in the
- * plan too, because "it flickered an old title at me" should be a known price
- * and not a bug report.
+ * reason. That is accepted rather than overlooked: renames are cosmetic. Said
+ * out loud in the plan too, because "it flickered an old title at me" should be
+ * a known price and not a bug report.
+ *
+ * ## "Delete is archive, so nothing here can lose anything" — no longer true
+ *
+ * That sentence stood here until 2026-09-07 and was the whole reason staleness
+ * was cheap: every card named something that still existed, so the worst a
+ * stale one could do was be out of date about it. `DELETE /api/library/:slug`
+ * ends that (docs/plans/260906h-delete-an-article-permanently.md). A card
+ * painted from a body saved before a delete names an article that is **gone**,
+ * and it opens a 404 — which, per `offline-store.ts` § `invalidate`, looks
+ * exactly like a delete that failed.
+ *
+ * `forgetCachedReader` below is the answer, and it is deliberately blunt: the
+ * one control that destroys an article calls it on a confirmed deletion and
+ * retires this reader's whole cached set, rather than trying to name the seven
+ * or eight prefixes an article's data is spread across. Per-article
+ * invalidation can replace it later; nothing here may go on promising an
+ * article that has been destroyed.
  */
 import type { LibraryEntry } from "../../types.js";
-import { readCached } from "./offline-store.js";
+import { forgetUser, lastKnownUser, readCached } from "./offline-store.js";
+
+/**
+ * Throw away **everything** this device has cached for the signed-in reader.
+ *
+ * For the one caller that has destroyed something for good — `DeletePermanently`
+ * in [Metadata.tsx](../Metadata.tsx). Invalidating `/api/library` and
+ * `/api/article/<slug>` is not enough: metadata, comments, chat, search,
+ * glossary and illustrated are all cacheable too (`api.ts` § `cacheable`), and
+ * any one of them left behind is this app telling a reader that an article they
+ * destroyed is still here.
+ *
+ * **Never throws.** `forgetUser` already gives up quietly where IndexedDB is
+ * missing or refuses (a private window, Node), and a cache we could not clear
+ * must not stop the reader being taken to their library — the delete has
+ * happened either way, and the live answer is one request behind.
+ *
+ * Signed out, there is no drawer to empty and this does nothing. `lastKnownUser`
+ * is an id and authorises nothing; it selects which drawer, exactly as it does
+ * for every read and write in `api.ts`.
+ */
+export async function forgetCachedReader(): Promise<void> {
+  const reader = lastKnownUser();
+  if (!reader) return;
+  try {
+    await forgetUser(reader);
+  } catch {
+    /* Deliberately swallowed — see above. */
+  }
+}
 
 /** The one URL this module is about. Kept in step with `useShelf`'s own fetch. */
 const SHELF_URL = "/api/library";

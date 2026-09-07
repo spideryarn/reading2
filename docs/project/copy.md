@@ -412,6 +412,59 @@ because copy stays freely rewritable and a message match would quietly stop
 working when somebody rewrote one — [`src/jobs.ts`](../../src/jobs.ts) §
 `DeadlineReached`.
 
+## The words on the one control that cannot be undone
+
+**Delete permanently**, on the metadata page — `DeletePermanently` in
+[`src/web/Metadata.tsx`](../../src/web/Metadata.tsx), the whole argument in
+[260906h-delete-an-article-permanently.md](../plans/260906h-delete-an-article-permanently.md). This
+is the only place in the app where the reader destroys something of theirs for good, so the copy is
+recorded here rather than left to be rediscovered in a component.
+
+**Not in `src/messages.ts`, and no bracketed codes**, which is the `mic-` family's argument in a
+different place: that file is about failures a model call can return, none of these is one, and none
+of them has anything to say to `worthRetrying`. The three failure sentences below could take codes
+under the glossary's 2026-09-04 precedent — a reader who thinks a refusal is *wrong* should be able
+to quote four characters — and they deliberately do not yet, because Fable settled this copy on
+2026-09-06 without them and a code added late is a code nobody has argued for. **If a report ever
+arrives that cannot be told apart from another branch, that is the moment to add them**, and it is
+the same moment the picker's `pick-` family got theirs.
+
+Four things about the wording are load-bearing:
+
+1. **Never bare "Delete".** For nine days that word meant *archive*, here and on the shelf, and
+   Greg filed a report asking for the feature he was already looking at
+   ([the note](../user-feedback/260904_1722-archive-an-article.md)). The rest state says **Delete
+   permanently** and the confirm says **Delete for ever**; the two are never shortened.
+2. **The question names the article** — *Delete “{title}” for ever?* That is the cheap 90% of
+   type-the-title-to-confirm: it costs the reader nothing, and it makes them read *which* one.
+3. **It points at Archive rather than gating on it.** *If you only want it off the shelf, Archive
+   above does that and can be reversed* is one sentence doing the job a structural gate was
+   proposed for, and Greg overruled the gate on 2026-09-06.
+4. **It says what we cannot take back.** *Anything already on a device stays there: the copy this
+   browser saved so the article opens offline, and any export you have taken. We cannot recall
+   those.* A "delete permanently" that quietly means "except the copies" is the kind of claim
+   [privacy.md](privacy.md) exists to stop us making, and the same sentence is on that page.
+
+And three failure sentences, which are rule 2 — *say whose problem it is* — applied to a case where
+the honest answer is sometimes **we do not know**:
+
+| When | What it says |
+|---|---|
+| A re-read confirms the article survived | *Couldn't delete it — {the server's sentence} The article is still here, untouched.* |
+| The re-read settles nothing | *Couldn't tell whether that worked. Reload the page.* |
+| An import is running (409) | the server's own sentence, unwrapped: *An import is running on this article, so it cannot be deleted yet. Stop it, or wait for it to finish, then delete.* |
+
+The middle one is the interesting one and it is not padding. A failed request is not proof that
+nothing was written, so the control asks again — but `apiFetch` answers a GET whose transport failed
+out of the saved copy, with a real 200 (`src/web/lib/api.ts` § `attempt`), so only a **fresh server**
+404 proves the delete landed and only a **fresh server** 200 proves it did not. Anything else has to
+say so. Writing *"nothing changed"* there would be this control's one dishonest sentence, and it is
+the same lesson `ArchiveArticle` learned from a cross-model review on 2026-08-27.
+
+The 409 keeps the server's own words with no lead in front of them, for `ExportSection`'s reason
+about the 413: that sentence already says what happened and what to do, and *"Couldn't delete it —"*
+would only get in the way of it.
+
 ## What this does not cover yet
 
 **One near-miss first**, because it is the kind of thing this section exists to
