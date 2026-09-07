@@ -270,7 +270,7 @@ precisely what its gist-echo check drops.
 | | failure | line |
 |---|---|---|
 | 1 | fabricated count — the child count (6) where the text says four | `Computational functionalism (6 arguments): why isn't computation sufficient for consciousness?` |
-| 2 | neutral lookup question | `Computational functionalism: what four arguments does the section cover?` |
+| 2 | a lookup: one fact settles it and no argument need be followed | `Computational functionalism — how many arguments does the section give against it?` |
 | 3 | answer-leaking question | `Computational functionalism (4 arguments): why do brains-not-computers, life and simulation-not-instantiation defeat it?` |
 | 4 | title-only line | `Consciousness & Computation?` |
 | 5 | the gist with a question mark on it | `Four independent arguments—about brains, alternative computation, biological life, and simulation—undermine the assumption that digital computation alone can produce consciousness?` |
@@ -282,6 +282,45 @@ Anchors 3 and 5 are the calibration that actually matters. A judge primed on "re
 tempted to rate them *highly*, because they are the most informative lines on the page. If it does,
 it is measuring information rather than the door-or-wall criterion, and it cannot be trusted to rank
 the real arms.
+
+### Anchor 2 was rewritten on 2026-09-07, before the second run and not after the first
+
+**It is the anchor that failed the gate**, fourteen of the fifteen inversions of the 2026-09-05 run,
+placed 4th / 2nd / 4th of twelve with a perfect `5,5,5,5,5` and leakage 1. The line was:
+
+> `Computational functionalism: what four arguments does the section cover?`
+
+and on inspection **it is not a bad line**: the count is right, the topic is named, nothing leaks,
+and a reader can decide from it whether to descend. It was labelled a wall at design time on a theory
+about lookup questions. The judge scored it as a door, and the judge was closer to right.
+
+**Two things had to change together, and only one of them is the anchor.** GPT Sol, reviewing the
+plan to rewrite it (F3, 2026-09-07): the rubric has fidelity, distinctiveness, triage, orientation,
+simplicity, leakage and shape-hint axes and **no criterion for "requires following an argument rather
+than retrieving a fact"** — so the eval was asking the judge to reject a failure it had never been
+told to look for, and any replacement anchor could pass the gate while the judge went on preferring
+polished lookups. `judge.ts` § `RUBRIC` now has a **`demand`** axis, and that is the substantive half
+of this repair.
+
+The new line is faithful, distinctive, simple and low-leakage, and settled by retrieving one number:
+
+> `Computational functionalism — how many arguments does the section give against it?`
+
+Sol's own draft ended `(4 arguments)`. Dropped: a hint that answers the question makes the line
+*answer-leaking* as well, which is anchor 3's defect, and an anchor carrying two defects stops
+measuring either. The prompt permits omitting the hint.
+
+**It is in V4's shape rather than V1's, unlike the other four**, because V4 is what ships since
+`toc/7`: a lookup dressed in the shape production asks for is the realistic failure, and the lineup
+mixes shapes anyway.
+
+**Pre-registered here, before the run:** anchor 2 and anchor 4 must both rank below every real line.
+Anchor 4 matters because it is the *fifteenth* inversion — `anchor-4 ranked above v1` in repeat 1 —
+which the summary "fourteen of fifteen are one anchor" is right about and quietly leaves doing
+nothing. Repairing anchor 2 alone would not have cleared a gate at `MAX_ANCHOR_INVERSIONS = 0`.
+
+**The gate is not touched.** The tolerance is still `0`, still declared before the run. If these two
+still invert, that is a result about the judge and not a reason to edit an anchor a second time.
 
 ---
 

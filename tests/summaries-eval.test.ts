@@ -42,9 +42,9 @@ import {
   type RankedLineup,
 } from "../evals/summaries/anchors.js";
 import { ARMS, armByName, armsNeedingCodeChange, promptBlocksFor } from "../evals/summaries/arms.js";
-import { CORPUS, defaultCorpus } from "../evals/summaries/corpus.js";
+import { CORPUS, defaultCorpus, loadDocument } from "../evals/summaries/corpus.js";
 import type { LoadedDocument } from "../evals/summaries/corpus.js";
-import { proseWindows, rngFrom, seedFrom, shuffled } from "../evals/summaries/judge.js";
+import { proseWindows, rngFrom, RUBRIC, seedFrom, shuffled } from "../evals/summaries/judge.js";
 import { productionGists, productionQuestions, productionSystem, sectionOf, THE_DIAGNOSED_SENTENCE } from "../evals/summaries/production-prompt.js";
 import { structureRequest } from "../src/hierarchy.js";
 import {
@@ -68,6 +68,96 @@ import type { Tree } from "../src/types.js";
 const REPO = new URL("..", import.meta.url).pathname;
 
 /* -------------------------------------------------------- the two sources -- */
+
+/**
+ * **The rubric's axes and its answer schema have to agree**, and an axis named in
+ * prose but missing from the JSON example is the sort of drift that produces
+ * inconsistent answers no one can attribute.
+ *
+ * `demand` was added on 2026-09-07 and is the substantive half of the
+ * calibration repair: until it existed the rubric had **no criterion for the
+ * lookup failure every variant's prompt forbids**, so the run of 2026-09-05 gave
+ * the designated lookup anchor a perfect `5,5,5,5,5` and the gate failed on it.
+ * ⟨GPT Sol, F3 on 260907d.⟩
+ */
+describe("the judge's rubric", () => {
+  it("asks for the argument-demand axis, and asks for it in the schema too", () => {
+    expect(RUBRIC).toContain("  demand ");
+    expect(RUBRIC).toContain('"demand": 3');
+    /* Every question axis the schema names must be described above it, or the
+       judge is being asked to fill in a field nobody defined. */
+    const schema = /"questions":[\s\S]*?"ranking"/.exec(RUBRIC)?.[0] ?? "";
+    for (const axis of ["fidelity", "distinctive", "triage", "orientation", "simplicity", "leakage", "demand", "shapeHint"]) {
+      expect(schema, `${axis} in the questions schema`).toContain(`"${axis}"`);
+      expect(RUBRIC, `${axis} described in the axis list`).toMatch(new RegExp(`^  ${axis}\\s`, "m"));
+    }
+  });
+
+  it("does not turn the new axis into a penalty on straight questions", () => {
+    /* V3's whole axis is a question asked straight, and the rubric's existing
+       guarantee — "a question asked straight, including a yes/no question, is
+       legitimate" — must survive the addition. A rubric that quietly made
+       yes/no score low on `demand` would decide against V3 before the judge read
+       a word of it. */
+    expect(RUBRIC).toContain("including a yes/no question — is legitimate");
+    expect(RUBRIC).toContain("A yes/no question is not automatically low");
+  });
+});
+
+/**
+ * **The corpus pin has to fire on the article and not on the envelope.**
+ *
+ * `blocks.json` is `{sanitizer, blocks}`. Hashing the whole file meant every
+ * document drifted at once whenever `SANITIZER_VERSION` moved — which happened
+ * between 2026-09-05 and 2026-09-07, when all seven default documents reported
+ * drift on the same day with no tree moved and every block count unchanged. A
+ * signal that fires for a reason unrelated to the articles is one somebody
+ * explains away every time, until the day it means something.
+ *
+ * Established before the change, not assumed: the exported blocks for
+ * `noema-mythology-of-conscious-ai` were compared field by field against the
+ * committed fixture cut, and id, tag, kind, text, words, gistable **and html**
+ * were identical on all 141.
+ */
+describe("the corpus pin", () => {
+  const write = (dir: string, sanitizer: number, text: string) => {
+    fs.mkdirSync(path.join(dir, "s"), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "s", "blocks.json"),
+      JSON.stringify({ sanitizer, blocks: [{ id: "spya-a", tag: "p", kind: "text", text, words: 2, gistable: true, html: `<p>${text}</p>` }] }),
+    );
+    fs.writeFileSync(
+      path.join(dir, "s", "tree.json"),
+      JSON.stringify({ version: "toc/7", generator: "x", slug: "s", rootId: "n1", nodes: { n1: { id: "n1", depth: 0, parent: null, children: [], range: ["spya-a", "spya-a"], title: "T", gist: "g" } } }),
+    );
+  };
+
+  it("ignores the sanitiser stamp and notices the prose", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "summaries-corpus-pin-"));
+    write(dir, 5, "one two");
+    const entry = { ...CORPUS[0]!, slug: "s" };
+    const pinned = await loadDocument(dir, entry);
+    /* Whatever the manifest says, this run's own hash is the baseline for the
+       two perturbations below. */
+    const sha = /blocks\.json is ([0-9a-f]+)…/.exec(pinned.drift[0] ?? "")?.[1];
+    expect(sha, "the drift line names the hash it computed").toBeTruthy();
+
+    /* Same blocks, different envelope: no drift. This is the case that fired on
+       every document and meant nothing. */
+    write(dir, 6, "one two");
+    const bumped = await loadDocument(dir, { ...entry, sha256: `${sha}${"0".repeat(64 - sha!.length)}` });
+    const bumpedSha = /blocks\.json is ([0-9a-f]+)…/.exec(bumped.drift[0] ?? "")?.[1];
+    expect(bumpedSha, "a sanitiser bump alone must not move the hash").toBe(sha);
+
+    /* One word of the article changed: drift. This is the case the pin is for. */
+    write(dir, 6, "one three");
+    const edited = await loadDocument(dir, entry);
+    const editedSha = /blocks\.json is ([0-9a-f]+)…/.exec(edited.drift[0] ?? "")?.[1];
+    expect(editedSha, "a changed block must move the hash").not.toBe(sha);
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
 
 describe("variants.md is the source of the prompt text", () => {
   it("yields four variants, one GISTS block and five anchors", () => {
@@ -966,6 +1056,30 @@ describe("every eval that imports coverage.ts takes its exit code from it", () =
       expect(raises.length, "of which raise process.exitCode").toBe(calls.length);
     });
   }
+
+  /**
+   * **A failed calibration gate has to reach the shell**, and until 2026-09-07 it
+   * did not: `commandJudge` never touched `process.exitCode`, and
+   * `commandReport`'s came from `exitCodeFor(coverage)` alone. So *"No ranking is
+   * reported"* — the declared outcome of the 2026-09-05 run — was a printed
+   * sentence that a wrapper, a cron or a `&&` read as success.
+   *
+   * **Both commands, counted rather than merely present**, for the reason the
+   * coverage guard above gives in full: a check satisfied by one of two exits
+   * passes a file where the other one shrugs. `judge` is where the verdict is
+   * computed and where a caller that stops early finds out; `report` is where it
+   * is written up.
+   */
+  it("raises process.exitCode on a failed calibration gate, in both commands", () => {
+    const src = fs.readFileSync(path.join(REPO, "evals/summaries/run.ts"), "utf8");
+    const RAISES_ON_GATE = /!\w+(?:\.\w+)*\.passed\) process\.exitCode = 1/g;
+    const raises = src.match(RAISES_ON_GATE) ?? [];
+    expect(raises.length, "commands that raise on a failed gate").toBe(2);
+    /* And the guard can fire: the shape it is written against is a file that
+       computes the verdict and only prints it. */
+    const shrugs = "const verdict = calibrationOf(x);\nconsole.log(verdict.passed);\n";
+    expect(shrugs.match(RAISES_ON_GATE) ?? []).toHaveLength(0);
+  });
 
   it("can still fire — the guard, against a file that counts and shrugs", () => {
     /* A check you have never seen fail is not evidence. Both shapes: one that

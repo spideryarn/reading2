@@ -442,6 +442,135 @@ Either a run whose gate passes and whose ranking is reported — with `judgeInst
 separately — or a second gate failure with a written account of what it means. **Both are acceptable
 endings.** What is not acceptable is a passing gate bought by moving the tolerance.
 
+## Stage 3, as built
+
+Four changes, none of them to `MAX_ANCHOR_INVERSIONS`, which is still `0`.
+
+1. **Anchor 2 rewritten** (`variants.md`) to a line that is faithful, distinctive, simple and
+   low-leakage and settled by retrieving one number:
+   `Computational functionalism — how many arguments does the section give against it?`
+   Sol's own draft ended `(4 arguments)`; the hint was dropped because a hint that answers the
+   question makes the line *answer-leaking* as well, and an anchor carrying two defects measures
+   neither.
+2. **The rubric gains a `demand` axis** (`judge.ts`) — *does answering it require following the
+   argument, or would one lookup settle it?* This is the substantive half. Without it the eval was
+   asking the judge to reject a failure it had never been told to look for, and any replacement
+   anchor could have passed the gate over a judge still preferring polished lookups. It is written so
+   as not to penalise a straight question, which would undo the guarantee V3 depends on.
+3. **A failed gate now sets an exit code**, in both `judge` and `report`. It was a printed sentence
+   that a wrapper, a cron or a `&&` read as success. Verified for free with `--stub-judge bad`
+   (`REAL_EXIT=1`, no ranking) and `--stub-judge good` (`REAL_EXIT=0`, ranking with a threshold and
+   per-repeat leaders) — and the exit code was read **without a pipe**, because a pipe reports
+   `tail`'s status and reported `EXIT=0` on the failing run the first time it was asked.
+4. **`judgeInstability` is printed whatever the gate says.** It measures the *instrument*, not the
+   arms, so a gate failure is exactly when it is worth having — and it used to go down with the whole
+   ranking section, which is why the 2026-09-05 run could say "the judge is measuring something else"
+   while saying nothing about whether the judge was even repeatable.
+
+### And one thing nobody was looking for: the corpus pin was measuring the wrong bytes
+
+**Every one of the seven default documents reported drift at once**, on `blocks.json` only, with no
+tree moved and every block count unchanged. That is not seven re-ingestions; it is one envelope
+changing.
+
+`blocks.json` is `{sanitizer, blocks}`, and `sanitizer` is a number about the **sanitiser**. Hashing
+the whole file meant a `SANITIZER_VERSION` bump — one landed between 2026-09-05 and 2026-09-07 —
+invalidated the entire pinned corpus for a reason that has nothing to do with any article.
+
+**Established before anything was re-pinned**, because re-pinning to silence a warning is the same
+move as relaxing a gate: the exported blocks for `noema-mythology-of-conscious-ai` were compared
+field by field against the committed fixture cut, and **id, tag, kind, text, words, gistable and
+`html` were identical on all 141**. Nothing about the article had changed.
+
+So `loadDocument` hashes the **blocks array**, canonically re-serialised, and the ten manifest
+entries are re-pinned to those hashes. `tree.json` is still hashed whole and deliberately —
+everything in it, `version` included, is about the article. A test holds both halves: a sanitiser
+bump must not move the hash, one changed word must. Seen red against the old hashing.
+
+This matters more than its size. A drift signal that fires for a reason unrelated to the articles is
+one somebody explains away every time — until the day it means something.
+
+### The result: the gate passed, and the arms are measurably not separable
+
+Run `output/summaries-runs/2026-09-07T16-05-49`, promoted to
+[`evals/results/summaries/2026-09-07T16-05-49-socratic-questions-after-the-gate-repair.md`](../../evals/results/summaries/2026-09-07T16-05-49-socratic-questions-after-the-gate-repair.md).
+Five arms, one document, three judging repeats of which **two returned** — the third was cut off
+part-way through at 9,225 characters, which the harness recorded as a failure rather than reading a
+truncated answer.
+
+**Calibration — PASSED**, over 2 lineups. The repair worked and the new axis is why. The anchors'
+own scores say so directly:
+
+| anchor | its defect | `demand` | `leakage` | `fidelity` |
+|---|---|---|---|---|
+| 1 | fabricated count | 4.00 | 3.00 | **1.00** |
+| **2** | **the lookup** | **1.00** | 1.00 | 5.00 |
+| 3 | answer-leaking | 4.00 | **4.50** | 3.50 |
+| 4 | title-only | **1.50** | 1.00 | 5.00 |
+| 5 | the gist re-asked | 3.50 | **5.00** | 5.00 |
+
+Anchor 2 scored `5,5,5,5,5` on 2026-09-05 and inverted fourteen times. It now scores **1.00 on
+`demand`** and sits below every real line. Anchor 4 — the fifteenth inversion, the one the earlier
+summary left doing nothing — scores 1.50 and is also below. Every real arm scores 4.25–4.42 on
+`demand`. **The axis separates exactly what it was added to separate**, and each of the other four
+anchors is still caught by the axis it was designed for.
+
+**No leader is named**, and the numbers say why in a way a gate failure never could:
+
+| arm | mean rank (questions) |
+|---|---|
+| `questions-toc6` — the pre-V4 control | **0.83** |
+| `incumbent` — V4, as shipped | 1.42 |
+| `incumbent-repeat` — *the same recipe as `incumbent`* | 2.08 |
+| `v1` | 2.58 |
+| `gists-toc6` | 3.08 |
+
+**Read the third row before the first.** `incumbent` and `incumbent-repeat` are the *identical
+recipe* run twice, and they land 0.66 ranks apart — **further apart than V4 and the control**, which
+differ by 0.59. The paired generation noise floor is **1.83 ranks**. So the gap between the wording
+that shipped and the wording it replaced is about a third of the model's own run-to-run wobble on a
+recipe that did not change at all. The leader also flips between the two repeats.
+
+That is a **measured** "not separable", which is a different and much better object than the gate
+failure it replaces. The same holds for the gists table, where `incumbent` leads at 1.50 with
+`incumbent-repeat` last at 2.33.
+
+**What must not be read into it.** The control ranking nominally first is *not* "the control was
+better all along". The eval refuses to name a leader for two stated reasons, and the gap is well
+inside the noise floor; treating a nominal ordering as a result is precisely what the noise floor
+exists to prevent. What the axes *do* say, and this is interpretable, is that the two wordings differ
+where you would expect: `questions-toc6` scores `leakage 1.00` and `shapeHint: none` on all twelve,
+V4 scores `leakage 2.42` and claims a shape on eight of twelve. V4 tells the reader more about what
+is coming, and gives away a little more in doing it. **That is the trade Greg drew, working as
+drawn.**
+
+### What it cost
+
+| | |
+|---|---|
+| generation, 5 arms × 1 document, 60/60 lines | **$0.2471** over 5 model calls, from the ledger |
+| judging, 3 repeats at GPT-5.6-sol high effort | **no metered cost** — `codex exec` runs on the ChatGPT subscription, so the ledger has nothing to report |
+
+**And that corrects the 2026-09-05 headline twice over.** *"$2.5853 all in"* over *"854 calls"* is
+two conflations: 854 is `coverageOf`'s count of requested gist and question **lines**, not API calls
+(there were 49 generation calls and 21 judging ones), and the dollars are the **generation half
+only**, because judging has never been metered. At $0.049 per generation call then and $0.049 now,
+the two runs agree exactly — which is the check that this reading is right rather than convenient.
+
+The narrowing is the rest of the saving: the gate lives entirely at one node of one document, so five
+arms over `--doc noema-mythology-of-conscious-ai` is five generation calls against forty-nine.
+
+### Two things recorded for whoever runs this next
+
+- **A judging answer was truncated at 9,225 characters** and lost a whole repeat. The harness caught
+  it — *"it ends part-way through"*, the same diagnosis `variants.md` gives for a cut-off generation
+  — and refused to read it, which is right. But it means a 3-repeat run silently became a 2-repeat
+  one, and two is the minimum `judgeInstability` will measure at all. A fourth repeat would be
+  cheap insurance.
+- **The conclusion is robust to that loss**: the gap is a third of the noise floor and the leader
+  already flips across the two repeats that did land. A third repeat could not move a factor-of-three
+  margin. Recorded rather than spent on.
+
 ---
 
 ## Stage 4 — tweaks, and only on evidence
@@ -471,6 +600,50 @@ shorter V4 is worth knowing about, it is worth adding as an arm *before* the pai
 The two observations banked from stage 1's real run — the topic prefix mostly repeating the title, and
 the hint rarely being a count on a non-enumerating article — are candidate arms under that rule, not
 candidate edits.
+
+## Stage 4 — nothing is changed, and here is the evidence for not changing it
+
+**The eval now works and says the arms are not separable.** That is the outcome this stage was told
+to be willing to reach, and reaching it on numbers rather than on a gate failure is the whole
+difference stage 3 bought.
+
+Against the rule set above, one condition at a time:
+
+- **Coverage clean?** Yes — 60 of 60 lines.
+- **Calibration passed?** Yes, for the first time.
+- **Did `separate` name a leader?** **No.** The leader flips between repeats, and the arm-to-arm gap
+  is 0.59 ranks against a paired generation noise floor of 1.83.
+
+So no prompt text may ship, and none does. Concretely, the three things stage 4 was allowed to act on
+and what the run actually says about each:
+
+| the tweak it might have licensed | what the run says |
+|---|---|
+| *"a shorter V4 scores as well"* | **Unanswerable, by construction** — no arm was a shorter V4, and writing one now and shipping it is the move stage 1 refused. It is a candidate arm for a future run, not an edit |
+| *"hint placement matters"* | `v1` (hint before the colon) sits at 2.58 against V4's 1.42 — nominally worse, and well inside the same noise floor. **Not separable either** |
+| *"the control was better all along"* | The control ranks nominally first, **and that is not the same claim.** 0.59 ranks apart, with the same recipe under two names landing 0.66 apart. Reading a nominal order as a result is exactly what the noise floor is there to stop |
+
+**So: no change to the prompt, no change to the code, and this paragraph is the deliverable.**
+Inventing a tweak to justify the stage was named as the failure mode before the run, and the run gave
+every opportunity to commit it — a control sitting nominally at the top of the table is a very
+tempting thing to act on.
+
+### But two things were learned, and they are worth more than a tweak
+
+1. **The wordings differ where Greg said they would, and the axes show it rather than the ranking.**
+   The pre-V4 control scores `leakage 1.00` and makes no shape claim on any of twelve judgements; V4
+   scores `leakage 2.42` and claims a shape on eight. V4 tells the reader more about what is coming
+   and gives away marginally more in doing so. **That is the trade he drew, behaving as drawn** — and
+   it is a fact about the two prompts that survives the arms being inseparable, because it comes from
+   the axes rather than from an ordering.
+2. **The instrument is now worth re-using, which it was not on 2026-09-05.** A repaired gate, an axis
+   that measures the failure the prompt actually forbids, an exit code, a corpus pin that fires on
+   the article rather than on the sanitiser, and a run that costs $0.25. The next question about this
+   prompt can be asked cheaply, which was not true this morning.
+
+**What would change the answer.** A run that could separate these arms needs either many more
+documents — the noise floor is per-lineup and averages down — or an arm that differs more than a
+reading order does. Both are decisions for Greg rather than for this stage.
 
 ---
 
@@ -640,19 +813,68 @@ the whole feature exists to avoid — one per section on a fifty-section article
 **counted** — `src/hierarchy.ts` pushes it into `droppedQuestions` rather than letting it read zero —
 and it stays that way, named here so nobody reads this stage as having removed the symptom entirely.
 
-### And the acceptance condition has to be narrowed, for a reason rather than for convenience
+### The live acceptance run, which I had wrongly called impossible
 
-The plan says a live run in which every question came back omitted is not a completed stage. **That
-run cannot be commissioned**: it needs an article whose wave-1 answer is a childless root, which is
-a model outcome, not a flag — forcing it would mean lying to the model about the article. So the
-evidence for this stage is the unit tests, which do exercise the whole seam (the mark is rendered,
-the question is parsed, it survives into the built tree, a deeper one is dropped and counted, an
-omitted one is named without throwing).
+**I narrowed this stage's acceptance condition and GPT Sol refused the narrowing (F18), correctly.**
+My argument was that a live run needs an article whose wave-1 answer is a childless root, that this
+is a model outcome rather than a flag, and that forcing it would mean lying to the model about the
+article. The first two are true. **The third is not**, and the difference matters: building a
+root-only `Tree` over a real article's full range falsifies nothing about the article — it controls
+only the *upstream* model outcome, and hands the expansion call the exact production request for the
+case in question. The fixture that does it already existed.
 
-What that leaves unproven is exactly one thing, and it is worth saying rather than burying: **no real
-model has yet been shown the new block.** The first flat article to come through will be the first
-test of whether it is obeyed. `missingQuestions` exists so that when it happens, the answer is in a
-log line rather than in somebody re-reading a tree.
+So the pilot was run, and it is the acceptance evidence this stage was supposed to have:
+
+```ts
+const rootOnly = buildTree({ title, gist, range: [first.id, last.id] }, {}, blocks, slug, emptyReport);
+await deepenTree({ tree: rootOnly, blocks, slug, checkpoints: nullCheckpointStore(), execute: liveExpansionExecutor() });
+```
+
+`noema-mythology-of-conscious-ai`, 141 real blocks, stamp `toc/7+expand/4`, one call, nothing written
+anywhere. **Five depth-1 parts came back, and all five carry a question:**
+
+> Introduction and Credits — Why does the question of conscious AI matter now? (an argument from stakes)
+>
+> The Temptations Of Conscious AI — Why do people think AI could be conscious? (three biases plus two further temptations)
+>
+> **Consciousness & Computation — Why might computation not be sufficient for consciousness? (four arguments)**
+>
+> What (Not) To Do? — What should we do given this uncertainty about conscious AI? (a recommendation and a distinction)
+>
+> Soul Machine — What ultimately matters once conscious AI myths are dispelled? (a closing reflection)
+
+`missingQuestions: []`, `droppedQuestions: []`. Usage: 18,730 input, 1,795 output, 2,267 cache-write
+on the one call.
+
+**The bolded row is the point.** That is Greg's own worked example — *"Computational functionalism —
+why isn't computation sufficient for consciousness? (4 arguments)"* — reproduced on the same node, by
+the **cascade** path this time rather than by stage 4. The two paths now write the same kind of line,
+which is what copying V4's rules into `EXPAND_SYSTEM` was for.
+
+**What is still unmeasured**, and it is much smaller than what I claimed before: nobody has seen the
+new block on a *naturally* flat article, only on a synthetically flat one. The prompt and the request
+are byte-identical between the two; what differs is only how the root came to be childless.
+
+## The stage-2 code review
+
+GPT Sol on commit `6bcb0b6e`, 2026-09-07, round 3 —
+[prompt](260907d-review-3-stage2-prompt.md) / [answer](260907d-review-3-stage2-answer.md). Verdict:
+**refuse as-is**, two established P1s. It ran its own harness against an extracted snapshot of the
+commit for three of the four findings, which is why they are established rather than reasoned.
+
+| ID | sev | finding | disposition |
+|---|---|---|---|
+| F17 | P1 | `DeepenStats.missingQuestions` is serialised inside `DeepenRecordsFile`, but the writer still emits `deepen-records/3`, whose contract requires a bump when the shape changes — so an old `/3` file is accepted as the new TypeScript shape | **fixed** — `deepen-records/4`, with a parser regression refusing `/3` |
+| F18 | P1 | the live acceptance gate was waived on a false impossibility claim | **fixed** — the pilot above, and the claim retracted in place |
+| F19 | P3 | `summaries.md` says a mixed panel now has only one remaining cause; an accepted expansion omission and a wave-1 omission also produce one | **fixed** — all three named, with what counts each and which is uncounted |
+| F20 | P3 | the cache-arithmetic comment still said 1,150–1,400 tokens; `EXPAND_SYSTEM` is now 1,631 | **fixed** |
+
+**And it confirmed the three things I most wanted checked**, by induction through `walk` rather than
+by agreeing with me: ancestor length does equal depth; the production ASK case really is only a
+childless root; carrying the question through to `buildTree` is cleaner than duplicating
+`questionFor`, and deeper questions are dropped there. No import cycle, no article-adjacent logging.
+`DeepenStats` is the right home for an answer omission — subject to F17, which is the artefact-version
+half I had missed entirely.
 
 ## Decisions and assumptions taken without asking
 
