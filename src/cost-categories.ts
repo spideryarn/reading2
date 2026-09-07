@@ -128,6 +128,7 @@ const INTERACTIVE_REQUEST_JOBS: ReadonlySet<string> = new Set([
   "explain",
   "search",
   "quiz-mark",
+  "quiz-verdict",
   "referee-mirror",
   "referee-criteria",
   "referee-claims",

@@ -41,7 +41,7 @@
  * See docs/plans/260831al-review-quiz-sub-mode.md and src/quiz.ts.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Job, Quiz, QuizQuestionId, QuizResponse } from "../types.js";
+import type { Job, Quiz, QuizQuestionId, QuizResponse, QuizVerdict } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
@@ -76,7 +76,7 @@ class MarkStopped extends Error {
 async function readMark(
   body: ReadableStream<Uint8Array>,
   onDelta: (text: string) => void,
-): Promise<string> {
+): Promise<{ reply: string; verdict: QuizVerdict | undefined }> {
   let text = "";
   for await (const event of readEvents(body, { stallMs: STREAM_STALL_MS })) {
     if (event.name === "delta") {
@@ -88,12 +88,22 @@ async function readMark(
       continue;
     }
     if (event.name === "done") {
-      const reply = (event.data as { reply?: unknown }).reply;
+      const data = event.data as { reply?: unknown; verdict?: unknown };
+      const reply = data.reply;
+      /* **Validated rather than cast**, because this decides how hard the next
+         question is and a stray string would step the ladder on nonsense. Any
+         other value is absence, which means *hold the band* — the same outcome
+         as the classifier having failed, and a perfectly ordinary one. */
+      const verdict: QuizVerdict | undefined =
+        data.verdict === "right" || data.verdict === "wrong" ? data.verdict : undefined;
       /* The server's own whole reply where it sent one, because it is the
          trimmed text and the deltas are not. Falling back to the accumulator
          rather than trusting the field blindly, so a malformed `done` still
          hands back what the reader watched arrive. */
-      return typeof reply === "string" && reply.trim() ? reply : text;
+      return {
+        reply: typeof reply === "string" && reply.trim() ? reply : text,
+        verdict,
+      };
     }
     if (event.name === "error") {
       const message = (event.data as { error?: unknown }).error;
@@ -144,6 +154,21 @@ export interface Attempt {
   reply: string;
   /** Why it stopped badly, if it did. */
   error: string | null;
+  /**
+   * **Whether they got it right — and it is never rendered.**
+   *
+   * The adaptive ladder reads this to choose the next question
+   * (src/quiz-ladder.ts). `QuizPanel` must not print it, hint at it, or change
+   * a word of copy because of it: docs/project/quiz.md is explicit that quoting
+   * a difficulty at a reader hands them a token with nothing behind it, and a
+   * verdict is worse — it is the grade the whole marking prompt refuses to give.
+   *
+   * Absent far more often than not: no verdict when the classifier failed or
+   * timed out, when the question was ill-posed, or on any attempt that did not
+   * reach `done`. Absence means *hold the band*, which is why nothing here has
+   * to treat it as an error.
+   */
+  verdict?: QuizVerdict;
 }
 
 export interface UseQuiz {
@@ -373,10 +398,17 @@ export function useQuiz(slug: string): UseQuiz {
         /* **The reply is what `readMark` returns**, and it returns only on a
            `done` frame. There is no other road to the two lines below, which is
            the whole of the terminal contract as the client keeps it. */
-        const reply = await readMark(res.body, (text) =>
+        const { reply, verdict } = await readMark(res.body, (text) =>
           setAttempt({ questionId, answer, status: "marking", reply: text, error: null }),
         );
-        setAttempt({ questionId, answer, status: "done", reply, error: null });
+        setAttempt({
+          questionId,
+          answer,
+          status: "done",
+          reply,
+          error: null,
+          ...(verdict ? { verdict } : {}),
+        });
         setAnswered((was) => {
           const next = new Set(was);
           next.add(questionId);
