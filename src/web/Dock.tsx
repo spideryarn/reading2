@@ -1473,25 +1473,7 @@ export function Dock({
             marked={marked}
           />
         ) : (
-          visible.map((m) => (
-            <DockLink
-              key={m.mode}
-              href={readHref(slug, withMode(search, m.mode), "article")}
-              current={false}
-              icon={m.icon}
-              label={MODE_LABEL[m.mode]}
-              /* `dock-mode` says *this is one of the modes* on a page where
-                 they are fourteen loose links rather than one segment, so
-                 § the bar's fit ladder can take their labels at the mode rung
-                 the way it takes the segment's. Without it that rung does
-                 nothing on the metadata and tweets pages, and the bar there
-                 skips straight from every label to none. GPT Sol, reviewing
-                 the design. */
-              className={`dock-mode${marked?.has(m.mode) ? ` ${MARKED}` : ""}`}
-              keepLabel={m.keepLabel}
-              title={`${MODE_CATALOG[m.mode].description} — back in the article itself`}
-            />
-          ))
+          <DockModeLinks slug={slug} search={search} modes={visible} marked={marked} />
         )}
 
         {/* **The other door into the same fourteen**, immediately after them
@@ -1550,11 +1532,12 @@ export function Dock({
                `signedIn` is not the question; ownership is. A drawer-less bar
                belongs to the owner on the metadata and tweets pages of *their*
                article, and to a visitor on the public stand-ins. */
-            title={
-              isVisitor
+            hover={{
+              kind: "title",
+              text: isVisitor
                 ? "Comments on this article, back in the article they are about"
-                : "Your comments, back in the article they are about"
-            }
+                : "Your comments, back in the article they are about",
+            }}
           />
         )}
 
@@ -1580,7 +1563,7 @@ export function Dock({
           current={view === "tweets"}
           icon={ListOrdered}
           label="Tweets"
-          title="The article as a numbered thread of short posts"
+          hover={{ kind: "title", text: "The article as a numbered thread of short posts" }}
           /* **Only for the owner, and only from the reading view's own bar.**
              `isVisitor` is the same capability seam every band uses: a visitor
              cannot write anything, so arming would mint a token nothing can
@@ -1601,7 +1584,10 @@ export function Dock({
           current={view === "metadata"}
           icon={Info}
           label="Metadata"
-          title="Where this article came from, what shape it is, and what the pipeline wrote"
+          hover={{
+            kind: "title",
+            text: "Where this article came from, what shape it is, and what the pipeline wrote",
+          }}
         />
 
         {/* **The switch itself, last, and only for somebody who has an account
@@ -1879,21 +1865,40 @@ function DockModes({
             key={m.mode}
             placement="top"
             className="tip-soon"
+            /* **A `ControlTip`, since 2026-09-07, and the second paragraph is
+               the point.** This was a head and one sentence — the same sentence
+               the command bar draws inline beside the name — so the hover cost
+               a reader 300ms to be told what the label already said. The bar
+               was the last row of controls in the app without the shape every
+               other row has, and it is the row where the unguessable half
+               matters most. Six of these buttons start a model call the instant
+               they are pressed, four wait on the reader's own words, three read
+               a tree written before the reader arrived and one generates
+               nothing at all — and nothing on screen tells them apart.
+               `how` lives in the catalog
+               beside `description` (src/mode-catalog.ts § `how`), which is also
+               where the two rules it obeys are written down.
+               docs/plans/260907b-rich-tooltips-on-the-dock-modes.md. */
             content={
-              <>
-                <div className="tip-soon-head">{MODE_LABEL[m.mode]}</div>
-                <p>{MODE_CATALOG[m.mode].description}</p>
-                {/* A supplement, never the message. The sentence that actually
-                    explains the boundary is in the band this button opens —
-                    see the `marked` prop above for why that distinction is
-                    load-bearing rather than fussy. */}
-                {/* **The band's own sentence, not a second one saying the same
-                    thing.** It was a line of its own here until a browser pass
-                    read the pair as copy that had drifted — which it was. The
-                    tooltip is a preview of what the press opens now, and there
-                    is no second string to keep in step. visitor.ts § markedModes. */}
-                {marked?.get(m.mode) && <p>{marked.get(m.mode)}</p>}
-              </>
+              <ControlTip
+                head={MODE_LABEL[m.mode]}
+                /* **The visitor's sentence goes first, not last.** It was a
+                   third paragraph while the card had two; with `how` it would
+                   be the third of three, which buries the one line explaining
+                   why the button looks the way it does. `state` is exactly this
+                   case — Tooltip.tsx § `state` argues it for the experimental
+                   switch: what the control is doing *right now* goes above the
+                   description, because somebody who opened the card because the
+                   button looked wrong should not read two paragraphs first.
+
+                   A supplement, never the message: the sentence that actually
+                   explains the boundary is in the band this button opens, and
+                   this is the band's own string rather than a second one saying
+                   the same thing. visitor.ts § `markedModes`. */
+                state={marked?.get(m.mode)}
+                what={MODE_CATALOG[m.mode].description}
+                how={MODE_CATALOG[m.mode].how}
+              />
             }
           >
             {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern — a real <input type="radio"> cannot carry an icon beside a label, and styling one as a bar button means hiding the input and faking every state it already had */}
@@ -1943,6 +1948,87 @@ function DockModes({
         ))}
       </TooltipGroup>
     </div>
+  );
+}
+
+/**
+ * **The same fourteen modes, off the reading view** — the metadata and tweets
+ * pages, where there is no band to switch, so the segment degrades to loose
+ * links back to the article.
+ *
+ * A component of its own since 2026-09-07, and it is the arm this bar keeps
+ * forgetting. It has now twice been the half left behind: `keepLabel` was not
+ * passed to it, so Plain's word survived every narrow window on the reading
+ * view and vanished on the page you are most likely to be looking for the way
+ * back from (GPT Sol); and it carried a `title` attribute while the segment
+ * carried a card, so the same fourteen modes explained themselves one way here
+ * and another there. Sitting next to `DockModes` rather than inline in `Dock`
+ * is meant to make the pair visible enough that the next change to one is a
+ * change to both. tests/dock-mode-tooltips.test.tsx checks the two arms
+ * separately for exactly that reason.
+ */
+function DockModeLinks({
+  slug,
+  search,
+  modes,
+  marked,
+}: {
+  slug: string;
+  search: string;
+  /** Already filtered, by `visibleModes` — the same list the segment is given,
+   *  so the two arms cannot disagree about what is in the bar. */
+  modes: readonly ModeUi[];
+  marked?: ReadonlyMap<Mode, string> | undefined;
+}) {
+  return (
+    /* **One group, so these scrub like the segment does.** Fourteen independent
+       300ms waits is what a row of tooltips feels like without it —
+       Tooltip.tsx § grouping. Only the modes are in it; the three buttons after
+       this block are not modes and still carry a `title`. */
+    <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+      {modes.map((m) => (
+        <DockLink
+          key={m.mode}
+          href={readHref(slug, withMode(search, m.mode), "article")}
+          current={false}
+          icon={m.icon}
+          label={MODE_LABEL[m.mode]}
+          /* `dock-mode` says *this is one of the modes* on a page where they are
+             fourteen loose links rather than one segment, so § the bar's fit
+             ladder can take their labels at the mode rung the way it takes the
+             segment's. Without it that rung does nothing on the metadata and
+             tweets pages, and the bar there skips straight from every label to
+             none. GPT Sol, reviewing the design. */
+          className={`dock-mode${marked?.has(m.mode) ? ` ${MARKED}` : ""}`}
+          keepLabel={m.keepLabel}
+          /* **The same card the segment draws, plus where the press lands.** A
+             reader who learned what Quotes costs by hovering it on the reading
+             view should not meet a one-line OS box for it on the metadata page.
+             The trailing clause on `what` is the only difference in the *words*.
+
+             It is not the only difference in the behaviour, and that distinction
+             is why `how` is written the way it is: this link navigates and arms
+             nothing, where the segment's button calls `armActivationForMode`. So
+             a card saying *"opening it runs a model pass"* would be false here —
+             arriving at `?mode=glossary` from this link generates nothing
+             (activation.ts § arriving is not a press). Four of the fourteen said
+             that in first draft; the rule that replaced it is
+             src/mode-catalog.ts § `how`, first bullet. GPT Sol, 2026-09-07.
+             docs/plans/260907b-rich-tooltips-on-the-dock-modes.md. */
+          hover={{
+            kind: "card",
+            content: (
+              <ControlTip
+                head={MODE_LABEL[m.mode]}
+                state={marked?.get(m.mode)}
+                what={`${MODE_CATALOG[m.mode].description} — back in the article itself`}
+                how={MODE_CATALOG[m.mode].how}
+              />
+            ),
+          }}
+        />
+      ))}
+    </TooltipGroup>
   );
 }
 
@@ -2202,7 +2288,7 @@ function DockLink({
   current,
   icon: Icon,
   label,
-  title,
+  hover,
   className = "",
   keepLabel,
   onNavigate,
@@ -2211,7 +2297,25 @@ function DockLink({
   current: boolean;
   icon: typeof Info;
   label: string;
-  title: string;
+  /**
+   * **How this link explains itself on hover**, and a union rather than two
+   * optional props so that it cannot be both or neither.
+   *
+   * The two arms are not equals. A `card` is what this app means by a tooltip
+   * — styled, instant in a group, and reachable by a finger and by focus. A
+   * `title` is the OS's box: it waits about a second, cannot be styled,
+   * truncates at the OS's idea of a line, and does not exist at all on a touch
+   * device (docs/project/tooltips.md § A `title` attribute is not a small
+   * version of this).
+   *
+   * So the `title` arm is a **debt marked in the type**, not a choice. Its
+   * three remaining callers are Comments, Tweets and Metadata — the buttons in
+   * this bar that are not modes, and which each need their own verified second
+   * sentence before they can move. The fourteen loose mode links took the card
+   * arm on 2026-09-07 and the shape is here so the next three can, one at a
+   * time, without a fifth prop.
+   */
+  hover: { kind: "card"; content: ReactNode } | { kind: "title"; text: string };
   /** Extra classes — `MARKED` for a mode a visitor cannot have, and
    *  `dock-mode` for the loose mode links off the reading view. */
   className?: string | undefined;
@@ -2233,13 +2337,19 @@ function DockLink({
    */
   onNavigate?: (() => void) | undefined;
 }) {
-  return (
+  const link = (
     <Link
       href={href}
       onNavigate={onNavigate}
       className={`dock-btn${current ? " on" : ""}${className ? ` ${className}` : ""}`}
       aria-current={current ? "page" : undefined}
-      title={title}
+      /* **Exactly one of the two, and never both.** A `title` beside a card is
+         not a fallback, it is a race: the OS box appears over our panel a
+         second later, saying a shorter version of the same thing. Five test
+         files assert the absence of this attribute for that reason
+         (docs/project/tooltips.md), and this one is now covered by
+         tests/dock-mode-tooltips.test.tsx, in both arms. */
+      title={hover.kind === "title" ? hover.text : undefined}
       /* Explicit, for the reason DockModes gives: § the bar's fit ladder hides
          the visible label, and an accessible name computed from the text would go
          with it. `title` would step in as a fallback, but `title` is the long
@@ -2248,7 +2358,11 @@ function DockLink({
          labels on the last rung too, not just the modes.
 
          So `title` is now the hover description and **not** the accessible
-         name — this attribute is. Anything below claiming otherwise is stale. */
+         name — this attribute is. Anything below claiming otherwise is stale.
+         It is also what keeps the card arm honest: the tooltip is the trigger's
+         *description* (`useRole` wires `aria-describedby`), never its name, so
+         a link with a card and no `aria-label` would be an anonymous icon on
+         every width where the ladder has taken the word. */
       aria-label={label}
     >
       <Icon size={15} />
@@ -2257,11 +2371,31 @@ function DockLink({
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the explicit
           `aria-label` above is the accessible name on both of these, and the
-          `title` beside it is the long hover sentence. A comment here used to
-          name `title` as the accessible name — it was the fallback before the
-          `aria-label` was added, and it stopped being true then. GPT Sol. */}
+          long hover sentence is whichever arm of `hover` this link took — the
+          card for a mode, the `title` attribute for the three that are not one.
+          A comment here used to name `title` as the accessible name — it was the
+          fallback before the `aria-label` was added, and it stopped being true
+          then. GPT Sol. */}
       <span className={`dock-btn-label${keepLabel ? " always" : ""}`}>{label}</span>
     </Link>
+  );
+  if (hover.kind === "title") return link;
+  /* **`Link` is the one trigger in this app that is not a host element**, and
+     it works because React 19 hands a function component its `ref` as an
+     ordinary prop and `Link` both names it and spreads its rest props onto the
+     `<a>`. `useHover` puts a native `mouseenter` on whatever node the ref gave
+     it, so a trigger that swallowed the ref would open nothing at all, with no
+     error and nothing visibly different from before the tooltip was added —
+     docs/project/tooltips.md § Five things, point 5, and
+     tests/tooltip-on-link.test.tsx, whose third case is that failure.
+
+     `placement="top"` because the bar is at the foot of the window; there is
+     always room above it, so nothing here needs `keepSide` the way a chip at
+     the edge of the diagram panel does. */
+  return (
+    <Tooltip placement="top" className="tip-soon" content={hover.content}>
+      {link}
+    </Tooltip>
   );
 }
 
