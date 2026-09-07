@@ -1,9 +1,13 @@
 # The authenticated API's dispatch becomes enumerable — and the matrix test that has to come first
 
-Status as of 2026-09-07: **draft, revised after design input, not yet reviewed by Sol or built.**
-Evidence gathered at `d4b503b4`; `src/routes.ts` is byte-identical at the worktree HEAD, so every
-line number below is live. Design input from GPT 6 Astra (high) and Fable is folded in and
-attributed.
+Status as of 2026-09-07: **reviewed, stages 1 and 2 building.** Evidence gathered at `d4b503b4`;
+`src/routes.ts` is byte-identical at the worktree HEAD, so every line number below is live. Design
+input from GPT 6 Astra (high) and Fable, and a plan review from GPT Sol
+([review](260907b-split-the-authenticated-api-dispatch-by-domain-review-sol.md),
+[prompt](260907b-split-the-authenticated-api-dispatch-by-domain-review-prompt.md)), are folded in
+and attributed. Sol returned **no P0**; it reversed the shape decision, rejected stage 1's first
+design as circular, narrowed stage 2 from four files to one, and corrected the ordering model in
+both directions. Each correction is marked below.
 
 ## Brief
 
@@ -58,22 +62,38 @@ Three independent opinions, and they did not agree:
 - **Fable**, asked only to arbitrate scope — *"per-area route modules each contributing an ordered
   slice."*
 
-**Settled: an ordered list of entries, grouped by domain inside one array, with no boolean
-protocol.** The two positions are not actually exclusive, and each fixes the other's weak point:
+**Settled: per-domain functions in the same module, as 260906h said.** I initially settled this the
+other way — an ordered list of static entries — and Sol's review sent it back. Recording both, since
+the reasoning matters more than the verdict:
 
-- 260906h's objection is to a *data-driven* table, where the data drives behaviour — which is what
-  `src/public/routes.ts` does, and it is right that the authenticated surface is too heterogeneous
-  for it. An ordered list of closures is not that. Each handler keeps whatever shape it has now,
-  including hijacking the response to stream.
-- Astra's objection to `Promise<boolean>` is the fallthrough hazard, and **this repo has already
-  written that danger down**: `src/public/routes.ts:361` — *"a `false` returned from here is one
-  `if` away from being a fallthrough into the authenticated table."* Adopting a boolean protocol
-  for 14 domain functions would create 14 places to make exactly that mistake.
-- The domain grouping is what buys 260906h's stated payoff — fewer simultaneous editors in one
-  region — and it makes a later move of each group to its own file a cut rather than a redesign.
+- My argument was that 260906h's objection is to a *data-driven* table (behaviour derived from data,
+  as in `src/public/routes.ts`) and that an ordered list of closures is not that; and that a boolean
+  protocol creates fourteen instances of the fallthrough hazard this repo already documented at
+  `src/public/routes.ts:361` — *"a `false` returned from here is one `if` away from being a
+  fallthrough into the authenticated table."*
+- **Sol's answer**, which I accept: the boolean hazard is real but bounded and specifiable — each
+  handled arm must await all its work, streams included, before returning `true`, and a helper
+  returns `false` only after every *complete* matcher-and-method pair has missed. A table, meanwhile,
+  buys nothing here that same-module functions do not, and same-module functions are the smaller
+  change.
+- **Astra dissents** and would have taken the table, on the grounds that no-return-value dispatch
+  cannot be got wrong the way a boolean can. Overruled because Sol and this repo's own settled
+  decision agree against it, and because `noImplicitReturns` plus an explicit await rule covers the
+  failure Astra names. Its residual point stands and goes in the stage 3 brief: *`noImplicitReturns`
+  cannot stop someone starting a stream without awaiting it and returning `true`.*
 
-So: **the table is the mechanism, the domain grouping is the organisation**, and moving groups to
-separate files is a further, separate change that is Greg's call and is not in this plan.
+The signature is **not** `(req: IncomingMessage)`. Domains need the whole `ApiRequest` — `res`,
+`path`, `query`, sometimes `rawUrl` — and the feedback route at `:7103` additionally needs the
+verified user:
+
+```ts
+async function tryChatRoutes(request: ApiRequest): Promise<boolean>
+async function tryMiscRoutes(user: VerifiedUser, request: ApiRequest): Promise<boolean>
+```
+
+Moving each domain into its own **file** is a further, materially harder change — it is where
+ownership, import isolation and the `processSingleton` identities below actually have to move — and
+it is Greg's call, not this plan's.
 
 ## The constraints anything here must respect
 
@@ -86,12 +106,15 @@ Numbered so the review and the implementation briefs can quote them.
    malformed. Making it one entry among 81 loses that.
    [admin.md:86](../project/admin.md): *"It sits above the route table, so an admin endpoint added
    later is behind it whether or not whoever adds it remembers."*
-2. **[HTTP] Method mismatch is a 404 and there is no 405 on this surface.** The terminal `send(res,
-   404, …)` at `:8177` must stay a **sent** response, not a thrown error — the caller's `failure`
-   logging value would change. Preserve `req.method` and `rawUrl` in the message, including the
-   undefined-method case. No `Allow` header, no HEAD/OPTIONS handling, no URL decoding,
-   normalisation or trailing-slash tolerance. Copying `src/public/routes.ts:390`'s 405 policy would
-   be a behaviour change.
+2. **[HTTP] Method mismatch is a 404 — inside this dispatcher, for an authorised user.** The
+   wording matters (Sol, P2-R6): *"no 405 anywhere"* is only true of `serveAuthenticatedApi` **after
+   its admin gate**. The wider `serveApi` surface does have 405s, in the public dispatcher and the
+   Stripe webhook; and a non-admin asking for any `/api/admin` path gets 403 *before* method
+   dispatch, wrong method or not. Within that scope: the terminal `send(res, 404, …)` at `:8177`
+   must stay a **sent** response, not a thrown error — the caller's `failure` logging value would
+   change. Preserve `req.method` and `rawUrl` in the message, including the undefined-method case.
+   No `Allow` header, no HEAD/OPTIONS handling, no URL decoding, normalisation or trailing-slash
+   tolerance. Copying `src/public/routes.ts:390`'s 405 policy would be a behaviour change.
 3. **[URL] Match on `path`, never `rawUrl` or `req.url`.** The
    [260901a postmortem](../postmortems/260901a-the-route-the-query-string-hid.md): 32 matchers ran
    against a string carrying the query string, so `GET /api/chat/<slug>?summary=1` matched nothing
@@ -170,9 +193,24 @@ The chain was never shuffled; it grew in clusters, so grouping is mostly cutting
 | 7899–8111 | jobs, uploads | 8 |
 | 8111–8180 | billing | 4 |
 
-Two interleaves to move deliberately, after stage 1 and never before: **`uploads` (`:7903`–`:7939`)
-sits between `allJobs` GET (`:7899`) and POST (`:7939`)**, and **`readerRoute` GET (`:7107`) and
-PATCH (`:7176`)** are split by an unrelated handler.
+Interleaves to move deliberately, after stage 1 and never before. Sol corrected this list in both
+directions, and I verified each by hand:
+
+- **`uploads` (`:7903`–`:7939`) sits between `allJobs` GET (`:7899`) and POST (`:7939`).** Extracting
+  jobs reorders uploads against one of them.
+- **`shelfOpen` is declared with the library matchers at `:6626` but handled at `:7184`** — after
+  models, transcribe, feedback and both reader routes. I missed this one entirely. It means
+  *library* extraction reorders unrelated guards just as jobs extraction does, so library is not the
+  easy first domain it looks like.
+- **`readerRoute` GET (`:7107`) and PATCH (`:7176`) are already consecutive.** I had this wrong: the
+  69 lines between them are the GET handler's own body, not another guard. Verified — `awk` finds no
+  dispatch-level `if` in that range.
+
+Further declaration-order/guard-order inversions exist around article vs link preview/summary,
+source/asset/export vs metadata, quiz mark vs debate, the comment subroutes vs `one`, most chat
+subroutes vs `oneThread`, and referee scan vs mirror. They are harmless **because matcher evaluation
+is pure and every complete accepted pair is unique** — which is a property to preserve, not a
+coincidence to rely on silently.
 
 ## What does not justify this
 
@@ -189,46 +227,69 @@ PATCH (`:7176`)** are split by an unrelated handler.
 
 ## Stages
 
-**Stage 1 — the route/method matrix test, and nothing else.** The prerequisite Sol named in
+**Stage 1 — the route contract, checked against the source.** The prerequisite Sol named in
 [260826m § 3.1](260826m-simplification-audit.md) and 260902e named again, asked for four times over
 five weeks and never built. **It is worth landing on its own merits whether or not stage 2 or 3 ever
-happens.** Two halves, per Astra's [P1 ORACLE]:
+happens**, and Sol agrees stopping here would be a defensible finish.
 
-- *Structural manifest.* Parse `git show d4b503b4:src/routes.ts` with an AST parser — never a
-  hand-copied second list — and extract, in order, each guard's method, its matcher's exact source
-  and flags, and its identity. Reject any syntax the extractor does not understand, and fail if the
-  inventory is not 81 guards + 1 gate + 67 matchers. This is what gives coverage over *all* path
-  strings; a finite corpus cannot.
-- *Differential branch-entry execution.* Replace each handler body with a unique observation
-  recording guard identity and raw captures, run a corpus, and compare **selected identity, captures,
-  admin refusal and exhaustion** — not merely HTTP status, because a matched handler can legitimately
-  return 404 (`tests/the-query-string-does-not-decide-the-route.test.ts:137` explains that trap).
-  Needs no database. Corpus per Astra: a witness for every entry; every alternative in `cancel|retry`
-  and the image extensions; every declared method plus HEAD, OPTIONS, unknown, lowercase, undefined;
-  both overlap families crossed with every method; empty captures, missing/extra segments, trailing
-  slashes, hash lengths 63/64/65, uppercase hex; `%`, `%25`, encoded slash and dot, double encoding;
-  bare and near-miss admin paths for admin and non-admin users; query strings through the caller's
-  real splitting.
+My first draft of this stage was circular, and Sol rejected it (P1-R1): a list *derived from* the
+matchers cannot also be the independent oracle for whether a matcher was deleted, and a bare count
+is only a canary — delete one guard while adding another and it still passes. The corrected design:
 
-  Every registration must have a selecting witness, and a missing witness fails the harness.
+1. **A hand-written, reviewed `EXPECTED_AUTH_ROUTES`**, one row per matcher: the match (literal path,
+   or regex source plus flags), the accepted methods, and witnesses. **Do not pin binding names** —
+   renaming `timeline` to `timelineRoute` is behaviour-neutral and must not go red.
+2. **Parse `src/routes.ts` with the already-installed Babel parser** (there is repo precedent), and
+   extract the 67 matchers, the 81 matcher/method guards, the admin gate, and whether every handled
+   arm terminates.
+3. **Compare the two bidirectionally. Exact set equality is the oracle**; 67 and 81 are loud failure
+   controls, nothing more. Unsupported guard or matcher syntax must be *rejected*, never silently
+   omitted.
+4. **Black-box only the safe negative matrix**: for each witness, call every method that no matcher
+   matching that witness accepts, and require the exact terminal 404 and no `Allow` header. This
+   reaches no handler and so needs no database.
+5. **Leave positive dispatch behaviour to the existing per-route suites.** This is the correction
+   that matters most: several accepted POSTs write data, spend money, contact providers, open SSE
+   streams and create Stripe objects. A generic matrix that fires a witness at every accepted pair
+   would do all of that. `/api/models` is the cheap positive control.
 
-  **Mutation controls, to prove it can fail:** stop on first path match regardless of method (library
-  and chat cases must go red); remove the bare `/api/admin` case; swap two handler bodies keeping
-  their ids; decode the whole path. **Not** the library-guard swap — that is equivalent today.
+This catches deletion, addition, matcher changes, method changes, unknown syntax and accidental
+acceptance of a wrong method. It does **not** cover handler behaviour, URL restoration, query
+parsing, streaming completion, or arbitrary regex intersections — those stay with the focused tests
+that already own them.
 
-Done when green, and when each mutation above is watched red.
+**Mutation controls, to prove it can fail:** delete a guard; add one; change a matcher; change an
+accepted method; feed it syntax the parser does not understand. **Not** the library-guard swap, and
+not "reorder two overlapping guards" — no two guards accept the same method/path pair, so any such
+swap is an equivalent mutation and would pin an implementation detail rather than behaviour.
 
-**Stage 2 — make the four source-text tests fail loudly.** Before anything moves, and while what
-they grep for still exists. `referee-scan-route.test.ts:336`'s empty-match control is the model.
+**Stage 2 — fix the one source-text test that is genuinely silent.** Narrowed by Sol (P2-R4) from
+four files to one. `tests/cacheable-covers-artefact-routes.test.ts:132` filters away a `null`
+binding, so a route that stops matching vanishes from the test's universe. The other three
+(`owner-isolation.test.ts:1306`, `referee-scan-route.test.ts:342`, `source-store.test.ts:84`)
+already assert their extraction was non-empty and need nothing. `referee-scan-route`'s exact source
+shape will need adapting when its guard moves in stage 3 — that is a stage 3 edit, not a defect now.
+Ideally the cacheable test eventually reuses stage 1's checked parser instead of a second grep.
 
-**Stage 3 — the ordered entry list, in guard order, grouped by domain.** Static module-scope
-registrations; gates outside; handlers unchanged and still awaited. One domain per commit, suite
-green each time. Re-judged after two domains rather than run straight through: the domains touching
-the module-scope lock registries (`:1010`, `:3800`, `:3970`, `:4211`) — chat, live, jobs — are
-materially harder than billing or glossary, and the plan should not pretend otherwise.
+**Stage 3 — extract two or three same-module domains, then reassess.** Top-level
+`async function tryXRoutes(request: ApiRequest): Promise<boolean>` in the same file, gates outside,
+handlers unchanged. **Billing first**, as Sol suggests: it is a good control, four guards, no shared
+module state. One domain per commit, suite green each time.
 
-**Not in scope**, named as passed over: moving domains into separate files (Greg's call; stage 3
-makes it cheap); anything inside the 81 handler bodies; the eager-matcher cost; a 405 policy.
+Two corrections from Sol here. First, the lock-registry inventory was wrong and incomplete — there
+are **six**, not four: `answering` (`:1010`), `streaming` (`:2069`), `turnOrder` (`:2120`),
+`searching` (`:3800`), `refereeing` (`:3970`), `pullingClaims` (`:4211`). `streaming` and
+`turnOrder` were the omissions that mattered. Second, they do **not** make same-module extraction
+harder — helper functions go on closing over exactly the same module state. They become a real cost
+only at a later *file* split, where their ownership and `processSingleton` identities have to move
+atomically with the helpers that use them. So the plan's earlier claim that chat/live/jobs are
+"materially harder" was wrong for this stage and right for the one after it.
+
+**Not in scope**, named as passed over: moving domains into separate files (Greg's call, and the
+place the registries actually bite); anything inside the 81 handler bodies; the eager-matcher cost;
+a 405 policy; and pre-committing to extract all fourteen domains — Greg's request is enough to
+override 260905b's "Tier 3, do not start", but not enough to make every domain automatically worth
+extracting.
 
 ## Open
 
