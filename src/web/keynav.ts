@@ -304,12 +304,20 @@ function readingLine(): number {
 export function measureOrigin(blocks: Block[]): JumpOrigin {
   const tops = rowTops();
   const first = tops[0];
+  /* **One `readingLine()`, not two.** Each call is a `stickyOffset()`, which is
+     a rect on `.controls` plus a `getComputedStyle` in safe-area.ts — so the
+     pair below cost four layout reads where two do. Same hoist and same reason
+     as A8's Stage 2 in App.tsx and useColumnContext.ts; nothing between the two
+     uses writes to the DOM, so the second call could only ever have returned
+     what the first did. Note this is also one call in the early-return branch,
+     which is what it already was. */
+  const line = readingLine();
   /* No rows at all — an empty article, or a mode not drawing the table — or
      every row still below the line. Either way no block is under the reader,
      and `top` is what lets Back restore the actual top of the page rather than
      scrolling the first paragraph under the chrome. */
-  if (first === undefined || first > readingLine()) return { kind: "top" };
-  const block = blocks[activeSectionIndex(tops, readingLine())];
+  if (first === undefined || first > line) return { kind: "top" };
+  const block = blocks[activeSectionIndex(tops, line)];
   /* More rows drawn than blocks handed in. Not reachable today, and a wrong
      block is worse than an honest "the beginning". */
   return block === undefined ? { kind: "top" } : { kind: "block", blockId: block.id };

@@ -565,7 +565,15 @@ verdict rather than a hedged one. The ordinary-size control sits comfortably und
 tells us the cost is the section loop and not a fixed overhead.
 
 **Clause 3 fires too**: a granularity column toggle spends **12.50 ms** in the pilot at the median
-against an 8ms budget, and a mode switch has a pilot p95 of **421.60 ms**.
+against an 8ms budget, and a mode switch spends **about 27.1 ms** at the median.
+
+> **Citation corrected, 2026-09-07 (Sol F17's neighbour).** This sentence originally gave the mode
+> switch's pilot cost as "a p95 of 421.60 ms". The clause is written about the median, so quoting a
+> p95 against it compared two different statistics and made the margin look roughly fifteen times
+> larger than it is. The median is 27.1 ms, which still fires clause 3 against 8 ms — the finding
+> survives, the arithmetic behind it did not. Sol caught it while confirming that clause 3 fires at
+> all, which is the useful shape of a review: the conclusion was right and the evidence for it was
+> not.
 
 **Clause 2 never fires, and that is the honest half.** Duty cycle peaked at 6.1% against a 10%
 threshold. The reason is not that the pilot is cheap but that the frames are enormous — frame
@@ -667,9 +675,93 @@ rather than shipped as a cache that re-reads every frame anyway.
 predicted amount and the resulting `?at=` and `focusRow` values must be identical over the same
 scripted scroll. If the counters do not move, the instrument is wrong and that is the finding.
 
+#### Stage 2 addendum, 2026-09-07 — a third instance arrived while this ran
+
+The `origin/dev` merge brought `keynav.ts § measureOrigin`, the DOM half of the new jump-origin
+feature. It calls `readingLine()` **twice** in one body — once to decide whether the first row has
+crossed the line, once to pick the block — and each call is a `stickyOffset()`, so a rect on
+`.controls` plus a `getComputedStyle`. That is precisely Stage 2's pattern, written independently by
+somebody else, in the week Stage 2 removed the same shape from `App.tsx` and `useColumnContext.ts`.
+
+Hoisted, on the same argument: nothing between the two uses writes to the DOM, so the second call
+could only ever have returned what the first did. It is one call in the early-return branch too,
+which is what that branch already cost. Suites: `spine-jump-origin`, `keynav`, `spine-here` (40).
+
+**That three independent authors wrote this shape in one file set inside a week is itself evidence for
+the thesis of this plan** — not proof that the *shared snapshot* is worth building, which is Stage
+2c's job, but proof that "read the same geometry twice because the two readers cannot see each other"
+is the normal outcome here rather than an oversight. It is also the same class as F14, with the sign
+flipped: two reads of one value are harmless exactly when nothing moves between them, and a clock is
+the case where something always does.
+
+**Not instrumented, deliberately.** `measureOrigin` is a genuine eleventh geometry site and a third
+consumer of the one-rect-per-row scan. Adding it now would change `GEOMETRY_LEAVES` and the exact-count
+assertions mid-flight while F11's frame tagging is being built. Recorded here; decided after.
+
+### Stage 2c — the counterfactual that authorises Stage 3 (Sol F10)
+
+**Stage 3 may not begin until this has run and passed.** That ordering is the whole finding: the plan
+already required "a trace or counterfactual showing that removing the duplicate scan removes work",
+and Stage 1 was written up as though Stage 4's A/B would discharge it — but Stage 4 happens *after*
+Stage 3 is built, so the gate would have been checked only once the thing it guards already existed.
+
+It also cannot be discharged by the timing already in hand. A self-timer records *when* work
+happened, not *which* work caused it; F1 said so about forced layout and it is equally true here.
+`LayoutCount` 56 against 46 attempted writes cannot attribute anything either. **The only cheap
+instrument that attributes is removal**: take the reads away and see whether the time goes with them.
+
+#### Method
+
+One session, one browser, the same pinned gesture, two arms interleaved rather than run back to back,
+so drift on a shared box cannot masquerade as an effect:
+
+- **Arm A** — the code as it stands.
+- **Arm B** — a **throwaway spike**, not the Stage 3 service. `useColumnContext`'s per-frame row scan
+  is replaced by a reuse of tops already read in that frame. It does **not** have to be correct: it is
+  allowed to produce a wrong `focusRow`, because nothing about the reading is being trusted, only the
+  cost. Making this explicit matters — an arm B that had to be right is a Stage 3 implementation, and
+  then the gate is again inside the thing it guards.
+
+Arm B is reverted before Stage 3 begins. It is a measurement, not a first draft.
+
+#### What is written down before arm B runs
+
+From **arm A's own counters**, and recorded here before arm B is run at all:
+
+1. the predicted read reduction, in reads per scroll frame and per gesture;
+2. arm A's pilot p50/p95 per frame (post-F11, so a real frame distribution);
+3. the **run-to-run range** of that statistic across arm A's five warmed repetitions — the noise
+   floor, which is what stops a difference inside the noise being read as an effect.
+
+Writing (3) down before seeing arm B is the point. A threshold chosen afterwards is not a threshold.
+
+#### The rule, precommitted
+
+**Stage 3 is authorised only if both hold:**
+
+1. **The reads actually go.** Arm B's measured pilot reads fall by the predicted number from (1),
+   within rounding. If they do not, the spike did not do what it claims and nothing else it reports
+   means anything — this is the paired zero-work control that
+   [silent-success.md](../reusable/silent-success.md) asks for, and it fails loudly rather than
+   quietly reporting an improvement.
+2. **And the time goes with them.** Arm B's pilot p50 improves by more than arm A's run-to-run range
+   from (3).
+
+**If 1 holds and 2 does not, Stage 3 is refused and this plan closes as deferred with evidence** —
+and that is a real outcome, not a formality. It would mean the reads are not what the time is made
+of, that sharing them buys a smaller number in the counter and nothing on the clock, and that the
+observer's maintenance cost has bought nothing. It would also retire the Stage 1 write-up's claim
+that "the cost is the reads, not the flush", which F10 correctly says is not yet established.
+
+**If neither holds**, the instrument itself is in question before the pilot is.
+
+`LayoutCount`, `LayoutDuration` and `TaskDuration` are recorded for both arms and reported alongside,
+but they do not decide this: the browser-spike section above already found a pure scroll dirtying no
+layout at all, so a `LayoutCount` that does not move is the expected result rather than a refutation.
+
 ### Stage 3 — share one snapshot between two consumers, if Stage 1 convicts
 
-A **pilot**, and the review's standing instruction is to stop if the machinery outweighs the
+**Gated on Stage 2c above.** A **pilot**, and the review's standing instruction is to stop if the machinery outweighs the
 duplication.
 
 1. A reader-scoped, read-only geometry snapshot at the **existing measurement seam** — document-space
