@@ -56,6 +56,8 @@ function passage(name: string): Found {
     long: name,
     at: 0,
     whole: false,
+    /* Not a quote. See `Found.quoteTier`. */
+    quoteTier: null,
   };
 }
 

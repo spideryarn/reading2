@@ -29,8 +29,15 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { loadEnvLocal } from "../../src/env.js";
-import { transcribeWith, vocabularyFor } from "../../src/transcribe.js";
-import { SITE_TERMS, pack, phrases, properNouns, proseOf } from "../../src/vocabulary.js";
+import { DICTATION_MODEL } from "../../src/models.js";
+import { transcribeWith } from "../../src/transcribe.js";
+/* **The list, not the joined line.** Dictation sends the vocabulary as
+   `keywords`, an array, so every condition here composes with `packTerms` and
+   the join happens only where something wants characters — the size report and
+   `invented`. Building a line and splitting it back would lose exactly what the
+   split has to guess at: a term containing a comma comes back as two. */
+import { SITE_TERMS, packTerms, phrases, properNouns, proseOf } from "../../src/vocabulary.js";
+import { vocabularyTermsFor } from "../../src/vocabulary-sources.js";
 /* **What came back, against what was sent**, shared with `bench-models.ts` so
    neither can report a clean run over a condition that answered nothing, and
    so the results file names the plan and the outcome separately. */
@@ -46,7 +53,19 @@ if (!KEY) throw new Error("OPENROUTER_API_KEY is not set");
 
 const DIR = new URL(".", import.meta.url).pathname;
 const DATA = `${DIR}../../data`;
-const MODEL = "google/gemini-3.1-flash-lite";
+/**
+ * **The model this benchmark holds fixed — taken from the app, and passed to
+ * the call rather than printed beside it.**
+ *
+ * It was the string `"google/gemini-3.1-flash-lite"`, and `say` never sent it:
+ * `transcribeWith` was called without a `model` option, so every call went to
+ * `DICTATION_MODEL` whatever this line said. That is the label-not-a-parameter
+ * failure the `model` option in [`src/transcribe.ts`](../../src/transcribe.js)
+ * exists to remove, sitting in the file that option was added *for* — and it
+ * only became visible when dictation changed model, because until then the
+ * label and the default happened to agree. docs/reusable/silent-success.md.
+ */
+const MODEL = DICTATION_MODEL;
 const RUNS = Number(process.env.RUNS ?? 2);
 /* **The denominator, so it is checked where it is read.** `for (run = 0; run <
    RUNS; run++)` runs `ceil(RUNS)` times, so `RUNS=1.5` would make two calls per
@@ -100,7 +119,7 @@ function namesOf(slug: string | null, limit: number): string[] {
 }
 const PROFILE: string[] = (() => {
   const { profile } = JSON.parse(fs.readFileSync(`${DATA}/reader.json`, "utf8"));
-  /* **`phrases`, exactly as production does it.** A paragraph handed to `pack`
+  /* **`phrases`, exactly as production does it.** A paragraph handed to `packTerms`
      as one term is truncated at 80 characters, which is the bug GPT Sol's
      second review found — and a harness that did not share the fix would have
      measured a different prompt again. */
@@ -228,23 +247,26 @@ const IRRELEVANT: string[] = (() => {
   return [...new Set(terms)];
 })();
 
-const CONDITIONS: { name: string; build: (u: Utterance) => string | Promise<string> }[] = [
-  { name: "none", build: () => "" },
+const CONDITIONS: {
+  name: string;
+  build: (u: Utterance) => string[] | Promise<string[]>;
+}[] = [
+  { name: "none", build: () => [] },
   /* What ships today. Article: the glossary. Profile page: the profile prose. */
   {
     name: "shipped",
-    build: (u) => pack([u.slug ? asStored(glossaryOf(u.slug)) : PROFILE], CAP),
+    build: (u) => packTerms([u.slug ? asStored(glossaryOf(u.slug)) : PROFILE], CAP),
   },
-  { name: "site only", build: () => pack([SITE_TERMS], CAP) },
+  { name: "site only", build: () => packTerms([SITE_TERMS], CAP) },
   /* **The row that lets the profile be one step.** Without it, going from
      `shipped` to `site+profile+glossary` changes three things at once — it adds
      the site terms, adds the profile, and re-ranks the glossary — so no number
      in the table was about the profile alone. GPT Sol's second review, item 2. */
-  { name: "site+glossary", build: (u) => pack([SITE_TERMS, ranked(glossaryOf(u.slug))], CAP) },
+  { name: "site+glossary", build: (u) => packTerms([SITE_TERMS, ranked(glossaryOf(u.slug))], CAP) },
   /* No article text read at all — the cheap composite. */
   {
     name: "site+profile+glossary",
-    build: (u) => pack([SITE_TERMS, PROFILE, ranked(glossaryOf(u.slug))], CAP),
+    build: (u) => packTerms([SITE_TERMS, PROFILE, ranked(glossaryOf(u.slug))], CAP),
   },
   /* **A limit that actually binds.** `MAX_NAMES` is 40 and these articles
      produce 20-25, so the production number is a ceiling nothing has ever
@@ -254,12 +276,12 @@ const CONDITIONS: { name: string; build: (u: Utterance) => string | Promise<stri
      item 6. */
   {
     name: "+names(10)",
-    build: (u) => pack([SITE_TERMS, PROFILE, ranked(glossaryOf(u.slug)), namesOf(u.slug, 10)], CAP),
+    build: (u) => packTerms([SITE_TERMS, PROFILE, ranked(glossaryOf(u.slug)), namesOf(u.slug, 10)], CAP),
   },
   /* The same, plus the names the glossary does not carry. */
   {
     name: "+names(40)",
-    build: (u) => pack([SITE_TERMS, PROFILE, ranked(glossaryOf(u.slug)), namesOf(u.slug, 40)], CAP),
+    build: (u) => packTerms([SITE_TERMS, PROFILE, ranked(glossaryOf(u.slug)), namesOf(u.slug, 40)], CAP),
   },
   /* **The same condition again, deliberately, and it is the most useful row in
      the table.** Every other number here is one arm of a comparison with
@@ -272,7 +294,7 @@ const CONDITIONS: { name: string; build: (u: Utterance) => string | Promise<stri
      kept on purpose. */
   {
     name: "+names(40) again",
-    build: (u) => pack([SITE_TERMS, PROFILE, ranked(glossaryOf(u.slug)), namesOf(u.slug, 40)], CAP),
+    build: (u) => packTerms([SITE_TERMS, PROFILE, ranked(glossaryOf(u.slug)), namesOf(u.slug, 40)], CAP),
   },
   /* **The fifth source: the reader's own sentence about this article.** Greg
      asked for it on 2026-08-28, after the four-source table above was already
@@ -287,7 +309,7 @@ const CONDITIONS: { name: string; build: (u: Utterance) => string | Promise<stri
   {
     name: "+purpose",
     build: (u) =>
-      pack(
+      packTerms(
         [
           SITE_TERMS,
           /* **Only the clip whose box this is.** It used to go into every clip's
@@ -312,7 +334,7 @@ const CONDITIONS: { name: string; build: (u: Utterance) => string | Promise<stri
   {
     name: "+names(40) + irrelevant",
     build: (u) =>
-      pack(
+      packTerms(
         [SITE_TERMS, PROFILE, ranked(glossaryOf(u.slug)), namesOf(u.slug, 40), IRRELEVANT],
         CAP,
       ),
@@ -327,7 +349,7 @@ const CONDITIONS: { name: string; build: (u: Utterance) => string | Promise<stri
      names per article. A condition that cannot differ from another condition is
      not a control, and it took reading the size line above the results to
      notice — which is why that line is printed. */
-  { name: "whole library", build: (u) => pack([SITE_TERMS, PROFILE, LIBRARY, ranked(glossaryOf(u.slug))], 100_000) },
+  { name: "whole library", build: (u) => packTerms([SITE_TERMS, PROFILE, LIBRARY, ranked(glossaryOf(u.slug))], 100_000) },
   /* **The wrong article's vocabulary**, at full size. A reader in one tab and a
      slug from another, a stale client, a bug — but mostly this is the cleanest
      way to ask whether a term list drags a transcript towards itself.
@@ -336,7 +358,7 @@ const CONDITIONS: { name: string; build: (u: Utterance) => string | Promise<stri
      about, and it carried the site terms, which a third clip says out loud. So
      it scored partly as a right vocabulary and the arm meant nothing. GPT Sol's
      second review, item 3. */
-  { name: "wrong article", build: () => pack([IRRELEVANT], CAP) },
+  { name: "wrong article", build: () => packTerms([IRRELEVANT], CAP) },
   /* **The app's own answer, through the app's own code path.** Every other row
      composes its sources here, in this file, which is how the harness came to
      omit production's title and byline entirely and to differ from it in ways
@@ -346,10 +368,16 @@ const CONDITIONS: { name: string; build: (u: Utterance) => string | Promise<stri
      item 3.
 
      It should track `+names(40)` closely, and where it does not, this row is
-     right and that one is a model. */
+     right and that one is a model.
+
+     `vocabularyTermsFor` rather than `vocabularyFor`: the same composition, in
+     the shape the request is in. The joined one is that function with a
+     `.join(", ")` on the end, and joining here only to hand it to a call that
+     wants a list would put a second definition of "a term" in the way. */
   {
-    name: "production (vocabularyFor)",
-    build: (u) => vocabularyFor(u.slug ? { kind: "article", slug: u.slug } : { kind: "profile" }),
+    name: "production (vocabularyTermsFor)",
+    build: (u) =>
+      vocabularyTermsFor(u.slug ? { kind: "article", slug: u.slug } : { kind: "profile" }),
   },
 ];
 
@@ -367,25 +395,25 @@ checkInventedDetectorWorks();
 /**
  * **The production request, not a copy of it.**
  *
- * This used to be a hand-rolled `fetch` with its own system prompt, no JSON
- * schema and no `require_parameters` — so every number it produced was about a
- * request the app never sends. GPT Sol's review, item 3. `transcribeWith` is
- * the same function the server calls once it has a vocabulary, so the prompt,
- * the schema, the routing flags, the truncation and refusal checks and `tidy()`
- * are shared rather than described twice.
+ * This used to be a hand-rolled `fetch` with its own system prompt and no JSON
+ * schema — so every number it produced was about a request the app never sends.
+ * GPT Sol's review, item 3. `transcribeWith` is the same function the server
+ * calls once it has a vocabulary, so the endpoint, the `keywords` block, the
+ * refusal handling and `tidy()` are shared rather than described twice. The
+ * model goes with it, for the reason on {@link MODEL}.
+ *
+ * **What it no longer returns is a cost**, and the omission is the honest
+ * reading. It used to carry OpenRouter's per-call figure so the headline total
+ * could be re-summed from the results file — GPT Sol's second review item 7,
+ * then its third review item 2, both of which were about a dollar number nobody
+ * could check. `/v1/audio/transcriptions` reports `usage.cost: 0` on every call
+ * (measured at 3 seconds and at 22 on 2026-09-07), so keeping the field would
+ * have answered those reviews with a re-summable zero. The account is the only
+ * thing that knows: `npm run cost -- --reconcile`.
  */
-let spent = 0;
-async function say(audio: string, vocabulary: string) {
-  const out = await transcribeWith(audio, "webm", vocabulary);
-  /* **The cost is kept per call, not just summed.** The $ figure the plan
-     quotes used to come from grepping a log file nobody committed, so a reader
-     of the results file could check every number in the table except that one;
-     then only the total was stored, so the total could not be re-summed. GPT
-     Sol's second review item 7, then its third review item 2.
-     `transcribeWith` returns OpenRouter's own per-call figure. */
-  const usd = out.usd ?? 0;
-  spent += usd;
-  return { text: out.text, ms: out.ms, usd };
+async function say(audio: string, vocabulary: readonly string[]) {
+  const out = await transcribeWith(audio, "webm", vocabulary, { model: MODEL });
+  return { text: out.text, ms: out.ms };
 }
 
 /* --------------------------------------------------------------------- main */
@@ -395,15 +423,22 @@ for (const u of utterances) {
   audioOf.set(u.id, fs.readFileSync(`${DIR}clips/${u.id}.webm`).toString("base64"));
 }
 
+/* **The joined line, derived rather than kept.** Two things still want
+   characters — the size report below, because `packTerms` spends its budget in
+   characters, and `invented`, which is shared with `bench-models.ts` and takes
+   the joined form. Deriving both from the list means there is one vocabulary
+   here and not two that agree until they don't. */
+const joined = (terms: readonly string[]) => terms.join(", ");
+
 console.log(`${MODEL}, ${utterances.length} clips, ${RUNS} runs each.\n`);
 console.log("Vocabulary sizes, by condition and clip (characters / terms):");
-const vocabularyOf = new Map<string, string>();
+const vocabularyOf = new Map<string, string[]>();
 for (const c of CONDITIONS) {
   const sizes: string[] = [];
   for (const u of utterances) {
     const v = await c.build(u);
     vocabularyOf.set(`${c.name}::${u.id}`, v);
-    sizes.push(v ? `${v.length}/${v.split(", ").length}` : "0");
+    sizes.push(v.length ? `${joined(v).length}/${v.length}` : "0");
   }
   console.log(`  ${c.name.padEnd(22)} ${[...new Set(sizes)].join("  ")}`);
 }
@@ -416,8 +451,10 @@ interface Row {
   recallTotal: number;
   invented: string[];
   ms: number[];
-  /** One per run, so the headline total can be re-summed from the file. */
-  usd: number[];
+  /* **No `usd`.** It was one figure per run so the headline total could be
+     re-summed from the file; this endpoint reports zero for every call, so it
+     would now be an array of zeroes that sums to a number the run did not cost.
+     See {@link say}. */
   transcripts: string[];
 }
 const results = new Map<string, Map<string, Row>>();
@@ -431,7 +468,6 @@ for (const c of CONDITIONS) {
       recallTotal: 0,
       invented: [],
       ms: [],
-      usd: [],
       transcripts: [],
     });
   }
@@ -454,7 +490,7 @@ for (let run = 0; run < RUNS; run++) {
   for (const [clipIndex, u] of utterances.entries()) {
     for (let k = 0; k < CONDITIONS.length; k++) {
       const c = CONDITIONS[(k + clipIndex + run) % CONDITIONS.length] as (typeof CONDITIONS)[number];
-      const vocabulary = vocabularyOf.get(`${c.name}::${u.id}`) ?? "";
+      const vocabulary = vocabularyOf.get(`${c.name}::${u.id}`) ?? [];
       const row = (results.get(c.name) as Map<string, Row>).get(u.id) as Row;
 
       /* **A blip upstream must not throw away the hour before it.** This used
@@ -485,13 +521,15 @@ for (let run = 0; run < RUNS; run++) {
       row.words.push(scored.words);
       row.edits.push(scored.edits);
       row.ms.push(got.ms);
-      row.usd.push(got.usd);
       row.transcripts.push(got.text);
       for (const term of u.hard) {
         row.recallTotal++;
         if (has(got.text, term)) row.recallHit++;
       }
-      if (vocabulary) row.invented.push(...invented(vocabulary, u.text, got.text));
+      /* `invented` reads the joined line — it is shared with `bench-models.ts`
+         and takes a string. */
+      if (vocabulary.length)
+        row.invented.push(...invented(joined(vocabulary), u.text, got.text));
       done++;
       if (done % 20 === 0) process.stdout.write(`${done} `);
     }
@@ -645,8 +683,14 @@ fs.writeFileSync(
       /* No `Date.now()` stamp written by hand — `git log` on this file is the
          date, and a date typed into a results file is a date that gets copied
          forward into a re-run that did not happen. */
-      /* **What it cost, so the plan's dollar figure can be checked.** */
-      usd: Math.round(spent * 10_000) / 10_000,
+      /* **`null`, rather than a number or a missing key.** This was the run's
+         total, kept so the plan's dollar figure could be checked — and the
+         transcription endpoint reports `cost: 0` on every call, so the sum
+         would now be a confident zero. Saying "this file does not know" out
+         loud is the difference between a reader of an old results file and a
+         new one being able to tell them apart. `npm run cost -- --reconcile` asks
+         the account, which is the only thing that knows. */
+      usd: null,
       /* **The plan and the outcome, each under its own name.** This was
          `calls: CONDITIONS.length * utterances.length * RUNS` — the count the
          run *intended*, under a field that claims to say what happened. A
@@ -670,7 +714,7 @@ fs.writeFileSync(
       conditions: CONDITIONS.map((c) => ({
         name: c.name,
         vocabularies: Object.fromEntries(
-          utterances.map((u) => [u.id, vocabularyOf.get(`${c.name}::${u.id}`) ?? ""]),
+          utterances.map((u) => [u.id, joined(vocabularyOf.get(`${c.name}::${u.id}`) ?? [])]),
         ),
         clips: Object.fromEntries(results.get(c.name) as Map<string, Row>),
       })),

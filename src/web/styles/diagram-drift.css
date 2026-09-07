@@ -346,10 +346,17 @@
 
 /* **The microphone's one promise, and it is invisible.**
    Where the "unreliable" sticker used to be (removed 2026-08-27, along with the
-   bug it was about). The sentence — your voice is sent to be transcribed and is
-   not stored — is carried as the button's accessible description and as its
-   `title`, and takes no room on screen: it is a fact about how the control
-   works, not a warning about whether it does. docs/plans/260827x-dictation-two-pass.md. */
+   bug it was about). The sentence is carried as the button's accessible
+   description and as its `title`, and takes no room on screen: it is a fact
+   about how the control works, not a warning about whether it does.
+   **The words themselves are `DICTATION_PROMISE` in DictationStrip.tsx and are
+   deliberately not repeated here** — this comment used to paraphrase them as
+   "your voice is sent to be transcribed and is not stored", and that half-copy
+   outlived the promise: the not-stored clause went on 2026-09-07 when dictation
+   moved to an endpoint OpenRouter does not apply `zdr` on
+   (docs/plans/260907c-dictation-onto-an-openai-transcriber.md), and a stylesheet
+   is nobody's idea of where a privacy claim is checked.
+   docs/plans/260827x-dictation-two-pass.md. */
 /* **Nothing at all, on purpose.** It carries the sentence for screen readers
    and takes no space, because it now sits inside every microphone button
    wherever one appears — including the chat composer, which is a flex row where
