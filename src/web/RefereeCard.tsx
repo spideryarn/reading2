@@ -168,8 +168,18 @@ export function RefereeHowButton({
 }: {
   open: boolean;
   onToggle(): void;
-  /** From `useHowCard`. Optional so the button still works anywhere it is used alone. */
-  buttonRef?: RefObject<HTMLButtonElement | null> | undefined;
+  /**
+   * From `useHowCard`, and **required**.
+   *
+   * It was optional, which made the whole restore deletable in silence: taking
+   * `buttonRef={how.buttonRef}` off the one call site left every focus test
+   * green, because the test's own probe supplied it independently. GPT Sol
+   * called that the cleanest uncaught mutation in the stage, and it was. There
+   * are two call sites and both already pass it, so requiring it costs nothing
+   * and the compiler now refuses the mutation outright — which is a better
+   * guard than a test, because it cannot be forgotten.
+   */
+  buttonRef: RefObject<HTMLButtonElement | null>;
 }) {
   return (
     <button
