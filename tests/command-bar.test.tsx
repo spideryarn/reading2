@@ -295,6 +295,59 @@ describe("the keyboard contract", () => {
 });
 
 /**
+ * **The backdrop, which is the one way out of the bar that nothing tested.**
+ *
+ * Five native `<dialog>`s in this app close on a press outside them, all five
+ * by the same three lines — an `onClick` on the dialog and
+ * `if (e.target === ref.current) onClose()`. Until 2026-09-07 not one test
+ * anywhere dispatched a click whose target was the dialog;
+ * tests/feedback-dialog.test.tsx § *the backdrop* is the first of the five and
+ * carries the measurement of how much of it was really unprotected.
+ *
+ * **Why the target comparison is the whole mechanism.** A modal `<dialog>`'s
+ * `::backdrop` is not a separate element: a press on the dimmed area arrives
+ * with the dialog itself as the target, while a press on anything the dialog
+ * contains arrives with that child and bubbles up through the same handler. One
+ * equality test therefore separates "outside" from "inside", and losing it
+ * turns every press in the panel into a dismissal — here that means the reader
+ * clicking into the box to place a cursor loses the query they were typing.
+ *
+ * jsdom has no `showModal` and no `::backdrop`, and neither is needed: the
+ * handler compares targets and nothing else. That a real backdrop press does
+ * target the dialog is the platform's contract, which is why these assert on
+ * the target rather than on a pixel.
+ *
+ * Mounted through the real `Dock`, like everything else in this file, so `open`
+ * is a parent's state and `onClose` genuinely shuts it — with the prop nailed
+ * open, a deleted `onClose()` would pass.
+ */
+describe("the backdrop", () => {
+  it("closes on a press whose target is the dialog itself", () => {
+    reading();
+    openBar();
+    expect(dialog().open, "the bar never opened, so nothing below means anything").toBe(true);
+    act(() => {
+      dialog().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(dialog().open).toBe(false);
+  });
+
+  it("stays open when the press lands on something inside it", () => {
+    reading();
+    openBar();
+    type("toc");
+    act(() => {
+      input().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(dialog().open).toBe(true);
+    /* The query is what is being protected: a press in the box that dismissed
+       the bar would throw away what the reader had typed, since a reopened bar
+       is empty by design. */
+    expect(input().value).toBe("toc");
+  });
+});
+
+/**
  * **Which modes would start work if you opened them** — written out by hand, as
  * a total record, and NOT derived from `modeGenerates`.
  *

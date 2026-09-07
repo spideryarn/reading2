@@ -108,8 +108,18 @@ function Probe() {
   return createElement(
     "div",
     null,
-    createElement(RefereeHowButton, { open: how.open, onToggle: () => how.show(!how.open) }),
+    createElement(RefereeHowButton, {
+      open: how.open,
+      onToggle: () => how.show(!how.open),
+      /* Production wires this — RefereeMode.tsx passes `how.buttonRef` — so a
+         probe that omitted it would be testing a configuration nobody ships,
+         which is the mistake postmortem 260907b is about. */
+      buttonRef: how.buttonRef,
+    }),
     how.open ? createElement(RefereeHowCard, { onClose: () => how.show(false) }) : null,
+    /* Somewhere real for focus to be, for the half of the contract that says
+       "leave it alone". */
+    createElement("button", { type: "button", className: "elsewhere" }, "elsewhere"),
   );
 }
 
@@ -294,5 +304,55 @@ describe("where the band puts it", () => {
     );
     const head = app.slice(bandAt, briefAt);
     expect(head.includes("<RefereeHowButton"), "there is no way back to the card").toBe(true);
+  });
+});
+
+/**
+ * ## Closing it gives the keyboard back
+ *
+ * The ✕ that dismisses the card is **inside** the card, so pressing it unmounts
+ * the element the reader is standing on and focus falls to `<body>` — the next
+ * Tab then starts again from the top of the document. Invisible with a mouse.
+ *
+ * It matters more here than the shape suggests: this card is **open by default**
+ * until it has been dismissed once (`useHowCard`'s lazy initialiser), so closing
+ * it is close to the first thing a keyboard referee ever does in this mode.
+ *
+ * Found by GPT Sol in a focus inventory that had **excluded this card for being
+ * in flow** — being in flow removes the requirement to trap Tab, not the
+ * requirement to give focus back. It is surface 17 of
+ * docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-focus-inventory.md.
+ */
+describe("closing the card gives the keyboard back", () => {
+  it("puts focus on the header button when the ✕ inside the card unmounts itself", () => {
+    mount();
+    const close = host.querySelector<HTMLButtonElement>(".ref-how-close");
+    if (!close) throw new Error("no close button");
+    close.focus();
+    expect(document.activeElement).toBe(close);
+
+    press(".ref-how-close");
+
+    expect(card()).toBeNull();
+    expect(document.activeElement).toBe(host.querySelector(".ref-how-btn"));
+  });
+
+  /**
+   * The other half, and the reason this is an `activeElement` test rather than
+   * an unconditional `focus()`: a reader who has already gone somewhere real —
+   * pressed the header button, clicked a link in the paper — must be left where
+   * they are. `EditableTitle` makes the same distinction for the same reason,
+   * TitleEditor.tsx § the pencil and the input swap.
+   */
+  it("leaves focus alone when it had already gone somewhere real", () => {
+    mount();
+    const elsewhere = host.querySelector<HTMLButtonElement>(".elsewhere");
+    if (!elsewhere) throw new Error("no elsewhere button");
+    elsewhere.focus();
+
+    press(".ref-how-btn"); // the header toggle, not the card's own ✕
+
+    expect(card()).toBeNull();
+    expect(document.activeElement).toBe(elsewhere);
   });
 });
