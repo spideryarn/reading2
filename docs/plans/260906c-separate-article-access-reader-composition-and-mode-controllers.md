@@ -537,7 +537,7 @@ claim is real, all four memos key on it; and the article-access and position fil
 
 ## Merging `dev` — the proposal, before the edit
 
-**Status: proposed, not applied.** Nothing in the working tree has been merged.
+**Status: applied and pushed** — `2c40638d` on `dev`, 2026-09-07. See § What the merge cost, below. Nothing in the working tree has been merged.
 `docs/reusable/git-resolve-merge-conflicts.md` says *"Make a proposal. Don't make changes yet"*, and
 this one is big enough to deserve that: 198 commits landed on `dev` while this branch sat, against 8
 here. Merge base `0977d6f6`. Greg asked for the pull on 2026-09-06 — *"pull the latest changes to
@@ -644,6 +644,43 @@ mentions are this branch's own *"which left `App.tsx` for …"* comments.
 5. The seam Sol flags as most likely to lose half a feature silently: a dev feature whose JSX
    survived but landed under the wrong gate — a Feedback trigger outside its host, an owner-only
    band that lost its `owner &&`. Compilation cannot see either.
+
+### What the merge cost, and the two guards it found
+
+Applied as proposed, with Sol's four corrections folded in. `dev` moved three
+times during the work — 198 commits, then 14, then 4 — and only the first
+conflicted.
+
+| | |
+|---|---|
+| Conflicts | 11, of which 10 were the stylesheet-half/source-half union |
+| `App.tsx` port | 12 changed declarations, 11 merged by machine, 1 hand-ported (`OutlinePanel`, two changes) |
+| Typecheck | clean, 1,508 files |
+| Suite | 796 files passed, 1 skipped, 14,7xx tests, `EXIT=0` |
+| JSX features, dev's `App.tsx` vs the sixteen files | 568 = 568, zero differences — and proved able to fail |
+
+**Two guards misfired in ways worth writing down.**
+
+- **`npm run check:staged-revert` cannot read a merge.** It compares the index
+  against `HEAD`, finds 677 files it cannot locate there, cannot explain them
+  within its 40-commit search, and advises `git reset -- <paths>` — which during
+  a merge unstages the merge. It is right for the case it was built for (a stale
+  index quietly reverting a peer) and has no notion of a second parent. Checked
+  by hand instead: staged `App.tsx` 463 lines, every file this branch added
+  present in the index, nothing of ours deleted.
+- **`scripts/conflict-markers.ts`** — which landed on `dev` mid-merge — reported
+  [the review prompt](260906c-merge-resolution-prompt.md), which quotes ten
+  conflict hunks verbatim because `git-resolve-merge-conflicts.md` says to hand
+  over the hunks rather than a description. That is a documented false positive
+  with a documented escape, and the escape was taken (indent the quotation).
+  Both behaved correctly; both cost time that a line in this table may save.
+
+**The follow-up this merge deliberately did not do.** `tests/sanitize-client.test.ts`'s
+`article: Article` exemption does not distinguish a parameter annotation from an
+object property — `{ article: Article, other: 1 }` is exempted, and only the
+type-only import of `Article` keeps that harmless today. The comment now says so
+plainly. The AST check that would fix it is a piece of work with its own review,
+not a rider on a merge.
 
 ## What this deliberately does not do
 
