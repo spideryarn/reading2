@@ -494,6 +494,10 @@ one somebody explains away every time — until the day it means something.
 
 Run `output/summaries-runs/2026-09-07T16-05-49`, promoted to
 [`evals/results/summaries/2026-09-07T16-05-49-socratic-questions-after-the-gate-repair.md`](../../evals/results/summaries/2026-09-07T16-05-49-socratic-questions-after-the-gate-repair.md).
+The raw judgements under `output/summaries-runs/` are gitignored, so when the worktree was removed
+they were moved to the primary checkout's `output/summaries-runs-from-worktree-260907-fb1v/` rather
+than deleted. The corpus was not: `npm run db:export -- --out output/summaries-corpus` rebuilds it
+from the local database for nothing.
 Five arms, one document, three judging repeats of which **two returned** — the third was cut off
 part-way through at 9,225 characters, which the harness recorded as a failure rather than reading a
 truncated answer.
