@@ -250,6 +250,14 @@ export function CommandBar({ modes, activateMode, open, onClose }: Props) {
              name. */
           aria-label="Type a command"
           placeholder="Type a mode…"
+          /* **The soft keyboard's Enter key says Go**, because that is what it
+             does: it takes you to the selected mode. Not `search` — the search
+             is the typing, and Enter does not run one — and not `send`, which
+             in this app means posting something into a conversation.
+             docs/project/touch.md § What the Enter key promises, and
+             tests/what-the-enter-key-promises.test.tsx, which is a sweep of the
+             source and so finds a box that never asked the question. */
+          enterKeyHint="go"
           value={draft}
           role="combobox"
           aria-expanded={results.length > 0}

@@ -64,6 +64,9 @@ const PROMISES: Record<string, string> = {
   "TitleEditor.tsx › Title": "done",
   /* Enter posts a question into chat. */
   "CommentDialog.tsx › Ask a follow-up question about this passage": "send",
+  /* Enter opens the selected mode — it goes somewhere. Not `search`: the search
+     is the typing, and the list narrows as you type rather than on Enter. */
+  "CommandBar.tsx › Type a command": "go",
   /* Fields of the criterion form, whose submit button runs it. Not steps in a
      wizard, so `next` would be a lie about where the key goes. */
   "CriteriaPanel.tsx › crit-against": "go",

@@ -1295,7 +1295,7 @@ export function Dock({
    * component states the condition it is under, which is where it is readable
    * anyway.
    */
-  const commandBar = useCommandBarChord(onMode !== undefined, onPanel);
+  const commandBar = useCommandBarChord(onMode !== undefined && !isVisitor, onPanel);
 
   /**
    * ## The drawer takes focus, and gives it back
@@ -1431,6 +1431,7 @@ export function Dock({
       <DockCommandBar
         mode={mode}
         onMode={onMode}
+        isVisitor={isVisitor}
         /* The list the Dock drew, not a second computation of it: requirement
            4 — *the bar lists exactly what the Dock lists* — is true by
            construction this way, and would be a promise between two copies of
@@ -1500,7 +1501,7 @@ export function Dock({
             Greg asked for the button as well as the chord (260906h, answer 2)
             for one reason: **⌘-K does not exist on a phone**, and the bar is
             the only surface a phone has. */}
-        <DockCommands mode={mode} onMode={onMode} onOpen={commandBar.show} />
+        <DockCommands mode={mode} onMode={onMode} isVisitor={isVisitor} onOpen={commandBar.show} />
 
         {/* Two shapes of the same button. On the reading view it opens the
             drawer in place. Everywhere else it goes back to the reading view
@@ -2101,6 +2102,7 @@ function DockFeedback({ signedIn }: { signedIn: boolean }) {
 function DockCommands({
   mode,
   onMode,
+  isVisitor,
   onOpen,
 }: {
   /**
@@ -2112,9 +2114,21 @@ function DockCommands({
    */
   mode: Mode | undefined;
   onMode: Props["onMode"];
+  /**
+   * **A visitor gets no command bar**, and this is a capability gate rather
+   * than a tidiness one. A visitor reading somebody else's shared document may
+   * press the mode buttons they are given, and what stops those buying anything
+   * is `POLICY` in visitor.ts plus the band's own guards — a seam that has been
+   * reasoned about one control at a time. A second, faster door into the same
+   * activations is not something to add to that seam on the way past, and v1
+   * was never asked to: the bar is for the reader who owns the piece.
+   * tests/public-network-trace.test.tsx holds both halves — no text box at all
+   * for a visitor, and nothing a visitor can press that spends.
+   */
+  isVisitor: boolean;
   onOpen(): void;
 }) {
-  if (mode === undefined || onMode === undefined) return null;
+  if (mode === undefined || onMode === undefined || isVisitor) return null;
   return (
     <button
       type="button"
@@ -2152,17 +2166,20 @@ function DockCommands({
 function DockCommandBar({
   mode,
   onMode,
+  isVisitor,
   modes,
   activateMode,
   bar,
 }: {
   mode: Mode | undefined;
   onMode: Props["onMode"];
+  /** Owners only — `DockCommands` above carries the reasoning. */
+  isVisitor: boolean;
   modes: readonly ModeUi[];
   activateMode(next: Mode): void;
   bar: { open: boolean; show(): void; hide(): void };
 }) {
-  if (mode === undefined || onMode === undefined) return null;
+  if (mode === undefined || onMode === undefined || isVisitor) return null;
   return (
     <CommandBar
       modes={modes.map((m) => m.mode)}

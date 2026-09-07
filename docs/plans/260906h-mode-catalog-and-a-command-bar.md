@@ -380,6 +380,37 @@ reverting the fix and watching it stay green. It holds the invariant underneath 
 empty — and its docblock says plainly that it does not hold the timing.
 [silent-success.md](../reusable/silent-success.md).
 
+### Two things only the full suite found, and one of them changed the feature
+
+Both stages passed their own suites and both reviews. The full run then failed three files, and two
+of the failures were mine — each one a **total table this repo keeps precisely so that a new control
+cannot slip past it.** They are the best argument in this plan for the way this codebase is built.
+
+- **`tests/what-the-enter-key-promises.test.tsx`** sweeps the *source* for every text box in the
+  client and requires each to have declared what its Enter key promises. The command bar's input is
+  the twenty-first box and had declared nothing. It now carries `enterKeyHint="go"` — Enter takes
+  you to the selected mode. Not `search`, because the search is the typing and the list narrows as
+  you type rather than on Enter; not `send`, which in this app means posting into a conversation.
+  A sweep of the source rather than of mounted components is exactly why this caught a box that
+  nobody thought to mount.
+- **`tests/public-network-trace.test.tsx`** traces a signed-out visitor on a shared document and
+  asserts, among much else, that they are offered **no text input at all** and that pressing
+  everything they are given buys nothing. The command bar was being drawn for them.
+
+**So the command bar is owners-only, and that is a decision rather than a fix to make a test go
+green.** A visitor may press the mode buttons they are given; what stops those buying anything is
+`POLICY` in `visitor.ts` plus each band's own guards, a seam that has been reasoned about one
+control at a time. A second, faster door into those same activations is not something to add to that
+seam on the way past — and v1 was never asked to: this is a feature for the reader who owns the
+piece. The gate is `isVisitor`, on the button, the bar and the chord alike, with its own tests in
+`tests/command-bar.test.tsx` because the public trace would still pass if the bar were merely hidden
+rather than absent.
+
+*(Also worth recording, because it nearly shipped: `npm run typecheck | tail -2` reads as clean even
+when projects are red — the last two lines are always `✓`. A broken `Dock.tsx` was called "typecheck
+clean" on that basis and was caught only when 115 tests went red. Read that gate with `grep -E "✗"`,
+never `tail`.)*
+
 ### The browser pass, and the one gap it found
 
 Driven in a real Chrome on desktop and at 390×844, signed in as an owner. It works end to end: both

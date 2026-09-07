@@ -332,6 +332,41 @@ const GENERATES: Record<Mode, boolean> = {
 };
 
 /**
+ * **A visitor gets no command bar at all**, and this is a capability gate
+ * rather than a tidiness one.
+ *
+ * A visitor reading somebody else's shared document may press the mode buttons
+ * they are given, and what stops those buying anything is `POLICY` in
+ * visitor.ts plus each band's own guards — a seam reasoned about one control at
+ * a time. A second, faster door into the same activations is not a thing to add
+ * to that seam on the way past.
+ *
+ * It is asserted here as well as in tests/public-network-trace.test.tsx because
+ * that file is a trace of one signed-out session and this is the rule; the
+ * first would still pass if the bar were merely hidden rather than absent.
+ */
+describe("a visitor", () => {
+  it("is given no command-bar button and no bar", () => {
+    reading({ visitor: true });
+    expect(host.querySelector(".dock-commands")).toBeNull();
+    expect(host.querySelector("dialog.cmdbar")).toBeNull();
+  });
+
+  it("cannot open one with the chord either", () => {
+    reading({ visitor: true });
+    expect(chord()).toBe(false);
+    expect(host.querySelector("dialog.cmdbar")).toBeNull();
+  });
+
+  /** And the owner on the same page still gets both, so the gate is the visitor flag and not a mistake. */
+  it("is the only reader who does not — an owner still gets it", () => {
+    reading();
+    expect(host.querySelector(".dock-commands")).not.toBeNull();
+    expect(host.querySelector("dialog.cmdbar")).not.toBeNull();
+  });
+});
+
+/**
  * **The two ways in must obey the same policy**, which is GPT Sol's F1 and F2
  * on stage 2. Both were fixed by moving something into the one place both doors
  * pass through — the opening policy into `show`, the draft reset into the
