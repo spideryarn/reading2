@@ -473,6 +473,11 @@ describe("a streaming route's request lifetime", { timeout: 60_000 }, () => {
        headers have gone out and a model failure has to be a stored `error`
        rather than an HTTP one. The failure is asynchronous rather than a
        synchronous throw, which is the shape a moved closure would drop. */
+    /* Counted before, not assumed. An earlier draft asserted a fixed row count
+       here and passed only because the preceding case had left one behind — so
+       this case failed when run on its own, which is exactly how a case stops
+       being run at all. Sol, stage 4a review § P3-CASE-ISOLATION. */
+    const before = (await asTestOwner(() => refereeCriteriaStore.load(SLUG))).length;
     const spy = vi.spyOn(refereeCriteriaStore, "begin").mockImplementation(async () => {
       await new Promise<void>((resolve) => setImmediate(resolve));
       throw new Error("the store refused this criterion [lifetime-test]");
@@ -487,9 +492,13 @@ describe("a streaming route's request lifetime", { timeout: 60_000 }, () => {
     } finally {
       spy.mockRestore();
     }
-    /* Nothing was written, so the next case — and the sweep — see an empty
-       paper. Asserted rather than assumed: a `begin` that got half way would
-       leave a row this file would then attribute to something else. */
-    expect(await asTestOwner(() => refereeCriteriaStore.load(SLUG))).toHaveLength(1);
+    /* Nothing was written, so the next case — and the sweep — see the paper
+       exactly as this one found it. Asserted rather than assumed: a `begin`
+       that got half way would leave a row this file would then attribute to
+       something else. Relative, so the case stands on its own. */
+    expect(
+      await asTestOwner(() => refereeCriteriaStore.load(SLUG)),
+      "a rejected begin wrote nothing",
+    ).toHaveLength(before);
   });
 });

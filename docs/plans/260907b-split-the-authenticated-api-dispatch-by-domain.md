@@ -580,6 +580,43 @@ with an error nobody inspects — so without the check the second silently wins.
 a reader resolving a name to something the source does not unambiguously say, which is the P1's class
 exactly. Kept.
 
+**Stage 4a — the lifetime oracle, written before anything moves. ✅ Landed, reviewed clean.**
+`tests/streaming-route-request-lifetime.test.ts` drives `POST /api/referee/criteria/:slug` through
+`handleApi` with the model call paused, **while that guard is still an `if` in the chain**, and asks
+whether the response, the `refereeing` lock and the caller's promise are each still where the guard
+left them. No guard moved; `src/routes.ts` byte-identical; contract hash untouched.
+
+**The silent success the brief walked past.** `sweepPending` spares any row younger than
+`CRITERION_ORPHAN_GRACE_MS` (150 s), so the obvious version of this test — issue the GET, check the
+row is still `pending` — **passes with the lock deleted outright.** The row survives for being young
+and the assertion never touches the lock: a check agreeing with the code because it shares an
+assumption with it ([silent-success.md](../reusable/silent-success.md)). The test therefore backdates
+`attempt_started_at` past the grace window while the stream is paused, leaving the lock as the only
+thing between that row and the sweep, then restores and backdates identically *after* the request
+resolves, where the same GET buries it with `CRITERION_SWEPT`. One arrangement, two opposite answers,
+the only difference being whether the request is in flight — which is also how lock *removal* gets
+observed. Sol confirmed the equivalence: after backdating, every sweep predicate except
+`notInArray(id, keep)` is satisfied, so survival means the id is in `liveCriteria(slug)`, which is
+derived directly from `refereeing`.
+
+Three mutations, each red for the reason under test. The load-bearing one — `refereeing` released
+immediately after being taken — **was reproduced by the orchestrator rather than taken on the
+implementer's word**: `expected 'error' to be 'pending'`, reverted by editing the text back, green
+again. That is precisely the failure `assertHandlersAwaited` cannot see, because the syntax it reads
+never changed.
+
+**Sol's review: sound and pushable, no P0/P1/P2.** One P3 fixed in the same stage
+(**P3-CASE-ISOLATION**): the rejection case asserted a fixed row count and passed only on residue
+from the preceding case, so it failed when run alone — which is how a case stops being run at all. It
+counts before and after now, and was verified passing in isolation.
+
+**The nuance stage 4b must not miss.** Sol: at stage 4a the rejection case "does not yet exercise
+`dispatchAuthRoute`" — criteria still matches the chain guard, so it currently proves propagation
+through the guard's `await`, `serveAuthenticatedApi` and `serveApi`'s catch. Once criteria moves, the
+**unchanged** case exercises the dispatcher's awaited handler calls instead. **That post-move green is
+when the dispatcher half is discharged** — so 4b must run this file and require it green, and if 4b
+ever finds itself *editing* it, that is a finding rather than a chore.
+
 ## Where stage 3 stands, and what the next slice costs
 
 **13 of 81 guards migrated** (billing 4, jobs/uploads 9). 68 remain in the chain, plus the admin gate
@@ -676,6 +713,17 @@ an order fixture captured *before* the move. That scales to every remaining slic
 **So the honest price of finishing is one dispatcher test, one lifetime test, and ~10 mechanical
 slices verified the 3b way** — not a project. By this repo's own definition it is also the *simpler*
 end state: one mechanism, one order fixture, and no policy to document.
+
+**Sol was asked to overrule this and did not.** Because the argument reinterprets Sol's own finding,
+the stage 4a review put the question to it directly. Its answer: *"I agree with Fable: this is once,
+not per domain. No separate lifetime oracle is required for chat, searches, claims, or Mirror. Their
+locks/streams live inside their helpers; a verbatim caller move cannot alter those lifetimes."* It
+named the three things that cover the remaining move-specific risk — the body/order diff, the static
+awaited-handler check, and this unchanged rejection case passing through `dispatchAuthRoute` once
+criteria has moved — and set the condition under which a domain would need its own test after all:
+**only if its helper or caller responsibilities change**, not for a mechanical table migration. So
+both the cross-family reviewer and the arbitrating model agree, and the inflated estimate was the
+orchestrator's alone.
 
 **One caution of Fable's did not survive checking.** It warned that three worktrees carry unmerged
 `routes.ts` edits, making every slice a conflict. Listing non-merge commits on all branches that are
