@@ -285,12 +285,20 @@ the real arms.
 
 ---
 
-## One thing left for whoever ships the winner
+## One thing left for whoever ships the winner — **done, 2026-09-07**
 
-Nothing here touches `EXPAND_SYSTEM` in `src/hierarchy-expand.ts`, which has **no question field at
-all** (plan § P1-5). Whichever variant wins needs the same block there, or the deepening cascade
-produces depth-1 rows with no question — which is invisible while the question is a faint second
-line and obvious the moment it becomes the only one.
+Nothing here touches `EXPAND_SYSTEM` in `src/hierarchy-expand.ts`, which had **no question field at
+all** (plan § P1-5). Whichever variant won needed the same block there, or the deepening cascade
+would produce depth-1 rows with no question — invisible while the question was a faint second line,
+and obvious the moment it became the only one.
+
+V4 won, and that block is now in `EXPAND_SYSTEM` as `expand/4`, carrying V4's content rules in the
+expansion prompt's voice. Which sections it applies to is marked **per target** in the request
+(`ASK QUESTION ON CHILDREN` / `OMIT QUESTION`), because one call batches parents at different depths.
+[260907d](../../docs/plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md) § Stage 2.
+
+**This harness still does not measure that path**, and no result from it may be read as covering the
+cascade. That sentence is unchanged and is the reason this section stays rather than being deleted.
 
 ---
 

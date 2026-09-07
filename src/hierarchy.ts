@@ -252,22 +252,54 @@ export interface ModelNode {
 export const MAX_QUESTION_DEPTH = 1;
 
 /** Lower-cased, terminal punctuation and repeated spaces gone — for comparing
-    two sentences on their words alone.
+    two sentences on their words alone. Unchanged since it was written, and it
+    must stay that way: it is applied to the **gist**, which is an ordinary
+    sentence and may legitimately end in a parenthetical.
 
-    **The bracketed hint comes off BEFORE the terminal punctuation**, and the
-    order is the whole of it. Since `toc/7` a finished line ends
-    `…consciousness? (4 arguments)`, so a gist re-asked in V4's shape is
-    `<gist>? (4 arguments)` — and stripping `[.!?]+$` first finds no terminal
-    mark at all behind the bracket, leaves the bracket on, and lets the one
-    check in this file that means what it says wave the echo through. That is
-    anchor 5 of `evals/summaries/variants.md`, in the shipped shape. */
+    An earlier version of the `toc/7` patch stripped a trailing bracket in here
+    instead of in `bareQuestionWords` below, which changed the answer for inputs
+    that have nothing to do with V4. GPT Sol disproved the "every other shape
+    unchanged" claim with two of them: a question *"The treatment works
+    (tentatively)"* beside a gist *"The treatment works."* started being dropped
+    as an echo, and a gist genuinely ending *"(in principle)"* stopped matching
+    its own echo. One helper doing two jobs. ⟨F11, 2026-09-07.⟩ */
 function bareWords(s: string): string {
   return s
     .toLowerCase()
-    .replace(/\s*\([^()]*\)\s*$/, "")
     .replace(/[.!?]+$/, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * **A question reduced to the sentence inside it**, so that a gist re-asked in
+ * V4's shape can be recognised as one.
+ *
+ * `toc/7` asks for `<topic> — <question>? (<shape hint>)`, and both wrappers
+ * defeat a plain word comparison: the topic is a prefix the gist does not have,
+ * and the hint is a suffix it does not have either. So the gist-echo check —
+ * the one rule in this file that means exactly what it says — silently stopped
+ * catching the failure its own prompt names, *"never the gist with a question
+ * mark on it"*, in precisely the shape production now ships. Since the panel
+ * draws `question ?? gist`, the reader gets the wall instead of the door and
+ * nothing anywhere says so. ⟨GPT Sol, F10, 2026-09-07 — established with
+ * `"Computational functionalism — Four independent arguments undermine
+ * computation? (4 arguments)"` against that gist.⟩
+ *
+ * **The hint comes off first, then the topic**, and both are anchored: the hint
+ * only where it directly follows the `?` that ends the line, the topic only up
+ * to the **first** em dash. A topic that itself contains an em dash therefore
+ * loses only part of itself and stops matching — the question is *kept*, which
+ * is the safe direction: this check exists to drop a duplicate, and a missed
+ * drop shows a redundant line while a wrong drop loses a good one silently.
+ */
+function bareQuestionWords(s: string): string {
+  return bareWords(
+    s
+      .trim()
+      .replace(/\?[ \t]*\([^()\r\n]+\)$/, "?")
+      .replace(/^[^—\r\n]+—[ \t]*/, ""),
+  );
 }
 
 export function questionFor(mn: ModelNode, depth: number): string | undefined {
@@ -280,7 +312,7 @@ export function questionFor(mn: ModelNode, depth: number): string | undefined {
   if (q === "") return undefined;
   /* The gist, asked again. Two lines saying one thing is the duplication this
      whole feature exists to avoid, so it is dropped rather than drawn. */
-  if (mn.gist !== undefined && bareWords(q) === bareWords(mn.gist)) return undefined;
+  if (mn.gist !== undefined && bareQuestionWords(q) === bareWords(mn.gist)) return undefined;
   /* **A `?` followed by nothing but one short bracketed hint is a finished
      line**, and since `toc/7` that is the shape the prompt asks for:
      *"Computational functionalism — why isn't computation sufficient for
@@ -289,11 +321,22 @@ export function questionFor(mn: ModelNode, depth: number): string | undefined {
      below, and stores *"…(4 arguments)?"* — GPT Sol's P1-4, found before a
      penny was spent and held by `tests/summaries-eval.test.ts`.
 
-     The bound is deliberate. `[^()]{1,40}` is one un-nested bracket of at most
-     forty characters, which is a shape hint and not a second sentence, so a
-     model that ends on a parenthetical paragraph still gets its mark appended
-     visibly rather than silently accepted. */
-  if (/\?(\s*\([^()]{1,40}\))?$/.test(q)) return q;
+     **There is no length bound on the hint, and there was one for a day.**
+     `[^()]{1,40}` was a number I made up to separate "a shape hint" from "a
+     parenthetical sentence", and it rejected lines the prompt itself permits:
+     *"Evidence — how should we compare these accounts? (a comparison across
+     historical and modern cases)"* is fifteen words, names a shape rather than
+     an answer, satisfies every stated rule, and came out with a second `?` on
+     it. ⟨GPT Sol, F9, 2026-09-07 — and the test that claimed to hold the bound
+     did not: its input had no `?` before the bracket, so both the bounded and
+     the unbounded regex rejected it and the test passed either way.⟩
+
+     What the shape still requires is a `?` **immediately** before the bracket
+     and nothing but one un-nested single-line bracket after it. A trailing
+     parenthetical on a line with no `?` — *"It closes by reflecting (on a great
+     many things)"* — still falls through and gets its mark appended visibly,
+     which is the case the bound was reaching for and this handles properly. */
+  if (/\?(?:[ \t]*\([^()\r\n]+\))?$/.test(q)) return q;
   /* **Only `!` is stripped, never `.`** — a trailing full stop is as likely to
      belong to an abbreviation as to a sentence, and stripping it turned GPT
      Sol's example *"How did this affect the U.S."* into *"the U.S?"*. So the

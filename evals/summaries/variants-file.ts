@@ -14,8 +14,12 @@
  * what goes on the wire, verbatim.
  *
  * **The parse is loud on every failure and silent on none.** A section that
- * moved, a fence that lost its language tag, an anchor row that stopped being a
- * table row: each throws, naming the heading it was looking under. That matters
+ * moved, a section that appeared twice, a fence that disappeared, an anchor row
+ * that stopped being a table row: each throws, naming the heading it was looking
+ * under. (It used to say *"a fence that lost its language tag"*, which was never
+ * true — every prompt fence in `variants.md` is untagged and always has been, so
+ * the one example given was the one thing that could not happen. GPT Sol, F15,
+ * 2026-09-07.) That matters
  * more here than in most parsers, because the failure mode of a lenient one is
  * an arm that sends an EMPTY questions block, produces plausible output anyway
  * (the model still has the gist rules and the shape of the JSON) and scores as
@@ -131,6 +135,29 @@ export interface VariantsFile {
   anchors: AnchorRow[];
 }
 
+/**
+ * **Two headings of one name is a fault, not a preference**, and it has to throw
+ * where the discovery loop finds the second one.
+ *
+ * `fencedUnder` always takes the **first** heading that matches, and each
+ * discovery loop below writes into a `Map`, so a duplicated section parsed
+ * silently: the map reported one entry, the block used was the first copy, and
+ * the copy a person had just edited was the one ignored. GPT Sol demonstrated it
+ * on 2026-09-07 by adding a second `## The shipped QUESTIONS block, toc/6`,
+ * poisoning the **first** with a rule the prompt forbids, and watching
+ * `readVariants` return happily with every current test still green. ⟨F14.⟩
+ *
+ * That is this file's own stated failure mode — *"an arm that sends an EMPTY
+ * questions block, produces plausible output anyway and scores as a variant"* —
+ * in the one form the loud-on-every-failure parse did not cover.
+ */
+function refuseDuplicate(seen: Map<string, string>, key: string, label: string): void {
+  if (!seen.has(key)) return;
+  throw new Error(
+    `variants.md: two "## " headings for ${label}. The first copy is the one that would be parsed and the second silently ignored, so the block you just edited may not be the block that goes on the wire. Delete one.`,
+  );
+}
+
 let cached: VariantsFile | null = null;
 
 /**
@@ -153,6 +180,7 @@ export function readVariants(path: URL = VARIANTS_PATH): VariantsFile {
     const m = /^## (V\d+)\b/.exec(line);
     if (m) {
       const name = m[1]!;
+      refuseDuplicate(questions, name, `variant ${name}`);
       questions.set(name, fencedUnder(markdown, new RegExp(`^${name}\\b`), name));
     }
   }
@@ -164,6 +192,7 @@ export function readVariants(path: URL = VARIANTS_PATH): VariantsFile {
     const m = /^## The shipped GISTS block, (toc\/\d+)\s*$/.exec(line);
     if (m) {
       const version = m[1]!;
+      refuseDuplicate(shippedGists, version, `the shipped ${version} GISTS block`);
       shippedGists.set(
         version,
         fencedUnder(markdown, new RegExp(`^The shipped GISTS block, ${version.replace("/", "\\/")}\\s*$`), `the shipped ${version} GISTS block`),
@@ -176,6 +205,7 @@ export function readVariants(path: URL = VARIANTS_PATH): VariantsFile {
     const m = /^## The shipped QUESTIONS block, (toc\/\d+)\s*$/.exec(line);
     if (m) {
       const version = m[1]!;
+      refuseDuplicate(shippedQuestions, version, `the shipped ${version} QUESTIONS block`);
       shippedQuestions.set(
         version,
         fencedUnder(markdown, new RegExp(`^The shipped QUESTIONS block, ${version.replace("/", "\\/")}\\s*$`), `the shipped ${version} QUESTIONS block`),

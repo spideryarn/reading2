@@ -94,6 +94,33 @@ describe("variants.md is the source of the prompt text", () => {
     expect(v.questions.get("V2")).toContain("ARGUES");
   });
 
+  /**
+   * **A duplicated heading is the one lenient parse that survived.**
+   *
+   * `fencedUnder` takes the **first** matching heading and each discovery loop
+   * writes into a `Map`, so two `## The shipped QUESTIONS block, toc/6` sections
+   * parsed silently as one: the map reported a single entry, the block on the
+   * wire was the first copy, and the copy somebody had just edited was ignored.
+   * GPT Sol found it on 2026-09-07 (F14) by poisoning the first copy and
+   * watching every test stay green.
+   *
+   * Written against a temp file rather than the real `variants.md`, and under
+   * `os.tmpdir()` rather than `node_modules/` for the reason the test below
+   * gives: the review sandbox mounts the tree read-only.
+   */
+  it("refuses two headings of one name, rather than silently using the first", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "summaries-variants-dupe-"));
+    const file = path.join(dir, "variants.md");
+    const real = fs.readFileSync(new URL("../evals/summaries/variants.md", import.meta.url), "utf-8");
+    const start = real.indexOf("## The shipped QUESTIONS block, toc/6");
+    expect(start).toBeGreaterThan(0);
+    /* The whole section, appended a second time — exactly the shape a careless
+       merge or a copy-paste produces. */
+    fs.writeFileSync(file, `${real}\n\n${real.slice(start)}\n`);
+    expect(() => readVariants(new URL(`file://${file}`))).toThrow(/two "## " headings for the shipped toc\/6 QUESTIONS block/);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   it("refuses a file whose section moved, rather than returning nothing", () => {
     /* `silent-success.md`: an arm sent an empty QUESTIONS block still produces
        plausible output, because the OUTPUT schema alone tells the model what to
@@ -215,21 +242,68 @@ describe("production keeps V4's shape, which is the patch that shipped as toc/7"
     expect(questionFor(only(`${gist.replace(/\.$/, "")}?`, gist), 1)).toBeUndefined();
   });
 
-  it("still catches the gist echoed back with a hint bolted on", () => {
-    /* variants.md's second hunk, now in `bareWords`: strip the bracket BEFORE
-       the terminal punctuation, or anchor 5 in V4's shape sails through the one
-       check in that function that means what it says. */
+  /**
+   * **The gist re-asked, in every dress `toc/7` lets it wear.**
+   *
+   * `variants.md`'s second hunk, and the failure it was written for is anchor 5.
+   * The bare form was always caught. The two V4-shaped forms were **not**, and
+   * that was found by GPT Sol on 2026-09-07 as F10 — the topic prefix and the
+   * bracketed hint each defeat a plain word comparison on their own, so the one
+   * check in `questionFor` that means exactly what it says had quietly stopped
+   * catching the failure the shipped prompt names, in exactly the shape the
+   * shipped prompt asks for. The panel draws `question ?? gist`, so the reader
+   * got the wall instead of the door.
+   */
+  it("still catches the gist echoed back, hint and topic and all", () => {
     const gist = "Four independent arguments undermine the assumption that computation alone can produce consciousness.";
-    expect(questionFor(only(`${gist.replace(/\.$/, "")}? (4 arguments)`, gist), 1)).toBeUndefined();
+    const bare = gist.replace(/\.$/, "");
+    /* The three shapes, from the one that always worked to the one production
+       actually ships. */
+    expect(questionFor(only(`${bare}?`, gist), 1)).toBeUndefined();
+    expect(questionFor(only(`${bare}? (4 arguments)`, gist), 1)).toBeUndefined();
+    expect(questionFor(only(`Computational functionalism — ${bare}? (4 arguments)`, gist), 1)).toBeUndefined();
+    expect(questionFor(only(`Computational functionalism — ${bare}?`, gist), 1)).toBeUndefined();
   });
 
-  it("bounds the hint, so a parenthetical paragraph still gets its mark visibly", () => {
-    /* `[^()]{1,40}` is a shape hint, not a second sentence. A line ending in a
-       long bracket is not a finished question, and the append stays VISIBLE
-       rather than silently accepted — the right way round, per `questionFor`'s
-       own note on the rule it replaced. */
-    const long = "It closes by reflecting (on a great many things, at considerable and unhelpful length indeed)";
-    expect(questionFor(only(long), 1)).toBe(`${long}?`);
+  /**
+   * **The other half of F11: the unwrapping is the QUESTION's business, not the
+   * gist's.**
+   *
+   * For one day `bareWords` itself stripped a trailing bracket, which changed
+   * the answer for inputs that have nothing to do with V4. Sol's two
+   * counter-examples are both here, and both would pass under the shipped
+   * behaviour of `toc/6` and fail under that one-day version — which is the
+   * point, because the commit that introduced it claimed every other shape was
+   * unchanged.
+   */
+  it("leaves a gist and a question that merely end in brackets alone", () => {
+    /* Not an echo: the gist has no parenthetical and the question does. */
+    expect(questionFor(only("The treatment works (tentatively)", "The treatment works."), 1))
+      .toBe("The treatment works (tentatively)?");
+    /* An echo the one-day version missed, because it stripped "(in principle)"
+       off the gist and not off the question. */
+    const gist = "Systems can compute without awareness (in principle)";
+    expect(questionFor(only(`${gist}? (a thought experiment)`, gist), 1)).toBeUndefined();
+  });
+
+  /**
+   * **A hint may be as long as the prompt allows, which is not 40 characters.**
+   *
+   * `questionFor` carried `[^()]{1,40}` for a day — a number I made up — and it
+   * put a second `?` on lines the prompt itself permits. The test that claimed
+   * to hold that bound tested nothing: its input had no `?` before the bracket,
+   * so the bounded and the unbounded regex both rejected it and it passed either
+   * way. ⟨GPT Sol, F9.⟩ Both halves are here now, and the second one is what the
+   * bound was actually reaching for.
+   */
+  it("keeps a long hint, and still appends visibly where there is no question mark", () => {
+    const long = "Evidence — how should we compare these accounts? (a comparison across historical and modern cases)";
+    expect(long.length).toBeGreaterThan(40);
+    expect(questionFor(only(long), 1)).toBe(long);
+    /* No `?` before the bracket, so this is not a finished line however short
+       the bracket is: the mark is appended, and visibly. */
+    const statement = "It closes by reflecting (on a great many things, at considerable and unhelpful length indeed)";
+    expect(questionFor(only(statement), 1)).toBe(`${statement}?`);
   });
 
   it("says nothing needs a production code change any more, because V4 shipped", () => {
@@ -308,9 +382,17 @@ describe("the arms", () => {
        Unequal on QUESTIONS, because that is the variable. */
     expect(before.gists).toBe(after.gists);
     expect(before.questions).not.toBe(after.questions);
-    /* And the one that would otherwise pass silently: the "after" half really
-       is what production ships, not a stale copy of it. */
+    /* **The "after" half is PINNED to V4, and equal to what production ships
+       today.** Both halves, and the difference between them is F13: for a day
+       `gists-toc6` resolved its questions through `productionQuestions()`, so
+       one word changed in `src/hierarchy.ts` would have silently changed what
+       this comparison was *of*, while the arm's own note claimed both halves
+       stay put. Pinning makes the claim true; the equality keeps it honest
+       about today. */
+    expect(after.questions).toBe(readVariants().questions.get("V4"));
     expect(after.questions).toBe(productionQuestions());
+    expect(armByName("gists-toc6").variant).toBe("V4");
+    expect(armByName("gists-toc5").variant).toBe("V4");
     /* The two sentences that separate the halves, one from each side. */
     expect(before.questions).toContain(THE_DIAGNOSED_SENTENCE);
     expect(before.questions).toContain("Under 15 words");
@@ -577,7 +659,7 @@ describe("shape facts are facts", () => {
     expect(Object.keys(f)).not.toContain("penalty");
   });
 
-  it("reads V4's shape, which is the one production mangles", () => {
+  it("reads V4's post-question hint shape, which is production's since toc/7", () => {
     const f = shapeFacts("Computational functionalism — why isn't computation sufficient for consciousness? (4 arguments)");
     expect(f.hintAfterQuestionMark).toBe(true);
     expect(f.endsInQuestionMark).toBe(false);

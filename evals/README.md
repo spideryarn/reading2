@@ -533,7 +533,7 @@ few dollars instead of $8–20 and two hours. By `hierarchy-structure/arms.ts`'s
 makes every arm here a `bakeoff` and none of them `isolated` — the control arm is production's
 *rules* under a different request, not production's call — and what it cannot catch is an
 interaction between the new wording and the structure the model proposes in the same breath. It also
-touches nothing in `EXPAND_SYSTEM`, which has no question field at all, so no result from it covers
+touches nothing in `EXPAND_SYSTEM`, so no result from it covers
 the deepening cascade. Every results file repeats all of that.
 
 `isolatedAgainst` is the one thing the template did not have: an arm names the *other arm* it

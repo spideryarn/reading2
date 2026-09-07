@@ -150,9 +150,22 @@ const SHARED_DELTAS: readonly string[] = [
  * Everything else here is choosing between Socratic *question* shapes.
  * `gists-toc5` and `gists-toc6` ask one thing only: **did the `toc/6` per-depth
  * length ceiling change the gists the model writes, and in the direction asked
- * for?** Both carry production's QUESTIONS block unchanged, so the GISTS block
- * is the single variable — the one genuinely isolated pair here, though both
- * stay `bakeoff` because `SHARED_DELTAS` is still true of them.
+ * for?** Both carry the same QUESTIONS block, so the GISTS block is the single
+ * variable — the one genuinely isolated pair here, though both stay `bakeoff`
+ * because `SHARED_DELTAS` is still true of them.
+ *
+ * **That QUESTIONS block is PINNED to V4, and was production's live slice until
+ * 2026-09-07.** Holding a *live* block equal on both members is enough to keep
+ * this pair isolated — it moves on both at once — but it is not enough for the
+ * pair `questions-toc6` makes with `gists-toc6`, which claims to be V4's wording
+ * against the wording it replaced. With a live slice on one half, editing one
+ * word of `src/hierarchy.ts` silently changes what that comparison is of, while
+ * the arm's own note claims both halves stay put. ⟨GPT Sol, F13, 2026-09-07.⟩
+ *
+ * So both length-pair arms name `variant: "V4"`. They still send exactly what
+ * production sends today — `tests/summaries-eval.test.ts` asserts
+ * `productionQuestions()` is byte-identical to `variants.md` § V4 — and they go
+ * on sending it after production moves on, which is what a pinned arm is for.
  *
  * **Run them at `--depth 2`.** Depth 2 is where 852 of the 1,239 stored gists
  * live and where the *"22-32 words, and use them"* half of the change has to
@@ -166,7 +179,7 @@ const SHARED_DELTAS: readonly string[] = [
  */
 const LENGTH_PAIR_DELTAS: readonly string[] = [
   ...SHARED_DELTAS,
-  "GISTS: a PINNED copy of a shipped block from variants.md, not the live slice; QUESTIONS: production's, unchanged",
+  "GISTS: a PINNED copy of a shipped block from variants.md, not the live slice; QUESTIONS: PINNED to V4, which is what production sends today and will go on being what this pair sends after production moves",
 ];
 
 export const ARMS: readonly ArmSpec[] = [
@@ -280,6 +293,7 @@ export const ARMS: readonly ArmSpec[] = [
     name: "gists-toc5",
     comparison: "bakeoff",
     axis: "the GISTS block as it shipped BEFORE the toc/6 bump: one sentence, no ceiling anywhere",
+    variant: "V4",
     newGists: false,
     shippedGists: "toc/5",
     questionRule: "production",
@@ -290,6 +304,7 @@ export const ARMS: readonly ArmSpec[] = [
     comparison: "bakeoff",
     isolatedAgainst: "gists-toc5",
     axis: "the GISTS block as it ships today: root <=18 words, depth 1 <=25, deeper 22-32",
+    variant: "V4",
     newGists: false,
     shippedGists: "toc/6",
     questionRule: "production",

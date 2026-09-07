@@ -44,8 +44,10 @@
  * structure, titles, gists and questions in **one** long-context response and
  * this asks only for wording over a fixed tree. Nothing here sees an interaction
  * between the new wording and the structure the model proposes in the same
- * breath, and nothing here touches `EXPAND_SYSTEM`, which has no question field
- * at all.
+ * breath, and nothing here touches `EXPAND_SYSTEM`. That prompt gained its own
+ * QUESTIONS block on 2026-09-07 (`expand/4`), carrying V4's rules — so the
+ * cascade is no longer a hole in the product, but it is still a hole in this
+ * harness, and no result from here may be read as covering it.
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -209,7 +211,7 @@ function corpusFor(o: Options) {
  * directory name and the first line of its report.
  */
 function stubGenerator(arm: ArmSpec, silent: readonly string[]): Generator {
-  return async ({ user }) => {
+  return async ({ system, user }) => {
     if (silent.includes(arm.name)) throw new Error(`--stub-silent ${arm.name}: this arm's call was made to fail`);
     /* Only the rows the outline actually asks for — the stub has to obey the
        same instruction the arms do, or it would answer for the context rows and
@@ -219,11 +221,20 @@ function stubGenerator(arm: ArmSpec, silent: readonly string[]): Generator {
     for (const [id, depth] of ids) {
       const entry: { gist: string; question?: string } = { gist: `STUB gist for ${id} from arm ${arm.name}.` };
       if (depth <= 1) {
-        /* Keyed on the variant, not on `questionRule`, which stopped
-           discriminating when V4 shipped and production took its patch. The
-           stub still has to emit V4's shape for V4, because that shape is what
-           exercises the trailing-hint clause end to end. */
-        entry.question = arm.variant === "V4"
+        /* **Keyed on the block this arm actually sends**, which is the only
+           thing that stays true as the lineup changes.
+
+           It was `arm.questionRule`, which stopped discriminating the moment V4
+           shipped and production took its patch; the fix for that keyed on
+           `arm.variant === "V4"`, and that was wrong within the hour, because
+           removing the `v4` arm left **no** arm with that variant while five
+           arms carry V4's block through `productionQuestions()`. So `--stub`
+           claimed to exercise the trailing-hint seam and exercised it zero
+           times. ⟨GPT Sol, F12, 2026-09-07.⟩
+
+           Reading the system prompt cannot go stale that way: whichever arm
+           sends the shape, the stub answers in it. */
+        entry.question = system.includes('"<topic> — <question>? (<shape hint>)"')
           ? `STUB topic — what does ${id} argue? (2 reasons)`
           : `STUB topic (2 reasons): why does ${id} argue what it argues?`;
       }
@@ -296,7 +307,7 @@ interface RunFile {
 const CLAIM_LIMITS = [
   "Every arm is a `bakeoff`, the control included: production asks for structure, titles, gists and questions in ONE long-context response, and this asks only for wording over a fixed tree.",
   "Nothing here sees an interaction between the new wording and the structure the model proposes in the same breath — that is what the cheap design buys its cheapness with.",
-  "Nothing here touches `EXPAND_SYSTEM` (src/hierarchy-expand.ts), which has no question field at all, so no result covers the deepening cascade.",
+  "Nothing here touches `EXPAND_SYSTEM` (src/hierarchy-expand.ts), so no result covers the deepening cascade. That prompt gained its own QUESTIONS block on 2026-09-07 (`expand/4`), carrying V4's rules — but nothing in this harness measures it.",
   "A win is a reason to put a variant in front of Greg RENDERED (the plan's stage 2), never a reason to ship it.",
   "Depth-2 gists at two sentences are deferred, not measured: they raise TOKENS_PER_NODE and break evals/hierarchy-structure's baseline.",
 ];
