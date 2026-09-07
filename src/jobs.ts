@@ -3672,7 +3672,7 @@ async function slugAlreadyHolding(key: string): Promise<string | undefined> {
  * `urlKey` comparison in two adapters, and `urlKey` is not SQL.
  *
  * `queued` and `running` are the two statuses a job holds a slug in
- * (`ACTIVE`, src/store/pg-jobs.ts, and every one of the queue's partial unique
+ * (`ACTIVE`, src/store/jobs.ts, and every one of the queue's partial unique
  * indexes is over exactly those two); a cancelled or failed job is not holding
  * anything.
  */

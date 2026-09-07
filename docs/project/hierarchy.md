@@ -694,22 +694,28 @@ What that means in practice:
   are still arriving"* until one runs.
 - **The publication is what queues that successor**, and it does it inside its own transaction:
   `publishRevisionIn` ([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) calls
-  `enqueueSuccessorIn` ([`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts)) whenever the revision it
+  `enqueueSuccessorIn` ([`src/store/pg-successor.ts`](../../src/store/pg-successor.ts)) whenever the revision it
   has just published says `pending`, so the article and the job that finishes it become true
   together. **In the primitive rather than in the pipeline's `settleIn`**, for the reason the lineage
-  guard beside it gives — a guard in one caller is a guard the next caller forgets, and
-  [`pg-glossary.ts`](../../src/store/pg-glossary.ts) is already a second caller. It **spends no
+  guard beside it gives — a guard in one caller is a guard the next caller forgets, and the
+  standalone `publishRevision` wrapper in the same file is already a second caller. It **spends no
   quota slot**, and by omission rather than by a guard: [billing.md § Which requests spend a
   slot](billing.md#which-requests-spend-a-slot-and-why-the-wall-is-at-the-routes).
-  `onConflictDoNothing` against `jobs_active_work` means two publications for one article collapse
-  onto one queued successor. **Nothing on the server drives it** — the browser's `jobEngine` runs
+  Two publications for one article collapse onto one queued successor — and the conflict that makes
+  that happen is *classified* rather than swallowed, so a successor already bound to an earlier base
+  is a warning in the log rather than a silence
+  ([ingest-queue.md](ingest-queue.md#one-job-in-the-app-was-asked-for-by-nobody)).
+  **Nothing on the server drives it** — the browser's `jobEngine` runs
   every queued job the signed-in owner has, from any page, which is measured in the plan under
   [Who actually runs the successor](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md#who-drives).
 - **A `labels` job that fails writes `failed` onto the revision it was based on**, not onto its own
   discarded draft, and only while that revision is still what readers are being served —
   `markNavLabelsFailedIn` in [`pg-revisions.ts`](../../src/store/pg-revisions.ts). Otherwise the
   *"still arriving"* sentence would stay up for ever, since nothing reaps a queued job and nothing
-  else writes `failed`.
+  else writes `failed`. **Two callers, and the second matters more than it looks**: the claimant's own
+  settlement, and `settleExpired` ([`pg-jobs.ts`](../../src/store/pg-jobs.ts)) for the job whose lease
+  ran out with nobody inside it. The label pass is the slowest step in the app, so running out of
+  lease is its *ordinary* ending rather than an exotic one.
 - **`hierarchy` writes an empty manifest**, a `PendingLabelsFile` — the three hashes, `labels: {}`,
   `batches: null`, and deliberately **no `version` and no `generator`**, because no prompt and no
   model produced it. [`src/labels.ts`](../../src/labels.ts) has the type and the argument.

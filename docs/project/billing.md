@@ -759,7 +759,7 @@ table again with it in mind. `publishRevisionIn` ([`src/store/pg-revisions.ts`](
 queues a `{ steps: ["labels"] }` job inside the publication's own transaction whenever the revision
 reaches the shelf with `nav_label_status = 'pending'` —
 [hierarchy.md § Two passes](hierarchy.md#two-passes). It spends nothing, and **by omission
-rather than by a guard**: `enqueueSuccessorIn` ([`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts))
+rather than by a guard**: `enqueueSuccessorIn` ([`src/store/pg-successor.ts`](../../src/store/pg-successor.ts))
 has no `ingestEventId` and no parameter for one, so `settleReservation`'s first line —
 `if (!ingestEventId) return` — makes every ending of it a no-op. There are exactly two ways to
 charge it by accident: route it through a request body carrying a `url`, or copy the parent's

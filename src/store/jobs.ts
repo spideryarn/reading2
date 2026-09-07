@@ -68,7 +68,7 @@ import type { Job, JobStatus, JobStep, JobUpload, OwnerId, StepName } from "../t
  *
  * **Here rather than beside `sameWork` in src/jobs.ts, since 2026-09-07, and
  * the move was forced rather than tidy.** `enqueueSuccessorIn`
- * (src/store/pg-jobs.ts) has to mint a `work_key` from inside a publication's
+ * (src/store/pg-successor.ts) has to mint a `work_key` from inside a publication's
  * transaction, and src/jobs.ts takes the Postgres job store at module scope
  * (`const store: JobStore = pgJobStore`) — so a store file importing back from
  * it is a cycle whose failure mode is a TDZ `ReferenceError` on whichever entry
@@ -101,6 +101,27 @@ export function workKeyFor(
     )
     .digest("hex");
 }
+
+/**
+ * The two statuses a job can still be doing something in.
+ *
+ * **The predicate every one of the queue's partial unique indexes is drawn
+ * around** — `jobs_active_work`, `jobs_reserved_slug`, `jobs_active_source`
+ * (src/db/schema.ts) — so a query that re-reads after a conflict has to agree
+ * with it exactly or it answers a question the insert did not ask.
+ *
+ * **Here rather than in src/store/pg-jobs.ts, since 2026-09-07**, for the reason
+ * `workKeyFor` above moved: it is needed by src/store/pg-successor.ts, which
+ * sits *under* the publication path, and pg-jobs.ts now sits above it. This file
+ * is the leaf both can reach. pg-jobs.ts re-exports the name so nothing that
+ * already imported it from there had to move — tests/helpers/forget-revisions.ts
+ * being the one outside src/, which refuses to delete an article's revisions
+ * while a job is inside one of these: the second writer in
+ * docs/postmortems/260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md.
+ * A second copy of this list anywhere is a list that goes stale the day a status
+ * is added.
+ */
+export const ACTIVE = ["queued", "running"] as const;
 
 /**
  * Why a claim did not happen. Each of these is a different thing for the client

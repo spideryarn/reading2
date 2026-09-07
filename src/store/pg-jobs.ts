@@ -65,21 +65,42 @@
  * down as unreachable-today rather than presented as a live guard.
  */
 
-import { and, desc, eq, inArray, isNull, lt, lte, not, or, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  gte,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  not,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { guardDbStore, lockUnavailable, violatesConstraint } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { leaseIsOver, liveAttempt } from "./job-fence.js";
 import { RELEASED, releaseReservations, settleReservation } from "./pg-billing.js";
+/* **The edge that used to run the other way.** `enqueueSuccessorIn` lived here
+   and was imported by src/store/pg-revisions.ts; it moved to
+   src/store/pg-successor.ts on 2026-09-07 so that this file could reach the
+   revision layer instead. `npm run cycles` is the check. */
+import {
+  lockArticlesInSlugOrder,
+  logNavLabelsFailed,
+  markNavLabelsFailedIn,
+} from "./pg-revisions.js";
 import { jobs, queueState } from "../db/schema.js";
-import { mintId } from "../ids.js";
 import { INTERRUPTED } from "../messages.js";
 import type { FailureKind } from "../messages.js";
-import { stepLabel } from "../pipeline.js";
-import type { Job, JobStatus, JobStep, OwnerId, StepName } from "../types.js";
+import type { Job, JobStatus, JobStep, OwnerId } from "../types.js";
 import {
-  workKeyFor,
+  ACTIVE,
   type ClaimOutcome,
   type ClaimRefusal,
   type EnqueueOutcome,
@@ -132,13 +153,14 @@ const TERMINAL = ["done", "error", "cancelled"] as const;
 /**
  * The two a job can still be doing something in.
  *
- * Exported for tests/helpers/forget-revisions.ts, which refuses to delete an
- * article's revisions while a job is inside one of these — the second writer in
- * docs/postmortems/260902f-a-lost-claim-that-was-never-lost-and-a-publication-that-was-never-buried.md.
- * A second copy of this list in a helper is a list that would go stale the day a
- * status is added.
+ * **Re-exported rather than defined here since 2026-09-07.** It moved down to
+ * the leaf (src/store/jobs.ts) so that src/store/pg-successor.ts could ask the
+ * same question without importing this file — which would have been a cycle,
+ * because this file now imports src/store/pg-revisions.ts and that imports the
+ * successor. The name stays reachable here for every caller that already had
+ * it, including tests/helpers/forget-revisions.ts.
  */
-export const ACTIVE = ["queued", "running"] as const;
+export { ACTIVE };
 
 /**
  * A row as the rest of the app wants it.
@@ -216,88 +238,6 @@ export async function ingestProvenanceOf(
     .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner)))
     .limit(1);
   return row;
-}
-
-/**
- * Queue a follow-up job **on the caller's transaction**, so that whatever made
- * it necessary and the job that answers it become true together.
- *
- * ## Why this is not `enqueueOrGet`
- *
- * `tryEnqueue` below opens `const db = getDb()` and inserts on the pool. A
- * publication that enqueued through it would commit the pointer and the job
- * separately, and the gap between them is an article that says its labels are
- * still arriving with nothing anywhere queued to make them.
- *
- * The `Executor = Db | Tx` doctrine above is drawn around job *transitions*, and
- * `enqueueOrGet` is pointedly not on that list. The recorded reason is that it
- * takes a **second pooled connection** while `DATABASE_POOL_MAX` is 5 — which is
- * an argument against calling it while holding the billing lock, and **not** an
- * argument against inserting on an executor you already hold. So this is a
- * thirty-line insert rather than `tx` threaded through `enqueue`'s three
- * hundred. Written down because the next reader will otherwise "fix" it.
- *
- * ## It spends no quota, and that is by omission rather than by a guard
- *
- * There is no `ingestEventId` here and there is no parameter for one. The only
- * durable fact that makes a job chargeable is `jobs.ingest_event_id`
- * (src/db/schema.ts § `ingest_events`), written by `tryEnqueue` from the ticket
- * `withIngestSlot` hands it at the route — and `settleReservation`
- * (src/store/pg-billing.ts) returns on its first line when there is none. So a
- * successor settles nothing on every ending, and the only two ways to charge one
- * by accident are to route it through a request body carrying a `url`, or to
- * copy a parent's `ingestEventId` onto it. Neither is reachable from this
- * signature. tests/publication-enqueues-the-labels-successor.test.ts names both.
- *
- * ## The shape, and why each field is what it is
- *
- * `reservesName: false` and `urlKey: null`, so the row sits outside
- * `jobs_reserved_slug` and `jobs_active_source` and simply queues behind
- * whatever is already on this article. No `profile`: the steps a successor runs
- * take none, and putting one on would give identical work distinct work keys.
- * No `url`: the job is about an article, not an address, and `enqueue`'s
- * `urlForSlug` normalisation is exactly the thing that makes `Job.url` useless
- * for telling free work from paid.
- *
- * `onConflictDoNothing`, so a second publication for one article collapses onto
- * the successor already queued rather than erroring — `jobs_active_work` is
- * `(owner_id, slug, work_key)` over the active statuses, and that dedupe is the
- * behaviour we want rather than one we tolerate.
- *
- * Returns the job id when a row was inserted, and `null` when one was already
- * there. Nothing here drives it: `pump` is a no-op under `VERCEL` and could not
- * be called from inside a transaction anyway. The browser's `jobEngine` drives
- * every queued job the signed-in owner has, from any page —
- * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md § Who actually
- * runs the successor.
- */
-export async function enqueueSuccessorIn(
-  tx: Tx,
-  successor: { ownerId: OwnerId; slug: string; steps: StepName[] },
-): Promise<string | null> {
-  const { ownerId, slug, steps } = successor;
-  const id = mintId();
-  const inserted = await tx
-    .insert(jobs)
-    .values({
-      id,
-      ownerId,
-      slug,
-      steps: steps.map((name) => ({ name, label: stepLabel(name, false), status: "pending" })),
-      status: "queued",
-      /* **The canonical builder, not a second hashing of the same question.**
-         `sameWork` (src/jobs.ts) is the prose specification it satisfies, and
-         `tests/jobs.test.ts` holds the two together. No profile, no upload and
-         no URL, so this is a constant per step list — which is precisely what
-         makes the conflict below collapse two publications onto one job. */
-      workKey: workKeyFor(steps, new Set()),
-      reservesName: false,
-      urlKey: null,
-      ingestEventId: null,
-    })
-    .onConflictDoNothing()
-    .returning({ id: jobs.id });
-  return inserted[0]?.id ?? null;
 }
 
 /** One insert-or-look. `null` means the holder finished in between; ask again. */
@@ -1121,12 +1061,15 @@ const rawPgJobStore: JobStore = {
     requeueBudget = 0,
   ): Promise<ExpirySettlement[]> {
     const db = getDb();
+    /* Filled inside the transaction and said out loud after it commits. See the
+       marking loop at the foot of the transaction. */
+    const navLabelsFailed: { slug: string; revisionId: string }[] = [];
     /* Pinned rather than inherited, as src/store/pg-billing.ts and
        src/store/pg-session.ts both pin theirs: a `default_transaction_isolation`
        set on the role would otherwise change what two concurrent settlements of
        one reservation do — zero rows and a log at `read committed`, an
        uncaught 40001 that takes the whole sweep down above it. */
-    return await db.transaction(async (tx) => {
+    const outcomes = await db.transaction(async (tx) => {
       /**
        * **Which rows this sweep may touch at all**, written once so that the
        * requeue and the settlement below cannot disagree about it. A row either
@@ -1159,6 +1102,140 @@ const rawPgJobStore: JobStore = {
           ? leaseIsOver
           : or(isNull(jobs.leaseExpiresAt), lte(jobs.leaseExpiresAt, now)),
       );
+
+      /**
+       * **Before anything is written: which of these was buying paragraph
+       * labels?**
+       *
+       * A `labels` job that ends here leaves a published revision saying
+       * *"Paragraph labels are still arriving"* with nothing anywhere queued to
+       * make them, and nothing on the server ever revisits it — the article keeps
+       * the sentence for ever and a reader's only door out is a manual Retry.
+       * `settleIn` (src/store/pg-session.ts) has said so on the revision since
+       * stage 2b; this is the other ending, and it is the *likelier* one, because
+       * the label pass is the slowest step in the app (682 s measured against a
+       * 740 s claimant deadline) and so it is precisely the step that runs out of
+       * lease. GPT Sol, F1 of the stage 2b review;
+       * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
+       *
+       * **A plain read, and it must stay one.** No `for update`: a read takes no
+       * row lock, so this snapshot does not touch the lock order. What it is for
+       * is knowing *which article locks to take next*, and those have to be taken
+       * before the two `UPDATE`s below — *article lock before job lock,
+       * everywhere* (src/store/pg-revisions.ts § `openOrBeginJobDraft`). Marking
+       * afterwards without this would take them job-then-article and deadlock
+       * against `openOrBeginJobDraft`, `publishRevisionIn` and `failRevisionIn`
+       * going the other way.
+       *
+       * **Narrowed three ways, and each narrowing is exact rather than
+       * approximate.**
+       *
+       * *Holding a draft*, because the marker needs one to find the base
+       * revision. *Not `cancelling`, and out of requeue budget*, which is the
+       * requeue `UPDATE`'s own predicate inverted and a `cancelling` row's
+       * ending read off the settlement's `case`: a row that is about to be
+       * requeued gets another window and must not be marked, and a row that
+       * settles `cancelled` is never marked either. Locking those anyway was
+       * correct — the `ended` check below still refuses them — but it took
+       * article locks that could never be used, and held the earlier ones while
+       * waiting for the later ones. GPT Sol, F5 of the stage 2c review. **At the
+       * default budget of zero this is every lapsed row**, which is the shape the
+       * sweep had before any of this existed.
+       *
+       * `ORDER BY slug` is the lock order `lockArticlesInSlugOrder` requires, so
+       * two concurrent sweeps cannot deadlock against each other.
+       *
+       * **What the snapshot cannot promise.** `leaseIsOver` compares against
+       * `clock_timestamp()`, which advances *inside* a transaction, so a row can
+       * enter the lapsed set between this read and the settlement below. Such a
+       * row is simply absent from the subset and is not marked — the same outcome
+       * as before this existed, and never a wrong write.
+       */
+      const holdingDrafts = await tx
+        .select({
+          id: jobs.id,
+          ownerId: jobs.ownerId,
+          slug: jobs.slug,
+          draftRevisionId: jobs.draftRevisionId,
+          steps: jobs.steps,
+        })
+        .from(jobs)
+        .where(
+          and(
+            lapsed,
+            isNotNull(jobs.draftRevisionId),
+            /* Exactly the two conditions the statements below settle on, read
+               off the same two values they read, so the sets cannot drift. */
+            not(jobs.cancelling),
+            gte(jobs.requeues, requeueBudget),
+          ),
+        )
+        /* **`collate "C"`, so that this order and the one the helper below
+           asserts are the same order.** The snapshot sorts in Postgres and
+           `lockArticlesInSlugOrder` asserts in JavaScript, whose `<` is
+           code-point; the database's default is the cluster's locale, and under
+           `en_GB.utf8` the two disagree for perfectly valid slugs containing
+           hyphens and digits. The helper *throws* when it sees rows out of
+           order, and it is inside this transaction — so a collation would have
+           become an outage of the queue's only reaper, before any job settled.
+           `C` is byte order, and `isSlug` (src/ingest.ts) is
+           `/^[a-z0-9][a-z0-9-]*$/`, so for every string that can be here byte
+           order **is** code-point order. GPT Sol, G3 of the second stage 2c
+           review. */
+        .orderBy(sql`${jobs.slug} collate "C"`);
+
+      /**
+       * **Was this job buying labels at all?** — asked of its *step list*, not of
+       * which step it was inside.
+       *
+       * What this filter protects against is a job re-running some **other** step
+       * on an article whose labels are still arriving marking them failed, while
+       * a separate labels successor still sits in the queue. A job whose step list
+       * does not contain `labels` at all is the cheap half of that — **and only
+       * the cheap half**: membership is not ownership, and the rest of the
+       * question is asked after the settlement, where the live-promise check
+       * lives. Read that comment too; this one has been wrong twice on its own.
+       *
+       * **It used to ask whether the `labels` entry was `running`, and that was
+       * too narrow.** `runStep` (src/jobs.ts) writes `status: "running"` through
+       * `noteProgress`, but a claimant can die before that write lands — after
+       * `claim`, or inside `stepIsDone`, which runs before it — and the job then
+       * ended `error` having marked nothing, which is the bug this whole change
+       * exists to fix. And a `["hierarchy","labels"]` job that dies inside
+       * `hierarchy` leaves the base `pending` with **no other successor** — and
+       * that last clause is the whole of it, which is why the live-promise check
+       * below exists. GPT Sol, F4 of the stage 2c review and G1 of the second.
+       *
+       * **The window that is left, written down rather than closed.** A claimant
+       * that died before `openOrBeginJobDraft` holds no `draft_revision_id`, so
+       * there is no base to look up and the row is skipped by the `WHERE` above.
+       * That window is the milliseconds between `claim` and the draft being
+       * opened, against a model call measured at 682 s, and only on a *first*
+       * claim — every requeue afterwards keeps the draft. It is not worth
+       * widening `markNavLabelsFailedIn` to take a null draft, which would mean
+       * guessing which revision a job that never started was about.
+       */
+      const couldBuyLabels = holdingDrafts
+        .filter((row) => row.steps.some((step) => step.name === "labels"))
+        .map((row) => ({
+          id: row.id,
+          slug: row.slug,
+          /* Both narrowings are what the `WHERE` above already established; the
+             column types are `string | null` and `string` because a table says
+             nothing about who owns a row. `toJob` casts the same field for the
+             same reason. */
+          draftRevisionId: row.draftRevisionId as string,
+          ownerId: row.ownerId as OwnerId,
+        }));
+
+      /* The article locks, in slug order, before either `UPDATE` below — and
+         **the answer is the rows it actually locked**, which is the marking set
+         from here on. A slug whose article row has gone is dropped rather than
+         carried: marking it later would take its lock *after* the job locks
+         below, and if the slug has been recreated by then that is a real lock,
+         taken in the forbidden order. src/store/pg-revisions.ts says it at
+         length. */
+      const buyingLabels = await lockArticlesInSlugOrder(tx, couldBuyLabels);
 
       /**
        * **First, the jobs that get another go — back to `queued` on their own
@@ -1341,6 +1418,111 @@ const rawPgJobStore: JobStore = {
         settled.map((row) => row.ingestEventId),
       );
 
+      /**
+       * **And the article learns that its labels are not coming.**
+       *
+       * The second caller of a rule that already had one. `markNavLabelsFailedIn`
+       * (src/store/pg-revisions.ts) says which revision this is written on — the
+       * draft's *base*, not the discarded draft — and refuses when something has
+       * published past it. This adds only the question of *when*: a job that ends
+       * here ends with nobody inside it, so the session path that owns the other
+       * caller will never run for these rows.
+       *
+       * **The article locks these calls want were taken above**, before either
+       * `UPDATE`, and are still held: re-locking a row this transaction already
+       * has is free, and taking them here for the first time would be the
+       * job-then-article order that the lock rule exists to forbid.
+       *
+       * **`error` only, never `cancelled`** — the same rule `settleIn` follows
+       * and states. A reader who pressed Stop has not been told anything went
+       * wrong, and asking again is the remedy the pending sentence already
+       * implies.
+       *
+       * **The draft id comes from the snapshot, not from `RETURNING`**: the
+       * settlement above clears `draft_revision_id`, so the row it hands back no
+       * longer knows which draft this job was writing.
+       *
+       * A row that was *requeued* rather than settled is absent from `settled`
+       * and therefore untouched here, which is right: it keeps its draft and gets
+       * another window, and the sentence on the revision is still true.
+       */
+      const ended = new Map(settled.map((row) => [row.id, row.status]));
+
+      /**
+       * **Is this job still the one carrying the article's promise?**
+       *
+       * The filter above asks whether the job's step list *contains* `labels`.
+       * That is membership, and the question is **ownership** — and this is the
+       * second time this filter has been wrong about which. It first asked
+       * whether the `labels` step was `running`, which missed a claimant that
+       * died before it wrote the status down; widening it to membership then let
+       * in the case Sol found (G1 of the second stage 2c review):
+       *
+       * 1. Job A, `["hierarchy","labels"]`, queues behind running job C.
+       * 2. C publishes a `pending` revision and queues successor B, `["labels"]`.
+       * 3. A predates B, so A claims first and opens its draft from that revision.
+       * 4. A dies inside `hierarchy`.
+       * 5. Membership says mark it — **while B is still queued to make exactly
+       *    those labels**, and B then runs and they arrive.
+       *
+       * A wrong sentence that heals itself is the kind nobody reports and
+       * everybody sees, so `pending` is not the protection it looks like. The
+       * missing fact is this one: **no other active job on this article still
+       * carries `labels`**. If one does, skip — it will be marked at its own
+       * ending if it dies too, so nothing is lost and the sentence stays true
+       * meanwhile.
+       *
+       * **Asked after the settlement, deliberately.** By now every row this sweep
+       * ended is terminal and so is outside `ACTIVE`, which is what stops two
+       * candidates on one article each reading the other as the live promise —
+       * and the settled ids are excluded explicitly as well, so the answer does
+       * not depend on that ordering staying true. A row this sweep *requeued* is
+       * `queued` and does count, which is right: it has another window and its
+       * draft.
+       */
+      const stillCarryingLabels =
+        buyingLabels.length === 0
+          ? []
+          : (
+              await tx
+                .select({ id: jobs.id, ownerId: jobs.ownerId, slug: jobs.slug, steps: jobs.steps })
+                .from(jobs)
+                .where(
+                  and(
+                    inArray(
+                      jobs.slug,
+                      buyingLabels.map((row) => row.slug),
+                    ),
+                    inArray(jobs.status, ACTIVE),
+                    not(jobs.cancelling),
+                  ),
+                )
+            ).filter(
+              (row) =>
+                !ended.has(row.id) && row.steps.some((step) => step.name === "labels"),
+            );
+
+      for (const row of buyingLabels) {
+        if (ended.get(row.id) !== "error") continue;
+        if (
+          stillCarryingLabels.some(
+            (other) => other.slug === row.slug && other.ownerId === row.ownerId,
+          )
+        ) {
+          continue;
+        }
+        const marked = await markNavLabelsFailedIn(
+          tx,
+          row.slug,
+          row.draftRevisionId,
+          row.ownerId,
+        );
+        /* After the commit, never inside it — the rule `publishRevisionIn`
+           states at length: a line logged in a transaction announces something a
+           later statement may roll back. */
+        if (marked) navLabelsFailed.push({ slug: row.slug, revisionId: marked });
+      }
+
       /* What the statements already return, and both fields of theirs.
          `RETURNING` hands back the row *after* the update, so the status here is
          the ending the `case` chose — or `queued`, for the rows that got another
@@ -1356,6 +1538,11 @@ const rawPgJobStore: JobStore = {
         status: row.status as ExpirySettlement["status"],
       }));
     }, READ_COMMITTED);
+
+    /* Committed, so it is now true. `logNavLabelsFailed` is the same line the
+       session path prints, so the two endings read alike in the log. */
+    for (const line of navLabelsFailed) logNavLabelsFailed(line.slug, line.revisionId);
+    return outcomes;
   },
 
   async noteProgress(id: string, attempt: string, steps: JobStep[]): Promise<Job> {

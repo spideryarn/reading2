@@ -2,28 +2,39 @@
  * Pipeline stage 4b — the nav labels, one per gistable block, generated in
  * parallel batches once the tree's shape is fixed.
  *
- * **There is no `npm run labels` any more**, and it was retired rather than
- * converted (2026-09-05). There is no `labels` *step*, and adding one to
- * preserve a debugging command would be a pipeline redesign: stage 4
- * deliberately produces structure, gists, blocks and labels as one typed atomic
- * result (docs/project/hierarchy.md), and a tree published without its labels is
- * what that contract calls incomplete. `generateLabels` stays exported for
- * `evals/` and for src/hierarchy.ts.
+ * **`labels` is a step of its own again, and `npm run labels -- <slug>` runs
+ * it.** Both came back on 2026-09-07, in stage 2a of
+ * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md: the label pass
+ * is the slowest thing in the app — 682 s measured against a 740 s claimant
+ * deadline — so it left the blocking `hierarchy` step and became a free
+ * successor job a publication queues for itself. `STEP_ORDER` (src/step-order.ts)
+ * has the step and `package.json` has the script.
  *
- * **What that command was for has no replacement, and the plan thought it did.**
- * It said re-labelling becomes `npm run hierarchy -- <slug> --force`, paying for
- * an extra structure call as the honest price. Measured on 2026-09-05, that is
- * not what happens: `force` makes the *step* run again rather than skip, and the
- * step then finds its structure and its label batches in the article's
- * `checkpoints` rows and replays both — two consecutive forced runs on an
- * unchanged article bought two model calls and then none. **So changing the
- * label prompt and re-running is not a thing any command does today.** The eval
- * (`npm run eval:hierarchy`) is how a prompt change is judged; buying a genuinely
- * fresh answer needs `force` to mean something to a checkpoint, which is a
+ * ⟨This paragraph said the opposite until 2026-09-07, in the present tense, and
+ * had done since the step was retired on 2026-09-05. It is left recorded rather
+ * than simply deleted because the *reason* it gave still stands and is why the
+ * step's return had to be a plan rather than an edit: stage 4 produced structure,
+ * gists, blocks and labels as one typed atomic result, and a tree published
+ * without its labels was what that contract called incomplete. What changed is
+ * the contract — `nav_label_status` on the revision now carries `pending`,
+ * `ready` or `failed`, so an article may honestly reach the shelf without its
+ * labels and say so.⟩
+ *
+ * **Re-labelling on demand still is not a solved thing**, and this half of the
+ * old note survives intact. `force` makes the *step* run again rather than skip,
+ * and the step then finds its structure and its label batches in the article's
+ * `checkpoints` rows and replays both — measured 2026-09-05, two consecutive
+ * forced runs on an unchanged article bought two model calls and then none. So
+ * changing the label prompt and buying a genuinely fresh answer is not a thing
+ * any command does today: the eval (`npm run eval:hierarchy`) is how a prompt
+ * change is judged, and making `force` mean something to a checkpoint is a
  * queue-wide decision and Greg's. GPT Sol found it in review; the measurement is
  * in docs/project/setup-dev.md.
  *
- * **Why this is not part of src/hierarchy.ts's call any more.** A nav label is written
+ * `generateLabels` stays exported for `evals/`, for src/hierarchy.ts and for the
+ * step.
+ *
+ * **Why this is not part of src/hierarchy.ts's model call.** A nav label is written
  * for every gistable block, so this is the one output in the whole pipeline that
  * grows with the article without a bound — measured at 73% of stage 4's answer
  * on a 360-block article, against 27% for the entire tree. One model response
