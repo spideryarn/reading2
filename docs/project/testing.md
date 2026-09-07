@@ -921,7 +921,7 @@ The fixture rules that generalise, each of which passed a test against the bug i
   is the opposite case: a test that rebuilt a row's DOM id by hand as `` `-${mode}` `` went red in
   sixteen places when `commandId()` changed shape (2026-09-07), and no rename sweep could have
   warned it, because it never wrote the string down to be found. Unless the test's job *is* the
-  spelling, take it from the function that owns it —
+  spelling, take it from the function that owns it — `commandId(modeCommand(mode))` in
   [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx).
 - **Build every fake from one builder.** A hand-built flat error object passed against the exact bug
   it targeted, because it was not shaped like the real thing.
