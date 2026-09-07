@@ -249,7 +249,14 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        the pipeline step that builds the tree (src/step-order.ts), which is a
        collision the rename resolved in the *step's* favour — harmless here,
        since nothing a reader types addresses a step. */
-    aliases: ["toc", "contents", "structure"],
+    /* **`structure` came out of this list on 2026-09-07**, the day Structure
+       became a mode of its own. `label-prefix` outranks `alias-prefix`
+       (src/web/command-match.ts § TIERS), so leaving it would not have ranked
+       Hierarchy above Structure for somebody typing the word — but it would
+       have put Hierarchy in the list underneath, telling a reader that the two
+       adjacent buttons are two names for one thing. An alias that is another
+       mode's actual name is the loose alias this table refuses. */
+    aliases: ["toc", "contents"],
     experimental: false,
   },
   chat: {
@@ -386,6 +393,32 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        that objection is about code and does not reach a reader's keyboard.
        src/modes.ts § debate. */
     aliases: ["critiques", "reception", "responses"],
+    experimental: true,
+  },
+  structure: {
+    description: "The document's shape in two linked columns — every part, and the sections of the one you are in",
+    /* Checked against the code rather than written from the plan, which is the
+       failure this field has already had twice (docs/project/new-mode.md § The
+       card on the button). "Nothing to generate" is true: the tree arrives in
+       the page's own payload and this mode reaches no artefact and makes no
+       request. The second sentence is the reading order, which is the one thing
+       a press does not tell you and the whole of how the two columns relate —
+       and it is what a reader would otherwise have to infer from watching the
+       right-hand column change at a boundary. */
+    how: "The same already-built tree as Hierarchy and Outline, so there is nothing to generate. Read it left to right: the right-hand column is always the inside of the row marked in the left, and it re-fills as you cross into a new part.",
+    /* One nickname, and it is the shape rather than the subject. `tree` and
+       `map` are Outline's, `contents` and `toc` are Hierarchy's, and taking any
+       of them would rank the wrong one of three adjacent structural modes first
+       for somebody who typed the right thing — the exact cost this table says
+       a loose alias has. `columns` is the only word that is about *this* one. */
+    aliases: ["columns"],
+    /* **Behind the switch because it is an instrument, not because it is
+       unfinished** — the second row here that is about what the mode is for
+       rather than about its readiness, Referee being the first. Greg asked for
+       a third structural mode so that he could flip between three views of one
+       tree and find out which is better; hiding it is what keeps an ordinary
+       reader's bar unchanged while that comparison runs.
+       docs/project/experimental-features.md owns that argument. */
     experimental: true,
   },
 };

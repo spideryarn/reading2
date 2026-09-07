@@ -32,6 +32,7 @@ import { QuotesBand, VisitorQuotesBand } from "../modes/quotes/QuotesMode.js";
 import { DebateBand } from "../modes/debate/DebateMode.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
+import { StructureBand } from "../modes/structure/StructureMode.js";
 import { SummaryBand } from "../modes/summary/SummaryMode.js";
 import { DiagramBand } from "../modes/diagram/DiagramMode.js";
 import { RefereeBand } from "../modes/referee/RefereeMode.js";
@@ -1498,6 +1499,29 @@ export function Reader({
                what this panel needs and `allowParagraphs` beside it is already
                one. src/web/nav-labels.ts. */
             paragraphLabels={paragraphLabelsReady(article.navLabelStatus)}
+            onJump={jumpTo}
+          />
+        );
+      /* **The third structural view, and it owns its own hooks.** Outline's
+         tree and focus sampler are computed up in this component, gated on
+         `mode === "outline"`, because that is where they were when App.tsx was
+         split. Structure's are inside `StructureBand`, which is only mounted
+         here — so nothing of this mode's is measured or built while the reader
+         is in any other one. Same reason there is no owner/visitor pair: the
+         tree is in the payload every reader already holds, so there is nothing
+         to fetch and nothing for a visitor to be short of. */
+      case "structure":
+        return (
+          <StructureBand
+            article={article}
+            leafDepth={geometry.leafDepth}
+            sections={sections}
+            layoutKey={layoutKey}
+            /* `modeW` is 0 exactly when the band covers the prose instead of
+               sitting beside it (layout.ts) — the same input `OutlinePanel`
+               takes, read from the layout rather than from a width guessed
+               here. */
+            proseBeside={fit.modeW > 0}
             onJump={jumpTo}
           />
         );

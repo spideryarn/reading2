@@ -160,6 +160,7 @@ import {
   BookA,
   Brain,
   ClipboardCheck,
+  Columns2,
   Command,
   Lightbulb,
   ChevronUp,
@@ -566,6 +567,24 @@ const MODES_UI = [
   {
     mode: "outline",
     icon: Focus,
+  },
+  /* Third of the three structural views, and it is here so that the comparison
+     it was built for is three adjacent buttons rather than a hunt across the
+     bar — Greg, 2026-09-06: "that way I can flip back and forth to compare".
+
+     **Most readers never see this row**, because the mode is behind the
+     experimental switch (src/mode-catalog.ts § structure), so the bar an
+     ordinary reader gets is unchanged by it: Hierarchy, then Outline, then
+     Summary, exactly as before. `visibleModes` below is what makes that true,
+     and `tests/dock-experimental-modes.test.tsx` is what keeps it true.
+
+     `Columns2` rather than another tree or list glyph: Hierarchy has `ListTree`
+     and Outline has `Focus`, and the thing this mode is *for* is the pair of
+     linked columns rather than the tree all three read.
+     docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md. */
+  {
+    mode: "structure",
+    icon: Columns2,
   },
   {
     mode: "summary",

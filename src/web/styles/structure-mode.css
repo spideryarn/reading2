@@ -1,0 +1,299 @@
+/* structure-mode.css — the Structure panel in the mode band: the document's
+   shape in two linked columns. StructurePanel.tsx.
+
+   Read docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md
+   first. Structure is the third of three views over one tree — Hierarchy's
+   columns, Outline's nested list, and this — added on 2026-09-06 so that the
+   three can be compared, and hidden behind the experimental switch so that
+   adding it changes nothing for an ordinary reader. It is an instrument rather
+   than an addition.
+
+   **Deliberately not written by extending `.mode-band.outln`** in
+   outline-mode.css. Outline is one of the two things being compared against,
+   and a shared selector is a change to it: the comparison would then be
+   measuring a mode that this work moved. The duplication is on the record in
+   the plan doc § Why Outline's measuring code is copied rather than shared, and
+   it comes out when Greg has decided what survives.
+
+   -------------------------------------------------------- § structure mode --
+
+   **The panel does not scroll**, the same rule and the same reason as Outline
+   and as the gist columns' context panels: a wheel over the band moves the
+   article, and the reader's scroll is never taken off it. `overflow: hidden`,
+   never `auto`. If the list overflows, the fit chose the wrong rung; the answer
+   is a lower rung, never a scrollbar.
+
+   **Stage 1 draws both columns at a fixed rung.** The measured ladders, the
+   reserved-height wells and the row window on a short viewport are stage 2. */
+.mode-band.struct {
+  overflow: hidden;
+  /* The browser adjusts a scroll container's position to keep visible content
+     still when content above it resizes — which is every part boundary here.
+     It would quietly undo the layout this panel just chose. Same fix and same
+     reason as `.mode-band.outln` and ContextPanel. */
+  overflow-anchor: none;
+  /* **This padding is not free, and the cost is the two-column threshold.**
+     `.mode-band` is `border-box` with a 1px border, so a 400px band carries 399
+     content pixels; two `GIST_MIN` (176) tracks and a 12px gutter need 364, so
+     the bare threshold is a 365px band. Every pixel of horizontal padding here
+     raises that by two — 12px a side puts it at 389, which still fits inside
+     `MODE_IDEAL` and is why this number is 0.75rem rather than Outline's
+     1.25rem. GPT Sol's review of the plan, finding 6. */
+  padding: 0.75rem 0.75rem 0.5rem;
+}
+
+/* **Two tracks, or one, and the switch is `container-type` rather than a width
+   read off `--mode-w`.**
+
+   `fitMode` reports `modeW: 0` when the band *covers* the prose, while the CSS
+   expands the band to the whole viewport (narrow-window.css) — so a query on
+   `--mode-w` would stack the columns on the one screen where the band is
+   widest. A container query asks the element how wide it actually is, which is
+   the only question with a true answer here. Sol, finding 6.
+
+   364px is the content width two 176px tracks and a 12px gutter need; the
+   band's own padding is already outside it, because the query is on this
+   element's content box. */
+.struct-grid {
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  /* `flex: 1 1 auto` and not `height: 100%`. The band is a column flexbox with
+     `min-height: 0` (mode-band.css), so a percentage height here resolves
+     against a box that is itself still being sized — and `min-height: 0` is what
+     lets this shrink rather than push the band past its `bottom`. Same pair the
+     other panels' scrollers use. */
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: start;
+}
+
+@container (min-width: 364px) {
+  .struct-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+}
+
+.struct-side {
+  min-width: 0;
+}
+
+/* The bracket, and the whole of the connector in v1: column B is drawn as the
+   inside of the row marked in column A, and the rule down its left edge is what
+   says so. In the parent depth's tint, so the eye pairs it with the marked row
+   rather than reading it as a divider. */
+.struct-inner {
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--rule-strong);
+}
+
+/* Stacked, the bracket would point at the row above rather than to the left, so
+   it moves to the top edge and the indent goes. Same mark, honest in both
+   layouts. */
+@container (max-width: 363.98px) {
+  .struct-inner {
+    padding-left: 0;
+    padding-top: 0.5rem;
+    border-left: 0;
+    border-top: 2px solid var(--rule-strong);
+  }
+}
+
+/* Column B's header: the part these rows are the inside of. Not a `.band-head`
+   — that would be the *band* naming itself, which the Dock already does. This
+   names the column's subject, which nothing else on screen says. */
+.struct-of {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  margin: 0 0 0.35rem;
+  padding: 0 0.3rem;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.struct-col {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+/* A count standing in for the rows a window left off. Sized and spaced like a
+   row so the level's shape is unbroken, but plainly not one: no hover, no
+   pointer, and italic. It is `aria-hidden` in the markup — a screen reader
+   moving through the list wants the rows, and "12 earlier" is a fact about the
+   drawing rather than about the document. */
+.struct-elided {
+  padding: 0.15rem 0.3rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  font-style: italic;
+}
+
+/* The honest total, when a section's paragraphs are too many to draw and there
+   is no centre to window them around (structure.ts). Under column B rather than
+   inside it: it is a fact about the current section, not one of its rows. */
+.struct-total {
+  margin: 0.35rem 0 0;
+  padding: 0 0.3rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  font-style: italic;
+}
+
+/* A button rather than a link, because a row moves the reading position within
+   this page rather than navigating: there is no href a middle-click could
+   usefully open, and offering one would promise a second copy of the article.
+   The same call every other row in the band makes.
+
+   **A grid rather than a flex row, and it is the same trap Outline documented**
+   (outline-mode.css § `.outln-row`): the title needs to be able to become a
+   block-level box for a line clamp, and as an inline-flow sibling of the number
+   it would then take a line of its own — every numbered row two lines tall,
+   nothing erroring, half the panel's height spent on numbers. Grid from the
+   start, so that stage 3 can clamp without rediscovering it. */
+.struct-row {
+  display: block;
+  width: 100%;
+  padding: 0.2rem 0.3rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: none;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+
+.struct-row:hover {
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
+/* Focus drawn on the row rather than left to the UA default: the rows sit on a
+   raised surface where some platforms' default ring is the same value as the
+   background it is drawn on. Inset, so it is not clipped by the panel's
+   `overflow: hidden` on the first and last rows. */
+.struct-row:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: -2px;
+}
+
+/* **"You are here", and it steps in weight and colour rather than in size.**
+   Outline's tiers step in size because its rows are one sequence and distance
+   along that sequence is the thing being shown. Here the marked row is the one
+   column B is the inside of — a relationship rather than a distance — so it is
+   marked as a state, and nothing around it shrinks.
+
+   Keyed off `aria-current` rather than a `.here` class so that the mark a
+   screen reader is given and the mark an eye is given cannot drift apart. */
+.struct-row[aria-current] {
+  color: var(--ink);
+  font-weight: 600;
+  background: var(--surface-raised);
+}
+
+/* The number is an address, so it is tabular and it does not wrap: "10" and "9"
+   line up, and a two-digit part does not push its title onto a second line in a
+   194px column.
+
+   `max-width` for the reason Outline's has one: a number past it wraps and
+   makes its own row taller — which a measuring copy would see — rather than
+   squeezing the title toward zero. A supplement's number is the empty string
+   and still reserves its gutter, so the apparatus lines up with the parts it
+   sits after rather than hanging a step to their left. */
+/* **The title line is its own grid**, so the number sits BESIDE the title
+   instead of above it. Outline documented the trap and it is the same one here:
+   `.struct-text` becomes a block-level box the moment it grows a line clamp, and
+   as an inline-flow sibling of `.struct-num` it then takes a line of its own —
+   every numbered row two lines tall, nothing erroring, half the panel's height
+   spent on numbers. Grid from the start so stage 2 can clamp without
+   rediscovering it. */
+.struct-line {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+
+.struct-num {
+  grid-column: 1;
+  min-width: 1.5em;
+  max-width: 6em;
+  color: var(--ink-faint);
+  font-size: 0.82em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* **The number lifts with its row.** `.struct-num` sets an explicit colour, so
+   it beats the row's `[aria-current]` and `:hover` on directness and would
+   otherwise stay at the faintest value in the panel while its title went to
+   `--ink`. One step below the title rather than equal to it — the number is
+   still the subordinate half of the row; what it must not be is the one part of
+   "you are here" that does not say so. Outline had this bug and Sol found it,
+   2026-08-30. */
+.struct-row[aria-current] .struct-num,
+.struct-row:hover .struct-num {
+  color: var(--ink-soft);
+}
+
+.struct-text {
+  grid-column: 2;
+  min-width: 0;
+}
+
+/* The gist, on the rows the rung reached. A second line under the title rather
+   than beside it: at 193px there is no room for a column of sentences, and a
+   gist that wrapped into a 60px gutter would be unreadable at any length. */
+.struct-gist {
+  display: block;
+  margin-top: 0.1rem;
+  padding-left: 1.9em;
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+/* A paragraph row is a leaf and reads as one: no number of its own, indented
+   under its section, and never marked current (structure.ts
+   § `PARAGRAPHS_HAVE_NO_CENTRE`). */
+.struct-paragraph {
+  padding-left: 1rem;
+  font-size: 0.78rem;
+}
+
+/* **Read rows change colour and nothing else.** Opacity does not stack: a read
+   row and a distant row must not multiply into a grey smear over the half of the
+   document the reader has been through — the mistake caught in the gist columns
+   before it reached a screen (outline-mode.css says the same). */
+.struct-read .struct-text {
+  color: var(--ink-faint);
+}
+
+/* The apparatus — endnotes, references — is in the structure and outside the
+   argument, so it is drawn quieter and carries no number (structure.ts
+   § `makeRow`). */
+.struct-supp .struct-text {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.struct-empty {
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}

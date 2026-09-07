@@ -3819,6 +3819,18 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   debate:
     "What we went looking for on the open web: replies to this piece, and the argument around " +
     "the claims it makes.",
+  /* **The same three words as `hierarchy` and `outline` do the work here** —
+     "where there are gists" — for the reason those two carry it: a provisional
+     tree has none, and this row is read about articles that have not finished
+     ingesting (src/public/dto.ts § `provisional`).
+
+     It says "again" on purpose. This mode adds no content to what an owner is
+     about to publish; it is a third arrangement of the two things the rows
+     above already named, and a row implying otherwise would over-state what
+     sharing hands over. */
+  structure:
+    "Those same headings and gists again, arranged as two linked columns — the parts, and the " +
+    "sections of the one you are reading, where there are gists.",
 };
 
 /* ---------------------------------------------------------------- timeline --
