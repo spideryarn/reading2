@@ -198,6 +198,29 @@ describe("what the page puts first", () => {
     expect(order.indexOf("Access & sharing")).toBeLessThan(order.indexOf("Your reading"));
   });
 
+  /**
+   * *Generate it again* sits with the reader's own work rather than with the
+   * machinery, which is the placement argument in
+   * docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md
+   * § Where the control goes: the page reads *what the article is*, then *where
+   * it goes*, then *the reader's own work on it*, then *the machinery* — and
+   * asking for something to be generated again is the third of those.
+   *
+   * It is a section of its own and not a button on a stage row **because the
+   * stage rows are two disclosures deep**: a shut *Technical details*, then a
+   * subheading. The dimmed placeholder lived there for three days and Greg
+   * asked for the feature without mentioning it, which is the evidence he never
+   * saw it.
+   */
+  it("offers the re-runs with the reader's own work, above the export", async () => {
+    await mount();
+    const order = sections();
+
+    expect(order).toContain("Generate it again");
+    expect(order.indexOf("Your reading")).toBeLessThan(order.indexOf("Generate it again"));
+    expect(order.indexOf("Generate it again")).toBeLessThan(order.indexOf("Export"));
+  });
+
   it("puts the machinery last, above only the thing that takes the article off the shelf", async () => {
     await mount();
     const order = sections();
