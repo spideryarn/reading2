@@ -1,8 +1,22 @@
 # The top bar leaves while you read, at every width
 
-**Status: stages 1–3 built 2026-09-07.** Worktree `hierarchy-column-controls`, branch
-`worktree-hierarchy-column-controls`, off `dev` at `70040b0b`. `npm run check` green — 786 files,
-14,329 tests — `npm run typecheck` clean, browser pass at five widths recorded under stage 3.
+**Status: done and on `dev`, 2026-09-07.** All three stages built, both review rounds answered, and
+the worktree removed.
+
+- `cb8ffccf` — stages 1–3
+- `b86b6726` — the round-two fixes (F6–F10)
+- merged to `dev` as `b12a8fa1`, off `70040b0b`. Worktree `hierarchy-column-controls`, branch
+  `worktree-hierarchy-column-controls`, both gone.
+
+`npm run check` green on the merged tree as pushed — **797 files, 14,758 tests** — `npm run
+typecheck` clean, four mutations red then restored, and **two** browser passes at five widths
+(§ stage 3, and § round two for the focus case the second review found). The pre-review numbers this
+line used to carry, 786 files and 14,329 tests, were from before the merge with `dev`'s `App.tsx`
+split.
+
+**Nothing is left of this plan.** The two things it deliberately did not do are at the bottom, and
+neither is a loose end: one is a claim it corrected rather than a behaviour it changed, and the
+other is a pre-existing defect in `dockOffset()` written up rather than folded in.
 
 The controls bar already gets out of the way while you read forwards — but only on a phone. This
 makes it do that on a laptop too.

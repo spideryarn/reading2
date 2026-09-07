@@ -4,6 +4,16 @@
 >
 > — Greg, 2026-09-07
 
+**Status: built, reviewed and landed on `dev` on 2026-09-07** (`bf5c1dbf`). All fourteen modes carry
+a two-paragraph `ControlTip` in **both** arms of the bar. `npm test` was 3 red of 787 files, all
+three environmental — two want a build the worktree had never run, the third is the Postgres
+concurrency test, green on its own. Typecheck clean; checked in a browser at 1280px.
+
+**What is deliberately not done**, and it is the only thing left: the bar's three buttons that are
+*not* modes — Comments, Tweets, Metadata — still carry `title` attributes. They now sit visibly in
+the `title` arm of `DockLink`'s `hover` union, so the debt is written into the type rather than into
+a comment. § The simpler option passed over says why they were left.
+
 The fourteen mode buttons already open a card. What the card says is **one sentence**, and that
 sentence is `MODE_CATALOG[mode].description` — the same words the command bar draws inline beside
 the name. So the hover costs a reader 300ms to be told what the button's own label plus a glance at
