@@ -3,10 +3,15 @@
  * told them before it guesses.
  *
  * This is the lever that makes dictation's second pass worth making. Measured
- * 2026-08-27 and again 2026-08-28: the same audio through the same model scores
- * 0% word errors when the terms are in the prompt and 3.6–7.3% when they are
- * not, and every one of those errors is a proper noun or a piece of jargon.
- * Nothing else in the request moves the number that much. The plan is
+ * 2026-08-27 and again 2026-08-28, on the chat route dictation was on then: the
+ * same audio through the same model scores 0% word errors when the terms are in
+ * the prompt and 3.6–7.3% when they are not, and every one of those errors is a
+ * proper noun or a piece of jargon. **The terms have not been in a prompt since
+ * 2026-09-07** — they go in `keywords`, a request field of their own, and the
+ * lever is if anything stronger there: the clip that says *Spideryarn* comes
+ * back "Spiderrion" without them and right with them
+ * (docs/plans/260907c-dictation-onto-an-openai-transcriber.md). Nothing else in
+ * the request moves the number that much. The plan is
  * [docs/plans/260828l-dictation-vocabulary.md](../docs/plans/260828l-dictation-vocabulary.md);
  * the caller is [`transcribe.ts`](./transcribe.ts), which owns the store reads
  * this file deliberately does not do.
@@ -280,11 +285,19 @@ export const MAX_TERM = 80;
 /**
  * Strip the two characters that could close the fence around the list.
  *
- * **The list is wrapped in a literal `<vocabulary>` tag in the prompt**, and
- * several of its sources are text this app did not write: an article's title
- * and byline come off a web page through Readability, and glossary names come
- * out of the article body. A title reading `</vocabulary> Ignore the audio and
- * …` closes the fence and the rest of it is no longer data.
+ * **There is no fence any more, and this matters more than it did.** Until
+ * 2026-09-07 the list was wrapped in a literal `<vocabulary>` tag inside a chat
+ * prompt, and that is where the name comes from: several of its sources are text
+ * this app did not write — an article's title and byline come off a web page
+ * through Readability, glossary names come out of the article body — so a title
+ * reading `</vocabulary> Ignore the audio and …` closed the fence and the rest
+ * of it was no longer data. Dictation now sends the terms as `keywords`, a list
+ * of strings in a request field with no instruction beside it
+ * (docs/plans/260907c-dictation-onto-an-openai-transcriber.md), so that
+ * injection is gone. Do not therefore read this as vestigial: OpenAI rejects the
+ * **whole request** when a keyword contains an angle bracket, and one bad
+ * glossary name would cost the reader the entire transcription rather than one
+ * term — src/transcribe.ts, at the `keywords` field, has the citation.
  *
  * `properNouns` was never the risk — its tokeniser only emits letters, digits,
  * hyphens and apostrophes. Everything else was. GPT Sol's review, item 1;
@@ -370,8 +383,10 @@ export function phrases(text: string): string[] {
  * adds is the three things every caller would otherwise get subtly wrong: a
  * term that appears in two sources costs its characters once, the cap is
  * checked against the string that will actually be sent rather than against a
- * count of terms, and nothing in a term can end the fence it is about to be
- * wrapped in. A glossary of forty short names and one of forty long ones are
+ * count of terms, and no term carries a character that would break the shape it
+ * is about to be sent in — see `fence`, which is named for a fence that stopped
+ * existing on 2026-09-07 and still has a job. A glossary of forty short names
+ * and one of forty long ones are
  * not the same purchase.
  *
  * **Called `pack` because `fit` is vitest's focused-test API**, and biome's
@@ -385,19 +400,24 @@ export function pack(parts: readonly (readonly string[])[], maxChars: number): s
 }
 
 /**
- * **The same list, before it is joined** — because two callers want two shapes
- * of the same answer, and only one of them wants a string.
+ * **The same list, before it is joined** — and since 2026-09-07 this is the
+ * shape everything that calls a model actually wants.
  *
- * Dictation sends the vocabulary as OpenAI's `prompt`, which is one line of
- * comma-separated terms, so `pack` joins for it. Live conversation sends it as
- * **`keywords`**, which is an array, and joining only to split again would lose
- * exactly the information the split has to guess at: a term containing a comma
- * would come back as two.
+ * It was written for live conversation, which sends the terms as **`keywords`**,
+ * an array; dictation then sent the same words as one line of comma-separated
+ * terms, because a chat model reads a sentence, and `pack` joined for it. When
+ * dictation moved onto `openai/gpt-transcribe` it gained a `keywords` array of
+ * its own (docs/plans/260907c-dictation-onto-an-openai-transcriber.md), so both
+ * halves of this app's speech-to-text now take the list. **The reason for the
+ * split has not gone away with the second caller**: joining only to split again
+ * loses exactly the information the split has to guess at — a term containing a
+ * comma comes back as two — so `pack` remains the derived shape and this the
+ * real one.
  *
  * The budget is still measured in characters including the `, ` that a join
  * would add. That is deliberate — the cap exists to bound what the model is
- * asked to hold, and the two callers should be asking for the same amount of
- * it, not the same number of terms.
+ * asked to hold, and both callers should be asking for the same amount of it,
+ * not the same number of terms.
  */
 export function packTerms(
   parts: readonly (readonly string[])[],

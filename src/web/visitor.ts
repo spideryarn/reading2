@@ -166,6 +166,22 @@ const POLICY: Record<Mode, VisitorPolicy> = {
      from the same payload the visitor already holds, and reaches no artefact at
      all: without arc.json it simply skips the arc rung. */
   outline: { kind: "available" },
+  /* **And Structure, on exactly the same bargain, stated for the same reason
+     Outline had to be.** It is a third arrangement of the tree in the payload
+     the visitor already holds: no artefact, no request, nothing to be short of.
+     It draws no arc, so it does not even have Outline's one skipped rung.
+
+     **Behind the experimental switch is not the same question as owners-only,
+     and this row is where the two get confused.** The switch decides whether
+     the *bar draws the button*; this table decides what a visitor is shown when
+     they arrive at the mode. A signed-out reader is treated as switch-off
+     (docs/project/experimental-features.md), so they will not find this in the
+     bar — but `?mode=structure` still works for them, because hiding a feature
+     never breaks a link to it, and what they then get has to be the same band
+     the owner sees. Marking it `owners-only` to "match" the switch would make a
+     shared URL show two people different things, which is the one thing that
+     doc says the switch must never do. */
+  structure: { kind: "available" },
   /* And summary, since 2026-08-31. It used to be an artefact mode, gated on a
      `summary.json` a visitor's payload might not carry. The generated ladder is
      gone (docs/plans/260831s-gist-only-summaries.md) and what the panel draws now is the

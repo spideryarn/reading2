@@ -4,8 +4,15 @@
  * `SPINE_W` in layout.ts and `--spine-w` in styles.css are the same number
  * written twice, and two `@media` queries are *derived* from it by hand —
  * both of them `GIST_MIN + PROSE_MIN + SPINE_W - 1` — because a media query
- * cannot read a custom property and `@custom-media` is not shipped anywhere. A
- * third copy of that sum lives in `scroll.ts` as a `matchMedia` string.
+ * cannot read a custom property and `@custom-media` is not shipped anywhere.
+ *
+ * **There was a third copy, in `scroll.ts` as a `matchMedia` string, and it went
+ * on 2026-09-07** — `watchBarVisibility` asked the breakpoint so a large window
+ * would attach no scroll listener, and then the top bar started hiding at every
+ * width and there was nothing left to gate
+ * (docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md). The
+ * last describe below keeps the half of that guard which still has a subject:
+ * the query is written once, and no copy of it has come back.
  *
  * **There was a fourth, the mode crossover, and it is gone rather than
  * checked** — the last describe in this file says why, and stands where it was.
@@ -18,8 +25,9 @@
  * layout.ts and nothing in the stylesheet had to move with it. Had the query
  * still been there it would have been a fifth hand-copy to find.
  *
- * So there are five places one number lives, no tool checks any of them against
- * the others, and **the failure is silent in the direction that matters**. Move
+ * So there are four places one number lives — five until 2026-09-07 — no tool
+ * checks any of them against the others, and **the failure is silent in the
+ * direction that matters**. Move
  * `SPINE_W` and leave the stylesheet behind and there is a band of window widths
  * where `fitView` offers a gist column the stylesheet has already decided there
  * is no room for; move the mode query and leave `fitMode` behind and every mode
@@ -216,39 +224,51 @@ describe("the derived breakpoints are the sums they say they are", () => {
   });
 });
 
-describe("scroll.ts's SMALL_DEVICE is the same query as § a small device", () => {
-  /**
-   * The fourth copy, and the one whose own comment used to say no test could
-   * catch it drifting — because the failure is "the bar never hides", which
-   * looks exactly like the feature being off.
-   */
-  it("carries the narrow-window number", () => {
-    const m = scroll.match(/const SMALL_DEVICE = "([^"]+)"/);
-    expect(m, "SMALL_DEVICE literal not found in scroll.ts").not.toBeNull();
-    const width = m![1]!.match(/max-width:\s*(\d+)px/);
-    expect(width, `no max-width in ${m![1]}`).not.toBeNull();
-    expect(Number(width![1])).toBe(GIST_MIN + PROSE_MIN + SPINE_W - 1);
-  });
+/**
+ * **§ a small device's query, which used to have a twin in TypeScript.**
+ *
+ * `scroll.ts` held a `SMALL_DEVICE` constant carrying this string
+ * character-for-character, because `watchBarVisibility` asked `matchMedia` the
+ * same question the stylesheet asked and attached its scroll listener only
+ * while it matched. The two tests here were the guard against those drifting,
+ * and the failure they caught was a bad one: "the bar never hides" looks
+ * exactly like the feature being off.
+ *
+ * **That constant went on 2026-09-07**, when the top bar started hiding at every
+ * width and there was nothing left to gate
+ * (docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md).
+ * The half that asserted the *number* is covered by the marker check above,
+ * which reads every `spine-width-check` comment in the stylesheets and this
+ * query carries one.
+ *
+ * **What is kept is the half the markers cannot do**: the whole string, once.
+ * The `max-height` clause and the comma are load-bearing — the comma is an OR,
+ * so a query agreeing on the width while disagreeing on the height applies the
+ * dock's half of the switch on a different set of devices — and a *second* copy
+ * appearing somewhere is how § a small device and § a narrow window drifted
+ * apart in the first place.
+ */
+describe("§ a small device's query", () => {
+  const SMALL_DEVICE = `(max-height: 620px), (max-width: ${GIST_MIN + PROSE_MIN + SPINE_W - 1}px)`;
 
-  it("is the same string the stylesheet uses, character for character", () => {
-    /* Not just the same number: the `max-height` half and the comma are load
-       bearing too (the comma is an OR — styles.css § a small device), and a
-       copy that agreed on the width while disagreeing on the height would
-       attach the listener on a different set of devices from the one the rules
-       apply to. */
-    const literal = scroll.match(/const SMALL_DEVICE = "([^"]+)"/)![1]!;
+  it("is written exactly once across the reader stylesheets", () => {
     /* **`cssCode`, not `css`**: this file is full of prose quoting media
-       queries, including the one this literal used to be, so the raw text would
-       be satisfied by a *comment* describing a rule that no longer exists. And
-       an exact count rather than `toContain`, so that a second copy of the query
-       appearing somewhere — which is how § a small device and § a narrow window
-       drifted apart in the first place — is a failure rather than a shrug.
-       GPT Sol, 2026-08-28. */
-    const uses = cssCode.split(`@media ${literal} {`).length - 1;
+       queries, so the raw text would be satisfied by a *comment* describing a
+       rule that no longer exists. An exact count rather than `toContain`, so a
+       second copy is a failure rather than a shrug. GPT Sol, 2026-08-28. */
+    const uses = cssCode.split(`@media ${SMALL_DEVICE} {`).length - 1;
     expect(
       uses,
-      `the reader stylesheets should use "@media ${literal} {" exactly once`,
+      `the reader stylesheets should use "@media ${SMALL_DEVICE} {" exactly once`,
     ).toBe(1);
+  });
+
+  it("no longer has a copy in scroll.ts", () => {
+    /* The point of this line is that the constant is *gone*, not merely
+       unused: a `SMALL_DEVICE` sitting in scroll.ts with nothing reading it is
+       a breakpoint two files still appear to agree on, and the next person to
+       need one would reach for it. */
+    expect(scroll).not.toMatch(/SMALL_DEVICE\s*=/);
   });
 });
 

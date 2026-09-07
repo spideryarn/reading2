@@ -56,6 +56,8 @@ function passage(name: string): Found {
     long: name,
     at: 0,
     whole: false,
+    /* Not a quote. See `Found.quoteTier`. */
+    quoteTier: null,
   };
 }
 
@@ -78,11 +80,19 @@ const PRODUCERS = {
 } as const satisfies Record<string, keyof PassageSlots>;
 
 /**
- * **The nine modes with no passage producer**, named rather than derived — the
+ * **The modes with no passage producer**, named rather than derived — the
  * point of the file is that this set is a decision somebody made and not a
  * fall-through. `chat` and `remember` were verified to publish nothing when
  * they moved out of `App.tsx`; `glossary`'s selection is a different currency
  * (`termSelections`) that never reaches this state.
+ *
+ * `structure` joined on 2026-09-07, and this is the one place to be sceptical
+ * about it: adding a mode here is also the cheap wrong fix for the compile
+ * error `selectPassages` raises, so the entry has to be earned. It is — the
+ * mode is navigation over the tree, so every row of it is already a door into a
+ * passage rather than a claim about one, and a version that lit its own rows'
+ * blocks in the prose would mark the whole article. Same position as `outline`
+ * and `hierarchy` for the same reason.
  */
 const SILENT: Mode[] = [
   "plain",
@@ -93,6 +103,7 @@ const SILENT: Mode[] = [
   "diagram",
   "remember",
   "outline",
+  "structure",
   "debate",
 ];
 
@@ -105,7 +116,7 @@ describe("selectPassages", () => {
     }
   });
 
-  it("gives the nine modes with no producer the shared empty list, by identity", () => {
+  it("gives every mode with no producer the shared empty list, by identity", () => {
     for (const mode of SILENT) {
       const chosen = selectPassages(mode, SLOTS);
       /* `toBe`, not `toEqual`: the four memos in `Reader` key on this array by

@@ -31,7 +31,14 @@ api-dist
 data
 output
 
-# Nothing in the build or the running server reads any of these.
+# Nothing in the build or the deployed function reads any of these — a claim
+# this file makes and cannot check. The `build` gate in scripts/deploy.ts is
+# what checks it: it renames these aside before building, because reaching into
+# one of them resolves everywhere except on Vercel. See
+# docs/postmortems/260907a-an-import-into-a-vercelignored-directory-built-everywhere-except-vercel.md
+#
+# (The local dev server is a deliberate exception — vite.config.ts reads
+# supabase/config.toml in an `apply: "serve"` plugin, which never ships.)
 docs
 evals
 tests

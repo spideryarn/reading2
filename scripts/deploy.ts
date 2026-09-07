@@ -37,7 +37,7 @@
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -555,7 +555,93 @@ function explainBuildFailure(output: string): string {
       "           in a build connects to any of them) and run this again."
     );
   }
+  /* A failure that names one of the pruned roots is the one this gate would
+     otherwise have missed, and it looks insane without this line: the file is
+     right there in the editor. Say which directory and why it was not on
+     disk. */
+  const pruned = maskedRoots.find((r) => new RegExp(`['"\`/(]${r}/`).test(output));
+  if (pruned) {
+    return (
+      `${tail(output, 12)}\n\n` +
+      `         ^ this names ${pruned}/, which .vercelignore prunes out of the upload —\n` +
+      "           so this gate built without it, exactly as Vercel will. The file exists on\n" +
+      "           your disk and will not exist on the build machine. Move what the build\n" +
+      "           needs into src/, or take the directory off .vercelignore deliberately.\n" +
+      "           docs/postmortems/260907a-an-import-into-a-vercelignored-directory-built-everywhere-except-vercel.md"
+    );
+  }
   return tail(output);
+}
+
+/**
+ * The `.vercelignore` entries that name a whole directory of *content*.
+ *
+ * Derived from the file rather than typed out, so it cannot drift from it, and
+ * **read out of the worktree rather than out of `ROOT`** — the same reason
+ * everything else here is: this script gates the commit, not the disk, and
+ * `.vercelignore` is part of what a commit changes.
+ *
+ * Filtered down to plain names: a pattern (`scratch-*`, `.env*`) and a negation
+ * (`!.env.example`) are neither a directory nor safe to guess about. The four
+ * exclusions are the ones the build itself needs — `node_modules` is symlinked
+ * in by the caller, `.git` is what makes the worktree a worktree, and the two
+ * `dist` directories are the build's own output rather than its input.
+ */
+function prunedRootsIn(dir: string): string[] {
+  const spec = path.join(dir, ".vercelignore");
+  if (!existsSync(spec)) return [];
+  return readFileSync(spec, "utf8")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l !== "" && !l.startsWith("#") && !l.startsWith("!"))
+    .filter((l) => !l.includes("*") && !l.includes("/"))
+    .filter((l) => !["node_modules", ".git", "dist", "api-dist"].includes(l));
+}
+
+/**
+ * What the last `maskPrunedRoots` actually moved, for `explainBuildFailure` to
+ * name. A `let` rather than a parameter because the two are far apart and the
+ * only reader is a message.
+ */
+let maskedRoots: string[] = [];
+
+/**
+ * **Build the way Vercel builds — without the directories it never receives.**
+ *
+ * `.vercelignore` prunes the upload *before* the build machine sees it, so the
+ * build gate below had been answering a different question from the one that
+ * matters: it compiled a full worktree, where every ignored directory is
+ * present. An `import` reaching into one of them therefore resolved here, on
+ * every laptop, and in the editor, and failed on Vercel alone with
+ * `[UNRESOLVED_IMPORT]` — a green gate, a pushed `main`, an applied migration
+ * and no deployment. It happened on 2026-09-07 to a 210 KB data file the
+ * changelog page imports out of `docs/`.
+ * docs/postmortems/260907a-an-import-into-a-vercelignored-directory-built-everywhere-except-vercel.md
+ *
+ * Renamed aside rather than deleted, and restored by the returned closure —
+ * because `tests/` and the fixture corpus are exactly what the *later* gates
+ * need, and this runs in the window before `.env.local` is even linked in. The
+ * worktree is a throwaway checkout of a committed sha, so the worst a crash
+ * mid-rename can cost is a directory left with a `.pruned-` prefix inside a
+ * directory that is about to be deleted.
+ *
+ * It catches a static import, a Vite glob, a config read and a build script —
+ * anything the real compiler resolves. It cannot catch a runtime `readFile`,
+ * which is a different boundary and belongs to the deployed function.
+ */
+function maskPrunedRoots(wt: string): () => void {
+  const moved: Array<[string, string]> = [];
+  for (const name of prunedRootsIn(wt)) {
+    const live = path.join(wt, name);
+    if (!existsSync(live)) continue;
+    const aside = path.join(wt, `.pruned-${name}`);
+    renameSync(live, aside);
+    moved.push([live, aside]);
+  }
+  maskedRoots = moved.map(([live]) => path.basename(live));
+  return () => {
+    for (const [live, aside] of moved) renameSync(aside, live);
+  };
 }
 
 /**
@@ -646,7 +732,15 @@ function gatesAt(sha: string): void {
        second time here, which was the only place a developer could see the
        whole recipe; now there is one of it and this reads it rather than
        repeating it. */
-    const built = run("npm", ["run", "--silent", "build"], { cwd: wt, env: BUILD_ENV });
+    const unmask = maskPrunedRoots(wt);
+    let built;
+    try {
+      built = run("npm", ["run", "--silent", "build"], { cwd: wt, env: BUILD_ENV });
+    } finally {
+      /* Before `gate()`, which throws on a failure it is not told to force —
+         and the gates after this one need `tests/` and the corpus back. */
+      unmask();
+    }
     gate("build", built.code === 0, () => explainBuildFailure(built.out));
 
     /* Only the tests need the personal state, so only they get it. */

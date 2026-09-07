@@ -134,10 +134,11 @@ beforeEach(() => {
   }
   vi.stubGlobal("fetch", async (_url: string, init: { body: string }) => {
     calls.push({ body: JSON.parse(init.body) as Record<string, unknown> });
-    return new Response(
-      JSON.stringify({ choices: [{ message: { content: '{"transcript":"Spideryarn"}' } }] }),
-      { status: 200 },
-    );
+    /* The transcription endpoint's answer, not chat/completions' — dictation
+       moved on 2026-09-07 and a `{choices: […]}` reply here would be a stub
+       shaped like a wire this app no longer speaks, which is a green test about
+       nothing. docs/plans/260907c-dictation-onto-an-openai-transcriber.md. */
+    return new Response(JSON.stringify({ text: "Spideryarn" }), { status: 200 });
   });
 });
 
@@ -167,16 +168,32 @@ function mount(slug: string | null) {
 /** Past the floor under which nothing is sent to the model at all. */
 const AUDIO = "A".repeat(8_000);
 
-/** The `<vocabulary>` block of the request the model would have received. */
+/**
+ * The words the model would have received, however they are carried.
+ *
+ * They used to be a `<vocabulary>` fence inside a user message; since
+ * 2026-09-07 they are `provider.options.openai.keywords`, a list in a field of
+ * its own. **The tests below did not change** — what a reader of a report cares
+ * about is that Spideryarn and the article's own words reach the model, not
+ * which envelope they travel in — so the change is confined to this function,
+ * which is why it exists.
+ *
+ * It **throws when the field is absent** rather than returning empty. An empty
+ * vocabulary and an unsent one are the same string and very different bugs, and
+ * the whole report behind this file was a suspicion that the words were not
+ * arriving (docs/reusable/silent-success.md).
+ */
 async function vocabularySentFor(context: unknown): Promise<string> {
   const where = parseWhere(context);
   if (!where) throw new Error("the server would refuse this context");
   await transcribe(AUDIO, "webm", where);
-  const messages = calls[0]?.body.messages as { role: string; content: unknown }[];
-  const user = messages.find((m) => m.role === "user");
-  const parts = user?.content as { type: string; text?: string }[];
-  const text = parts.find((p) => p.type === "text")?.text ?? "";
-  return /<vocabulary>\n([\s\S]*)\n<\/vocabulary>/.exec(text)?.[1] ?? "";
+  const provider = calls[0]?.body.provider as
+    | { options?: { openai?: { keywords?: unknown } } }
+    | undefined;
+  const keywords = provider?.options?.openai?.keywords;
+  if (!Array.isArray(keywords))
+    throw new Error("no keywords in the request — the vocabulary never left");
+  return (keywords as string[]).join(", ");
 }
 
 /* ------------------------------------------------------------- the tests -- */

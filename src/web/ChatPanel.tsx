@@ -1899,9 +1899,12 @@ export function Composer({
    * `{ kind: "article", slug }` is what tells the server to prime the
    * transcriber with this article's glossary — which is exactly the vocabulary
    * a reader asking about this article is about to use. Measured on 2026-08-27:
-   * with the terms in the prompt the model got this app's own jargon right
-   * every run; without them it made the same mistakes as every dedicated
-   * speech-to-text model. docs/plans/260827x-dictation-two-pass.md.
+   * with the terms supplied the model got this app's own jargon right every run;
+   * without them it made the same mistakes as every dedicated speech-to-text
+   * model. docs/plans/260827x-dictation-two-pass.md. (They went *in the prompt*
+   * until 2026-09-07 and go in `keywords` now — the finding is about telling it
+   * the words, not about where they sit;
+   * docs/plans/260907c-dictation-onto-an-openai-transcriber.md.)
    */
   const dictate = useDictationField({
     value,

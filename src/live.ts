@@ -83,9 +83,14 @@ export const LIVE_VOICE = "marin";
 /**
  * **The transcriber, and it is not the one dictation uses.**
  *
- * Dictation's second pass runs a chat model over a finished recording. This is
- * the live input path, and it changed on 2026-08-31 because the first real
- * conversation produced a bug Greg spotted straight away:
+ * Dictation's second pass posts a **finished** recording to a batch endpoint and
+ * waits for the whole transcript — `openai/gpt-transcribe` on OpenRouter's
+ * `/v1/audio/transcriptions` since 2026-09-07, and a chat model over the same
+ * recording before that (docs/plans/260907c-dictation-onto-an-openai-transcriber.md).
+ * Either way it is one request with an end. This is the live input path, where
+ * the audio never stops and the reader never presses anything, and it changed on
+ * 2026-08-31 because the first real conversation produced a bug Greg spotted
+ * straight away:
  *
  * > I noticed that it did the hallucination thing where it thought I'd said all
  * > the vocabulary when there was a period of silence/background noise.
@@ -465,9 +470,12 @@ export interface LiveToken {
  * function that a test can read without a network.
  *
  * **`vocabulary` is a term LIST, and which field it goes in is the whole
- * story.** Same words dictation builds (`vocabularyTermsFor`), but sent as
- * `keywords` rather than as `prompt`, and that is not tidiness — see
- * `LIVE_TRANSCRIBER` above for the bug the `prompt` field caused.
+ * story.** Same words dictation builds (`vocabularyTermsFor`), sent as
+ * `keywords` and not as `prompt`, and that is not tidiness — see
+ * `LIVE_TRANSCRIBER` above for the bug the `prompt` field caused. **The contrast
+ * is with the other field on this session, not with dictation**: since
+ * 2026-09-07 dictation asks for its words the same way, in the `keywords` its
+ * own transcriber takes. This route found it first, on 2026-08-31.
  *
  * **`keywords` cannot be verified by reading the session back.** It is accepted
  * with a 200 and does not appear in `session.created`, while `prompt` and

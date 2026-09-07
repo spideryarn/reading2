@@ -1010,6 +1010,27 @@ export interface Quote {
 }
 
 /**
+ * How heavily a quote is outlined in the prose — **two levels, and the number of
+ * levels is the finding, not an accident.**
+ *
+ * `1` is the light stroke, `2` the heavy one. The stylesheet owns the widths
+ * (1px and 3px, styles/annotations.css § quote strokes); this is an ordinal so
+ * that the design values stay in the design layer, exactly as `data-hues` keeps
+ * a count here and the colours next door.
+ *
+ * **Why not three.** A blind pairwise test on the box, 2026-09-07, scored three
+ * tiers at 1/2/3px at **13/20 — chance** — and the tester's answers correlated
+ * with slot position rather than with thickness, which is the standard tell for
+ * guessing. Two tiers at 1px and 3px scored **12/12 at both device scale
+ * factors**, with no hesitation on any pair. Everything involving a middle tier
+ * is what fails: 1-vs-2 and 2-vs-3 are each marginal, while 1-vs-3 is obvious.
+ * So a third level would be a ranking the reader cannot see, which is worse than
+ * no ranking at all.
+ * docs/plans/260907c-quotes-drawn-as-a-stroke-in-the-prose-with-weight-carrying-priority.md
+ */
+export type QuoteTier = 1 | 2;
+
+/**
  * What was thrown away, and why. **Every one of these is invisible from
  * outside** — a dropped quote looks exactly like a line the model chose not to
  * offer — which is the whole reason they are counted and logged.
