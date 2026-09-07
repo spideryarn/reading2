@@ -58,15 +58,15 @@ paint in the **top layer**, above every z-index — `lightbox.css:12` says so in
 | 3 | **Illustrated full** `<dialog class="ill-full">` | `IllustratedView.tsx:610`, `showModal()` on `full` at `:310` | top layer, no z-index (`diagram-illustrated.css:225`) | `cancel` + `close` at `IllustratedView.tsx:342-343` | **no `preventDefault`** — the handler takes no event | platform closes it; `setFull(false)` |
 | 4 | **Sketch full** `<dialog class="sk-full">` | `SketchView.tsx:1317`, `showModal()` on `full` at `:521` | top layer, no z-index (`diagram-sketch.css:186`) | `cancel` + `close` at `SketchView.tsx:573-577`; the SVG's own Escape branch is **disabled while full** (`SketchView.tsx:853`) | no; the comment at `:574` says not-prevented is deliberate | platform closes it |
 | 5 | **Tooltip** (Floating UI) | wherever `<Tooltip>` is used — incl. the dock bar (`Dock.tsx:1687`, `:2061`), Outline, Search, Criteria, Claims, Debate, Masthead, Quiz | `.tooltip-anchor` **z-100** (`tooltip.css:22` — "Above EVERYTHING, drawer included") | `document` / bubble (`floating-ui.react.mjs:2782`) | **`stopPropagation()`** (`:2628`; `escapeKey` defaults `true` at `:2593`, `bubbles` undefined ⇒ `escapeKey: false` at `:2572`) | closes itself |
-| 6 | **Prose hover card** | always mounted in the reader (`App.tsx:3428`); shown on hover/tap of `mark.term, .prose a[href], a.cited-link, .chat-sources a[href]` (`ProseHoverCard.tsx:296`) | `.tooltip-anchor interactive hover-card`, so **z-100** (`useHoverCard.ts:771`, `tooltip.css:22/59`) | `document` / bubble (`useHoverCard.ts:645`) | **nothing** (`useHoverCard.ts:640`) | `shut()` |
+| 6 | **Prose hover card** | always mounted in the reader (`reader/Reader.tsx § `<ProseHoverCard>``); shown on hover/tap of `mark.term, .prose a[href], a.cited-link, .chat-sources a[href]` (`ProseHoverCard.tsx:296`) | `.tooltip-anchor interactive hover-card`, so **z-100** (`useHoverCard.ts:771`, `tooltip.css:22/59`) | `document` / bubble (`useHoverCard.ts:645`) | **nothing** (`useHoverCard.ts:640`) | `shut()` |
 | 7 | **Debate hover card** | Debate mode only (`DebatePanel.tsx:640`) | same z-100 layer | same hook, same line | **nothing** | `shut()` |
 | 8 | **Search colour picker** | `open` state in `SearchPanel.tsx:1858`, click-opened, portalled | `.srch-picker` **z-99** (`search.css:280`; the banner at `:274` says "above the drawer's 95") | `document` / bubble, via `useDismiss(context)` at `SearchPanel.tsx:1871` | **`stopPropagation()`** | closes itself |
 | 9 | **ProfilePanel** | `WrittenForYou.tsx:75/157` — Quotes band and the Tweets page | `.prof-panel` **z-99** (`profile.css:432`) | `document` / bubble, `ProfilePanel.tsx:162` | **`stopPropagation()`** | closes itself |
-| 10 | **Dock drawer** | `panel !== null && drawer` (`Dock.tsx:1170`); `panel` is `?panel=` (`App.tsx:2516`) | `.dock-drawer` **z-95** (`dock.css:474`); scrim 92, bar 96 | **`window` / capture** (`Dock.tsx:1115`), only while `open && onPanel` (`:1109`) | **`stopImmediatePropagation()`** (`Dock.tsx:1112`) | `onPanel(null)` |
-| 11 | **CommentDialog** | `owner && !overlay && openComment` (`App.tsx:3346`) or `!owner && !overlay && openComment` (`:3333`); `note` is `?note=` (`App.tsx:2131`) | `.cmt-dialog` **z-70** (`annotations.css:606`) | `window` / bubble (`CommentDialog.tsx:162`) | **nothing** | `setNote(null)` (`App.tsx:3343/3355`) |
-| 12 | **ChatDialog** | `owner && overlay` (`App.tsx:3287`) | `.chat-dialog` **z-70** (`dialogs.css:38`) | `window` / bubble (`ChatDialog.tsx:306`) | **nothing** | `onClose` — clears the draft/thread |
-| 13 | **AnnotateDialog** | `owner && annotating` (`App.tsx:3236`); `annotating` set only by `selectProse` (`App.tsx:2900`) | `.annotate-dialog` **z-70** (`dialogs.css:70`) | `window` / bubble (`AnnotateDialog.tsx:160`) | **nothing** | `setAnnotating(null)` (`App.tsx:3243`) — **discards the draft** |
-| 14 | **Masthead rename** | `rename.editing` (`TitleEditor.tsx:299`), reached by the pencil in `Masthead.tsx:226`; the masthead is in the reader (`App.tsx:3025`) | in flow, no z-index | React `onKeyDown` on the input (`TitleEditor.tsx:96`) — **T1** | **nothing** | `onDone(undefined)` — cancels the rename |
+| 10 | **Dock drawer** | `panel !== null && drawer` (`Dock.tsx:1170`); `panel` is `?panel=` (`reader/Reader.tsx § `panel``) | `.dock-drawer` **z-95** (`dock.css:474`); scrim 92, bar 96 | **`window` / capture** (`Dock.tsx:1115`), only while `open && onPanel` (`:1109`) | **`stopImmediatePropagation()`** (`Dock.tsx:1112`) | `onPanel(null)` |
+| 11 | **CommentDialog** | `owner && !overlay && openComment` (`reader/Reader.tsx § `owner && !overlay && openComment``) or `!owner && !overlay && openComment` (`:3333`); `note` is `?note=` (`reader/Reader.tsx § `note``) | `.cmt-dialog` **z-70** (`annotations.css:606`) | `window` / bubble (`CommentDialog.tsx:162`) | **nothing** | `setNote(null)` (`reader/Reader.tsx § `<CommentDialog onClose>``) |
+| 12 | **ChatDialog** | `owner && overlay` (`reader/Reader.tsx § `owner && overlay``) | `.chat-dialog` **z-70** (`dialogs.css:38`) | `window` / bubble (`ChatDialog.tsx:306`) | **nothing** | `onClose` — clears the draft/thread |
+| 13 | **AnnotateDialog** | `owner && annotating` (`reader/Reader.tsx § `owner && annotating``); `annotating` set only by `selectProse` (`reader/Reader.tsx § `selectProse``) | `.annotate-dialog` **z-70** (`dialogs.css:70`) | `window` / bubble (`AnnotateDialog.tsx:160`) | **nothing** | `setAnnotating(null)` (`reader/Reader.tsx § `<AnnotateDialog onCancel>``) — **discards the draft** |
+| 14 | **Masthead rename** | `rename.editing` (`TitleEditor.tsx:299`), reached by the pencil in `Masthead.tsx:226`; the masthead is in the reader (`reader/Reader.tsx § `<Masthead>``) | in flow, no z-index | React `onKeyDown` on the input (`TitleEditor.tsx:96`) — **T1** | **nothing** | `onDone(undefined)` — cancels the rename |
 | 15 | **BlockGutter disclosure** | `open` state, listener registered only while open (`BlockGutter.tsx:423`) | `.blk-gutter[data-open]` **z-3** (`gutter.css:660`) | `document` / bubble (`BlockGutter.tsx:430`) | **nothing** | `setOpen(false)` + focus returns to the "…" |
 
 All fifteen **READ**. There are exactly four native `<dialog>`s in `src/` and no others.
@@ -92,13 +92,13 @@ arrow key (`keynav.ts:466-470`), so it is not an Escape owner (**READ**).
 ## The reachable pairs
 
 "How a reader gets there" is a named interaction in every row. `?panel=`, `?note=` and `?thread=`
-are all URL state (`App.tsx:2516/2131/2165`), so several of these are also reachable by pasting a
+are all URL state (`reader/Reader.tsx § `panel`, `note` and `thread``), so several of these are also reachable by pasting a
 link.
 
 | # | Pair | How a reader gets there | Today | Should own it |
 |---|------|-------------------------|-------|----------------|
-| **1** | **Annotate + Comment** | select prose (`selectProse`, `App.tsx:2881` — clears `note`, sets `annotating`), then click a `mark.cmt` in the prose (`TableView.tsx:1378-1380`) or the gutter's `.blk-cmt` (`BlockGutter.tsx:498`). Both call `openCommentDialog`, which is `(id) => void setNote(id)` (`App.tsx:2910`) and clears nothing | **both close on one press; the annotation draft is discarded** | Comment (later, and painted on top — it renders after Annotate in `App.tsx`, same z-70). Annotate should stay with its draft |
-| **2** | **Annotate + ChatDialog** | select prose, then the gutter's chat or "?" button — `chatAboutBlock` (`App.tsx:2763`) and `helpAboutBlock` (`:2871`) set `chatDraft` and clear `note`, but **neither clears `annotating`** | **both close on one press; the annotation draft is discarded** | Chat (later, painted on top). **Not in the plan — same defect as pair 1, second door** |
+| **1** | **Annotate + Comment** | select prose (`selectProse`, `reader/Reader.tsx § `selectProse`` — clears `note`, sets `annotating`), then click a `mark.cmt` in the prose (`TableView.tsx:1378-1380`) or the gutter's `.blk-cmt` (`BlockGutter.tsx:498`). Both call `openCommentDialog`, which is `(id) => void setNote(id)` (`reader/Reader.tsx § `openCommentDialog``) and clears nothing | **both close on one press; the annotation draft is discarded** | Comment (later, and painted on top — it renders after Annotate in `App.tsx`, same z-70). Annotate should stay with its draft |
+| **2** | **Annotate + ChatDialog** | select prose, then the gutter's chat or "?" button — `chatAboutBlock` (`reader/Reader.tsx § `chatAboutBlock``) and `helpAboutBlock` (`:2871`) set `chatDraft` and clear `note`, but **neither clears `annotating`** | **both close on one press; the annotation draft is discarded** | Chat (later, painted on top). **Not in the plan — same defect as pair 1, second door** |
 | **3** | **Annotate + prose hover card** | select prose, then simply **hover a glossary term or a link** — no click at all | **both close; the annotation draft is discarded** | the hover card alone (z-100). **The cheapest path to the loss, and it needs no click** |
 | **4** | **Comment + prose hover card** | open a comment, hover a term | both close | the hover card alone |
 | **5** | **ChatDialog + prose hover card** | open a floating chat, hover a term (or a link in the answer — `.chat-sources a[href]` is in the selector) | both close; the chat draft goes with it | the hover card alone |
@@ -124,7 +124,7 @@ contain their own tooltips: the same `body` is rendered inside the `<dialog>` wh
 
 | Pair | Why not |
 |------|---------|
-| **Comment + ChatDialog** | mutually exclusive by construction: `ChatDialog` needs `overlay` (`App.tsx:3287`), both `CommentDialog` arms need `!overlay` (`:3333`, `:3346`). **READ** |
+| **Comment + ChatDialog** | mutually exclusive by construction: `ChatDialog` needs `overlay` (`reader/Reader.tsx § `owner && overlay``), both `CommentDialog` arms need `!overlay` (`:3333`, `:3346`). **READ** |
 | **Drawer + BlockGutter disclosure** | the scrim is a full-viewport button at z-92 (`dock.css:454-456`) so the gutter cannot be pressed under it; and opening the drawer is an outside pointerdown, which the gutter's own **capture** listener catches and closes on (`BlockGutter.tsx:426-432`). **READ** |
 | **Drawer + colour picker, Drawer + ProfilePanel** | both are click-opened and live in a mode band behind the scrim; and `useDismiss`'s `outsidePress` defaults to `true` on `pointerdown` (`floating-ui.react.mjs:2594-2595`), so pressing the dock tab dismisses them on the way. **READ** the defaults, **INFERRED** that the scrim intercepts the press |
 | **Two native dialogs at once** | all four use `showModal()` (`Lightbox.tsx:94`, `FeedbackDialog.tsx:421`, `IllustratedView.tsx:310`, `SketchView.tsx:521`), which makes everything outside the dialog inert, so the second cannot be opened. **READ** the calls, **INFERRED** the inertness |
@@ -134,8 +134,8 @@ contain their own tooltips: the same `body` is rendered inside the `<dialog>` wh
 
 ### F1 — the known-lossy pair is real, and there are three of it
 
-**Verified.** `selectProse` clears the comment before opening the annotation (`App.tsx:2897-2900`);
-`openCommentDialog` is `(id) => void setNote(id)` and clears nothing (`App.tsx:2910`). Both dialogs
+**Verified.** `selectProse` clears the comment before opening the annotation (`reader/Reader.tsx § `selectProse``);
+`openCommentDialog` is `(id) => void setNote(id)` and clears nothing (`reader/Reader.tsx § `openCommentDialog``). Both dialogs
 then render — `owner && annotating` (`:3236`) against `owner && !overlay && openComment` (`:3346`) —
 and both register a T3 `useEscapeToClose` that stops nothing.
 
@@ -149,7 +149,7 @@ closed. If focus were still in the textarea with words in it, the first press wo
 Two more doors to the same loss, neither of them in the plan:
 
 - **Annotate + ChatDialog** (pair 2). `chatAboutBlock` and `helpAboutBlock` clear `note` but not
-  `annotating` (`App.tsx:2763`, `:2871`), and `ChatDialog` is another T3 listener.
+  `annotating` (`reader/Reader.tsx § `chatAboutBlock``, `:2871`), and `ChatDialog` is another T3 listener.
 - **Annotate + hover card** (pair 3). This one needs **no click at all** — hovering a glossary term
   opens a T2 surface that stops nothing, so one Escape closes the card and discards the annotation.
 
@@ -222,7 +222,7 @@ presses once. The plan is right: **there is no coverage of any pair in this docu
 
 ### F6 — three smaller things found on the way
 
-- **`openCommentDialog` is typed `(id: BlockId)`** (`App.tsx:2910`) but is called with a *comment*
+- **`openCommentDialog` is typed `(id: BlockId)`** (`reader/Reader.tsx § `openCommentDialog``) but is called with a *comment*
   id from `TableView.tsx:1378-1380` and `BlockGutter.tsx:498`. It compiles because `BlockId` is a
   plain alias (`src/types.ts:32`). Harmless today, wrong in the one place that names the contract
   everything else depends on, and it would be a type error the day the id gets branded.

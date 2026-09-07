@@ -47,19 +47,41 @@ Shipping unverified viewport geometry would be inventing a bug and a fix for it 
 |-------|-------|
 | 1 — the surface, piloted in Search and Chat | **Done**, on `dev` (`8cef3161`). Two review rounds, F15–F24. |
 | 2 step 0 — capture every band before touching it | **Done**, on `dev` (`e4952ecb`), committed on its own so the ordering is provable. |
-| 2 — the remaining eleven bands | **Done and committed** (`af589082`), two review rounds, F25–F33. **Not yet on `dev`:** blocked behind the A1 collision below. |
+| 2 — the remaining eleven bands | **Done and committed** (`af589082`), two review rounds, F25–F33. Merged with `origin/dev` at `285437a8`; the collision below is **resolved**. |
 | 4 step 1 — the diagnostic | **Done**, on `dev` (`2dfa5235`). |
 | 3 — A6, who owns Escape | **Inventory done and committed**; the implementation is **not started**. |
 | 4 — the fit itself | **Blocked**, and correctly so: it needs a trace from a real iPhone, which no machine here can produce. **A5 is therefore incomplete**, and the fit is not delivered. |
 
-**The open collision.** A1 landed while stage 2 was being built and moved every mode controller into
-`src/web/modes/<mode>/`, including `RefereeBand` → `src/web/modes/referee/RefereeMode.tsx`. Stage 2
-migrated Referee onto `ModeSurface` *in `App.tsx`*, where it no longer lives. All eleven panels merge
-cleanly; only `App.tsx` and `tests/referee-band-fits.test.ts` conflict. The merge was **aborted rather
-than resolved** — [a conflict is a proposal before it is an edit](../reusable/git-resolve-merge-conflicts.md).
-The proposal is to take `origin/dev`'s `App.tsx` whole, re-apply only the `ViewportProbe` import and
-mount, move the Referee migration to `RefereeMode.tsx`, and combine both sides of the test (their
-`BAND_FILE` constant, this branch's `ModeSurface` regex). Nothing is discarded either way.
+**The collision with A1, and how it was settled.** A1
+([260906c](260906c-separate-article-access-reader-composition-and-mode-controllers.md)) landed while
+stage 2 was being built: every mode controller left `App.tsx` for `src/web/modes/<mode>/`, the reader
+for `src/web/reader/Reader.tsx`, and `App.tsx` went from 5,716 lines to 462. Stage 2 had migrated
+Referee onto `ModeSurface` *in `App.tsx`*, where it no longer lives. The other eleven panels are
+their own files and merged untouched, so the whole collision was Referee.
+
+The first merge was **aborted rather than resolved** —
+[a conflict is a proposal before it is an edit](../reusable/git-resolve-merge-conflicts.md) — and the
+proposal was put to Greg before anything was changed. It was then carried out at `285437a8`, and
+**nothing was discarded on either side**:
+
+- `src/web/App.tsx` takes `origin/dev`'s version **whole**. It is their file and their refactor, and
+  this branch's side of the conflict was the old monolith. The Referee migration moves to
+  `src/web/modes/referee/RefereeMode.tsx`; the `ViewportProbe` mount needed nothing, because A1 had
+  already carried it into `Reader.tsx` intact when they split the file.
+- `tests/referee-band-fits.test.ts` had both sides editing the same two lines, and they turned out to
+  be **complementary**: `dev` changed which *file* the regex reads (`BAND_FILE`,
+  `readerCssNoComments`, a `-1` guard), this branch changed the *pattern* it matches
+  (`feature="gloss referee"` … `</ModeSurface>`). Both are kept.
+  `tests/referee-how-card.test.tsx` auto-merged into the same combination.
+
+Two things are worth recording because they are evidence rather than opinion. **The oracle held**:
+all 63 tests in the five files this stage owns pass after the merge, including the Referee shape read
+through `<App/>`, so it survived both the `ModeSurface` migration and A1's restructuring of the
+reader. And **somebody else maintained the oracle while this branch was away** — its comments were
+re-homed file by file, and a fixture bug of mine was fixed in passing (`importance: 90` and
+`striking: 80` where `score()` in `src/quotes.ts` wants 0–1; it sat there looking plausible because
+nothing downstream read the numbers, and `quoteTier` reads them now). That is the check working in
+the direction it was built for.
 
 ## Design decisions
 
