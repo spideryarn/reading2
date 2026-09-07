@@ -169,12 +169,29 @@ async function diagnose(model: string) {
     return Buffer.concat([h, pcm]).toString("base64");
   })();
 
+  /* **The WAV rows exist because the webm rows cannot separate two reasons.**
+     Until 2026-09-07 the last row took the schema off *and* changed the
+     container, so a `200` there was evidence about the pair and not about
+     either — and the row above it could not tell "this provider will not take
+     webm" from "this provider will not take a schema". The four WAV rows put
+     each constraint back one at a time over a container that is known to get
+     through the door.
+
+     The `zdr, ..., WAV` row is the one worth running on its own account: `zdr`
+     is a filter over *endpoints*, so it should refuse a WAV exactly as it
+     refuses a webm — but "should" is the word that costs the most here, since a
+     200 on that row would mean the copy beside the microphone can go on saying
+     the reader's voice is not stored. Measure it rather than reason about it. */
   const probes: [string, Record<string, unknown>, string, string][] = [
     ["no provider block, schema, webm", schema, AUDIO, "webm"],
     ["require_parameters only, schema, webm", { ...schema, provider: { require_parameters: true } }, AUDIO, "webm"],
     ["zdr only, schema, webm", { ...schema, provider: { zdr: true } }, AUDIO, "webm"],
     ["no provider block, no schema, webm", {}, AUDIO, "webm"],
     ["no provider block, no schema, WAV", {}, wav, "wav"],
+    ["no provider block, schema, WAV", schema, wav, "wav"],
+    ["require_parameters only, schema, WAV", { ...schema, provider: { require_parameters: true } }, wav, "wav"],
+    ["zdr only, schema, WAV", { ...schema, provider: { zdr: true } }, wav, "wav"],
+    ["zdr only, no schema, WAV", { provider: { zdr: true } }, wav, "wav"],
   ];
   console.log(`\n  ${model} — one constraint at a time:`);
   for (const [label, extra, data, format] of probes) {
