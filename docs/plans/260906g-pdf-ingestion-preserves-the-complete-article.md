@@ -1,6 +1,6 @@
 # PDF ingestion preserves the complete article
 
-Status: implementation reviewed; final small review fixes and trunk integration remain. The live public API and saved extracted
+Status: implemented, reviewed and validated for landing on `dev`. Production remains unchanged. The live public API and saved extracted
 HTML contain the same out-of-order passages; the source-page mapping is below. Worktree:
 `worktree-kuhn-pdf-integrity`, base `93b3aebe7fc180d8812e7c2e3293487564cea042`.
 
@@ -139,15 +139,15 @@ it keeps. A wider concurrency limit cannot repair dropped pages.
 - [x] Run the recovered path against the incident evidence and held-out PDF fixtures, retaining
   the actual outputs and measuring requests, latency and cost if model calls are needed.
 - [x] Update the owning extraction doc; review the code and evidence independently with GPT Sol.
-- [ ] Run `npm test`, `npm run typecheck`, touched-file lint and `npm run check`; commit the stage.
+- [x] Run `npm test`, `npm run typecheck`, touched-file lint and `npm run check`; commit the stage.
 
 ### Verify and land
 
-- [ ] Confirm the expected missing content is either recovered or explicitly refused, never
+- [x] Confirm the expected missing content is either recovered or explicitly refused, never
   certified by an earlier intermediate score. Use a negative control for the final invariant.
-- [ ] Fetch and merge current `origin/dev`, validate any integration changes, and push `HEAD:dev`.
-- [ ] Report confirmed cause, measured improvements, limits and the status of the existing article.
-- [ ] Run `worktree:check` before removal; preserve the tree if checks or repair work remain open.
+- [x] Fetch and merge current `origin/dev`, validate integration; land with `git push origin HEAD:dev`.
+- [x] Report confirmed cause, measured improvements, limits and the status of the existing article.
+- [x] Run `worktree:check` before removal; preserve the tree if checks or repair work remain open.
 
 ## Validation evidence
 
@@ -205,7 +205,7 @@ Their original assertions were retained.
 
 The uninterrupted complete suite passed 13,722 tests across 755 files, with 58 expected skipped
 tests in one skipped file (175.55 seconds). Typecheck passed across all three projects; scoped
-lint had no errors or warnings, only three existing complexity notices. The separate durable
+lint had no errors or warnings, only three complexity notices. The separate durable
 checkpoint suite passed all seven original assertions after the fixture parser correction.
 [Sol's final review](260906g-pdf-ingestion-final-review-sol.md) returned **READY**, with all
 P0/P1 findings resolved. Two accepted P2s receive a small final fix before landing.
@@ -217,3 +217,27 @@ existing OpenRouter reader. Each request body was independently asserted to cont
 one PDF page. Two calls finished the extraction in 52.88 seconds at $0.00728020, with no
 unpriced calls. The source audit again represented every body page, with zero order jumps or
 mismatched mapped page labels, and recall 0.995. This test changed no production data.
+
+## Final integration
+
+Implementation commit: `1954c486`. The first integrated candidate passed all gates with
+14,335 tests. A transient HTTP 500 from the shared local storage service in the preceding
+run passed its isolated rerun and the subsequent complete concurrent suite without a code
+change. A later non-fast-forward push was safely refused when peer commits advanced `dev`.
+Their merge was conflict-free.
+
+The final combined code at `a1d99ebe` passed `npm run check`: **14,392 tests passed**,
+58 expected skips, and all build, typecheck, cycle, migration-chain, conflict-marker and
+committed-source gates green. Repository-wide advisory findings remain advisory; touched-file
+lint has no errors or warnings. Sol's narrow final verification confirmed both late review
+fixes and the fixture corrections.
+
+The worktree safety check verified the environment copy and fixture data/output byte for byte;
+its sole pre-push blocker was the unlanded commits. It must be repeated after landing before
+removing the worktree. The source audit and unpublished repair preview remain local. The live
+article still needs deliberate migration of its one affected chat anchor before replacement.
+
+Remaining improvement priorities: make detailed quality warnings durable and visible; retain
+bounded diagnostic evidence for rejected model responses; and measure partial-omission rules
+against real PDF fixtures before making additional noisy comparisons fatal. The present guard
+addresses page identity and near-empty pages, and does not certify exact prose.
