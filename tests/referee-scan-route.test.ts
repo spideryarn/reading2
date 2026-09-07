@@ -339,9 +339,18 @@ describe("whose manuscript this is", () => {
       fileURLToPath(new URL("../src/routes.ts", import.meta.url)),
       "utf8",
     );
+    /* The route is a **row of `AUTH_ROUTES`** now rather than a guard in the
+       `if` chain (stage 4b of
+       docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md), so
+       this anchors on the row's own `pattern:` line instead of on
+       `if (refereeScan && …)`, which no longer exists. The arm ends at the
+       handler's closing `\n    },` — four spaces, brace, comma — which nothing
+       inside the body has. */
     const whole =
-      /if \(refereeScan && req\.method === "GET"\) \{[\s\S]*?\n {4}\}/.exec(source)?.[0] ?? "";
-    expect(whole, "the route is not in src/routes.ts under that name").not.toBe("");
+      /pattern: \/\^\\\/api\\\/referee\\\/scan\\\/\(\[\\w\.%-\]\+\)\$\/,[\s\S]*?\n {4}\},/.exec(
+        source,
+      )?.[0] ?? "";
+    expect(whole, "the route is not in src/routes.ts under that pattern").not.toBe("");
     /* Comments out, so a sentence *about* a call cannot stand in for one. */
     const body = whole.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 

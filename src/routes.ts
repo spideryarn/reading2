@@ -6599,24 +6599,37 @@ interface PatternAuthRoute {
 type AuthRoute = ExactAuthRoute | PatternAuthRoute;
 
 /**
- * **The three matchers two rows each share**, named once so there is one place
+ * **The six matchers two rows each share**, named once so there is one place
  * that decides what they match.
  *
- * The chain has fourteen bindings read by two guards apiece, and each is still a
- * single `const`. A table row has no such binding, so the same shape has to be a
+ * The chain has bindings read by two guards apiece, and each is still a single
+ * `const`. A table row has no such binding, so the same shape has to be a
  * module-scope constant that both rows name. Spelling a regex out twice would
  * compile, run identically today, and let the copies drift apart tomorrow —
  * tests/authenticated-api-route-contract.test.ts § `names each matcher once` is
- * what refuses that, and it counts declaration *sites*, so these three are three
- * matchers and not six.
+ * what refuses that, and it counts declaration *sites*, so these six are six
+ * matchers and not twelve.
  *
  * A matcher used by exactly one row is written into that row instead: there is
  * nothing to keep in step, and a constant named from one place is a name to
- * chase rather than a fact recorded once.
+ * chase rather than a fact recorded once. That is why
+ * `/api/referee/scan/:slug` and `/api/referee/mirror/:slug` are not here.
  */
 const JOBS_PATH = "/api/jobs";
 const UPLOAD_PATTERN = /^\/api\/uploads\/([\w-]+)$/;
 const JOB_PATTERN = /^\/api\/jobs\/([\w.%-]+)$/;
+/* Referee mode's criteria. Two patterns and the same split as search's two: the
+   collection, and one row. `criteria` sits inside the path rather than as
+   `/api/referee/:slug` because the mode has four sub-modes and three of them
+   will want routes of their own — `/api/referee/claims/:slug` and
+   `/api/referee/mirror/:slug` both arrived under it without a rename — and a
+   namespace decided now is cheaper than a rename later. */
+const CRITERIA_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)$/;
+const ONE_CRITERION_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)\/([\w.%-]+)$/;
+/* Claims, the sub-mode the comment above named as next, and the namespace is why
+   it needed no rename to arrive. **One pattern, not two**: there is one claims
+   run per article, so there is no row to name. GET reads it, POST replaces it. */
+const REFEREE_CLAIMS_PATTERN = /^\/api\/referee\/claims\/([\w.%-]+)$/;
 
 /**
  * **The ordered table `serveAuthenticatedApi`'s `if` chain is being moved into,
@@ -6634,9 +6647,9 @@ const JOB_PATTERN = /^\/api\/jobs\/([\w.%-]+)$/;
  *
  * Because the move is incremental and must reorder nothing. What is here is the
  * **bottom of the chain, taken upward**: billing was its last four guards, jobs
- * and uploads the nine immediately above those, and asking the table after every
- * remaining guard and before the terminal 404 puts each of the thirteen in
- * exactly the position it already had.
+ * and uploads the nine immediately above those, referee the eight above *those*,
+ * and asking the table after every remaining guard and before the terminal 404
+ * puts each of the twenty-one in exactly the position it already had.
  *
  * **So the rows are in chain order, and prepending is how a domain arrives.**
  * The next slice up goes above the jobs rows, not below them — the table's order
@@ -6665,6 +6678,177 @@ const JOB_PATTERN = /^\/api\/jobs\/([\w.%-]+)$/;
  * **No `g` or `y` flag**, refused by `assertDispatchableRoutes` below.
  */
 const AUTH_ROUTES: readonly AuthRoute[] = [
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: CRITERIA_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      /* Both halves in one response, and read close together, for the reason
+         `SearchStore.sourceHash` gives (src/store/contracts.ts): the paper can
+         be re-extracted between them, and a list read before a hash read would
+         be compared against an article none of its criteria ever saw. */
+      send(res, 200, {
+        criteria: await sweepCriteria(slug),
+        sourceHash: await refereeCriteriaStore.sourceHash(slug),
+      });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: CRITERIA_PATTERN,
+    handler: async ({ request: { req, res } }, captures) => {
+      /* The fourth endpoint in this file that does not answer with JSON — see
+         `answer` and `search`. It is still reached through `send` for its
+         *failures*: `readCriterionRequest` throws before a header is written,
+         so a bad request is an ordinary 400. */
+      const criteriaBody = await readBody(req);
+      await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () =>
+        runRefereeCriterion(slugPart(captures, 1), criteriaBody, res),
+      );
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: ONE_CRITERION_PATTERN,
+    handler: async ({ request: { req, res } }, captures) => {
+      // Slug becomes a directory; the id is only ever matched against a list.
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      const { colour } = objectBody(await readBody(req));
+      /* **`{ colour }` and nothing else**, exactly as the search PATCH beside
+         it. A criterion's text, kind and poles are not editable through this
+         route — changing the question is what POST does, because a changed
+         question needs a fresh model call and this route makes none.
+
+         `null` is a real value: it is how the referee says "put this row back
+         on whatever colour it would have had". So the check cannot be a
+         truthiness one, and it cannot be `!colour` either — slot **0** is a
+         colour. */
+      if (colour !== null && !isStorableColour(colour)) {
+        throw httpError(400, "Expected { colour } to be null or a small whole number");
+      }
+      send(res, 200, { criteria: await refereeCriteriaStore.recolour(slug, id, colour) });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "DELETE",
+    pattern: ONE_CRITERION_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      send(res, 200, { criteria: await refereeCriteriaStore.remove(slug, id) });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: REFEREE_CLAIMS_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      /* Both halves in one response, and read close together, for the reason
+         `SearchStore.sourceHash` gives (src/store/contracts.ts): the paper can
+         be re-extracted between them, and a run read before a hash read would
+         be compared against an article it was never answered about.
+
+         The sweep is a *read* that repairs: a `pending` run this process is not
+         running is one an earlier process died in the middle of, and leaving it
+         would be a spinner nothing can ever clear. */
+      send(res, 200, {
+        run: await refereeClaimsStore.sweep(slug, pullingClaims.has(slug)),
+        sourceHash: await refereeClaimsStore.sourceHash(slug),
+      });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: REFEREE_CLAIMS_PATTERN,
+    handler: async ({ request: { res } }, captures) => {
+      /* The sixth endpoint in this file that does not answer with JSON. It still
+         reaches `send` for its failures: `loadArticle` throws its 404 and
+         `claimsProblem` its 400 before a header is written, which is why both
+         are the first two lines of `runRefereeClaims`.
+
+         **No body is read at all** — see that function's docstring. A POST with
+         a body is not refused, it is ignored, which is the same call
+         `POST /api/referee/mirror/:slug` makes.
+
+         `withSpendAttribution`, because the call inside it pays: the rows have
+         to carry the article or the cost report cannot say which paper a
+         referee's session was about. src/ai-spend.ts. */
+      await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () =>
+        runRefereeClaims(slugPart(captures, 1), res),
+      );
+    },
+  },
+
+  /* The source scan, and the one route under `/api/referee/` that is not a
+     sub-mode: it belongs to the **mode**, because a hidden instruction is a fact
+     about the document that bears on Criteria, Claims, Mirror and Candidates
+     alike. GET only, and nothing to POST: the answer is a pure function of bytes
+     already stored, so asking for it is reading. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/referee\/scan\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      /* **Ask whose article this is before reading a byte of it**, exactly as
+         `sendSource` does and for the same reason: this route reads the
+         reader's original manuscript off disk or out of the bucket, and the
+         Postgres reader's own `ownedSlug` filter is the second refusal rather
+         than the only one. tests/owner-isolation.test.ts pins that ordering
+         there; tests/referee-scan-route.test.ts pins it here. The answer is
+         discarded — it is asked as a question. */
+      await shelfStore.read(slug);
+      /* **No `withSpendAttribution`**, and its absence is the point rather than
+         an omission: this is the one thing in Referee mode that calls no model.
+         It is deterministic, free, and it reports without deciding anything —
+         see src/injection-scan.ts § *It reports. It does not decide.*
+
+         It can take several seconds on a large paper, which is why the panel
+         fetches it beside the band rather than in front of it: the band opens
+         at once and this lands when it lands (src/web/useSourceScan.ts). */
+      const { scan } = await scanArticleSource(slug);
+      /* **`scan: null` is "this article kept no source document"**, and it is
+         sent rather than turned into a 404 because the two mean different
+         things to a referee: a 404 says *no such paper*, and this says *there
+         is nothing here to check, so a clean report would be a lie*. A dangling
+         reference is neither — `loadSource` throws a 500 for that, above. */
+      send(res, 200, { scan });
+    },
+  },
+
+  /* Mirror, the second sub-mode to get a route, and the `/api/referee/`
+     namespace is why it needed no rename to arrive. POST only: a run is a model
+     call the referee asks for and nothing is stored, so there is nothing to GET,
+     nothing to PATCH and nothing to DELETE. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/referee\/mirror\/([\w.%-]+)$/,
+    handler: async ({ request: { res } }, captures) => {
+      /* The fifth endpoint in this file that does not answer with JSON. It
+         still reaches `send` for its failures: `loadArticle` throws its 404
+         before a header is written, and `runMirror` reads everything it needs
+         above `sse(res)` for exactly that reason.
+
+         `withSpendAttribution`, because the call inside it pays — the rows have
+         to carry the article or the cost report cannot say which paper a
+         referee's session was about. src/ai-spend.ts. */
+      await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () =>
+        runMirror(slugPart(captures, 1), res),
+      );
+    },
+  },
+
   {
     kind: "exact",
     method: "GET",
@@ -7460,36 +7644,12 @@ export async function serveAuthenticatedApi(
   const liveSessionClose = /^\/api\/live\/([\w-]+)\/close$/.exec(path);
   const searches = /^\/api\/search\/([\w.%-]+)$/.exec(path);
   const oneRun = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/.exec(path);
-  /* Referee mode's criteria. Two patterns and the same split as the two above:
-     the collection, and one row. `criteria` sits inside the path rather than as
-     `/api/referee/:slug` because the mode has four sub-modes and three of them
-     will want routes of their own — `/api/referee/claims/:slug` and
-     `/api/referee/mirror/:slug` both arrived under it without a rename — and a
-     namespace decided now is cheaper than a rename later. */
-  const criteria = /^\/api\/referee\/criteria\/([\w.%-]+)$/.exec(path);
-  const oneCriterion = /^\/api\/referee\/criteria\/([\w.%-]+)\/([\w.%-]+)$/.exec(path);
-  /* Claims, the sub-mode the comment beside the criteria regexes above named as
-     next, and the namespace is why it needed no rename to arrive. **One pattern,
-     not two**: there is one claims run per article, so there is no row to name.
-     GET reads it, POST replaces it. */
-  const refereeClaims = /^\/api\/referee\/claims\/([\w.%-]+)$/.exec(path);
-  /* Mirror, the second sub-mode to get a route, and the namespace above is why
-     it needed no rename to arrive. POST only: a run is a model call the referee
-     asks for and nothing is stored, so there is nothing to GET, nothing to
-     PATCH and nothing to DELETE. */
-  const refereeMirror = /^\/api\/referee\/mirror\/([\w.%-]+)$/.exec(path);
-  /* The source scan, and the one route under `/api/referee/` that is not a
-     sub-mode: it belongs to the **mode**, because a hidden instruction is a fact
-     about the document that bears on Criteria, Claims, Mirror and Candidates
-     alike. GET only, and nothing to POST: the answer is a pure function of bytes
-     already stored, so asking for it is reading. */
-  const refereeScan = /^\/api\/referee\/scan\/([\w.%-]+)$/.exec(path);
-  /* The jobs, uploads and billing matchers used to be declared here and handled
-     at the very end of the chain. They are the rows of `AUTH_ROUTES` above, in
-     that same order, and the table is consulted after every guard below and
-     before the terminal 404 — the position they already had, so the move
-     reorders nothing. `refereeScan` is now the last matcher this chain declares,
-     and the referee guards are the next slice up. */
+  /* The referee, jobs, uploads and billing matchers used to be declared here and
+     handled at the very end of the chain. They are the rows of `AUTH_ROUTES`
+     above, in that same order, and the table is consulted after every guard
+     below and before the terminal 404 — the position they already had, so the
+     move reorders nothing. `oneRun` is now the last matcher this chain declares,
+     and the search guards are the next slice up. */
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
@@ -8316,135 +8476,13 @@ export async function serveAuthenticatedApi(
       send(res, 200, { runs: await searchStore.remove(slug, id) });
       return;
     }
-    if (criteria && req.method === "GET") {
-      const slug = slugPart(criteria, 1);
-      /* Both halves in one response, and read close together, for the reason
-         `SearchStore.sourceHash` gives (src/store/contracts.ts): the paper can
-         be re-extracted between them, and a list read before a hash read would
-         be compared against an article none of its criteria ever saw. */
-      send(res, 200, {
-        criteria: await sweepCriteria(slug),
-        sourceHash: await refereeCriteriaStore.sourceHash(slug),
-      });
-      return;
-    }
-    if (criteria && req.method === "POST") {
-      /* The fourth endpoint in this file that does not answer with JSON — see
-         `answer` and `search`. It is still reached through `send` for its
-         *failures*: `readCriterionRequest` throws before a header is written,
-         so a bad request is an ordinary 400. */
-      const criteriaBody = await readBody(req);
-      await withSpendAttribution({ articleSlug: slugPart(criteria, 1) }, () =>
-        runRefereeCriterion(slugPart(criteria, 1), criteriaBody, res),
-      );
-      return;
-    }
-    if (oneCriterion && req.method === "PATCH") {
-      // Slug becomes a directory; the id is only ever matched against a list.
-      const [slug, id] = [slugPart(oneCriterion, 1), part(oneCriterion, 2)];
-      const { colour } = objectBody(await readBody(req));
-      /* **`{ colour }` and nothing else**, exactly as the search PATCH beside
-         it. A criterion's text, kind and poles are not editable through this
-         route — changing the question is what POST does, because a changed
-         question needs a fresh model call and this route makes none.
-
-         `null` is a real value: it is how the referee says "put this row back
-         on whatever colour it would have had". So the check cannot be a
-         truthiness one, and it cannot be `!colour` either — slot **0** is a
-         colour. */
-      if (colour !== null && !isStorableColour(colour)) {
-        throw httpError(400, "Expected { colour } to be null or a small whole number");
-      }
-      send(res, 200, { criteria: await refereeCriteriaStore.recolour(slug, id, colour) });
-      return;
-    }
-    if (oneCriterion && req.method === "DELETE") {
-      const [slug, id] = [slugPart(oneCriterion, 1), part(oneCriterion, 2)];
-      send(res, 200, { criteria: await refereeCriteriaStore.remove(slug, id) });
-      return;
-    }
-    if (refereeClaims && req.method === "GET") {
-      const slug = slugPart(refereeClaims, 1);
-      /* Both halves in one response, and read close together, for the reason
-         `SearchStore.sourceHash` gives (src/store/contracts.ts): the paper can
-         be re-extracted between them, and a run read before a hash read would
-         be compared against an article it was never answered about.
-
-         The sweep is a *read* that repairs: a `pending` run this process is not
-         running is one an earlier process died in the middle of, and leaving it
-         would be a spinner nothing can ever clear. */
-      send(res, 200, {
-        run: await refereeClaimsStore.sweep(slug, pullingClaims.has(slug)),
-        sourceHash: await refereeClaimsStore.sourceHash(slug),
-      });
-      return;
-    }
-    if (refereeClaims && req.method === "POST") {
-      /* The sixth endpoint in this file that does not answer with JSON. It still
-         reaches `send` for its failures: `loadArticle` throws its 404 and
-         `claimsProblem` its 400 before a header is written, which is why both
-         are the first two lines of `runRefereeClaims`.
-
-         **No body is read at all** — see that function's docstring. A POST with
-         a body is not refused, it is ignored, which is the same call
-         `POST /api/referee/mirror/:slug` makes.
-
-         `withSpendAttribution`, because the call inside it pays: the rows have
-         to carry the article or the cost report cannot say which paper a
-         referee's session was about. src/ai-spend.ts. */
-      await withSpendAttribution({ articleSlug: slugPart(refereeClaims, 1) }, () =>
-        runRefereeClaims(slugPart(refereeClaims, 1), res),
-      );
-      return;
-    }
-    if (refereeScan && req.method === "GET") {
-      const slug = slugPart(refereeScan, 1);
-      /* **Ask whose article this is before reading a byte of it**, exactly as
-         `sendSource` does and for the same reason: this route reads the
-         reader's original manuscript off disk or out of the bucket, and the
-         Postgres reader's own `ownedSlug` filter is the second refusal rather
-         than the only one. tests/owner-isolation.test.ts pins that ordering
-         there; tests/referee-scan-route.test.ts pins it here. The answer is
-         discarded — it is asked as a question. */
-      await shelfStore.read(slug);
-      /* **No `withSpendAttribution`**, and its absence is the point rather than
-         an omission: this is the one thing in Referee mode that calls no model.
-         It is deterministic, free, and it reports without deciding anything —
-         see src/injection-scan.ts § *It reports. It does not decide.*
-
-         It can take several seconds on a large paper, which is why the panel
-         fetches it beside the band rather than in front of it: the band opens
-         at once and this lands when it lands (src/web/useSourceScan.ts). */
-      const { scan } = await scanArticleSource(slug);
-      /* **`scan: null` is "this article kept no source document"**, and it is
-         sent rather than turned into a 404 because the two mean different
-         things to a referee: a 404 says *no such paper*, and this says *there
-         is nothing here to check, so a clean report would be a lie*. A dangling
-         reference is neither — `loadSource` throws a 500 for that, above. */
-      send(res, 200, { scan });
-      return;
-    }
-    if (refereeMirror && req.method === "POST") {
-      /* The fifth endpoint in this file that does not answer with JSON. It
-         still reaches `send` for its failures: `loadArticle` throws its 404
-         before a header is written, and `runMirror` reads everything it needs
-         above `sse(res)` for exactly that reason.
-
-         `withSpendAttribution`, because the call inside it pays — the rows have
-         to carry the article or the cost report cannot say which paper a
-         referee's session was about. src/ai-spend.ts. */
-      await withSpendAttribution({ articleSlug: slugPart(refereeMirror, 1) }, () =>
-        runMirror(slugPart(refereeMirror, 1), res),
-      );
-      return;
-    }
 
     /**
      * **The table, asked after every guard above and before the 404 below.**
      *
-     * Jobs, uploads and billing live in `AUTH_ROUTES` (above
+     * Referee, jobs, uploads and billing live in `AUTH_ROUTES` (above
      * `serveAuthenticatedApi`) rather than in this chain. They were its last
-     * thirteen guards, immediately above the terminal 404, so consulting the
+     * twenty-one guards, immediately above the terminal 404, so consulting the
      * table exactly here leaves each of them where it already was and reorders
      * nothing — the property that makes each increment a rearrangement rather
      * than a behaviour change.
