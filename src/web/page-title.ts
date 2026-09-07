@@ -186,6 +186,8 @@ export type TitleSpec =
   | { kind: "contact" }
   /** Every release since launch, newest first — ChangelogPage.tsx. */
   | { kind: "changelog" }
+  /** Where the code lives and what it is licensed under — OpenSourcePage.tsx. */
+  | { kind: "opensource" }
   /**
    * **The shelf of shared articles** — `/read/public`, PublicLibraryPage.tsx.
    *
@@ -304,6 +306,12 @@ function segments(spec: TitleSpec): string[] {
        followed "What's new" down there sees the same words in the tab. */
     case "changelog":
       return ["What’s new", APP_NAME];
+
+    /* Two words, and the same two the footer uses — the tab is where somebody
+       who opened this page to check whether the code is public looks to find it
+       again among twenty others. */
+    case "opensource":
+      return ["Open source", APP_NAME];
 
     /* The page's own heading, unshortened — it is already two words, which is
        the length the two cases above had to cut down to. It says *Shared* and

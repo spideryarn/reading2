@@ -88,15 +88,35 @@
  * docs/project/original-version/design-system.md, and the argument there for
  * not doing that yet.
  */
+import { buildDescription } from "./build-stamp.js";
 import { Link } from "./Link.js";
 import { LIBRARY_HREF } from "./router.js";
 
+/**
+ * **What the tooltip says, and why it is not a version number.**
+ *
+ * Greg asked for one here, 2026-09-07. `buildDescription` is where the answer
+ * to that is written out — the short version is that the running build cannot
+ * honestly know its own release number, and its sha is the fact it does know.
+ * So the tooltip carries the destination first, which is what a tooltip on a
+ * link is for, and the build second.
+ *
+ * **The destination survives when the build is unknown**, which is every test
+ * and every `npm run dev`: a tooltip is not the place to say *"unknown"*.
+ */
+const HOME_TITLE = "Spideryarn — back to the library";
+
 export function HomeLogo() {
+  const build = buildDescription();
   return (
     <Link
       href={LIBRARY_HREF}
       className="logo logo-home"
-      title="Spideryarn — back to the library"
+      /* Two lines rather than an em dash chain: the second is for the one
+         reader in a hundred who wants to know which copy they have, and it
+         should not push the sentence that matters onto a second line by
+         itself. `title` renders a newline as a newline. */
+      title={build === null ? HOME_TITLE : `${HOME_TITLE}\n(${build})`}
     >
       {/* `alt=""` and not "Spideryarn": the wordmark beside it already says the
           name, and a screen reader reading it twice is how a decorative image

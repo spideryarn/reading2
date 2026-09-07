@@ -96,12 +96,14 @@
  */
 import type { ReactNode } from "react";
 
+import { GitHubMark } from "./GitHubMark.js";
 import { Link } from "./Link.js";
 import {
   CHANGELOG_HREF,
   CONTACT_HREF,
   FEATURES_HREF,
   LIBRARY_HREF,
+  OPENSOURCE_HREF,
   PRICING_HREF,
   PRIVACY_HREF,
   useRoute,
@@ -128,7 +130,7 @@ import {
  */
 type FooterPage = Extract<
   Route["kind"],
-  "library" | "features" | "privacy" | "pricing" | "contact" | "changelog"
+  "library" | "features" | "privacy" | "pricing" | "contact" | "changelog" | "opensource"
 >;
 
 /**
@@ -138,7 +140,22 @@ type FooterPage = Extract<
  * it is the shelf, signed out it is the landing page, and on either of them a
  * link labelled Home would point at the page under the reader's feet.
  */
-const LINKS: readonly { href: string; label: string; here: FooterPage }[] = [
+const LINKS: readonly {
+  href: string;
+  label: string;
+  here: FooterPage;
+  /**
+   * A mark drawn before the label, and exactly one entry has one.
+   *
+   * Greg asked for the open-source link *"using GitHub logo to indicate"*, and
+   * the mark is doing work the word cannot: in a row of six identical grey
+   * words, it is the only thing that says *this one leaves the site and goes
+   * somewhere you already know how to read*. `aria-hidden` inside `GitHubMark`,
+   * because the label beside it is the accessible name and an icon read aloud
+   * as well is noise.
+   */
+  icon?: ReactNode;
+}[] = [
   { href: LIBRARY_HREF, label: "Home", here: "library" },
   { href: FEATURES_HREF, label: "Features", here: "features" },
   /* Added 2026-09-03 with `/pricing`, and this array is the whole edit — which
@@ -161,6 +178,16 @@ const LINKS: readonly { href: string; label: string; here: FooterPage }[] = [
      the process that writes the page (docs/project/changelog.md), and a
      reader has never heard of it. */
   { href: CHANGELOG_HREF, label: "What’s new", here: "changelog" },
+  /* Added 2026-09-07 with `/opensource` — and, like the three entries above it,
+     this array is the whole edit. The first entry to carry an icon; see `icon`
+     above for why this one and not the others.
+     docs/plans/260907f-changelog-table-of-contents-collapsible-versions-version-numbers-and-an-opensource-page.md. */
+  {
+    href: OPENSOURCE_HREF,
+    label: "Open source",
+    here: "opensource",
+    icon: <GitHubMark size={11} />,
+  },
 ];
 
 const LINK_CLASS = "tw:text-ink-faint tw:hover:text-highlight";
@@ -221,7 +248,11 @@ export function SiteFooter({
         {links.map((l, i) => (
           <span key={l.href}>
             {i > 0 && " · "}
-            <Link href={l.href} className={LINK_CLASS}>
+            <Link
+              href={l.href}
+              className={l.icon ? `${LINK_CLASS} tw:inline-flex tw:items-center tw:gap-1` : LINK_CLASS}
+            >
+              {l.icon}
               {l.label}
             </Link>
           </span>

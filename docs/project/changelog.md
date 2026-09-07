@@ -292,6 +292,34 @@ The three decisions this section used to leave open, taken on 2026-09-06 in
   N's line ships in version N+1. That is the honest ordering — the alternative is describing a deploy
   before it happened — and the page does not imply otherwise.
 
+Four more, taken on 2026-09-07 in
+[260907f](../plans/260907f-changelog-table-of-contents-collapsible-versions-version-numbers-and-an-opensource-page.md).
+Greg had found the page hard to use, and it was: drawn out it stood **46,368 pixels tall**, fifty
+releases with no way to see what was in it but to scroll all of it.
+
+- **Each release is a `<details>`, shut but the newest**, and a contents list at the top jumps to
+  one and opens it. Every contents row carries that release's *headline* titles, so it says
+  something the shut row below it does not; a release with no headline entry falls back to its
+  counts. `#release-42` in the address opens release 42.
+- **A release is numbered by its line in this file**, counted from the oldest — display only, minted
+  nowhere, and stable for ever because runs append. Quiet versions are counted although they are
+  never drawn, so the page and the file stay in step; so is the one line that is a redeploy of the
+  line above it.
+- **The reader is told the sha rather than a version number**, and that is Fable's answer to Greg
+  asking for *"a version number (semver?) as part of the deploy … and on tooltip for the Homepage
+  logo"*, which he took. The deploy cannot honestly carry a number: production is built on Vercel's
+  machine from a push to `main`, `deploy.ts` has no channel into that build's environment, and a
+  version's line here is written *after* it ships — so a running build's own sha is never in the copy
+  of this file it is carrying. The logo's tooltip says *"built 7 Sep 2026 from 39282f8"*
+  (`src/web/build-stamp.ts` § `buildDescription`), and the page's release number is the join.
+- **An entry's commits appear in one place, as shas.** Greg: *"I found the difference between the
+  link to the changes and the commit a bit confusing."* They were the same thing drawn twice — this
+  process emits one commit inside `links`, labelled *the change*, and the rest in `commits`. The page
+  now sorts an entry's links by **where they point**, not by which field they came in: a path is
+  somewhere in the app, anything else is a commit and joins the sha row under a GitHub mark. **The
+  copy stage is unchanged and may go on emitting that link** — 69 committed lines already carry it,
+  so the page has to handle them regardless. Each release also links the commit it was built from.
+
 ## Running it
 
 **`run docs/project/changelog.md`** means this section. The deterministic stages are committed as

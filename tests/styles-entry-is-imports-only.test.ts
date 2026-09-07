@@ -175,6 +175,14 @@ const MANIFEST = [
   "quiz.css",
   "feedback.css",
   "site.css",
+  /* Last, and indifferent to being so: two rules, both selecting
+     `.changelog-release > summary`, which nothing else in the tree mentions.
+     `/changelog` is chrome rather than reading view, so it sits beside the
+     marketing sheet above it. docs/project/website-text.md § The open-source
+     page is the neighbouring work; the sheet's own header says why two lines of
+     CSS need a file at all (we import no preflight, so a `<summary>` still
+     arrives with the browser's disclosure triangle). */
+  "changelog.css",
 ];
 
 /**
