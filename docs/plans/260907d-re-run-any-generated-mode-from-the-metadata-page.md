@@ -1,10 +1,14 @@
 # Re-run any generated mode, from the Metadata page
 
-**Status as of 2026-09-07: planned and reviewed, not built.** Evidence: `SOON` in
-[`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) still carries the dimmed `rerun` row, and
-nothing in `src/web/` posts `{ slug, steps: [step], force: [step] }` from that page. The plan has
-been through GPT Sol once — refused as written, seven of eight findings accepted, and the accepted
-ones cost `hierarchy` and `illustrated` their places. § Findings.
+**Status as of 2026-09-07: built through Stage 2, not yet browser-driven or landed.** Evidence:
+`RerunSection` in [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) and
+[`src/rerun-steps.ts`](../../src/rerun-steps.ts) exist, and `npm run check` is green over 14,810
+tests. Still open: Stage 3 — a real browser, the `SOON` row's removal, the evergreen docs, and the
+push to `dev`. The `SOON` `rerun` row is deliberately still there until then.
+
+The plan went through GPT Sol before anything was built — refused as written, seven of eight
+findings accepted, and the accepted ones cost `hierarchy` and `illustrated` their places (§
+Findings).
 
 ## The goal, and the sentence it comes from
 
@@ -272,9 +276,16 @@ dialog and nothing blocked — not a copy of the component: `Rewrite` is welded 
 layout.
 
 **Confirm on every row, including rows the pill says have not run.** The uniform rule is one code
-path, and the friction is negligible on a page whose stage rows are already behind a shut heading.
-The alternative — one click when `done` is false — would put the branch in the one place a mistake
-costs money.
+path, and the alternative — one click when `done` is false — would put the branch in the one place a
+mistake costs money.
+
+**And `busy` does not do what this plan first said it does.** ⟨Found in the build, 2026-09-07.⟩ The
+claim, borrowed from `Rewrite`'s own docstring, was that it stops the plain button reappearing
+mid-flight. It does not: `useStepJob.start` calls `setStarting(true)` **before** its `await`, so
+`JobProgress` draws its starting row from the first render after the click either way — and the
+first version of the test for it stayed green with `busy` deleted, which is the tell. What `busy`
+actually buys is that the confirm **sentence** stays on screen for the whole round trip and its own
+button is disabled against a second press. The test asserts that instead, and goes red.
 
 ### What the button and the confirm actually say
 
@@ -434,10 +445,11 @@ Ordered by how much you need them.
     (*one press, one model call*) into a false one. Both were mine to get wrong at the plan stage
     and cheap to fix there, which is the argument for the review being first rather than last.
 
-### Stage 2 — its own section on the Metadata page, for the nine
+### ✅ Stage 2 — its own section on the Metadata page, for the nine
 
-- [ ] **Tests first, each watched red before it is made green.**
-  - [ ] `tests/metadata-rerun-button.test.tsx`, in the shape of
+- ✅ **Tests first, each watched red before it is made green.**
+  - ✅ `tests/metadata-rerun-section.test.tsx` (named for the section, not the button),
+        in the shape of
         `tests/metadata-export-button.test.tsx` (mount `Metadata`, not the section, so the gating
         and the slug are tested rather than the props):
     - a control appears for each of the nine and for **no** other step — `fetch`, `extract`,
@@ -449,36 +461,70 @@ Ordered by how much you need them.
     - the glossary row says *Find more terms* and its confirm says *New terms are added*, not
       *the result changes*;
     - the sketch row's confirm carries `SKETCH_PRICE` and `SKETCH_WAIT`.
-  - [ ] A unit assertion pinning `METADATA_RERUN_STEPS`: every member is in
+  - ✅ A unit assertion pinning `METADATA_RERUN_STEPS`: every member is in
         `FORCE_ONLY_WHEN_NAMED` (so no press cascades), none is a step `unrunnableStepPlan` would
         refuse alone, and the list is **explicit** rather than derived — a new mode step gets a
         button only when somebody has answered the three questions in § The list.
-  - [ ] The list lives in a **browser-safe leaf**, not `src/pipeline.ts`:
+  - ✅ The list lives in a **browser-safe leaf**, not `src/pipeline.ts`:
         `tests/client-imports.test.ts` forbids the client reaching a server module, and
         `src/step-order.ts` exists because this was tried for `STEP_ORDER` and reverted. ⟨Sol, F1⟩
-  - [ ] **The failure-safety test.** A single-step re-run that fails leaves the previously published
-        artefact readable, and `articles.current_revision_id` unmoved. Against the **real store** —
-        `tests/store-publish-guards.test.ts` is the neighbourhood — not a mock, which would prove
-        the mock. Postgres suites are flaky under contention on this box: re-run alone before
-        believing a red.
-- [ ] **Move the metadata GET onto [`useOrderedRead`](../../src/web/useOrderedRead.ts), and hand
+  - ✅ **The failure-safety test** — `tests/rerun-failure-keeps-the-old-artefact.test.ts`, three
+        cases, against the real store in the `private-postgres` lane. It publishes a revision
+        holding one set of quotes, opens a draft, writes a *different* set into it, fails the draft,
+        and reads back through **`loadQuotes` — the reader's own path**, not the column.
+    - 📔 Each of the three was watched red first, by sabotaging `failRevisionIn` and putting the
+      edit back: making it move `current_revision_id` turns two of them red (*expected 'lost' to be
+      'kept'*, and *promise resolved instead of rejecting*), and turning its `UPDATE … status
+      'failed'` into a `DELETE` turns the third red while the other two **stay green** — which is
+      exactly why the third one is kept. Losing the evidence of what failed is invisible from
+      outside.
+    - 📔 The reader-path choice earned itself immediately: an assertion on the draft's own column
+      would have passed under the first sabotage, because the column really did hold the new value
+      — the fault was the *pointer*, and only a read through `loadQuotes` can see it.
+- ✅ **Move the metadata GET onto [`useOrderedRead`](../../src/web/useOrderedRead.ts), and hand
       every row the same stable `refresh`** — never `reload`. ⟨Sol, F7, and I had reached the same
       answer independently.⟩ Without it nothing on the page changes when a run lands: `ranAt`,
       `done` and the generator strings stay as they were, and the reader is left to guess whether
       the press did anything. With nine rows able to fire `onFinished`, the ordering this module
       exists for matters more here than in any single mode — a completion read must **trail** an
       outstanding GET, never join it, or the pre-job artefact overwrites the new one for good.
-  - [ ] A race test: an older metadata GET resolving *after* the completion refresh must not win,
+  - ✅ A race test: an older metadata GET resolving *after* the completion refresh must not win,
         and `ranAt` / `done` must update without navigation.
-- [ ] Build it: a per-row component owning its own `useStepJob(slug, step, …)` — **a component, not
+- ✅ Build it: a per-row component owning its own `useStepJob(slug, step, …)` — **a component, not
       a loop of hooks**, because `provenance` is null before the fetch lands and a loop would change
       the hook count between renders. `JobProgress` for the running / failed / stalled / retry
       states; a confirm row in `Rewrite`'s shape for the ask.
-- [ ] Copy, added to [copy.md](../project/copy.md): the button, the two confirm variants, the sketch
-      row's price line, and the failure sentence. No claim about staleness in any of it.
-- [ ] `npm test`, `npm run typecheck` (grep for `✗`, the tail is always `✓`), `npm run lint` on the
+- ❌ ~~Copy, added to [copy.md](../project/copy.md)~~ — **not done, and it should not be.** That
+      doc's scope is model-call failure messages, and it says of everything else, in terms:
+      *"empty states, button labels, the panel headings — is still written wherever it is used…
+      That is a gap rather than a decision."* This feature adds no new failure sentence
+      (`JobProgress` reuses the existing ones), so nothing here belongs there by that file's own
+      rule. The copy lives beside the component, in named constants with the reasoning on each.
+- ✅ `npm test`, `npm run typecheck` (grep for `✗`, the tail is always `✓`), `npm run lint` on the
       touched files, `npm run check`.
-- [ ] GPT Sol on the built code — weighted higher than the plan review, per AGENTS.md. Commit.
+- ✅ GPT Sol on the built code — weighted higher than the plan review, per AGENTS.md. Commit.
+
+- 📔 **What the build found that the plan had wrong or had not said:**
+  - `busy` does not stop the plain button reappearing — § What the button and the confirm actually
+    say, corrected above. The first test written for it stayed green with `busy` deleted.
+  - **`SKETCH_PRICE` / `SKETCH_WAIT` became a leaf of their own**
+    ([`src/web/sketch-cost.ts`](../../src/web/sketch-cost.ts)). Importing them from `SketchView.tsx`
+    would have put the whole Sketch panel — its hook, its scene validator, its painter — into the
+    graph of a page that draws no diagram. `IllustratedView` reads them from there too now, so
+    there is still one copy of each number.
+  - **The purpose box had to change, and it was a real regression rather than tidying.** Its seeding
+    effect ran on every `provenance` change, which was harmless while the page read once — and
+    stopped being so the moment a finished run started firing a refresh, because it would drop the
+    stored sentence over a reader's half-typed draft. Keyed on the slug through a ref now, so a
+    reader who has deliberately *cleared* the box does not get it filled back in either.
+  - **The section is deliberately NOT gated on `hasShelfRow`**, unlike Export and Archive. Those are
+    withheld because their only outcome without a row is a 404; a run is `POST /api/jobs`, whose
+    refusal comes back as reader-facing copy that `JobProgress` already draws beside the row. So the
+    rows draw while the metadata request is out, with `done: undefined` reading as *not that we know
+    of*. That is also what makes the ordering race testable through the page at all.
+  - **`debate` had never been run through `useStepJob` by any surface**, so `useStepJob`'s "the two
+    lists are the same nine names" note was going stale. It now points at the pinning test rather
+    than restating a count.
 
 ### Stage 3 — drive a real browser, and the docs
 

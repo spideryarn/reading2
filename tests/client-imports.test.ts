@@ -82,6 +82,18 @@ const SHARED = new Set([
      This is the outcome the long comment below argues for, reached one more
      time. See src/step-order.ts. */
   "step-order.js",
+  /* Which nine steps the Metadata page offers a *Generate it again* button for.
+     On the list for the reason the header of this file gives rather than for
+     convenience: it imports `StepName` from `types.js` and nothing else, and it
+     was written as a leaf **because of this rule** — the alternative was the
+     browser importing `src/pipeline.ts` for `FORCE_ONLY_WHEN_NAMED`, which is
+     the same edge `step-order.js` above was extracted to stop.
+     Beside that file and not inside it: one answers what order the steps run
+     in, the other which of them a reader may ask for again, and the second is a
+     product judgement about cost and failure semantics.
+     See src/rerun-steps.ts and
+     docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md. */
+  "rerun-steps.js",
   // Whether a saved search still describes the article. The panel puts a
   // warning on a row and the server answers the same question at the read seam;
   // src/source-hash.ts computes the fingerprints and needs `node:crypto`, so
