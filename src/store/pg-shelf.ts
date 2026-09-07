@@ -29,6 +29,7 @@ import { log } from "../log.js";
 import { currentOwnerId, type OwnerId } from "../owner.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { lockBillingAccount } from "./pg-billing.js";
+import { TERMINAL } from "./pg-jobs.js";
 import { notFound, ownedByReader, ownedSlug, requireSlug, shelfFrom } from "./pg.js";
 import type { LibrarySearch, LibrarySearchOptions, ShelfStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
@@ -106,10 +107,11 @@ export function lockedArticleForDestroyQuery(
  *   on the same row and it carries on (src/db/schema.ts § `requeues`) — so it
  *   is a wait the reader can end by pressing Stop, not a row to delete under.
  *
- * `done` and `error` are the two this does **not** match, and that is measured
- * rather than assumed: both slug indexes are partial on
+ * `done`, `error` and `cancelled` are the three this does **not** match, and
+ * that is measured rather than assumed: both slug indexes are partial on
  * `status in ('queued','running')`, so a terminal row blocks nothing and the
- * reader can re-add the same URL afterwards. It stays as history.
+ * reader can re-add the same URL afterwards. It does not stay as history
+ * either — `deleteTerminalJobs` below says why the delete takes it.
  *
  * **Owner-scoped as well as slug-scoped.** `jobs.slug` carries no foreign key
  * and no owner filter of its own, so without `owner_id` this would let one
@@ -165,6 +167,66 @@ function importRunning(): Error {
     ),
     { status: 409 },
   );
+}
+
+/**
+ * **Why the finished jobs go with the article, when the running ones stop it.**
+ *
+ * Not a function — the delete is three lines inside `destroy` — but the argument
+ * needs a home, because the two halves look contradictory: a live job makes the
+ * delete refuse, and a terminal one is deleted outright.
+ *
+ * ## What a leftover terminal row can do
+ *
+ * `jobs` has no `article_id`; it is keyed by `slug` text and is invisible to the
+ * cascade. Stage C left the terminal rows on the grounds that they are inert
+ * against all four of the queue's partial unique indexes, which is true and is
+ * not the whole question. `retryJob` (src/jobs.ts) copies the failed attempt's
+ * own `url` or `upload` into the new request, and `slugForRetry` deliberately
+ * keeps the failed attempt's own slug — so **Retry on a long-dead failure
+ * queues a job for the destroyed slug, and the worker's `lockOrCreateArticle`
+ * remakes the article.** That is not a race the reader has to win: the row
+ * survives on purpose, so they can do it weeks later. GPT Sol's F20,
+ * docs/plans/260906h-delete-an-article-permanently.md.
+ *
+ * ## Why deleting them cannot leak a quota slot, where deleting a live one can
+ *
+ * F3 is why an *active* job is refused rather than deleted: it may be holding an
+ * unsettled reservation, deleting the row does not settle it
+ * (src/db/schema.ts § `ingest_event_id`), and an unsettled reservation never
+ * expires (§ `ingest_events`).
+ *
+ * A terminal job cannot be in that state, and this is a property of the code
+ * rather than an observation about the rows. **Every transition into a terminal
+ * status settles the reservation inside the same transaction**, and there are
+ * only four of them: `settlingIfTerminal` (pg-jobs.ts) wraps `releaseStep` and
+ * `finish`, `requestCancel` settles on the branch that answers `cancelled`,
+ * `settleExpired`'s sweep releases everything it ended, and `settleIn`
+ * (pg-session.ts) succeeds the slot in the publishing transaction. So by the
+ * time a row is `done`, `error` or `cancelled` its slot is already `succeeded_at`
+ * or `released_at`, and the `ingest_events` row — which is what the bill is
+ * computed from — is untouched by this delete in either case. `jobs.ingest_event_id`
+ * is `NO ACTION` in both directions.
+ *
+ * `pgJobStore.forget` and `trimFinished` have deleted terminal rows on exactly
+ * this reasoning since before any of it was written down; this is the same
+ * operation, chosen by article rather than by hand.
+ *
+ * ## Owner-scoped, like everything else here
+ *
+ * `articles.slug` is globally unique, so another owner cannot have this article
+ * — but they *can* have a terminal job that lost the race for the name, and it
+ * is not this delete's business. Their retry would create *their* article, which
+ * is a different row and already possible today.
+ */
+function deleteTerminalJobs(
+  tx: Pick<ReturnType<typeof getDb>, "delete">,
+  slug: string,
+  ownerId: OwnerId,
+) {
+  return tx
+    .delete(jobs)
+    .where(and(eq(jobs.ownerId, ownerId), eq(jobs.slug, slug), inArray(jobs.status, TERMINAL)));
 }
 
 const rawPgShelfStore: ShelfStore = {
@@ -336,6 +398,12 @@ const rawPgShelfStore: ShelfStore = {
 
       const live = await liveJobsForQuery(tx, slug, ownerId);
       if (live.length > 0) throw importRunning();
+
+      /* **And the finished ones go with it**, in this transaction, and only
+         after the refusal above has established there are no others. See
+         `deleteTerminalJobs` for why a terminal row is safe to delete and an
+         active one is not. */
+      await deleteTerminalJobs(tx, slug, ownerId);
 
       const result = await tx.delete(articles).where(ownedSlug(slug, ownerId));
 

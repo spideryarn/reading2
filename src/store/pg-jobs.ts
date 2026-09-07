@@ -125,8 +125,15 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
  */
 type Executor = Db | Tx;
 
-/** The three statuses a job never leaves. */
-const TERMINAL = ["done", "error", "cancelled"] as const;
+/**
+ * The three statuses a job never leaves.
+ *
+ * **Exported for `pgShelfStore.destroy`** (pg-shelf.ts), which takes an
+ * article's terminal jobs with it — a `forget` per row, for the reason written
+ * there. Same argument as `ACTIVE` below: a second copy of this list somewhere
+ * else is a list that goes stale the day a status is added.
+ */
+export const TERMINAL = ["done", "error", "cancelled"] as const;
 /**
  * The two a job can still be doing something in.
  *

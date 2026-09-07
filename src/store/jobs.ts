@@ -132,12 +132,20 @@ export interface EnqueueTicket {
    * **This request names an article that must already exist**, so the store may
    * refuse rather than insert if it does not.
    *
-   * True for exactly one shape: `{ slug, steps }` — *run something on the
-   * article I already have*. False, and absent, for a URL or an upload, which
-   * are requests to **have** an article: the worker's `lockOrCreateArticle`
-   * creating the row is right for those, and refusing on absence would break a
-   * simultaneous double-paste that legitimately adopts a name from an in-flight
-   * job before any article row exists.
+   * **True exactly when the slug was adopted from the shelf** —
+   * `SlugAllocation.from === "shelf"` (src/jobs.ts), which covers `{ slug,
+   * steps }` (*run something on the article I already have*) and a paste of an
+   * address one of this reader's articles already holds.
+   *
+   * False, and absent, for the two allocations that are requests to **have** an
+   * article: a mint, and an adoption from an in-flight job of this reader's that
+   * has not opened its draft yet. The worker's `lockOrCreateArticle` creating the
+   * row is right for those, and refusing on absence would break the simultaneous
+   * double-paste that legitimately adopts a name before any article row exists.
+   *
+   * **It used to read `!request.url && !request.upload`**, and that was wrong for
+   * the shelf paste: the request looks identical to the paste that mints, and
+   * only the allocation can tell them apart. GPT Sol's F21 on the same plan.
    *
    * `enqueue` (src/jobs.ts) already refuses that shape up front, and this is not
    * a second copy of that check — it is the same check taken again **under the

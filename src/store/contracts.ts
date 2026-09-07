@@ -652,6 +652,14 @@ export interface ShelfStore {
    *   cautious one.
    * - **`{ destroyed }`**, naming the slug that no longer exists.
    *
+   * **The article's *finished* jobs go with it**, and that is not merely tidying.
+   * `jobs` is keyed by slug text, carries no foreign key, and is invisible to the
+   * cascade — and a terminal row keeps the failed attempt's URL, so Retry on one
+   * would queue a job for the destroyed slug whose worker calls
+   * `lockOrCreateArticle` and remakes the article. GPT Sol's F20; the whole
+   * argument, including why a terminal job cannot leak a quota slot where a live
+   * one can, is at `deleteTerminalJobs` in src/store/pg-shelf.ts.
+   *
    * **Never the entry**, which is what makes this different from `patch`.
    * `patch` returns the card as it now stands, so a caller cannot get away with
    * assuming what the write did; there is no card here, and handing back a

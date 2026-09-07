@@ -40,6 +40,16 @@ until it lands this is reachable only by a `curl`. It destroys the article and e
 off it, answers 404 for a slug that is not yours and 409 while an import is running on it, and
 there is no undo: *Archive* below is the reversible ending, and this is the other one.
 
+**It takes the article's finished jobs too**, and that is worth knowing because `jobs` is keyed by
+slug text, has no foreign key to `articles`, and so is invisible to the cascade. A `done`, `error`
+or `cancelled` row keeps the attempt's own URL and its own slug, and Retry copies both — so leaving
+one behind left a button that queued a job for the destroyed slug and rebuilt the article, weeks
+later and at the reader's leisure. A *running* job is refused instead (the 409 above), because it
+may still hold an unsettled quota reservation that deleting the row would strand; a terminal one
+cannot, since every transition into a terminal status settles the slot in the same transaction. The
+argument in full is at `deleteTerminalJobs` in
+[`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts).
+
 **This said "the two routes" until 2026-08-25.** The last two arrived together, and they are one
 route with three views rather than three routes: same article, same fetch, same bottom bar, so
 `Route` carries a `view` and `ArticlePage` branches on it

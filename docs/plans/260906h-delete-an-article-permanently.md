@@ -518,6 +518,110 @@ records on the job whether it created the article.
 
 **Stage C does not commit until this is closed.**
 
+#### Stage C, second pass — F20, F21 and F22 closed, 2026-09-07
+
+Two changes, both small, and **neither of them is the fix Sol proposed for F20**.
+
+##### The article's terminal jobs go with it (F20)
+
+`pgShelfStore.destroy` now deletes this owner's `done`/`error`/`cancelled` jobs for the slug, in
+the transaction that deletes the article and *after* the live-job refusal has established there
+are no others. `deleteTerminalJobs` in [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) holds
+the argument.
+
+*The alternative considered and rejected*: **record on the job whether it ever created an
+article** — the note above proposes this, and it is the honest discriminator. It needs a column, a
+migration, and a write at `openOrBeginJobDraft`, and it buys a distinction nothing else in the
+codebase wants. Deleting the rows removes the retry surface outright and needs no schema change.
+
+*The thing that had to be established first*, because it is why Stage C refuses an active job
+rather than deleting it: **can a terminal job still hold an unsettled reservation?** No, and it is
+a property of the code rather than of the rows. There are four transitions into a terminal status
+and each settles the slot in the same transaction — `settlingIfTerminal` wraps `releaseStep` and
+`finish`, `requestCancel` settles on the branch that answers `cancelled`, `settleExpired` releases
+everything its sweep ended, and `settleIn` succeeds the slot in the publishing transaction. F3's
+leak belongs to an **active** job, which is still refused. `pgJobStore.forget` and `trimFinished`
+have deleted terminal rows on exactly this reasoning since before F3 was written.
+
+The cost, stated: a deleted article's job history goes too, so *Add* history loses those cards.
+That is what `forget` already offers by hand, and the cards named an article that no longer exists.
+The ledger is untouched — `ai_calls` keeps `article_slug`, `ingest_events` keeps the settled row,
+and the test asserts the reader's computed usage does not move.
+
+##### `requiresArticle` comes off the allocation, not off the request (F21)
+
+`SlugAllocation` gains provenance, as Sol asked: `minted`, `adopted from: "shelf"`, or
+`adopted from: "queue"`. `requiresArticle` is `insistsOnTheArticle(allocation)`, which is
+`from === "shelf"` and nothing else. The lookup `freeSlug` takes now answers a `SlugHolder` pair
+rather than a bare slug, because erasing *which kind of thing holds this address* at the lookup is
+what made the fact unrecoverable later.
+
+That closes F21 and also strengthens the retry path: a retry whose URL is still on the shelf now
+insists on the article, where before it did not.
+
+##### Where Sol was wrong, and the test that pins it
+
+Sol's F20(b) — `requiresArticle: request.retryOf !== undefined || …` — is refused, for the reason
+sketched above and now verified: an `articles` row is created when the worker opens its draft, not
+at enqueue, so a job stopped or swept while still `queued` has none, and `jobWorthRetrying` offers
+Retry on it. Under that rule, *paste a URL, press Stop, press Retry* would 404. There is a green
+test standing on that sequence — tests/article-delete-pg.test.ts § *still lets a retry mint for an
+attempt that never got as far as an article* — so the wrong fix cannot be reintroduced quietly.
+
+##### The cascade test is derived from the schema (F22)
+
+`articleForeignKeys()` in [`tests/store-shelf-pg.test.ts`](../../tests/store-shelf-pg.test.ts) walks
+the drizzle schema for every foreign key pointing at `articles` — fourteen, ten `cascade` and four
+`set null` — and the fixture now seeds a row in each. Three assertions, and the first two are what
+stop the third going quietly vacuous:
+
+1. the seeder's keys equal the schema's list exactly, so a fifteenth foreign key is a red test
+   rather than a silence;
+2. every table had a row of ours *before* the delete;
+3. after it, no row anywhere points at the article — and the **total** row count fell by exactly
+   the seeded rows for a `cascade` key and did not move for a `set null` one, which is the only
+   way to tell the two apart.
+
+Generic *insertion* is still by hand (every table has its own not-null columns and CHECKs); what is
+no longer by hand is the list.
+
+##### Evidence
+
+Red first, in every case, and each fix mutated afterwards to check the suite notices.
+
+| Finding | Watched red | Mutation that put it back red |
+|---|---|---|
+| F20 | *goes with the article, so a retry has nothing left to retry* — the `error`, `cancelled` and `done` rows all survived the delete | removing the `deleteTerminalJobs` call: 2 cases fail |
+| F21 | *refuses rather than queueing a job that would rebuild what was deleted* — the enqueue resolved with a queued job on the destroyed slug | restoring `requiresArticle: !request.url && !request.upload`: 1 case fails |
+| F22 | n/a (a coverage gap, not a defect) | dropping one table's seed → *referee_claims was never seeded*; dropping one key → the equality case fails; calling a `cascade` key a survivor → *comments is a deliberate survivor and lost a row* |
+
+`npm run typecheck` clean. Green: `article-delete-pg`, `store-shelf-pg`, `jobs`,
+`one-article-for-one-address`, `enqueue-owns-the-article`, `enqueue-drives-what-it-queues`,
+`billing-admission`, `owner-isolation`, `retry-keeps-the-checkpoints`,
+`retry-is-only-for-a-failed-job`, `retry-after-a-failed-refresh`, `pipeline-slug-claim`,
+`job-state`, `owner-jobs`, `store-slug-guard`, `find-article`. The barrier case was run four times
+for flakiness.
+
+##### One thing Stage C left red, found on the way past
+
+`tests/authenticated-api-route-contract.test.ts` had been failing since Stage C landed the route:
+`EXPECTED_AUTH_ROUTES` never learned about `DELETE /api/library/:slug`, so five cases were red —
+the contract-vs-source comparison, the guard-count canary, and three *"a method no matcher accepts
+is the terminal 404"* rows that refuse to send a request the source would answer. Fixed by adding
+`DELETE` to the `shelfEntry` matcher's methods and bumping `EXPECTED_GUARD_COUNT` 81 → 82. It is
+outside the file list this pass was scoped to, but a red gate is a red gate.
+
+The only other red in a full `npm run check` was `tests/chat-web-links.test.ts` §
+*grows roughly linearly in the number of unclosed brackets*, a timing assertion; green on its own,
+and it is the box.
+
+##### Still open
+
+- `uploads.slug` survives a delete, deliberately, for Stage E. `/add/upload/<id>` is a stale
+  redirect afterwards; it cannot resurrect the article (an upload always mints a fresh slug), but
+  it is a dead link until Stage E retires the row.
+- `feedback.slug` survives, as the table above says.
+
 ### Stage D — the control on the metadata page
 
 - [ ] `DeletePermanently` under `ArchiveArticle`, in its own `Section` labelled **Delete this

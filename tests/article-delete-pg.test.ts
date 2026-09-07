@@ -58,6 +58,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, ingestEvents, jobs } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
+import { enqueue } from "../src/jobs.js";
 import { runAsOwner } from "../src/owner.js";
 import type { OwnerId } from "../src/owner.js";
 import { FREE } from "../src/billing/tiers.js";
@@ -115,11 +116,18 @@ async function givenReservation(): Promise<string> {
 }
 
 interface JobFixture {
-  status: "queued" | "running" | "done" | "error";
+  status: "queued" | "running" | "done" | "error" | "cancelled";
   draftRevisionId?: string;
   ingestEventId?: string;
   /** For a `running` row: how long ago its lease ran out, in ms. Live if absent. */
   leaseExpiredMsAgo?: number;
+  /**
+   * The address the attempt was for. **This is what makes a terminal row
+   * dangerous rather than inert**: `retryJob` copies it into the new request,
+   * and `slugForRetry` then mints this very slug again — see § *a finished job
+   * is a way back in* below.
+   */
+  url?: string;
 }
 
 async function givenJob(fixture: JobFixture): Promise<string> {
@@ -145,6 +153,7 @@ async function givenJob(fixture: JobFixture): Promise<string> {
     }),
     ...(fixture.draftRevisionId !== undefined && { draftRevisionId: fixture.draftRevisionId }),
     ...(fixture.ingestEventId !== undefined && { ingestEventId: fixture.ingestEventId }),
+    ...(fixture.url !== undefined && { url: fixture.url }),
   });
   return id;
 }
@@ -254,19 +263,97 @@ describe("an article with a job still on it", () => {
    * **The positive control for the refusal**, without which a predicate that
    * matched every job would look exactly like one that matched the right ones.
    *
-   * A terminal job is inert — the Stage A spike measured that both slug indexes
-   * are partial on `('queued','running')`, so a `done` row blocks nothing and
-   * the reader can re-add the same URL afterwards. It stays as history, with a
-   * slug naming an article that is gone.
+   * A terminal job does not block the delete — the Stage A spike measured that
+   * both slug indexes are partial on `('queued','running')`, so a `done` row
+   * blocks nothing. What happens to it afterwards is the next describe block.
    */
   it("deletes anyway when the only job left is finished", async () => {
     await givenArticle();
-    const jobId = await givenJob({ status: "done" });
+    await givenJob({ status: "done" });
 
     expect(await asOwner(() => pgShelfStore.destroy(SLUG))).toEqual({ destroyed: SLUG });
 
     expect(await articleRows()).toHaveLength(0);
-    expect(await jobRows()).toEqual([{ id: jobId, status: "done" }]);
+  });
+});
+
+/* --------------------------------------- a finished job is a way back in -- */
+
+/**
+ * **What the terminal rows do after the article has gone** — GPT Sol's F20.
+ *
+ * Stage C left them, on the grounds that a `done` or `error` row is inert
+ * against every one of the queue's partial unique indexes. Index-inert is not
+ * the same as operationally inert, and the gap is `retryJob`
+ * ([src/jobs.ts](../src/jobs.ts)): it copies the failed attempt's own `url` (or
+ * `upload`) into the new request, and `slugForRetry` deliberately keeps the
+ * failed attempt's own slug. So a reader who deletes an article and then presses
+ * Retry on a month-old failure gets a queued job for the destroyed slug, and the
+ * worker's `lockOrCreateArticle` **remakes the article they destroyed**.
+ *
+ * It is not a race: the terminal row survives deliberately, so the reader can do
+ * this at their leisure, minutes or weeks later.
+ *
+ * The fix is that `destroy` takes them with it, in the transaction that takes
+ * the article. That is safe against the reservation leak F3 found, because a job
+ * only ever *reaches* a terminal status through a transaction that settles its
+ * reservation in the same statement batch — `settlingIfTerminal` and
+ * `requestCancel` in [pg-jobs.ts](../src/store/pg-jobs.ts), `settleIn` in
+ * [pg-session.ts](../src/store/pg-session.ts), and `settleExpired`'s sweep. The
+ * unsettled reservation F3 is about belongs to an **active** job, and those are
+ * still refused rather than deleted. `forget` and `trimFinished` have deleted
+ * terminal rows on exactly this reasoning since before any of this.
+ */
+describe("the finished jobs an article leaves behind", () => {
+  it("goes with the article, so a retry has nothing left to retry", async () => {
+    await givenArticle();
+    const failed = await givenJob({ status: "error", url: "https://example.test/gone" });
+    await givenJob({ status: "cancelled", url: "https://example.test/gone" });
+    await givenJob({ status: "done" });
+
+    expect(await asOwner(() => pgShelfStore.destroy(SLUG))).toEqual({ destroyed: SLUG });
+
+    expect(await articleRows()).toHaveLength(0);
+    expect(await jobRows()).toHaveLength(0);
+
+    /* The reader's own route, said in the store's words. `retryJob` starts with
+       `store.get(id, owner)` and answers `null` — which src/routes.ts turns into
+       the 404 a stranger's job id already gets — so there is no request that can
+       reach `enqueue` carrying this attempt's slug. */
+    expect(await pgJobStore.get(failed, OWNER)).toBeUndefined();
+  });
+
+  /**
+   * **The bill does not move**, which is the half F3 would have this test prove.
+   *
+   * A finished ingest's reservation is `succeeded`, and it is counted for the
+   * period whether or not the job that spent it is still on file — the row lives
+   * in `ingest_events`, `jobs.ingest_event_id` points *at* it, and that key is
+   * `NO ACTION` in both directions. Deleting the job is not a refund and must
+   * not read as one.
+   */
+  it("leaves the settled reservation, and the usage, exactly where they were", async () => {
+    await givenArticle();
+    const reservationId = await givenReservation();
+    await getDb()
+      .update(ingestEvents)
+      .set({ succeededAt: new Date() })
+      .where(eq(ingestEvents.id, reservationId));
+    await givenJob({ status: "done", ingestEventId: reservationId });
+
+    const before = await usageFor(OWNER, FREE);
+    expect(before.chargedFullPrice, "a succeeded reservation is a slot spent").toBe(1);
+
+    expect(await asOwner(() => pgShelfStore.destroy(SLUG))).toEqual({ destroyed: SLUG });
+
+    expect(await jobRows()).toHaveLength(0);
+    const [reservation] = await getDb()
+      .select({ succeededAt: ingestEvents.succeededAt, releasedAt: ingestEvents.releasedAt })
+      .from(ingestEvents)
+      .where(eq(ingestEvents.id, reservationId));
+    expect(reservation?.releasedAt, "not a refund").toBeNull();
+    expect(reservation?.succeededAt).not.toBeNull();
+    expect(await usageFor(OWNER, FREE)).toEqual(before);
   });
 });
 
@@ -416,4 +503,116 @@ describe("enqueueing against an article that is being deleted", () => {
       }
     }
   }, 30_000);
+});
+
+/* ----------------------------- adopting a slug the shelf no longer has -- */
+
+/**
+ * **A fresh paste that adopts a slug from the shelf** — GPT Sol's F21, and the
+ * classification bug F4's fix left behind.
+ *
+ * `enqueue` decided whether the article had to already exist by looking at the
+ * *request*: `!request.url && !request.upload`. But a URL is not one shape, it
+ * is three, and slug allocation is the only line in the codebase that knows
+ * which:
+ *
+ * - **minted** — nothing holds this address, so this job is about to *make* the
+ *   article and there is nothing yet to insist on;
+ * - **adopted from the shelf** — a published article of this reader's already
+ *   holds this address, and the job is going to run on it;
+ * - **adopted from the queue** — another request of this reader's, seconds old,
+ *   is minting for this address and has not opened its draft yet, so there is
+ *   still no article row and there must not be one insisted on.
+ *
+ * Only the middle one may insist, and the request shape cannot tell the three
+ * apart. So the fact travels on `SlugAllocation`, which is where it is known.
+ *
+ * ## Why this is deterministic rather than a race dressed up as one
+ *
+ * The holder connection takes the article row, so the enqueue reaches
+ * `lockArticleFor` and stops there — its shelf lookup has already happened and
+ * already returned the slug. The holder then deletes the row **from its own
+ * transaction** and commits. So the delete lands exactly in the window F21
+ * describes, every time, rather than whenever the scheduler feels like it.
+ *
+ * A timing slip fails this test rather than passing it: if the enqueue had not
+ * reached the lock, its shelf lookup would find nothing, mint a fresh random
+ * slug, and insert — and the assertion below is a refusal.
+ */
+describe("a fresh paste for a URL the shelf is losing", () => {
+  const URL = "https://example.test/an-article-being-deleted";
+
+  /** An article with a published revision carrying `URL` — what `slugForUrlKey` reads. */
+  async function givenPublishedArticle(): Promise<string> {
+    const db = getDb();
+    const articleId = await givenArticle();
+    const [revision] = await db
+      .insert(articleRevisions)
+      .values({ articleId, status: "published", finalUrl: URL })
+      .returning({ id: articleRevisions.id });
+    await db
+      .update(articles)
+      .set({ currentRevisionId: revision!.id })
+      .where(eq(articles.id, articleId));
+    return articleId;
+  }
+
+  it("refuses rather than queueing a job that would rebuild what was deleted", async () => {
+    if (!pool) return;
+    const articleId = await givenPublishedArticle();
+
+    const holder = await pool.connect();
+    try {
+      await holder.query("begin");
+      await holder.query("select 1 from spideryarn.articles where id = $1 for update", [articleId]);
+
+      const enqueueing = asOwner(() =>
+        enqueue({ slug: "an-article-being-deleted", url: URL, steps: ["fetch"], pump: false }),
+      );
+      /* Long enough for the shelf lookup to have happened and the lock to be
+         waited on. Without this the two never overlap and the test proves
+         nothing — see the header. */
+      await new Promise((resolve) => setTimeout(resolve, 250));
+
+      /* The delete, from inside the transaction holding the row, so it commits
+         in exactly the window between the adoption and the insert. */
+      await holder.query("delete from spideryarn.articles where id = $1", [articleId]);
+      await holder.query("commit");
+
+      await expect(enqueueing).rejects.toMatchObject({ status: 404 });
+    } finally {
+      await holder.query("rollback").catch(() => {});
+      holder.release();
+    }
+
+    /* The forbidden outcome, stated as itself: a queued job for a slug whose
+       article has gone is a job whose worker calls `lockOrCreateArticle`. */
+    expect(await jobRows()).toHaveLength(0);
+    expect(await articleRows()).toHaveLength(0);
+  }, 20_000);
+
+  /**
+   * **The other direction, and the reason Sol's own fix for F20 was not taken.**
+   *
+   * Sol proposed `requiresArticle: request.retryOf !== undefined || …` — every
+   * retry insists on its article. That is wrong, and this is the case that shows
+   * it: an `articles` row is created when the worker opens its draft
+   * (`openOrBeginJobDraft` → `lockOrCreateArticle`), **not at enqueue**. So a job
+   * stopped or swept while still `queued` never made one, `jobWorthRetrying`
+   * offers Retry on it, and under that rule the retry would 404 over an article
+   * that was never supposed to exist yet.
+   *
+   * Paste a URL, press Stop before it starts, press Retry: that is the whole
+   * sequence, and it must keep working.
+   */
+  it("still lets a retry mint for an attempt that never got as far as an article", async () => {
+    const failed = await givenJob({ status: "cancelled", url: URL });
+
+    const job = await asOwner(() =>
+      enqueue({ slug: SLUG, retryOf: failed, url: URL, steps: ["fetch"], pump: false }),
+    );
+
+    expect(job.slug, "a retry keeps the attempt's own name").toBe(SLUG);
+    expect(await articleRows(), "and no article had to exist for it").toHaveLength(0);
+  });
 });
