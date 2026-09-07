@@ -62,9 +62,12 @@ import type { Block, BlockId } from "../types.js";
 import { JobProgress } from "./JobProgress.js";
 import { apiFetch } from "./lib/api.js";
 /* The Sketch's own two numbers, imported rather than restated — see
-   `SKETCH_THEN_PAINT_COST`. The edge is new and one-way: SketchView imports
-   nothing from here, which is what keeps `npm run check`'s cycle gate quiet. */
-import { SKETCH_PRICE, SKETCH_WAIT } from "./SketchView.js";
+   `SKETCH_THEN_PAINT_COST`. They lived in `./SketchView.js` until 2026-09-07 and
+   moved to a leaf when a third caller arrived (the Metadata page's *Generate it
+   again* row), which also takes the panel-to-panel edge out of the graph
+   entirely rather than leaving a one-way one for `npm run check`'s cycle gate to
+   keep quiet about. */
+import { SKETCH_PRICE, SKETCH_WAIT } from "./sketch-cost.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { type UseIllustrated, useIllustrated } from "./useIllustrated.js";
 
