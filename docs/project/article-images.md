@@ -92,6 +92,23 @@ A deadline on the *first* draw was written and thrown away: at the deadline it w
 publisher's URL back into markup the reader was about to see, which is the sentence in bold above,
 done deliberately.
 
+**The figures do have a clock, and it is a different kind of thing.** `FIGURE_WAIT_MS` is not a
+budget on latency but a ceiling on a hang: the figures *are* awaited before the first draw, so until
+2026-09-07 one `/api/asset/…` that never answered meant the article never appeared at all — a blank
+page rather than a blank picture, on a document we hold in full. Past the ceiling a figure is
+caption-only, which is a state this feature already had, so the bound added no new reader-facing
+words. Nothing healthy comes near it: the bytes come from our own bucket at a ~348 ms median, and
+the largest figure in the corpus is 0.76 MB.
+
+**And the guarantee is conditional on our own end working.** An image of ours that fails or times
+out falls back to the publisher's URL, because the second draw is rebuilt from the original html —
+so a manifest saying `stored` over a bucket that has lost the objects hands every reader straight
+back to the CDN, with nothing reporting a failure. Measured on 2026-09-07: one article in the local
+corpus had 102 of 102 `stored` and none of the objects, and every asset request answered 500. It
+turned out to be a seeded fixture rather than anything this box ingested — every other article's
+objects were present — but it is the shape the privacy claim fails in, and
+[security.md](security.md) now says so.
+
 ## Why host them rather than hot-link
 
 Three reasons, and the third is the one that made it worth doing:

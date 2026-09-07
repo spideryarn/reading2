@@ -191,11 +191,12 @@ const CONTENT_OMISSIONS: readonly Omission[] = [
     kind: "content",
     what: "image-bytes",
     why:
-      "content/assets.json names every image the article referenced — content hash, " +
-      "type and size — but the bytes are not in the zip. An image the article " +
-      "hot-linked carries its source URL and can be re-fetched. A figure recovered " +
-      "from an uploaded PDF has no source URL and cannot: it is named by its page " +
-      "and content hash only.",
+      "content/assets.json lists every image the article referenced, but the bytes are " +
+      "not in the zip. One we stored carries its content hash, type and size; one we " +
+      "could not carries the reason instead, and there is nothing to fetch back. An " +
+      "image the article hot-linked carries its source URL and can be re-fetched. A " +
+      "figure recovered from an uploaded PDF has no source URL and cannot: it is named " +
+      "by its page and content hash only.",
   },
   {
     kind: "content",
@@ -636,9 +637,11 @@ Each block also carries its \`ordinal\`, so you can sort the order back if you l
 - **The original PDF or web page.** Deliberately left out — you already have the URL, in
   \`manifest.json\` as \`url\`, and the original is easy to fetch again. What you get instead is
   \`content/stamped.html\`, which is the version Spideryarn actually read.
-- **Image files.** \`content/assets.json\` names every image — its source URL, its content hash, its
-  type and its size — but the image bytes themselves are not in this zip. The URLs in it are the
-  originals, so most images can be re-fetched.
+- **Image files.** \`content/assets.json\` lists every image the article referenced, but the image
+  bytes themselves are not in this zip. One we stored is named by its content hash, type and size;
+  one we could not carries the reason instead. Where an entry has a source URL it is the publisher's
+  original, so most of an ordinary web article's images can be re-fetched — but a figure recovered
+  from a PDF you uploaded never had one, and cannot be fetched back from anywhere.
 - **Earlier versions of the article.** Only the current extraction is exported. Spideryarn does
   keep earlier ones, so this is a decision about what belongs in an export rather than something
   it could not do.
@@ -798,6 +801,34 @@ function countOf(value: unknown, key: string): number {
 }
 
 /**
+ * **How many pictures this bundle actually names**, across both collections.
+ *
+ * Structural rather than typed on `Assets`, like `countOf` above and for the
+ * same reason: these columns are `jsonb` and a bundle is built from rows of
+ * unknown age, so a manifest written before either collection existed has to
+ * count as none rather than throw.
+ *
+ * `status === "stored"` is the whole test. A `failed` entry is a record that we
+ * looked and could not get the picture, and counting it would tell the reader
+ * they have something they have not got.
+ */
+function storedIn(assets: unknown): number {
+  if (assets === null || typeof assets !== "object") return 0;
+  const box = assets as Record<string, unknown>;
+  let n = 0;
+  for (const key of ["entries", "pdfFigures"]) {
+    const found = box[key];
+    if (!Array.isArray(found)) continue;
+    for (const entry of found) {
+      if (entry !== null && typeof entry === "object") {
+        if ((entry as Record<string, unknown>).status === "stored") n += 1;
+      }
+    }
+  }
+  return n;
+}
+
+/**
  * The counts, in the order the page shows them, with the empty ones dropped.
  *
  * Dropping zeroes rather than printing them: a page telling a reader they have
@@ -816,7 +847,19 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "timeline events", n: countOf(revision.timeline, "events") },
     { label: "quiz questions", n: countOf(revision.quiz, "questions") },
     { label: "arc entries", n: countOf(revision.arc, "entries") },
-    { label: "images named", n: countOf(revision.assets, "entries") },
+    /* **Both collections, and only what is really named.** `assets` holds the
+       article's own `<img src>`s in `entries` and the pictures recovered from a
+       PDF in `pdfFigures`, and this counted the first only — so a paper, which
+       by construction has no `<img>` in its blocks at all, reported *no images*
+       however many figures came out of it. Since the zeroes are dropped below,
+       the row then disappeared rather than reading 0.
+
+       `storedIn` and not `countOf`, because the question the label asks is how
+       many pictures this bundle *names*, and a `failed` entry names none: it is
+       a record that we looked and could not get one. Counting it would tell the
+       reader they have a picture that is not there — the same overstatement
+       `assets.json`'s own note was corrected for. GPT Sol, 2026-09-07. */
+    { label: "images named", n: storedIn(revision.assets) },
     { label: "comments and notes", n: rows.comments.length },
     { label: "chat threads", n: rows.chatThreads.length },
     { label: "chat messages", n: rows.chatMessages.length },

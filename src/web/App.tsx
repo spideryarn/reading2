@@ -996,7 +996,7 @@ async function resolveAccess(
   signedIn: boolean,
   load: ArticleLoad,
 ): Promise<ResolvedAccess> {
-  const found = await findArticle(slug, signedIn);
+  const found = await findArticle(slug, signedIn, load.signal);
   if (found.kind === "not-shared" || found.kind === "reauth-required") {
     return { access: found, withImages: NO_SECOND_ANSWER };
   }
@@ -1101,10 +1101,22 @@ interface ResolvedAccess {
 /** Nothing of ours to draw on this one, so there is no second draw. */
 const NO_SECOND_ANSWER: Promise<ArticleAccess | null> = Promise.resolve(null);
 
-/** The two-step itself: the owned route, then the public one. Raw payloads. */
+/**
+ * The two-step itself: the owned route, then the public one. Raw payloads.
+ *
+ * **`signal` is the article load's**, and it is here for the reason `ArticleLoad`
+ * exists at all (rehost.ts): a load owns its own requests, so that a reader who
+ * moves on stops paying for the one they left. Until 2026-09-07 the load's
+ * controller reached the *asset* fetches and not the payload fetch above them,
+ * which is the larger of the two — so releasing a load abandoned a 150KB
+ * download rather than cancelling it. Nothing visible was wrong: the `live`
+ * guard already refuses the stale render, and this is the resource half of the
+ * same rule. GPT Sol, reviewing the built code.
+ */
 async function findArticle(
   slug: string,
   signedIn: boolean,
+  signal: AbortSignal,
 ): Promise<
   | { kind: "not-shared" }
   | { kind: "reauth-required" }
@@ -1120,7 +1132,7 @@ async function findArticle(
    */
   let sessionUnconfirmed = false;
   if (signedIn) {
-    const res = await apiFetch(`/api/article/${encodeURIComponent(slug)}`);
+    const res = await apiFetch(`/api/article/${encodeURIComponent(slug)}`, { signal });
     /* 404 is *not mine*; 401 is *we cannot tell*, after `apiFetch` has already
        spent its one refresh and one retry on it (lib/api.ts). Everything else,
        `readJson` turns into a message — including a 500, which must not be
@@ -1145,7 +1157,7 @@ async function findArticle(
      disappears, and
      docs/plans/260902j-public-read-only-access-audit-and-improvements.md
      § Cluster B. */
-  const read = await loadPublicArticle(slug);
+  const read = await loadPublicArticle(slug, signal);
   /* **Both answers, and this is the line where they meet.** *Nobody shared it*
      is a complete answer to a reader we could identify; to one we could not it
      is only half of one, and the reader needs a way back in rather than a

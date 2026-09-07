@@ -43,9 +43,8 @@ vi.mock("../src/web/public-api.js", () => ({
   publicFetch: (...args: unknown[]) => publicFetch(...args),
 }));
 
-const { rehostImages, rehostBlockHtml, beginArticleLoad, IMAGE_WAIT_MS } = await import(
-  "../src/web/rehost.js"
-);
+const { rehostImages, rehostBlockHtml, beginArticleLoad, IMAGE_WAIT_MS, FIGURE_WAIT_MS } =
+  await import("../src/web/rehost.js");
 const { pdfFigureNotesIn, hasOriginalPdf, FIGURE_NOT_RECOVERED } = await import(
   "../src/web/PdfFigureNote.js"
 );
@@ -358,6 +357,75 @@ describe("rehostImages", () => {
     const out = await firstDraw(article, "a-piece", "owned");
     expect(out.blocks[0]?.html).not.toContain("<img");
     expect(out.blocks[1]?.html).toMatch(/src="blob:/);
+  });
+
+  /**
+   * **A figure that never answers must not cost the reader the article.**
+   *
+   * The figures are awaited before the first draw, deliberately — there is
+   * nothing to put in their place, so drawing sooner buys the reader nothing.
+   * The price of that decision is that `rehostImages` is on the critical path of
+   * *the prose appearing at all*, and until 2026-09-07 the await was unbounded:
+   * one `/api/asset/…` that never resolved — a stalled connection, a response
+   * whose `blob()` never completes — meant `resolveAccess` never returned and
+   * the reader sat on the loading state for the rest of the session. Not a
+   * blank picture: a blank page. GPT Sol found it reviewing the built code.
+   *
+   * `FIGURE_WAIT_MS` is the bound. Past it the figure is caption-only, which is
+   * a state this module already has and already documents — *the manifest says
+   * the picture is there and this is a transport failure the reader can do
+   * nothing about*. So the fix adds a ceiling and no new reader-facing state.
+   *
+   * **Fake timers, and the assertion is on both sides of the clock**: before it
+   * fires there is no article, after it there is. Written red first — without
+   * the bound the `await` below never settles and the test times out rather than
+   * failing on an assertion, which is the honest shape of the bug.
+   */
+  it("gives up on a figure that never answers, and still draws the prose", async () => {
+    vi.useFakeTimers();
+    try {
+      const hung = "a1".repeat(32);
+      const quick = "b2".repeat(32);
+      const signals: (AbortSignal | undefined)[] = [];
+      apiFetch.mockImplementation(async (path: string, init?: { signal?: AbortSignal }) => {
+        signals.push(init?.signal);
+        if (path.includes(quick)) return okPng();
+        return new Promise(() => {});
+      });
+
+      const article = articleWith(
+        [
+          figureBlock("spya-hung01", REF_ONE, "Figure 1."),
+          figureBlock("spya-hung02", REF_TWO, "Figure 2."),
+        ],
+        [stored(REF_ONE, hung), stored(REF_TWO, quick)],
+      );
+
+      let drawn: Article | undefined;
+      const running = rehostImages(article, "a-piece", "owned", beginArticleLoad()).then((r) => {
+        drawn = r.article;
+      });
+
+      /* **Nothing yet**, with the clock frozen — the figures really are awaited,
+         which is the decision this bound exists to make survivable rather than
+         to reverse. */
+      await Promise.resolve();
+      expect(drawn, "the prose must not be drawn before the figures are settled").toBeUndefined();
+
+      await vi.advanceTimersByTimeAsync(FIGURE_WAIT_MS);
+      await running;
+
+      /* The one that answered is ours; the one that hung is caption-only. */
+      expect(drawn?.blocks[1]?.html).toMatch(/src="blob:/);
+      expect(drawn?.blocks[0]?.html).not.toContain("<img");
+
+      /* **The abort itself**, so the dead request is not left downloading a
+         picture nothing will ever look at — `imageSources` is held to the same
+         thing, and for the same reason. */
+      expect(signals.some((s) => s?.aborted)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   /** Blocks whose html did not change come back as the very same object. */

@@ -132,6 +132,25 @@ The differences that matter to a reader:
   ([ingest-queue.md](ingest-queue.md)) — and the chunks the first attempt finished are read back
   rather than re-bought.
 - **A scan cannot be checked at all**, has no text layer to check against, and says so on the page.
+- **A figure leaves this stage as a caption and a marker, and the picture is fetched two stages
+  later.** `renderHtml` writes `<figure data-spya-pdf-figure="<ref>"><figcaption>…</figcaption></figure>`
+  and no `<img>` — because the model **cannot hand back the raster**, and because a final `/api/…`
+  URL written here would be *stripped* by the sanitiser in stage 3, which deliberately removes any
+  `src` resolving to our own API. (It does *see* the picture: the whole native PDF goes up as a
+  `file` part, embedded images and all. What it returns is text in a fixed record shape, so a
+  caption is the most a figure can come back as. An earlier draft of this bullet said the model
+  never sees the raster, which is a different and false claim — GPT Sol, 2026-09-07.) The marker is an opaque ref folding in the raw PDF's sha256, the page,
+  the figure's ordinal on that page and a digest of the caption, so it fails closed against a
+  document that has since changed; [`src/reserved.ts`](../../src/reserved.ts) is the one file
+  allowed to name it. Stage 4.5 reopens the PDF, extracts what it can and writes the outcome into
+  the manifest; the reading view turns marker plus manifest into an `<img>` after sanitising, and
+  puts a muted line under the caption when nothing was recovered.
+  [article-images.md](article-images.md) owns all of that. Until 2026-09-06 a PDF figure was a
+  caption and a blank space, on purpose and by v1's design, which Greg reasonably read as a bug —
+  [260906a](../plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md).
+- **A figure with no caption produces no element at all.** `renderHtml` returns early on empty text,
+  before it builds the `<figure>` — so there is no block to mark and no picture to recover. Worth
+  knowing before assuming every image in the PDF has somewhere to land.
 - **A word broken by a page break is mended from the text layer, not by a second model call.** The
   chunks are read in parallel and none of them sees over its own edge, so `dis-` / `patcher` arrives
   as two records and used to render as "dis patcher". `mendSeamHyphens` in

@@ -726,7 +726,39 @@ function storedFigures(assets: Assets | undefined): Map<string, StoredFigure> {
 export const IMAGE_WAIT_MS = 15_000;
 
 /**
- * The figures' bytes, by ref — **awaited outright**.
+ * **The ceiling on how long the prose may be held back by a figure.**
+ *
+ * The same number as `IMAGE_WAIT_MS` and a different kind of thing, which is
+ * exactly why it is a separate constant rather than a reuse: that one is a
+ * deadline on a *decoration*, and past it the reader loses privacy on a picture
+ * they already have the prose around. This one is on the **critical path of the
+ * article appearing at all**, because the figures are deliberately awaited (see
+ * `rehostImages` — there is nothing to draw in a figure's place, so drawing
+ * sooner buys the reader nothing). Past it, the reader loses the picture.
+ *
+ * **It exists because the await was unbounded until 2026-09-07**, and GPT Sol
+ * found it reviewing the built code. One `/api/asset/…` that never resolves — a
+ * stalled connection, or a response whose `blob()` never completes — meant
+ * `rehostImages` never returned, `resolveAccess` never resolved, and the reader
+ * sat on the loading state for the rest of the session. Not a blank picture: a
+ * blank page, on an article we hold in full.
+ *
+ * **A ceiling on a pathology, not a latency budget**, and the difference decides
+ * the number. The bytes come from our own bucket — measured at a ~348 ms median
+ * per object on this box, and the largest figure in the corpus is 0.76 MB — so
+ * nothing healthy comes near it. What it stops is *never*. Shortening it to
+ * something a slow connection could plausibly exceed would trade a hang nobody
+ * has for figures somebody would really lose, which is the wrong way round.
+ *
+ * **And what it degrades to is a state this file already has**: caption-only,
+ * no message, because the manifest says the picture is there and this is a
+ * transport failure the reader can do nothing about. So the bound adds a
+ * ceiling and no new reader-facing state — see `rehostImages`'s header.
+ */
+export const FIGURE_WAIT_MS = 15_000;
+
+/**
+ * The figures' bytes, by ref — **awaited, but not for ever.**
  *
  * The fetches go out together rather than one after another: eight sequential
  * round trips is a visible pause before the article draws, and eight parallel
@@ -736,7 +768,15 @@ export const IMAGE_WAIT_MS = 15_000;
  * take the other seven off the page with it. **A `ref` absent from the map is
  * how a failure is spelled**, which is what leaves that figure caption-only —
  * the promise in this module's header, and until 2026-09-06 a promise only the
- * owner's branch kept.
+ * owner's branch kept. A figure the clock ran out on is absent for the same
+ * reason and means the same thing, so `FIGURE_WAIT_MS` needed no new vocabulary.
+ *
+ * **Its own `AbortController`, downstream of the load's** — the shape
+ * `imageSources` already uses below, and here for one of the same two reasons:
+ * the deadline has to stop these fetches, and the load being released still has
+ * to. Aborting rather than letting the stragglers land matters less here than it
+ * does there (nothing will look at another figure once this html is built) but
+ * leaving a dead download running is not free either.
  */
 async function figureSources(
   slug: string,
@@ -745,17 +785,37 @@ async function figureSources(
   load: ArticleLoad,
 ): Promise<Map<string, StoredSrc>> {
   const figures = new Map<string, StoredSrc>();
-  await Promise.allSettled(
+  if (load.signal.aborted) return figures;
+
+  const stop = new AbortController();
+  const passOn = (): void => stop.abort();
+  load.signal.addEventListener("abort", passOn, { once: true });
+
+  const settled = Promise.allSettled(
     [...wanted].map(async ([ref, entry]) => {
-      const blob = await fetchAsset(slug, footing, entry, load.signal);
-      /* **Released while the bytes were arriving.** A response already in hand
-         is not cancelled by aborting its request, so this is the check an
-         `AbortController` alone does not make. `mint` refuses too; both, because
-         a picture nobody is looking at should not be put in a map either. */
-      if (load.signal.aborted) return;
+      const blob = await fetchAsset(slug, footing, entry, stop.signal);
+      /* **Released, or the clock ran out, while the bytes were arriving.** A
+         response already in hand is not cancelled by aborting its request, so
+         this is the check an `AbortController` alone does not make. `mint`
+         refuses too; both, because a picture nobody is looking at should not be
+         put in a map either. */
+      if (stop.signal.aborted) return;
       figures.set(ref, { src: load.mint(blob), width: entry.width, height: entry.height });
     }),
   );
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    settled,
+    new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        stop.abort();
+        resolve();
+      }, FIGURE_WAIT_MS);
+    }),
+  ]);
+  clearTimeout(timer);
+  load.signal.removeEventListener("abort", passOn);
   return figures;
 }
 
