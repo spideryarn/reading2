@@ -420,6 +420,55 @@ in either direction.
 This is cheap, and it is the guard against the specific way this refactor goes wrong three slices
 from now, when nobody remembers that "the one call" was a property rather than a coincidence.
 
+#### Stage 3, as built
+
+No new dependency: `tests/helpers/ts-ast.ts` already provides `parseSource`/`walkAst`, and the
+contract test already imports from it — so this is the machinery that was here rather than a second
+way to do the same thing. The case counts `CallExpression`s whose callee is the `requireUser`
+identifier (comments are not nodes, so the six that mention it cannot fool it in either direction)
+and asserts the one call sits above the `serveAuthenticatedApi` handoff, since a single call that had
+drifted *below* it would satisfy a count and guard nothing.
+
+**Mutation 6**, watched: a second `await requireUser(req, verify)` added under a dead condition.
+Red — *"expected 2 to be 1"*, quoting the security map. Reverted.
+
+### The Stage 1 review, and the gap it found
+
+[GPT Sol's review of the built Stage 1](260907e-referee-joins-the-route-table-stage1-review-sol.md)
+([prompt](260907e-referee-joins-the-route-table-stage1-review-prompt.md)): **no P0, one P1, three
+P2s.** All four are fixed, and the P1 is the interesting one.
+
+- **P1 — the claims lock's *release* was untested.** Deleting `pullingClaims.delete(slug)` left both
+  claims cases green: one asks its question mid-stream and the other only about lifetime, so neither
+  looks after the request has answered. Criteria had that case; claims did not, and claims is a
+  separate lock, key, sweep and store method rather than an instance of criteria. **This is the same
+  class as the original oracle bug** — a lock whose release nothing watches — found twice in one
+  night, in two different places, which is what makes it worth naming rather than just fixing. Now
+  covered, and **mutation 5** confirms it: deleting the claims release turns exactly that new case
+  red and nothing else.
+- **P2 — the claims grace was not pinned.** The tripwire asserted only
+  `CRITERION_ORPHAN_GRACE_MS < 10 min`. `CLAIMS_ORPHAN_GRACE_MS` is derived from a *different*
+  timeout, so if it grew past ten minutes the claims lock cases would quietly start passing for the
+  age reason again. Both constants are asserted now.
+- **P2 — a one-microtask hole in `settled`.** Fulfilling a promise queues its continuations rather
+  than running them, so a request finishing in the same job as the gate could read `settled === false`
+  for a tick. Sol confirmed the actual mutation is still caught — each route does awaited database
+  work before the generator — but the hole is closed with a single `await Promise.resolve()` after
+  the checkpoint.
+- **P2 — an early failure became a 60-second timeout.** If a route stops matching, the checkpoint
+  never fires and the case times out reporting nothing useful. `reachedOrSettled` now races the
+  request against the checkpoint and names what happened instead.
+
+Sol also **confirmed three things I had asserted**: the criteria and claims lock oracles are now
+causally valid with no third guard available; `importOriginal` does not suppress module-scope side
+effects; and the registry's `mechanisms: ["fixture-loader"]` is right, because `withSpendAttribution`
+only overlays context and the ledger row comes from gateway calls the stubs bypass. And it confirmed
+**point 8** — that nothing in the file is coupled to the guards' current form, so Stage 2 should need
+no edit to it. Stage 2 then needed none, which is the useful kind of agreement.
+
+It could not run the suite itself (`EPERM` reaching the local Postgres port), so every green above is
+mine, from this box.
+
 ## Why the three specification tests still test what they tested
 
 `security-map.md` names these as the specification, and the brief asks me to be able to say why each

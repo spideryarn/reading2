@@ -251,7 +251,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { isPublicNamespace } from "../src/public/routes.js";
 import { handleApi } from "../src/routes.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
-import { type AstNode, lineOf, parseSource } from "./helpers/ts-ast.js";
+import { type AstNode, lineOf, parseSource, walkAst } from "./helpers/ts-ast.js";
 
 loadEnvLocal();
 
@@ -1920,6 +1920,54 @@ describe("the authenticated API's route contract", () => {
         "POST literal /api/billing/confirm",
         "GET literal /api/billing/usage",
       ]);
+    });
+
+    /**
+     * **One `requireUser` call, and it is above the handoff.**
+     *
+     * docs/project/security-map.md names *the one `requireUser` call* as a place
+     * a defence physically lives. "The one" is the load-bearing half: a split
+     * that ended with two call sites would have broken the property the map
+     * relies on even with every route still guarded, because the claim it lets
+     * you make — *everything behind the gate is behind this line* — stops being
+     * checkable by reading one statement.
+     *
+     * Nothing enforced it. It was true by the fact that nobody had added a
+     * second, which is how it would have stopped being true. Added while moving
+     * referee into the table (260907e): that slice does not go near the gate,
+     * and the point of writing it down now is that the next one might.
+     *
+     * **AST rather than a text count** (GPT Sol, stage 1 review). `requireUser`
+     * appears in this file as an import and in six comments; a regex would have
+     * to strip both and would misfire the first time somebody wrote the word in
+     * a new comment — a check that goes red for a sentence is a check people
+     * learn to edit. `walkAst` sees a `CallExpression` whose callee is the
+     * identifier, and comments are not nodes.
+     */
+    it("calls requireUser exactly once, inside serveApi and above the handoff", () => {
+      const source = readFileSync(ROUTES_PATH, "utf8");
+      const calls: number[] = [];
+      walkAst(parseSource(source).program, (node) => {
+        if (node.type !== "CallExpression") return;
+        const callee = node.callee as AstNode | undefined;
+        if (callee?.type === "Identifier" && callee.name === "requireUser") {
+          calls.push(lineOf(node));
+        }
+      });
+      expect(
+        calls.length,
+        "src/routes.ts must call requireUser exactly once — docs/project/security-map.md § where the defences live names 'the one requireUser call', and two call sites break that claim even if both are correct",
+      ).toBe(1);
+
+      /* And in the right place: above the point where the authenticated half is
+         handed the user. A single call that had drifted below the handoff would
+         satisfy the count and guard nothing. */
+      const gate = calls[0] ?? 0;
+      const handoff = source.slice(0, source.indexOf("serveAuthenticatedApi(user")).split("\n")
+        .length;
+      expect(gate, "the requireUser call is not above the serveAuthenticatedApi handoff").toBeLessThan(
+        handoff,
+      );
     });
 
     it("gives every contract row at least one method and one honest witness", () => {

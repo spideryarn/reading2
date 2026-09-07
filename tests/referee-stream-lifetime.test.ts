@@ -167,6 +167,7 @@ await pgReady({
 
 const { handleApi, CRITERION_ORPHAN_GRACE_MS } = await import("../src/routes.js");
 const { refereeCriteriaStore } = await import("../src/store/index.js");
+const { CLAIMS_ORPHAN_GRACE_MS } = await import("../src/store/pg-referee-claims.js");
 
 /**
  * A request that is **started but not waited for**, so the test can look at it
@@ -239,6 +240,44 @@ async function get(url: string): Promise<Record<string, unknown>> {
 }
 
 /**
+ * Wait for the generator's checkpoint, and **fail fast if the request answers
+ * instead of reaching it**.
+ *
+ * Waiting on `reached()` alone is right until something upstream of the stream
+ * goes wrong — a matcher that stopped matching, a 404, a validation error. Then
+ * the checkpoint never fires and the case sits until the suite's 60-second
+ * timeout, reporting "timed out" about a routing failure. Racing the request
+ * against it turns that into a sentence naming what happened. GPT Sol's stage 1
+ * review, P2.
+ *
+ * The trailing `await Promise.resolve()` closes the one-microtask hole in
+ * `settled`: fulfilling a promise *queues* its continuations rather than running
+ * them, so a request that finished in the same job as the gate could still read
+ * `settled() === false` for one tick. Yielding once lets that continuation run
+ * before anything is asserted (same review, P2).
+ */
+async function reachedOrSettled(
+  gate: { reached: () => Promise<void> },
+  call: { promise: Promise<void> },
+  route: string,
+): Promise<void> {
+  const early = call.promise.then(
+    () => {
+      throw new Error(`${route}: the request settled before the stream was entered`);
+    },
+    () => {
+      throw new Error(`${route}: the request failed before the stream was entered`);
+    },
+  );
+  /* Marks `early` handled, so Node does not warn when the gate wins the race.
+     `Promise.race` would attach a handler too, but only to whichever settles
+     first. */
+  early.catch(() => {});
+  await Promise.race([gate.reached(), early]);
+  await Promise.resolve();
+}
+
+/**
  * Make every `pending` criterion on this article older than the grace.
  *
  * The precedent is tests/store-searches-pg.test.ts, which backdates
@@ -300,7 +339,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
         criterion: "Are the methods reproducible?",
         kind: "single",
       });
-      await gates.criterion.reached();
+      await reachedOrSettled(gates.criterion, call, "POST /api/referee/criteria/:slug");
 
       /* The handshake has fired, so the handler is genuinely inside the stream.
          Both of these are false for a route that launched and returned. */
@@ -321,7 +360,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
         criterion: "Are the methods reproducible?",
         kind: "single",
       });
-      await gates.criterion.reached();
+      await reachedOrSettled(gates.criterion, call, "POST /api/referee/criteria/:slug");
 
       /* **The row is now older than the grace**, so the age guard cannot be
          what spares it. Only `keep` — `liveCriteria(slug)`, built from the
@@ -341,7 +380,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
         criterion: "Are the methods reproducible?",
         kind: "single",
       });
-      await gates.criterion.reached();
+      await reachedOrSettled(gates.criterion, first, "POST /api/referee/criteria/:slug");
       gates.criterion.release();
       await first.promise;
 
@@ -400,7 +439,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
        its lock, key, store method and sweep are all its own (Sol, finding 4). */
     it("holds the request open until the stream is finished", async () => {
       const call = begin("POST", `/api/referee/claims/${SLUG}`);
-      await gates.claims.reached();
+      await reachedOrSettled(gates.claims, call, "POST /api/referee/claims/:slug");
 
       expect(call.settled(), "the request answered while the stream was still running").toBe(false);
       expect(call.ended()).toBe(false);
@@ -413,7 +452,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
 
     it("still holds its own lock while the stream is running, however old the run looks", async () => {
       const call = begin("POST", `/api/referee/claims/${SLUG}`);
-      await gates.claims.reached();
+      await reachedOrSettled(gates.claims, call, "POST /api/referee/claims/:slug");
 
       await ageTheClaimsRun(article.articleId);
       const mid = await get(`/api/referee/claims/${SLUG}`);
@@ -423,6 +462,32 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
       gates.claims.release();
       await call.promise;
     });
+
+    it("releases its own lock by the time it answers, so the next sweep can collect a stale run", async () => {
+      /* **The gap Sol found in the first version of this file**, and it is the
+         same shape as the oracle bug in the draft before that: the two cases
+         above both stayed green with `pullingClaims.delete(slug)` deleted,
+         because neither of them asks anything after the request has answered.
+         Criteria had this case; claims did not, and claims is a separate lock,
+         key, sweep and store method rather than an instance of criteria. */
+      const call = begin("POST", `/api/referee/claims/${SLUG}`);
+      await reachedOrSettled(gates.claims, call, "POST /api/referee/claims/:slug");
+      gates.claims.release();
+      await call.promise;
+
+      /* There is one claims run per article, so the key is the slug and the row
+         is the row — no id to keep in step. Put back to `pending` and aged past
+         the grace, it is collectable if and only if the slug has left
+         `pullingClaims`. */
+      await getDb()
+        .update(refereeClaims)
+        .set({ status: "pending", createdAt: new Date(Date.now() - 10 * 60_000) })
+        .where(eq(refereeClaims.articleId, article.articleId));
+
+      const after = await get(`/api/referee/claims/${SLUG}`);
+      const run = after.run as { status: string } | null;
+      expect(run?.status, "the slug was never released, so the sweep spared it").toBe("error");
+    });
   });
 
   describe("POST /api/referee/mirror/:slug", () => {
@@ -431,7 +496,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
        to return its promise independently of the other two. */
     it("holds the request open until the stream is finished", async () => {
       const call = begin("POST", `/api/referee/mirror/${SLUG}`);
-      await gates.mirror.reached();
+      await reachedOrSettled(gates.mirror, call, "POST /api/referee/mirror/:slug");
 
       expect(call.settled(), "the request answered while the stream was still running").toBe(false);
       expect(call.ended()).toBe(false);
@@ -443,10 +508,15 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
     });
   });
 
-  it("uses the grace this file assumes, so backdating ten minutes is enough", () => {
-    /* If somebody raises the grace past ten minutes, every aged-row case above
-       starts passing for the old, broken reason. This is the tripwire for
-       that. */
-    expect(CRITERION_ORPHAN_GRACE_MS).toBeLessThan(10 * 60_000);
+  it("uses the graces this file assumes, so backdating ten minutes is enough", () => {
+    /* If either grace is raised past ten minutes, every aged-row case above
+       starts passing for the old, broken reason — the row is spared by its age
+       and the lock is never the explanation, which is exactly the bug this file
+       was rewritten to remove. **Both** are asserted: checking only the criteria
+       one left the claims cases free to rot silently, since `claims` sweeps on a
+       grace of its own that is derived from a different timeout (Sol's stage 1
+       review, P2). */
+    expect(CRITERION_ORPHAN_GRACE_MS, "criteria").toBeLessThan(10 * 60_000);
+    expect(CLAIMS_ORPHAN_GRACE_MS, "claims").toBeLessThan(10 * 60_000);
   });
 });
