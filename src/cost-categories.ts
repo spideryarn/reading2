@@ -192,6 +192,13 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   "link-summary": "interactive request work",
   /* Marking an answer the reader just typed. */
   "quiz-mark": "interactive request work",
+  /* The word that decides how hard the reader's next question is, judged from
+     the mark above and shown to nobody — docs/project/quiz.md. Request scope
+     and reader-triggered like its neighbour, and it fires once per answered
+     question *beside* a `quiz-mark` call, which is why it is billed separately:
+     folded together, the cost of marking an answer would silently include a
+     second call on a different tier. */
+  "quiz-verdict": "interactive request work",
   /* The four referee stages. A peer reviewer is waiting on each —
      docs/project/referee-mode.md. */
   "referee-mirror": "interactive request work",

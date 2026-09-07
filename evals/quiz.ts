@@ -95,7 +95,7 @@ import path from "node:path";
 import { loadEnvLocal } from "../src/env.js";
 import { withLedger } from "../src/cli-ledger.js";
 import { generateQuiz } from "../src/quiz.js";
-import { GRADE_WORDS, markAnswer } from "../src/quiz-mark.js";
+import { GRADE_WORDS, markAnswer, type QuizMarkResult } from "../src/quiz-mark.js";
 import { readArticleFromDir } from "../tests/helpers/article-from-dir.js";
 import { FIXTURE_ROOT } from "../tests/helpers/require-fixture.js";
 import { fallbackHeadTitle } from "../src/source-hash.js";
@@ -116,6 +116,23 @@ interface MarkCase {
   readonly evidence: readonly QuizEvidence[];
   /** What the reader wrote, as speech, because most of it will be dictated. */
   readonly said: string;
+  /**
+   * **What the hidden verdict should be** — the label these cases got when the
+   * quiz went adaptive, docs/plans/260907d-make-the-quiz-adaptive.md.
+   *
+   * `src/quiz-verdict.ts` reads the finished mark and says `right` or `wrong`
+   * so the ladder can step; nobody is ever shown it. These eight cases are
+   * already the eight ways this exchange goes wrong, so they are the right
+   * cases to hold a classifier to — and four of them are precisely its hard
+   * ones. `poisonedReference` matters most: the mark defends a reader who was
+   * right against a wrong draft, and a classifier that reads that as `wrong`
+   * would punish them for being right, which is the worst thing this feature
+   * can do.
+   *
+   * `"none"` means no verdict is the correct answer, not a failure to produce
+   * one. Left undefined where the honest label is arguable — see `half`.
+   */
+  readonly expectVerdict?: "right" | "wrong" | "none";
 }
 
 /** Evidence without an offset, which no caller of `markAnswer` reads. */
@@ -124,6 +141,10 @@ const at = (blockId: string, quote: string): QuizEvidence => ({ blockId, quote, 
 const CASES: readonly MarkCase[] = [
   {
     name: "differentWords",
+    /* Right, in their own words. The classifier must not mistake unfamiliar
+       wording for a miss — the mistake the marking prompt itself is built
+       against, asked again one layer up. */
+    expectVerdict: "right",
     watchFor:
       "The reader is RIGHT and shares almost no wording with the draft. Does it invent a correction to have something to say, or grade them?",
     question:
@@ -141,6 +162,9 @@ const CASES: readonly MarkCase[] = [
   },
   {
     name: "elsewhere",
+    /* Right, from another passage. Arriving by a different route is not a
+       lesser answer, and the ladder must not punish it. */
+    expectVerdict: "right",
     watchFor:
       "A CORRECT answer drawn from a different passage than the one the draft cites. Is it treated as a miss because it is not where the evidence points?",
     question:
@@ -155,6 +179,8 @@ const CASES: readonly MarkCase[] = [
   },
   {
     name: "confidentlyWrong",
+    /* Contradicts the piece. The one unambiguous `wrong`. */
+    expectVerdict: "wrong",
     watchFor:
       "Wrong, and sure of it. Is the correction built from a sentence that contradicts them BY ITSELF, or assembled out of the marker's own reasoning? And is it a correction or a verdict?",
     question: "What is Seth's view of the relationship between intelligence and consciousness?",
@@ -168,6 +194,9 @@ const CASES: readonly MarkCase[] = [
   },
   {
     name: "noIdea",
+    /* They did not attempt it, which is `wrong` for the ladder's purpose — the
+       next question should be easier — without anything on screen saying so. */
+    expectVerdict: "wrong",
     watchFor:
       "They asked to be told. Is this a plain answer from the article, or a hedge, a consolation, or a question back?",
     question: "Why does Seth say brains are not computers?",
@@ -187,6 +216,15 @@ const CASES: readonly MarkCase[] = [
   },
   {
     name: "half",
+    /**
+     * **Deliberately unlabelled — this is the materially-partial case**, and
+     * the honest position is that either answer is defensible: two parts of
+     * three, where whether the third matters is exactly the judgement being
+     * asked for. Asserting a label here would be inventing certainty to make a
+     * score look better. What is worth watching is whether it comes back the
+     * *same* way across runs; a case that flips is a classifier making a coin
+     * toss, and coin tosses steer the ladder.
+     */
     watchFor:
       "Two parts of a three-part answer, not claimed as complete. Does it list what was missing, or raise the one thing worth their time?",
     question:
@@ -201,6 +239,8 @@ const CASES: readonly MarkCase[] = [
   },
   {
     name: "moreComplete",
+    /* More than the draft had, and the article backs it. Emphatically right. */
+    expectVerdict: "right",
     watchFor:
       "The reader says MORE than the draft does, and the article backs the extra. Is the extra read as an error, or as an addition the draft missed?",
     question: "What does Seth mean by saying that, for brains, time is physical?",
@@ -214,6 +254,12 @@ const CASES: readonly MarkCase[] = [
   },
   {
     name: "poisonedReference",
+    /* **The one that matters most.** The reader is right and the draft is
+       wrong; a good mark takes the reader's side. A classifier that reads that
+       defence as `wrong` would hand a reader who was right an easier question
+       — punishing them for being right, quietly, in the one channel they
+       cannot see. If this cell is wrong, the design does not ship. */
+    expectVerdict: "right",
     /**
      * **THE case.** The reference answer below is deliberately false — it says
      * the opposite of the passage it cites — and its block ids are real, so
@@ -241,6 +287,11 @@ const CASES: readonly MarkCase[] = [
   },
   {
     name: "illPosed",
+    /* **No verdict is the right answer here**, not a failure to reach one. The
+       article does not settle the question, so grading the reader either way is
+       a judgement the piece cannot support — and absence simply holds the band,
+       which is the outcome a reader would want from an unfair question. */
+    expectVerdict: "none",
     /* Doubles as Sol's "reference unsupported by its evidence": the draft
        over-claims, and the reader is the one being careful. The article says we
        ought to worry about organoids; it never says it thinks one would be
@@ -538,6 +589,11 @@ async function main(): Promise<void> {
   say();
 
   let flagged = 0;
+  /* The hidden verdict against its hand label — see `expectVerdict`. Only the
+     seven labelled cases are counted; `half` is deliberately unlabelled. */
+  let verdictsChecked = 0;
+  let verdictsAgreed = 0;
+  const verdictMisses: string[] = [];
   let uncited = 0;
   let invented = 0;
   let misplaced = 0;
@@ -575,7 +631,7 @@ async function main(): Promise<void> {
     say();
 
     const started = performance.now();
-    let out: { reply: string; model: string };
+    let out: QuizMarkResult;
     try {
       out = await markAnswer({
         meta,
@@ -607,6 +663,29 @@ async function main(): Promise<void> {
     misplaced += placed.wrong;
     checkedQuotes += placed.checked;
     const secs = ((performance.now() - started) / 1000).toFixed(1);
+
+    /* **The hidden verdict, and whether it matches the hand label.** The mark
+       above is what the reader sees; this is the word that decides how hard
+       their next question is and that they never see. A mismatch here is
+       invisible in production by construction, which is why it is printed
+       beside a label somebody wrote by hand.
+       docs/plans/260907d-make-the-quiz-adaptive.md § Measuring it. */
+    const got = out.verdict ?? "none";
+    if (c.expectVerdict) {
+      verdictsChecked += 1;
+      if (got === c.expectVerdict) verdictsAgreed += 1;
+      else verdictMisses.push(`${c.name}: wanted ${c.expectVerdict}, got ${got}`);
+    }
+
+    say(
+      `**Verdict (hidden from the reader)** — \`${got}\`` +
+        (c.expectVerdict
+          ? got === c.expectVerdict
+            ? ` · matches the hand label`
+            : ` · ⚠︎ **hand label says \`${c.expectVerdict}\`**`
+          : ` · no hand label — watch whether it is stable across runs`),
+    );
+    say();
 
     say(
       `**Reply** — ${out.reply.split(/\s+/).length} words, ${cited.known} citation${cited.known === 1 ? "" : "s"}, ${secs}s` +
@@ -645,6 +724,18 @@ async function main(): Promise<void> {
       `${checkedQuotes} checked (should be 0 — see \`misattributed\` in \`evals/quiz.ts\`)`,
   );
   say(`- citing no block at all: ${uncited} of ${marked} (worth a look, not a failure)`);
+  /* **This one IS close to a verdict**, unlike the counts around it, and that is
+     the difference between a judgement about tone and a judgement about a label
+     somebody wrote down first. It still is not a gate: seven cases and a model
+     that varies means one miss is worth reading rather than reacting to, and
+     `poisonedReference` is worth more than the other six put together. */
+  say(
+    `- hidden verdict matching its hand label: **${verdictsAgreed}** of ${verdictsChecked} ` +
+      `(the adaptive ladder steps on this — see \`expectVerdict\`)`,
+  );
+  if (verdictMisses.length) {
+    say(`  - ⚠︎ ${verdictMisses.join("; ")}`);
+  }
   say();
   if (marked === 0) {
     say(

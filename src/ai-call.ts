@@ -539,8 +539,25 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
-  /* **The Luna summary of where a hyperlink goes** (src/link-summary.ts) — the
-     app's only quick-tier job, and the only chat row here with **no `order`**.
+  /* **No `order`, exactly like `link-summary` above and for its reason.** The
+     app's other quick-tier job, pointed at an OpenAI model, and an Anthropic pin
+     here would not merely be useless but wrong *quietly*: OpenRouter would find
+     no Anthropic upstream, fall through to the real one, and answer anyway — a
+     line of configuration that reads as a guarantee and enforces nothing.
+
+     `require_parameters` is kept, and it is doing less here than it does for the
+     two rows above: this job sends no `cache_control`, because it never sends
+     the article, so there is no cached prefix a fallback could silently drop. It
+     stays because a provider that cannot honour the token ceiling on a job whose
+     whole contract is "one word" should not serve it. */
+  "quiz-verdict": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true },
+  },
+  /* **The Luna summary of where a hyperlink goes** (src/link-summary.ts) — a
+     quick-tier job with **no `order`**, and the first of the two; `quiz-verdict`
+     above joined it on 2026-09-07 and copies this row's reasoning.
 
      `dictation`'s argument, one row down, applies exactly: the Anthropic pin
      exists so repeat calls land on a cached prefix, and pointed at an OpenAI
