@@ -356,6 +356,58 @@ describe("the per-owner spend aggregate", () => {
        reason nobody names is a check everybody learns to ignore. */
     expect(mine?.creditsNanos).toBe(21_523_500 + 0 + 1_000_000);
   });
+
+  it("splits the window by which BILL each row lands on, not just which key", async () => {
+    /* `credentialsInWindow` above tallies one fingerprint across all six rows,
+       including the Anthropic one — which is precisely why it cannot answer
+       "what is on the OpenRouter account". The fixtures carry two accounts and
+       one key, so the two functions must disagree, and this is the disagreement
+       that matters since Greg declined a per-reader cap on 2026-09-06 and left a
+       single OpenRouter ceiling as the only control. */
+    await written;
+    const { accountsInWindow } = await import("../src/store/ai-calls-spend-pg.js");
+    const bills = await accountsInWindow(SINCE, UNTIL);
+
+    const openrouter = bills.find((b) => b.account === "openrouter");
+    const anthropic = bills.find((b) => b.account === "anthropic");
+    expect(openrouter?.calls).toBe(5);
+    expect(anthropic?.calls).toBe(1);
+    /* Five OpenRouter rows: the ordinary settled one, the CLI one, two BYOK
+       zeroes and one that reported nothing. */
+    expect(openrouter?.creditsNanos).toBe(21_523_500 + 1_000_000);
+    expect(openrouter?.byokNanos).toBe(5_000_000);
+    expect(openrouter?.computedNanos).toBe(0);
+    expect(anthropic?.computedNanos).toBe(3_000_000);
+    /* Every row is on the one key, so the credential tally sees six and cannot
+       tell these apart. That is the whole point of the new query. */
+    expect(bills.reduce((n, b) => n + b.calls, 0)).toBe(IN_WINDOW.length);
+  });
+
+  it("counts BYOK money as outside the cap even though its row says openrouter", async () => {
+    /* **The trap GPT Sol named (F3), and the reason the report groups by account
+       AND pocket rather than by account alone.** A BYOK row carries
+       `provider_account = 'openrouter'` while `byok_upstream_nanos` was charged
+       to somebody else's key entirely. Grouping by account and calling
+       everything under `openrouter` "capped" would therefore be wrong on our
+       largest non-OpenRouter pocket — and wrong in the reassuring direction. */
+    await written;
+    const { accountsInWindow } = await import("../src/store/ai-calls-spend-pg.js");
+    const bills = await accountsInWindow(SINCE, UNTIL);
+    const outside = bills.reduce(
+      (sum, b) =>
+        sum + b.byokNanos + (b.account === "openrouter" ? 0 : b.creditsNanos + b.computedNanos),
+      0,
+    );
+    /* $0.005 of BYOK sitting on an openrouter row, plus $0.003 of Anthropic. */
+    expect(outside).toBe(5_000_000 + 3_000_000);
+    /* And it is NOT the same as "everything not on the openrouter account",
+       which is the shortcut this test exists to refuse. */
+    const naive = bills
+      .filter((b) => b.account !== "openrouter")
+      .reduce((sum, b) => sum + b.creditsNanos + b.byokNanos + b.computedNanos, 0);
+    expect(naive).toBe(3_000_000);
+    expect(naive).not.toBe(outside);
+  });
 });
 
 describe("the reporting period the admin column and the CLI share", () => {

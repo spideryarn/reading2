@@ -965,14 +965,42 @@ arriving in the category they belong to.
 `npm run cycles` green — the new `import type { AiJob }` adds no edge that `pipeline.ts` did not
 already carry.
 
-**Stage 8 — the report says which bill, and what the cap cannot see.** F3's shape, not this pass's:
-per-account recorded subtotals split by the three money pockets, and a fixed note rather than a
-single reassuring "outside-cap total". It must say in its own words that it **cannot see the cap
-amount or the remaining headroom**, that BYOK money sits on an `openrouter` row and was billed
-elsewhere, and that unpriced and unmetered spend is missing from every figure. It must not imply
-that inside-the-cap means safe: [ai-gateway.md](../project/ai-gateway.md) is explicit that the cap
-converts a runaway into *every reader losing every paid feature until the month turns*, which is a
-blast radius rather than a throttle.
+**Stage 8 — the report says which bill, and what the cap cannot see. ✅ Built, 2026-09-07.** F3's
+shape, not this pass's. `accountsInWindow` in
+[`src/store/ai-calls-spend-pg.ts`](../../src/store/ai-calls-spend-pg.ts) groups by
+`provider_account` and returns the **three money pockets separately**; `printBills` in
+[`scripts/ai-cost.ts`](../../scripts/ai-cost.ts) prints a line per account and one fixed note under
+them. The existing credential tally stays — it answers a different question and Sol said to keep it.
+
+**The pockets are separate because the account alone is a lie.** A BYOK row says
+`provider_account = 'openrouter'` while `byok_upstream_nanos` was charged to somebody else's key, so
+"everything under `openrouter` is capped" would be wrong on our largest non-OpenRouter pocket, and
+wrong in the reassuring direction. The total is named for exactly what it is — **recorded
+known-dollar spend outside the cap** — and the note says all three of the things that make it less
+than the truth: the report cannot see the cap's amount or the headroom left; unpriced rows are
+missing; and every entry under *"no seam can see"* is missing. It also refuses to let
+inside-the-cap read as safe, because
+[ai-gateway.md](../project/ai-gateway.md) is explicit that the cap converts a runaway into *every
+reader losing every paid feature until the month turns* — a blast radius, not a throttle.
+
+What it prints today, on the dev ledger:
+
+```
+Billed to    openrouter  1225 call(s)  $45.8884 credits · $4.3276 BYOK upstream · $0.0000 computed  (14 unpriced)
+             $4.3276 of the above is RECORDED KNOWN-DOLLAR SPEND OUTSIDE THE CAP — …
+```
+
+That $4.33 was invisible before this stage, and it is not a rounding error against $18.51 of product
+spend.
+
+**Done:** two new Postgres tests in `tests/ai-calls-spend-pg.test.ts`. The implementation came first
+here, so rather than claim a red-first that did not happen, the assertions were **proved to bite by
+mutation**: regrouping the query on `cost_source` instead of `provider_account` turns them red
+(`expected undefined to be 5`, `expected 30523500 to be 8000000`) and restoring it turns them green.
+The second test also holds the correct outside-cap figure against the naive one
+(`expect(naive).not.toBe(outside)`), which is the F3 shortcut written down so it cannot be
+reintroduced as a simplification. 154 tests green across the seven affected files; `npm run typecheck`
+clean.
 
 **Deliberately not in scope**, restating the brief and § Scope: no cap, quota or throttle (Greg's
 call, twice); no dashboard, charts, billing UI, alerting or forecasting; no scheduler; no second

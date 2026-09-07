@@ -60,8 +60,10 @@ import { loadEnvLocal } from "../src/env.js";
 import { costStore, totalRows } from "../src/store/ai-calls.js";
 import type { LedgerRead } from "../src/store/contracts.js";
 import {
+  type AccountTally,
   type CredentialTally,
   type RealtimeCoverage,
+  accountsInWindow,
   credentialsInWindow,
   currentUtcMonth,
   realtimeSessionCoverage,
@@ -687,6 +689,82 @@ function money(t: { creditsNanos: number; byokNanos: number; computedNanos: numb
   return cashNanos(t);
 }
 
+
+/**
+ * **Which bills this report is a report of, and what the OpenRouter cap does
+ * not reach.**
+ *
+ * ## Why it is here at all
+ *
+ * On 2026-09-06 Greg declined a per-reader spend cap on the paid endpoints,
+ * because the OpenRouter account already carries a global monthly one
+ * (docs/project/ai-gateway.md § What stops a reader spending our money). That
+ * makes a single global ceiling the only control there is — and until
+ * 2026-09-07 this report, the one thing that says what anything costs, never
+ * mentioned `provider_account` at all. It printed one credential line, which
+ * reads as *this is all of it*.
+ *
+ * ## What it must not say
+ *
+ * **Not that anything is safe.** Two separate reasons, and both have to be on
+ * the page or the subtotal becomes a reassurance:
+ *
+ * - The cap is a **monthly account total** and this report answers an arbitrary
+ *   `[since, until)`. It cannot see the cap's amount or the headroom left, so no
+ *   figure here is a distance from a limit.
+ * - Even for OpenRouter the cap does not do what "cap" suggests. It is global,
+ *   so the failure it converts a runaway into is *every reader losing every paid
+ *   feature until the month turns* — a blast radius, not a throttle. That is the
+ *   accepted trade, recorded in ai-gateway.md, and it is not this report's job to
+ *   soften it.
+ *
+ * ## The split is account **and** pocket, never account alone — GPT Sol, F3
+ *
+ * A BYOK row says `provider_account = 'openrouter'` while its
+ * `byok_upstream_nanos` was billed to somebody else's key. So the money outside
+ * the cap is *direct Anthropic and OpenAI, plus OpenRouter's BYOK pocket*, and
+ * an "outside the cap" line that grouped by account alone would be wrong on our
+ * largest non-OpenRouter pocket. The per-account subtotals are printed in full
+ * and the total is named for exactly what it is.
+ */
+function printBills(bills: AccountTally[]): void {
+  if (bills.length === 0) {
+    say("Billed to", "no rows, so no bill to name");
+    return;
+  }
+  for (const b of bills) {
+    const pockets = [
+      `${formatNanos(b.creditsNanos)} credits`,
+      `${formatNanos(b.byokNanos)} BYOK upstream`,
+      `${formatNanos(b.computedNanos)} computed`,
+    ].join(" · ");
+    say(
+      bills[0] === b ? "Billed to" : "",
+      `${b.account.padEnd(11)} ${b.calls} call(s)  ${pockets}` +
+        (b.unpricedCalls > 0 ? `  (${b.unpricedCalls} unpriced)` : ""),
+    );
+  }
+  /* The three pockets that the OpenRouter ceiling cannot see: everything on
+     another account, plus BYOK money that sits on an `openrouter` row and was
+     charged elsewhere. */
+  const outside = bills.reduce(
+    (sum, b) =>
+      sum + b.byokNanos + (b.account === "openrouter" ? 0 : b.creditsNanos + b.computedNanos),
+    0,
+  );
+  say(
+    "",
+    `${formatNanos(outside)} of the above is RECORDED KNOWN-DOLLAR SPEND OUTSIDE THE CAP —`,
+    "direct Anthropic and OpenAI, plus BYOK money that sits on an openrouter row",
+    "and was billed to somebody else's key. The OpenRouter cap is a global MONTHLY",
+    "account total: this report cannot see its amount or the headroom left, so no",
+    "figure here is a distance from a limit. Unpriced rows and every entry under",
+    "\"no seam can see\" below are missing from it as well. And the cap is not a",
+    "throttle — it is global, so a runaway becomes every reader losing every paid",
+    "feature until the month turns. docs/project/ai-gateway.md.",
+  );
+}
+
 /**
  * **The coverage header** — printed before any money, and not a preamble.
  *
@@ -700,11 +778,12 @@ function printCoverage(
   seen: {
     fold: SpendFold;
     credentials: CredentialTally[];
+    bills: AccountTally[];
     realtime: RealtimeCoverage | null;
     accounts: Denominator;
   },
 ): void {
-  const { fold, credentials, realtime, accounts } = seen;
+  const { fold, credentials, bills, realtime, accounts } = seen;
   console.log("\nCoverage — read this before believing any figure below");
   say(
     "Authoritative",
@@ -749,6 +828,8 @@ function printCoverage(
         `${formatNanos(c.creditsNanos)} in credits`,
     );
   }
+
+  printBills(bills);
 
   if (realtime === null) {
     say(
@@ -1099,16 +1180,17 @@ async function ownersReport(args: Args): Promise<void> {
      ledger. GPT Sol settled the cutoff behind it — **Postgres is authoritative
      and the JSONL history was never imported** — and that is still true; what
      went is the other store it was refusing on behalf of. */
-  const [groups, credentials, realtime] = await Promise.all([
+  const [groups, credentials, bills, realtime] = await Promise.all([
     spendGroupedByOwner(args.since, args.until),
     credentialsInWindow(args.since, args.until),
+    accountsInWindow(args.since, args.until),
     realtimeSessionCoverage(args.since, args.until),
   ]);
   const fold = foldSpend(groups);
   const accounts = await accountDenominator();
 
   console.log(`AI spend by owner — ${args.label}`);
-  printCoverage(args, { fold, credentials, realtime, accounts });
+  printCoverage(args, { fold, credentials, bills, realtime, accounts });
   await reconciliationLine(args);
 
   if (fold.totalCalls === 0) {
