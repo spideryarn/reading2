@@ -269,13 +269,23 @@ export function costCategoryOf(facts: CategoryFacts): CostCategory {
      step-name treatment below; only a job this build actually knows about is
      held to its disposition. GPT Sol asked for the two to stay separable (F7). */
   const disposition = dispositionOf(facts.job);
-  /* **Voice before scope.** A live session is recorded in *request* scope
-     (`src/live.ts` § the accounting routes) and would otherwise land in the
-     interactive bucket — the one category whose figure it would dominate, and
-     the one distinction the whole live-metering stage exists to make. Read from
-     the table rather than hard-coded against `live_conversation`, so `"voice"`
-     is a value that does something. */
-  if (disposition === "voice") return "voice";
+  /* **Voice before the step branch, and only in request scope.** A live session
+     is recorded in *request* scope (`src/live.ts` § the accounting routes) and
+     would otherwise land in the interactive bucket — the one category whose
+     figure it would dominate, and the one distinction the whole live-metering
+     stage exists to make. Read from the table rather than hard-coded against
+     `live_conversation`, so `"voice"` is a value that does something.
+
+     **The scope test is the F10 fix.** Without it this branch returned before
+     anything looked at the scope, so `job_step / live_conversation / hierarchy`
+     — a live conversation recorded as a pipeline step, which is nonsense —
+     came back `voice` rather than `unknown`, and the mismatch rule three lines
+     down did not apply to the one job whose figure it most matters for. GPT Sol
+     found it in the round-two check, and noted it was true of the old classifier
+     too. No producer writes that triple today. */
+  if (disposition === "voice") {
+    return facts.scopeKind === "request" ? "voice" : "unknown";
+  }
   if (facts.scopeKind === "job_step") {
     /* **A job that says it is not step-driven, in step scope, is a mismatch.**
        Not an error and not a guess: `unknown`, printed, for somebody to look at.

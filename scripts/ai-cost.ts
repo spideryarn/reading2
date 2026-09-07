@@ -692,6 +692,44 @@ function money(t: { creditsNanos: number; byokNanos: number; computedNanos: numb
 
 
 /**
+ * **The bill split, from rows rather than from SQL** — the ordinary report's
+ * half of `accountsInWindow`.
+ *
+ * Two implementations of the same question, which is normally the thing to
+ * avoid; here it is the lesser of the two evils and worth naming. The
+ * alternative was a second `accountsInWindow` call from a report that already
+ * holds every row, and that is a **later snapshot** of the ledger than the
+ * totals printed above it — a call landing between the two reads makes the page
+ * disagree with itself for a reason no reader could reconstruct. GPT Sol, F12.
+ *
+ * They cannot drift on the part that matters, because **the money and the
+ * unpriced count both come from `totalRows`** — the one definition, held against
+ * the SQL one by `tests/ai-calls-spend-pg.test.ts`. This function only decides
+ * which rows are in which pile.
+ */
+export function tallyAccounts(rows: readonly AiCallRow[]): AccountTally[] {
+  const piles = new Map<string, AiCallRow[]>();
+  for (const row of rows) {
+    const pile = piles.get(row.providerAccount) ?? [];
+    pile.push(row);
+    piles.set(row.providerAccount, pile);
+  }
+  return [...piles.entries()]
+    .map(([account, pile]) => {
+      const money = totalRows(pile);
+      return {
+        account,
+        calls: pile.length,
+        creditsNanos: money.credits,
+        byokNanos: money.upstream,
+        computedNanos: money.computed,
+        unpricedCalls: money.unpriced,
+      };
+    })
+    .sort((a, b) => b.calls - a.calls);
+}
+
+/**
  * **Which bills this report is a report of, and what the OpenRouter cap does
  * not reach.**
  *
@@ -756,9 +794,19 @@ function printBills(bills: AccountTally[]): void {
  * Both callers take their lines from `billReport`, so there is exactly **one**
  * wording of the caveat. Two would drift, and the thing they would drift about
  * is what the cap does — which is the one sentence here that has to stay true.
+ *
+ * **The tallies come from the rows this report already has, not from a second
+ * query.** It did call `accountsInWindow` again, and GPT Sol's round-two check
+ * (F12) pointed out that a second read is a **later snapshot**: a call arriving
+ * between the two makes the bill block disagree with every total printed above
+ * it, for no reason a reader could ever work out. The ordinary report holds
+ * every row already, so it can answer this itself — and the arithmetic goes
+ * through `totalRows`, which is the one definition of what a set of rows cost
+ * and of what "unpriced" means. `--owners` keeps the SQL version because it
+ * never fetches rows at all, deliberately.
  */
-async function printBillsPlain(args: Args): Promise<void> {
-  const bills = await accountsInWindow(args.since, args.until);
+export function printBillsPlain(rows: readonly AiCallRow[]): void {
+  const bills = tallyAccounts(rows);
   if (bills.length === 0) return;
   const report = billReport(bills);
   console.log("\nBilled to");
@@ -1392,12 +1440,32 @@ async function main(): Promise<void> {
     return;
   }
   const read = await costStore.read(args.since, args.until);
-  const { rows } = read;
 
   console.log(`AI spend — ${args.label}`);
   console.log(`Ledger: ${costStore.describe()}`);
   const bytes = await costStore.size();
   if (bytes !== null) console.log(`        ${(bytes / 1024).toFixed(0)} KB`);
+
+  await ledgerReport(args, read);
+}
+
+/**
+ * **The ordinary report**, everything below the two lines naming the store.
+ *
+ * Its own exported function so a test can run **the whole page** against fixture
+ * rows and read what came out. It was inline in `main()`, and GPT Sol's
+ * round-two check (F11) named exactly what that cost: `tests/cost-report.test.ts`
+ * tests the bill builder thoroughly and never reaches a renderer, so *"deleting
+ * `printBills(bills)` or the ordinary `printBillsPlain(rows)` call would still
+ * leave the suite green"* — which is the same deletion mutation the review one
+ * round earlier had asked the tests to catch. A pure builder with no caller is
+ * a page that prints nothing and a suite that says everything is fine.
+ *
+ * It needs no database and no network: `read` is handed in, and `reconcile()`
+ * runs only behind `args.reconcile`.
+ */
+export async function ledgerReport(args: Args, read: LedgerRead): Promise<void> {
+  const { rows } = read;
 
   /* **Before the early return, not after it.** A ledger whose every line is
      damaged has no rows *and* a non-zero count, and the first version returned
@@ -1502,7 +1570,7 @@ async function main(): Promise<void> {
      cannot see, that is money no seam sees at all — and the recorded half has to
      come first or the caveat's reference to "every entry under 'no seam can
      see' below" points at nothing. */
-  await printBillsPlain(args);
+  printBillsPlain(rows);
 
   unmetered();
   undeclared();

@@ -291,6 +291,25 @@ describe("placing every job the app can bill for", () => {
     expect(costCategoryOf({ scopeKind: "request", job: "labels", stepName: null })).toBe("unknown");
   });
 
+  it("calls a live conversation in the wrong scope a mismatch too", () => {
+    /* **F10.** The voice branch used to return before anything looked at the
+       scope, so a live conversation recorded as a pipeline step came back
+       `voice` — the one job whose figure the mismatch rule matters most for was
+       the one job it did not apply to. `unknown` is where a row that makes no
+       sense belongs, and it makes no sense: `src/live.ts` records usage in
+       request scope and nothing else can produce this triple. */
+    expect(
+      costCategoryOf({ scopeKind: "job_step", job: "live_conversation", stepName: "hierarchy" }),
+    ).toBe("unknown");
+    expect(
+      costCategoryOf({ scopeKind: "retired-in-2025", job: "live_conversation", stepName: null }),
+    ).toBe("unknown");
+    /* And the real shape still works, which is the half worth breaking. */
+    expect(costCategoryOf({ scopeKind: "request", job: "live_conversation", stepName: null })).toBe(
+      "voice",
+    );
+  });
+
   it("still classifies a RETIRED job by its step, because the table cannot know it", () => {
     /* `summarise` was split into `hierarchy` and `labels` long ago and is in no
        union, so `dispositionOf` returns null and the old step-name path runs.

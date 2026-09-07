@@ -794,6 +794,14 @@ features dominate" today, and it is the same answer `src/models.ts § TASK_TIER`
 about when it calls `labels` *"the biggest bill in the app by a distance"*. Voice is $0.00 because no
 live conversation has ever been held on this box, not because it is cheap.
 
+**What this pass still cannot tell you is what one article costs end to end**, which is
+[open-questions.md § Q7](../project/open-questions.md#q7) and Stage 4's, not this plan's. Q7 was
+**unchanged as of this work landing on 2026-09-07** — it still reads *"What is left: log a real
+ingest end to end"* — so there was no measured table to cite, and this plan deliberately did not
+write one into it. The report is now the thing that would show such a run honestly; the run itself
+belongs to
+[260902g-estimate-article-ingestion-and-mode-generation-costs.md](260902g-estimate-article-ingestion-and-mode-generation-costs.md).
+
 ### The three things left
 
 **A. A reader-facing job can go uncategorised and nothing goes red.** `link-summary` — the hover
@@ -1088,6 +1096,52 @@ the sentence most likely to be lost by somebody tidying up. Proved by mutation: 
 term gives `expected +0 to be 5000000` and `expected 3000000 to be 8000000`.
 
 **F9 (P3)** — "that $4.33 was invisible" overclaimed and is corrected above.
+
+### Round two: the narrow check on the two P1 fixes
+
+R1 and F6 were both P1s whose fixes landed *after* the snapshot that found them, so
+[engineering-manager.md](../reusable/engineering-manager.md) requires a narrowly scoped check of
+those fixes — and it is the exact sequence that doc says gets missed. [The
+review](260902g-cost-tracking-round2-review-sol.md), against
+[this prompt](260902g-cost-tracking-round2-review-prompt.md), scoped to the fixes and explicitly not
+reopening discovery.
+
+**Verdict: *the two P1 fixes are sound*.** No P1s. It confirmed all four of the questions the prompt
+asked: R1 is complete (only `request` and `job_step` groups reach the spread, the owner table and the
+margin); the denominator and the nearest-rank percentiles survive the narrowed fold, because
+`population` is still supplied independently and `spendPerAccount` maps the full population against
+the smaller fold; F6's placement before `unmetered()` gives the caveat's *"below"* its referent; and
+F7 reclassifies no row any current producer writes.
+
+Three P2s, all narrow, all accepted:
+
+**F10 — the mismatch rule missed the one job it matters most for.** The voice branch returned before
+anything looked at the scope, so `job_step / live_conversation / hierarchy` — a live conversation
+recorded as a pipeline step, which is nonsense — came back `voice` rather than `unknown`. F7 had made
+mismatches visible for interactive and step-driven jobs and left the most expensive category exempt.
+Guarded on `request` scope now, with the mirror case tested. True of the old classifier too, and no
+producer writes that triple.
+
+**F11 — the builder was tested and its caller was not.** F8 asked for tests that would catch the
+deletion of `printBills`; the tests that came back tested the pure builder thoroughly and never
+reached a renderer, so **deleting the render call would still have left every suite green** — the
+same mutation, one round later, surviving the fix that was supposed to catch it. The ordinary report
+is now `export async function ledgerReport(args, read)`, and four tests in `tests/ai-cost-cli.test.ts`
+run the **whole page** against fixture rows with `console.log` captured. Proved by doing exactly what
+Sol described: commenting out `printBillsPlain(rows)` gives three failures —
+`expected '\nProduct spend: …' to contain 'Billed to'` — and restoring it gives 34 green.
+
+**F12 — the second query was a later snapshot.** `printBillsPlain` called `accountsInWindow` again,
+from a report that already holds every row, so a call arriving between the two reads would make
+"Billed to" disagree with every total above it for a reason no reader could reconstruct. It now
+derives its tallies from those rows via `tallyAccounts`, whose money and unpriced count both come
+from `totalRows` — **the one definition**, already held against the SQL one by
+`tests/ai-calls-spend-pg.test.ts`. Cross-checked live: the row-derived block and the SQL one print
+the same `1225 call(s) · $45.8884 credits · $4.3276 BYOK upstream`. `--owners` keeps the SQL version
+because it deliberately never fetches rows.
+
+**Nothing overruled; the chain converged rather than being stopped.** Round two found no P1, and the
+three P2s were cheap and correct.
 
 **Deliberately not in scope**, restating the brief and § Scope: no cap, quota or throttle (Greg's
 call, twice); no dashboard, charts, billing UI, alerting or forecasting; no scheduler; no second
