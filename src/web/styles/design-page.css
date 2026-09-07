@@ -329,6 +329,16 @@
    no gallery.
 
    `align-self` on the wordmark rather than `align-items` on the cell, so the
-   caption and the class name below it still fill the width and wrap normally. */
-.design-logo-cell .logo { align-self: flex-start; }
+   caption and the class name below it still fill the width and wrap normally.
+
+   **And the corner copy's own padding, which is not cosmetic.** Two animations
+   seat a pseudo-element at `--logo-pad` — the anchor's left padding, which is
+   how they find the spider's centre — and this gallery's `.logo` is neither of
+   the two real copies, so it inherited the token's 0.7rem default while having
+   no padding at all. The result was `spya-radius` drawing its overlay 11px to
+   the right of the image (a second, two-tone spider beside the first) and
+   `spya-dragline` hanging its thread in front of the `S`. Both were seated
+   correctly in the app; the gallery, which is the review surface, was lying
+   about exactly the two expensive ones. Fable's review, 2026-09-07. */
+.design-logo-cell .logo { align-self: flex-start; padding: 0 0.7rem; }
 .design-logo-row { display: flex; gap: 2rem; align-items: center; flex-wrap: wrap; }

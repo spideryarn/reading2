@@ -28,8 +28,8 @@ Its advice was to hand-write exactly one animation and stop.
 Greg overruled that on 2026-09-07, and the overrule is only of the *number*. What we kept is the
 diagnosis: **the apparatus was the expensive part, not the animations.** So there is one stylesheet,
 one hook, no route of its own, no per-animation component, and the entire registry is one array. The
-`/design` section that lists them is forty lines, and it earns them by being the thing that makes
-review possible at all.
+`/design` section that lists them is small — about ninety lines with the markup helper it shares,
+on 2026-09-07 — and it earns them by being the thing that makes review possible at all.
 
 ## How the thirteen were chosen
 
@@ -51,6 +51,9 @@ the first place to look when one of these disappoints on screen.
   [wildcards](../plans/260907f-logo-animations-longlist-wildcards.md).
 - **[The shortlist](../plans/260907f-logo-animations-shortlist.md)** — Fable's arbitration on ease,
   value and diversity, with a diversity table, ten near-misses, and a cut order.
+- **[The browser check](../plans/260907f-logo-animations-browser-check.md)** and
+  **[Fable's review of the build](../plans/260907f-logo-animations-fable-review.md)** — what was
+  wrong once it existed, which was mostly not what anyone predicted.
 
 **Diversity was scored on the set, not on the idea**, which is the one thing about this exercise
 worth carrying to the next one. A reader meets these one at a time in random order, so what they
@@ -148,8 +151,11 @@ nothing for a large group of readers ([silent-success.md](../reusable/silent-suc
 2. **Never select `.logo-text`.** Only the corner copy has it. See above.
 3. **Return to the resting state at 100%**, so removing the class cannot strand the wordmark
    mid-gesture — and so the reduced-motion freeze is harmless. `animation-fill-mode: forwards` is
-   allowed only where the 100% frame is a still you would be happy to ship, which three of these
-   rely on and say so.
+   allowed only where the 100% frame is a still you would be happy to ship, which exactly two of
+   these rely on and say so. **A pseudo-element needs its resting `transform` declared statically**,
+   not only in its keyframes: the guard fills nothing, so a thread whose `scaleY(0)` lives only at
+   `0%` reverts to no transform at all and hangs at full length beside something at rest. That has
+   happened three times in this one file and is now a test.
 4. **Do not change the element's box.** The dock copy is in a flex row that reflows; the corner copy
    is `position: fixed` over pages that reserved no space for it. Transforms, opacity, filters,
    masks and absolutely-positioned pseudo-elements only.
@@ -157,12 +163,27 @@ nothing for a large group of readers ([silent-success.md](../reusable/silent-suc
 `tests/logo-animation.test.tsx` enforces 1, 2, and the registry–stylesheet agreement in both
 directions. All four of its guards were watched go red before being trusted.
 
+**Only The Settle eases out.** Every keyframe animation here ends the frame the pointer leaves,
+from whatever frame it was on, because a transition cannot start from a value an animation was
+supplying. That is why "return to rest inside your own loop" is a rule rather than a preference —
+it is the only thing standing between a cut-off animation and a visible snap.
+
 **And then look at it in a browser**, because those tests reach none of the things that actually
 went wrong here. [The browser check](../plans/260907f-logo-animations-browser-check.md) found four
 defects in a stylesheet whose every rule was doing exactly what it said; what was wrong was which
 box a rule resolved against, and only a browser knows that. It also confirmed the two mechanisms
 most likely to have failed quietly — `@property` interpolating through the Vite build, and
 `mask-image: url(/spideryarn-logo.png)` clipping to leg-shaped pixels rather than a box.
+
+Then [Fable reviewed the build against its own spec](../plans/260907f-logo-animations-fable-review.md)
+and found two more dropped lines, six of its own numbers that were wrong once they existed rather
+than being described, and a claim in this file's stylesheet that was simply false. Its conclusion on
+the set is worth keeping: **thirteen is right, and nothing needed replacing** — the three animations
+held in reserve were each conditional on a sibling disappointing, and the two that did disappoint
+disappointed on numbers rather than on concept.
+
+**`/design` cannot show you everything.** Its gallery draws the corner copy's face — Trebuchet — so a
+fault specific to Geist is one only the reading view will show you.
 
 ### The traps that cost time here
 
@@ -176,8 +197,17 @@ most likely to have failed quietly — `@property` interpolating through the Vit
 - **Both copies already transition `opacity` on hover**, so an animation that also writes `opacity`
   on the anchor fights it. Write opacity on the children.
 - **`--i` is not set in the JSX.** The letter index is ten `:nth-child` rules in the base block; a
-  stagger written as `calc(var(--i) * 28ms)` without them resolves to an invalid value and the whole
+  stagger written as `calc(var(--i) * 34ms)` without them resolves to an invalid value and the whole
   declaration is dropped, silently.
+- **A padding change to the wordmark is a change to `--logo-pad`.** Two animations seat a
+  pseudo-element at the spider's centre from that token, which is declared once in the base block
+  for each of the four boxes the wordmark is drawn in — the corner, the dock, the dock at its
+  tightest rung, and `/design`'s gallery. Change one of those paddings without it and the thread and
+  the sweep drift silently. The gallery drew a second spider for exactly this reason before its
+  padding was matched to the corner's.
+- **The vertical budget is 8px and it is genuinely the ceiling.** The dock is 40px tall and clips;
+  the letter box is 20.3px and centred, so its bottom sits at 30.2px. A letter may drop 8px and the
+  mark may drop 8px; at 10px both are cut off square.
 - **A pseudo-element on a letter needs the letter to be positioned**, or `left: 100%` means 100% of
   the 136px anchor rather than of the 8px letter. Three animations hang one off a letter and all
   three were written without it; the base block now gives every letter `position: relative`, which
@@ -195,8 +225,11 @@ most likely to have failed quietly — `@property` interpolating through the Vit
   line drawing its own border, which looks like a leak), plus a second copy of the mark to keep in
   sync. Worth doing one day; not worth it for a hover flourish.
 - **No user setting.** There is one already, and it is the operating system's:
-  `prefers-reduced-motion` flattens all of this to nothing through the global guard in
-  [`tailwind.css`](../../src/web/tailwind.css).
+  `prefers-reduced-motion` collapses each of these to a **still** through the global guard in
+  [`tailwind.css`](../../src/web/tailwind.css) — not to nothing, which is what a reader expects and
+  is not what they get. Most land on the base style; The Settle holds its lift, the seam stays
+  parted with its thread drawn, and the `i` stays a pixel high. The stylesheet names the still each
+  animation lands on, per animation, and that is the contract a fourteenth has to meet.
 - **No weighting, no rarity, no context.** The wildcard list proposed animations that appear one time
   in fifty, that know the time of day, or that behave differently on a second hover. Some are good
   and they are all a second mechanism; the picker is uniform until something shows it should not be.

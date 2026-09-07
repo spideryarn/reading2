@@ -93,6 +93,36 @@ describe("the two rules the stylesheet is written under", () => {
        rule naming `.logo-text` silently does nothing there. */
     expect(RULES).not.toMatch(/\.logo-text/);
   });
+
+  it("defines a @keyframes block for every animation it runs", () => {
+    /* A typo in an animation *name* is the one silent no-op the registry check
+       above cannot see: the class is registered, the rule parses, the class
+       lands on the element, and nothing moves. Fable's review, 2026-09-07. */
+    const defined = new Set(
+      [...RULES.matchAll(/@keyframes\s+([a-z0-9-]+)/g)].map((m) => m[1] as string),
+    );
+    const used = [...RULES.matchAll(/animation:\s*([a-z][a-z0-9-]*)/g)].map((m) => m[1] as string);
+    expect(used.filter((n) => !defined.has(n))).toEqual([]);
+  });
+
+  it("gives every animated pseudo-element a resting transform", () => {
+    /* **This class of bug has now happened three times in this one file.**
+       Under the motion guard an animation runs for 0.01ms and fills nothing, so
+       a `::before` whose only `transform` lives in its keyframes reverts to
+       having none at all — which for the three thread pseudo-elements here
+       means a hairline drawn at its full 8px length beside a letter, or a
+       spider, sitting perfectly still. Two of the three shipped that way and
+       were caught by reading rather than by anything automatic.
+
+       `spya-type`'s cursor animates `opacity` rather than `transform` and
+       carries an explicit `transform: none` so that this can stay a flat rule
+       with no exception in it. */
+    const blocks = [...RULES.matchAll(/::(?:before|after)\s*\{([^}]*)\}/g)].map(
+      (m) => m[1] as string,
+    );
+    const offenders = blocks.filter((b) => /animation:/.test(b) && !/(^|;)\s*transform:/.test(b));
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe("pickLogoAnimation", () => {
@@ -268,6 +298,54 @@ describe("the long press", () => {
     expect(bare().className).toContain("spya-anim");
     act(() => void vi.advanceTimersByTime(5000));
     expect(bare().className).not.toContain("spya-anim");
+  });
+
+  it("does not swallow the next click after an abandoned long press", () => {
+    /* Hold past the threshold, then leave the control before releasing. No
+       click ever reaches the anchor, so the suppression flag the hold set is
+       never read — and if it stands, the reader's *next* ordinary press on the
+       way home is the one that gets eaten, once, for no visible reason. iOS
+       produces the same shape by cancelling the click after a long press, which
+       is what the expiry timer below is for. Fable's review, 2026-09-07. */
+    if (LOGO_ANIMATIONS.length === 0) return;
+    act(() => root.render(<Bare />));
+    act(() => {
+      bare().dispatchEvent(pointer("pointerdown"));
+    });
+    act(() => void vi.advanceTimersByTime(400));
+    act(() => {
+      bare().dispatchEvent(pointer("pointerout"));
+    });
+
+    const later = new MouseEvent("click", { bubbles: true, cancelable: true });
+    act(() => {
+      bare().dispatchEvent(pointer("pointerdown"));
+      bare().dispatchEvent(pointer("pointerup"));
+      bare().dispatchEvent(later);
+    });
+    expect(later.defaultPrevented).toBe(false);
+  });
+
+  it("expires the suppression flag when no click follows the hold", () => {
+    /* The other half of the same fault, and the one a pointer-leave cannot
+       catch: the finger comes up on the control and the browser simply does not
+       send a click. */
+    if (LOGO_ANIMATIONS.length === 0) return;
+    act(() => root.render(<Bare />));
+    act(() => {
+      bare().dispatchEvent(pointer("pointerdown", { pointerType: "touch" }));
+    });
+    act(() => void vi.advanceTimersByTime(400));
+    act(() => {
+      bare().dispatchEvent(pointer("pointerup", { pointerType: "touch" }));
+    });
+    act(() => void vi.advanceTimersByTime(500));
+
+    const later = new MouseEvent("click", { bubbles: true, cancelable: true });
+    act(() => {
+      bare().dispatchEvent(later);
+    });
+    expect(later.defaultPrevented).toBe(false);
   });
 
   it("lets a short press through, so the way home still works", () => {

@@ -28,12 +28,14 @@
    applies the classes directly so all dozen can be looked at side by side.
 
    **And therefore: start and end every keyframe set at the resting state.**
-   Class removal is instantaneous — there is no exit transition to be had, and
-   `animation-fill-mode: forwards` would leave the wordmark stuck in the
-   animation's last pose until the next hover. An animation that returns to
-   neutral at 100% needs no exit, cannot strand the mark, and is the same
-   property that makes the reduced-motion freeze harmless. Both requirements
-   have one answer, which is why this is stated as one rule.
+   Class removal is instantaneous, and a keyframe animation cut off by it snaps
+   home from whatever frame it was on — there is no exit to be transitioned,
+   because a transition cannot start from a value an animation was supplying
+   (measured; see the note on `.logo-image` below, which is the one exception
+   and is a transition rather than a keyframe). An animation that returns to
+   neutral at 100% therefore needs no exit, cannot strand the mark, and is the
+   same property that makes the reduced-motion freeze harmless. Both
+   requirements have one answer, which is why this is stated as one rule.
 
    **Every animation must be safe at one frame.** The global motion guard
    (src/web/tailwind.css) flattens `animation-duration` to 0.01ms and
@@ -56,14 +58,16 @@
    **`animation-fill-mode: forwards` only where the 100% frame is a wordmark you
    would be happy to ship as a still.** This file said "never `forwards`" for an
    afternoon and that was too strong: `forwards` is exactly how an animation
-   holds a pose for as long as the reader points at it, which three of these
-   want. What it costs is that the guard's flattened single iteration lands on
-   100% rather than on the base style — so the 100% frame becomes a second
-   resting state, and it has to be a legitimate one. `spya-i` freezes with the
-   `i` a pixel high; `spya-seam` with the word parted and the thread drawn;
-   `spya-register` at zero offset, which is the base style anyway. A `forwards`
-   whose 100% is mid-gesture is the "letter left rotated" failure, and that is
-   the thing actually being forbidden.
+   holds a pose for as long as the reader points at it. What it costs is that
+   the guard's flattened single iteration lands on 100% rather than on the base
+   style — so the 100% frame becomes a second resting state, and it has to be a
+   legitimate one. Exactly **two** things here rely on it: `spya-register`,
+   whose 100% is zero offset and transparent, which is the base style by another
+   route, and the seam's thread, whose 100% is the drawn thread. (`spya-i` and
+   `spya-settle` hold their poses too, but they are *transitions*, which the
+   guard collapses to the hovered value by a different route entirely.) A
+   `forwards` whose 100% is mid-gesture is the "letter left rotated" failure,
+   and that is the thing actually being forbidden.
 
    **Write `opacity` on the children, not on `.logo`.** Both `.logo-home:hover`
    and `.dock-home:hover` already run `opacity: 0.85 → 1` (styles/dock.css,
@@ -167,18 +171,26 @@
 .dock-home.spya-anim { --logo-pad: 0.6rem; }
 .dock.dock-fit-3 .dock-home.spya-anim { --logo-pad: 0.45rem; }
 
-/* **A soft landing for the mark, and it is deliberately not inside
-   `.spya-anim`.** The hook takes both classes off at once when the pointer
-   leaves, so anything scoped to the animating state has already stopped
-   applying by the time the exit needs to happen. On the resting element it
-   works the other way round and costs nothing: `transform` is never otherwise
-   set on this image, so the transition has nothing to do until an animation has
-   left the spider somewhere and let go of it.
+/* **A soft landing for The Settle, and only for it.** That is a correction: an
+   earlier draft of this comment claimed it eased the mark home "from wherever
+   an animation left it", and it does no such thing. Measured on 2026-09-07 —
+   pause `spya-dragline` at 44%, remove both classes, sample — the computed
+   transform is `none` in the same frame and every frame after, with this
+   `transition-duration: 0.22s` sitting right there on the element. **A
+   transition does not start from a value an animation was supplying.** When
+   the animation goes, the value goes with it.
 
-   Only the mark. The letters go back to `display: inline` in the same frame
-   and lose the transform with it, so their exits snap — accepted rather than
-   overlooked, and none of the letter animations below holds a pose far enough
-   from rest for the snap to be visible. */
+   So this rule serves `spya-settle`, which is a transition in both directions
+   and eases back along this gentler curve on the way out, and it serves nothing
+   else. Every keyframe animation here ends the frame the pointer leaves, from
+   whatever frame it was on — which is not a defect but the reason for the "start
+   and end at the resting state" rule above: an animation that never travels far
+   from rest cannot snap visibly.
+
+   It is outside `.spya-anim` because the hook removes both classes at once, so
+   anything scoped to the animating state has stopped applying by the time an
+   exit would need it. `transform` is never otherwise set on this image, so the
+   rule costs nothing at rest. */
 .logo-image {
   transition: transform 220ms cubic-bezier(0.33, 0, 0.67, 1);
 }
@@ -226,14 +238,25 @@
 
    Reduced motion: base style. */
 .spya-pluck .logo-letter {
-  animation: spya-pluck 1.6s ease-in-out infinite;
-  animation-delay: calc(var(--i) * 28ms);
+  animation: spya-pluck 1.4s ease-in-out infinite;
+  /* 34ms × 9 = 306ms across the word, so the `S` is on its second swing while
+     the `n` starts its first and the row visibly skews. The first version
+     staggered 28ms under a 600ms bump, which is a bump twenty-one letters wide:
+     every letter rose at once and what you saw was the whole word bobbing at
+     2.6Hz — the tired micro-interaction this entry was written to avoid. */
+  animation-delay: calc(var(--i) * 34ms);
 }
+/* A plucked string does not send a bump along its length; it oscillates about
+   rest on *both* sides and decays. Five swings of falling height at a half
+   period of about 160ms — a tremble rather than a bounce — then 530ms of rest
+   so it re-plucks. The +1px below the baseline is inside the dock's clip. */
 @keyframes spya-pluck {
-  0%, 75%, 100% { transform: none; }
-  14% { transform: translateY(-2px); }
-  38% { transform: translateY(-1px); }
-  58% { transform: translateY(-0.5px); }
+  0%, 62%, 100% { transform: none; }
+  8% { transform: translateY(-2px); }
+  20% { transform: translateY(1px); }
+  31% { transform: translateY(-1px); }
+  42% { transform: translateY(0.5px); }
+  52% { transform: translateY(-0.3px); }
 }
 
 /* -- 3. Stronger Than Steel ----------------------------------------------
@@ -285,7 +308,12 @@
    Reduced motion: `forwards` holds 100%, which is zero offset and transparent —
    the base style by another route. */
 .spya-register .logo-letter {
-  animation: spya-register 640ms cubic-bezier(0.16, 1, 0.3, 1) 1 forwards;
+  /* **`both`, so the plates are all present at hover-in and only the *lock*
+     travels.** `forwards` fills nothing during the delay, so each letter drew
+     nothing for up to 180ms and then its two plates *appeared* 1.5px apart — a
+     wave of plates arriving S → n, which is the glitch reading this entry
+     exists to avoid. */
+  animation: spya-register 640ms cubic-bezier(0.16, 1, 0.3, 1) 1 both;
   animation-delay: calc(var(--i) * 20ms);
 }
 @keyframes spya-register {
@@ -358,11 +386,24 @@
   content: "";
   position: absolute;
   left: 100%;
-  top: 55%;
+  top: 46%;
   width: 6px;
-  height: 1px;
-  background: var(--highlight);
+  height: 3px;
+  /* **A curved hairline, not a straight one, and the curve is the whole
+     point.** A flat 6px rule at x-height between two letters is an en dash:
+     the wordmark read "Spider–yarn" and a reader would have taken it for
+     punctuation. Only the bottom edge is drawn, bent by the radius into a 2px
+     sag — which is a shape no glyph in either face makes. */
+  border-bottom: 1px solid var(--highlight);
+  border-radius: 0 0 50% 50% / 0 0 100% 100%;
   opacity: 0.6;
+  /* Safe without this, and stated anyway. `both` fills backwards through the
+     180ms delay, so the guard's flattened run does land on `scaleX(0)` — but
+     only as a side effect of a fill mode chosen for a different reason, and the
+     two threads that shipped drawn-at-rest were the same shape of accident.
+     Declaring it makes the resting state a property of this rule rather than of
+     one word in the line below it. */
+  transform: scaleX(0);
   transform-origin: left;
   animation: spya-seam-thread 240ms 180ms cubic-bezier(0.2, 0.8, 0.2, 1) 1 both;
 }
@@ -387,17 +428,32 @@
   transform-origin: 60% 50%;
   animation: spya-strain 1.8s ease-in-out infinite;
 }
+/* **It shudders, and that is what makes it effort rather than a tilt.** The
+   first version leaned 10° over 684ms into a 250ms *static* hold, which on a
+   20px silhouette is indistinguishable from the icon simply being crooked —
+   the risk this entry named. Arriving sooner, leaning further and trembling
+   twice in the hold is what a thing straining against a weight does.
+
+   The dock's budget: 15° about `60% 50%` moves a corner ≤3.5px vertically
+   against 10px of headroom, `scaleX(1.16)` is 23.2px wide against a 6.4px gap,
+   and −3.5px is inside the 9.6px padding. */
 @keyframes spya-strain {
-  0%, 82%, 100% { transform: none; }
-  38%, 52% { transform: translateX(-2px) rotate(-10deg) scaleX(1.1); }
-  66% { transform: rotate(4deg); }
+  0%, 84%, 100% { transform: none; }
+  26% { transform: translateX(-3px) rotate(-14deg) scaleX(1.12); }
+  34% { transform: translateX(-3.5px) rotate(-15deg) scaleX(1.16); }
+  42% { transform: translateX(-3px) rotate(-14deg) scaleX(1.12); }
+  50% { transform: translateX(-3.5px) rotate(-15deg) scaleX(1.16); }
+  58% { transform: translateX(-3px) rotate(-14deg) scaleX(1.12); }
+  70% { transform: rotate(5deg); }
 }
 .spya-strain .logo-letter {
   animation: spya-strain-hold 1.8s ease-in-out infinite;
 }
+/* After it lets go (58%), not during the hold — which is the beat the note
+   above describes, and was the one thing the first version had out of order. */
 @keyframes spya-strain-hold {
-  0%, 45%, 100% { color: var(--highlight); }
-  62%, 78% { color: var(--highlight-ink); }
+  0%, 56%, 100% { color: var(--highlight); }
+  68%, 82% { color: var(--highlight-ink); }
 }
 
 /* -- 8. Only the i -------------------------------------------------------
@@ -516,11 +572,19 @@
   content: "";
   position: absolute;
   left: calc(100% + 0.1em);
-  top: 0.12em;
+  /* 4.7px → 13.9px of the box in both faces, which is cap height down to the
+     baseline. The first version spanned 1.6px → 12.7px: a cursor floating
+     3.4px above the caps and stopping short of the baseline, which is the one
+     thing a terminal cursor never does. */
+  top: 0.36em;
+  height: 0.7em;
   width: 0.42em;
-  height: 0.85em;
   background: currentColor;
   opacity: 0;
+  /* Explicit, so the "every animated pseudo-element declares a resting
+     transform" test can be a flat rule rather than one with an exception in
+     it. This one animates `opacity`; the rest animate `transform`. */
+  transform: none;
   animation: spya-blink 1.06s steps(1, end) infinite;
   animation-delay: 700ms;
 }
@@ -535,10 +599,13 @@
    baseline, and is reeled smoothly back up to rejoin the word as though nothing
    had happened.
 
-   **Eight pixels is a measurement, not a taste.** The letter box's bottom sits
-   at about 26.5px inside the dock's 40px bar, and that bar is `overflow-y:
-   hidden` (styles/dock.css § .dock) — so 8px hangs clear and 10px is cut off
-   square. Do not tidy this number upward.
+   **Eight pixels is a measurement, not a taste, and it is nearer the edge than
+   it first looked.** The letter box's bottom sits at **30.2px** inside the
+   dock's 40px bar — the box is 20.3px tall, not the 12 an earlier note here
+   assumed, because `body`'s line-height reaches the letters — and the bar is
+   `overflow-y: hidden` (styles/dock.css § .dock). So 8px clears the clip by
+   **1.8px**, not by five. It still fits; it is now genuinely the ceiling, and
+   10px would be cut off square.
 
    The thread is anchored 8px above the letter's own top and rides down with it,
    so it is pinned to where the letter *was* rather than to a coordinate that
@@ -564,11 +631,22 @@
   content: "";
   position: absolute;
   left: 50%;
-  top: -8px;
+  /* **From the top of the `n` as it was to the top of the `n` as it is.** The
+     letter's *box* is 20.3px tall — `body`'s line-height reaches the letters —
+     and the glyph starts about half an em below the box top (7px in Trebuchet,
+     6px in Geist). Anchored at the box top instead, the yarn stopped 7px above
+     the letter hanging from it and the two read as unrelated marks. */
+  top: calc(0.5em - 8px);
   width: 1px;
   height: 8px;
   background: var(--highlight);
   opacity: 0.6;
+  /* **The resting state, and it is not decoration.** The guard runs this
+     animation for 0.01ms with no fill, so the pseudo reverts to *this* — and
+     without it that is a thread at full 8px length beside a letter sitting at
+     rest, for as long as the reader points. Two of the three threads in this
+     file shipped without it. */
+  transform: scaleY(0);
   transform-origin: top;
   animation: spya-abseil-thread 2s infinite;
 }
@@ -619,6 +697,9 @@
   height: 8px;
   background: var(--highlight);
   opacity: 0.7;
+  /* The resting state — see the note on `spya-abseil`'s thread. Without it the
+     dragline hangs at full length under a spider that is not on it. */
+  transform: scaleY(0);
   transform-origin: top;
   animation: spya-dragline-thread 1.6s ease-in-out infinite;
 }
@@ -661,7 +742,10 @@
   inherits: false;
   initial-value: 0deg;
 }
-@supports (mask-image: url("")) or (-webkit-mask-image: url("")) {
+/* The gradient form rather than `url("")`: an empty URL is an odd thing to ask
+   a browser about, and the gradient is the probe the build spike verified. */
+@supports (mask-image: linear-gradient(#000, #000)) or
+  (-webkit-mask-image: linear-gradient(#000, #000)) {
   .spya-radius::after {
     content: "";
     position: absolute;
@@ -670,6 +754,12 @@
     top: calc(50% - 10px);
     width: 20px;
     height: 20px;
+    /* This one animates `--spya-angle`, whose resting value is the line below,
+       and it never transforms at all. The declaration is here so the "every
+       animated pseudo-element declares a resting transform" test can be a flat
+       rule with no exception written into it — the same reason the block cursor
+       carries one. It is convention, not mechanism. */
+    transform: none;
     --spya-angle: 0deg;
     background: conic-gradient(
       from var(--spya-angle),

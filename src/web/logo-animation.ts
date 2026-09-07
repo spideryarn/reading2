@@ -37,7 +37,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 /**
  * One animation. `id` is the CSS class the stylesheet defines; `name` and
  * `blurb` exist for `/design`, which lists them, and for a reader of this file
- * who wants to know what `spya-anim-dragline` looks like without hunting for
+ * who wants to know what `spya-dragline` looks like without hunting for
  * its keyframes.
  */
 export type LogoAnimation = {
@@ -168,6 +168,15 @@ const LONG_PRESS_MS = 350;
 const TOUCH_LINGER_MS = 4500;
 
 /**
+ * How long the click-suppression flag stands after the press ends, in ms.
+ *
+ * Long enough for the click that a long press normally produces to arrive and
+ * read it; short enough that when no click comes — iOS cancels it after a long
+ * press — the reader's next deliberate press is not the one that gets eaten.
+ */
+const CLICK_SUPPRESSION_MS = 400;
+
+/**
  * The `<a>` props that make the wordmark animate.
  *
  * Spread onto the link, not onto a wrapper: both copies of the wordmark are
@@ -187,12 +196,21 @@ export function useLogoAnimation() {
      *this* gesture, and a state update scheduled during pointerdown is not
      guaranteed to have been applied by then. */
   const suppressClick = useRef(false);
+  /* Clears `suppressClick` shortly after the finger or button comes up. See
+     `onPointerUp` for why the flag cannot simply wait to be read. */
+  const flagTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* Whether the press in progress came from a finger, read by `onContextMenu`.
+     A ref for the same reason as the flag: the context menu arrives during the
+     gesture, not after a re-render. */
+  const pressedByTouch = useRef(false);
 
   const clearTimers = useCallback(() => {
     if (pressTimer.current !== null) clearTimeout(pressTimer.current);
     if (lingerTimer.current !== null) clearTimeout(lingerTimer.current);
+    if (flagTimer.current !== null) clearTimeout(flagTimer.current);
     pressTimer.current = null;
     lingerTimer.current = null;
+    flagTimer.current = null;
   }, []);
 
   useEffect(() => clearTimers, [clearTimers]);
@@ -237,7 +255,24 @@ export function useLogoAnimation() {
       onPointerLeave: (e: ReactPointerEvent) => {
         if (e.pointerType === "touch") return;
         clearTimers();
+        /* The gesture left the control, so no click is coming to read this.
+           Leaving it set would swallow the reader's *next* press instead. */
+        suppressClick.current = false;
         setActive(null);
+      },
+      onContextMenu: (e: ReactMouseEvent) => {
+        /* **Android, and only during a touch long press.**
+           `-webkit-touch-callout` in styles/dock.css handles iOS and does
+           nothing in Chrome on Android, which fires `contextmenu` on a held
+           link at around 500ms and raises *Open in new tab / Copy link* over
+           the animation the reader has just asked for. `user-select: none`
+           does not stop it either.
+
+           Guarded on the ref rather than applied always, because a right-click
+           on a link should still offer the menu: that is a reader asking for
+           the link, not for the spider. Not verified on a device — there is no
+           Android here — so it is written to fail open. */
+        if (pressedByTouch.current) e.preventDefault();
       },
       onPointerDown: (e: ReactPointerEvent) => {
         /* Only the primary button. A right-click opens the context menu and a
@@ -249,6 +284,8 @@ export function useLogoAnimation() {
            until someone changes the React version underneath it. */
         const pointerType = e.pointerType;
         clearTimers();
+        suppressClick.current = false;
+        pressedByTouch.current = pointerType === "touch";
         pressTimer.current = setTimeout(() => {
           pressTimer.current = null;
           /* The hold *is* the request, so it re-rolls even mid-hover: a mouse
@@ -266,13 +303,30 @@ export function useLogoAnimation() {
         }, LONG_PRESS_MS);
       },
       onPointerUp: () => {
+        pressedByTouch.current = false;
         if (pressTimer.current !== null) {
           clearTimeout(pressTimer.current);
           pressTimer.current = null;
         }
+        /* **The flag has to expire, not merely wait to be read.** A click does
+           not always follow a long press — iOS cancels it, and so does a
+           release that lands after the pointer has moved — and a flag left
+           standing then eats the reader's *next* ordinary press on the way
+           home, once, for no visible reason. A real click arrives within a few
+           milliseconds of this and clears the flag itself; this is only the
+           backstop for when none does. */
+        if (suppressClick.current) {
+          if (flagTimer.current !== null) clearTimeout(flagTimer.current);
+          flagTimer.current = setTimeout(() => {
+            flagTimer.current = null;
+            suppressClick.current = false;
+          }, CLICK_SUPPRESSION_MS);
+        }
       },
       onPointerCancel: () => {
         clearTimers();
+        suppressClick.current = false;
+        pressedByTouch.current = false;
         setActive(null);
       },
       onClick: (e: ReactMouseEvent) => {
