@@ -304,7 +304,8 @@ the built code.⟩
 > here — about two minutes — and it costs about $0.20.
 >
 > **Debate:** Two model calls, not one: it searches the open web, and it is the dearest thing on
-> this page at up to about $0.27. The result changes only if the run succeeds.
+> this page — $0.20–0.40 for a completed run on a short article, and more on a long one. The result
+> changes only if the run succeeds.
 
 **The gap F9 walked through was this section's own count, and it is worth saying plainly rather than
 just changing the number.** *"Two exact variants"* listed the default and the glossary, with the
@@ -312,9 +313,13 @@ sketch's two numbers held over to a subsection below — and thereby claimed, wi
 down, that *"Another model call"* was true of the remaining seven. It was wrong about the **number**
 for `debate`, which makes **two separately metered calls**
 (`src/debate.ts` § *Two groups, two passes, one atomic step*; pass B runs only if pass A succeeded,
-so a failure costs one rather than two), and silent about the price: up to ~$0.27, typically
-$0.13–0.20, measured in [260905f](260905f-debate-mode-stage-0-spike-results.md) and named in
-`src/step-order.ts` as *"the second dearest thing in the app"*.
+so a failure costs one rather than two), and silent about the price. **The price it then gained was
+also wrong, and for a reason worth more than the number** — see § Round three, F12: *up to ~$0.27*
+came from § The spend ceiling of
+[260905f](260905f-debate-mode-stage-0-spike-results.md), which § Stage 3½ § 1 of that same document
+corrects twenty-seven lines further down. It is a **range**: $0.20–0.40 for a completed run on a
+short article, rising with length. `src/step-order.ts` calls the step *"the second dearest thing in
+the app"*.
 
 **And § The list, four sections up, already said the first half** — *"`debate` makes two separately
 metered calls"* is there, as the reason the *one press, one model call* claim had to go. One
@@ -678,7 +683,7 @@ because `JobProgress` draws it and the plan reasoned about the button it drew it
 
 | ID | Severity | Disposition | What changed here |
 |---|---|---|---|
-| F9 | P1 established | **accepted** | `RERUN_CONFIRM_DEBATE` — two model calls, the open web, up to about $0.27. § What the button and the confirm actually say now lists **four** variants and says plainly how the count came to be wrong. The figure is inline with a citation rather than a constant beside `SKETCH_PRICE`, for the reason given there. |
+| F9 | P1 established | **accepted**, and its number **superseded by F12** below | `RERUN_CONFIRM_DEBATE` — two model calls, the open web, up to about $0.27 (the wrong figure, from the wrong section; F12). § What the button and the confirm actually say now lists **four** variants and says plainly how the count came to be wrong. The figure is inline with a citation rather than a constant beside `SKETCH_PRICE`, for the reason given there. |
 | F10 | P1 established | **accepted**, Sol's shape | `RerunRow` holds `pending: null \| "run" \| "retry"` in place of a boolean `asking`, and hands `JobProgress` a `failed` whose `retry` opens the confirm; the Yes button dispatches to `start({force:true})` or to the original retry. Same sentence for both — a one-step job's retry **is** a re-run and forces the same step — and different Yes words so the reader knows which press they are agreeing to. `JobProgress` keeps its straight-through Retry: nine other callers rely on it, and for a many-stage ingest that is right. |
 | F11 | P1 established | **accepted** | Every actionable control in a row now carries a mode-specific `aria-label` **beginning with its visible text** — `Run it again — Debate` — so speech input still matches. Yes and Cancel are `RerunRow`'s own; Run and Retry take a new **optional** `about` prop on `JobProgress`, so the nine existing callers pass nothing and are unchanged. **Not** a row-level label or `role="group"`: the reported failure mode is button-list navigation, which does not pick either up, so that would have looked like a fix without being one. |
 
@@ -687,7 +692,90 @@ worth naming is the accessible-name test: this file's own test header had **desc
 names and then used `data-rerun-step` to work around them, which is how the defect survived the
 build. A test hook read as if it were something the reader gets is a shape worth recognising again.
 
+### Round three, on the built code again
+
+GPT Sol against the round-two commit —
+[the review in full](260907d-re-run-any-generated-mode-code-review-round2-sol.md). Verdict:
+**refuse**, three P1s and two P3s. All five checked against the source and **all five accepted**;
+F15 and F16 were fixed by Greg while the other three were being built.
+
+| ID | Severity | Disposition | What changed here |
+|---|---|---|---|
+| F12 | P1 established | **accepted** | `RERUN_CONFIRM_DEBATE` quotes the measured **range** — *$0.20–0.40 for a completed run on a short article, and more on a long one* — in place of *up to about $0.27*. Its docstring now cites § Stage 3½ § 1 and says out loud that the old ceiling was measured with probes carrying **no article**, so the next person to grep for a Debate price meets the correction rather than the number that was corrected. |
+| F13 | P1 established | **accepted** | The confirm sentence carries `id="rerun-confirm-<step>"` — keyed on the step, because nine rows are on screen at once — and Yes points at it with `aria-describedby`. Focus moves to Yes when the confirm opens, so it no longer falls to `BODY` when the pressed button is unmounted. **Cancel is deliberately not described by it**: a description is read every time the control is reached, and repeating the price on the button that spends nothing is noise on the safe half of the pair. |
+| F14 | P1 established | **accepted**, and widened | A pending confirm is invalidated when the state it stands over goes — a retry whose `retry` callback has disappeared, **and any pending confirm once an active `job` exists**. `RerunRow` derives what it draws (`asking`) rather than waiting for the effect that clears `pending`, so the render that would have shown the confirm over the live job never happens. |
+| F15 | P3 established | **accepted** | Fixed by Greg: [ingest-queue.md](../project/ingest-queue.md) now says three special rows and six default ones. |
+| F16 | P3 established | **accepted** | Fixed by Greg: the page's docstring now names `revision_step_runs.input_hash` via `hierarchyCurrency` for the tree and `Arc`'s own `sourceHash`, rather than a `tree.json` that does not exist. |
+
+**F14 was widened past what Sol asked for, and the reason is the same one.** Sol's fix is *invalidate
+a pending retry when its retry callback disappears, and let an active job take precedence*. A pending
+**run** is the same shape: a job arriving from another tab means the thing the reader is being asked
+whether to buy is already happening, and for as long as they take to answer, the confirm is drawn
+*instead of* `JobProgress` — so they lose the progress, the Stop button and the stall warning over a
+question that has been answered for them. It keys on `job`, never on `starting`: `starting` is the
+gap between our own POST and the first poll, so keying on that would tear the confirm away between
+the click on Yes and the answer, which is the state `busy` exists to hold on screen.
+
+Three tests came with them, each watched red first:
+
+- the debate row's confirm names the range and **not** `$0.27` — red against the shipped sentence;
+- focus lands on Yes and Yes's `aria-describedby` **resolves** to text naming the cost — red twice,
+  once with the attribute removed (*"Yes is not described by anything"*) and once with it left in
+  place but pointing at an id nothing has, which is what asserting the resolved description rather
+  than the attribute is for;
+- three interleavings under an open confirm — a job arriving under a *run* confirm, a job arriving
+  under a *retry* confirm, and the failure clearing with no job at all — each red with the confirm
+  still drawn over the live job and the silent-no-op Yes still reachable.
+
+- 📔 **The lesson under F12 is not the price.** The number was taken from the **first hit** in a
+  document that corrects itself: § The spend ceiling says *up to ~$0.27*, and § Stage 3½ § 1 —
+  **twenty-seven lines further down, in the same file** — says that figure was measured with probes
+  carrying no article, that a completed live run cost $0.3527, that per-pass cost varied 2.4×, and
+  that it should be quoted as a range. The citation was real, the reading stopped early, and the
+  test written for it pinned the same wrong number, so the two agreed with each other about
+  something neither had checked. **A cited figure is only as good as the last section of the cited
+  document**, and a spike-results doc is exactly the shape that supersedes itself: the early sections
+  are probes and the later ones are the real runs.
+
+- 📔 **`SKETCH_PRICE` was checked for the same defect and is not it.** F12's shape — a figure taken
+  from a section its own document later corrects — is worth asking of every measured number on this
+  page, and the sketch's was asked. *About $0.20* is still the best-supported figure: the three
+  ledger-read measurements in `evals/results/cost-per-article-2026-09-03.md` (the same model and the
+  same `high` effort as production today) are $0.1443, $0.1671 and $0.2994, mean **$0.2036**.
+  **Left alone**, because it is rendered on three surfaces and is right. Two smaller things are now
+  known and are not this plan's to change: it is a **mean rather than a bound** — a long article is
+  $0.30, so a Debate-style *up to* would say $0.30 — and the *121–194 s* range that `sketch-cost.ts`,
+  `src/jobs.ts`, `src/step-order.ts`, `src/mode-catalog.ts` and
+  [diagram.md](../project/diagram.md) all repeat is falsified by a 220.5 s draw in that same eval,
+  which leaves the 240 s budget 8% of headroom rather than the "rounded up hard" its comment claims.
+
+- 📔 **What is still open after F13**, named rather than fixed: when a confirm is torn away by a job
+  arriving from another tab, focus falls to `BODY` again. Moving it in response to a background
+  event is its own anti-pattern, so this is left alone deliberately — but it is the same class as
+  F13 and worth knowing about.
+
 ## Deferred, named rather than inherited
+### Two cost figures outside this feature that measurement has overtaken
+
+**Found while fixing F12, not fixed, and both are Greg's call because they change copy on surfaces
+this work does not own.**
+
+- **`SKETCH_PRICE` is a mean presented as a figure.** Three ledger-read draws on 2026-09-03, same
+  model and effort as production (`evals/results/cost-per-article-2026-09-03.md:36`): $0.1443,
+  $0.1671, **$0.2994** — mean $0.2036. The copy says *"about $0.20"*, which is 50% under the top of
+  that sample. Debate's row, one line above it on the same page, now says *"$0.20–0.40 … and more on
+  a long one"*, so the two rows hold themselves to different standards. Changing it means changing
+  what the Sketch panel and Illustrated say to readers, which is why it is here rather than done.
+- **The `121–194 s` range is falsified.** The same eval has a **220.5 s** draw. The range is
+  repeated in `src/web/sketch-cost.ts`, `src/jobs.ts:657`, `src/step-order.ts:109`,
+  `src/mode-catalog.ts:306` and `docs/project/diagram.md:1602`, and against the 240 s budget it
+  leaves **8%** of headroom rather than the *"rounded up hard"* its own comment claims. That one is
+  not only copy.
+
+Neither is introduced here. Both are named because this feature now renders the first of them to a
+reader on a fourth surface, and shipping a disclosure we have just been told is low is the exact
+mistake F12 was.
+
 
 ### `hierarchy`, as the repair path it actually is
 

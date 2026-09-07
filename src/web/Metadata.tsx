@@ -128,11 +128,16 @@
  * **Half of that reasoning is now about the page rather than about the store,
  * and the correction matters.** This paragraph said until 2026-09-07 that the
  * honest thing was to say which stages had run *"until `tree.json` and
- * `arc.json` carry a hash of the blocks they consumed"*. They do: `StageState.done`
- * has meant *ran, and would not be re-run today* since the Postgres move, and
- * `articleMetadata` (src/store/pg.ts) computes it with a per-step `isCurrent` —
- * `hierarchyCurrency` for the tree, the very function `reasonsNotToPublish`
- * uses. **The store can answer; this page cannot say.** `done` is one boolean
+ * `arc.json` carry a hash of the blocks they consumed"*. The store answers that
+ * now, though **not** in the shape that sentence imagined, and the difference is
+ * worth stating rather than glossing: there is no `tree.json`, and `Tree`
+ * carries no `sourceHash` to this day. What carries it for the tree is the
+ * **run** — `revision_step_runs.input_hash`, read by `hierarchyCurrency`, the
+ * very function `reasonsNotToPublish` uses — while `Arc` does carry a
+ * `sourceHash` of its own. `articleMetadata` (src/store/pg.ts) puts a per-step
+ * `isCurrent` over both, which is why `StageState.done` has meant *ran, and
+ * would not be re-run today* since the Postgres move.
+ * **So the store can answer; this page cannot say.** `done` is one boolean
  * carrying two facts, and `StageRow` renders it as a two-state pill, so a
  * *stale* glossary reads here as *not run* beside a glossary the reader can open
  * next door. Telling *absent* from *stale* needs a second field, and that is
@@ -1256,12 +1261,25 @@ const RERUN_CONFIRM_SKETCH = `${RERUN_CONFIRM} It is the slowest one here — ${
  * pass A succeeded, so a failure costs one rather than two; *up to* is doing
  * real work in the sentence.
  *
- * The price is measured rather than guessed: worst observed for a single pass
- * is $0.135, so a two-pass run is up to ~$0.27 and typically $0.13–0.20
- * (docs/plans/260905f-debate-mode-stage-0-spike-results.md § the honest cost
- * figure). `src/step-order.ts` calls the step the second dearest thing in the
- * app; on **this** page it is the dearest of the nine, which is the comparison
- * the reader in front of it can act on, and the Sketch's row next door is what
+ * **The price is a range and not a number, and this said “up to about $0.27”
+ * until 2026-09-07.** ⟨Sol, F12.⟩ That ceiling is
+ * docs/plans/260905f-debate-mode-stage-0-spike-results.md § The spend ceiling,
+ * and the *same document* corrects it twenty-seven lines further down —
+ * § Stage 3½ § 1, *“The cost figure is a range, and the plan's ceiling was too
+ * low”*: a completed live run cost **$0.3527**, because the ceiling was
+ * measured with probes **carrying no article** while pass B sends the whole
+ * thing. Per-pass cost varied **2.4×** ($0.0725 to $0.1780) with how much the
+ * model chose to search, so any single figure is a sample. That section asks
+ * for the words this constant now uses: *$0.20–0.40 for a completed run on a
+ * short article*, rising with length, said as a range.
+ *
+ * Left here rather than only in the plan, because the next person to want a
+ * Debate price will grep for one and the first hit is what they will take —
+ * which is exactly how the wrong number got here.
+ *
+ * `src/step-order.ts` calls the step the second dearest thing in the app; on
+ * **this** page it is the dearest of the nine, which is the comparison the
+ * reader in front of it can act on, and the Sketch's row next door is what
  * makes that legible.
  *
  * **Inline rather than a constant beside `SKETCH_PRICE`.** That leaf exists
@@ -1276,7 +1294,8 @@ const RERUN_CONFIRM_SKETCH = `${RERUN_CONFIRM} It is the slowest one here — ${
  */
 const RERUN_CONFIRM_DEBATE =
   "Two model calls, not one: it searches the open web, and it is the dearest thing " +
-  "on this page at up to about $0.27. The result changes only if the run succeeds.";
+  "on this page — $0.20–0.40 for a completed run on a short article, and more on a " +
+  "long one. The result changes only if the run succeeds.";
 
 /**
  * One row: the mode's name, and a control that asks before it spends anything.
@@ -1343,11 +1362,63 @@ function RerunRow({
    * the Yes button dispatches on this.
    */
   const [pending, setPending] = useState<null | "run" | "retry">(null);
+  /**
+   * **A confirm may not outlive the state it was opened over.** ⟨Sol, F14.⟩
+   *
+   * Two ways it can, and both were reachable: a job arriving from another tab
+   * (or the CLI) while the reader is still reading the sentence, and the
+   * failure a Retry stands over clearing underneath it — `useStepJob` sets
+   * `failed` to null and nothing here noticed, so `failed?.retry?.()` became a
+   * button whose only effect was to close itself. A press that does nothing and
+   * says nothing is the failure this repo names most often.
+   *
+   * **An active job wins over both kinds of confirm**, not just the retry. The
+   * confirm asks whether to buy a run; a job in the polled list means the run
+   * the reader is being asked about is *already happening*, and drawing the
+   * question over it costs them the progress, the Stop button and the stall
+   * warning for as long as they take to answer. `job` is only ever a queued or
+   * running row (src/web/useStepJob.ts § `job`), so this cannot be tripped by a
+   * finished one.
+   *
+   * **`job`, deliberately, and never `starting`.** `starting` is the gap
+   * between our own POST and the first poll that sees it — so keying on it
+   * would tear the confirm away between the click on Yes and the answer, which
+   * is the state `busy` exists to hold on screen.
+   */
+  const obsolete =
+    pending !== null && (job !== null || (pending === "retry" && !failed?.retry));
+  /* Cleared rather than only hidden, so that a job finishing does not bring a
+     question the reader never answered back out from behind it. Asking again is
+     one press, and it is the press they would have made. */
+  useEffect(() => {
+    if (obsolete) setPending(null);
+  }, [obsolete]);
+  /* What is actually drawn. Derived rather than waited for, because the effect
+     above lands a render later and that render is the one showing the confirm
+     over the live job. */
+  const asking = obsolete ? null : pending;
   /* The round trip. `start` resolves when the POST has been answered, not when
      the job has, and until then there is nothing in the polled list — so
      without this the confirm row would come and go under a press that had
      already landed. */
   const [busy, setBusy] = useState(false);
+  /**
+   * **Where focus goes when the confirm opens**, and it went to `BODY`
+   * until 2026-09-07 ⟨Sol, F13⟩: the press unmounts the button it was on, and
+   * nothing here caught it. A reader who could not see the sentence therefore
+   * had to go looking for the control that had replaced the one they pressed,
+   * and would meet Yes with no idea what it was standing over.
+   */
+  const yesRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (asking) yesRef.current?.focus();
+  }, [asking]);
+  /**
+   * **The id the sentence is reachable by**, keyed on the step because nine of
+   * these rows are on screen at once and a fixed id would give the reader
+   * whichever row happened to be first in the document.
+   */
+  const confirmId = `rerun-confirm-${step}`;
 
   const Icon = STAGE_ICONS[step];
   /* *Find more terms* for the glossary, in the words its own panel already uses,
@@ -1371,7 +1442,7 @@ function RerunRow({
      buys and the confirm can honestly say the same thing. Only the Yes button's
      words differ, so the reader can tell which press they are agreeing to. */
   const yes =
-    pending === "retry" ? "Yes, try again" : step === "glossary" ? "Yes, find more" : "Yes, run it";
+    asking === "retry" ? "Yes, try again" : step === "glossary" ? "Yes, find more" : "Yes, run it";
   /* Retry, routed through the confirm instead of straight to the retry route —
      see § the Retry in this component's header. The original `failed.retry` is
      read at click time below, off this render's `failed`, so nothing here has to
@@ -1400,14 +1471,30 @@ function RerunRow({
           row and its running band, and a block element inside phrasing content
           is invalid markup that nothing here would ever go red over. */}
       <div className="tw:ml-auto tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2">
-        {pending ? (
+        {asking ? (
           <>
-            <span className="tw:text-xs tw:text-muted-foreground">{confirm}</span>
+            <span id={confirmId} className="tw:text-xs tw:text-muted-foreground">
+              {confirm}
+            </span>
             <Button
               type="button"
+              ref={yesRef}
               variant="outline"
               size="xs"
               disabled={busy}
+              /* **What the press costs, said to the reader who cannot see it.**
+                 The sentence beside this button is a plain sibling `<span>`,
+                 which a screen reader announces on its way past and not at all
+                 to somebody navigating by button list — so without this, Yes
+                 announced its own words and nothing about two model calls or
+                 the price, and the two-click rule bought nothing for exactly
+                 the reader who can least afford a surprise. ⟨Sol, F13.⟩
+
+                 **On Yes and not on Cancel.** A description is read after the
+                 name every time the control is reached, and Cancel spends
+                 nothing: repeating the price on it would be noise on the safe
+                 button. The guarded press carries it. */
+              aria-describedby={confirmId}
               /* Every actionable control in this row carries the mode's name,
                  because the name itself is a sibling `<span>` and a screen
                  reader's button list does not read those — nine rows of *Yes,
@@ -1416,7 +1503,7 @@ function RerunRow({
               aria-label={`${busy ? "Starting…" : yes} — ${RERUN_LABEL[step]}`}
               onClick={async () => {
                 setBusy(true);
-                if (pending === "retry") {
+                if (asking === "retry") {
                   /* The failure's own retry, taken from this render rather than
                      from the wrapper handed to `JobProgress`. It returns void —
                      `queue.retry` is fired and not awaited (src/web/useStepJob.ts)

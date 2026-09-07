@@ -761,12 +761,12 @@ free `labels` successor that would restore them is not built.
 request carrying a `url` ([billing.md](billing.md)) — so the only cost is ours, and there is no
 per-reader spend cap ([ai-gateway.md](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not)).
 The confirm is where the price is said, and it is the same answer `Tweets.tsx` § `Rewrite` reached
-for the same reason. **Four of the nine rows say something of their own**, and each difference is a
-fact about the step rather than decoration: the glossary's, because forcing it **appends** rather
-than replaces; the sketch's, because it is two minutes and about $0.20; and the debate's, because it
-is **two separately metered calls** and the dearest thing on the page. A generic *"another model
-call"* is a true sentence about five of them and a false one about debate, which is the gap a
-cross-family review of the built code walked through.
+for the same reason. **Three of the nine rows say something of their own** and the other six take the
+default, and each difference is a fact about the step rather than decoration: the glossary's, because
+forcing it **appends** rather than replaces; the sketch's, because it is two minutes and about $0.20;
+and the debate's, because it is **two separately metered calls** and the dearest thing on the page. A
+generic *"another model call"* is a true sentence about those six and a false one about debate, which
+is the gap a cross-family review of the built code walked through.
 
 ### A step is done when *all* its files are there
 

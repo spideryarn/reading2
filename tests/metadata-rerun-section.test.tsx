@@ -450,11 +450,18 @@ describe("the Generate it again section", () => {
   /**
    * **Debate is two separately metered calls, not one** (src/debate.ts § *Two
    * groups, two passes, one atomic step*), and it is the dearest press on this
-   * page at up to ~$0.27
-   * (docs/plans/260905f-debate-mode-stage-0-spike-results.md). The generic
-   * *"another model call"* was therefore wrong about the number **and** silent
-   * about the price — a confirmation that understates what it is asking for is
-   * worse than none, because the reader has been told something.
+   * page — $0.20–0.40 for a completed run on a short article, rising with
+   * length (docs/plans/260905f-debate-mode-stage-0-spike-results.md § Stage 3½
+   * § 1). The generic *"another model call"* was therefore wrong about the
+   * number **and** silent about the price — a confirmation that understates
+   * what it is asking for is worse than none, because the reader has been told
+   * something.
+   *
+   * **And the first price this test pinned was itself the wrong one.** It
+   * asserted *up to about $0.27*, taken from § The spend ceiling of that same
+   * document, whose § Stage 3½ corrects it twenty-seven lines later — so the
+   * test agreed with the code about a figure both had got from a superseded
+   * section. A number asserted in two places is not a number checked twice.
    *
    * Asserted as *not the generic sentence* as well as *these words*: a variant
    * that got added and never wired to the row would pass the second half alone.
@@ -468,7 +475,14 @@ describe("the Generate it again section", () => {
       "Another model call.",
     );
     expect(text).toContain("Two model calls");
-    expect(text).toContain("about $0.27");
+    /* **The range, not the ceiling.** “Up to about $0.27” came from the spike's
+       § The spend ceiling, and § Stage 3½ § 1 of the same document corrects it
+       twenty-seven lines further down: the probes carried no article, a
+       completed live run cost $0.3527, and per-pass cost varied 2.4×. A
+       confirmation that understates the purchase it guards is worse than none.
+       ⟨Sol, F12.⟩ */
+    expect(text, "the debate row still quotes the disproven ceiling").not.toContain("$0.27");
+    expect(text).toContain("$0.20–0.40");
     /* The draft-then-publish clause is the one thing every variant must keep. */
     expect(text).toContain("only if the run succeeds");
   });
@@ -558,5 +572,117 @@ describe("the Generate it again section", () => {
       return name;
     });
     expect(confirmNames).toEqual(["Yes, run it — Ideas", "Cancel — Ideas"]);
+  });
+
+  /**
+   * **The two-click rule is worth nothing to a reader who never hears the
+   * sentence**, and until 2026-09-07 that was every screen-reader user
+   * ⟨Sol, F13⟩. The Run button they pressed is unmounted by the press, so focus
+   * fell to `BODY`; the confirm sentence is an unlabelled, non-live sibling
+   * `<span>`, so nothing announced it; and Yes carried an `aria-label` and no
+   * `aria-describedby`, so navigating to it said *Yes, run it — Debate* and
+   * neither *two model calls* nor the price.
+   *
+   * **Asserted on the resolved description rather than on the attribute**,
+   * because the attribute is a promise and the text is what the reader is told:
+   * an `aria-describedby` pointing at an id that does not exist looks identical
+   * to a correct one from the outside, and nine rows on one page is exactly the
+   * shape that produces a duplicated id.
+   */
+  it("moves focus to Yes and describes it with the sentence that names the cost", async () => {
+    await open();
+    await press(button("debate", "Run it again"));
+
+    const yes = button("debate", "Yes, run it");
+    expect(document.activeElement, "focus was left outside the confirm").toBe(yes);
+
+    const ids = (yes?.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
+    expect(ids, "Yes is not described by anything").not.toEqual([]);
+    const described = ids.map((id) => document.getElementById(id)?.textContent ?? "").join(" ");
+    expect(described, "the description does not say what the press buys").toContain(
+      "Two model calls",
+    );
+    expect(described, "the description does not say the price").toContain("$0.20–0.40");
+  });
+
+  /**
+   * **A confirm may not outlive the state it was opened over** ⟨Sol, F14⟩.
+   *
+   * Two separate harms, and the second is the worse one. Pressing Yes on a
+   * retry whose failure has gone reaches `failed?.retry?.()`, does nothing and
+   * closes the row — a silent no-op, which is the failure this repo writes up
+   * most often. And until that press the confirm is drawn *instead of*
+   * `JobProgress`, so a reader with a job running in another tab has no
+   * progress, no Stop and no stall warning.
+   *
+   * Three interleavings, because the state can go stale in three ways and only
+   * one of them was ever considered.
+   */
+  it("gives a job that arrives under an open confirm the row back", async () => {
+    await open();
+    await press(button("quotes", "Run it again"));
+    expect(posts, "the ask posted something").toHaveLength(0);
+
+    /* Another tab, or the CLI: `useStepJob` finds the job in the polled queue
+       rather than remembering the click, so this is a run of ours in every way
+       that matters here. Two lists because the engine treats the first one it
+       ever sees as a baseline. */
+    await act(async () => jobEngine.receive([]));
+    await act(async () => jobEngine.receive([madeJob("job-elsewhere", "quotes", "running")]));
+    await settle();
+
+    expect(button("quotes", "Yes, run it"), "the confirm outlived the job that answered it")
+      .toBeFalsy();
+    expect(button("quotes", "Stop"), "the live job has no Stop button").toBeTruthy();
+    expect(posts, "the row started a second job").toHaveLength(0);
+  });
+
+  it("gives a job that arrives under an open Retry confirm the row back", async () => {
+    await open();
+    await press(button("quotes", "Run it again"));
+    await press(button("quotes", "Yes, run it"));
+    await act(async () => jobEngine.receive([]));
+    await act(async () => {
+      jobEngine.receive([
+        { ...madeJob("job-1", "quotes", "error"), error: "The AI service is busy right now." },
+      ]);
+    });
+    await settle();
+    await press(button("quotes", "Retry"));
+    expect(button("quotes", "Yes, try again"), "the Retry did not ask").toBeTruthy();
+
+    /* The other tab pressed Retry first: the failure is replaced by a live job. */
+    await act(async () => jobEngine.receive([madeJob("job-retried", "quotes", "running")]));
+    await settle();
+
+    expect(button("quotes", "Yes, try again"), "an obsolete confirm hid a live job").toBeFalsy();
+    expect(button("quotes", "Stop"), "the live job has no Stop button").toBeTruthy();
+    expect(retries, "we retried a job that was already running").toEqual([]);
+  });
+
+  it("closes an obsolete Retry confirm when the failure it stands over has cleared", async () => {
+    await open();
+    await press(button("quotes", "Run it again"));
+    await press(button("quotes", "Yes, run it"));
+    await act(async () => jobEngine.receive([]));
+    await act(async () => {
+      jobEngine.receive([
+        { ...madeJob("job-1", "quotes", "error"), error: "The AI service is busy right now." },
+      ]);
+    });
+    await settle();
+    await press(button("quotes", "Retry"));
+    expect(button("quotes", "Yes, try again"), "the Retry did not ask").toBeTruthy();
+
+    /* The failure clears with no job to replace it — the job succeeded on its
+       retry elsewhere. `failed` goes null, so `failed.retry` is gone and the
+       Yes standing over it could only be a no-op. */
+    await act(async () => jobEngine.receive([madeJob("job-1", "quotes", "done")]));
+    await settle();
+
+    expect(button("quotes", "Yes, try again"), "a Yes that can only do nothing is reachable")
+      .toBeFalsy();
+    expect(button("quotes", "Run it again"), "the row lost its control altogether").toBeTruthy();
+    expect(retries, "something was retried").toEqual([]);
   });
 });
