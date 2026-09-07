@@ -1819,7 +1819,7 @@ const NOT_A_MODE = {
        revision, and `orderComments` keeps one whose block is gone entirely.
        So the sentence states the two halves and the outcome, and claims no
        mechanism between them. */
-    how: "Saving one costs nothing and asks the model nothing — the tick-box that brings the AI in saves your words first, free, and then opens a chat about the passage. Each stores the passage's permanent id as well as the exact words it quotes, and after the article is re-fetched the saved comment stays in the list even when those words are gone and the underline can no longer be drawn.",
+    how: "Saving one costs nothing and asks the model nothing — the tick-box that brings the AI in saves your words first, then opens a chat about the passage. Each stores the passage's permanent id as well as the exact words it quotes, and after the article is re-fetched the saved comment stays in the list even when those words are gone and the underline can no longer be drawn.",
   },
   tweets: {
     what: "The article as a numbered thread of short posts",
@@ -1830,18 +1830,30 @@ const NOT_A_MODE = {
        written"* is not literally true: `buildThread` trims each post
        (src/tweets.ts). The load-bearing claim is the one about the limit, so it
        is the one the sentence makes. GPT Sol, 2026-09-07. */
-    how: "Each thread is one model pass over the whole article and is kept until somebody asks for it again — writing one is not part of adding a piece, so a thread exists only where it was asked for. Nothing in it is shortened to fit: a post over the length limit is left at the length the model wrote, and the page marks the overrun rather than cutting it.",
+    how: "Each thread is one model pass over the whole article and is kept until somebody asks for it again — writing one is not part of adding a piece, so a thread exists only on the pieces somebody wanted one for. Nothing in it is shortened to fit: a post over the length limit is left at the length the model wrote, and the page marks the overrun rather than cutting it.",
   },
   metadata: {
     what: "Where this article came from, what shape it is, and what the pipeline wrote",
-    /* **"The page generates nothing", not "nothing on it is generated".** The
-       first draft said the second thing, inheriting it from `Metadata.tsx`'s
-       own header — and the page opens with the hierarchy's `gist` and
-       `summary` under *In one sentence*, which are model output. Opening it
-       spends nothing and that is the true and useful claim; *there is nothing
-       generated here* is a different sentence and a false one. GPT Sol,
-       2026-09-07. The header upstream has the same ambiguity. */
-    how: "The page itself generates nothing and makes no model call — every number on it is read off what has already been written, which is why it is the page to open when something looks wrong. It also says which parts have been built for this article and which have not.",
+    /* **"Opening it spends nothing" — and the two wider claims that came
+       before it were each false, a few hours apart.**
+
+       *"Nothing on it is generated"* was inherited from `Metadata.tsx`'s own
+       header, and the page opens with the hierarchy's `gist` and `summary`
+       under *In one sentence*, which are model output. GPT Sol.
+
+       *"The page itself generates nothing and makes no model call"* survived
+       about an hour, and was killed by a merge rather than by a reviewer:
+       260907d landed the same day and gave that page a *Generate it again*
+       button per step (`RerunSection`, src/rerun-steps.ts). A press there
+       spends.
+
+       What is left is the claim that is actually load-bearing, and it is about
+       **arriving** rather than about the page: this button, alone among the
+       three, arms nothing. The re-run buttons are on the page and announce
+       their own cost; a tooltip on the bar does not need to inventory them, and
+       a sentence that tried would be owner-only into the bargain — the
+       visitor's metadata page has no `RerunSection` at all. */
+    how: "Opening it spends nothing: every number on it is read off what has already been written, which is why it is the page to go to when something looks wrong. It also says which parts have been built for this article and which have not.",
   },
 } as const;
 

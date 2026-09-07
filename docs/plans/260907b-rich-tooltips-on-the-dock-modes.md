@@ -232,7 +232,7 @@ number of moving parts.
 |---|---|---|
 | Comments | saving one costs nothing and asks the model nothing; it is pinned to the block id before the quote, so the comment outlives the sentence it marked | [comments.md](../project/comments.md) § What a comment is now, § Anchoring, § Asking the model |
 | Tweets | one model pass per thread, kept until asked again; not part of adding an article; nothing is shortened to fit and the page marks the overrun | [`src/tweets.ts`](../../src/tweets.ts) header and `buildThread`, [`Tweets.tsx`](../../src/web/Tweets.tsx) `over` and `Rewrite` |
-| Metadata | the page generates nothing and makes no model call — every number on it is read off what has already been written | [`Metadata.tsx`](../../src/web/Metadata.tsx), [`PublicPages.tsx`](../../src/web/PublicPages.tsx) |
+| Metadata | opening it spends nothing — every number on it is read off what has already been written | [`Metadata.tsx`](../../src/web/Metadata.tsx), [`PublicPages.tsx`](../../src/web/PublicPages.tsx) |
 
 **Three of those six sentences were wrong in first draft, and all three were wrong the same way as
 stage 1's twelve — inherited from a doc or a header that was itself out of date.** Sol found all
@@ -240,8 +240,18 @@ three; each is checked in the source now and the wrong version is recorded at th
 
 - *"Nothing on it is generated"* (Metadata) — the page opens with the hierarchy's `gist` and
   `summary` under *In one sentence*, which are model output. `Metadata.tsx`'s own header says the
-  sentence I copied, and it is stale or at best ambiguous. The true claim is about the *page*, not
-  its contents: opening it spends nothing.
+  sentence I copied, and it is stale or at best ambiguous.
+
+  **Its replacement lasted about an hour**, and this is the one worth remembering: *"the page itself
+  generates nothing and makes no model call"* was killed not by a reviewer but by the merge before
+  the push. [260907d](260907d-re-run-any-generated-mode-from-the-metadata-page.md) landed the same
+  day and gave that page a *Generate it again* button per step, so a press there spends. Two of the
+  three surviving claims about that page died in one afternoon — a doc, then a feature — which is
+  the argument for writing the **narrowest** true sentence rather than the most satisfying one.
+  What is left is about arriving rather than about the page: opening it spends nothing, and unlike
+  the two buttons beside it this one arms nothing on the way in. The re-run buttons announce their
+  own cost where they are, and a bar tooltip that inventoried them would be owner-only anyway — the
+  visitor's metadata page has no `RerunSection`.
 - *"Written once and then kept"* (Tweets) — a thread has a deliberate `Rewrite`, which the page
   itself calls *"Another model call"*. The empty state upstairs has the same drift.
 - *"Kept exactly as written"* (Tweets) — `buildThread` trims each post. Whitespace only, so a wording
