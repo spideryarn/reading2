@@ -542,6 +542,118 @@ discarded its own test run. That is a process fault of mine, not Sol's: a live p
 names a tree, not bytes, and I kept editing the tree. **The next review in this plan goes out against
 a commit.**
 
+## The stage-1 code review, and the three P1s in the shipped patch
+
+GPT Sol on commit `334988ad`, 2026-09-07, round 2 — prompt and answer at
+[`260907d-review-2-stage1-prompt.md`](260907d-review-2-stage1-prompt.md) /
+[`260907d-review-2-stage1-answer.md`](260907d-review-2-stage1-answer.md). Verdict: **refuse as-is**,
+three established P1s. This is the review engineering-manager says to weight above the plan review,
+and it earned that too: **all three P1s were in code that had passed 14,864 green tests**, and two of
+them were in the two lines the whole stage was about.
+
+| ID | sev | finding | disposition |
+|---|---|---|---|
+| F9 | P1 | the `{1,40}` bound rejected hints the prompt permits, and the test that claimed to hold it tested nothing | **fixed** — bound removed |
+| F10 | P1 | the gist-echo check no longer catches a gist re-asked **in V4's own shape** | **fixed** — `bareQuestionWords` |
+| F11 | P1 | `bareWords` stripping a bracket changed unrelated inputs, in both directions | **fixed** — reverted; the unwrapping is the question's business |
+| F12 | P2 | the stub's V4 branch became unreachable when the `v4` arm was removed | **fixed** — keyed on the block, not the arm |
+| F13 | P2 | the control's comparator resolved its questions live, so "both halves stay put" was false | **fixed** — both length-pair arms pin `variant: "V4"` |
+| F14 | P2 | a duplicated `## …` section parses silently and the **first** copy wins | **fixed** — `refuseDuplicate` on all three discovery loops |
+| F15 | P3 | the parser's header promised to throw on a lost fence language tag; every fence is untagged | **fixed** — sentence corrected |
+| F16 | P3 | three comments still described the retired `v4` arrangement | **fixed** |
+
+### The two that matter, and why the tests did not catch them
+
+**F9 — a number I made up.** `[^()]{1,40}` was meant to separate "a shape hint" from "a parenthetical
+sentence". It rejected *"Evidence — how should we compare these accounts? (a comparison across
+historical and modern cases)"* — fifteen words, a shape rather than an answer, every stated rule
+satisfied — and stored it with a second `?`. Worse, **the test I wrote to hold the bound did not test
+it**: its input had no `?` before the bracket, so the bounded and unbounded regexes both rejected it
+and the test passed either way. A test that cannot distinguish the thing it names is not evidence,
+which is the whole of [silent-success.md](../reusable/silent-success.md) in one assertion.
+
+**F10 — the check stopped catching the failure its own prompt names.** The gist re-asked is what
+anchor 5 of the eval is built out of and what the QUESTIONS block forbids in so many words. In V4's
+shape that echo is `<topic> — <gist>? (<hint>)`, and the topic prefix alone defeats the equality
+check. So the one rule in `questionFor` that means exactly what it says had, from the moment V4
+shipped, stopped meaning it — **in precisely the shape production now asks for**. And because the
+panel draws `question ?? gist`, the reader gets the wall instead of the door with nothing anywhere
+recording it.
+
+Both are now `bareQuestionWords`: unwrap the hint, then the topic, then compare. `bareWords` is back
+to what it was, because it is applied to the **gist**, which is an ordinary sentence that may
+legitimately end in a parenthetical — F11, established by Sol with a pair I would not have thought
+of.
+
+All five new or rewritten assertions were **seen red against `334988ad`** before the fix, each
+reproducing its finding.
+
+## Stage 2, as built
+
+Built by an Opus subagent against the brief above; `expand/4`, and green.
+
+**What landed:** `EXPAND_SYSTEM` gains a QUESTIONS block carrying V4's rules in the expansion
+prompt's voice; `renderTargetBriefing` prints `ASK QUESTION ON CHILDREN` or `OMIT QUESTION` per
+target, derived from that target's own ancestor chain; `ProposedChild` gains `question?`;
+`DeepenStats.missingQuestions` names the parts that were asked and did not answer, with a `warn` that
+is silent at zero; `EXPAND_PROMPT_VERSION` `expand/3` → `expand/4`.
+
+### Two things this plan got wrong about the code
+
+1. **`questionFor` cannot be imported into the cascade.** `hierarchy-expand`/`-deepen`/`-cascade` are
+   imported *by* `src/hierarchy.ts` and take **types only** from it; a value import closes a cycle
+   `npm run cycles` refuses. So *"attachment puts it through `questionFor`, imported, at
+   `candidate.depth + 1`"* is not buildable as written.
+
+   **What replaced it is better, not merely different.** The expansion carries the model's question
+   onto the node **unjudged**, and `buildTree`'s existing `questionFor` call keeps or drops it at the
+   node's **real depth in the finished tree**. Every deepened article is rebuilt through `buildTree`,
+   and `proposalFromTree` already carries `question` for exactly this reason. Drops land in
+   `BuildReport.droppedQuestions` with no second rule and no widened signature — and it is *more*
+   correct than `candidate.depth + 1`, which would be wrong wherever `collapseRestatedRungs` promotes
+   a rung. Rejected on the way: hoisting `questionFor` into `hierarchy-prompt.ts` (bigger blast
+   radius), and duplicating `MAX_QUESTION_DEPTH` in the cascade (a second rule).
+
+2. **The new counter could not go on `BuildReport`**, which lives in `src/hierarchy.ts`. It is
+   `DeepenStats.missingQuestions`, named by position in `BuildReport`'s style, reaching the log
+   through `deepen: run.deepen` in `pipeline.ts`.
+
+### The scope of the fix, stated honestly — it is narrower than the symptom
+
+**`asksChildQuestions` is true only when wave 1 returned a root with no children at all.**
+`deepenTree`'s `walk` makes a candidate only of a *childless* node, so on any article whose wave-1
+answer divided the root, every target is at depth ≥ 1 and every section is marked `OMIT QUESTION`.
+Verified in `src/hierarchy-deepen.ts` § `walk` rather than taken from the subagent's report.
+
+That is the right scope — it is the second of the two cases
+[summaries.md](../project/summaries.md) already named — but it means the fix covers **one** of the
+two ways a part ends up with no question:
+
+| how a part loses its question | fixed here? |
+|---|---|
+| a **flat article** deepened through stage 5: its parts come from the expansion call, whose prompt did not ask | **yes**, this is `expand/4` |
+| a **rung that restated its parent** is spliced away and its children come up in its place, carrying none — they were depth 2 when the model wrote them, and nothing asks a question at depth 2 | **no** |
+
+The second is not fixable inside this stage's constraints: it would need questions at depth 2 (which
+the whole feature exists to avoid — one per section on a fifty-section article is the noise
+`MAX_QUESTION_DEPTH` is there to prevent) or a second model call (forbidden). It is already
+**counted** — `src/hierarchy.ts` pushes it into `droppedQuestions` rather than letting it read zero —
+and it stays that way, named here so nobody reads this stage as having removed the symptom entirely.
+
+### And the acceptance condition has to be narrowed, for a reason rather than for convenience
+
+The plan says a live run in which every question came back omitted is not a completed stage. **That
+run cannot be commissioned**: it needs an article whose wave-1 answer is a childless root, which is
+a model outcome, not a flag — forcing it would mean lying to the model about the article. So the
+evidence for this stage is the unit tests, which do exercise the whole seam (the mark is rendered,
+the question is parsed, it survives into the built tree, a deeper one is dropped and counted, an
+omitted one is named without throwing).
+
+What that leaves unproven is exactly one thing, and it is worth saying rather than burying: **no real
+model has yet been shown the new block.** The first flat article to come through will be the first
+test of whether it is obeyed. `missingQuestions` exists so that when it happens, the answer is in a
+log line rather than in somebody re-reading a tree.
+
 ## Decisions and assumptions taken without asking
 
 Greg cannot be reached during this run, so these are recorded rather than asked.

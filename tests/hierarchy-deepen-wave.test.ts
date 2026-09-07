@@ -1845,3 +1845,170 @@ describe("re-asking a wave the store has already answered", () => {
     expect(second.run.deepen?.usage.inputTokens).toBe(COST.inputTokens);
   });
 });
+
+/* ========================================================== the questions == */
+
+/**
+ * **The Socratic question on a part the cascade built** — P1-5, recorded during
+ * the review of report 24 and fixed at generation in
+ * docs/plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md
+ * § stage 2.
+ *
+ * Since report 24 shipped `question ?? gist`, `SummaryPanel` draws **one** line
+ * per row. So a part with no question draws a bare claim beside a neighbour's
+ * question, with nothing on screen to explain the difference — and every test
+ * that asks whether a tree is well formed passes, because the tree is well
+ * formed. That is what these are written against.
+ *
+ * **Where the depth rule is applied is the whole design.** The expansion carries
+ * the question the model sent, unjudged, onto the node; `questionFor` — the same
+ * function the whole-document path uses — then keeps or drops it in `buildTree`,
+ * at the node's real depth in the finished tree, and counts every drop into
+ * `droppedQuestions`. A second depth rule in the cascade could disagree with the
+ * one that ships, and the disagreement would be invisible.
+ */
+describe("the question on a part the cascade built", () => {
+  /**
+   * A wave-1 answer that divided nothing: one root over the whole article, no
+   * children. The cascade's target is then the **root**, its children are the
+   * depth-1 parts, and `MAX_QUESTION_DEPTH` keeps a question on exactly those —
+   * which is the article shape P1-5 is about.
+   */
+  async function rootOnlyTree(): Promise<Tree> {
+    ({ buildTree } = await import("../src/hierarchy.js"));
+    return buildTree(
+      {
+        title: "The Whole Work",
+        gist: "It argues one thing at length.",
+        range: [blockId(0), blockId(59)],
+      },
+      {},
+      BLOCKS,
+      SLUG,
+      { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] },
+    );
+  }
+
+  /** `answerFor`, plus one question per child — or none, which is the other case. */
+  function answerWithQuestions(request: ExpansionRequest, asked = true): ExpansionAnswer {
+    const answer = JSON.parse(answerFor(request).text) as {
+      sections: { section: number; children: Record<string, unknown>[] }[];
+    };
+    for (const section of answer.sections) {
+      for (const [i, child] of section.children.entries()) {
+        if (asked) {
+          child.question = `Part ${i + 1} — why does it follow from what came before? (a reason)`;
+        }
+      }
+    }
+    return freeAnswer(JSON.stringify(answer));
+  }
+
+  /** `rebuild`, with the report it produced — which is where a drop is counted. */
+  async function rebuildWithReport(
+    root: import("../src/hierarchy.js").ModelNode,
+  ): Promise<{ tree: Tree; report: import("../src/hierarchy.js").BuildReport }> {
+    const report: import("../src/hierarchy.js").BuildReport = {
+      repairs: [],
+      droppedChildren: [],
+      droppedHeadings: [],
+      collapsedRungs: [],
+      droppedQuestions: [],
+    };
+    return { tree: buildTree(root, {}, BLOCKS, SLUG, report), report };
+  }
+
+  it("keeps a question the model wrote on a child of the whole work", async () => {
+    const tree = await rootOnlyTree();
+    const fake = fakeExecutor((request) => Promise.resolve(answerWithQuestions(request)));
+    const out = await deepenTree({
+      tree,
+      blocks: BLOCKS,
+      slug: SLUG,
+      checkpoints: nullCheckpointStore(),
+      execute: fake.execute,
+    });
+
+    expect(out.root).not.toBeNull();
+    const { tree: deeper, report } = await rebuildWithReport(out.root!);
+    const depthOne = Object.values(deeper.nodes).filter((n) => n.depth === 1);
+    expect(depthOne).toHaveLength(2);
+    /* The line the reader sees, on both of them — not "at least one". A panel
+       with a question on one part and a gist on its neighbour is the defect. */
+    for (const node of depthOne) {
+      expect(node.question).toMatch(/^Part \d+ — why does it follow/);
+    }
+    /* Nothing was thrown away to get there. */
+    expect(report.droppedQuestions).toEqual([]);
+    expect(out.stats.missingQuestions).toEqual([]);
+  });
+
+  /**
+   * **The other half of the same rule, and it must be `questionFor`'s doing.**
+   *
+   * Here the targets are the depth-1 parts, so their children are depth 2 and
+   * keep no question. The assertion is deliberately in two halves: the question
+   * is not on the node, **and** it is named in `droppedQuestions`. Half of that
+   * is satisfiable by never carrying the field at all, which would take the one
+   * number that says the prompt has drifted down to zero for ever.
+   */
+  it("drops a question written for a deeper child, and counts it", async () => {
+    const tree = await waveOne();
+    const fake = fakeExecutor((request) => Promise.resolve(answerWithQuestions(request)));
+    const out = await deepenTree({
+      tree,
+      blocks: BLOCKS,
+      slug: SLUG,
+      checkpoints: nullCheckpointStore(),
+      execute: fake.execute,
+    });
+
+    const { tree: deeper, report } = await rebuildWithReport(out.root!);
+    const depthTwo = Object.values(deeper.nodes).filter(
+      (n) => n.depth === 2 && n.children.length > 0,
+    );
+    expect(depthTwo).toHaveLength(4);
+    for (const node of depthTwo) expect(node.question).toBeUndefined();
+    expect(report.droppedQuestions).toEqual([
+      "root > child 1 > child 1",
+      "root > child 1 > child 2",
+      "root > child 3 > child 1",
+      "root > child 3 > child 2",
+    ]);
+    /* Asked for none, so none is missing: the counter below is about the
+       sections the request marked, and these were marked OMIT QUESTION. */
+    expect(out.stats.missingQuestions).toEqual([]);
+  });
+
+  /**
+   * **A missing question is ordinary, and it is named.**
+   *
+   * Absence has always been ordinary here — every tree built before the field
+   * existed has none — so this must not throw, must not redraw, and must not
+   * make a second call to fill the gap. What it must not do either is pass in
+   * silence: "the model wrote one and we discarded it" and "the model wrote
+   * none" are different facts, and only the first has a count.
+   * docs/reusable/silent-success.md.
+   */
+  it("names the parts that came back with no question, without throwing or re-asking", async () => {
+    const tree = await rootOnlyTree();
+    const fake = fakeExecutor((request) => Promise.resolve(answerWithQuestions(request, false)));
+    const out = await deepenTree({
+      tree,
+      blocks: BLOCKS,
+      slug: SLUG,
+      checkpoints: nullCheckpointStore(),
+      execute: fake.execute,
+    });
+
+    expect(out.stats.missingQuestions).toEqual(["root > child 1", "root > child 2"]);
+    /* One call: no redraw, and no second call to fill the gap. */
+    expect(fake.seen).toHaveLength(1);
+    /* And the article is published exactly as it would have been. */
+    expect(out.root).not.toBeNull();
+    const { tree: deeper, report } = await rebuildWithReport(out.root!);
+    expect(Object.values(deeper.nodes).filter((n) => n.depth === 1)).toHaveLength(2);
+    /* Not a drop: nothing was written, so nothing was thrown away. */
+    expect(report.droppedQuestions).toEqual([]);
+  });
+});

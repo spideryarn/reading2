@@ -38,6 +38,7 @@ import {
   EXPAND_HEADROOM,
   EXPAND_PROMPT_VERSION,
   EXPAND_SYSTEM,
+  EXPANSION_PROMPT_STAMP,
   expansionPrefixIsCacheable,
   type CandidateRecord,
   expansionOverhead,
@@ -106,6 +107,16 @@ function briefing(from: number, to: number, where: string): TargetBriefing {
       { title: "Chapter Two", gist: "It narrows to the second half." },
     ],
   };
+}
+
+/**
+ * **The one briefing whose target is the whole work**, and therefore the only
+ * shape whose children are the depth-1 parts `MAX_QUESTION_DEPTH` keeps a
+ * question on. `ancestors` empty is the whole of it — `ExpansionTarget` carries
+ * no depth, so the chain above a target is what says where it sits.
+ */
+function rootBriefing(from: number, to: number, where = "root"): TargetBriefing {
+  return { target: target(from, to, where), ancestors: [] };
 }
 
 const OUTLINE = renderFrozenOutline({
@@ -226,6 +237,47 @@ describe("the scoped prompt", () => {
     expect(report.droppedChildren).toEqual(["root > child 1 > child 3"]);
   });
 
+  /**
+   * **The block that closes P1-5**, and what it is written against is a screen
+   * rather than a schema: since report 24 `SummaryPanel` draws `question ?? gist`,
+   * one line per row, so a part built by the deepening cascade drew a bare claim
+   * beside a neighbour's question with nothing to explain the difference. An
+   * expansion prompt with no `question` field is invisible in every test that
+   * asks whether a tree is well formed — the tree *is* well formed.
+   *
+   * The rules pinned here are V4's, from `SYSTEM` in src/hierarchy.ts, because
+   * the two paths must write the same kind of line: the shape with the topic
+   * first and the bracketed hint last, the presupposed direction, and a hint
+   * that is the shape of the answer rather than its content. A second prompt
+   * inventing its own rules is how one article comes to read as though two
+   * people wrote it.
+   */
+  it("asks for V4's question, in V4's shape, on the children it is told to", () => {
+    expect(EXPAND_SYSTEM).toContain(
+      `- Shape: "<topic> — <question>? (<shape hint>)" — the topic first, in the`,
+    );
+    expect(EXPAND_SYSTEM).toContain("The question presupposes where the child lands.");
+    expect(EXPAND_SYSTEM).toContain("The hint is the SHAPE of the answer, never its content");
+    expect(EXPAND_SYSTEM).toContain("Under 20 words in all.");
+    /* The field has to be in the output shape too, or the rules above describe
+       a key the model has never been shown a place to put. */
+    expect(EXPAND_SYSTEM).toContain(`"question": "..."`);
+  });
+
+  /**
+   * **One call batches several sections and they need not be at the same depth.**
+   * A single global instruction — "ask for questions" or "do not" — is therefore
+   * wrong for some target in any mixed batch, and the model has nothing in the
+   * request from which to infer a target's depth: the chain above it is prose,
+   * not a number. So the request marks each target, and this is the sentence
+   * that tells the model the marks exist and are per-section.
+   */
+  it("explains the per-section marker rather than stating one global policy", () => {
+    expect(EXPAND_SYSTEM).toContain("ASK QUESTION ON CHILDREN");
+    expect(EXPAND_SYSTEM).toContain("OMIT QUESTION");
+    expect(EXPAND_SYSTEM).toContain("obey each section's own mark");
+  });
+
   it("tells the model not to send an empty sourceHeading", () => {
     /* Run B sent `"sourceHeading": ""` on children the author gave no heading,
        and `buildTree` counts an unbackable claim — the empty string included,
@@ -267,18 +319,38 @@ describe("the constants a scoped call is made with", () => {
    * written to the old budget and half to the new, which is the visible defect
    * a reader would call a bug. Greg's brief in
    * docs/plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md.
+   *
+   * `expand/4`, 2026-09-07: the prompt gained a QUESTIONS block and a
+   * per-section marker, so an `expand/3` answer has no `question` on any child
+   * of any section — the defect P1-5 names, in stored form.
    */
-  it("is at expand/3, since the gists gained a length and lost the narration", () => {
-    expect(EXPAND_PROMPT_VERSION).toBe("expand/3");
+  it("is at expand/4, since the children of the whole work are asked a question", () => {
+    expect(EXPAND_PROMPT_VERSION).toBe("expand/4");
+  });
+
+  /**
+   * **The stamp, spelled out — because "the stamp moved" is satisfiable by
+   * doing nothing.** It is derived from both prompt versions, so `toc/7` had
+   * already carried it from `toc/6+expand/3` to `toc/7+expand/3` before this
+   * work began, and any test asserting only that it *changed* would have passed
+   * over an expansion prompt nobody had touched. ⟨GPT Sol's F5.⟩
+   *
+   * What the explicit bump buys is honest provenance rather than a forced
+   * checkpoint miss: `canonicalExpansionRequest` hashes the whole wire request,
+   * `EXPAND_SYSTEM` included, so a changed prompt already misses.
+   */
+  it("stamps toc/7+expand/4, both halves named", () => {
+    expect(EXPANSION_PROMPT_STAMP).toBe("toc/7+expand/4");
   });
 
   /**
    * The floor is a property of the model, not of us, and the estimate is four
    * characters to a token.
    *
-   * **`EXPAND_SYSTEM` now clears it on its own**, at 1,078 estimated tokens
+   * **`EXPAND_SYSTEM` now clears it on its own**, at 1,631 estimated tokens
    * against 1,024, so `expansionPrefixIsCacheable` is `true` for every outline
-   * including none at all. Until `expand/3` it was 893.
+   * including none at all. It was 893 until `expand/3`, 1,078 until `expand/4`
+   * added the QUESTIONS block.
    *
    * **What that changed, stated exactly**, because the loose version of it was
    * wrong and GPT Sol caught it: eligibility moved from *outline-dependent* to
@@ -342,6 +414,38 @@ describe("the expansion request", () => {
     expect(request.params.output_config).toEqual({ effort: EXPAND_EFFORT });
   });
 
+  /**
+   * **The seam P1-5 is fixed at, and the one an agent gets wrong by default.**
+   *
+   * A batch carries up to four parents and they need not be at the same depth,
+   * so the policy is a fact about each target rather than about the call. Mark
+   * the call and the model writes a question on the children of a section six
+   * levels down — which `questionFor` then throws away, at the cost of the
+   * tokens and of a `droppedQuestions` count that means nothing — or writes
+   * none on the children of the work itself, which is the defect this stage
+   * exists to close.
+   *
+   * The derivation is `ancestors` being empty, not a depth field: an
+   * `ExpansionTarget` carries no depth, and the chain above it is what the
+   * request already knows. ⟨GPT Sol's F4.⟩
+   */
+  it("marks each target with its own question policy, in one mixed-depth call", () => {
+    const request = expansionRequest({
+      briefings: [rootBriefing(0, 39), briefing(10, 19, "root > child 2")],
+      blocks,
+      outline: OUTLINE,
+      recipe: CASCADE_RECIPE,
+    });
+    const [, first, second] = request.own.split(/^SECTION /m);
+    /* Split on the header rather than searched whole: both markers appear in a
+       mixed batch, so a `toContain` over the request would pass however they
+       were distributed — including with both on the same target. */
+    expect(first).toContain("ASK QUESTION ON CHILDREN");
+    expect(first).not.toContain("OMIT QUESTION");
+    expect(second).toContain("OMIT QUESTION");
+    expect(second).not.toContain("ASK QUESTION ON CHILDREN");
+  });
+
   it("shows each target its chain, ending with the target itself", () => {
     const request = expansionRequest({
       briefings: [briefing(10, 19, "root > child 2")],
@@ -378,7 +482,7 @@ describe("the expansion request", () => {
    * src/labels.ts came to write a marker that did nothing for months.
    *
    * **Since `expand/3` every prefix clears the floor**, because `EXPAND_SYSTEM`
-   * does on its own — 1,078 estimated tokens against 1,024, up from 893. So the
+   * does on its own — 1,631 estimated tokens against 1,024, up from 893. So the
    * case this used to prove `false` with is now `true`, and **no case here
    * proves the flag false any more.** That is the honest state rather than a
    * gap: no caller can produce one, because every prefix contains
@@ -506,6 +610,45 @@ describe("reading a scoped answer strictly", () => {
     expect(built.map((c) => c.proposed.verdict)).toEqual(["finished", "needs-deeper"]);
     expect(built[0]!.proposed).toBe(sections[0]!.children[0]);
     expect(built[1]!.proposed).toBe(sections[0]!.children[1]);
+  });
+
+  /**
+   * **The question is carried, and it is not judged here.**
+   *
+   * `readChild` keeps it as an optional string and `normaliseExpansion` puts it
+   * on the node beside the gist, exactly as it does `sourceHeading` — presence,
+   * not truthiness, and no second opinion about whether it is a good question or
+   * a legal depth. Both of those belong to `questionFor`, which runs over the
+   * finished proposal in `buildTree`; a parser that dropped a deep question
+   * quietly here would take it out of `droppedQuestions` as well, which is the
+   * one number that would say the prompt had drifted.
+   */
+  it("keeps a returned question on the child and carries it onto the node", () => {
+    const asked = "Computational functionalism — why is it not sufficient? (4 arguments)";
+    const sections = parseExpansionAnswer(
+      wire([child({ start: blockId(0), question: asked }), child({ start: blockId(5) })]),
+      1,
+    );
+    expect(sections[0]!.children[0]!.question).toBe(asked);
+    expect(sections[0]!.children[1]!.question).toBeUndefined();
+
+    const built = normaliseExpansion({
+      children: sections[0]!.children,
+      parent: [blockId(0), blockId(9)],
+      blocks: article(10),
+      where: "root > child 1",
+      report: emptyReport(),
+    });
+    expect(built[0]!.node.question).toBe(asked);
+    expect(built[1]!.node.question).toBeUndefined();
+    expect("question" in built[1]!.node).toBe(false);
+  });
+
+  it("refuses a question that is not a string", () => {
+    /* The same loop `gist`, `sourceHeading` and `why` are in: a number here is
+       a malformed answer, not a question to be coerced. */
+    const refusal = refusalFrom(() => parseExpansionAnswer(wire([child({ question: 4 })]), 1));
+    expect(refusal.reason).toBe("malformed-answer");
   });
 
   /**

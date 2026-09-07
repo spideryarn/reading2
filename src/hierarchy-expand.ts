@@ -97,8 +97,24 @@ import type { Block } from "./types.js";
  * (§ 6 of `EXPAND_SYSTEM` below). A stored `expand/1` answer was written under a
  * question that did not ask for it, so it must read as a miss rather than be
  * resumed onto — which is the whole reason this string is in the key.
+ *
+ * **`expand/4`, 2026-09-07**: the prompt gained a QUESTIONS block and the
+ * per-section mark that says which targets it applies to (§ 7 of `EXPAND_SYSTEM`
+ * below), so an `expand/3` answer carries no `question` on any child of any
+ * section.
+ *
+ * **This bump is for honest provenance, not to force a checkpoint miss**, and
+ * the distinction is worth stating because the two earlier notes above are the
+ * other case. Stage 1's `toc/7` had already carried `EXPANSION_PROMPT_STAMP`
+ * from `toc/6+expand/3` to `toc/7+expand/3` before this change was written, so
+ * "the stamp moved" was already true and would have been satisfied by doing
+ * nothing here ⟨GPT Sol's F5⟩. A stale replay was never the risk either: the
+ * expansion checkpoint key hashes the whole wire request, `EXPAND_SYSTEM` and
+ * the target briefings included (src/hierarchy-deepen.ts §
+ * `canonicalExpansionRequest`), so a changed prompt already misses. What this
+ * buys is a record on every candidate of **which semantic protocol wrote it**.
  */
-export const EXPAND_PROMPT_VERSION = "expand/3";
+export const EXPAND_PROMPT_VERSION = "expand/4";
 
 /**
  * **Both prompt versions, as one string** — the wave-1 prompt this outline came
@@ -168,7 +184,7 @@ const ENVELOPE_TOKENS = 200;
  * **The scoped prompt.**
  *
  * Grown from `scripts/spike-expand-section.ts`'s draft, which made the three
- * calls the plan's stage 2 rests on. Six things changed, and each of them is a
+ * calls the plan's stage 2 rests on. Seven things changed, and each of them is a
  * finding rather than a preference:
  *
  * 1. **The precedence, stated.** *"An authored heading always begins a child,
@@ -206,6 +222,19 @@ const ENVELOPE_TOKENS = 200;
  *    always enforced; this is the sentence that asks for it, and it took the
  *    stamp to `expand/2` so no `expand/1` answer is resumed onto.
  *    ⟨GPT Sol's review of stage 4, F3, 2026-09-05.⟩
+ *
+ * 7. **A question, on the children of the whole work and on nothing else.**
+ *    `EXPAND_SYSTEM` had no such field, so a part built by the cascade drew a
+ *    bare gist beside a neighbour's question once `SummaryPanel` began drawing
+ *    `question ?? gist` — GPT Sol's P1-5, recorded on 2026-09-05 and fixed here.
+ *    The content rules are **V4's**, copied from the QUESTIONS block in
+ *    src/hierarchy.ts § `SYSTEM` and put into this prompt's voice, because two
+ *    paths writing two kinds of line is the same failure as two contracts for a
+ *    tree. **Which targets are asked is marked per section, not stated once**:
+ *    a batch carries up to four parents at different depths, so a global
+ *    instruction is wrong for some of them and the model has nothing to infer a
+ *    depth from. `renderTargetBriefing` supplies each mark; this explains it.
+ *    ⟨GPT Sol's F4.⟩
  *
  * It is otherwise deliberately close to `SYSTEM` in src/hierarchy.ts: the same
  * boundary rules, the same title and gist contract, the same refusal to invent
@@ -270,6 +299,38 @@ TITLES AND GISTS
   sibling sections in the outline above. Four children that all mean
   "Background" is the failure to avoid.
 
+QUESTIONS
+
+Each section below is marked ASK QUESTION ON CHILDREN or OMIT QUESTION. The
+mark depends on where that section sits in the whole work, which you cannot tell
+from its blocks, so obey each section's own mark and never carry one across to
+another section in the same answer.
+
+- Under OMIT QUESTION: send no "question" on any child of that section.
+- Under ASK QUESTION ON CHILDREN: exactly ONE question on every child of that
+  section.
+- It is the question that child is BUILT to answer — the author's question, not
+  a reader's. A reader must be able to tell from this line alone whether to go
+  in: it carries the same direction as the gist, in a different mood.
+- Shape: "<topic> — <question>? (<shape hint>)" — the topic first, in the
+  author's own term; then the question, ending in "?"; then an optional hint in
+  brackets. Nothing follows the hint.
+- The question presupposes where the child lands. "Why isn't computation
+  sufficient" carries the claim; "is computation sufficient?" hides it. So
+  "why", "how", "what follows if" — never "which", "who", or anything a single
+  fact settles.
+- Where the child does NOT land — it weighs, describes, or leaves the matter
+  open — do not invent a landing. Ask the question it leaves open and let the
+  hint say so: "(two options weighed)", "(no settled answer)".
+- The hint is the SHAPE of the answer, never its content: a count or a kind
+  ("a thought experiment", "two case studies", "a recommendation"). A count
+  only when the child itself counts ("four arguments") or you could list each
+  item from its text. Never count anything below this child — that is a
+  different number. Omit the hint when there is no honest shape.
+- Not rhetorical, not yes/no, never the gist with a question mark on it.
+- Under 20 words in all. Digits for counts. The work's own words for what it
+  names, ordinary words for the rest, exactly as with gists.
+
 THE VERDICT
 
 For each child, say whether it is finished or still wants a level of its own.
@@ -291,8 +352,10 @@ JSON only, no prose, no code fence. One entry per section you were given, in the
 order you were given them, each naming its own number:
 
 {"sections": [{"section": 1, "children": [
-  {"start": "<blockId>", "title": "...", "gist": "...",
+  {"start": "<blockId>", "title": "...", "gist": "...", "question": "...",
    "sourceHeading": "...", "verdict": "finished", "why": "..."}]}]}
+
+"question" only under ASK QUESTION ON CHILDREN; omit the key entirely otherwise.
 
 Use only block ids that appear in that section's blocks. Do not invent ids.`;
 
@@ -351,6 +414,30 @@ function chainRung(entry: OutlineEntry): string {
 }
 
 /**
+ * **Whether this target's children are the ones a question is asked on** —
+ * `ASK QUESTION ON CHILDREN` against `OMIT QUESTION`, per target and never per
+ * call.
+ *
+ * A target with no ancestors *is* the whole work, so its children are the
+ * depth-1 parts — the only ones `questionFor` (src/hierarchy.ts) keeps a
+ * question on. One call batches up to four parents and they need not be at the
+ * same depth, so a single instruction for the call would be wrong for some of
+ * them, and the model has nothing in the request to infer a depth from: the
+ * chain above a target is prose, not a number. ⟨GPT Sol's F4.⟩
+ *
+ * **It decides what is asked for, and nothing about what is kept.** Whether a
+ * returned question survives is `questionFor`'s, applied by `buildTree` at the
+ * node's real depth in the finished tree — a second depth rule here could
+ * disagree with the one that ships, and the disagreement would be invisible.
+ * What this predicate is additionally good for is the honest reading of an
+ * absent question: only a section that was *asked* can have failed to answer
+ * (src/hierarchy-deepen.ts § `DeepenStats.missingQuestions`).
+ */
+export function asksChildQuestions(ancestors: readonly OutlineEntry[]): boolean {
+  return ancestors.length === 0;
+}
+
+/**
  * The per-target half of the request: which section this is, what sits above
  * it, and its blocks.
  *
@@ -384,8 +471,15 @@ function renderTargetBriefing(
     ...(node.gist !== undefined ? { gist: node.gist } : {}),
   };
   const chain = [...briefing.ancestors, own].map(chainRung).join("\n  ↳ ");
+  /* **Above the chain, not inside it.** The mark is an instruction about this
+     section and the chain is the article's own prose; a line of ours in the
+     middle of a list of the author's titles reads as another rung. */
+  const questions = asksChildQuestions(briefing.ancestors)
+    ? "ASK QUESTION ON CHILDREN"
+    : "OMIT QUESTION";
   return (
     `SECTION ${ordinal} OF ${count}\n\n` +
+    `${questions}\n\n` +
     `THE CHAIN ABOVE IT\n\n  ${chain}\n\n` +
     `ITS BLOCKS\n\n${renderBlocks(blocks.slice(from, to + 1))}`
   );
@@ -605,6 +699,10 @@ export interface ExpansionAnswerChild extends ProposedChild {
   /** The model's reason, at most a dozen words. Telemetry: nothing reads it to decide. */
   why?: string;
 }
+/* `question` is on `ProposedChild` itself (src/hierarchy-cascade.ts), beside
+   `gist` and `sourceHeading`, so `normaliseExpansion` carries it onto the node
+   with the other two rather than this file holding a field the derivation has
+   never heard of. */
 
 /**
  * **What a refused answer looked like**, kept so that a refusal can be read
@@ -916,8 +1014,19 @@ function readChild(value: unknown, where: string): ExpansionAnswerChild {
      unbackable `sourceHeading` into `droppedHeadings` on purpose — "a number, or
      a string of spaces, is a claim this stage threw away too". `gist` is in this
      loop only for the type check; it is required and non-blank above.
-     (`why` is telemetry and nothing reads it structurally.) */
-  for (const field of ["gist", "sourceHeading", "why"] as const) {
+     (`why` is telemetry and nothing reads it structurally.)
+
+     **`question` is optional here whatever the section was marked**, and that is
+     deliberate rather than lax. A section marked ASK QUESTION ON CHILDREN whose
+     answer carries none is a *logged omission*, not a refusal: refusing the
+     batch would throw away every boundary in it over a second line, and
+     re-asking would be a second model call to fill a gap left by the first. The
+     count is `DeepenStats.missingQuestions`; the rule is stage 2 of
+     docs/plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md.
+     Nothing here judges the string either — `questionFor` (src/hierarchy.ts)
+     owns depth, shape and the gist-re-asked check, and a second opinion in this
+     file would take a drop out of `droppedQuestions` where nobody could see it. */
+  for (const field of ["gist", "sourceHeading", "why", "question"] as const) {
     if (field in child && child[field] !== undefined && typeof child[field] !== "string") {
       throw refuse(
         "malformed-answer",
@@ -932,6 +1041,7 @@ function readChild(value: unknown, where: string): ExpansionAnswerChild {
     title: child.title as string,
     verdict: verdict as ModelVerdict,
     ...(typeof child.gist === "string" ? { gist: child.gist } : {}),
+    ...(typeof child.question === "string" ? { question: child.question } : {}),
     ...(typeof child.sourceHeading === "string"
       ? { sourceHeading: child.sourceHeading }
       : {}),

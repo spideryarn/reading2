@@ -318,11 +318,12 @@ and does not need to** — that is the prompt's business, and which prompt is
 [`evals/summaries`](../../evals/summaries/variants.md).
 
 **Absence is ordinary, not a fault.** Every article whose hierarchy predates 2026-09-05 has no
-question on any row and shows its gists exactly as before; only a row with neither says so. And note
-what § Two places a part can end up with no question now means: a depth-1 node built by the
-deepening cascade has no question, because the expansion prompt has no such field, so **the panel
-can show a question on one part and a gist on its neighbour**. That was invisible while the question
-was a faint second line.
+question on any row and shows its gists exactly as before; only a row with neither says so.
+
+**But a *mixed* panel is a different thing**, and drawing one line per row is what made it visible: a
+question on one part and a bare claim on its neighbour, with nothing to explain the difference. That
+was invisible while the question was a faint second line. § *Two places a part could end up with no
+question* has the two causes and which of them is now closed.
 
 ### Punctuation is normalised, never read for meaning
 
@@ -341,10 +342,23 @@ ignoring case and punctuation.
 [collapsed rung](../../src/hierarchy.ts) — nothing on screen distinguishes a question that was
 thrown away from one the model chose not to write.
 
-**Two places a part can end up with no question**, both benign absence rather than breakage, both
-named in the plan doc: a rung that restated its parent is spliced away and its children come up in
-its place carrying none; and a flat article deepened through stage 5 grows its parts from the
-expansion call, whose prompt does not ask for questions.
+**Two places a part could end up with no question**, both benign absence rather than breakage. **One
+of them was closed on 2026-09-07 and the other is structural.**
+
+- **A flat article deepened through stage 5** grew its parts from the expansion call, whose prompt
+  did not ask for questions. `EXPAND_SYSTEM` now has its own QUESTIONS block (`expand/4`) carrying
+  the same V4 rules, and the request marks each target `ASK QUESTION ON CHILDREN` or `OMIT QUESTION`
+  — per target, because one call batches parents at different depths and a single instruction would
+  be wrong for some of them. Only the children of the whole work are asked, which is the only depth
+  `questionFor` keeps one at.
+- **A rung that restated its parent** is spliced away and its children come up in its place carrying
+  none. That one stays: those children were at depth 2 when the model wrote them, and nothing asks a
+  question at depth 2 — asking would be the noise `MAX_QUESTION_DEPTH` exists to prevent, and filling
+  it in afterwards would be a second model call. It is **counted** rather than silent:
+  `BuildReport.droppedQuestions` records it, and the panel draws the gist.
+
+So a mixed panel — a question on one part, a claim on its neighbour — is now only ever the second
+case, and it is a number somebody can look at.
 
 ### Existing articles have none until their hierarchy is re-run
 
