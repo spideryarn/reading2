@@ -266,10 +266,20 @@ describe("what a visitor is told, mode by mode", () => {
        though the runs on it cost the owner a model call each. What a visitor
        gets is the answers somebody already paid for, which is the same bargain
        `diagram` makes with the Sketch. */
+    /* **`structure` joined on 2026-09-07**, on the plainest version of this
+       bargain there is: it is a third arrangement of the tree in the payload
+       every reader already holds, mounts no hook, issues no request, and reads
+       no artefact at all — so unlike `outline` it does not even have a rung to
+       skip when one is missing. Behind the experimental switch is a separate
+       question and does not belong in this list: the switch decides whether the
+       *bar draws the button*, and a shared URL must show two people the same
+       band whatever their switches say
+       (docs/project/experimental-features.md). */
     const ALWAYS_FREE: Mode[] = [
       "plain",
       "hierarchy",
       "outline",
+      "structure",
       "summary",
       "diagram",
       "search",
@@ -314,6 +324,10 @@ describe("what a visitor is told, mode by mode", () => {
         mode === "plain" ||
         mode === "hierarchy" ||
         mode === "outline" ||
+        /* Same tree, third arrangement, and it reads no artefact at all — so a
+           visitor is short of nothing and there is no gap to report.
+           docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md. */
+        mode === "structure" ||
         mode === "glossary" ||
         mode === "summary" ||
         mode === "ideas" ||

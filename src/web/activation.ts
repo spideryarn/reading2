@@ -237,6 +237,7 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   plain: { kind: "none", reason: "the article and nothing else — there is nothing to generate" },
   hierarchy: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
   outline: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
+  structure: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
   summary: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
 
   /* Nothing exists to fill until the reader has typed. */

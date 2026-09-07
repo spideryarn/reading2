@@ -217,8 +217,13 @@ export const VIEW_LABEL: Record<Exclude<ArticleView, "article">, string> = {
 };
 
 /**
- * **Which of the fourteen middle-band modes, by the name the Dock uses**, so that
- * the tab and the button the reader pressed to get there say the same word.
+ * **Which of the middle-band modes, by the name the Dock uses**, so that the tab
+ * and the button the reader pressed to get there say the same word.
+ *
+ * It said "the fourteen middle-band modes" until 2026-09-07, and the number came
+ * out rather than being incremented: nothing counts the modes, and a count in a
+ * comment is one of the eight places promoting Quotes had to edit arithmetic
+ * (docs/project/new-mode.md § Moving a mode in or out of the switch).
  *
  * Here rather than in src/web/page-title.ts because the server composes this
  * title too — `/read/<slug>?mode=glossary` is served with `· Glossary` already
@@ -243,4 +248,5 @@ export const MODE_LABEL: Record<Mode, string> = {
   chat: "Chat",
   remember: "Remember",
   debate: "Debate",
+  structure: "Structure",
 };

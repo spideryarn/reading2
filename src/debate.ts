@@ -167,7 +167,8 @@ import { sameTarget, webLinks } from "./urls.js";
 import { anyLost, distinctSources, isDebateDocument } from "./types.js";
 /* The model-free half of group one's evidence: what this page shares with this
    article, both ways round. src/shingles.ts. */
-import { articleShingles, isCopy, shingleOverlap } from "./shingles.js";
+import { articleShingles, isArticleText, isCopy, shingleOverlap } from "./shingles.js";
+import type { ArticleBlockText, ShingleOverlap } from "./shingles.js";
 
 export { anyLost, distinctSources, isDebateDocument };
 export type {
@@ -512,21 +513,36 @@ export function namesArticle(witness: string, article: ArticleIdentity): boolean
  * page that links it *and* names it should say both in the tooltip.
  */
 export function namesArticleBy(witness: string, article: ArticleIdentity): ArticleNaming | null {
-  let url: string | null = null;
-  if (article.url) {
-    /* `webLinks` rather than a second URL pattern: it already knows where a bare
-       address stops, hands back the sentence's full stop, and refuses the
-       credential form. */
-    for (const link of webLinks(witness)) {
-      if (sameTarget(link.url, article.url)) {
-        url = link.url;
-        break;
-      }
-    }
-  }
-
+  const url = linkTo(witness, article.url);
   const by = namedInText(witness, article);
   return url === null && by === null ? null : { url, by };
+}
+
+/**
+ * **The article's own address, as this text spells it** — the link branch of the
+ * rule above, on its own, because two callers now need it over two different
+ * strings.
+ *
+ * `namesArticleBy` asks it of the **witness**, which is the directness check and
+ * stays exactly as it was — that rule is load-bearing and was the fix for this
+ * file's worst bug (Sol's F24). `readDirectGroup` asks it of the **whole
+ * extract**, which is the evidence list: the model is asked for *one* valid
+ * witness, not every witness, so a page whose extract plainly contains the
+ * article's URL but whose chosen witness is the title was recorded as `named`
+ * only — and the default bar then hid a genuine linked response while the
+ * tooltip, which promises every signal found, listed one that was not the
+ * strongest (Sol's F3, 2026-09-06).
+ *
+ * `webLinks` rather than a second URL pattern: it already knows where a bare
+ * address stops, hands back the sentence's full stop, and refuses the credential
+ * form.
+ */
+function linkTo(text: string, articleUrl: string | null): string | null {
+  if (!articleUrl) return null;
+  for (const link of webLinks(text)) {
+    if (sameTarget(link.url, articleUrl)) return link.url;
+  }
+  return null;
 }
 
 /** The title branch of the rule above, on its own. */
@@ -663,8 +679,12 @@ export interface GroupInput {
    * `quoted` signal a real block id to point at — so this moved up from
    * `ClaimGroupInput` on 2026-09-06 and that interface, having nothing else in
    * it, went with it.
+   *
+   * **The value carries the kind as well as the text**, so that "headings are
+   * not quotation evidence" (`articleShingles`) is a filter over *one* map
+   * rather than a second map beside this one that could disagree with it.
    */
-  blockText: ReadonlyMap<string, string>;
+  blockText: ReadonlyMap<string, ArticleBlockText>;
 }
 
 /** The shared half of one row, or the reason it is not shown. */
@@ -821,25 +841,91 @@ export function readDirectGroup(
 
     const overlap = shingleOverlap(article, excerpt);
     /* **The ceiling, before the row is kept.** A mirror is the most convincing
-       row on the screen and the least worth showing. */
-    if (isCopy(overlap)) return { ok: false, reason: "sourceIsCopy" };
+       row on the screen and the least worth showing.
 
-    const identifies: IdentificationSignal[] = [];
-    if (naming.url !== null) identifies.push({ kind: "linked", url: naming.url });
-    if (overlap.hit) {
-      identifies.push({
-        kind: "quoted",
-        quote: overlap.hit.quote,
-        blockId: overlap.hit.blockId as BlockId,
-        coverage: overlap.coverage,
-        density: overlap.density,
-      });
+       **Two signals, not one.** `isCopy` judges the extract, and a search engine
+       can hand back a long blockquote plus one short rebuttal — which is what a
+       fisking looks like, and it was refused with the reader told the page was a
+       copy of the article (Sol's F2). So the row's own verified `sourceQuote`
+       has to be article text too: a mirror has no words of its own, a fisking's
+       are its own rebuttal sentence. Measured over the ten rows the model
+       reported across the three journals, this refuses none of them. */
+    if (isCopy(overlap) && isArticleText(article, shared.base.sourceQuote)) {
+      return { ok: false, reason: "sourceIsCopy" };
     }
-    if (naming.by !== null) identifies.push({ kind: "named", by: naming.by, witness });
-    /* Non-empty by construction: `naming` is one or both of its two halves, and
-       either one puts a signal in this list. */
+
+    /* **Both signals are read off the whole extract**, not off the witness —
+       see `linkTo`. The witness still has to name the article, which is the
+       directness rule and is unchanged; this list records what is *there*,
+       because the model is asked for one valid witness and not for every one.
+       Neither can weaken the row: `linkTo` over the extract is the same question
+       asked of more text, and `named` is the weakest arm, so it can add to a
+       tooltip and never move a level. */
+    const linked = linkTo(excerpt, opts.article.url);
+    const named = naming.by ?? namedInText(excerpt, opts.article);
+
+    /* **A witness link that does not survive being read in context is not a
+       link** (Sol, on the first draft of this fix). The witness is an arbitrary
+       slice, so an address that *ends* the slice parses as this article there
+       and as a longer, different address — a `…-2026` successor — in the whole
+       extract. Carrying the witness's reading forward as a fallback put a
+       successor page on screen at `linked` with a tooltip claiming a link the
+       page does not have, which is the class this stage contains. When neither
+       signal survives, the page named nothing this run can stand behind. **This
+       is also what keeps `identifies` non-empty**, which the type requires. */
+    if (linked === null && named === null) {
+      return { ok: false, reason: "directnessUnverified" };
+    }
+
+    /* Non-empty by construction: the refusal above is exactly the case where
+       neither `linked` nor `named` would put anything in this list. */
+    const identifies = signalsOf({
+      linked,
+      named,
+      overlap,
+      /* The model's own witness when it was the thing that named the article,
+         and the extract's own occurrence of the title when it was not — the same
+         discipline `locate` follows everywhere else here: what is shown as
+         coming from a page is that page's spelling of it. */
+      witness:
+        naming.by !== null
+          ? witness
+          : (locate(excerpt, collapse(opts.article.title ?? "")) ?? witness),
+    });
     return { ok: true, row: { ...shared.base, articleReferenceQuote: witness, identifies } };
   });
+}
+
+/**
+ * **The evidence list, in the strength order the arms are declared in** —
+ * `IdentificationSignal` (src/types.ts), which `identificationLevel` reads.
+ *
+ * Its own function so that the rule *above* it — which rows are refused — stays
+ * legible beside it rather than trailing off into list-building; the three
+ * questions have already been answered by the time this is called, and it
+ * decides nothing.
+ */
+function signalsOf(found: {
+  linked: string | null;
+  named: ArticleNaming["by"];
+  overlap: ShingleOverlap;
+  witness: string;
+}): IdentificationSignal[] {
+  const signals: IdentificationSignal[] = [];
+  if (found.linked !== null) signals.push({ kind: "linked", url: found.linked });
+  if (found.overlap.hit) {
+    signals.push({
+      kind: "quoted",
+      quote: found.overlap.hit.quote,
+      blockId: found.overlap.hit.blockId as BlockId,
+      coverage: found.overlap.coverage,
+      density: found.overlap.density,
+    });
+  }
+  if (found.named !== null) {
+    signals.push({ kind: "named", by: found.named, witness: found.witness });
+  }
+  return signals;
 }
 
 /**
@@ -862,9 +948,12 @@ export function readClaimGroup(
   return readGroupWith(rows, MAX_CLAIM_ROWS, opts, webSearches, (row, shared) => {
     if (!shared.ok) return shared;
     const blockId = str(row.blockId);
-    const text = opts.blockText.get(blockId);
-    if (text === undefined) return { ok: false, reason: "unknownBlockId" };
-    const claimQuote = locate(text, str(row.claimQuote));
+    /* **Any block, headings included.** The heading rule is quotation evidence's
+       alone: a `claimQuote` the model located in a heading is a real passage of
+       this article and resolves the same way it always did. */
+    const block = opts.blockText.get(blockId);
+    if (block === undefined) return { ok: false, reason: "unknownBlockId" };
+    const claimQuote = locate(block.text, str(row.claimQuote));
     if (claimQuote === null) return { ok: false, reason: "claimNotInBlock" };
     return { ok: true, row: { ...shared.base, claimQuote, blockId: blockId as BlockId } };
   });
@@ -1712,12 +1801,14 @@ export async function generateDebate(opts: {
 }
 
 /**
- * The text a `claimQuote` is looked up in, by block id.
+ * The text a `claimQuote` is looked up in, by block id — **and what each block
+ * is**, which is what lets `articleShingles` keep headings out of the quotation
+ * evidence without a second map to disagree with this one.
  *
  * **The same blocks the prompt was built from**, filtered by `isBodyEvidence` —
  * so a model naming a block it was never shown is `unknownBlockId` rather than a
  * quote checked against a caption the article does not really argue in.
  */
-export function blockTextById(blocks: readonly Block[]): Map<string, string> {
-  return new Map(blocks.map((b) => [b.id, b.text]));
+export function blockTextById(blocks: readonly Block[]): Map<string, ArticleBlockText> {
+  return new Map(blocks.map((b) => [b.id, { text: b.text, kind: b.kind }]));
 }

@@ -19,6 +19,7 @@ import type { ArcCell, SummaryNode } from "./tree.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { NodeId, TreeNode } from "../types.js";
 import { onFontsChanged } from "./fonts.js";
+import { ModeSurface } from "./ModeSurface.js";
 
 interface Props {
   /** The tree, nested and numbered. Null if it is unusable. */
@@ -304,12 +305,15 @@ export function OutlinePanel({
   const rowId = (r: OutlineRow) => `outln-${r.node.id}`;
 
   return (
-    <aside
-      className="mode-band outln"
-      aria-label="Outline"
+    <ModeSurface
+      feature="outln"
+      label="Outline"
+      /* **The band Outline measures**, so the ref goes to the surface's own
+         `ref` prop and lands on the same `<aside>` it always did. */
       ref={panelRef}
       /* Evidence about the decision, never about the fit — a browser session
-         can read which rung was chosen.
+         can read which rung was chosen. Reaches the element through the
+         surface's `{...rest}` passthrough, which exists for this attribute.
          **Whether the chosen list actually fits is NOT asserted anywhere in
          the test suite**, and this comment used to say it was, contradicting
          that test file's own preamble. jsdom does no layout, so
@@ -358,7 +362,7 @@ export function OutlinePanel({
           </ol>
         ))}
       </div>
-    </aside>
+    </ModeSurface>
   );
 }
 

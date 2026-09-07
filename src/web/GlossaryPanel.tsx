@@ -104,6 +104,7 @@ import type { StepFailure } from "./useStepJob.js";
 import { builtButEmpty, codeOfMessage } from "../messages.js";
 import { MAX_ASKED_TERM } from "../asked-term.js";
 import { JobProgress } from "./JobProgress.js";
+import { ModeSurface } from "./ModeSurface.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
 
@@ -247,31 +248,60 @@ export function GlossaryPanel({
   const [withProfile, setWithProfile] = useState(() => (glossary ? (owner?.profiled ?? false) : true));
 
   return (
-    <aside className="mode-band gloss" aria-label="Glossary">
-      <div className="band-head">
-        {/* The mode's name went on 2026-09-05 — the Dock says it, and saying it
-            twice was the clutter Greg asked us to clear (§ Stage 5 of
-            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-            stays, because what follows is a count rather than a name. */}
-        {glossary && (
-          <span className="gloss-count">
-            {glossary.entries.length} {glossary.entries.length === 1 ? "term" : "terms"}
-          </span>
-        )}
-        {/* A label rather than a control, and on the head line rather than in a
-            banner: it is provenance, not a warning. The glossary already made
-            this exact choice once — "a label instead of a warning triangle" —
-            and the reason holds. src/web/WrittenForYou.tsx. */}
-        {/* Provenance about the owner's own run, so a visitor sees none of it:
-            `profileHash` never leaves the server (src/public-types.ts). */}
-        {glossary && owner && (
-          <WrittenForYou
-            written={owner.profiled}
-            changed={owner.profileChanged}
+    <ModeSurface
+      label="Glossary"
+      feature="gloss"
+      /* **A fragment, not a conditional** — and that is the whole trap of this
+          migration. Both children below are gated on `glossary`, so while the
+          list is still coming this row is empty; a `head={glossary && …}` would
+          hand the surface `null` and it would render no `.band-head` at all,
+          deleting a row that is on screen today. The fragment is always
+          present, and the conditionals live inside it. */
+      head={
+        <>
+          {/* The mode's name went on 2026-09-05 — the Dock says it, and saying
+              it twice was the clutter Greg asked us to clear (§ Stage 5 of
+              docs/plans/260905d-declutter-the-reading-view-top-bars.md). The
+              row stays, because what follows is a count rather than a name. */}
+          {glossary && (
+            <span className="gloss-count">
+              {glossary.entries.length} {glossary.entries.length === 1 ? "term" : "terms"}
+            </span>
+          )}
+          {/* A label rather than a control, and on the head line rather than in
+              a banner: it is provenance, not a warning. The glossary already
+              made this exact choice once — "a label instead of a warning
+              triangle" — and the reason holds. src/web/WrittenForYou.tsx. */}
+          {/* Provenance about the owner's own run, so a visitor sees none of it:
+              `profileHash` never leaves the server (src/public-types.ts). */}
+          {glossary && owner && (
+            <WrittenForYou
+              written={owner.profiled}
+              changed={owner.profileChanged}
+              slug={owner.slug}
+            />
+          )}
+        </>
+      }
+      /* Pinned under the scroller rather than at the end of it, which is what
+          `foot` is for. The guard is the one it had as a trailing child: the
+          run row belongs to an owner whose glossary has arrived. */
+      foot={
+        glossary && (owner === null || owner.status === "ready") && owner?.glossary ? (
+          <Foot
+            job={owner.job}
+            starting={owner.starting}
+            failed={owner.failed}
+            onMore={owner.more}
+            onCancel={owner.cancel}
+            withProfile={withProfile}
+            onWithProfile={setWithProfile}
+            hasProfile={owner.hasProfile}
             slug={owner.slug}
           />
-        )}
-      </div>
+        ) : null
+      }
+    >
 
       {/* **Above the list and above the sort**, because it is the way in rather
           than a way of arranging what is already there — and because a reader
@@ -482,23 +512,9 @@ export function GlossaryPanel({
               ))}
             </ol>
           </div>
-
-          {owner?.glossary && (
-            <Foot
-              job={owner.job}
-              starting={owner.starting}
-              failed={owner.failed}
-              onMore={owner.more}
-              onCancel={owner.cancel}
-              withProfile={withProfile}
-              onWithProfile={setWithProfile}
-              hasProfile={owner.hasProfile}
-              slug={owner.slug}
-            />
-          )}
         </>
       )}
-    </aside>
+    </ModeSurface>
   );
 }
 

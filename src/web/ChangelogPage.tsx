@@ -10,7 +10,7 @@
  *
  * ## The file reaches the browser through Vite's `?raw`
  *
- * No API route, no database: `docs/changelog/versions.ndjson` is 210 KB of
+ * No API route, no database: `src/web/changelog-versions.ndjson` is 210 KB of
  * committed text, and the simplest thing that ships it is a build-time string
  * import, parsed with `parseChangelog` (src/changelog.ts) exactly as the
  * writer re-reads its own output. **That import lives inside this,
@@ -49,9 +49,15 @@ import {
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SiteFooter } from "./SiteFooter.js";
-// The 210 KB the header above is about. Only ever reached through this
-// lazily-loaded module — see LazyPage.tsx and App.tsx § loadChangelog.
-import versionsText from "../../docs/changelog/versions.ndjson?raw";
+/* The 210 KB the header above is about. Only ever reached through this
+   lazily-loaded module — see LazyPage.tsx and App.tsx § loadChangelog.
+
+   **Beside this file, and that is not a filing preference.** It lived in
+   `docs/`, which `.vercelignore` prunes out of the upload, so the import
+   resolved on every laptop and in the deploy's own `build` gate and failed on
+   Vercel alone —
+   docs/postmortems/260907a-an-import-into-a-vercelignored-directory-built-everywhere-except-vercel.md. */
+import versionsText from "./changelog-versions.ndjson?raw";
 
 /** What each section is called on the page, in the order `changelog.md` sets. */
 const SECTION_LABEL: Record<Section, string> = {

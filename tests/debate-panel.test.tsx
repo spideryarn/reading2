@@ -52,7 +52,9 @@ import type {
   DebateLosses,
   DebateValence,
   DirectDebateRow,
+  IdentificationLevel,
 } from "../src/types.js";
+import { DEBATE_LEVEL_DEFAULT } from "../src/web/debate-levels.js";
 import type { UseDebate } from "../src/web/useDebate.js";
 import {
   DEBATE_CLAIMS_FOLLOW,
@@ -175,12 +177,27 @@ let host: HTMLDivElement;
 let root: Root;
 const jumped: BlockId[] = [];
 
-function paint(o: UseDebate) {
+/** Every level the bar was dragged to, in order — `null` is its reset. */
+const levelled: (IdentificationLevel | null)[] = [];
+
+/**
+ * **The bar is wound fully open unless a test is about the bar.**
+ *
+ * `?name=` defaults to `quoted`, and the fixture row above is `named`-only — so
+ * every test in this file that is about *rows* would otherwise be testing the
+ * threshold by accident, and would go green again the day somebody broke it in
+ * the other direction. `named` is *show everything*, which is what these tests
+ * mean when they say "the panel draws two rows". The section that owns the bar
+ * passes `null`, which is what a reader who has never touched it sends.
+ */
+function paint(o: UseDebate, level: IdentificationLevel | null = "named") {
   act(() => {
     root.render(
       createElement(DebatePanel, {
         access: { kind: "owner", owner: o },
         onJump: (id: BlockId) => jumped.push(id),
+        level,
+        onLevel: (next: IdentificationLevel | null) => levelled.push(next),
       }),
     );
   });
@@ -190,6 +207,7 @@ const text = () => host.textContent ?? "";
 
 beforeEach(() => {
   jumped.length = 0;
+  levelled.length = 0;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -774,6 +792,232 @@ describe("searchedAt is displayed provenance, not staleness", () => {
        the article changing is a separate fact with its own banner. */
     expect(text()).toContain("Searched on");
     expect(text()).toContain("The article has changed");
+  });
+});
+
+/**
+ * **The identification bar, on the panel.**
+ *
+ * The rule itself is tested without a DOM in debate-bar.test.ts; what is here is
+ * everything that can only go wrong once it is drawn — and the shape of every
+ * one of them is *a number that disagrees with the list under it*, which
+ * threshold.ts names as this feature's worst failure.
+ *
+ * The three counts a reader can see at once are the reason this section is long:
+ * the head's **pages behind the rows on screen**, the bar's **responses it is
+ * holding back**, and the foot's **pages each search returned**. They are three
+ * different facts and they have to stay three different facts.
+ */
+describe("the bar over how firmly a page identifies this article", () => {
+  const quoted = (over: Partial<DirectDebateRow> = {}) =>
+    direct({
+      id: "spya-d2w4r7",
+      url: "https://quoting.example/reply",
+      identifies: [
+        {
+          kind: "quoted",
+          quote: "a starter needs cool water",
+          blockId: KNOWN,
+          coverage: 0.04,
+          density: 0.13,
+        },
+      ],
+      ...over,
+    });
+
+  it("hides a page that only names this piece, when nobody has touched it", () => {
+    /* `null` is what a reader who has never touched the bar sends, and the panel
+       resolves it to `quoted` — Greg's *"important that the commentary be about
+       the article being read here"*. The fixture row names the piece and nothing
+       more, which on the decoy article is a page about a different document
+       sharing a title. */
+    paint(owner(), null);
+    expect(DEBATE_LEVEL_DEFAULT).toBe("quoted");
+    expect(host.querySelectorAll(".dbt-item")).toHaveLength(1);
+    expect(text()).not.toContain("Names this piece");
+    /* The positive control: the same row, same everything, one stop to the left. */
+    paint(owner(), "named");
+    expect(host.querySelectorAll(".dbt-item")).toHaveLength(2);
+    expect(text()).toContain("Names this piece");
+  });
+
+  it("says how many it is holding back, and calls them responses rather than pages", () => {
+    /* Two page counts are already on this screen — the head's and the searches'
+       — so a third noun for a third fact would be three numbers all called
+       pages. `hiddenNote` counts rows, and a direct row is a page that responds
+       to this piece, which is the word the lead sentence already uses. */
+    paint(owner(), null);
+    expect(text()).toContain("1 response is hidden by this threshold");
+    expect(text()).toContain("Drag the slider left to show it");
+  });
+
+  it("says so even when it is holding nothing back", () => {
+    /* Present wherever the control is, absent wherever it is not. A line that
+       goes missing for a *different* reason teaches the reader nothing. */
+    paint(owner(), "named");
+    expect(host.querySelector(".dbt-bar-note")?.textContent).toBe(
+      "Nothing is hidden by this threshold.",
+    );
+  });
+
+  it("counts only direct rows, however many claim rows are under it", () => {
+    /* The failure this whole section exists for. Claim rows carry no level, are
+       never hidden by the bar, and must be in neither of its numbers — so a
+       `0 of 1` sits over a list of three rows, and that is correct. */
+    paint(
+      owner({
+        debate: artefact({
+          direct: { rows: [direct()], counts: counts({ reportedRows: 1, keptRows: 1 }) },
+          claims: {
+            rows: [
+              claim(),
+              claim({ id: "spya-c7w2d3", url: "https://third.example/x" }),
+              claim({ id: "spya-c7w2d4", url: "https://fourth.example/y" }),
+            ],
+            counts: counts({ returnedSources: 3, reportedRows: 3, keptRows: 3 }),
+          },
+        }),
+      }),
+      null,
+    );
+    expect(host.querySelector(".dbt-bar-value")?.textContent).toBe("quotes it · 0 of 1");
+    expect(text()).toContain("1 response is hidden by this threshold");
+    expect(text()).not.toContain("4 responses");
+    expect(host.querySelectorAll(".dbt-item")).toHaveLength(3);
+    expect(host.querySelectorAll(".dbt-mark-claim")).toHaveLength(3);
+  });
+
+  it("keeps the count beside the slider equal to the direct rows it drew", () => {
+    /* One pass, two readings of it: the `N of M` and the list. The only way they
+       can disagree is if somebody walks the list twice with two copies of the
+       rule. */
+    const rows = [direct(), quoted(), direct({ id: "spya-d2w4r8", url: "https://third.example/z" })];
+    paint(
+      owner({
+        debate: artefact({ direct: { rows, counts: counts({ reportedRows: 3, keptRows: 3 }) } }),
+      }),
+      null,
+    );
+    expect(host.querySelector(".dbt-bar-value")?.textContent).toBe("quotes it · 1 of 3");
+    expect(host.querySelectorAll(".dbt-mark-quoted")).toHaveLength(1);
+    expect(host.querySelectorAll(".dbt-mark-named")).toHaveLength(0);
+    expect(text()).toContain("2 responses are hidden by this threshold");
+  });
+
+  it("moves the head count with the bar, because it counts what is on screen", () => {
+    /* `7 pages` over four rows is the same disagreement one line up. */
+    paint(owner({ debate: artefact({ claims: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) } }) }), "named");
+    expect(host.querySelector(".gloss-count")?.textContent).toBe("1 page");
+    paint(owner({ debate: artefact({ claims: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) } }) }), null);
+    expect(host.querySelector(".gloss-count")?.textContent).toBe("0 pages");
+  });
+
+  it("hands the drag back as a word, and one stop left shows the row again", () => {
+    paint(owner(), null);
+    const slider = document.getElementById("dbt-bar") as HTMLInputElement | null;
+    expect(slider, "the bar must be on screen to be dragged").not.toBeNull();
+    expect(slider?.value).toBe("1");
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    act(() => {
+      setter?.call(slider, "0");
+      slider?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    /* **The word, never the index.** The rank exists only so `applyThreshold`
+       has a number; a number in the URL would be the score this feature
+       refused. */
+    expect(levelled).toEqual(["named"]);
+    paint(owner(), "named");
+    expect(host.querySelectorAll(".dbt-item")).toHaveLength(2);
+  });
+
+  it("offers a reset only once the reader has moved it", () => {
+    paint(owner(), null);
+    expect(host.querySelector(".dbt-bar-reset")).toBeNull();
+    paint(owner(), "linked");
+    const reset = host.querySelector<HTMLButtonElement>(".dbt-bar-reset");
+    expect(reset).not.toBeNull();
+    act(() => {
+      reset?.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 }));
+    });
+    /* `null`, not the word `quoted`: *back to untouched* is the state the reset
+       exists to reach, and it is the one that keeps the default in one file. */
+    expect(levelled).toEqual([null]);
+  });
+
+  it("says nothing extra when the bar has hidden every response", () => {
+    /* The fourth empty state, and it is deliberately silent: `hiddenNote` has
+       already said what happened, and the lead sentence's subject is what the
+       *search* came back with. Telling a reader the search found nothing when
+       they hid it themselves would be false. */
+    paint(owner(), null);
+    expect(text()).not.toContain(DEBATE_RESPONSES_NONE);
+    expect(text()).not.toContain(debateResponsesUnverified(2));
+    /* Not *"All 1 response"* — `hiddenNote` drops the "All" at one, because it
+       tells the reader nothing the count does not and is not English. */
+    expect(text()).toContain("1 response is hidden by this threshold");
+    /* The positive control: a group that really is empty still says so. */
+    paint(
+      owner({
+        debate: artefact({
+          direct: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) },
+        }),
+      }),
+      null,
+    );
+    expect(text()).toContain(DEBATE_RESPONSES_NONE);
+  });
+
+  it("draws no bar at all when the search kept no responses to threshold", () => {
+    /* A control that cannot change anything, over a foot line saying "nothing is
+       hidden by this threshold" under an empty list, would read as an
+       explanation of the emptiness. `leadNote` owns that sentence. */
+    paint(
+      owner({
+        debate: artefact({
+          direct: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) },
+        }),
+      }),
+      null,
+    );
+    expect(host.querySelector(".dbt-bar")).toBeNull();
+    expect(text()).not.toContain("hidden by this threshold");
+  });
+
+  it("never tells the reader a row is shown when the bar has taken it away", () => {
+    /* `keptNote` is arithmetic about the run and says *kept*, not *shown*, since
+       the bar arrived. The counts here are the artefact's own and do not move
+       with the threshold — the sentence would be a lie in exactly the place this
+       panel has to be trustworthy about numbers. */
+    paint(
+      owner({
+        debate: artefact({
+          direct: { rows: [direct(), quoted()], counts: counts({ reportedRows: 3, keptRows: 2 }) },
+        }),
+      }),
+      null,
+    );
+    const foot = host.querySelector(".dbt-foot")?.textContent ?? "";
+    expect(foot).toContain("2 were kept");
+    expect(foot).not.toContain("are shown");
+    expect(host.querySelectorAll(".dbt-item")).toHaveLength(2);
+  });
+
+  it("counts the pages contributing to the rows shown, not to the rows hidden", () => {
+    /* `sourcesNote` ends *"contribute to the rows shown"*, so the bar decides
+       which those are. Leaving it on the whole group would keep the figure
+       looking right while the words went false. */
+    paint(
+      owner({
+        debate: artefact({
+          direct: {
+            rows: [direct(), quoted()],
+            counts: counts({ returnedSources: 5, reportedRows: 2, keptRows: 2 }),
+          },
+        }),
+      }),
+      null,
+    );
+    expect(text()).toContain("returned evidence from 5 pages; 1 contributes to the rows shown");
   });
 });
 
