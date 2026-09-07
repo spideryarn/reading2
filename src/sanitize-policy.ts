@@ -52,7 +52,7 @@ import type { Config, DOMPurify } from "dompurify";
  * against a policy, and this names the policy. Tying it to the dependency would
  * re-sanitise every article in the library on every patch release, for nothing.
  */
-export const SANITIZER_VERSION = 5;
+export const SANITIZER_VERSION = 6;
 /* 1 → 2 on 2026-08-27: the policy now strips URLs pointing at our own `/api/`
    (see `isOwnApi`). Stricter, so every artefact stored under 1 was cleaned by a
    policy that has never seen this rule and has to be re-cleaned on next read —
@@ -79,7 +79,17 @@ export const SANITIZER_VERSION = 5;
    sanitiser" warn, until stage 3 is re-run for it — nothing is
    rewritten and no reader sees a difference. GPT Sol's finding 8, reviewing
    docs/plans/260902f-make-referee-mode-understandable.md, and the change that
-   added `data-dir` had forgotten it. */
+   added `data-dir` had forgotten it.
+
+   5 → 6 on 2026-09-07: `data-quote`, `data-quote-start`, `data-quote-end` and
+   `data-wash` are forbidden — the attributes that draw a quote as an outline
+   and decide whether a search wash appears. Stricter again, same reasoning: an
+   artefact cleaned under 5 could be carrying a forged priority stroke, which is
+   our claim about which passages of the piece matter most, printed on a
+   sentence its author picked. Found by a GPT Sol review of
+   docs/plans/260907c-quotes-drawn-as-a-stroke-in-the-prose-with-weight-carrying-priority.md
+   **before the attributes existed** — the third time in this list that a change
+   adding an annotation attribute would otherwise have forgotten this file. */
 
 /**
  * Video embeds, by exact origin and path prefix.
@@ -224,6 +234,18 @@ export const ARTICLE_CONFIG: Config = {
        a phrase, so an article shipping its own would be a stranger's document
        telling our reader that we called their sentence bad. */
     "data-dir",
+    /* **The quote outline and its two end-caps, and the switch that turns the
+       search wash on.** Since 2026-09-07 a quote is drawn as a stroke rather
+       than a fill, and these four are what the stylesheet keys it off:
+       `data-quote` carries the tier, so a forged one is *our* "this is one of
+       the most important passages in the piece" printed on a sentence the
+       author chose; `data-quote-start` / `data-quote-end` decide where the
+       outline is capped; and `data-wash` is what says a search hit is here at
+       all, so an article shipping its own could paint a passage as something a
+       reader's saved search had found. Same reason as `data-hit` and
+       `data-hues`, which were forgotten once already — see the version history
+       above, twice. */
+    "data-quote", "data-quote-start", "data-quote-end", "data-wash",
     "data-open", "data-cmt-open", "data-chat-open", "data-hit-open", "data-term-open",
     /* The enlarge wrapper's own attribute (src/web/zoomable.ts). It decides
        whether the figure is laid out inline or as a block, so an article that

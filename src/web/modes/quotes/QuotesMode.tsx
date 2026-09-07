@@ -19,7 +19,7 @@ import { barParam, quoteParam, rankParam } from "../../params.js";
 import { usePassageLifecycle } from "../../passage-lifecycle.js";
 import { useRenderCount } from "../../perf.js";
 import { useQuotes } from "../../useQuotes.js";
-import { effectiveRank, markedQuotes, QuotesPanel } from "../../QuotesPanel.js";
+import { effectiveRank, markedQuotes, quoteTier, QuotesPanel } from "../../QuotesPanel.js";
 
 /**
  * Quotes, and the fetch that belongs to it.
@@ -197,7 +197,14 @@ function useQuotesMode({
      stored offset is measured in `block.text` and this resolution happens in
      the rendered text. It is still on the artefact, because it is what
      `inDocumentOrder` sorts two quotes from one paragraph by. */
-  const found = useMemo(() => resolveQuotes(blocks, listed), [listed, blocks]);
+  /* The tier is attached here rather than inside `resolveQuotes`, so the
+     resolver stays a thing that turns text into spans and never learns what a
+     score is — and so `search-hits.ts`, which the node tests load, does not have
+     to import a React module to find `quoteTier`. */
+  const found = useMemo(
+    () => resolveQuotes(blocks, listed.map((quote) => ({ ...quote, tier: quoteTier(quote) }))),
+    [listed, blocks],
+  );
 
   /* The ring, computed from the selection rather than looked up in `found`: a
      quote whose block the article has lost resolves to nothing, and the honest
