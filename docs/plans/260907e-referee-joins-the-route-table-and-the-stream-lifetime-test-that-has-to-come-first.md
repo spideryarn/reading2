@@ -301,6 +301,34 @@ pasted into this doc. A test never seen red is not evidence:
 The fourth is only runnable once Stage 2 exists; it is the acceptance test for the move itself. All
 four are reverted immediately and none is committed.
 
+#### Stage 1, as built — and the three mutations, watched
+
+`tests/referee-stream-lifetime.test.ts`, 8 cases, green against the routes **still in the chain**;
+`tests/store-migration-registry.ts` gains the lane and the registry entry a new Postgres suite needs.
+Nine files / 589 tests green together, `npm run typecheck` clean.
+
+The mutations were run one at a time against the unmoved routes, and each failed on its own
+assertion and no other:
+
+| Mutation | Result |
+|---|---|
+| `await` → `void` in the criteria guard | **red**, 2 cases: *"the request answered while the stream was still running: expected true to be false"*, and the propagation case, which an un-awaited rejection cannot reach |
+| `refereeing.delete(key)` deleted from the `finally` | **red**, 1 case: *"the key was never released, so the sweep spared it: expected 'pending' to be 'error'"* |
+| the release moved above the blocked work | **red**, 1 case: *"an aged row survived only if the lock is held: expected 'error' to be 'pending'"* |
+
+The middle row is the one that justifies the review: **that is the mutation my first oracle stayed
+green under.** `git diff HEAD -- src/routes.ts` was empty afterwards, so nothing leaked into the
+commit.
+
+Two things I got wrong while building it, both caught by the suite rather than by reading:
+
+- backdating **every** row of the article violated `referee_criteria_attempt_both`, because `finish`
+  clears the attempt pair and my update stamped a time onto a row with no attempt id. Aging only
+  `pending` rows is both the fix and what the cases actually mean.
+- proving release via `refereeCriteriaStore.begin(…, sameId)` made the case depend on
+  `withCriterion`'s reset policy — it returned the row still `done`. The row is now put back to
+  `pending` directly, so the case is about the lock and nothing else.
+
 ### Stage 2 — the move
 
 Eight rows appended to `AUTH_ROUTES`, **prepended above the jobs rows in the chain's order**, so the
