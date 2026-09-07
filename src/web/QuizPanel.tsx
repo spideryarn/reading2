@@ -61,6 +61,7 @@ import { BlockRef } from "./BlockRef.js";
 import { CitedText } from "./Cited.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { JobProgress } from "./JobProgress.js";
+import { ModeSurface } from "./ModeSurface.js";
 import { TooltipGroup } from "./Tooltip.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
 import { armActivation } from "./activation.js";
@@ -321,14 +322,27 @@ export function QuizPanel({
   };
 
   return (
-    <aside className="mode-band gloss quiz" aria-label="Quiz">
-      <div className="band-head">
-        {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
-            docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-            stays for the Recall | Quiz control, which is the one thing here the
-            Dock does *not* say. */}
-        {subMode}
-      </div>
+    <ModeSurface
+      label="Quiz"
+      feature="gloss quiz"
+      /* **A fragment, because `subMode` is an optional prop.** `RememberBand`
+          passes one on every render, so an empty row is not a state a reader
+          can reach — but `head={subMode}` would hand the surface `undefined`
+          for any caller that did not, and the row would vanish rather than sit
+          empty. The fragment is always a header. */
+      head={
+        <>
+          {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+              docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
+              stays for the Recall | Quiz control, which is the one thing here
+              the Dock does *not* say. */}
+          {subMode}
+        </>
+      }
+      /* Pinned under the question rather than at the end of it, on the same
+          guard it had as a trailing child of the band. */
+      foot={quiz && owner.status === "ready" ? <div className="quiz-rewrite">{run("Write them again")}</div> : null}
+    >
 
       {owner.error && <p className="gloss-error">{owner.error}</p>}
 
@@ -499,11 +513,9 @@ export function QuizPanel({
               </div>
             </TooltipGroup>
           )}
-
-          <div className="quiz-rewrite">{run("Write them again")}</div>
         </>
       )}
-    </aside>
+    </ModeSurface>
   );
 }
 

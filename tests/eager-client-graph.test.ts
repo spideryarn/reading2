@@ -447,8 +447,16 @@ const ROUTE_PRIVATE = [
  * `lucide-react` are recorded as external and never enter either closure — this
  * list is about *this repo's* modules, not about node_modules.
  *
- * Sorted, one per line, so a diff reads as a decision. 47 of them on
- * 2026-09-06, against a 264-file eager closure and a 51-file route closure.
+ * Sorted, one per line, so a diff reads as a decision.
+ *
+ * **There was a count in this sentence and it is gone** (2026-09-07). It said
+ * how many entries the list has, and it was wrong at the base of this merge —
+ * 45 written over 46 — so two branches each added entries, each carried the
+ * wrong total forward, and the two wrong totals conflicted. A number nobody can
+ * be wrong about is the one the test below already asserts, exactly and in both
+ * directions: an entry missing from the list fails, and an entry here that is
+ * not in both closures fails too. Prose restating a proved fact can go stale;
+ * the proof cannot.
  */
 const SHARED_WITH_READER = [
   "src/admin.ts",
@@ -489,6 +497,21 @@ const SHARED_WITH_READER = [
   "src/web/build-stamp.ts",
   "src/web/components/ui/button.tsx",
   "src/web/components/ui/toggle.tsx",
+  /* Arrived 2026-09-06 with debate's `?name=` bar, by the *first* of the two
+     zero-cost routes this list's header predicts, and it is the same shape as
+     `referee-views.ts` below: a categorical URL parameter needs its vocabulary
+     in one place, so `params.ts` — already here — imports it, and `params.ts` is
+     in both closures. The reader downloaded it already, through
+     `DebatePanel.tsx`; what is new is only that the lazy routes reach it.
+
+     **`threshold.ts` follows it in**, which is this list's second predicted
+     case: a module here gaining an import of its own. It is the one threshold
+     rule Glossary, Quotes and Search already share, so it has been in the
+     reader's eager closure since long before this — three eager panels import
+     it — and nothing about the admin closure reaching it costs a byte. Keeping
+     it out would mean splitting the ordering from the filtering it exists to
+     drive, which is the seam this module was made to close. */
+  "src/web/debate-levels.ts",
   "src/web/diagram.ts",
   "src/web/jump-history.ts",
   "src/web/lib/DataTable.tsx",
@@ -507,6 +530,8 @@ const SHARED_WITH_READER = [
   "src/web/referee-views.ts",
   "src/web/relative-time.ts",
   "src/web/router.ts",
+  /* See `debate-levels.ts` above, which is what brought it here. */
+  "src/web/threshold.ts",
   "src/web/useNow.ts",
 ];
 

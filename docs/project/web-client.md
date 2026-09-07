@@ -363,7 +363,7 @@ How it's put together, and what to know before touching it:
   Georgia, and it did not go away when the reading face became Geist in 2026-08-25 —
   light-on-dark bloom is about the contrast, not the face. The other half of the same fix is
   `--reading-weight: 450`; see
-  [design-css-overview.md § Typography](design-css-overview.md#typography).
+  [typography.md](typography.md).
 - **Soft and faint greys run the other way.** In [`src/web/styles/tokens.css`](../../src/web/styles/tokens.css),
   `--ink-soft` / `--ink-faint` now *descend* in lightness from `--ink` instead of ascending. Anything
   that read `color-mix(…, black)` to darken the orange became `color-mix(…, white)` to lift it — that

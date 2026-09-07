@@ -22,10 +22,13 @@ import {
   COPY_DENSITY,
   COPY_MIN_WINDOWS,
   articleShingles,
+  isArticleText,
   isCopy,
   shingleOverlap,
   shingleWindows,
 } from "../src/shingles.js";
+import type { ArticleBlockText } from "../src/shingles.js";
+import type { BlockKind } from "../src/types.js";
 
 /* ------------------------------------------------------------- the article -- */
 
@@ -36,8 +39,18 @@ import {
  * which is the condition the coverage ceiling failed under and the reason the
  * ceiling counts density instead.
  */
-const ARTICLE: [string, string][] = [
-  ["spya-aaaaa1", "What the tide clock cannot tell you"],
+type Fixture = [id: string, text: string, kind?: BlockKind];
+
+/**
+ * The article's blocks with their kinds, as `blockTextById` hands them over —
+ * `text` unless the fixture says otherwise, because **headings are not
+ * quotation evidence** and the shingler has to be told which is which.
+ */
+const blocksOf = (rows: readonly Fixture[]): Map<string, ArticleBlockText> =>
+  new Map(rows.map(([id, text, kind]) => [id, { text, kind: kind ?? "text" }]));
+
+const ARTICLE: Fixture[] = [
+  ["spya-aaaaa1", "What the tide clock cannot tell you", "heading"],
   [
     "spya-aaaaa2",
     "Every harbour office I have visited keeps a tide clock on the wall behind the counter, and " +
@@ -91,7 +104,7 @@ const ARTICLE: [string, string][] = [
   ],
 ];
 
-const article = articleShingles(new Map(ARTICLE));
+const article = articleShingles(blocksOf(ARTICLE));
 
 /* -------------------------------------------------------------- the pages -- */
 
@@ -204,6 +217,111 @@ describe("what counts as a window", () => {
   });
 });
 
+/* ------------------------------------------------------ headings are not prose -- */
+
+/**
+ * **A long title is not a quotation of the piece it titles** — GPT Sol's F1,
+ * 2026-09-06.
+ *
+ * Eight words reaching forty characters is a window, and plenty of titles are
+ * both, so an article whose H1 is long enough was quoting *itself*: a page that
+ * merely repeated the title earned `quoted`, cleared the default bar, and was
+ * shown as reception. That is the failure the whole file exists to prevent,
+ * arriving through the signal built to prevent it. The seven-word title above is
+ * exactly why no fixture could see it.
+ */
+describe("headings are not quotation evidence", () => {
+  const LONG_TITLE = "A careful guide to building reliable artificial intelligence systems at scale";
+  const PROSE =
+    "The second week is when the interesting regressions arrive, and by then nobody is looking " +
+    "at the evaluation suite that was written in the first.";
+
+  const titled = articleShingles(
+    blocksOf([
+      ["spya-fffff1", LONG_TITLE, "heading"],
+      ["spya-fffff2", PROSE],
+    ]),
+  );
+
+  it("takes no window from a heading, however long the heading is", () => {
+    /* Long enough on its own — the rule has to be about what the block *is*. */
+    expect(shingleWindows(LONG_TITLE).length).toBeGreaterThan(0);
+    expect(titled.windows.every((w) => w.blockId === "spya-fffff2")).toBe(true);
+  });
+
+  it("gives a page that only repeats the title no hit at all", () => {
+    const successor =
+      `${LONG_TITLE} — the new 2026 edition overturns the earlier advice on evaluation and ` +
+      "deployment, and replaces the checklist at the back of it entirely.";
+    expect(shingleOverlap(titled, successor).hit).toBeNull();
+  });
+
+  it("does not count a heading on the copy side either, so one rule holds both", () => {
+    /* The first draft kept headings in `blocks`, and a title long enough to
+       carry five windows then made an extract that is *only* the title read as
+       100% article words — dropped as `sourceIsCopy`, with the reader told the
+       page was a copy of the piece. Two false sentences about the same page,
+       from the two halves of one file. GPT Sol, on the first draft of this fix. */
+    const LONGER =
+      "A careful guide to building reliable artificial intelligence systems safely at " +
+      "planetary scale today";
+    const longer = articleShingles(
+      blocksOf([
+        ["spya-ggggg1", LONGER, "heading"],
+        ["spya-ggggg2", PROSE],
+      ]),
+    );
+    expect(longer.blocks.map((b) => b.blockId)).not.toContain("spya-ggggg1");
+    expect(isArticleText(longer, LONGER)).toBe(false);
+    const titleOnly = shingleOverlap(longer, LONGER);
+    /* Enough windows that the floor is not what is saving it. */
+    expect(titleOnly.extractWindows).toBeGreaterThanOrEqual(COPY_MIN_WINDOWS);
+    expect(titleOnly.density).toBe(0);
+    expect(isCopy(titleOnly)).toBe(false);
+  });
+
+  it("still sees a mirror that reproduces the prose under the heading", () => {
+    const mirror = `${LONG_TITLE}\n\n${PROSE}`;
+    expect(isCopy(shingleOverlap(titled, mirror))).toBe(true);
+  });
+});
+
+/* --------------------------------------------- the row's own words, or the article's -- */
+
+/**
+ * **Whose words is this passage?** — the second signal the copy refusal wants,
+ * asked of one quotation rather than of a ratio (GPT Sol's F2).
+ */
+describe("is this passage the article's own words", () => {
+  it("says yes to a sentence lifted out of a block", () => {
+    expect(isArticleText(article, "It names the residual, the part of the answer")).toBe(true);
+  });
+
+  it("says no to a reply's own sentence, however much of the article surrounds it", () => {
+    expect(isArticleText(article, "That conclusion is completely unsupported.")).toBe(false);
+  });
+
+  it("accepts a run of words that crosses a block boundary, which density may not", () => {
+    /* The extract of a copy is the article's blocks with the breaks between
+       them, and the spaced matcher reads across one — so a model that picked a
+       `sourceQuote` spanning two paragraphs took a mirror past the refusal while
+       this said false. Across a break the words are still the article's. Density
+       is asked per block for the opposite reason: a join there would invent
+       windows and inflate the ratio with text nobody wrote. */
+    const spanning = "a hundred moods. So the card under the clock";
+    expect(isArticleText(article, spanning)).toBe(true);
+    expect(ARTICLE.some(([, text]) => text.includes(spanning))).toBe(false);
+  });
+
+  it("is still no for a reply's own words, whichever blocks they sit between", () => {
+    expect(isArticleText(article, "the card is furniture and nobody stops to read it")).toBe(false);
+  });
+
+  it("says no to an empty quotation rather than yes to everything", () => {
+    expect(isArticleText(article, "   ")).toBe(false);
+  });
+});
+
 /* ------------------------------------------------------------- the two ratios -- */
 
 describe("the two ratios", () => {
@@ -212,7 +330,7 @@ describe("the two ratios", () => {
        plus one window of its own — so half the article is in the page and half
        the page is the article. Hand-countable on purpose. */
     const tiny = articleShingles(
-      new Map([
+      blocksOf([
         ["spya-bbbbb1", "alpha bravo charlie delta echo foxtrot golf hotel"],
         ["spya-bbbbb2", "india juliett kilo lima mike november oscar papa"],
       ]),
@@ -225,7 +343,7 @@ describe("the two ratios", () => {
   });
 
   it("is zero rather than not-a-number when there is nothing to divide", () => {
-    const empty = articleShingles(new Map([["spya-ccccc1", "too short to hold a window"]]));
+    const empty = articleShingles(blocksOf([["spya-ccccc1", "too short to hold a window"]]));
     const overlap = shingleOverlap(empty, "also far too short");
     expect(overlap.articleWindows).toBe(0);
     expect(overlap.extractWindows).toBe(0);
@@ -255,7 +373,7 @@ describe("the floor — any hit at all", () => {
        both what the fold exists to see through and what a fixture that copied
        the bytes could never prove. */
     const line = "the harbour office's card is a sentence about the limits of a sentence";
-    const essay = articleShingles(new Map([["spya-eeeee1", line]]));
+    const essay = articleShingles(blocksOf([["spya-eeeee1", line]]));
     const page =
       "The essay ends by saying that “the harbour office’s card is a sentence about the limits " +
       "of a sentence”, and after eleven seasons on this quay I think that is exactly backwards.";
@@ -345,7 +463,7 @@ describe("the ceiling — a copy is not a response", () => {
        arithmetic is `>=`, and a fixture sitting on the boundary is what keeps it
        from drifting to `>`. */
     const tiny = articleShingles(
-      new Map([["spya-ddddd1", "alpha bravo charlie delta echo foxtrot golf hotel india juliett"]]),
+      blocksOf([["spya-ddddd1", "alpha bravo charlie delta echo foxtrot golf hotel india juliett"]]),
     );
     const extract = "alpha bravo charlie delta echo foxtrot golf hotel india juliett kilo lima";
     const overlap = shingleOverlap(tiny, extract);

@@ -103,12 +103,22 @@ describe("the stylesheet caps the preamble and floors the panel", () => {
 
 describe("the markup the rules above are aimed at", () => {
   /**
-   * The band, from `className="mode-band gloss referee"` to the end of its
-   * `<aside>`. Crude, and deliberately so: a missing band is a failure here
-   * rather than a vacuous pass, which is the trap a regex test falls into when
-   * it stops matching anything.
+   * The band, from `feature="gloss referee"` to the end of its `<ModeSurface>`.
+   * Crude, and deliberately so: a missing band is a failure here rather than a
+   * vacuous pass, which is the trap a regex test falls into when it stops
+   * matching anything.
+   *
+   * **It used to read `className="mode-band gloss referee"` … `</aside>`, and
+   * this is the crudeness working rather than failing.** Referee's band went
+   * through `src/web/ModeSurface.tsx` on 2026-09-07 along with the other eleven
+   * (item A5;
+   * docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md),
+   * so the hand-written `<aside>` and its class string are gone while the band
+   * and all five of its parts are exactly where they were. A regex over source
+   * cannot tell those two apart, which is precisely why this file asserts the
+   * match is defined before it asserts anything about the contents.
    */
-  const band = BAND_SOURCE.match(/className="mode-band gloss referee"[\s\S]*?<\/aside>/)?.[0];
+  const band = BAND_SOURCE.match(/feature="gloss referee"[\s\S]*?<\/ModeSurface>/)?.[0];
 
   /* The five **tags**, not the five words. `.ref-panel` is named in the prose of
      the comment above the scan ("outside `.ref-panel`"), so an `indexOf` on the
@@ -125,7 +135,7 @@ describe("the markup the rules above are aimed at", () => {
   } as const;
 
   it(`the Referee band is still in ${BAND_FILE} and still has all five parts`, () => {
-    expect(band, `no \`mode-band gloss referee\` aside in ${BAND_FILE}`).toBeDefined();
+    expect(band, `no \`gloss referee\` ModeSurface in ${BAND_FILE}`).toBeDefined();
     for (const [name, tag] of Object.entries(TAGS)) {
       expect(band, `the ${name} (\`${tag}\`) is not in the band`).toContain(tag);
     }
@@ -168,8 +178,17 @@ describe("the markup the rules above are aimed at", () => {
 describe("the preamble is shut until a referee asks for it", () => {
   /* The same slice as the describe above takes, and taken again rather than
      shared: a `band` that stopped matching would then fail in one place instead
-     of quietly emptying two. */
-  const band = BAND_SOURCE.match(/className="mode-band gloss referee"[\s\S]*?<\/aside>/)?.[0];
+     of quietly emptying two.
+
+     Both copies stopped matching on 2026-09-07, when Referee's band moved onto
+     `ModeSurface`, and both were updated. **An earlier version of this comment
+     claimed the duplication is what stops a shared, stale slice passing
+     vacuously here. That is wrong** — `toContain` on an `undefined` match
+     throws, so a shared slice would have failed this describe too. What
+     actually provides the protection is that every assertion below names
+     something and none of them is satisfied by absence; the duplication only
+     makes the failure local. GPT Sol F33, 2026-09-07. */
+  const band = BAND_SOURCE.match(/feature="gloss referee"[\s\S]*?<\/ModeSurface>/)?.[0];
 
   it("the notice's label is the long sentence's own opening clause", () => {
     /* Values, not source text: two strings that drift apart are the failure —

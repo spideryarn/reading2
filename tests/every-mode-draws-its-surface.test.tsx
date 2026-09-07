@@ -391,8 +391,33 @@ const DEBATE: Debate = {
         articleReferenceQuote: "The instrument was built",
         /* The witness is the same string as `articleReferenceQuote` — that is
            how src/debate.ts builds a `named` signal, and a fixture that split
-           them would describe a row the pipeline cannot produce. */
-        identifies: [{ kind: "named", by: "title", witness: "The instrument was built" }],
+           them would describe a row the pipeline cannot produce.
+
+           **The `quoted` signal beside it is what keeps this row on screen.** The
+           identification bar landed on 2026-09-06 and this fixture on the same
+           day, on separate branches; the signal was added on 2026-09-07, when
+           the merge first put the two in one tree and the band came out empty.
+           The bar defaults to `quoted` — measured on the corpus, because a page that
+           merely shares a title may be about a same-named successor — so a
+           `named`-only row is hidden by design, and this fixture drew a band with
+           nothing in it but chrome: exactly the F6 failure this sweep was
+           calibrated against, reached by a real change rather than by a mutation.
+
+           The quote is a genuine run of `PARAGRAPH`, and its block is
+           `spya-bbbbbb` rather than the `h1`, because quotation evidence is taken
+           from prose only (GPT Sol's F1): a title of eight words was otherwise
+           evidence for itself. The two ratios are what `shingleOverlap` returns
+           for one window of a short article. */
+        identifies: [
+          {
+            kind: "quoted",
+            quote: "instrument was built before anybody could say what it would measure",
+            blockId: "spya-bbbbbb",
+            coverage: 0.5,
+            density: 0.2,
+          },
+          { kind: "named", by: "title", witness: "The instrument was built" },
+        ],
       },
     ],
     counts: COUNTS,

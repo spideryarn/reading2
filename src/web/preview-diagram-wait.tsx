@@ -126,7 +126,8 @@ window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 /**
  * **The band's own element is `position: fixed`, and six of them collide.**
  *
- * `DiagramPanel` renders its own `<aside class="mode-band diag">`, and
+ * `DiagramPanel` renders its band through `ModeSurface` — a
+ * `<aside class="mode-band diag">` either way, since 2026-09-07 — and
  * `.mode-band` is fixed — which is right in the app, where exactly one band is
  * ever on screen. Six live instances on one page all pin to the same corner and
  * stack, so only the last-painted one is visible and the other five sit under
