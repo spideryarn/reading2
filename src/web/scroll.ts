@@ -162,32 +162,112 @@ export function stickyOffset(): number {
 }
 
 /**
- * **The one string this file and styles.css § a small device have to agree on.**
+ * **Where the bar is *going*** — as against `stickyOffset` above, which is
+ * where it is.
  *
- * A device that is small in *either* direction — Greg, 2026-08-27: *"every
- * centimetre of real estate in either dimension is valuable"*. The comma is an
- * OR. The stylesheet decides what a hidden bar looks like; this decides whether
- * to spend a scroll listener finding out, so a laptop attaches nothing at all.
+ * These were one function for a few hours on 2026-09-07 and merging them was a
+ * mistake, so the distinction is worth stating plainly:
  *
- * Duplicated rather than derived, because CSS cannot read a TypeScript constant
- * and a media query cannot be built at runtime without `matchMedia` string
- * concatenation that is harder to read than the string itself. If you change one
- * you must change the other — and the failure mode is why that mattered: it is
- * "the bar never hides", which looks exactly like the feature being off.
+ * | | asks | who calls it |
+ * |---|---|---|
+ * | `stickyOffset` | how much of the top is covered **now** | `readingLine()` (keynav.ts), the `?at=` tracker (App.tsx), `isBlockOnScreen`, `whereIsBlock` |
+ * | `stickyDestination` | how much will be covered **when a jump lands** | `scrollToBlock`, `scrollByScreen` |
  *
- * **There is now a test that catches the drift**, which there was not until
- * 2026-08-28: `tests/spine-width.test.ts` reads this literal out of this file as
- * text and asserts it is the same number as § a small device's query in
- * styles.css, and that both are `GIST_MIN + PROSE_MIN + SPINE_W − 1`. The 731
- * fell out of the spine being halved, which is exactly the change that would
- * otherwise have moved three of the four copies and left this one behind.
+ * At rest they return the same number, which is why one function served both
+ * for months. They part company only while the bar is travelling — 180ms, and
+ * only since it started doing that on laptops as well as phones.
+ *
+ * **Why the destination half is needed.** `scrollToBlock` calls this **once**
+ * and hands the number to `glide()` as a fixed target; `markOurScroll` stops
+ * the bar *reacting* to the jump but cannot stop a transition already in
+ * flight. So a reader who scrolled up — starting the reveal — and clicked a
+ * gist 90ms later got a target computed against half a bar, and the row they
+ * asked for finished underneath the other half. GPT Sol F2.
+ *
+ * **Why it must not be given to the others.** They ask where the reader *is*,
+ * and a prediction moves the reading line by up to a bar's height while the
+ * slide runs: at `safeTop` 47 with the bar's bottom at 69 and rows at
+ * [0, 80, 120], the measurement makes the first row current and the prediction
+ * makes it the second — so ↓ during a slide would skip a paragraph. GPT Sol
+ * F8, which is the reason this is a second function rather than a new body for
+ * the first one.
+ *
+ * **`rect.bottom <= 0`, not `<= safeTop`.** A hidden bar is translated by
+ * `--bar-h + --safe-top`, so it comes to rest with its bottom edge at exactly
+ * zero. Coming back, that edge travels 0 → 91 on a 47px inset, and a boundary
+ * at the inset would call the whole first half of the journey "hidden" and
+ * reserve 47 where 91 is needed. Invisible on every machine without a notch,
+ * because there the two boundaries are the same number. GPT Sol F7.
+ *
+ * **The rect, and deliberately not `data-bars`.** The attribute is not the same
+ * question: the two `:has()` guards in shell.css hold the bar down —
+ * `--bar-hide: 0px` — while the attribute is still set, so a reader in a band
+ * mode, or tabbing along the pills, would have had every jump land under a bar
+ * that is plainly there. Asking the element is what makes those guards free.
+ *
+ * Mid-*hide* this over-reserves by up to a bar's height, and that is the right
+ * way round to be wrong: an over-reserved target lands a little lower than it
+ * needed to, an under-reserved one lands invisible.
  */
-const SMALL_DEVICE = "(max-height: 620px), (max-width: 731px)";
+export function stickyDestination(): number {
+  const safeTop = safeAreaInsets().top;
+  const bar = document.querySelector<HTMLElement>(".controls");
+  if (!bar) return safeTop;
+  const rect = bar.getBoundingClientRect();
+  if (rect.bottom <= 0) return safeTop; // gone, and no further to go
+  return rect.height + safeTop; // here, or on its way here
+}
+
+/*
+ * **`SMALL_DEVICE` used to live here, and it went on 2026-09-07.**
+ *
+ * It was `"(max-height: 620px), (max-width: 731px)"`, duplicated from
+ * narrow-window.css § a small device and pinned character-for-character by
+ * `tests/spine-width.test.ts` — a real guard against a real drift, because the
+ * failure mode is "the bar never hides", which looks exactly like the feature
+ * being off. The reason for the copy was that `watchBarVisibility` asked
+ * `matchMedia` the same question the stylesheet asked, so a laptop would attach
+ * no scroll listener for an attribute no rule read.
+ *
+ * **The bar hides at every width now** (Greg, 2026-09-07:
+ * *"can we make it so that it's invisible most of the time except when we
+ * scroll"*), so every width reads the attribute and there is nothing left to
+ * gate. The string stays in the stylesheet, where it still gates the *dock*
+ * half and the rest of § a small device — the Dock deliberately did not come
+ * with the top bar onto laptops — and `tests/spine-width.test.ts` keeps the
+ * half of its assertion that ties that number to `GIST_MIN + PROSE_MIN +
+ * SPINE_W − 1`.
+ *
+ * docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md.
+ */
 
 /** px of downward travel before the bar gives way. */
 export const BAR_HIDE_AFTER = 24;
 /** Never hide inside the first screenful — see `stepBar`. */
 export const BAR_KEEP_UNTIL = 160;
+/**
+ * **How long `data-bar-moving` may stay on without a `transitionend` to end
+ * it**, and the reason there is a number here at all.
+ *
+ * The attribute scopes the fisheye panels' `transition: top` to the one case
+ * that should have one — the bar moving — because a panel's `top` also changes
+ * on ordinary scrolling, while the sticky head settles out from under the
+ * masthead over the first ~150px, and there a slide is a lag rather than an
+ * animation (useColumnContext.ts § ColumnRect.top; GPT Sol F1, 2026-09-07).
+ *
+ * `transitionend` is what normally ends it. **A transition that never starts
+ * never ends**, and there are at least three ways to have one: `prefers-
+ * reduced-motion`, which turns the transition off outright; a background tab,
+ * where it does not advance; and somebody deleting the rule. In every one of
+ * those the attribute would latch on, and the symptom is not an error but the
+ * defect it was added to prevent, permanently and everywhere.
+ *
+ * 400 rather than the 180 the transition takes: this is a backstop, not a
+ * duration, and clearing it early would cut the slide short on a slow frame.
+ * Nothing measures it, so it only has to be comfortably longer than 180 and
+ * comfortably shorter than a reader's next gesture.
+ */
+export const BAR_MOVE_MAX_MS = 400;
 
 export interface BarStep {
   /** Whether the controls bar should be out of the way. */
@@ -260,41 +340,105 @@ export function stepBar(hidden: boolean, y: number, from: number): BarStep {
  * something. And it never hides near the top of the article, where the bar has
  * not finished sticking and hiding it would just look like a glitch.
  *
- * **The breakpoint is asked twice, and on purpose.** The stylesheet owns
- * whether a hidden bar means anything, and this function asks `matchMedia` the
- * same question so that a laptop installs no scroll listener at all rather than
- * maintaining an attribute nothing reads — performance.md is why that is worth
- * the duplicated string. An earlier version of this note claimed the decision
- * lived in one place and that this function knew nothing about viewport
- * heights; that stopped being true the moment the listener started coming and
- * going with the query. Keep the two queries in step.
+ * **The breakpoint used to be asked twice, and is not asked at all now.** From
+ * 2026-08-27 to 2026-09-07 this function held a copy of § a small device's media
+ * query and attached its listener only while that matched, so a laptop paid
+ * nothing for an attribute no rule there read. Greg asked for the bar to leave
+ * on a laptop too (2026-09-07), so every width reads it and the gate had nothing
+ * left to protect — see the note where `SMALL_DEVICE` used to be.
  *
- * Note "a laptop attaches nothing" is only true of a laptop with a *large*
- * window: the width half of the query deliberately includes a narrow one, so a
- * 700px browser window on a desktop gets the listener and the hiding bar.
- * That is intended — the rule is about how much room there is, not about what
- * kind of machine is providing it. GPT Sol, 2026-08-27.
+ * What that costs, stated rather than waved past, because performance.md argues
+ * against a scroll listener on every machine: this one is `passive`, coalesced
+ * into a `requestAnimationFrame`, and its body is `stepBar` — arithmetic on
+ * three numbers with no DOM read in it. The page already installs a scroll
+ * listener at every width for the fisheye panels (useColumnContext.ts), and
+ * that one measures rects.
+ *
+ * **The bottom bar did not come with it.** `--dock-bottom` stays inside § a
+ * small device: the Dock is 40px, it names the mode and it is the way out of
+ * every one of them, and it joined this switch on a phone because 124px of a
+ * 390px viewport was desperate. On a laptop it is not.
  *
  * Returns its own teardown.
  */
 export function watchBarVisibility(): () => void {
-  /**
-   * **Only where a rule reads it.** The attribute could be set at every size
-   * and left for the media query to ignore, which is what this did first — but
-   * that installs a scroll listener on every laptop in exchange for nothing,
-   * on a page whose scroll cost is documented at length in performance.md. So
-   * the query is asked here as well, and the listener comes and goes with it.
-   * The string is duplicated from styles.css § a small device, which is the
-   * ordinary cost of a breakpoint two languages have to agree on.
-   */
-  const small = window.matchMedia(SMALL_DEVICE);
-  let listening = false;
   let hidden = false;
   let from = window.scrollY;
   let pending = 0;
 
+  /**
+   * **`data-bar-moving`: the bar is travelling right now.**
+   *
+   * The fisheye panels are the one thing under the bar that CSS does not move:
+   * they are `position: fixed` with a `top` measured off the table head by
+   * useColumnContext.ts. So they need a `transition: top` to slide with
+   * everything else — and they must **not** have one at any other time, because
+   * the same measured `top` also changes on ordinary scrolling, while the
+   * sticky head settles out from under the masthead over the first ~150px. A
+   * standing transition would turn that into a 180ms lag on every frame of it:
+   * a worse defect than the one it was added to fix. GPT Sol F1, 2026-09-07.
+   *
+   * Under continuous scrolling the two cases cannot overlap, which is what
+   * makes an attribute enough rather than approximate — `stepBar` refuses to
+   * hide the bar inside the first `BAR_KEEP_UNTIL` pixels, and the head has
+   * finished settling before then, so a gesture that arrives frame by frame has
+   * left the first case before it can enter the second. **A single frame that
+   * jumps more than 160px from the top does combine them**, and the panel then
+   * glides its whole distance rather than snapping and sliding — measured in a
+   * browser, 2026-09-07, and left alone; column-context.css § the panels and
+   * the measuring stick has the numbers and the reason.
+   *
+   * `transitionend` on the bar's own `transform` is what normally ends it, and
+   * `BAR_MOVE_MAX_MS` is the backstop for the several ways a transition can
+   * never begin — see the constant for the list. Both, not either: the event
+   * alone latches, and the timer alone would cut a slow frame short.
+   */
+  let settle = 0;
+  let bar: HTMLElement | null = null;
+  const stopMoving = () => {
+    if (settle) clearTimeout(settle);
+    settle = 0;
+    bar?.removeEventListener("transitionend", arrived);
+    bar = null;
+    delete document.documentElement.dataset.barMoving;
+  };
+  /**
+   * **The bar's own `transform`, by name, and nothing else.**
+   *
+   * `transitionend` bubbles, and this bar is full of things that transition:
+   * the granularity pills are shadcn `Toggle`s carrying
+   * `transition-[color,background-color,border-color]` over **120ms**
+   * (pill.ts). Hover or press one while the bar is sliding and three of these
+   * arrive at `.controls` 60ms before the bar has finished its own 180ms
+   * travel. Taking any of them would end the slide a third of the way through
+   * and stop every panel dead in the middle of the screen — with no error, and
+   * only when a pointer happened to be on a pill.
+   *
+   * Both halves are needed: `target` because a descendant's `transform` would
+   * pass the property test, and `propertyName` because `.controls` itself could
+   * be given a second transitioning property later.
+   */
+  const arrived = (e: TransitionEvent) => {
+    if (e.target === bar && e.propertyName === "transform") stopMoving();
+  };
+  const startMoving = () => {
+    stopMoving(); // a reversal mid-slide restarts the window rather than extending it
+    document.documentElement.dataset.barMoving = "";
+    bar = document.querySelector<HTMLElement>(".controls");
+    bar?.addEventListener("transitionend", arrived);
+    settle = window.setTimeout(stopMoving, BAR_MOVE_MAX_MS);
+  };
+
+  /* Put the bar back **and abandon any slide in flight**. Both callers are
+     cases where nothing is animating any more and nobody is watching: a
+     teardown, and a rotation that takes the rules away. Leaving `data-bar-moving`
+     behind either would strand it on the root for the rest of the session, with
+     no `transitionend` ever coming to clear it.
+     Note the ordinary hide→show flip does NOT come through here — `apply` does
+     that inline, precisely because it *is* a slide. */
   const show = () => {
     hidden = false;
+    stopMoving();
     delete document.documentElement.dataset.bars;
   };
 
@@ -311,6 +455,10 @@ export function watchBarVisibility(): () => void {
     from = next.from;
     if (next.hidden === hidden) return;
     hidden = next.hidden;
+    /* Before the attribute the panels answer to, so a `MutationObserver` on
+       `data-bars` (useColumnContext.ts) already sees the slide is on when it
+       takes its fresh measurement. */
+    startMoving();
     if (hidden) document.documentElement.dataset.bars = "hidden";
     else delete document.documentElement.dataset.bars;
   };
@@ -320,25 +468,46 @@ export function watchBarVisibility(): () => void {
     pending = requestAnimationFrame(apply);
   };
 
-  const sync = () => {
-    if (small.matches === listening) return;
-    listening = small.matches;
-    if (listening) {
-      from = window.scrollY;
-      window.addEventListener("scroll", onScroll, { passive: true });
-    } else {
-      window.removeEventListener("scroll", onScroll);
-      if (pending) cancelAnimationFrame(pending);
-      pending = 0;
-      show(); // rotating to portrait must not leave the bar stuck off screen
-    }
+  /**
+   * **Focus moves the bar too, and nothing else can tell.**
+   *
+   * `:root:has(.controls:focus-within, .mode-band)` in shell.css puts
+   * `--bar-bottom` and `--bar-hide` back **while `data-bars` is still
+   * `"hidden"`** — that is the guard that stops the bar sliding out from under
+   * a keyboard reader tabbing the granularity pills. So focus alone moves the
+   * bar and the table head 44px, twice, and neither end of it changes an
+   * attribute on `<html>`.
+   *
+   * Nothing would have noticed. The fisheye panels take their `top` from the
+   * head and re-measure on `data-bars`, so a reader who tabbed into the pills
+   * got a bar back over panels that stayed where the hidden bar had left them,
+   * until they happened to scroll. GPT Sol F6, 2026-09-07.
+   *
+   * `focusin` / `focusout` rather than the bar's `transitionrun`, which was the
+   * other candidate and looks more general: `transitionrun` does not fire under
+   * `prefers-reduced-motion`, where the bar snaps and the panels still need to
+   * be re-placed. This fires either way.
+   *
+   * **Only while the bar is hidden**, because only then does the guard change
+   * anything. At rest `--bar-bottom` is already its resting value, so
+   * announcing a move would put every panel into a 180ms transition for a bar
+   * that is going nowhere — on every tab through the pills.
+   */
+  const onFocusShift = (e: FocusEvent) => {
+    if (!hidden) return;
+    if (!(e.target instanceof Node)) return;
+    if (!document.querySelector(".controls")?.contains(e.target)) return;
+    startMoving();
   };
 
-  sync();
-  small.addEventListener("change", sync);
+  from = window.scrollY;
+  window.addEventListener("scroll", onScroll, { passive: true });
+  document.addEventListener("focusin", onFocusShift);
+  document.addEventListener("focusout", onFocusShift);
   return () => {
-    small.removeEventListener("change", sync);
     window.removeEventListener("scroll", onScroll);
+    document.removeEventListener("focusin", onFocusShift);
+    document.removeEventListener("focusout", onFocusShift);
     if (pending) cancelAnimationFrame(pending);
     show();
   };
@@ -532,7 +701,7 @@ export function scrollToBlock(id: string, behavior: ScrollBehavior = "smooth") {
   // Explicit and clamped rather than scrollIntoView(): we want the row's own
   // top edge, offset to clear the bars, and no surprise when the row sits
   // inside a cell that spans dozens of others.
-  const top = row.getBoundingClientRect().top + window.scrollY - stickyOffset();
+  const top = row.getBoundingClientRect().top + window.scrollY - stickyDestination();
   const max = document.documentElement.scrollHeight - window.innerHeight;
   const target = Math.max(0, Math.min(top, max));
   if (behavior === "smooth" && !reducedMotion()) glide(target);
@@ -599,7 +768,7 @@ export function scrollByScreen(dir: -1 | 1) {
   // to. Two swipes at the end of the article must deliver two screens; measuring
   // the second from a half-finished first delivers about one and a half.
   const from = glideTarget() ?? window.scrollY;
-  const target = screenTarget(from, window.innerHeight, stickyOffset(), dockOffset(), max, dir);
+  const target = screenTarget(from, window.innerHeight, stickyDestination(), dockOffset(), max, dir);
   // Already there — the true end of the article, or the top. No jump, and no
   // pretending we did something. Compared against `from` rather than the live
   // position, so a jump already heading somewhere else is not silently kept:

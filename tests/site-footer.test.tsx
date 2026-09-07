@@ -29,6 +29,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { type AstNode, parseSource, walkAst } from "./helpers/ts-ast.js";
 import { SiteFooter } from "../src/web/SiteFooter.js";
 
 /* React only treats `act()` as authoritative when this is set, and without it
@@ -151,6 +152,47 @@ describe("the site footer", () => {
 });
 
 /**
+ * **Every `.ts` and `.tsx` the browser loads, at any depth — one walk, shared by
+ * both source scans in this file.**
+ *
+ * There were two walks and they had drifted apart. The mount scan below became
+ * recursive on 2026-09-06, when the reading view moved into `src/web/reader/`
+ * and `src/web/article/`; the `ADMIN_EMAIL` scan at the foot of the file was
+ * left flat — and on that same day ten mode controllers left `App.tsx` for
+ * `src/web/modes/<feature>/`. Every one of them walked out of that guard, which
+ * went on reporting a clean tree because it was no longer pointed at the files
+ * (GPT Sol, 2026-09-06, F16; docs/reusable/silent-success.md). One collector is
+ * what stops the two answers diverging again: a directory either is in the
+ * browser's source tree or it is not, and neither scan gets its own opinion.
+ *
+ * `readdirSync(…, { recursive: true })` yields paths relative to `WEB`, so an
+ * entry reads `modes/referee/RefereeMode.tsx` and `sourceOf` joins it back on.
+ */
+const WEB = path.join(import.meta.dirname, "..", "src", "web");
+
+const CLIENT_FILES = readdirSync(WEB, { recursive: true, encoding: "utf8" }).filter(
+  (f) => f.endsWith(".ts") || f.endsWith(".tsx"),
+);
+
+const sourceOf = (file: string) => readFileSync(path.join(WEB, file), "utf8");
+
+describe("the walk both source scans are built on", () => {
+  it("reaches a mode controller two directories down", () => {
+    /* **The witness, named, because an empty walk answers every question below
+       correctly.** A count would not do: `length > 50` was true of the flat
+       walk as well, so it could never have caught the hole this collector
+       exists to close. `RefereeMode.tsx` is the file both guards were shown to
+       be blind to. */
+    expect(CLIENT_FILES).toContain(path.join("modes", "referee", "RefereeMode.tsx"));
+  });
+
+  it("found a client tree at all, rather than an empty directory", () => {
+    // docs/reusable/silent-success.md.
+    expect(CLIENT_FILES.length).toBeGreaterThan(50);
+  });
+});
+
+/**
  * **Which pages mount it, how many times, and which of them declare `here` —
  * as a source scan, and the reason it is one and what it is not.**
  *
@@ -169,21 +211,49 @@ describe("the site footer", () => {
  * `ProfilePage` needs a Supabase session, a `nuqs` adapter and a fetch mock
  * each, and what that would mostly prove is that this file can build a fixture.
  *
- * **It is a text check and it says so**: it reads JSX as characters, so a
- * footer reaching the reading view by way of some component `App.tsx` already
- * renders would slip past it. What it catches is the whole-page mistake, which
- * is the one that has actually happened.
+ * **It is a static check and it says what it cannot see**: it reads each page's
+ * JSX, so a footer reaching the reading view by way of some component `App.tsx`
+ * already renders would slip past it. What it catches is the whole-page
+ * mistake, which is the one that has actually happened.
+ *
+ * **It counts elements rather than characters, since 2026-09-06.** It was a
+ * `match(/<SiteFooter[\s/>]/g)` until GPT Sol commented out `SignInPage`'s
+ * mount — the whole element, inside a JSX comment — and watched all fifteen
+ * tests here stay green over a page that no longer renders a footer (F22). A
+ * comment is the exact thing a character scan cannot tell from code, and
+ * commenting a mount out is how somebody disables one. So the scan counts
+ * `JSXOpeningElement` nodes, which cannot be written inside a comment or a
+ * string. docs/reusable/silent-success.md; the parser argument is in
+ * [`tests/helpers/ts-ast.ts`](helpers/ts-ast.ts).
  */
+/**
+ * How many `<SiteFooter …>` **elements** one module renders.
+ *
+ * `JSXOpeningElement` nodes, so a mount commented out in JSX is not one, and
+ * neither is the component's name in a string or a docblock — which is the
+ * difference between this and the character scan it replaced (F22 above).
+ * `errorRecovery` is on, so a file this cannot fully parse still yields the
+ * elements it did read rather than throwing somewhere a caller would read as
+ * zero.
+ */
+function footerMounts(source: string): number {
+  const ast = parseSource(source);
+  let n = 0;
+  walkAst(ast.program, (node) => {
+    if (node.type !== "JSXOpeningElement") return;
+    const name = node.name as AstNode | undefined;
+    if (name?.type === "JSXIdentifier" && name.name === "SiteFooter") n += 1;
+  });
+  return n;
+}
+
 describe("the pages that mount it", () => {
-  const WEB = path.join(import.meta.dirname, "..", "src", "web");
-
-  const sourceOf = (file: string) => readFileSync(path.join(WEB, file), "utf8");
-
-  /** `<SiteFooter …>` occurrences per `src/web/*.tsx`, files with none omitted. */
+  /**
+   * `<SiteFooter …>` **elements** per `src/web/**\/*.tsx`, files with none omitted.
+   */
   const mounts = new Map(
-    readdirSync(WEB)
-      .filter((f) => f.endsWith(".tsx"))
-      .map((f) => [f, sourceOf(f).match(/<SiteFooter[\s/>]/g)?.length ?? 0] as const)
+    CLIENT_FILES.filter((f) => f.endsWith(".tsx"))
+      .map((f) => [f, footerMounts(sourceOf(f))] as const)
       .filter(([, n]) => n > 0)
       .sort(),
   );
@@ -218,23 +288,27 @@ describe("the pages that mount it", () => {
   it("is nothing under /read/ — not the reading view, not the two dead ends", () => {
     /* Greg's one explicit exclusion, and it gets an assertion of its own rather
        than resting on the list above, because the two files are kept out for
-       reasons of different strength. `App.tsx` holds `ArticlePage` *and* six
-       routes that do get a footer, so the interesting fact about it is the
-       absence rather than its position in a sorted list. `PublicChrome.tsx`
+       reasons of different strength. `App.tsx` holds six routes that do get a
+       footer, so the interesting fact about it is the absence rather than its
+       position in a sorted list; `ArticlePage` and `Reader` left it on
+       2026-09-06 and are named here too. `PublicChrome.tsx`
        holds two dead-end pages that would take a footer perfectly well and are
        kept out only because they sit at a `/read/` address — SiteFooter.tsx
        § Where it goes. **If Greg says the exclusion was about the reading view
        rather than the path, this is the line to edit**, along with the two
        comments in PublicChrome.tsx. */
     expect([...mounts.keys()]).not.toContain("App.tsx");
+    expect([...mounts.keys()]).not.toContain("reader/Reader.tsx");
+    expect([...mounts.keys()]).not.toContain("article/ArticlePage.tsx");
     expect([...mounts.keys()]).not.toContain("PublicChrome.tsx");
   });
 
   it("found the mounts at all, rather than matching nothing", () => {
-    /* The regex above is the kind that fails silently — rename the component,
-       or let a formatter break the opening tag across lines, and it matches
-       zero files, at which point both assertions above pass while proving
-       nothing. docs/reusable/silent-success.md. */
+    /* The scan above is still the kind that fails silently — rename the
+       component and it finds zero elements, at which point both assertions
+       above pass while proving nothing. Parsing removed the formatter half of
+       that risk (an opening tag broken across lines is one node either way) and
+       not this half. docs/reusable/silent-success.md. */
     expect(mounts.size).toBeGreaterThan(0);
   });
 
@@ -269,26 +343,101 @@ describe("the pages that mount it", () => {
  * failed-send fallback, which was the one screen in the app that asks a reader
  * to write to us — and named a person while doing it.
  *
- * An import rather than a text match, so that a comment quoting Greg's original
+ * A *use* rather than a text match, so that a comment quoting Greg's original
  * request (`AdminPage.tsx` has one) is not a failure.
+ *
+ * **And a use rather than an import clause, since 2026-09-06.** It read
+ * `/import\s*\{[^}]*ADMIN_EMAIL[^}]*\}\s*from\s*…admin\.js/` until GPT Sol
+ * put this at the foot of `FeedbackDialog.tsx` and watched it pass (F23):
+ *
+ * ```ts
+ * import * as reviewAdmin from "../admin.js";
+ * void reviewAdmin.ADMIN_EMAIL;
+ * ```
+ *
+ * — the exact screen the rule was written for, reaching the exact constant, in
+ * a spelling the pattern had no opinion about. An aliased import
+ * (`{ ADMIN_EMAIL as x }`) and a re-export walked past it too. So the scan
+ * parses instead, resolves what each import of `admin.js` binds locally, and
+ * asks whether the module then *reaches* the constant under any of its names.
+ * docs/reusable/silent-success.md.
  */
-describe("the one address a reader is shown", () => {
-  const WEB = path.join(import.meta.dirname, "..", "src", "web");
-
-  const browserFiles = readdirSync(WEB).filter((f) => f.endsWith(".ts") || f.endsWith(".tsx"));
-
-  it("is never the administrator's, anywhere the browser loads", () => {
-    const reaching = browserFiles.filter((f) =>
-      /import\s*\{[^}]*\bADMIN_EMAIL\b[^}]*\}\s*from\s*["'][^"']*admin\.js["']/.test(
-        readFileSync(path.join(WEB, f), "utf8"),
-      ),
-    );
-    expect(reaching).toEqual([]);
+/**
+ * Whether one module reaches `ADMIN_EMAIL` from `admin.js`, however spelled.
+ *
+ * Four spellings, because all four are how somebody would actually write it:
+ *
+ * | Written | Caught by |
+ * |---|---|
+ * | `import { ADMIN_EMAIL } from "…/admin.js"` | the named binding |
+ * | `import { ADMIN_EMAIL as x }` … `x` | the binding, under its local name |
+ * | `import * as a` … `a.ADMIN_EMAIL` | the namespace, plus the member access |
+ * | `export { ADMIN_EMAIL } from "…/admin.js"` | the re-export |
+ *
+ * A named import counts on sight — no client file has any business importing
+ * it at all, so an unused one is still the mistake. A **namespace** import
+ * does not: `import * as admin` is a legitimate way to reach something else
+ * in that module, so it counts only when the constant is actually read off
+ * it. That asymmetry is the whole reason this is a walk and not a wider
+ * pattern.
+ *
+ * Comments and strings cannot trigger it, which is the property the previous
+ * version had and this one keeps.
+ */
+function reachesAdminEmail(source: string): boolean {
+  const ast = parseSource(source);
+  /* Locals bound to the constant itself, and locals bound to the whole
+     module. Collected in the same pass that answers, because an import can
+     legally sit below the use in a module. */
+  const direct = new Set<string>();
+  const namespaces = new Set<string>();
+  let reexported = false;
+  walkAst(ast.program, (node) => {
+    const kind = node.type;
+    if (kind !== "ImportDeclaration" && kind !== "ExportNamedDeclaration") return;
+    const src = node.source as AstNode | undefined;
+    if (typeof src?.value !== "string" || !/(^|\/)admin\.js$/.test(src.value)) return;
+    for (const raw of (node.specifiers ?? []) as AstNode[]) {
+      const local = (raw.local as AstNode | undefined)?.name;
+      const imported = (raw.imported as AstNode | undefined)?.name;
+      const exported = (raw.exported as AstNode | undefined)?.name;
+      if (raw.type === "ImportNamespaceSpecifier") {
+        if (typeof local === "string") namespaces.add(local);
+      } else if (imported === ADMIN || exported === ADMIN) {
+        if (kind === "ExportNamedDeclaration") reexported = true;
+        else if (typeof local === "string") direct.add(local);
+      }
+    }
   });
+  if (reexported || direct.size > 0) return true;
+  if (namespaces.size === 0) return false;
+  /* `a.ADMIN_EMAIL` and `a["ADMIN_EMAIL"]` both, since the second is what
+     somebody writes when the first has been made to fail. */
+  let read = false;
+  walkAst(ast.program, (node) => {
+    if (node.type !== "MemberExpression") return;
+    const object = node.object as AstNode | undefined;
+    const property = node.property as AstNode | undefined;
+    if (object?.type !== "Identifier" || typeof object.name !== "string") return;
+    if (!namespaces.has(object.name)) return;
+    const named = node.computed
+      ? property?.type === "StringLiteral" && property.value
+      : property?.name;
+    if (named === ADMIN) read = true;
+  });
+  return read;
+}
 
-  it("found files to look at, rather than matching nothing", () => {
-    /* The filter above is the kind that passes by reading zero files.
-       docs/reusable/silent-success.md. */
-    expect(browserFiles.length).toBeGreaterThan(50);
+/** Spelled once, so the assertions below and the walk cannot drift apart. */
+const ADMIN = "ADMIN_EMAIL";
+
+describe("the one address a reader is shown", () => {
+  it("is never the administrator's, anywhere the browser loads", () => {
+    /* `CLIENT_FILES` rather than a walk of its own — see its header. This scan
+       was flat until 2026-09-06, so a mode controller under `modes/` could
+       import `ADMIN_EMAIL` and never be looked at. The walk is checked up
+       there, once, instead of each scan restating that it read some files. */
+    const reaching = CLIENT_FILES.filter((f) => reachesAdminEmail(sourceOf(f)));
+    expect(reaching).toEqual([]);
   });
 });

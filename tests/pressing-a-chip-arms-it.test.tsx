@@ -74,7 +74,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 });
 
 const { Dock } = await import("../src/web/Dock.js");
-const { RefereeViews } = await import("../src/web/App.js");
+const { RefereeViews } = await import("../src/web/modes/referee/RefereeMode.js");
 const { RememberSubModeToggle } = await import("../src/web/QuizPanel.js");
 const { pendingActivation, resetActivations } = await import("../src/web/activation.js");
 

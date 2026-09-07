@@ -105,7 +105,7 @@
  * pipeline artefact with ids that outlive a run.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import type { Claim, OtherText } from "../referee-claims.js";
 import {
@@ -128,6 +128,7 @@ import {
 } from "../referee-claims.js";
 import type { Block, BlockId } from "../types.js";
 import { assignSlots } from "./hit-colours.js";
+import { usePassageLifecycle } from "./passage-lifecycle.js";
 import { type Found, resolveClaim } from "./search-hits.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 import { type ClaimsApi, useClaims } from "./useClaims.js";
@@ -183,10 +184,11 @@ export function inDocumentOrder(claims: Claim[], at: Map<BlockId, number>): Clai
  * - **Slots are assigned over every claim, not the switched-on ones**, so a
  *   claim's colour does not change when the referee unticks the one above it.
  *   hit-colours.ts § What the assignment has to be.
- * - **`useLayoutEffect`, not `useEffect`, to push the results up.** This
- *   component renders the new list immediately and the prose only changes after
- *   the setter runs, so a passive effect leaves a frame where the panel shows the
- *   new passages and the article still shows the old marks.
+ * - **The passage lifecycle is `usePassageLifecycle`'s**, not this file's:
+ *   publish before paint, and clear on the way out in a separate cleanup that
+ *   depends on nothing but the parent's setters. src/web/passage-lifecycle.ts
+ *   says why each of those is the way it is, and why the clear is a *layout*
+ *   cleanup — this band and `CriteriaBand` share one slot.
  */
 export function ClaimsBand({
   slug,
@@ -254,19 +256,20 @@ export function ClaimsBand({
     return out;
   }, [claims, showing, slots, blocks]);
 
-  useLayoutEffect(() => onFound(found), [found, onFound]);
+  /* **Publish before paint, and clear on the way out** — two of the three rules
+     every passage producer follows, in src/web/passage-lifecycle.ts rather than
+     here.
 
-  /* Leaving the sub-mode must take the marks out of the prose with it. Its own
-     effect, with no dependency on the results, so it runs on unmount and only on
-     unmount — folding it into the cleanup above would clear the marks on every
-     frame and set them again immediately, which is a visible flicker of every
-     highlight on the page. The trap `GlossaryBand` documents. */
-  useEffect(
-    () => () => {
-      onFound([]);
-    },
-    [onFound],
-  );
+     **`unkeyed`, which is a shape of its own**: this band owns no open key at
+     all, so nothing rings a mark and the clear takes `found` and nothing else.
+
+     **It and `CriteriaBand` are the pair the phase of the clear matters for.**
+     They are siblings inside `RefereeSubMode` writing the *same* slot, so
+     changing `?referee=` hands one slot from one producer to the other inside a
+     single commit, and a passive clear would land *after* the incoming
+     producer's layout publication and overwrite it.
+     docs/postmortems/260906d-one-publication-slot-two-producers-two-commit-phases.md. */
+  usePassageLifecycle({ kind: "unkeyed", found, onFound });
 
   const toggle = useCallback((id: string) => {
     setShowing((on) => (on.includes(id) ? on.filter((x) => x !== id) : [...on, id]));

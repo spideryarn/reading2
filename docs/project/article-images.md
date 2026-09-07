@@ -68,7 +68,8 @@ still cannot wait for the bytes, for two reasons that pull opposite ways:
 `rehostImages` therefore hands back **two articles**: one to draw at once, with the PDF figures in it
 and every image we hold a copy of stripped of its `src`, `srcset`, `sizes` and sibling `<source>`;
 and a promise of the same article with the copies in. `useArticleAccess`
-([`src/web/App.tsx`](../../src/web/App.tsx)) draws the first and replaces it with the second — an
+([`src/web/article/access.ts`](../../src/web/article/access.ts)) draws the first and replaces it
+with the second — an
 ordinary state transition, because an `src` written imperatively into the live DOM would be erased
 the next time `TableView` re-rendered that block. GPT Sol, 2026-09-06.
 

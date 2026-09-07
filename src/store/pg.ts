@@ -779,8 +779,20 @@ const REVISION_READ_POLICY: Record<
   /* **The grant this map's own note predicted.** It said `rawFilename` is
      reader-facing — *"it is what an uploaded PDF should download as"* — and
      *"will want a grant here the day something serves it, which is exactly what
-     this map is for"*. `GET /api/source/:slug` is that day, 2026-08-31. */
-  rawFilename: { rawSource: "value" },
+     this map is for"*. `GET /api/source/:slug` is that day, 2026-08-31.
+
+     **Two more grants on 2026-09-07, and for a second reason entirely.** The
+     column's own comment in src/db/schema.ts says `origin` "is derivable from
+     the two URLs being null" — which was never quite true, because a fetched
+     revision may be published with neither. What *is* true is that this column
+     is non-null exactly when the document came off a reader's disk, and that
+     became the question the masthead and the metadata page had to ask when an
+     uploaded document stopped always being a PDF (`cameOffADisk` in
+     src/web/SourceLink.tsx; docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md).
+     So it joins `META_COLUMNS`, and the two reads that build a `Meta` take it.
+     Not `public`: a filename is a string the reader chose, and publishing a
+     document is not publishing what they called it. */
+  rawFilename: { rawSource: "value", article: "value", library: "value" },
   /* **The library's cached scalars, and the library now reads them.**
      They are written by `deriveLibraryScalars` (src/library-scalars.ts) inside
      the same transaction that writes the blocks and the tree they describe —
@@ -813,6 +825,7 @@ const META_COLUMNS = {
   finalUrl: articleRevisions.finalUrl,
   fetchedAt: articleRevisions.fetchedAt,
   rawSha256: articleRevisions.rawSha256,
+  rawFilename: articleRevisions.rawFilename,
   source: articleRevisions.source,
   extractMethod: articleRevisions.extractMethod,
   pages: articleRevisions.pages,
@@ -1420,6 +1433,11 @@ function metaFrom(
        the whole content of this field. src/db/schema.ts § `publishedAt`. */
     ...(revision.publishedAt === null ? {} : { publishedAt: revision.publishedAt }),
     ...(revision.note === null ? {} : { note: revision.note }),
+    /* **Non-null exactly when the document came off the reader's own disk**, so
+       it is what the masthead and the metadata page ask instead of
+       `source === "pdf"` — which is the media kind and stopped being a proxy
+       for *uploaded* on 2026-09-07. `Meta.filename` says the rest. */
+    ...(revision.rawFilename === null ? {} : { filename: revision.rawFilename }),
     /* PDF provenance, so the spread pattern above is load-bearing here too:
        `source: null` in `meta.json` is not the same artefact as no `source`
        key, and the round-trip test compares them. docs/plans/260826c-pdf-ingestion.md.

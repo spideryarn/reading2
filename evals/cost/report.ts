@@ -686,8 +686,17 @@ export type DrawPhase = "ingest" | "mode" | "batched";
  * and OpenAI caches a repeated prefix automatically, across jobs and without a
  * breakpoint. The fixture bytes and the prompt are byte-identical between runs,
  * so a rerun inside the cache lifetime would report a discounted `extract` as
- * cold ingest. Dictation is `DICTATION_MODEL`, a Gemini model, and Gemini caches
- * implicitly by default — the same trap, on the interactions side.
+ * cold ingest. Dictation used to be the same trap on the interactions side —
+ * `DICTATION_MODEL` was a Gemini model, and Gemini caches implicitly by default
+ * — and since 2026-09-07 it is a different problem rather than a solved one: it
+ * is `openai/gpt-transcribe` on `/v1/audio/transcriptions`, whose `usage` came
+ * back `{seconds, cost}` on both calls anybody has measured — the protocol
+ * allows optional token counts and this model sends none. So there is no cache-read
+ * count to gate on, `roundCache` returns `unknown` for it, and nothing here can
+ * say whether the upstream warmed anything. **Unknown, not cold** — the gate
+ * below never sees a dictation row anyway (it is an interaction, not a draw),
+ * and the reason is recorded here so the next person to widen these rules does
+ * not read a null as a zero. src/models.ts § `Wire`.
  *
  * **Not under `--batched-modes` and not on a batched draw**, where the warm read
  * is the thing being measured.

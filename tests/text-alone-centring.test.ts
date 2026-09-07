@@ -5,7 +5,7 @@
  * Plain mode centres the article — Greg, 2026-09-03: *"In Plain mode, can you
  * centre the text on the page?"* — and it takes three things that live in three
  * files: `fitView` caps the column (`PROSE_ALONE_MAX_REM`, tested next door),
- * `App.tsx` turns `fit.alone` into a `text-alone` class and writes `--table-w`,
+ * `Reader` turns `fit.alone` into a `text-alone` class and writes `--table-w`,
  * and `styles.css` centres the table and the masthead with those. **Delete
  * either of the last two and all 31 layout tests stay green while the page is
  * back where it started** — GPT Sol's third finding on the built code, 2026-09-03.
@@ -30,14 +30,17 @@ const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), "utf8"
 
 /** Block comments only — enough for CSS, and for the JSDoc and `/* … *\/` in App. */
 const stripBlockComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "");
-/** And the line comments App.tsx also uses. */
+/** And the line comments the reading view also uses. */
 const stripLineComments = (src: string) => src.replace(/^[^\n"'`]*\/\/[^\n]*$/gm, "");
 
 /* The reading-view sheets as a set, not one path: since 2026-09-06 a rule can
    move between them without changing, and a test that named the file it used to
    be in would go green over nothing. tests/helpers/stylesheets.ts. */
 const css = readerCssNoComments();
-const app = stripLineComments(stripBlockComments(read("../src/web/App.tsx")));
+/* The reading view, which left `App.tsx` for src/web/reader/Reader.tsx on
+   2026-09-06. The read is what fails if it moves again — an assertion pointed
+   at the wrong file would simply stop finding what it is looking for. */
+const reader = stripLineComments(stripBlockComments(read("../src/web/reader/Reader.tsx")));
 
 /**
  * One CSS rule body, by selector, with whitespace flattened.
@@ -137,17 +140,17 @@ describe("the article on its own is centred", () => {
     );
   });
 
-  it("App writes the class and the width the stylesheet reads", () => {
+  it("Reader writes the class and the width the stylesheet reads", () => {
     // The class comes from `fit.alone` rather than from a second copy of the
     // condition — the mistake `proseVisible` exists because of.
-    expect(app).toMatch(/fit\.alone \? " text-alone" : ""/);
-    expect(app).toMatch(/"--table-w": `\$\{fit\.tableW\}px`/);
+    expect(reader).toMatch(/fit\.alone \? " text-alone" : ""/);
+    expect(reader).toMatch(/"--table-w": `\$\{fit\.tableW\}px`/);
   });
 
   it("and hands fitView the root font size the page is painted at", () => {
     // Without this the cap is a px number that is only right at a 16px root, and
     // a reader with a larger default font loses a quarter of their measure.
-    expect(app).toContain("useRootFontPx()");
-    expect(app).toMatch(/^\s*rootFontPx,$/m);
+    expect(reader).toContain("useRootFontPx()");
+    expect(reader).toMatch(/^\s*rootFontPx,$/m);
   });
 });

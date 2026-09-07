@@ -521,13 +521,22 @@ const TASKS: readonly InteractionTask[] = [
     note:
       `One recording (${DICTATION_CLIP}) transcribed through \`transcribe\`, with the article's ` +
       "vocabulary in scope as the composer's mic has. **One round, because there is no article " +
-      "prefix and no explicit cache breakpoint** — not because nothing can warm. The earlier " +
-      "wording claimed the second, and it is false: `DICTATION_MODEL` is a Gemini model " +
-      "(src/models.ts) and Gemini caches implicitly, by default, with no breakpoint asked for. " +
-      "The clip is committed and the vocabulary comes from a fixed article, so a rerun inside " +
-      "the cache lifetime resends identical bytes. That is why the round is checked against its " +
-      "calls (`roundCache`) rather than assumed cold. The number scales with the seconds of " +
-      "audio, so it is a rate rather than a per-press price.",
+      "prefix and no explicit cache breakpoint.** The number scales with the seconds of audio, " +
+      "so it is a rate rather than a per-press price. " +
+      "**Its cache state is UNKNOWN and will stay that way**, which is a stronger statement than " +
+      "cold: since 2026-09-07 dictation is a transcription request to `openai/gpt-transcribe` on " +
+      "the transcription endpoint, whose `usage` is `{seconds, cost}` — no token counts of any " +
+      "kind, so no cache-read count for `roundCache` to read. It returns `unknown` here rather " +
+      "than `cold`, this round is listed every run as not the state it was labelled, and the " +
+      "zeros on its token line mean *not reported* rather than *measured zero*. " +
+      "**The wording has now been wrong twice and both mistakes are worth keeping.** It first " +
+      "said nothing could warm, which was false: `DICTATION_MODEL` was then a Gemini model and " +
+      "Gemini caches implicitly, by default, with no breakpoint asked for, and the clip and the " +
+      "vocabulary are fixed so a rerun inside the cache lifetime resends identical bytes. The " +
+      "correction to that said the round was *checked* rather than assumed — which is still the " +
+      "right instinct and is now the reason there is no answer, because the new wire reports " +
+      "nothing to check. Whether the upstream warms anything is not something we can see from " +
+      "here; do not write it down as cold.",
     rounds: { kind: "one" },
     async run({ slug }) {
       const audio = (
@@ -652,6 +661,13 @@ const STANDING_NOTES = [
     "— so both numbers are real and their ratio means nothing. It is the most expensive turn " +
     "in the app by design: 12k output tokens and up to 30 web search results.",
   "Unpriced calls are unknown, not zero: a total carrying them is short by an unknown amount.",
+  "The same goes for token counts. `tokens.cacheRead` and the rest are sums that read a missing " +
+    "count as zero, and the model dictation is on since 2026-09-07 reports none of them — " +
+    "`openai/gpt-transcribe` on the `transcription` wire, whose usage came back `{seconds, cost}` " +
+    "on both calls anybody has measured. Read the row's `cache` field, not its zeros: `unknown` " +
+    "there means nobody told us, and the terminal line prints NOT REPORTED rather than a number. " +
+    "The token line has the same hazard and is not yet guarded the same way — a zero there may be " +
+    "a real zero or a missing count, and only the `transcription` rows are suspect today.",
 ];
 
 /* ------------------------------------------------------------- measuring -- */
@@ -750,7 +766,24 @@ function printRound(r: RoundResult): void {
   console.log(
     `  ${" ".repeat(18)}      tokens ${r.tokens.input.toLocaleString()} in / ` +
       `${r.tokens.output.toLocaleString()} out / ${r.tokens.reasoning.toLocaleString()} reasoning / ` +
-      `${r.tokens.cacheRead.toLocaleString()} cache-read / ${r.tokens.cacheWrite.toLocaleString()} cache-write` +
+      /* **`0 cache-read` and "nobody said" are different facts and used to print
+         the same.** `sum` coerces a `null` count to zero, so a model reporting
+         no counts — `openai/gpt-transcribe`, whose `usage` came back
+         `{seconds, cost}` (src/models.ts § `Wire`) — rendered as a round that had
+         demonstrably read no cache. `roundCache` already knows the difference and
+         says so in `r.cache`, so this reads the verdict that exists rather than
+         adding a second one. Added 2026-09-07 with dictation's move to
+         the transcription endpoint.
+
+         **The `in / out / reasoning` numbers on the line above have the same
+         hazard and are not guarded**, so a transcription row still shows
+         `0 in / 0 out`. Left because the fix is not another suffix — those three
+         are summed across every row in the round, so one unreported row cannot
+         be spoken for without splitting the sum by wire. Named here rather than
+         quietly tolerated; GPT Sol's third review. */
+      (r.cache.kind === "unknown"
+        ? "cache-read / cache-write NOT REPORTED"
+        : `${r.tokens.cacheRead.toLocaleString()} cache-read / ${r.tokens.cacheWrite.toLocaleString()} cache-write`) +
       /* The line that says whether the label was true, and it is the one thing
          on this page a wrong ratio would come from. A token count nobody reads
          is not a verdict; `roundCache` is. */
