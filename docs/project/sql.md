@@ -158,7 +158,7 @@ Three things to copy from it, not just the idea:
 - **A containment test that matches the real shape** — `'[{"name":"toc"}]'` — if you want one at all.
 
 **And check what else was derived from the blob.** `jobs.work_key` is
-[`workKeyFor`](../../src/jobs.ts)'s hash of the step names *and four other things*, and it is what
+[`workKeyFor`](../../src/store/jobs.ts)'s hash of the step names *and four other things*, and it is what
 active-job de-duplication compares. Rewriting the steps without recomputing the key makes one request
 look like two. Worse, that function's own comment says it must hash exactly what `sameWork` reads
 "or there are two rules for one question and they drift" — so a migration that edits the steps behind

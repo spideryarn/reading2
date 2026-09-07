@@ -1,9 +1,12 @@
 # The authenticated API's dispatch becomes enumerable — and the matrix test that has to come first
 
 Status as of 2026-09-07: **the expensive part is behind us; what remains is mechanical.** Stages 1,
-1b, 1c, 2, 3a, 3b, 3c, 4a and 4b are landed and reviewed. `AUTH_ROUTES` holds **21 of the 81 guards**
-(billing, jobs/uploads, referee); **60 remain**, and search is the next slice up. Biome on
-`serveAuthenticatedApi`: **244 → 234 → 183 → 164**.
+1b, 1c, 2, 3a, 3b, 3c, 4a, 4b and 5 are landed and reviewed. `AUTH_ROUTES` holds **25 of the 81
+guards** (billing, jobs/uploads, referee, search); **56 remain**, and **chat is the next slice — and
+it is claimed by 260907e**, which takes it on waking at 05:17. Check `ListAgents` and ask before
+starting any slice: referee was built twice, in parallel, eleven minutes apart, because both plans
+queued it and neither session announced. Biome on `serveAuthenticatedApi`: **244 → 234 → 183 → 164 →
+153**.
 
 **This supersedes an earlier "done enough to stop here."** That recommendation rested on a cost
 estimate that was wrong — see § *Fable settles the end-state, and corrects the price*. The remaining
@@ -700,6 +703,80 @@ Both new assertions were watched fail — a `withSpendAttribution` added at the 
 (which the old lexical cut would have missed), and a duplicated row. The general lesson is the one
 this job keeps re-learning in new costumes: **a reader that picks one of several answers cannot tell
 you it had several**, and "assign the last match" is that shape wearing ordinary clothes.
+
+**Stage 5 — search joins the table. ✅ Landed.** Four guards (`searches` GET/POST, `oneRun`
+PATCH/DELETE) became four rows, prepended above referee. Two shared matchers, `SEARCHES_PATTERN` and
+`ONE_RUN_PATTERN`. **25 of 81 rows; 56 guards remain.** Biome 164 → **153**. Contract hash unmoved.
+
+**Red-first again**, and cleanly: the four pair-keys went in with no source change, the file went red
+with exactly those four rows at the head of a 21-vs-25 diff, and the expectation was not touched
+afterwards. The body comparison was stricter than the brief asked — it did **not** strip comments, so
+all four bodies were compared token-for-token including their prose, and all four came out identical.
+
+### The claim this stage was built on turned out to be wrong, in our favour
+
+This slice deliberately shipped **no lifetime oracle**, on Sol's "once, not per domain" ruling. The
+brief said plainly that the cost was a lock-holding streaming handler with no runtime guard, so that
+the price was recorded rather than assumed away. **It was not the price.** Mutating the moved
+`searches` POST handler's `await` to `void` reddens **`tests/routes.test.ts` § *POST
+/api/search/:slug is a stream too*** — five cases, `expected +0 to be 200`, the request ending before
+the stream ran — with a 128-passed control on the unmutated tree. Reproduced by the orchestrator.
+
+So search had de-facto request-lifetime coverage all along, written for its own sake long before this
+migration, and that coverage now travels through `dispatchAuthRoute`. Two corrections fall out:
+
+- **The orchestrator told a peer session that "nothing catches" this. That was false**, and it had
+  already been half-corrected by that peer, who pointed out the body diff catches it statically. The
+  full answer is that *both* catch it: a standing behavioural test at runtime, and the body diff at
+  move time.
+- **The residual gap is narrower than § queued below first claimed.** It is not "search has no
+  standing guard"; it is that the guard is incidental — `routes.test.ts` was never written as a
+  lifetime oracle and nothing names it as one, so a future reorganisation could remove it without
+  anyone noticing what it was also doing.
+
+**One hazard checked rather than assumed.** A mid-body `return;` meaning *fall through to the next
+guard* would change meaning in the table while the normaliser strips only the trailing one — an
+**empty diff over a real behaviour change**, which is the worst shape available here. It does not
+apply: the slice's four `return;` are each their arm's last statement, and the only mid-body exit is
+`throw httpError(400, …)` in `oneRun` PATCH, which propagates identically because `dispatchAuthRoute`
+puts no `try` around `await route.handler(...)`. **Re-check this per slice** — `chat` has more arms
+and more early exits than anything moved so far.
+
+**A silent success in the evidence, not the code.** `npx vitest run` given a path that does not exist
+runs the other files and exits 0 without mentioning it. A brief here named a superseded test file and
+vitest reported three files passing rather than complaining about the fourth. Read the `Test Files N
+passed` count against the number of paths you passed; when a test is load-bearing evidence, that
+count is part of the evidence.
+
+### The four slices that need an oracle written before they move
+
+Sol's stage 5 review answered the question stage 5 raised. The **"once, not per domain" ruling holds**
+as an argument about a *verified verbatim move* — the dispatcher's await is tested once, and the body
+comparison protects each caller's own await. What does **not** generalise is the runtime safety net:
+search's behavioural coverage is **incidental**, so "search turned out to be covered" is not evidence
+that the next one will be. Sol went looking, and named the gaps:
+
+| Route | Stateful behaviour | Coverage |
+|---|---|---|
+| `DELETE /api/chat/:slug/:threadId` | holds `inTurnOrder` until deletion completes | **Gap.** No server-side DELETE test at all; `tests/turn-order.test.ts:9` says the helper suite does not test route wiring. **In the chat slice.** |
+| `POST /api/comments/:slug/:id/answer` | SSE plus the `answering` registry | **Gap.** Only HTTP test is a pre-stream 409 refusal (`routes.test.ts:1400`); no successful-path test. |
+| `POST /api/similar/:slug`, `/api/projection/:slug` | paid single-flight promises in `INFLIGHT` | **Gap.** Their lifetime link is `return withSpendAttribution(…)` rather than an `await`, so the equivalent mutation is `return` → `void`. |
+| `GET /api/link-summary` | SSE plus a database single-flight claim | **Gap.** Nothing drives a successful HTTP stream through it. |
+
+Covered, and safe to move on the existing recipe: **chat POST** (`chat-route.test.ts:114` awaits
+`handleApi` then requires frames and stored rows), **quiz mark**, the live-session routes, and the
+non-streaming domains — glossary, ideas, quotes, timeline, arc, sketch, illustrated.
+
+### The normaliser should refuse, not rely on a hand check
+
+Sol's **P2-RETURN-NORMALIZER**: the body comparison should refuse automatic comparison whenever the
+guard's own function scope holds any return other than exactly one final, argumentless `return;`,
+excluding nested-function returns. **And it corrected the model both this plan and 260907e were using
+for the hazard.** A retained early `return;` in a table handler does *not* fall through to another
+route — `dispatchAuthRoute` still returns `true` after the handler. **The dangerous transformation is
+the opposite: *removing* a return and letting later statements in the same handler execute.** The
+refusal boundary is right either way, and it will force deliberate handling of chat GET and of the
+existing `similar`/`projection` promise returns.
 
 ## Where stage 3 stands, and what the next slice costs
 

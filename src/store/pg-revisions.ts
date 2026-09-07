@@ -87,13 +87,14 @@ import {
 import { currentOwnerId } from "../owner.js";
 import { hashBlocks } from "../source-hash.js";
 import { checkTree } from "../tree-invariants.js";
-import type { Block, StepName, Tree } from "../types.js";
+import type { Block, OwnerId, StepName, Tree } from "../types.js";
 import { deriveLibraryScalars } from "../library-scalars.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { REVISION_PROJECTIONS, ownedSlug, requireSlug } from "./pg.js";
 import { slugIsTaken } from "./slug-is-taken.js";
 import { NO_INPUT_HASH, PIPELINE_RUN, hierarchyCurrency } from "./artifacts.js";
 import { liveAttempt } from "./job-fence.js";
+import { enqueueSuccessorIn, type SuccessorOutcome } from "./pg-successor.js";
 
 const logger = log("store");
 
@@ -580,18 +581,100 @@ export class JobDraftGone extends Error {
 
 /* ---------------------------------------------------------------- helpers -- */
 
-/** The article row, locked for the length of the transaction. */
+/**
+ * The article row, locked for the length of the transaction.
+ *
+ * **The owner is a parameter, and omitting it is the ambient one.** That is
+ * `ownedSlug`'s own contract (src/store/owned-slug.ts) and the reason it has the
+ * argument: a caller that already knows whose row it is holding says so rather
+ * than asking a second question that can differ. Every caller in this file is
+ * inside a request, or a claimant running as the article's owner, so all of them
+ * omit it — `settleExpired`'s global sweep is the exception, and it comes in
+ * through `lockArticlesInSlugOrder` below.
+ */
 async function lockArticle(
   tx: Tx,
   slug: string,
+  ownerId?: OwnerId,
 ): Promise<typeof articles.$inferSelect | undefined> {
   const rows = await tx
     .select()
     .from(articles)
-    .where(ownedSlug(slug))
+    .where(ownedSlug(slug, ownerId))
     .limit(1)
     .for("update");
   return rows[0];
+}
+
+/**
+ * **Take several article locks up front, in one fixed order** — for a caller
+ * that is about to touch job rows and must not invert the order this file keeps.
+ *
+ * *Article lock before job lock, everywhere* (see `openOrBeginJobDraft`). A
+ * caller that has already locked a job row and then reaches
+ * `markNavLabelsFailedIn` would take them job-then-article, which deadlocks
+ * against `publishRevisionIn` and `failRevisionIn` going the other way. The only
+ * caller that has this problem is `settleExpired` (src/store/pg-jobs.ts), whose
+ * whole shape is two `UPDATE`s over a set of jobs; it snapshots the set first
+ * and calls this before either of them.
+ *
+ * **Sorted by slug**, which is the second half of the guarantee. Two locks per
+ * transaction is a deadlock between two concurrent sweeps unless every taker
+ * agrees an order, and `articles.slug` is globally unique — it is the URL
+ * contract — so it is a total order over the rows here. Sorting is done by the
+ * caller's `ORDER BY` and asserted rather than redone: the caller reads its
+ * snapshot in slug order, so a re-sort here would be a second opinion about the
+ * same thing.
+ *
+ * **The assertion is JavaScript's `<`, which is code-point order, so the caller
+ * must sort in code-point order too** — `order by slug collate "C"`, not the
+ * cluster's default collation, which under a locale like `en_GB.utf8` disagrees
+ * with `<` for valid slugs containing hyphens and digits. Getting that wrong
+ * does not degrade gracefully: this throws, and it throws inside the caller's
+ * transaction, so a collation setting would take the whole sweep down before any
+ * job settled. `isSlug` (src/ingest.ts) is `/^[a-z0-9][a-z0-9-]*$/`, so byte
+ * order and code-point order are the same order for every string that can reach
+ * here — the argument holds only while slugs stay ASCII, and it is written here
+ * because that is the assumption. GPT Sol, G3 of the second stage 2c review.
+ *
+ * **The owner is per row and never ambient.** The sweep runs inside whichever
+ * reader's request happened to make it, and the job it is ending may be anybody's
+ * — so the owner comes off the job row. An ambient lookup would match nothing,
+ * return `undefined`, and be indistinguishable from "there is no such article".
+ *
+ * ## A row it could not lock is dropped from the answer, and that is load-bearing
+ *
+ * **It returns the rows it actually locked**, and the caller must go on with
+ * *those* rather than with what it asked for. Silently locking nothing and
+ * carrying on is what this used to do, and it restores the very inversion the
+ * function exists to prevent: the sweep would lock no article, go on to lock job
+ * rows, and `markNavLabelsFailedIn` would then take the article lock itself — by
+ * which time the slug may have been **recreated**, so the lock is real and is
+ * taken *after* the job lock. A stale claimant holding that replacement article
+ * in `openOrBeginJobDraft` and waiting on the swept job row closes the cycle.
+ * GPT Sol, F2 of the stage 2c review.
+ *
+ * So this fails closed. Skipping the mark for an article that is not there is the
+ * right outcome anyway — there is no revision to write a sentence on — and the
+ * generic signature is what makes the caller's filtered set keep its own fields.
+ */
+export async function lockArticlesInSlugOrder<
+  T extends { readonly slug: string; readonly ownerId: OwnerId },
+>(tx: Tx, toLock: readonly T[]): Promise<T[]> {
+  const locked: T[] = [];
+  let previous: string | undefined;
+  for (const row of toLock) {
+    if (previous !== undefined && row.slug < previous) {
+      throw new Error(
+        "lockArticlesInSlugOrder was handed rows out of slug order; two callers taking these " +
+          "locks in different orders is a deadlock.",
+      );
+    }
+    previous = row.slug;
+    requireSlug(row.slug);
+    if (await lockArticle(tx, row.slug, row.ownerId)) locked.push(row);
+  }
+  return locked;
 }
 
 /**
@@ -1767,6 +1850,27 @@ export interface PublishRevisionResult {
    * says them out loud after the commit; nothing else reads them.
    */
   readonly carriedTreeProblems: readonly string[];
+  /**
+   * **What became of the free `labels` job this publication needed** — the whole
+   * `SuccessorOutcome`, not a field per arm.
+   *
+   * `null` means the question did not arise: the revision published `ready` or
+   * `failed`, so there was nothing to buy. Otherwise it is one of three answers,
+   * and one of them — `boundToOlderBase` — is the news that this revision has
+   * reached the shelf saying *"Paragraph labels are still arriving"* with nothing
+   * queued to make it stop being true.
+   *
+   * **It was two nullable fields for one day**, `successorJobId` and
+   * `successorBoundToOlderBase`, and that is a union wearing a disguise: nothing
+   * stopped both being set, and the two ternaries that filled them would have
+   * mapped a future fourth arm to two nulls with the compiler saying nothing.
+   * `logPublication` now switches over this with a `never` check, so a fourth arm
+   * is a compile error at the place that has to decide what to say about it. GPT
+   * Sol, G5 of the second stage 2c review; CLAUDE.md § *Let the types catch it*.
+   *
+   * `logPublication` is the only reader. Nothing decides anything on it.
+   */
+  readonly successor: SuccessorOutcome | null;
 }
 
 /** What `reasonsNotToPublish` decided: what refuses, and what merely worries. */
@@ -2027,7 +2131,52 @@ export async function publishRevisionIn(
     .set({ currentRevisionId: revisionId })
     .where(eq(articles.id, article.id));
 
-  return { revisionId, previousRevisionId: article.currentRevisionId, scalars, carriedTreeProblems };
+  /**
+   * **A revision that publishes `pending` buys the job that finishes it — here,
+   * in the transaction that published it.**
+   *
+   * `hierarchy` stopped calling `generateLabels` in stage 2a
+   * (docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md), so an
+   * article now reaches the shelf saying *"Paragraph labels are still
+   * arriving"*. This is what makes that sentence temporary. Inside the
+   * transaction, so the pointer and the successor become true together: a
+   * publication that committed with nothing queued would leave that sentence up
+   * for ever, and nothing on the server reaps a queued row to notice.
+   *
+   * **In the primitive rather than in `pgStoreSession.settleIn`, and this file
+   * has already made that argument once** — the lineage check above lived in
+   * that caller until 2026-09-01, and *a guard that lives in one caller is a
+   * guard the next caller forgets*. The rule is about the revision, not about
+   * the pipeline: any publication whose result is `pending` needs the job,
+   * including the standalone `publishRevision` wrapper above, which is a caller
+   * the pipeline never uses. GPT Sol's stated rule for this stage.
+   *
+   * **`=== "pending"` rather than `!== "ready"`**, so `failed` does not buy a job
+   * on every publication of an article whose labels have already been tried and
+   * lost. Re-running them is a step re-run the reader asks for.
+   *
+   * Nothing is driven from here — see `enqueueSuccessorIn`, and § *Who actually
+   * runs the successor* in the plan: the browser's `jobEngine` drives every
+   * queued job the signed-in owner has, from any page.
+   */
+  const successor =
+    draft.navLabelStatus === "pending"
+      ? await enqueueSuccessorIn(tx, {
+          ownerId: article.ownerId as OwnerId,
+          slug,
+          steps: ["labels"],
+        })
+      : null;
+
+  return {
+    revisionId,
+    previousRevisionId: article.currentRevisionId,
+    scalars,
+    carriedTreeProblems,
+    /* Carried out of the transaction whole, so `logPublication` can say the
+       right thing about it after the commit. See `SuccessorOutcome`. */
+    successor,
+  };
 }
 
 /**
@@ -2048,9 +2197,32 @@ export function logPublication(
       previous: published.previousRevisionId,
       blocks: published.scalars.blockCount,
       words: published.scalars.wordCount,
+      /* Absent on almost every publication. Present means this revision reached
+         the shelf without its paragraph labels and bought the free job that
+         finishes them — see `publishRevisionIn`. */
+      ...(published.successor?.kind === "queued"
+        ? { successorJobId: published.successor.jobId }
+        : {}),
     },
     "revision published",
   );
+  /**
+   * **The article reached the shelf promising labels that nothing is going to
+   * buy**, and this line is the only thing that says so.
+   *
+   * A `labels` job for this article was already queued and is working from an
+   * earlier base, so it can never finish this revision, and nothing queued a
+   * second one. The reader sees *"Paragraph labels are still arriving"* and it
+   * stays. The remedy is a `labels` re-run against this article once the older
+   * job is out of the way — deliberately **not** "retry the publication", which
+   * would be refused by the base-lineage guard the moment that job publishes
+   * anything of its own. GPT Sol, F6 of the stage 2c review, on the advice the
+   * refusal this replaced used to give.
+   *
+   * Slug, revision and job id — the same fields the line above carries, and no
+   * article prose.
+   */
+  sayWhatBecameOfTheSuccessor(opts.slug, published);
   /* After the commit, and only here. The article is now serving a tree that
      `checkTree` rejects — carried forward, not caused by this publication, and
      already in front of readers before it. Re-running `hierarchy` repairs it.
@@ -2064,6 +2236,60 @@ export function logPublication(
       },
       "published over a carried-forward tree that checkTree rejects — re-run hierarchy to repair it",
     );
+  }
+}
+
+/**
+ * **The one arm of `SuccessorOutcome` a reader needs to hear about**, said after
+ * the commit and switched over exhaustively.
+ *
+ * A `switch` with a `never` default rather than an `if`, because this is the
+ * place that has to decide what a fourth arm means: adding one to the union is
+ * then a compile error here instead of a silent nothing. GPT Sol, G5.
+ */
+function sayWhatBecameOfTheSuccessor(slug: string, published: PublishRevisionResult): void {
+  const successor = published.successor;
+  if (!successor) return;
+  switch (successor.kind) {
+    /* Already in the line above, and an ordinary dedupe is not news. */
+    case "queued":
+    case "alreadyQueued":
+      return;
+    case "boundToOlderBase":
+      /**
+       * **The article reached the shelf promising labels that nothing is going
+       * to buy**, and this line is the only thing that says so.
+       *
+       * A `labels` job for this article was already queued and is working from an
+       * earlier base, so it can never finish this revision, and nothing queued a
+       * second one. The reader sees *"Paragraph labels are still arriving"* and
+       * it stays.
+       *
+       * **The remedy names the holder and the order**, because one command is not
+       * enough: an unforced `npm run labels -- <slug>` de-duplicates straight onto
+       * that older job, drives it to its inevitable lineage failure and exits, so
+       * the operator has to ask again once it is terminal. GPT Sol, G6 of the
+       * second stage 2c review. Retrying the *publication* is not the remedy at
+       * all — the base-lineage guard would refuse it.
+       *
+       * Slug, revision and job id — the same fields the line above carries, and
+       * no article prose.
+       */
+      logger.warn(
+        {
+          slug,
+          revisionId: published.revisionId,
+          holderJobId: successor.jobId,
+        },
+        "published without a labels successor: the queued one is bound to an earlier revision, " +
+          "so this revision keeps its \"still arriving\" sentence — once that job ends, re-run " +
+          "labels for this article",
+      );
+      return;
+    default: {
+      const unreachable: never = successor;
+      throw new Error(`unhandled successor outcome: ${JSON.stringify(unreachable)}`);
+    }
   }
 }
 
@@ -2152,6 +2378,103 @@ export async function failRevisionIn(
   if (opts.job) await fenceJob(tx, opts.job.id, opts.job.attemptId, null);
 
   return { changed: result.rowCount };
+}
+
+/**
+ * A `labels` job died; say so on **the revision it was working from**, and only
+ * while that is still what readers are being served.
+ *
+ * ## Which revision, and why it is not the obvious one
+ *
+ * A failing job fails its **candidate draft** (`failRevisionIn` above), and that
+ * draft is thrown away. The revision carrying `nav_label_status = 'pending'` —
+ * the one on the shelf, saying *"Paragraph labels are still arriving"* — is the
+ * draft's **base**, and nothing touches it on the failing path. So a successor
+ * that fails leaves the sentence up for ever unless something writes `failed`
+ * onto the base, which is what this is. Stage 1 built the `failed` state and its
+ * reader-facing sentence; until now nothing wrote it.
+ *
+ * ## Only while the base is current
+ *
+ * Two reads under the article lock this takes: the draft's
+ * `based_on_revision_id`, written once by `beginDraftIn` and never changed, and
+ * `articles.current_revision_id`. If they differ, something published while this
+ * job ran — and that newer revision has its own labels story and its own
+ * successor. Writing `failed` onto whatever is current would tell a reader that
+ * a publication they can see went wrong because a job about an older one did.
+ * GPT Sol, F4 of the design review.
+ *
+ * ## And only over `pending`
+ *
+ * The `WHERE` carries it, so a base that is already `ready` — a labels re-run
+ * asked for by hand against an article that has its labels — is not
+ * downgraded by a failure, and a base already `failed` does not move.
+ *
+ * ## Two callers, and the second one is why `ownerId` exists
+ *
+ * The first is `settleIn` (src/store/pg-session.ts): a claimant that is still
+ * alive, running as the article's owner, ending its own job. The second, since
+ * 2026-09-07, is `settleExpired` (src/store/pg-jobs.ts) — the sweep that ends a
+ * job **with nobody inside it**, when the lease lapsed and the requeue budget is
+ * spent. That is the likeliest ending this feature has, because the label pass
+ * is the slowest step in the app; without it the article kept its *"still
+ * arriving"* sentence for ever. GPT Sol, F1 of the stage 2b review.
+ *
+ * The sweep runs inside whichever reader's request happened to make it, over
+ * every owner's jobs — deliberately, because it is the only door that reaches
+ * the job of an owner who is not coming back (src/jobs.ts § `advanceJobWith`).
+ * So it passes the **job row's** owner. Omitted, this is the ambient one, which
+ * is right for a claimant and wrong for the sweep in a way nothing would report:
+ * `ownedSlug` would simply match no article and this would return `null`.
+ *
+ * Returns the revision it moved, or `null`. **`null` is an ordinary answer** on
+ * every one of the cases above, which is why it is not a throw: the caller wants
+ * to know whether there is a line to log, not whether something went wrong.
+ */
+export async function markNavLabelsFailedIn(
+  tx: Tx,
+  slug: string,
+  draftRevisionId: string,
+  ownerId?: OwnerId,
+): Promise<string | null> {
+  requireSlug(slug);
+  /* Taken here whether or not the caller holds it, for the reason
+     `publishRevisionIn` gives: this is a function that must not depend on the
+     caller having remembered. Re-locking a row this transaction already has is
+     free — which is also what makes it safe for `settleExpired` to have taken
+     this same lock earlier, before it touched any job row. */
+  const article = await lockArticle(tx, slug, ownerId);
+  if (!article) return null;
+
+  const [draft] = await tx
+    .select({ basedOnRevisionId: articleRevisions.basedOnRevisionId })
+    .from(articleRevisions)
+    .where(eq(articleRevisions.id, draftRevisionId))
+    .limit(1);
+  const base = draft?.basedOnRevisionId;
+  /* `null` is a first ingest — copied from nothing, so there is no earlier
+     revision wearing the `pending` sentence and nothing to correct. */
+  if (!base || base !== article.currentRevisionId) return null;
+
+  const result = await tx
+    .update(articleRevisions)
+    .set({ navLabelStatus: "failed" })
+    .where(
+      and(eq(articleRevisions.id, base), eq(articleRevisions.navLabelStatus, "pending")),
+    );
+  return result.rowCount === 1 ? base : null;
+}
+
+/**
+ * The line `markNavLabelsFailedIn` prints — **after** its caller's commit, for
+ * the reason `publishRevisionIn` gives at length: a `logger` call inside a
+ * transaction announces something a later statement may roll back.
+ */
+export function logNavLabelsFailed(slug: string, revisionId: string): void {
+  logger.warn(
+    { slug, revisionId },
+    "the paragraph labels failed; the published revision now says so",
+  );
 }
 
 /**
