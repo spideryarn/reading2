@@ -139,6 +139,7 @@ export function JobProgress({
   step,
   icon,
   runningLabel,
+  about,
 }: {
   /** The job the queue says is running for this step, or null. */
   job: Job | null;
@@ -207,6 +208,28 @@ export function JobProgress({
   icon: ReactNode;
   /** Shown while running, when the step has not reported a label of its own. */
   runningLabel: string;
+  /**
+   * **What this band is about**, when the surrounding page has more than one of
+   * them — the mode's name, as a reader would say it: `"Debate"`.
+   *
+   * It exists for the **accessible name** of the two buttons below and for
+   * nothing else. `label` and *Retry* are what the reader sees, and they are the
+   * same words in every band; the mode's name sits beside the band as ordinary
+   * text, which a screen reader's button list does not pick up. On a page with
+   * nine of these — Metadata's *Generate it again* — that list reads as eight
+   * indistinguishable *Run it again* controls. Found by a cross-family review of
+   * the built code, 2026-09-07 (§ F11 of the plan).
+   *
+   * The composed name **begins with the visible text** — `Run it again — Debate`
+   * — so a speech-input user saying the words on the button still matches it.
+   *
+   * **Optional, because the nine other reader-facing callers draw one band per
+   * page** — a mode panel, the thread, the sketch — where a name would be a
+   * distinction with nothing to draw it against, and the tenth is the showcase
+   * in DesignPage. Passing nothing leaves the buttons exactly as they were: no
+   * `aria-label` at all, so the accessible name is the visible text.
+   */
+  about?: string;
 }) {
   /**
    * A second while a job is on screen, a minute otherwise.
@@ -273,6 +296,8 @@ export function JobProgress({
           variant="outline"
           size="sm"
           title="Run it again, skipping the stages that already worked"
+          /* The visible word first, then what it is about — see `about`. */
+          aria-label={about ? `Retry — ${about}` : undefined}
           onClick={failed.retry ?? undefined}
         >
           <RotateCw size={13} />
@@ -286,7 +311,13 @@ export function JobProgress({
           `write(force?)` has exactly that shape. The default parameter is what
           makes the shorthand dangerous. */}
       {offerRun && (
-        <Button type="button" variant="outline" size="sm" onClick={() => void onRun()}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-label={about ? `${label} — ${about}` : undefined}
+          onClick={() => void onRun()}
+        >
           {icon}
           {label}
         </Button>

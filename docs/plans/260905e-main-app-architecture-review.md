@@ -752,7 +752,7 @@ implying the sluggishness is fixed.
 
 ### Stage: Consolidate geometry only after the preceding baseline
 
-- [ ] Profile the actual scroll/layout reads after A7. If they are not material, close this stage
+- [x] Profile the actual scroll/layout reads after A7. If they are not material, close this stage
   as deferred with evidence; a new observer service has a real maintenance cost.
 - [ ] Share the smallest read snapshot between two existing consumers. Preserve distinct focus
   calculations and fresh explicit jumps; test delayed image/font/viewport changes.
