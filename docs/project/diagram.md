@@ -143,7 +143,8 @@ wrote in:
 >
 > — a reader, 2026-09-04 (SPIDERYARN-READING2-13)
 
-So Diagram's row in `MODES_UI` is `experimental: false` and each row of
+So Diagram is `experimental: false` in
+[`MODE_CATALOG`](../../src/mode-catalog.ts) and each row of
 `KIND_UI` ([`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx)) carries the flag
 instead — Sketch false, the other four true. The chip row draws the ones that
 are not experimental **plus whichever the URL names**, which is the mode bar's

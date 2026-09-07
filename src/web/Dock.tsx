@@ -113,14 +113,16 @@
  *
  * ## And a second rule, which is *whether* a button is drawn at all
  *
- * Since 2026-09-03 the order is not the only question a `MODES_UI` row answers.
- * Some of these rows are behind the experimental-features switch, so the bar
- * draws the rows that are not experimental **plus whichever mode the reader is
- * in**. Every row carries a required `experimental: boolean`, so mode fifteen
- * cannot be added without somebody deciding which side of that line it is on.
+ * Order is the only question a `MODES_UI` row answers, but it is not the only
+ * question the bar asks. Some modes are behind the experimental-features
+ * switch, so the bar draws the ones that are not experimental **plus whichever
+ * mode the reader is in**. Every mode carries a required `experimental: boolean`
+ * — on the row here from 2026-09-03, and in `MODE_CATALOG` (src/mode-catalog.ts)
+ * since 2026-09-07 — so mode fifteen cannot be added without somebody deciding
+ * which side of that line it is on.
  *
- * **Which modes are on which side is not written down here**, and moving one
- * is the flag below and nothing else in this file. The membership and the
+ * **Which modes are on which side is not written down here at all any more**,
+ * and moving one is that boolean and nothing in this file. The membership and the
  * reason for each is docs/project/experimental-features.md; the independent
  * copy that stops a flag moving unnoticed is
  * tests/dock-experimental-modes.test.tsx § BEHIND_THE_SWITCH. This paragraph
@@ -177,10 +179,13 @@ import {
   X,
   Quote,
 } from "lucide-react";
-/* The one name each mode has, and the bar is one of four places that used to
-   spell it out for itself. src/title-text.ts imports nothing under src/web/, so
-   this direction is safe — the server composes a page title from the same
-   record. See `ModeUi` below. */
+/* The one name each mode has, and the one sentence about what it is — and the
+   bar is one of four places that used to spell the name out for itself. Both
+   modules import nothing under src/web/, so this direction is safe: the server
+   composes a page title from the same record, and src/mode-catalog.ts is
+   written to be readable by both runtimes for the same reason. See `ModeUi`
+   below for what a row here still holds, which is layout and nothing else. */
+import { MODE_CATALOG } from "../mode-catalog.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { Comment } from "../types.js";
 import { armActivationForMode, armActivationForTweets } from "./activation.js";
@@ -468,30 +473,20 @@ interface Props {
 interface ModeUi {
   mode: Mode;
   icon: typeof Info;
-  /**
-   * One sentence in the tooltip, which is the only per-mode string this table
-   * still holds. The **name** is `MODE_LABEL[mode]` (src/title-text.ts) — a
-   * total, compiler-checked record that the tab title and the shared-inventory
-   * dialog already read, so renaming a mode is one edit and cannot leave the
-   * bar and the tab saying different words. It had a `label` field of its own
-   * until 2026-09-02, and all thirteen pairs matched, which is what a copy
-   * looks like right up until it does not.
-   * docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md § T1.2.
-   */
-  blurb: string;
-  /**
-   * **Is this mode still being built?** If so it is drawn only for a reader who
-   * turned the experimental-features switch on — or who is in it right now.
-   * docs/project/experimental-features.md is the operating manual, and
-   * `visibleModes` below is the rule.
-   *
-   * **Required on every row, and not an optional flag on five.**
-   * `ModesMissingFromDock` proves each mode has a row; only a required field
-   * proves each row *made the decision*, and docs/project/new-mode.md says the
-   * author must make it. An optional flag would quietly enrol mode fifteen
-   * among the polished ones. (GPT Sol, finding 8.)
-   */
-  experimental: boolean;
+  /* **A row holds no per-mode words at all any more, and no policy either.**
+     The **name** is `MODE_LABEL[mode]` (src/title-text.ts) — a total,
+     compiler-checked record the tab title and the shared-inventory dialog
+     already read, so renaming a mode is one edit and cannot leave the bar and
+     the tab saying different words. It had a `label` field of its own until
+     2026-09-02, and all thirteen pairs matched, which is what a copy looks like
+     right up until it does not
+     (docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md § T1.2).
+     The **sentence** and the **experimental flag** left on 2026-09-07 for
+     `MODE_CATALOG` (src/mode-catalog.ts), which is where the reasoning for both
+     now lives: they are facts about the mode rather than about the bar, and a
+     second reader of them was arriving that could not import this file.
+     docs/plans/260906h-mode-catalog-and-a-command-bar.md.
+     What is left here is layout, and only layout. */
   /**
    * **Keep the word when every other button loses one.**
    *
@@ -548,16 +543,12 @@ const MODES_UI = [
      while a band is open. docs/plans/plain-mode-and-the-way-out.md. */
   {
     mode: "plain",
-    experimental: false,
     icon: AlignLeft,
-    blurb: "Just the article — no columns, no panel",
     keepLabel: true,
   },
   {
     mode: "hierarchy",
-    experimental: false,
     icon: ListTree,
-    blurb: "The article's own shape, one column per level of detail",
   },
   /* Straight after Hierarchy, because it answers the same question — what shape
      is this piece, and where am I in it — with one nested list instead of
@@ -566,23 +557,15 @@ const MODES_UI = [
      at the near end. docs/plans/260828aw-outline-mode.md. */
   {
     mode: "outline",
-    experimental: false,
     icon: Focus,
-    blurb:
-      "The whole document in one list, with more detail on the part you are reading and less on the rest",
   },
   {
     mode: "summary",
-    experimental: false,
     icon: Layers,
-    blurb:
-      "The article, its parts and its sections, a sentence on each — as deep into the piece as you ask",
   },
   {
     mode: "glossary",
-    experimental: false,
     icon: BookA,
-    blurb: "The terms this piece uses in a non-obvious way, defined from the piece itself",
   },
   /* Straight after Glossary, because the order runs outwards from the article's
      own words and these two are the same kind of thing pointed at different
@@ -591,9 +574,7 @@ const MODES_UI = [
      reasoning rather than on the end. */
   {
     mode: "ideas",
-    experimental: false,
     icon: Lightbulb,
-    blurb: "The propositions this piece needs you to hold — the ones it assumes, and the ones it adds",
   },
   /* Next again, and it belongs at this end of the order for the same reason
      Ideas does: the bar runs outwards from the article's own words, and this is
@@ -609,9 +590,7 @@ const MODES_UI = [
      docs/project/experimental-features.md. */
   {
     mode: "quotes",
-    experimental: false,
     icon: Quote,
-    blurb: "The lines worth keeping — the piece's own sentences, chosen and checked against it",
   },
   /* **After Ideas and before Search**, which is Greg's placement (2026-08-31)
      and the reason it lands *here* rather than immediately after the Ideas row:
@@ -623,9 +602,7 @@ const MODES_UI = [
      docs/plans/260831i-timeline-mode.md § 3. */
   {
     mode: "timeline",
-    experimental: true,
     icon: Clock,
-    blurb: "When the piece says these things happened, in order — and how sure it actually is",
   },
   /* Search was **two** dimmed placeholders in the `SOON` list this file used to
      carry — `Search` and `Highlights`, side by side — and is one mode now. That
@@ -640,9 +617,7 @@ const MODES_UI = [
      annotate.ts where somebody adding a fifth kind of mark will meet it. */
   {
     mode: "search",
-    experimental: false,
     icon: Search,
-    blurb: "Find a passage by the words it uses, or by what it says",
   },
   /* **Straight after Search, because it is Search's kind of thing** — a pass
      over the piece looking for passages — pointed at somebody who has been
@@ -662,9 +637,7 @@ const MODES_UI = [
      mode is actually for. docs/project/icons.md. */
   {
     mode: "referee",
-    experimental: true,
     icon: ClipboardCheck,
-    blurb: "Reviewing this for somebody? Your criteria, its claims, and a second look at your own notes",
   },
   /* Diagram sits between the ways *into* the article and the conversation about
      it, next to Summary rather than next to Chat, because it is the same move
@@ -683,19 +656,16 @@ const MODES_UI = [
      chip inside the mode. activation.ts § MODE_TARGET has the reasoning, and the
      empty state still says the price for anyone who arrives without pressing.
 
-     The blurb names the picture a default reader will actually meet. It used to
-     list the three geometries, which are now the hidden ones. */
+     Its description (src/mode-catalog.ts) names the picture a default reader
+     will actually meet. It used to list the three geometries, which are now the
+     hidden ones. */
   {
     mode: "diagram",
-    experimental: false,
     icon: Network,
-    blurb: "The article's shape as a picture: a model reads the argument and draws it",
   },
   {
     mode: "chat",
-    experimental: false,
     icon: MessagesSquare,
-    blurb: "Ask about this article — answers point back at the paragraphs they came from",
   },
   /* **After Chat and before Remember**, which is a placement in the ordering
      this list has followed since Greg set it by hand rather than an array
@@ -715,15 +685,14 @@ const MODES_UI = [
      other sense in this app — *shared publicly* — appears only on surfaces that
      are about sharing, and the bar is not one. docs/project/icons.md.
 
-     The blurb names the empty case, because it is the commonest one: most
-     pieces have no critical reception at all, and a mode that is empty four
-     times in five reads as broken unless the button said so first.
+     Its description (src/mode-catalog.ts) names the empty case, because it is
+     the commonest one: most pieces have no critical reception at all, and a
+     mode that is empty four times in five reads as broken unless the button
+     said so first.
      docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
   {
     mode: "debate",
-    experimental: true,
     icon: Globe,
-    blurb: "What the rest of the web says about this piece — often nobody has written anything, and it says so",
   },
   /* Last, and one step further out than Chat, which is the end of the ordering
      this list has followed since Greg set it by hand: it runs from the article
@@ -732,8 +701,8 @@ const MODES_UI = [
      all until they have read the piece — so it belongs past the point where the
      article's own words run out. docs/plans/260827ah-review-mode.md.
 
-     **The blurb is doing more work here than anywhere else in this list**, and
-     it has to keep doing it. "Remember" (renamed from "Review" on 2026-09-01)
+     **Its description is doing more work than any other in the catalog**
+     (src/mode-catalog.ts), and it has to keep doing it. "Remember" (renamed from "Review" on 2026-09-01)
      suggests two things this mode is not: saved memories you can go back to,
      and spaced repetition. Neither exists — nothing is stored for later and
      nothing comes back on a schedule; the reader talks, and the model shows
@@ -743,13 +712,11 @@ const MODES_UI = [
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
   {
     mode: "remember",
-    experimental: true,
     /* `Brain`, not `Speech`, from 2026-09-05. `Speech` was the mode's method — the
        reader talks — and Greg asked for its subject instead: what they kept.
        SPIDERYARN-READING2-25. It is the only brain in the bar, and Lucide has
        exactly one, so there is no second thing it could be confused with. */
     icon: Brain,
-    blurb: "Say what you took from this and find out where it holds up — not saved notes or flashcards",
   },
 ] satisfies readonly ModeUi[];
 
@@ -814,7 +781,11 @@ export type ModesMissingFromDock<
  */
 export function visibleModes(on: boolean, current: Mode | undefined): readonly ModeUi[] {
   return MODES_UI.filter((m) =>
-    shownBehindTheSwitch({ experimental: m.experimental, on, current: m.mode === current }),
+    shownBehindTheSwitch({
+      experimental: MODE_CATALOG[m.mode].experimental,
+      on,
+      current: m.mode === current,
+    }),
   );
 }
 
@@ -1295,7 +1266,7 @@ export function Dock({
                  the design. */
               className={`dock-mode${marked?.has(m.mode) ? ` ${MARKED}` : ""}`}
               keepLabel={m.keepLabel}
-              title={`${m.blurb} — back in the article itself`}
+              title={`${MODE_CATALOG[m.mode].description} — back in the article itself`}
             />
           ))
         )}
@@ -1691,7 +1662,7 @@ function DockModes({
             content={
               <>
                 <div className="tip-soon-head">{MODE_LABEL[m.mode]}</div>
-                <p>{m.blurb}</p>
+                <p>{MODE_CATALOG[m.mode].description}</p>
                 {/* A supplement, never the message. The sentence that actually
                     explains the boundary is in the band this button opens —
                     see the `marked` prop above for why that distinction is

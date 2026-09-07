@@ -1,6 +1,6 @@
 # A mode catalog, and a command bar that opens a mode
 
-Status: **planned**, not yet built. Written 2026-09-07.
+Status: **Stage 1 landed** 2026-09-07 (the catalog). Stage 2 — the command bar — not yet built.
 
 This is the build plan for the design set out in
 [260905e-mode-catalog-and-command-bar.md](260905e-mode-catalog-and-command-bar.md), which stays the
@@ -236,24 +236,24 @@ still be an improvement — the discovery facts out of a contested component and
 
 ### Stage 1 — the catalog
 
-- [ ] Add `src/mode-catalog.ts`: `ModeCatalogEntry` and a total `MODE_CATALOG: Record<Mode, …>`
+- [x] Add `src/mode-catalog.ts`: `ModeCatalogEntry` and a total `MODE_CATALOG: Record<Mode, …>`
   carrying `description`, `aliases`, `experimental`. Imports `./modes.js` and nothing else.
-- [ ] Move the fourteen blurbs and the fourteen `experimental` booleans out of `MODES_UI` **verbatim**.
+- [x] Move the fourteen blurbs and the fourteen `experimental` booleans out of `MODES_UI` **verbatim**.
   No copy is rewritten in this stage — a wording change hidden inside a move is a wording change
   nobody reviewed.
-- [ ] `MODES_UI` rows become `{ mode, icon, keepLabel? }`. `visibleModes` stays in `Dock.tsx`, still
+- [x] `MODES_UI` rows become `{ mode, icon, keepLabel? }`. `visibleModes` stays in `Dock.tsx`, still
   exported, and reads `MODE_CATALOG[m.mode].experimental`; the three call sites at Dock.tsx 817, 1298
   and 1694 are the whole edit.
-- [ ] Test: aliases are unique across modes, and no alias equals another mode's label — an ambiguous
+- [x] Test: aliases are unique across modes, and no alias equals another mode's label — an ambiguous
   bar is worse than a bare one.
-- [ ] Test: `tests/dock-experimental-modes.test.tsx`'s `BEHIND_THE_SWITCH` still passes and is
+- [x] Test: `tests/dock-experimental-modes.test.tsx`'s `BEHIND_THE_SWITCH` still passes and is
   **still not derived** from the catalog. It is the independent statement; that is its whole job, and
   its docblock says so.
-- [ ] Test: `tests/client-imports.test.ts` still holds — the catalog must not pull `src/web/` into
+- [x] Test: `tests/client-imports.test.ts` still holds — the catalog must not pull `src/web/` into
   the server's import graph. **`mode-catalog.js` needs adding to that file's shared-module
   allowlist**; a new shared module is not admitted by default.
-- [ ] Docs: `new-mode.md` gains the catalog row in its totals table; `web-client.md` gains the file.
-- [ ] Mutation check: flip one `experimental` in the catalog and confirm the suite goes red.
+- [x] Docs: `new-mode.md` gains the catalog row in its totals table; `web-client.md` gains the file.
+- [x] Mutation check: flip one `experimental` in the catalog and confirm the suite goes red.
 
 Done looks like: the Dock renders identically, `npm test` and `npm run typecheck` green, and nothing
 outside `src/web/` imports React because of this change.
@@ -310,7 +310,8 @@ and mount. Both are attributed in their commit messages. `App.tsx` is not edited
   [260906h-mode-catalog-and-a-command-bar-review-sol.md](260906h-mode-catalog-and-a-command-bar-review-sol.md).
   Its verdict: *"The catalog split is sound, and deferring `AppAction` is sound. I would not build
   Stage 2 unchanged, however."*
-- [ ] GPT Sol at the end of Stage 1.
+- [x] GPT Sol at the end of Stage 1 — 2026-09-07, five findings, no P0 or P1, in
+  [260906h-stage1-review-sol.md](260906h-stage1-review-sol.md). All five accepted and fixed.
 - [ ] GPT Sol at the end of Stage 2.
 
 Two rounds each, then settled here in writing.
@@ -329,6 +330,25 @@ Two rounds each, then settled here in writing.
 It also cleared, explicitly: the catalog split, `modes.ts` keeping the vocabulary, mounting from
 `Dock`, deferring `AppAction`, and — verified independently, by hand — the three-call-site blast
 radius. It found no new token-cross-spend sequence.
+
+### Stage 1 dispositions — all five accepted
+
+Reviewed 2026-09-07, no P0 and no P1. What it cleared matters as much as what it found: it
+mechanically compared all 14 descriptions and all 14 booleans against `3ac53baa` and confirmed
+**zero differences**, confirmed `Record<Mode, ModeCatalogEntry>` preserves totality with no
+`Partial`, optional, index signature or default, and confirmed the import direction is safe.
+
+| ID | Sev | Finding | Fix |
+|---|---|---|---|
+| F1 | P2 | Prose in seven places still pointed at `MODES_UI` for facts that had left | Retargeted `Dock.tsx` (header + Diagram/Debate/Remember comments), `dock-experimental-modes.test.tsx` ×2, `diagram-kind-gating.test.tsx`, `diagram.md`, `DiagramPanel.tsx`. The ordering rationales stay verbatim |
+| F2 | P2 | Alias uniqueness compared raw text, before the matcher's whitespace collapse — `"peer review"` and `"peer  review"` both pass and then collide. **Sol reproduced it** | A single `canonical()` in the test — lowercase, trim, collapse — used by all three assertions, plus one asserting the table is *stored* canonical |
+| F3 | P2 | `quiz` named a Remember sub-mode the bar cannot reach: opening Remember lands on Recall (`params.ts`), so the alias would name a destination and not go there | **`quiz` removed**, with the reason written into the row so it is not re-added. It returns when a command can encode `{ mode: "remember", remember: "quiz" }` |
+| F4 | P2 | `claims` → Ideas collides with Referee's sub-mode labelled exactly "Claims". Textual uniqueness cannot see it — the collision is with a label inside another mode | `premises` instead |
+| F5 | P3 | Stage 1 prose described the Stage 2 bar in the present tense | Future tense in all three places |
+
+F3 and F4 are the two worth noting: both were aliases that would have shipped a small lie, and
+neither was reachable by any test in the file. That is the class — **an alias is product copy, and
+product copy is checked by a person or not at all.**
 
 ### F1, and why the premise does not hold
 

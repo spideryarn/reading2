@@ -220,9 +220,9 @@ interface Props {
  * >
  * > — a reader, 2026-09-04 (SPIDERYARN-READING2-13)
  *
- * `experimental` is **required on every row**, for `MODES_UI`'s reason
- * (Dock.tsx): an optional flag would quietly enrol picture six among the
- * finished ones. The rule that reads it is `visibleKinds` below, and it is the
+ * `experimental` is **required on every row**, for `MODE_CATALOG`'s reason
+ * (src/mode-catalog.ts): an optional flag would quietly enrol picture six among
+ * the finished ones. The rule that reads it is `visibleKinds` below, and it is the
  * bar's own rule, shared rather than copied — experimental-visibility.ts.
  *
  * **It is not a gate and must not be read as one.** Hiding a chip hides a
