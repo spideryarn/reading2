@@ -508,10 +508,18 @@
   color: var(--ink);
 }
 
-/* The wordmark. Structure and class names are the original app's so its
-   CSS-only logo animations can be dropped in later as one file — see
-   docs/project/original-version/design-system.md, and the argument there for
-   not doing that. */
+/* The wordmark. Structure and class names are the original app's, and on
+   2026-09-07 that stopped being a bet and started paying: `.logo-letter` and
+   `.logo-image` are what styles/logo-animations.css keys its dozen hover
+   animations off, so the set arrived as one new sheet and two spread props
+   rather than as a change to the markup. docs/project/design-logo.md.
+
+   The original app's own version of this cost ~4,700 lines and is
+   docs/project/original-version/design-system.md's headline example of scope
+   creep on a cosmetic feature. Its advice was to hand-write exactly one
+   animation; Greg asked for the random set instead, so what we kept from the
+   warning is the *apparatus* being small — one stylesheet, one hook, no route
+   of its own. */
 .logo {
   display: inline-flex;
   align-items: center;
@@ -519,6 +527,15 @@
   color: var(--highlight);
   font-size: 0.82rem;
   letter-spacing: 0.02em;
+  /* **These two exist for the long press**, which is how a reader with no
+     pointer asks the wordmark for an animation (src/web/logo-animation.ts).
+     Holding a link on iOS otherwise raises the callout menu and the selection
+     lens after roughly half a second — both of them arriving on top of the very
+     gesture they would be interrupting. They are here rather than in
+     styles/logo-animations.css so that `.logo` is one block a reader can see
+     the whole of; the reason for them is in that file's header. */
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 .logo-image { display: block; }
 

@@ -83,20 +83,28 @@
  * rewritten rather than merely narrowed. `ArticlePage`'s final branch is where
  * it stopped being drawn.
  *
- * The class names are the original app's, so its fifteen CSS-only logo
- * animations can be dropped in later as one file — see
- * docs/project/original-version/design-system.md, and the argument there for
- * not doing that yet.
+ * ## The hover animations
+ *
+ * The class names are the original app's, which is what made 2026-09-07 cheap:
+ * `useLogoAnimation` puts one more class on this link and
+ * src/web/styles/logo-animations.css keys its keyframes off `.logo-letter` and
+ * `.logo-image`, both of which are already here. `DockHome` spreads the same
+ * hook, so the two copies of the wordmark cannot drift into two behaviours.
+ * docs/project/design-logo.md.
  */
+import { cn } from "@/lib/utils";
 import { Link } from "./Link.js";
+import { useLogoAnimation } from "./logo-animation.js";
 import { LIBRARY_HREF } from "./router.js";
 
 export function HomeLogo() {
+  const anim = useLogoAnimation();
   return (
     <Link
       href={LIBRARY_HREF}
-      className="logo logo-home"
+      className={cn("logo", "logo-home", anim.className)}
       title="Spideryarn — back to the library"
+      {...anim.handlers}
     >
       {/* `alt=""` and not "Spideryarn": the wordmark beside it already says the
           name, and a screen reader reading it twice is how a decorative image

@@ -283,3 +283,41 @@
   padding-bottom: calc(var(--block-pad) / 2);
 }
 
+
+/* ------------------------------------------- the wordmark animation gallery --
+   `/design` § Wordmark animations, which draws all dozen at once so they can be
+   compared — DesignPage.tsx § LogoAnimations has the argument for the section
+   existing at all.
+
+   Nothing here styles the wordmark itself. `.logo`, `.logo-text` and
+   `.logo-letter` are already defined (styles/dock.css § the wordmark,
+   styles/tokens.css), and the whole value of this gallery is that it renders
+   the real ones — a cell that redefined them would go on looking right after
+   the shipping wordmark broke, which is the exact failure this page exists to
+   catch. These three rules supply nothing but the grid.
+
+   The cells are `overflow: hidden`, which is not tidiness: the reading view's
+   `.dock` clips its wordmark the same way (`overflow-y: hidden`, dock.css), so
+   an animation that hangs a thread below the mark is cut off there and must be
+   seen cut off here too. A gallery with generous bleed would show every
+   animation at its best and none of them as it ships. */
+.design-logo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.9rem;
+  margin-top: 0.9rem;
+}
+.design-logo-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  /* Matches `--bar-h`, the height the dock gives the wordmark, for the same
+     reason the clipping does: this is the room it actually has. */
+  padding: 0.7rem;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: calc(var(--radius) - 4px);
+  background: var(--panel);
+}
+.design-logo-cell .design-note { margin: 0; }
+.design-logo-row { display: flex; gap: 2rem; align-items: center; flex-wrap: wrap; }

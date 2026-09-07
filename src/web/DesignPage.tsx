@@ -43,6 +43,7 @@ import { Circle, LoaderCircle, Search, Settings, TriangleAlert } from "lucide-re
 import { Button } from "@/components/ui/button";
 import { builtButEmpty, providerHttpFailure, UNEXPECTED_FAILURE } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
+import { LOGO_ANIMATIONS } from "./logo-animation.js";
 /* Type-only, and deliberately so: it is erased at build, so `/design` does not
    pull the eagerly-loaded annotator into its lazy chunk — see `SPECIMEN_OUT`. */
 import type { Mark } from "./annotate.js";
@@ -1066,6 +1067,8 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
         </div>
       </section>
 
+      <LogoAnimations />
+
       <section>
         <h2>Marks in the prose</h2>
         <p className="design-note">
@@ -1102,6 +1105,131 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
         </div>
       </section>
     </main>
+  );
+}
+
+/**
+ * **Every wordmark animation, all running at once.**
+ *
+ * This page's header says it is "above all not the original app's `logoplay/`",
+ * and that is still true and is the reason this component is forty lines rather
+ * than 2,807: no route, no props, no per-animation component, no reference
+ * "original" beside each one. It maps the registry and puts the class on.
+ *
+ * It exists because the alternative is worse. A dozen animations that fire on
+ * hover, one at random, cannot otherwise be compared — you cannot get two of
+ * them on screen together, you cannot get the one you are working on twice in a
+ * row, and the only way to see the twelfth is to keep hovering until chance
+ * offers it. That is not a gallery, it is a lottery, and it makes reviewing the
+ * set impossible.
+ *
+ * **It also enforces something.** The animations are driven by the class alone,
+ * never by `:hover` (src/web/styles/logo-animations.css § Drive everything off
+ * the class) — because a finger long-pressing is not a hover. This page applies
+ * the classes with no pointer anywhere near them, so an animation that has
+ * quietly been written as `.logo:hover` shows up here as a cell that does
+ * nothing. That is the check, and it is the reason to keep the page rather than
+ * screenshot it once.
+ *
+ * The markup below is `HomeLogo`'s, copied rather than imported, and that is
+ * the one deliberate duplication here: the component is a `Link` to the library
+ * and hangs itself in `position: fixed` in the corner of the window, neither of
+ * which is wanted twelve times in a grid.
+ *
+ * **The two copies of the wordmark are set in different faces**, which is not
+ * this page's doing and is drawn at the top of the section so it cannot be
+ * forgotten: `.logo-text` takes `--font-brand` (Trebuchet MS) in
+ * styles/tokens.css, and the reading view's `.dock-btn-label` inherits Geist.
+ * docs/project/design-logo.md § The two copies are not the same typeface.
+ */
+function LogoAnimations() {
+  /* Bumped by the replay button, and used as the grid's `key` so React
+     rebuilds the cells rather than updating them. Re-mounting is what restarts
+     a one-shot animation: re-applying a class the element already has does not,
+     and half of these run once and stop by design. */
+  const [take, setTake] = useState(0);
+  /* **The classes go on a frame after the cells exist, and that is not a
+     nicety.** Three of the thirteen are CSS *transitions* rather than keyframes
+     (`spya-settle`, `spya-seam`, `spya-i`), because a transition is the only
+     mechanism that animates the exit as carefully as the entrance. A transition
+     needs a previous value to move from, and an element born with its final
+     class has none — so rendered in one pass this gallery would show those
+     three as static end poses and quietly misrepresent them as doing nothing.
+     One frame of delay gives them the starting value they need, and costs the
+     keyframe ones nothing. */
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    setArmed(false);
+    const id = requestAnimationFrame(() => setArmed(true));
+    return () => cancelAnimationFrame(id);
+    /* On `take` as well as on mount: `Play again` changes the grid's `key`, so
+       the cells are rebuilt without the class and need arming a second time. */
+  }, [take]);
+  return (
+    <section>
+      <h2>Wordmark animations</h2>
+      <p className="design-note">
+        One of these is picked at random whenever a reader hovers or long-presses the wordmark, in
+        the corner and in the reading view's bottom bar alike — <code>useLogoAnimation</code> in
+        src/web/logo-animation.ts, keyframes in src/web/styles/logo-animations.css, and the design
+        in docs/project/design-logo.md. Half of them run once and stop, so use{" "}
+        <em>Play again</em> to see those; the loops need no help.
+      </p>
+      <div className="design-panel">
+        <p className="design-note">
+          The same wordmark in its two forms. The corner copy is Trebuchet at weight 600 and the
+          reading view's is Geist — a divergence that predates these animations and is the reason
+          every one of them wants looking at in both places.
+        </p>
+        <div className="design-logo-row">
+          <span className="logo">
+            <LogoGlyph wrapper="logo-text" />
+          </span>
+          <span className="logo">
+            <LogoGlyph wrapper="dock-btn-label" />
+          </span>
+        </div>
+      </div>
+      <Button variant="outline" onClick={() => setTake((n) => n + 1)}>
+        Play again
+      </Button>
+      <div className="design-logo-grid" key={take}>
+        {LOGO_ANIMATIONS.map((a) => (
+          <div className="design-logo-cell" key={a.id}>
+            <span className={armed ? `logo spya-anim ${a.id}` : "logo"}>
+              <LogoGlyph wrapper="logo-text" />
+            </span>
+            <p className="design-note">
+              <strong>{a.name}</strong> — {a.blurb}
+            </p>
+            <code>{a.id}</code>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The inside of the wordmark: the mark, then ten letter spans.
+ *
+ * `wrapper` is the one thing that genuinely differs between the two copies, and
+ * taking it as a prop is how this file shows the difference rather than
+ * asserting it in a comment nobody re-checks.
+ */
+function LogoGlyph({ wrapper }: { wrapper: "logo-text" | "dock-btn-label" }) {
+  return (
+    <>
+      <img className="logo-image" src="/spideryarn-logo.png" alt="" width={20} height={20} />
+      <span className={wrapper}>
+        {"Spideryarn".split("").map((ch, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: fixed string, rebuilt whole
+          <span className="logo-letter" key={i}>
+            {ch}
+          </span>
+        ))}
+      </span>
+    </>
   );
 }
 
