@@ -1,6 +1,6 @@
 # Share measured geometry — after profiling the scroll and layout reads
 
-Status: **Stages 1 and 2 built; the Stage 1 review sent it back.** Sol's round-2 verdict is *request changes, Stage 3 authorisation refused* — five P1s, one of them a behaviour change in the probe itself. Findings F10–F17, their dispositions and their order are in § "Review ledger — round 2" at the foot of this document. **Stage 3 is blocked** on F10's counterfactual, and every number in § "Stage 1 result" is **provisional** until F11 and F13 are fixed and the three sessions re-run.
+Status: **Stages 1 and 2 done; the Stage 1 numbers have been retaken on the corrected harness and the verdict is optimise.** Sol's round-2 review found five P1s: F14 (the probe changed the page), F11, F12, F13 (the harness) and F15 (the decisive site was mutation-blind) are all **fixed**, and the three sessions re-run. **F10 remains open and Stage 3 is still ungated** — the ownership counterfactual is Stage 2c and has not run. Findings and dispositions are in § "Review ledger — round 2" at the foot of this document.
 Source baseline `cc749e0f1061583f1a8877dc3db5b6c1b2c162e3` (branch `worktree-a8-shared-geometry`).
 
 This is item **A8** of
@@ -526,22 +526,24 @@ performance.md, and the job is done. That is a legitimate finish and not a failu
 beside them, the commands are recorded so they can be re-taken, and the decision rule has been applied
 in writing.
 
-### Stage 1 result, 2026-09-06 — **eligible for optimisation**, on clause 1, on both heavy shapes, in every session
+### Stage 1 result — **optimise**, on clauses 1 and 3, on both heavy shapes
 
-> **Provisional, and the verdict word has changed.** Sol's round-2 review (F10–F13) found that the
-> p50/p95 quoted below are percentiles over *repetition means*, not over frames; that the pinned
-> distance was enforced to 80% rather than exactly; that statistics were published on fewer than the
-> five warmed repetitions the rule requires; and that F10's ownership counterfactual — which this plan
-> made the gate on Stage 3 — was never run. Sol's own provisional re-derivation from the raw vectors
-> still puts both heavy articles over clause 1, so the **direction** below survives; the **numbers**
-> do not, and neither does the claim that the cost is the reads rather than a flush. Read everything
-> in this section as pending the re-run. § "Review ledger — round 2" has the corrections and their
-> order.
+> **Retaken 2026-09-07 on the corrected harness. The section immediately below is the current
+> result; everything after it is the superseded first run of 2026-09-06, kept because the way it was
+> wrong is the most useful thing in this document.** F10's counterfactual is still owed and Stage 3 is
+> still ungated — see Stage 2c.
 
 Production build, `vite preview` on port 5310, Playwright against system Chrome on the Hetzner box.
 Three sessions per configuration, `--repeats 6 --warmup 1`, pinned scroll of 30 × 100px = 3,000px at a
 requested 16ms cadence with a 500ms settle, run from the top **and** from the middle. Re-runnable:
 [`scripts/measure-geometry.ts`](../../scripts/measure-geometry.ts).
+
+**Sign-in is not optional and the harness will tell you so.** Each of the three articles has a
+different owner — `dev-admin@spideryarn.local` for `m1-kuhn`, `eval@spideryarn.local` for
+`evaldeepen`, `referee-test-260901@example.com` for `replication-crisis` — and `--local-sign-in`
+needs `--sign-in-via <dev origin>` because it imports the app's own SDK from `/src/web/lib/`, which
+`vite preview` does not serve. Both mistakes were made on the retake and both were refused rather than
+measured: a signed-out page renders nothing and costs nothing, *"which reads as a good result"*.
 
 **Population confirmed in the loaded page before any timing**, and the corpus survey checks out
 against the instrument, which is the cross-check that matters: `readingPosition` reports **1,238**
@@ -549,6 +551,115 @@ reads per call on `m1-kuhn` (1,237 sections + one `scrollY`) and **52** on `repl
 (51 + 1). Those are the survey's exact numbers, arrived at by a counter that knows nothing about
 `<td>` elements. The measured refresh cadence with nothing happening was p50 16.7ms — that is the
 noise floor, and it is why the frame numbers below are not the box being idle-slow.
+
+#### Retaken, 2026-09-07, on the corrected harness — **the verdict stands, and one claim did not**
+
+The numbers below this heading are the **first run**, and they are superseded. F11, F12 and F13 are
+fixed, and the three sessions were retaken on the corrected harness against a production build of
+`97bcd4c7`. Verdict unchanged: **optimise**, on clause 1 and clause 3, on both heavy shapes.
+
+**Per scroll frame, over real frames — one entry per frame, the two samplers summed within it.**
+Three sessions × two start positions, desktop, `--repeats 6 --warmup 1`.
+
+| article | sections | p50 | p95 | max | clause 1 |
+|---|---:|---|---|---|---|
+| `m1-kuhn` | 1,237 | 9.40 – 10.80 | 14.60 – 17.20 | 32.10 – 77.40 | **fires** on both halves |
+| `evaldeepen` | 1,166 | 7.50 – 8.10 | 10.10 – 11.20 | 28.40 – 53.60 | **fires** on both halves |
+| `replication-crisis` | 51 | 1.40 – 1.60 | 4.10 | 5.30 | under, correctly |
+
+Clause 1 needs p50 ≥ 4 **or** p95 ≥ 8. Both heavy shapes clear **both** thresholds in every session
+that was allowed to publish; the light control clears neither, which is the discrimination the control
+exists to provide.
+
+**Clause 2 still does not fire**, and by more margin than before: duty cycle p50 2.2–2.3% on
+`m1-kuhn`, 1.5–4.6% on `evaldeepen`, against a 10% threshold. The honest reading is unchanged from the
+first run — the pilot is a small fraction of wall time, and it is **not** why this page is slow.
+
+**Clause 3 fires**, on the correct quantity. Clause 3 is written about the median **total pilot ms per
+gesture**, because that cost is paid once per gesture rather than every frame — so the per-frame
+figure is the wrong statistic to compare against it. Column toggle: 10.6–14.3 ms. Mode switch:
+25.0–33.6 ms. Both are over 8 ms on both heavy articles in every session.
+
+##### What the correction actually changed, which is not what was expected
+
+The prediction was that p95 would rise. It did, and the p50 barely moved:
+
+| `m1-kuhn`, session 1, from the top | first run | retaken |
+|---|---|---|
+| p50 | 10.33 | 9.40 |
+| p95 | ~11.10 | **14.60** |
+| max | ~11.10 | **42.00** |
+
+The first run's "p50/p95" were percentiles across five per-repetition **means**, so the whole quoted
+spread was the spread *between repetitions* — which is why its p95 and its max were nearly the same
+number. That is the tell, visible in the old output and not noticed: a p95 equal to the max means the
+vector had about five entries in it.
+
+Two things follow, and only one was anticipated:
+
+- **The tail was invisible.** Real frames reach 42–77 ms in the pilot on `m1-kuhn`. Averaging inside a
+  repetition removed them entirely. This is exactly what Sol's F6 asked for and what F11 found had
+  been silently undone.
+- **The centre was slightly overstated.** The mean of a right-skewed distribution sits above its
+  median, so the first run reported 10.33 where the true median is 9.40. The old method was wrong in
+  *both* directions at once — too high in the middle, far too low in the tail — which is worth saying
+  plainly, because "we were being conservative" would have been the comfortable summary and it is not
+  true.
+
+The harness now prints the mean beside the distribution, labelled *"a mean has no tail; do not quote a
+percentile of it"*, so the two cannot be confused again.
+
+##### One number that did not reproduce, and one session that was refused
+
+The first run's clause-3 line claimed a granularity toggle spent **12.50 ms at the median**. Retaken,
+the column toggle's *per-frame* p50 is 3.50–4.40 ms and its *per-gesture* total is 10.6–14.3 ms. The
+12.50 was the per-gesture quantity all along, so the finding survives — but the earlier write-up had
+already mislabelled it once (quoting a p95 against a rule about medians, corrected under F17), and
+that is twice now that this clause has been supported by the wrong statistic. The clause is about
+per-gesture totals. Nothing else.
+
+**F13 refused `evaldeepen` session 2, scroll-from-the-middle**, with *"4 warmed valid repetition(s)
+out of 6 — the rule this plan committed to before measuring is 5, so nothing here may be quoted"*. Sol
+predicted exactly that session would fall short. Its raw vectors are printed and excluded, the
+cross-session table prints `—` for it, and the run exits non-zero. That is the rule working on its
+first contact with real data rather than being quietly relaxed.
+
+`comment-open` refused on both heavy articles in all sessions — neither has stored comments. A
+refusal, not a zero.
+
+##### The duplication, measured rather than argued
+
+On `m1-kuhn`, one 3,000px gesture:
+
+| site | calls | reads | reads per call |
+|---|---:|---:|---:|
+| `readingPosition` | 30 | 37,140 | **1,238** |
+| `columnContext` | 30 | 37,260 | **1,242** |
+| everything else, eight sites | — | 366 | — |
+| **total across all ten** | | **74,766** | |
+
+1,238 is 1,237 sections plus one `scrollY`; 1,242 is the same scan plus the fisheye's fixed reads. The
+two hooks are **99.5% of every layout read the page performs during a scroll**, and they are reading
+the same 1,237 rectangles as each other, in two rAF callbacks, to produce one URL parameter and one
+integer.
+
+That is the mechanism this plan exists to remove. It is still **not** proof that removing it removes
+time — that is Stage 2c's job, and it remains ungated.
+
+##### A caveat on comparability
+
+These numbers were taken **after** Stage 2's hoists and after F14 and F15 landed, so the retaken
+figures are not a clean statistical re-derivation of the first run's workload — they are the corrected
+statistics of a slightly cheaper page. Stage 2 moved reads out of the pilot's *leaves*
+(`stickyOffset`, `safeAreaInsets`), which the pilot's inclusive `ms` still contains, so a small part of
+any downward movement in p50 is Stage 2 rather than F11. The direction of the verdict does not depend
+on separating them; a claim about the *size* of Stage 2's effect would, and none is made here.
+
+#### THE FIRST RUN, 2026-09-06 — superseded, and kept for how it was wrong
+
+Everything from here to the end of this section is the original measurement, taken on the harness
+before F11, F12 and F13 were fixed. Its verdict was right and its statistics were not. Read it with
+the retaken block above.
 
 #### The pilot verdict — `readingPosition` + `columnContext` only, per Sol F4
 
@@ -937,6 +1048,11 @@ scoped follow-up that is plausibly worth more than everything else in this plan.
      as shortfall — the old rule could not express that at all, so a repetition that travelled 3,400px
      of a pinned 3,000 was quoted as pinned. `MIN_WARMED_REPETITIONS = 5` is enforced before any
      summary is printed, in the cross-session table too, so there is no back door.
+
+   **The re-run is done, 2026-09-07** — see § "Retaken, 2026-09-07" above. The verdict stands at
+   **optimise** on clauses 1 and 3. On its first contact with real data F13 refused `evaldeepen`
+   session 2 from the middle at 4 warmed repetitions of 6, which is the session Sol predicted would
+   fall short, and the run exits non-zero rather than quietly quoting it.
 
    **Verified rather than accepted:** typecheck clean, 51 tests green across the three geometry
    suites, biome clean on all five files, and my own mutation — `PINNED_TOLERANCE_PX` 1 → 600 and
