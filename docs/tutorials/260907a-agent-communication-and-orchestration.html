@@ -1,0 +1,1745 @@
+<!--
+  Request (Greg, 2026-09-07, verbatim):
+
+  "I would like to understand about what capabilities you have for communicating with other agents
+  (both subagents, and in separate sessions). Can you send them messages? How do you direct them or
+  know who to send them to? Can they return them? Can you see what's going on in their
+  conversations? What are the possibilities? What are the limits? Can you send messages to agents
+  that are running on a different computer, but logged in with the same Claude.ai account? Or to
+  agents on the current server, but logged in with different Claude.ai accounts? Can you reawaken a
+  closed session? Exit a session when it has finished? Include answers to other questions I might
+  not have thought to ask. Can you tell when they're about to run out of context? How can you tell
+  if you're about to hit usage limits, and when they will reset? The main reason for asking is that
+  I want to set up an 'Orchestrator' agent who controls and directs all the others.
+
+  Use Sonnet for web research, introspect your own tools, and try having a look for other agents in
+  other sessions, and run spikes. Then run @docs/reusable/write-tutorial.md"
+
+  Follow-up from Greg in the same session:
+  "And perhaps include a section based on Sonnet web research for 3rd-party inter-agent communication
+  protocols (e.g. across boxes, accounts, even perhaps between Claude and Codex) - see
+  @docs/reusable/third-party-library-selection.md"  → §11.
+
+  Written 2026-09-07 by session reading2-e5 (Claude Code 2.1.263, Opus 5 1M, macOS).
+
+  Reviewed by GPT Sol (cross-family, per AGENTS.md) before finishing. It found two P0 factual errors
+  that are now corrected — the claim that the status-line rate_limits figures are per-machine (they
+  come from a usage endpoint and are account-level; it is the /usage *activity view* that is local),
+  and the claim that any addressable session's transcript can be read (true only same-machine,
+  same-unix-user). It also corrected the preemption timestamps against the raw queue records, the
+  "costs you nothing" column, the A2A/MCP dismissals, and the durability of LISTEN/NOTIFY.
+
+  KNOWN GAP, left deliberately: write-tutorial.md asks for one worked example threaded throughout.
+  This has several — worker-a/worker-b for fan-out, orchestrator-spike for stop/resume, preempt2 for
+  delivery timing — because they were genuinely separate experiments and merging them in the prose
+  would misrepresent what was run. Worth restructuring if this doc is ever revised.
+
+  Sources — almost everything here was MEASURED in this session, not recalled:
+    - Live spikes against claude-cli 2.1.263 on Greg's Mac, 2026-09-07 21:30-22:10 BST:
+      peer discovery, local + cross-machine SendMessage round trips, `claude --bg`,
+      stop/resume/wake, a two-worker fan-out, and two reproductions of the --session-id bug.
+    - Real replies from two live peers: reading2-d2 (this Mac) and fb2b-monkeys-illustration
+      (the Hetzner box, spideryarn-box:/home/greg/code/spideryarn2).
+    - On-disk introspection of ~/.claude/{sessions,teams,tasks,projects,plugins}/ and /tmp/cc-socks/.
+    - Tool schemas for SendMessage, ListAgents, Agent, TaskStop, Monitor, CronCreate, RemoteTrigger.
+    - A captured live status-line payload (isolated --settings file, throwaway session) — the source
+      of the rate_limits / context_window figures in §6.
+    - Three Sonnet research subagents: two against code.claude.com / platform.claude.com for
+      documented behaviour (subagents, agent teams, cross-session messaging, Remote Control, hooks,
+      compaction, usage limits), one against the open web for §11's third-party protocol survey
+      (A2A, MCP-as-transport, AGNTCY/ACP, agent frameworks, Postgres LISTEN/NOTIFY).
+    - Repo docs: docs/reusable/{claude-cli-as-subagent,trawl-session-transcripts,engineering-manager,
+      silent-success}.md, AGENTS.md.
+
+  Scope note: this is about Claude Code's own agent-to-agent machinery. It is NOT about Spideryarn's
+  pipeline stages, and nothing here has been wired into the product.
+-->
+<title>Agent Communication and Orchestration</title>
+<meta name="description" content="How Claude Code sessions find, message, watch, wake and stop each other — measured first-hand — and what that means for building an Orchestrator.">
+<style>
+  :root {
+    --ink: #1a1a1a; --ink-soft: #4a4a4a; --ink-faint: #6e6e6e;
+    --bg: #fbfaf8; --card: #ffffff; --rule: #e3e0da;
+    --local: #2563eb; --local-bg: #eaf1fe;
+    --disk: #6b7280; --disk-bg: #f1f2f4;
+    --cloud: #7c3aed; --cloud-bg: #f3ecfe;
+    --remote: #059669; --remote-bg: #e6f6f0;
+    --warn: #b45309; --warn-bg: #fdf3e3;
+    --danger: #b91c1c; --danger-bg: #fdecec;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #ecebe8; --ink-soft: #bdbbb6; --ink-faint: #918e88;
+      --bg: #17181a; --card: #1f2023; --rule: #34363a;
+      --local: #7ba7f8; --local-bg: #1b2740;
+      --disk: #a1a5ad; --disk-bg: #26282c;
+      --cloud: #b799f7; --cloud-bg: #2a2140;
+      --remote: #58c9a3; --remote-bg: #14302a;
+      --warn: #e0a44f; --warn-bg: #33280f;
+      --danger: #ef8b8b; --danger-bg: #3a1d1d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #ecebe8; --ink-soft: #bdbbb6; --ink-faint: #918e88;
+    --bg: #17181a; --card: #1f2023; --rule: #34363a;
+    --local: #7ba7f8; --local-bg: #1b2740;
+    --disk: #a1a5ad; --disk-bg: #26282c;
+    --cloud: #b799f7; --cloud-bg: #2a2140;
+    --remote: #58c9a3; --remote-bg: #14302a;
+    --warn: #e0a44f; --warn-bg: #33280f;
+    --danger: #ef8b8b; --danger-bg: #3a1d1d;
+  }
+
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    margin: 0; padding: 0 20px 120px;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 820px; margin: 0 auto; }
+  h1 { font-size: 2.1rem; line-height: 1.15; letter-spacing: -0.02em; margin: 2.2rem 0 0.5rem; }
+  h2 {
+    font-size: 1.45rem; letter-spacing: -0.015em; margin: 3.2rem 0 0.9rem;
+    padding-top: 1.4rem; border-top: 1px solid var(--rule);
+  }
+  h3 { font-size: 1.1rem; margin: 2rem 0 0.5rem; }
+  h4 { font-size: 0.97rem; margin: 1.4rem 0 0.4rem; color: var(--ink-soft); }
+  p { margin: 0.85rem 0; }
+  a { color: var(--local); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  code {
+    font-family: var(--mono); font-size: 0.87em;
+    background: var(--disk-bg); padding: 0.12em 0.36em; border-radius: 4px;
+    overflow-wrap: break-word;
+  }
+  pre {
+    background: var(--card); border: 1px solid var(--rule); border-left: 3px solid var(--disk);
+    border-radius: 6px; padding: 0.85rem 1rem; overflow-x: auto;
+    font-family: var(--mono); font-size: 0.83rem; line-height: 1.55;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .lede { font-size: 1.06rem; color: var(--ink-soft); }
+  .meta { color: var(--ink-faint); font-size: 0.87rem; margin: 0.2rem 0 1.6rem; }
+
+  .tldr {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 1.1rem 1.3rem; margin: 1.6rem 0;
+  }
+  .tldr h2 { border: 0; margin: 0 0 0.5rem; padding: 0; font-size: 0.8rem;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
+
+  .model {
+    background: var(--card); border: 1px solid var(--rule); border-left: 4px solid var(--local);
+    border-radius: 8px; padding: 0.9rem 1.1rem; margin: 1rem 0;
+  }
+  .model strong { display: block; margin-bottom: 0.2rem; font-size: 1.02rem; }
+  .model p { margin: 0.35rem 0 0; color: var(--ink-soft); }
+
+  .note, .warn, .danger, .win {
+    border-radius: 8px; padding: 0.8rem 1.05rem; margin: 1.1rem 0; font-size: 0.95rem;
+    border: 1px solid var(--rule); border-left-width: 4px;
+  }
+  .note { background: var(--local-bg); border-left-color: var(--local); }
+  .warn { background: var(--warn-bg); border-left-color: var(--warn); }
+  .danger { background: var(--danger-bg); border-left-color: var(--danger); }
+  .win { background: var(--remote-bg); border-left-color: var(--remote); }
+  .note p:first-child, .warn p:first-child, .danger p:first-child, .win p:first-child { margin-top: 0; }
+  .note p:last-child, .warn p:last-child, .danger p:last-child, .win p:last-child { margin-bottom: 0; }
+  .label { font-weight: 600; }
+
+  .fig { margin: 1.6rem 0; }
+  .fig .scroll { overflow-x: auto; }
+  .fig svg { display: block; width: 100%; height: auto; min-width: 480px; }
+  figcaption { color: var(--ink-faint); font-size: 0.85rem; margin-top: 0.5rem; }
+
+  .key { display: flex; flex-wrap: wrap; gap: 0.5rem 1.1rem; margin: 0.8rem 0 0.4rem;
+    font-size: 0.82rem; color: var(--ink-soft); }
+  .key span { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+  .tbl { overflow-x: auto; margin: 1.2rem 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9rem; min-width: 520px; }
+  th, td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--rule);
+    vertical-align: top; }
+  th { font-size: 0.78rem; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--ink-faint); font-weight: 600; }
+  td code { font-size: 0.85em; }
+  .yes { color: var(--remote); font-weight: 600; }
+  .no  { color: var(--danger); font-weight: 600; }
+  .part { color: var(--warn); font-weight: 600; }
+
+  details {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 0.55rem 1rem; margin: 1rem 0;
+  }
+  details[open] { padding-bottom: 0.9rem; }
+  summary { cursor: pointer; font-weight: 600; font-size: 0.95rem; padding: 0.3rem 0; }
+  summary::marker { color: var(--ink-faint); }
+
+  .toc { background: var(--card); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 1rem 1.3rem; }
+  .toc ol { margin: 0.4rem 0; padding-left: 1.3rem; }
+  .toc li { margin: 0.22rem 0; }
+  .paths { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--rule); font-size: 0.92rem; }
+  .paths p { margin: 0.4rem 0; }
+
+  .verdict { font-size: 0.9rem; color: var(--ink-faint); margin-top: 0.3rem; }
+  ul, ol { padding-left: 1.35rem; }
+  li { margin: 0.3rem 0; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 2.5rem 0; }
+  .measured { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--remote); font-weight: 700; }
+</style>
+
+<main>
+
+<h1>Agent communication and orchestration</h1>
+<p class="meta">Claude Code 2.1.263 · measured 2026-09-07 · skim 8 min · deep dive 30 min</p>
+
+<p class="lede">Claude Code sessions can find each other, message each other, read each other's
+conversations, wake each other from the dead and shut each other down. This is what actually works,
+tested live on Greg's Mac and against the Hetzner box — and where the sharp edges are if you want an
+Orchestrator sitting on top.</p>
+
+<div class="tldr">
+  <h2>TL;DR</h2>
+  <p>Every Claude Code session on a machine publishes itself to a small registry on disk and listens
+  on a private unix socket. <code>ListAgents</code> reads that registry; <code>SendMessage</code>
+  writes to that socket. Sessions on <em>other</em> machines are reachable too, through a cloud
+  bridge tied to your Claude account — that works, and messages to a machine that is currently
+  offline are queued rather than dropped.</p>
+  <p>Any session <em>on your own machine</em> you can also spy on: its full transcript sits readable
+  on disk, including a running count of how much context it has used. A worker on another machine
+  keeps its transcript over there, so the bus is all you have. Sessions can be spawned detached,
+  stopped, and later woken with their memory intact.</p>
+  <p>The gaps are all in the <em>identity</em> layer: names are nicknames, they drift, they collide,
+  and they differ depending on who is looking. An Orchestrator is very buildable; addressing is the
+  part that will bite you.</p>
+  <p>Two things worth knowing before you start. Live quota — how much of your five-hour and weekly
+  budget is gone, and when it resets — is available to a shell script every turn, which is the signal
+  a fan-out decision actually needs. And there is already a documented feature for orchestrating many
+  agents, so check <a href="#scale">§10</a> before building one by hand.</p>
+</div>
+
+<div class="note">
+  <p><span class="label">How to read the claims in here.</span> This mixes things I ran on these
+  machines with things the official docs say, and they do not deserve equal trust:</p>
+  <ul style="margin:0.4rem 0 0">
+    <li><span class="measured">Measured</span> — I ran it on 2026-09-07 against Claude Code 2.1.263,
+    and the numbers shown are the real output. Where it was a single observation, the text says so.</li>
+    <li><span class="label">Documented</span> — quoted from <code>code.claude.com</code>, and quoted
+    rather than paraphrased where the wording matters.</li>
+    <li><span class="label">Untested</span> — flagged inline. There are a few, and they are the rows
+    most likely to be wrong.</li>
+  </ul>
+  <p>Version-sensitive throughout: this is a fast-moving surface, and §11's release dates and star
+  counts will age fastest of all. Check the date in the source comment before trusting any of it.</p>
+</div>
+
+<h2 id="models">Five mental models</h2>
+
+<div class="model">
+  <strong>1. A switchboard, not an org chart.</strong>
+  <p>There is no tree of agents. Every session is a peer with a phone number, and any peer can ring
+  any other. "Orchestrator" is a <em>role you write into a prompt</em>, not a structural position the
+  system enforces. The one real parent/child relationship is a session and its in-process subagents.</p>
+</div>
+
+<div class="model">
+  <strong>2. Two post offices.</strong>
+  <p>Same machine: a unix socket in <code>/tmp/cc-socks/</code> — instant, private, and only works
+  while the other process is alive. Different machine: a relay through claude.ai — slower, tied to
+  your account, and it <em>holds mail</em> for a machine that is switched off.</p>
+</div>
+
+<div class="model">
+  <strong>3. A name is a nickname; an address is a phone number; neither is identity.</strong>
+  <p>Sessions name themselves from their working directory or their conversation topic. Those names
+  change while you watch, two sessions can wear the same one, and the same session answers to
+  different names depending on which post office you reached it through. The reply address on an
+  incoming message is the handle to use <em>right now</em> — but it is a route to a living process,
+  and it dies when that process does. Durable identity is something you have to record yourself.</p>
+</div>
+
+<div class="model">
+  <strong>4. Speech versus writing.</strong>
+  <p>What a session <em>says</em> goes into its own transcript, where nobody is listening. Only an
+  explicit <code>SendMessage</code> call crosses the gap. Tell a worker to "reply with the answer"
+  and it will helpfully print the answer to an empty room.</p>
+</div>
+
+<div class="model">
+  <strong>5. The transcript is a one-way mirror — on this side of the glass.</strong>
+  <p>You never have to ask a <em>local</em> session how it's doing. Its entire conversation — every
+  message, every tool call, and a running token count — is a JSONL file on disk that any process
+  running as you can read, live, without the session knowing or consenting. That file lives on the
+  machine the session runs on, so a worker on the box is opaque to you unless you go over there.</p>
+</div>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#pass1">What happens when one agent messages another</a></li>
+    <li><a href="#kinds">The five kinds of agent you can talk to</a></li>
+    <li><a href="#machinery">The machinery: registry, socket, bridge</a></li>
+    <li><a href="#worked">Worked example: a two-worker fan-out</a></li>
+    <li><a href="#identity">Addressing and identity — the part that bites</a></li>
+    <li><a href="#watching">Watching without asking: transcripts, context, limits</a></li>
+    <li><a href="#lifecycle">Lifecycle: spawn, sleep, wake, stop</a></li>
+    <li><a href="#boundaries">Boundaries: machines, accounts, permissions</a></li>
+    <li><a href="#hard">The genuinely hard parts</a></li>
+    <li><a href="#scale">What's already built, that you might not need to rebuild</a></li>
+    <li><a href="#protocols">Crossing the boundaries Claude Code won't</a></li>
+    <li><a href="#judgment">Designing the Orchestrator: trade-offs, risks, open questions</a></li>
+    <li><a href="#faq">FAQ</a></li>
+    <li><a href="#appendix">Appendix: commands, files, glossary</a></li>
+  </ol>
+  <div class="paths">
+    <p><span class="label">If you only want to know whether the Orchestrator is buildable</span> —
+    read <a href="#worked">§4</a>, then <a href="#scale">§10</a> before you build anything, then
+    <a href="#judgment">§12</a>.</p>
+    <p><span class="label">If you care about the failure modes</span> —
+    <a href="#identity">§5</a> and <a href="#hard">§9</a>.</p>
+    <p><span class="label">If you want the context/usage-limit answer specifically</span> —
+    <a href="#watching">§6</a>.</p>
+    <p><span class="label">If you want to cross accounts or reach Codex</span> —
+    <a href="#protocols">§11</a>.</p>
+    <p><span class="label">If you want to know what's physically on disk</span> —
+    <a href="#machinery">§3</a> and the <a href="#appendix">appendix</a>.</p>
+  </div>
+</div>
+
+<h2 id="pass1">1. What happens when one agent messages another</h2>
+
+<p>End to end, with no detail: <strong>every session announces itself in a small file on disk; you
+read that file to find who exists; you write to their socket to say something; their message appears
+in their conversation as if a user had typed it, wrapped in a tag that says it came from a robot.</strong></p>
+
+<p>Here it is as a picture. Everything blue is a process on this machine; grey is disk; purple is
+the cloud relay; green is another physical machine.</p>
+
+<figure class="fig">
+  <div class="key">
+    <span><i class="sw" style="background:var(--local)"></i> process on this machine</span>
+    <span><i class="sw" style="background:var(--disk)"></i> file on disk</span>
+    <span><i class="sw" style="background:var(--cloud)"></i> claude.ai bridge</span>
+    <span><i class="sw" style="background:var(--remote)"></i> another machine</span>
+  </div>
+  <div class="scroll">
+  <svg viewBox="0 0 860 430" role="img" aria-label="Two transports: local unix sockets and the cloud bridge">
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+
+    <!-- this machine boundary -->
+    <rect x="12" y="34" width="418" height="378" rx="12" fill="none" stroke="var(--local)" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.55"/>
+    <text x="26" y="24" font-size="14" font-weight="700" fill="var(--local)">Greg's Mac</text>
+
+    <!-- other machine boundary -->
+    <rect x="590" y="34" width="258" height="378" rx="12" fill="none" stroke="var(--remote)" stroke-width="1.5" stroke-dasharray="6 5" opacity="0.55"/>
+    <text x="604" y="24" font-size="14" font-weight="700" fill="var(--remote)">spideryarn-box (Hetzner)</text>
+
+    <!-- orchestrator -->
+    <rect x="34" y="58" width="164" height="60" rx="8" fill="var(--local-bg)" stroke="var(--local)" stroke-width="1.6"/>
+    <text x="116" y="82" font-size="14" font-weight="700" text-anchor="middle" fill="var(--ink)">Orchestrator</text>
+    <text x="116" y="102" font-size="12" text-anchor="middle" fill="var(--ink-soft)" font-family="monospace">reading2-e5</text>
+
+    <!-- registry -->
+    <rect x="256" y="58" width="158" height="60" rx="8" fill="var(--disk-bg)" stroke="var(--disk)" stroke-width="1.6"/>
+    <text x="335" y="80" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">registry</text>
+    <text x="335" y="99" font-size="12" text-anchor="middle" fill="var(--ink-soft)" font-family="monospace">~/.claude/sessions/</text>
+
+    <!-- read arrow -->
+    <g color="var(--disk)">
+      <path d="M200,80 L250,80" stroke="currentColor" stroke-width="1.8" fill="none" marker-end="url(#ah)"/>
+    </g>
+    <text x="225" y="72" font-size="12" text-anchor="middle" fill="var(--ink-soft)">① who exists?</text>
+
+    <!-- peer sessions -->
+    <rect x="34" y="176" width="164" height="56" rx="8" fill="var(--local-bg)" stroke="var(--local)" stroke-width="1.6"/>
+    <text x="116" y="198" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">peer session</text>
+    <text x="116" y="216" font-size="12" text-anchor="middle" fill="var(--ink-soft)" font-family="monospace">reading2-d2</text>
+
+    <rect x="34" y="256" width="164" height="56" rx="8" fill="var(--local-bg)" stroke="var(--local)" stroke-width="1.6"/>
+    <text x="116" y="278" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">bg worker</text>
+    <text x="116" y="296" font-size="12" text-anchor="middle" fill="var(--ink-soft)" font-family="monospace">worker-a</text>
+
+    <!-- socket dir -->
+    <rect x="256" y="200" width="158" height="88" rx="8" fill="var(--disk-bg)" stroke="var(--disk)" stroke-width="1.6"/>
+    <text x="335" y="228" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">unix sockets</text>
+    <text x="335" y="247" font-size="12" text-anchor="middle" fill="var(--ink-soft)" font-family="monospace">/tmp/cc-socks/</text>
+    <text x="335" y="266" font-size="12" text-anchor="middle" fill="var(--ink-faint)" font-family="monospace">srw------- greg</text>
+
+    <!-- socket arrows -->
+    <g color="var(--local)">
+      <path d="M200,204 L250,214" stroke="currentColor" stroke-width="1.8" fill="none" marker-end="url(#ah)"/>
+      <path d="M200,284 L250,272" stroke="currentColor" stroke-width="1.8" fill="none" marker-end="url(#ah)"/>
+      <path d="M290,196 L200,124" stroke="currentColor" stroke-width="1.8" fill="none" marker-end="url(#ah)"/>
+    </g>
+    <text x="176" y="146" font-size="12" text-anchor="middle" fill="var(--ink-soft)">② send</text>
+
+    <!-- bridge -->
+    <rect x="462" y="176" width="112" height="112" rx="8" fill="var(--cloud-bg)" stroke="var(--cloud)" stroke-width="1.6"/>
+    <text x="518" y="216" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">claude.ai</text>
+    <text x="518" y="234" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">bridge</text>
+    <text x="518" y="256" font-size="12" text-anchor="middle" fill="var(--ink-soft)">queues mail for</text>
+    <text x="518" y="271" font-size="12" text-anchor="middle" fill="var(--ink-soft)">offline machines</text>
+
+    <g color="var(--cloud)">
+      <path d="M198,96 C 330,120 400,150 460,196" stroke="currentColor" stroke-width="1.8" fill="none" marker-end="url(#ah)"/>
+      <path d="M576,232 L616,232" stroke="currentColor" stroke-width="1.8" fill="none" marker-end="url(#ah)"/>
+    </g>
+    <text x="398" y="140" font-size="12" text-anchor="middle" fill="var(--cloud)">③ same account, any machine</text>
+
+    <!-- remote sessions -->
+    <rect x="622" y="176" width="204" height="56" rx="8" fill="var(--remote-bg)" stroke="var(--remote)" stroke-width="1.6"/>
+    <text x="724" y="198" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">tmux session</text>
+    <text x="724" y="216" font-size="12" text-anchor="middle" fill="var(--ink-soft)" font-family="monospace">fb2b-monkeys-illustration</text>
+
+    <rect x="622" y="256" width="204" height="56" rx="8" fill="var(--remote-bg)" stroke="var(--remote)" stroke-width="1.6" stroke-dasharray="5 4" opacity="0.7"/>
+    <text x="724" y="278" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink-soft)">offline session</text>
+    <text x="724" y="296" font-size="12" text-anchor="middle" fill="var(--ink-faint)">mail waits here</text>
+    <g color="var(--cloud)">
+      <path d="M576,262 L616,278" stroke="currentColor" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+    </g>
+
+    <!-- transcripts -->
+    <rect x="34" y="340" width="380" height="56" rx="8" fill="var(--disk-bg)" stroke="var(--disk)" stroke-width="1.6"/>
+    <text x="224" y="362" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">transcripts — every session's full conversation</text>
+    <text x="224" y="381" font-size="12" text-anchor="middle" fill="var(--ink-soft)" font-family="monospace">~/.claude/projects/&lt;cwd-slug&gt;/&lt;session-id&gt;.jsonl</text>
+    <g color="var(--disk)">
+      <path d="M116,124 C 60,180 46,260 52,334" stroke="currentColor" stroke-width="1.6" fill="none" stroke-dasharray="4 4" marker-end="url(#ah)"/>
+    </g>
+    <text x="30" y="250" font-size="12" fill="var(--ink-soft)" transform="rotate(-90 30 250)">④ read anyone</text>
+  </svg>
+  </div>
+  <figcaption>The whole system. ① Read the registry to discover peers. ② Message a same-machine peer
+  over its unix socket. ③ Message another machine through the claude.ai bridge. ④ Read any session's
+  transcript straight off disk, no permission required.</figcaption>
+</figure>
+
+<p>Four numbered arrows, four capabilities. Everything else in this document is detail on one of them.</p>
+
+<h2 id="kinds">2. The kinds of agent you can talk to</h2>
+
+<p>"Agent" is doing a lot of work in the question. The table below lists the six things you will
+actually address — but they are not six clean categories, and it is worth seeing why. They vary along
+three independent axes: <strong>what the execution unit is</strong> (a call inside your process, or a
+separate session), <strong>how it was launched</strong> (foreground, background, as a teammate), and
+<strong>where it lives</strong> (this machine, or over the bridge). A background session can also be
+remote; a teammate is a session that a team spawned. Read the rows as common combinations, not as a
+taxonomy.</p>
+
+<div class="danger">
+  <p><span class="label">The column that matters most is the last one.</span> Isolating a worker's
+  <em>context</em> does not make it free. Every row below spends the same account quota, whether or
+  not its tokens ever reach your conversation. A fan-out of ten "cheap" subagents is ten times the
+  spend, and <a href="#watching">§6</a> is about the consequences.</p>
+</div>
+
+<div class="tbl">
+<table>
+  <thead>
+    <tr><th>Kind</th><th>Lives</th><th>Address</th><th>Its output goes to</th><th>Costs your context</th><th>Costs your quota</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="label">In-process subagent</span><br><span class="verdict">the <code>Agent</code> tool</span></td>
+      <td>Until it finishes, or the session ends</td>
+      <td>Its name, e.g. <code>research-limits</code></td>
+      <td>A report delivered into your conversation</td>
+      <td>Only the report — its own tool output stays in its context</td>
+      <td class="no">Yes, all of it</td>
+    </tr>
+    <tr>
+      <td><span class="label">Fork of yourself</span><br><span class="verdict"><code>subagent_type: "fork"</code></span></td>
+      <td>Same</td>
+      <td>Its name</td>
+      <td>Same</td>
+      <td>Inherits your full context, runs your model</td>
+      <td class="no">Yes, and more of it</td>
+    </tr>
+    <tr>
+      <td><span class="label">Teammate</span><br><span class="verdict">an <a href="#scale">agent team</a> member</span></td>
+      <td>Independent session; ends with the team</td>
+      <td>Its name, e.g. <code>research-protocols</code></td>
+      <td>Messages it chooses to send, plus a shared task list</td>
+      <td>Only what it sends you</td>
+      <td class="no">Yes, all of it</td>
+    </tr>
+    <tr>
+      <td><span class="label">Peer session</span><br><span class="verdict">a human's terminal</span></td>
+      <td>Independent of you entirely</td>
+      <td>Its registry name, e.g. <code>reading2-d2</code></td>
+      <td><strong>Its own transcript</strong> — you see nothing unless it messages you</td>
+      <td>Nothing</td>
+      <td class="no">Yes, if it's your account</td>
+    </tr>
+    <tr>
+      <td><span class="label">Background session</span><br><span class="verdict"><code>claude --bg</code></span></td>
+      <td>Until stopped; survives your session ending</td>
+      <td>Its name or short job id</td>
+      <td>Its own transcript</td>
+      <td>Nothing</td>
+      <td class="no">Yes, all of it</td>
+    </tr>
+    <tr>
+      <td><span class="label">Remote / bridged session</span><br><span class="verdict">another machine, or cloud</span></td>
+      <td>Independent</td>
+      <td>Its bridge title, e.g. <code>fb2b-monkeys-illustration</code></td>
+      <td>Its own transcript, <strong>on its own machine</strong></td>
+      <td>Nothing</td>
+      <td class="no">Yes, all of it</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note">
+  <p><span class="label">The distinction that matters most.</span> A <em>subagent</em> is a function
+  call: you ask, it works, it returns, it is gone, and its 200,000 tokens of tool output never touch
+  your context. A <em>session</em> is a colleague: it outlives you, it has its own user, it can
+  refuse, and it will only tell you things it deliberately chooses to send.</p>
+  <p>An Orchestrator built out of subagents is a program. An Orchestrator built out of sessions is a
+  team. They fail in completely different ways.</p>
+</div>
+
+<figure class="fig">
+  <div class="scroll">
+  <svg viewBox="0 0 820 300" role="img" aria-label="Subagents live inside your session; peer sessions do not">
+    <defs>
+      <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+
+    <!-- your session -->
+    <rect x="16" y="40" width="360" height="240" rx="12" fill="var(--local-bg)" stroke="var(--local)" stroke-width="2"/>
+    <text x="32" y="30" font-size="14" font-weight="700" fill="var(--local)">your session (one process, one context window)</text>
+
+    <rect x="40" y="66" width="150" height="50" rx="7" fill="var(--card)" stroke="var(--local)" stroke-width="1.5"/>
+    <text x="115" y="88" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">main conversation</text>
+    <text x="115" y="105" font-size="12" text-anchor="middle" fill="var(--ink-soft)">the Orchestrator</text>
+
+    <rect x="40" y="146" width="150" height="44" rx="7" fill="var(--card)" stroke="var(--local)" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <text x="115" y="167" font-size="12" font-weight="600" text-anchor="middle" fill="var(--ink)">subagent</text>
+    <text x="115" y="183" font-size="12" text-anchor="middle" fill="var(--ink-faint)">own context, returns a report</text>
+
+    <rect x="212" y="146" width="146" height="44" rx="7" fill="var(--card)" stroke="var(--local)" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <text x="285" y="167" font-size="12" font-weight="600" text-anchor="middle" fill="var(--ink)">subagent</text>
+    <text x="285" y="183" font-size="12" text-anchor="middle" fill="var(--ink-faint)">dies with the session</text>
+
+    <rect x="40" y="214" width="318" height="46" rx="7" fill="var(--card)" stroke="var(--local)" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <text x="199" y="235" font-size="12" font-weight="600" text-anchor="middle" fill="var(--ink)">fork of yourself</text>
+    <text x="199" y="251" font-size="12" text-anchor="middle" fill="var(--ink-faint)">inherits your entire conversation, always your model</text>
+
+    <g color="var(--local)">
+      <path d="M100,120 L100,142" stroke="currentColor" stroke-width="1.6" fill="none" marker-end="url(#ah2)"/>
+      <path d="M150,120 L262,142" stroke="currentColor" stroke-width="1.6" fill="none" marker-end="url(#ah2)"/>
+      <path d="M130,120 L160,210" stroke="currentColor" stroke-width="1.6" fill="none" marker-end="url(#ah2)"/>
+    </g>
+
+    <!-- outside -->
+    <text x="424" y="30" font-size="14" font-weight="700" fill="var(--ink-soft)">outside your process</text>
+    <rect x="412" y="40" width="392" height="240" rx="12" fill="none" stroke="var(--rule)" stroke-width="2" stroke-dasharray="7 5"/>
+
+    <rect x="436" y="66" width="344" height="50" rx="7" fill="var(--card)" stroke="var(--disk)" stroke-width="1.5"/>
+    <text x="608" y="87" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">peer session — someone else's terminal</text>
+    <text x="608" y="104" font-size="12" text-anchor="middle" fill="var(--ink-soft)">has its own user, its own permissions, can say no</text>
+
+    <rect x="436" y="136" width="344" height="50" rx="7" fill="var(--card)" stroke="var(--local)" stroke-width="1.5"/>
+    <text x="608" y="157" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">background session — <tspan font-family="monospace" font-size="12">claude --bg</tspan></text>
+    <text x="608" y="174" font-size="12" text-anchor="middle" fill="var(--ink-soft)">yours to command; outlives you; can be stopped and woken</text>
+
+    <rect x="436" y="206" width="344" height="50" rx="7" fill="var(--card)" stroke="var(--remote)" stroke-width="1.5"/>
+    <text x="608" y="227" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">remote session — another machine</text>
+    <text x="608" y="244" font-size="12" text-anchor="middle" fill="var(--ink-soft)">reached over the bridge; same Claude account only</text>
+
+    <g color="var(--cloud)">
+      <path d="M192,90 L432,90" stroke="currentColor" stroke-width="2" fill="none" marker-end="url(#ah2)" marker-start="url(#ah2)"/>
+      <path d="M192,96 C 300,120 340,140 432,158" stroke="currentColor" stroke-width="2" fill="none" marker-end="url(#ah2)" marker-start="url(#ah2)"/>
+      <path d="M192,104 C 300,160 330,200 432,228" stroke="currentColor" stroke-width="2" fill="none" marker-end="url(#ah2)" marker-start="url(#ah2)"/>
+    </g>
+    <text x="312" y="84" font-size="12" text-anchor="middle" fill="var(--cloud)" font-weight="600">SendMessage</text>
+  </svg>
+  </div>
+  <figcaption>The boundary that matters. Inside the box, agents are function calls that die with
+  you. Outside it, they are independent processes that you can only reach by explicitly sending a
+  message — and that can decline.</figcaption>
+</figure>
+
+<h2 id="machinery">3. The machinery: registry, socket, bridge</h2>
+
+<p>All of it is visible on disk, and none of it is magic.</p>
+
+<h3>The registry</h3>
+
+<p>Every running session writes one JSON file into <code>~/.claude/sessions/</code>, named after its
+process id. This is what <code>ListAgents</code> is reading. Here is this session's own entry, live,
+with nothing removed:</p>
+
+<pre><code>{
+  "pid": 20280,
+  "sessionId": "6a49a6eb-7ba8-481c-b8a7-4d994d99dddb",
+  "cwd": "/Users/greg/dev/spideryarn/reading2",
+  "version": "2.1.263",
+  "peerProtocol": 1,
+  "peerFeatures": ["notify_idle", "reply_across_default_dirs", "artifact_yield"],
+  "kind": "interactive",
+  "pidDomain": "darwin",
+  "messagingSocketPath": "/tmp/cc-socks/20280.sock",
+  "name": "reading2-e5",
+  "nameSource": "derived",
+  "status": "busy",
+  "bridgeSessionId": "session_01Ft2BPBKn7kTSdrdA5TkL5C"
+}</code></pre>
+
+<p>Read that top to bottom and you have the whole design. <code>name</code> is derived from the
+working directory. <code>status</code> flips between <code>busy</code> and <code>idle</code>.
+<code>messagingSocketPath</code> is the phone number. <code>bridgeSessionId</code> is how the outside
+world reaches it. And <code>kind</code> tells you whether a human is sitting in front of it.</p>
+
+<div class="note">
+  <p><span class="label">There is a shell-level equivalent, and it is a big deal for orchestration.</span>
+  <code>claude agents --json</code> prints the same listing from a plain terminal, with no Claude
+  session running at all. A cron job, a shell script, or a Codex-primary run can discover and
+  address your fleet.</p>
+</div>
+
+<h3>The socket</h3>
+
+<p>Same-machine delivery is a unix domain socket per session, plus a token file:</p>
+
+<pre><code>$ ls -la /tmp/cc-socks/
+drwx------   9 greg  wheel   288  7 Sep 21:33 .
+srw-------   1 greg  wheel     0  7 Sep 21:32 20280.sock
+srw-------   1 greg  wheel     0  7 Sep 21:33 20788.sock
+...
+$ head -c 30 ~/.claude/sessions/20280.*.key
+{"peerToken":"66363ab9a681...</code></pre>
+
+<p>Note the permission bits: <code>drwx------</code> on the directory, <code>srw-------</code> on
+every socket, all owned by <code>greg</code>. That single detail answers one of your questions
+outright — see <a href="#boundaries">§8</a>.</p>
+
+<h3>The bridge</h3>
+
+<p>Sessions on other machines appear in the same listing, marked <code>Remote Control</code> — the
+feature that links a session running on your own hardware to your claude.ai account, so you can reach
+it from the web or your phone. The code still runs on that machine; only the conversation goes
+through Anthropic. Those sessions are reached through the bridge rather than a socket. When a message arrives from one, its reply address
+looks like <code>bridge:session_01Ji3HNa25RdGfB9GNsovfcp</code> rather than
+<code>uds:/tmp/cc-socks/20788.sock</code> — the prefix tells you which post office carried it.</p>
+
+<details>
+  <summary>What a delivered message actually looks like on the receiving side</summary>
+  <p>A peer's message arrives as a user-role turn whose entire body is a tagged block, followed by a
+  standing harness note. This is <code>reading2-d2</code>'s own description of receiving mine, in its
+  words:</p>
+  <blockquote style="border-left:3px solid var(--rule); margin:0.8rem 0; padding-left:1rem; color:var(--ink-soft); font-size:0.94rem;">
+    <p>"It rendered as a user-role turn whose whole body was
+    <code>&lt;cross-session-message from="uds:/tmp/cc-socks/20280.sock" from-name="reading2-e5"
+    from-mode="prompting"&gt;…&lt;/cross-session-message&gt;</code>, followed by an unwrapped harness
+    note telling me to treat it as a teammate's request, to act within my own permission settings,
+    and that a peer can't grant escalation."</p>
+  </blockquote>
+  <p>Two things follow. First, a receiving agent can always tell a peer message from its human — they
+  are visually distinct, so you cannot impersonate the user by messaging a session. Second, the
+  harness actively defends against <em>permission laundering</em>: a peer asking you to do something
+  it was itself denied is supposed to be refused and surfaced. An Orchestrator cannot use a fleet to
+  route around its own permission settings, by design.</p>
+</details>
+
+<h2 id="worked">4. Worked example: a two-worker fan-out</h2>
+
+<p>This is the spike that answers "is an Orchestrator buildable", run for real in this session. One
+orchestrator, two detached workers, a task each, and the answers coming home.</p>
+
+<p class="measured">Measured 2026-09-07</p>
+
+<h4>Step 1 — spawn two detached workers</h4>
+
+<pre><code>$ claude --bg -n worker-a --model sonnet \
+    'You are worker-a. Compute 7 squared. Then call SendMessage with
+     to="reading2-e5" and message="worker-a result: &lt;the number&gt;".'
+backgrounded · 4b1995dd · worker-a
+
+$ claude --bg -n worker-b --model sonnet \
+    'You are worker-b. Compute 11 squared. Then call SendMessage ...'
+backgrounded · 93680737 · worker-b</code></pre>
+
+<p>Both returned immediately. Six seconds later they were in the registry as
+<code>"kind":"bg"</code>, status <code>busy</code>, each with its own socket — full peers,
+addressable by name.</p>
+
+<h4>Step 2 — the answers arrive on their own</h4>
+
+<p>No polling, no waiting, no <code>TaskOutput</code>. Two messages simply appeared mid-turn while I
+was doing something else:</p>
+
+<pre><code>&lt;cross-session-message from="uds:/tmp/cc-socks/30064.sock" from-name="worker-a"&gt;
+worker-a result: 49
+&lt;/cross-session-message&gt;
+
+&lt;cross-session-message from="uds:/tmp/cc-socks/30079.sock" from-name="worker-b"&gt;
+worker-b result: 121
+&lt;/cross-session-message&gt;</code></pre>
+
+<h4>Step 3 — clean up</h4>
+
+<pre><code>$ claude stop 4b1995dd
+stopped 4b1995dd</code></pre>
+
+<figure class="fig">
+  <div class="scroll">
+  <svg viewBox="0 0 820 340" role="img" aria-label="Sequence diagram of the fan-out spike">
+    <defs>
+      <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+
+    <!-- lifelines -->
+    <rect x="24" y="20" width="180" height="38" rx="7" fill="var(--local-bg)" stroke="var(--local)" stroke-width="1.6"/>
+    <text x="114" y="44" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">Orchestrator</text>
+    <line x1="114" y1="58" x2="114" y2="314" stroke="var(--local)" stroke-width="1.4" stroke-dasharray="4 4"/>
+
+    <rect x="330" y="20" width="150" height="38" rx="7" fill="var(--local-bg)" stroke="var(--local)" stroke-width="1.6"/>
+    <text x="405" y="44" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">worker-a</text>
+    <line x1="405" y1="58" x2="405" y2="314" stroke="var(--local)" stroke-width="1.4" stroke-dasharray="4 4"/>
+
+    <rect x="620" y="20" width="150" height="38" rx="7" fill="var(--local-bg)" stroke="var(--local)" stroke-width="1.6"/>
+    <text x="695" y="44" font-size="13" font-weight="700" text-anchor="middle" fill="var(--ink)">worker-b</text>
+    <line x1="695" y1="58" x2="695" y2="314" stroke="var(--local)" stroke-width="1.4" stroke-dasharray="4 4"/>
+
+    <!-- spawn a -->
+    <g color="var(--local)">
+      <path d="M116,88 L400,88" stroke="currentColor" stroke-width="1.8" fill="none" marker-end="url(#ah3)"/>
+      <path d="M116,120 L690,120" stroke="currentColor" stroke-width="1.8" fill="none" marker-end="url(#ah3)"/>
+    </g>
+    <text x="256" y="80" font-size="12" text-anchor="middle" fill="var(--ink-soft)" font-family="monospace">claude --bg -n worker-a</text>
+    <text x="400" y="112" font-size="12" text-anchor="middle" fill="var(--ink-soft)" font-family="monospace">claude --bg -n worker-b</text>
+
+    <!-- orchestrator keeps working -->
+    <rect x="60" y="146" width="108" height="52" rx="6" fill="var(--warn-bg)" stroke="var(--warn)" stroke-width="1.4"/>
+    <text x="114" y="168" font-size="12" font-weight="600" text-anchor="middle" fill="var(--ink)">carries on</text>
+    <text x="114" y="185" font-size="12" text-anchor="middle" fill="var(--ink-soft)">no polling</text>
+
+    <!-- work -->
+    <rect x="378" y="146" width="54" height="46" rx="6" fill="var(--card)" stroke="var(--local)" stroke-width="1.4"/>
+    <text x="405" y="174" font-size="13" text-anchor="middle" fill="var(--ink)">7²</text>
+    <rect x="668" y="146" width="54" height="46" rx="6" fill="var(--card)" stroke="var(--local)" stroke-width="1.4"/>
+    <text x="695" y="174" font-size="13" text-anchor="middle" fill="var(--ink)">11²</text>
+
+    <!-- replies -->
+    <g color="var(--remote)">
+      <path d="M400,224 L120,224" stroke="currentColor" stroke-width="2" fill="none" marker-end="url(#ah3)"/>
+      <path d="M690,256 L120,256" stroke="currentColor" stroke-width="2" fill="none" marker-end="url(#ah3)"/>
+    </g>
+    <text x="262" y="216" font-size="12" text-anchor="middle" fill="var(--remote)" font-weight="600">SendMessage → "result: 49"</text>
+    <text x="406" y="248" font-size="12" text-anchor="middle" fill="var(--remote)" font-weight="600">SendMessage → "result: 121"</text>
+
+    <!-- stop -->
+    <g color="var(--danger)">
+      <path d="M116,294 L400,294" stroke="currentColor" stroke-width="1.6" fill="none" marker-end="url(#ah3)"/>
+      <path d="M116,300 L690,300" stroke="currentColor" stroke-width="1.6" fill="none" marker-end="url(#ah3)"/>
+    </g>
+    <text x="270" y="288" font-size="12" text-anchor="middle" fill="var(--danger)" font-family="monospace">claude stop &lt;id&gt;</text>
+  </svg>
+  </div>
+  <figcaption>The whole orchestration loop, as it actually ran. The Orchestrator never blocks and
+  never polls — replies interrupt it whenever they are ready.</figcaption>
+</figure>
+
+<div class="win">
+  <p><span class="label">The pattern works, and it is genuinely asynchronous.</span> Workers run in
+  their own processes, on their own models, at their own pace. The Orchestrator gets on with other
+  things and the answers land in its conversation when they land — between its tool calls, not
+  mid-call (<a href="#hard">§9</a>). That is a much better shape than a blocking fan-out, and it is
+  available today with no custom code.</p>
+</div>
+
+<div class="danger">
+  <p><span class="label">One trap in the middle of that spike.</span> The <em>reason</em> both prompts
+  say "then call SendMessage" is that an earlier worker, told simply to "reply with the word ACK",
+  printed ACK into its own terminal and I never saw it. There is no implicit return channel.
+  <strong>A worker's ordinary output is invisible to whoever spawned it.</strong> If a task's answer
+  matters, the prompt must name the tool that carries it home.</p>
+</div>
+
+<h2 id="identity">5. Addressing and identity — the part that bites</h2>
+
+<p>This is where I would concentrate the design effort. Messaging is solid; <em>knowing who you are
+talking to</em> is not.</p>
+
+<h3>Three separate failures, all observed in one hour</h3>
+
+<h4>a. Names drift while you watch</h4>
+
+<p>A session on the Hetzner box was listed as <code>Unix sleep 10h wait</code> at 21:35. By 21:52,
+without restarting, the same session (same ref <code>[b94320]</code>) was listed as
+<code>Debrief progress</code> — because bridged sessions are named after their conversation topic,
+and the topic moved.</p>
+
+<h4>b. Names collide</h4>
+
+<p>By the time it renamed itself there were <em>two</em> sessions called <code>Debrief progress</code>
+in my listing, distinguishable only by their <strong>refs</strong> — the six-character code shown in
+brackets after every name, e.g. <code>[b94320]</code>, which exists precisely because names collide.
+A ref is itself observer-specific, so it is a tiebreaker within one listing, not a global id.</p>
+
+<h4>c. The same session has different names to different observers</h4>
+
+<p>This is the one that would actually break an Orchestrator. I asked the Hetzner box to reply to
+<code>reading2-e5</code> — the name my own registry gives me, and the name my Mac peers successfully
+used. It could not find me. Its reply:</p>
+
+<blockquote style="border-left:3px solid var(--warn); margin:1rem 0; padding-left:1rem; color:var(--ink-soft);">
+  <p>"You asked me to reply to <code>reading2-e5</code> on Greg's Mac. <strong>No such session
+  appears in my <code>ListAgents</code></strong> — 51 peers, none by that name. What does appear,
+  matching your <code>from-name</code> exactly, is <code>Agent communication and orchestration
+  capabilities [58824c]</code>, a Remote Control session… <strong>the name a session asks you to
+  reply to is a claim, and the <code>from</code> attribute is the address.</strong>"</p>
+  <p style="font-size:0.85rem; color:var(--ink-faint);">— fb2b-monkeys-illustration, unprompted, 2026-09-07</p>
+</blockquote>
+
+<h4>d. A send can be refused because the network was briefly unsure</h4>
+
+<p>Messaging a worker whose name was unique on this machine still failed, because the bridge could
+not be reached at that instant to rule out a remote session of the same name:</p>
+
+<pre><code>'preempt-test' matches one session that could be checked, but not every session
+could be — re-send with the ref to confirm you mean:
+  preempt-test [90f661] — Claude session, on this machine, active 16s ago
+Your account's other sessions (Remote Control and cloud) could not be checked
+just now, so this list may be missing one…</code></pre>
+
+<p>Re-sending as <code>preempt-test [90f661]</code> worked immediately. This is careful, correct
+behaviour — it refuses to guess rather than deliver to the wrong session — but for an Orchestrator it
+means <strong>a send can fail for reasons that have nothing to do with the recipient</strong>, and
+the retry needs a ref it can only learn from the error itself. Any automated send needs to handle
+this reply shape, not just success and failure.</p>
+
+<figure class="fig">
+  <div class="scroll">
+  <svg viewBox="0 0 800 260" role="img" aria-label="One session, three different names depending on the observer">
+    <rect x="290" y="98" width="220" height="66" rx="9" fill="var(--local-bg)" stroke="var(--local)" stroke-width="2"/>
+    <text x="400" y="124" font-size="14" font-weight="700" text-anchor="middle" fill="var(--ink)">one session</text>
+    <text x="400" y="145" font-size="12" text-anchor="middle" fill="var(--ink-soft)" font-family="monospace">pid 20280 · 6a49a6eb…</text>
+
+    <!-- local observer -->
+    <rect x="16" y="26" width="230" height="60" rx="8" fill="var(--card)" stroke="var(--local)" stroke-width="1.5"/>
+    <text x="131" y="48" font-size="12.5" font-weight="700" text-anchor="middle" fill="var(--ink)">a peer on the same Mac sees</text>
+    <text x="131" y="68" font-size="13" text-anchor="middle" fill="var(--local)" font-family="monospace" font-weight="700">reading2-e5</text>
+
+    <!-- remote observer -->
+    <rect x="16" y="176" width="230" height="66" rx="8" fill="var(--card)" stroke="var(--remote)" stroke-width="1.5"/>
+    <text x="131" y="198" font-size="12.5" font-weight="700" text-anchor="middle" fill="var(--ink)">the Hetzner box sees</text>
+    <text x="131" y="217" font-size="12" text-anchor="middle" fill="var(--remote)" font-family="monospace" font-weight="700">Agent communication and</text>
+    <text x="131" y="232" font-size="12" text-anchor="middle" fill="var(--remote)" font-family="monospace" font-weight="700">orchestration… [58824c]</text>
+
+    <!-- self -->
+    <rect x="554" y="26" width="230" height="60" rx="8" fill="var(--card)" stroke="var(--disk)" stroke-width="1.5"/>
+    <text x="669" y="48" font-size="12.5" font-weight="700" text-anchor="middle" fill="var(--ink)">its own ref, to itself</text>
+    <text x="669" y="68" font-size="13" text-anchor="middle" fill="var(--disk)" font-family="monospace" font-weight="700">[e064e7]</text>
+
+    <!-- reliable -->
+    <rect x="554" y="176" width="230" height="66" rx="8" fill="var(--remote-bg)" stroke="var(--remote)" stroke-width="2"/>
+    <text x="669" y="198" font-size="12.5" font-weight="700" text-anchor="middle" fill="var(--ink)">what always works</text>
+    <text x="669" y="219" font-size="12" text-anchor="middle" fill="var(--ink-soft)">the <tspan font-family="monospace" font-weight="700">from=</tspan> on its last message</text>
+    <text x="669" y="234" font-size="12" text-anchor="middle" fill="var(--ink-faint)">uds:… or bridge:…</text>
+
+    <g stroke-width="1.6" fill="none">
+      <path d="M286,124 L250,66" stroke="var(--local)"/>
+      <path d="M286,140 L250,196" stroke="var(--remote)"/>
+      <path d="M514,124 L550,66" stroke="var(--disk)"/>
+      <path d="M514,140 L550,196" stroke="var(--remote)" stroke-width="2.4"/>
+    </g>
+  </svg>
+  </div>
+  <figcaption>The same process, described four ways. Three of them are observer-dependent. Only the
+  <code>from=</code> address on an actual message is stable across the boundary.</figcaption>
+</figure>
+
+<div class="warn">
+  <p><span class="label">Design rule for the Orchestrator.</span> Never hand a worker a name and ask
+  it to reply there. Either (a) have the worker reply to the <code>from=</code> address on the
+  message you sent it, or (b) don't use messages for results at all — have workers write to an
+  agreed file or database row and have the Orchestrator read it. Option (b) is duller and far more
+  robust, and it survives the Orchestrator itself being restarted.</p>
+  <p><span class="label">And separate routing from identity.</span> A <code>from=</code> value like
+  <code>uds:/tmp/cc-socks/20280.sock</code> names a process that will not exist tomorrow — it is a
+  reply route for the current exchange, not a key. The things that stay true are the ones you write
+  down yourself: a task id, the session UUID, and which attempt this is. Persist those; treat every
+  name and address as cache.</p>
+</div>
+
+<p class="verdict" style="margin-top:1rem">One caution on how far to take this section: the
+observer-dependent name was seen once, on one route, in one version. What it establishes is that
+display names <em>can</em> disagree across the bridge — enough to stop you trusting them, not enough
+to state a general law about identity.</p>
+
+<h2 id="watching">6. Watching without asking: transcripts, context, limits</h2>
+
+<p>You asked whether you can see what's going on in other agents' conversations, whether you can tell
+when one is about to run out of context, and how you'd know a usage limit is coming. These are the
+same question, and the answer to all three is on disk.</p>
+
+<h3>You can read any <em>local</em> session's conversation, live</h3>
+
+<p>Every session's full transcript is JSONL at
+<code>~/.claude/projects/&lt;cwd-slug&gt;/&lt;session-id&gt;.jsonl</code> — one directory per working
+directory, which means one per worktree. No API, no permission, no notification to the session being
+read. The repo already has a recipe for mining these in bulk:
+<code>docs/reusable/trawl-session-transcripts.md</code>.</p>
+
+<div class="note">
+  <p><span class="label">Useful, and easy to miss.</span> For workers on the same machine, the
+  Orchestrator does not need them to report progress — it can just <em>look</em>. Status reporting is
+  the most annoying part of multi-agent systems to get right.</p>
+</div>
+
+<div class="warn">
+  <p><span class="label">But do not build the control plane on this.</span> Three limits:</p>
+  <ul style="margin:0.4rem 0 0">
+    <li><span class="label">It is same-machine, same-unix-user only.</span> A worker on the box keeps
+    its transcript on the box. Reaching it means SSH or shared storage — the messaging bus reaches
+    further than the mirror does.</li>
+    <li><span class="label">The format is a diagnostic artefact, not a contract.</span> Nothing
+    promises these fields are stable across versions. Fine for debugging and forensics; a poor thing
+    to make an Orchestrator depend on.</li>
+    <li><span class="label">Reading a worker's mind is not the same as it telling you.</span> Workers
+    should publish state, heartbeats and results explicitly to the durable task store
+    (<a href="#judgment">§12</a>). Transcript reading is how you find out <em>why</em> when that goes
+    wrong.</li>
+  </ul>
+</div>
+
+<h3>You can measure any session's context use, including your own</h3>
+
+<p>Each assistant turn records a <code>usage</code> block. Sum three of its fields and you have the
+size of that session's context at that moment:</p>
+
+<pre><code>context in use ≈ input_tokens + cache_creation_input_tokens + cache_read_input_tokens</code></pre>
+
+<p>Run live during this session, against two different transcripts:</p>
+
+<pre><code>=== my own transcript ===
+input 2  cache_creation 890  cache_read 99290
+=> context in use: 100,182 tokens
+
+=== a peer's (reading2-f3, a 3-day-old session in a worktree) ===
+=> peer context in use: 144,285 tokens</code></pre>
+
+<p>So: <strong>yes, you can tell when an agent is about to run out of context — including agents you
+did not spawn</strong> — by tailing their transcript and watching that number climb toward the
+window size. This works from a shell script with no Claude session involved.</p>
+
+<details>
+  <summary>What happens when it does run out, and what the transcript records</summary>
+  <p>Claude Code compacts automatically before the wall, and writes a <code>compact_boundary</code>
+  entry recording exactly what it did. A real one from a peer session:</p>
+  <pre><code>"compactMetadata": {
+   "trigger": "manual",
+   "preTokens": 161499,
+   "postTokens": 10159,
+   "cumulativeDroppedTokens": 261389,
+   "durationMs": 131827,
+   "preservedSegment": { "headUuid": "...", "anchorUuid": "...", "tailUuid": "..." }
+}</code></pre>
+  <p>161k in, 10k out, two minutes to do it, and a quarter of a million tokens dropped across the
+  session's life. <code>trigger</code> distinguishes <code>manual</code> (a human typed
+  <code>/compact</code>) from automatic compaction, so an Orchestrator watching these can tell the
+  difference between a worker that was tidied up and one that hit the ceiling.</p>
+  <p>Practical consequence: a long-running worker doesn't die of context exhaustion, but it does
+  quietly <em>forget</em>. If a worker has compacted three times, treat its account of what it did
+  four hours ago as unreliable, and go to its artefacts instead.</p>
+</details>
+
+<h3>Usage limits: you find out at the wall, not before</h3>
+
+<p>This one is a genuine limitation. Transcripts <em>do</em> record rate-limit events, with the
+reset time:</p>
+
+<pre><code>{"status":"rejected","resetsAt":1788085800,"rateLimitType":"five_hour",
+ "unifiedRateLimitFallbackAvailable":false,"overageStatus":"rejected",
+ "overageDisabledReason":"out_of_credits","isUsingOverage":false,
+ "lowPriorityOffer":"treatment","lowPriorityRetryAfterSeconds":20,
+ "lowPriorityMaxWaitSeconds":1200}</code></pre>
+
+<p><code>resetsAt</code> is a plain unix timestamp — <code>1788085800</code> is 2026-08-30 13:30
+local. So once you have been rejected, you know precisely when you can resume, and a script can wait
+for it.</p>
+
+<p>But the transcript only ever records the wall. I searched every transcript on this machine: there
+are 58 of these records and <strong>every single one has <code>"status":"rejected"</code></strong>.
+No warning status, no "you are at 80%", nothing written while things are fine.</p>
+
+<h3>The early warning exists — it just isn't in the transcript</h3>
+
+<p class="measured">Measured 2026-09-07</p>
+
+<p>It is in the <strong>status line payload</strong>. Claude Code pipes a JSON blob to your status
+line command on every turn, and that blob carries live quota. I captured a real one by running a
+throwaway session with an isolated settings file whose status line just dumped stdin to disk:</p>
+
+<pre><code>"rate_limits": {
+  "five_hour": { "used_percentage": 48, "resets_at": 1788813000 },
+  "seven_day": { "used_percentage": 31, "resets_at": 1788843600 }
+},
+"context_window": {
+  "context_window_size": 1000000,
+  "used_percentage": 5,
+  "remaining_percentage": 95,
+  "current_usage": { "input_tokens": 2, "cache_creation_input_tokens": 14569,
+                     "cache_read_input_tokens": 36633, "output_tokens": 4 }
+}</code></pre>
+
+<p>Decoded, at the moment of capture: the five-hour window was <strong>48% used, resetting 23:30
+tonight</strong>; the weekly window <strong>31% used, resetting 08:00 tomorrow</strong>. That is
+exactly the early warning I had concluded did not exist.</p>
+
+<div class="win">
+  <p><span class="label">This is the most useful thing in this document for your Orchestrator.</span>
+  A status line command is just a shell script that receives this JSON on stdin. Point it at a script
+  that appends <code>rate_limits</code> to a JSONL file, and the Orchestrator has a <strong>quota
+  signal it can consult before a fan-out decision</strong> — "the weekly window is at 80%, run three
+  workers rather than ten" becomes a decision it can actually make.</p>
+  <p>Unlike the <code>/usage</code> activity view, which the docs describe as "computed from local
+  session history on this machine", these plan-limit figures come from a usage <em>endpoint</em> — so
+  they are an account-level snapshot, not a per-machine tally.</p>
+</div>
+
+<div class="warn">
+  <p><span class="label">Four caveats, and the first two are the ones that would bite.</span></p>
+  <ul style="margin:0.4rem 0 0">
+    <li><span class="label">It is a snapshot, not a live feed, and it goes quiet exactly when you need
+    it.</span> The script runs on events (a turn, a compaction, a reset boundary) plus an optional
+    <code>refreshInterval</code> timer, debounced at 300ms. The documentation names this failure with
+    uncanny precision: <em>"the event-driven triggers can go quiet when the main session is idle, for
+    example while a coordinator waits on background subagents."</em> That is your Orchestrator.
+    <strong>Setting <code>refreshInterval</code> is mandatory for this design</strong>, not optional.</li>
+    <li><span class="label">One captured payload is not a guarantee.</span> I proved the fields exist
+    in one interactive session. I have <em>not</em> shown they are present and fresh in a background
+    worker, nor how quickly they reflect quota another machine just consumed. Treat missing or stale
+    values as normal and handle them.</li>
+    <li><span class="label">It reaches a script, not the model.</span> Nothing puts these numbers into
+    an agent's context. The Orchestrator has to read the file its own status line wrote.</li>
+    <li><span class="label">Workers won't rescue themselves.</span> Claude Code can wait out a usage
+    limit and resume at reset — but the documented exceptions are precisely the session kinds an
+    Orchestrator uses. In Remote Control and teammate sessions it "doesn't start the wait on its own";
+    a person must run <code>/rate-limit-options</code>. In <strong>background sessions and
+    <code>-p</code> runs it isn't offered at all</strong> — "the menu row isn't available". A fleet
+    that hits the limit <strong>stays</strong> stopped until something outside it intervenes.</li>
+  </ul>
+</div>
+
+<div class="warn">
+  <p><span class="label">And why this matters more for an Orchestrator than for you.</span> Sessions
+  share one account quota, and the five-hour and weekly windows are metered simultaneously. Ten
+  workers burn both ten times faster, and a single wide fan-out can exhaust the <em>weekly</em>
+  allowance before the five-hour window has even reset. Fan-out width is a budget decision, not just a
+  speed decision.</p>
+</div>
+
+<h2 id="lifecycle">7. Lifecycle: spawn, sleep, wake, stop</h2>
+
+<p>All four verbs work. The waking one surprised me.</p>
+
+<h3>Spawn</h3>
+<pre><code>claude --bg -n worker-a --model sonnet "…the task…"
+# → backgrounded · 4b1995dd · worker-a</code></pre>
+<p>Detached, survives the spawning session ending, registers as a full peer within a few seconds.</p>
+
+<h3>Stop</h3>
+<pre><code>claude stop 4b1995dd     # → stopped 4b1995dd, and it leaves the registry</code></pre>
+
+<h3>Wake — and it remembers</h3>
+
+<p class="measured">Measured 2026-09-07</p>
+
+<p>I stopped <code>orchestrator-spike</code>, confirmed it had left the registry, then woke it and
+asked what it had said before it died:</p>
+
+<pre><code>$ claude --bg --resume a85eeed7-cd0c-4561-97b2-37bd09176fea "Reply with just the word RESUMED."
+note: woke session a85eeed7 with its saved options (-n, --model).
+backgrounded · a85eeed7 · orchestrator-spike
+
+# then, over SendMessage: "reply with the word from your first message, and the word from now"
+# it answered:  PONG RESUMED</code></pre>
+
+<p>Same session id, same job id, same name, saved model and flags restored, new process — and it
+still knew a word it had said before it was killed. <strong>A stopped session is genuinely
+resumable, not merely restartable.</strong></p>
+
+<div class="danger">
+  <p><span class="label">The gotcha, and it is a silent one.</span> Resuming by the <em>short</em>
+  job id does something different — it forks a copy under a new id:</p>
+  <pre style="margin:0.6rem 0 0"><code>$ claude --bg --resume a85eeed7 "…"
+note: started a copy of that conversation as fb214c5e. To continue a session
+under its own id, pass its full session id … to --resume.</code></pre>
+  <p>Credit where due: the CLI says so. But if you script this and don't read stdout, you will build
+  an orchestrator that thinks it is talking to one worker and is actually spawning a new fork every
+  time — each with a fraction of the state and none of the accumulated work.</p>
+</div>
+
+<div class="danger">
+  <p><span class="label">And one that is genuinely silent — the worst finding here.</span>
+  <code>--session-id</code> lets you choose a session's id in advance, which would let an
+  Orchestrator know a worker's address before the worker exists. It works with <code>-p</code> and is
+  <strong>silently ignored with <code>--bg</code></strong>. Reproduced twice:</p>
+  <div class="tbl" style="margin:0.7rem 0">
+  <table>
+    <thead><tr><th>invocation</th><th>id requested</th><th>id you get</th><th></th></tr></thead>
+    <tbody>
+      <tr><td><code>claude -p --session-id …</code></td><td><code>766bd7bc-…</code></td><td><code>766bd7bc-…</code></td><td class="yes">honoured</td></tr>
+      <tr><td><code>claude --bg --session-id …</code></td><td><code>f652282c-…</code></td><td><code>4b1995dd-…</code></td><td class="no">ignored, no warning</td></tr>
+      <tr><td><code>claude --bg --session-id …</code></td><td><code>fed5bb9f-…</code></td><td><code>c6f81ec7-…</code></td><td class="no">ignored, no warning</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>No error, no note, exit code 0. This is exactly the class in
+  <code>docs/reusable/silent-success.md</code>: the command reports success while doing nothing you
+  asked. Any orchestrator design that pre-assigns worker addresses must read the id back out of the
+  <code>backgrounded ·</code> line rather than trusting the one it passed in.</p>
+</div>
+
+<h3>Can you make a peer exit?</h3>
+
+<p>You can <em>ask</em>. <code>SendMessage</code> carries a legacy protocol message
+<code>{"type": "shutdown_request"}</code>; approving it terminates the receiving process. But it is a
+request that the receiver evaluates, not a kill. For sessions you spawned yourself,
+<code>claude stop &lt;id&gt;</code> and <code>TaskStop</code> are the real controls. You cannot
+force-quit somebody else's terminal, which is correct.</p>
+
+<h2 id="boundaries">8. Boundaries: machines, accounts, permissions</h2>
+
+<div class="tbl">
+<table>
+  <thead><tr><th>Question</th><th>Answer</th><th>Evidence</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Another machine, same Claude account?</td>
+      <td class="yes">Yes</td>
+      <td>Messaged the Hetzner box from the Mac and got a reply naming <code>spideryarn-box</code> and <code>/home/greg/code/spideryarn2</code></td>
+    </tr>
+    <tr>
+      <td>…even if that machine is currently offline?</td>
+      <td class="part">Queueing <em>reported</em>; delivery unverified</td>
+      <td>The send returned "delivery is queued until that machine reconnects" rather than an error. I never brought that machine back up to confirm the message actually arrived — so this is Claude Code telling me what it intends, not evidence it happened</td>
+    </tr>
+    <tr>
+      <td>Cloud sessions?</td>
+      <td class="yes">Yes</td>
+      <td>Same bridge; note a cloud session receives but reportedly cannot message back yet</td>
+    </tr>
+    <tr>
+      <td>Same server, different <em>unix</em> user?</td>
+      <td class="no">No</td>
+      <td>Sockets are <code>srw-------</code> in a <code>drwx------</code> directory, owner-only; the registry is under <code>~/.claude</code></td>
+    </tr>
+    <tr>
+      <td>Same server, same unix user, different <em>Claude</em> account?</td>
+      <td class="part">Unknown — and the local evidence points toward <em>yes</em></td>
+      <td>Discovery and transport are gated on unix ownership (<code>~/.claude</code>, the socket permissions), not on which Claude account is signed in — so two logins sharing a home directory would plausibly see each other. A separate <code>CLAUDE_CONFIG_DIR</code> would change that. <strong>Not tested; do not treat the account as a security boundary on one machine.</strong></td>
+    </tr>
+    <tr>
+      <td>Can a peer make you do something you were denied?</td>
+      <td class="part">Narrower than it sounds</td>
+      <td>What is guaranteed: a peer message is never treated as your user's consent and cannot approve a pending permission prompt. What is <em>not</em> guaranteed: that the peer can't do the thing at all — a receiving session still acts under its own permissions, which may be broader than yours</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note">
+  <p><span class="label">The security shape, carefully.</span> There are two separate gates, and it is
+  worth not merging them. <strong>Local discovery and transport are gated on unix ownership</strong> —
+  the registry is in your home directory and the sockets are <code>srw-------</code>, so another
+  ordinary user on the same box cannot see or reach your sessions. It is not a network service and
+  nothing listens on a TCP port. <strong>Cross-machine reach is gated on the Claude account</strong>,
+  through the bridge.</p>
+  <p>Those two gates do not compose into a single tidy boundary. A second Claude account under the
+  same unix user is untested and may well be visible; root or an admin on the box bypasses filesystem
+  permissions anyway. Treat "one unix user, one machine" as the local blast radius, and don't lean on
+  the Claude account as an isolation mechanism between sessions on the same box.</p>
+</div>
+
+<h2 id="hard">9. The genuinely hard parts</h2>
+
+<p>Four constraints here shape the design in <a href="#judgment">§12</a>, so they are stated plainly
+before the detail:</p>
+
+<ul>
+  <li><strong>Messages wait for the current tool call.</strong> A worker mid-build won't see "stop"
+  for as long as that command runs. Latency is measured in whole tool calls, and there is no
+  interrupt short of killing the process.</li>
+  <li><strong>Idle is not done.</strong> The one-shot idle notice is a liveness edge; it fires on
+  failure and mid-task pauses too.</li>
+  <li><strong>Subagents send under their parent's address</strong>, so replies land in the parent's
+  conversation. A subagent cannot hold a conversation with an external session.</li>
+  <li><strong>A send has more than two outcomes.</strong> Delivered, held for approval, refused,
+  ambiguous, unreachable, queued-but-unconfirmed.</li>
+</ul>
+
+<p>The evidence and the mechanics for each:</p>
+
+<details>
+  <summary>Delivery timing: a blocking Bash call was not interrupted — measured</summary>
+  <p>I put a worker into a genuinely blocking 45-second foreground command and messaged it eight
+  seconds in. Reconstructed from its own transcript, including the queue records:</p>
+  <pre style="margin:0.6rem 0"><code>21:53:31  TOOL Bash    python3 -c "import time; time.sleep(45); print('DONE')"
+21:53:39  queue-operation: message ENQUEUED
+21:54:18  RESULT       DONE                    ← the blocking call returns
+21:54:18  queue-operation: REMOVED, reason:"absorbed_mid_turn"
+21:54:24  TOOL Bash    date +%H:%M:%S          ← only now does it act
+21:54:29  TOOL SendMessage → "saw it at 21:54:24"</code></pre>
+  <p><strong>Thirty-nine seconds queued</strong>, and the queue record is explicit: it was removed at
+  the exact instant the tool result landed, and <em>absorbed into the turn already in progress</em>
+  rather than starting a new one.</p>
+  <p><span class="label">What this shows, stated no more strongly than the evidence.</span> A message
+  arriving during one foreground <code>Bash</code> call did not preempt it; it waited and was folded
+  into the same turn once the tool returned. I have not tested other tool types or other agent states,
+  so treat this as "messages are incorporated between tool rounds" rather than a law about every
+  possible interruption.</p>
+  <p><span class="label">Practical consequence.</span> A worker deep in a ten-minute build will not
+  see "stop, change of plan" until it surfaces. Plan for latency measured in whole tool calls. If you
+  need a true interrupt, kill the process — <code>claude stop</code> acts on the process, not the
+  conversation.</p>
+  <div class="warn" style="margin:0.9rem 0 0.2rem">
+    <p><span class="label">The first version of this experiment lied to me, and it is worth knowing
+    why.</span> I originally had the worker run <code>sleep 50</code>. The harness <em>blocks
+    foreground <code>sleep</code></em>, so the worker quietly switched to
+    <code>run_in_background: true</code>, which returns instantly — leaving it idle, not blocked. It
+    answered my message in two seconds and I nearly wrote down "messages preempt tool calls". Only
+    reading its transcript showed the blocked command and the fallback. A timing experiment whose
+    subject silently did something other than what you asked reports a confident, wrong number
+    (<code>docs/reusable/silent-success.md</code>).</p>
+  </div>
+</details>
+
+<details>
+  <summary>Don't poll — subscribe. And the notice is better than you'd expect</summary>
+  <p><code>SendMessage</code> takes <code>notify_when_idle: true</code>, which fires exactly one
+  notice when that session next goes idle or exits. Omit the message body entirely for a pure
+  subscription that costs the other session nothing. This is the correct alternative to an
+  "are you done yet?" loop, which wastes both sessions' context and quota.</p>
+  <p>I subscribed to <code>reading2-d2</code> at 21:34 and the notice arrived like this:</p>
+  <pre style="margin:0.6rem 0"><code>[Cross-session idle notice] "reading2-d2", which you asked to be notified
+about, is idle now — it finished a turn at 21:37. Its harness reports:
+«Replied to `reading2-e5` with the three things it asked for: my name and
+cwd, that the message was …»</code></pre>
+  <p><span class="label">The detail worth noticing</span> is that the notice carries a one-line
+  summary of what the session actually did, generated by its harness rather than by the session
+  choosing to report. For an Orchestrator that is a free progress signal — you learn a worker stopped
+  moving, and roughly what it was last doing, without the worker cooperating.</p>
+  <div class="danger" style="margin:0.9rem 0 0.2rem">
+    <p><span class="label">Do not read "idle" as "done".</span> It is a liveness edge, nothing more.
+    An idle session may have finished the task, finished <em>one turn</em> of it, hit an error,
+    stopped for a permission prompt, or exited. In this very session a teammate went idle twice with
+    <code>idleReason: "failed"</code> and a network error — the browser check I had asked for never
+    ran at all.</p>
+    <p>Completion has to be an explicit terminal state plus a verified artefact. An Orchestrator that
+    treats an idle notice as success will confidently mark unfinished work complete.</p>
+  </div>
+  <p>Two caveats. It is <strong>one-shot</strong> — you get a single notice per subscription, so a
+  long-running worker needs re-subscribing each time. And per the confirmation text, the notice
+  reaches <em>you</em> only if the other session runs in the same permission class as yours or is one
+  you spawned; otherwise it is shown to the human instead.</p>
+</details>
+
+<details>
+  <summary>Subagents send under their parent's address</summary>
+  <p>If a subagent calls <code>SendMessage</code> to another session, the message goes out under the
+  <em>parent session's</em> address, and any reply is delivered to the parent's conversation — not to
+  the subagent, which may well have finished by then. So a subagent cannot hold a two-way
+  conversation with an external session. Cross-session messaging is genuinely session-to-session.</p>
+</details>
+
+<details>
+  <summary>Reading logs from a background session is unpleasant</summary>
+  <p><code>claude logs &lt;id&gt;</code> returns a raw terminal capture — ANSI escape codes, cursor
+  movements, spinner frames, the lot. Extracting the actual answer took
+  <code>tr -d '\000' | sed 's/\x1b\[[0-9;?]*[a-zA-Z]//g'</code> and even then it was soup. For
+  programmatic use, read the session's JSONL transcript instead; it is structured, and it is the same
+  information.</p>
+</details>
+
+<details>
+  <summary>A restarted session reusing a name is flagged — quietly</summary>
+  <p>When I messaged <code>orchestrator-spike</code> after waking it, the tool result included:
+  "Note: messaging a new session for the first time under a previously used name (was it
+  restarted?)". Useful, and easy to scroll past. An orchestrator should treat that note as a signal
+  that its addressing assumptions may have gone stale.</p>
+</details>
+
+<details>
+  <summary>Other orchestration primitives worth knowing about</summary>
+  <ul>
+    <li><code>Monitor</code> — streams stdout lines from a long-running script as chat notifications.
+    The right tool for watching a worker's transcript file grow, or for tailing a log for failure
+    signatures.</li>
+    <li><code>CronCreate</code> — schedules a prompt to fire later, session-only, auto-expiring after
+    seven days. Note the repo already has a standing complaint that there is no real scheduler
+    (<code>docs/project/cron-scheduler.md</code>); this is not it.</li>
+    <li><code>RemoteTrigger</code> — a real API for cloud "routines" that run on a schedule or a
+    GitHub webhook. Currently empty for this account (<code>{"data":[]}</code>), but it is the only
+    primitive here that survives every machine being switched off.</li>
+    <li><code>claude --bg --resume</code>, <code>claude agents --json</code>, <code>claude attach</code>
+    — the shell surface, usable from cron or a script with no session in the room.</li>
+  </ul>
+</details>
+
+<h2 id="scale">10. What's already built, that you might not need to rebuild</h2>
+
+<p>Everything above is the raw substrate. There are three higher-level features sitting on top of it,
+and one of them is the documented answer to your actual question.</p>
+
+<h3>Agent teams — already switched on, here</h3>
+
+<p>"Teammate" is a real, documented, named feature, not a metaphor. It is experimental and off by
+default, gated behind <code>CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1</code> — <strong>which is already
+set in your <code>~/.claude/settings.json</code></strong>, which is why the agents that researched
+this document appear as "Teammates" rather than plain subagents.</p>
+
+<p>A teammate is a fully independent session with its own context window that self-coordinates, where
+a subagent is a call that returns a result. Teams also get a <em>shared task list</em>
+(<code>TaskCreate</code> / <code>TaskGet</code> / <code>TaskList</code> / <code>TaskUpdate</code>)
+with pending/in-progress/completed states and dependency unblocking — which is most of the
+coordination bookkeeping an Orchestrator would otherwise write itself.</p>
+
+<div class="warn">
+  <p><span class="label">The constraints are what decide whether it fits.</span> One team per session,
+  no nested teams, and the lead role is fixed for the session's life. The one that decides the
+  architecture: <strong>spawning teammates requires an interactive session</strong>. Under
+  <code>-p</code>, and in Agent SDK sessions, "Claude doesn't spawn teammates, and a subagent that
+  Claude names runs as an ordinary subagent even with agent teams enabled" — note that it
+  <em>silently degrades</em> rather than failing. So an Orchestrator built on teams must be an
+  interactive session that stays alive; it cannot be a cron job or a script.</p>
+</div>
+
+<h3>Dynamic workflows — the documented answer for scale</h3>
+
+<p>This is the one worth knowing before you build anything. The official guidance is that subagents
+and teams are for <em>a handful</em> of agents per turn, and that coordinating <em>dozens to
+hundreds</em> is what the <strong>Workflow</strong> feature is for. It moves the orchestration into a
+script that the runtime executes <em>outside</em> the conversation context — so the fan-out logic
+stops competing with the work for context, and it can express pipelines, parallel stages and
+verification passes as ordinary code.</p>
+
+<div class="note">
+  <p><span class="label">Read that as a warning about the shape of the thing you are about to build.</span>
+  A hand-rolled Orchestrator holds its whole plan in a conversation, and that conversation compacts —
+  meaning the coordinator forgets the plan it is coordinating. A workflow script does not.</p>
+  <p>It is deliberately opt-in — it can spawn a lot of agents and spend a lot of tokens, so it only
+  runs when a user explicitly asks for it.</p>
+</div>
+
+<div class="warn">
+  <p><span class="label">But it is not a substitute for a fleet supervisor, and the limits say why.</span>
+  Workflows cap concurrency (documented at up to 16 agents), are scoped to the session that ran them,
+  take no user input mid-run, and the workflow script itself has no filesystem or shell. That makes
+  them excellent at a <strong>bounded batch</strong> — review nine dimensions, verify each finding —
+  and unsuitable as an always-on supervisor of independent sessions across two machines.</p>
+  <p>So the two are not competitors; they answer different questions. <em>Bounded fan-out with a
+  beginning and an end</em> → use Workflow, don't hand-roll it. <em>Durable supervision of long-lived
+  workers</em> → you need external state and something outside the fleet watching it
+  (<a href="#judgment">§12</a>). Decide which job you actually have before picking.</p>
+</div>
+
+<h3>Hooks — where an Orchestrator gets its control points</h3>
+
+<p>Hooks are shell commands fired on lifecycle events; exit code 2 blocks the thing that was about to
+happen. This repo already uses two (<code>PreToolUse</code> to protect the shared tree,
+<code>SessionStart</code> to print the primary-checkout notice). The ones an Orchestrator would care
+about:</p>
+
+<div class="tbl">
+<table>
+  <thead><tr><th>Hook</th><th>Fires when</th><th>What an Orchestrator does with it</th></tr></thead>
+  <tbody>
+    <tr><td><code>SubagentStop</code></td><td>A subagent finishes</td><td>Quality gate — refuse to let it stop until tests pass</td></tr>
+    <tr><td><code>TeammateIdle</code></td><td>A teammate goes idle</td><td>Exit 2 to keep it working; the natural "next task" hook</td></tr>
+    <tr><td><code>TaskCreated</code> / <code>TaskCompleted</code></td><td>Shared task list changes</td><td>Police the plan — block work nobody authorised, or completion without evidence</td></tr>
+    <tr><td><code>PreCompact</code> / <code>PostCompact</code></td><td>Around compaction</td><td>Persist state before the worker forgets it</td></tr>
+    <tr><td><code>SessionStart</code></td><td>Start, resume, clear, compact, fork</td><td>Re-inject the worker's brief every time its context is rebuilt</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Two settings are also worth knowing, because they are the defence a <em>worker</em> has against a
+badly-behaved Orchestrator: <code>crossSessionInbound</code> (<code>accept</code> /
+<code>hold</code> / <code>refuse</code>) decides what a session does with inbound peer messages, and
+<code>isolatePeerMachines</code> requires approval before any cross-machine send. Messages to a
+session running with bypassed permissions are held for approval by default.</p>
+
+<div class="danger">
+  <p><span class="label">And a cautionary tale from this system's own changelog</span>, worth reading
+  twice if you are about to build on it: <em>"sending to a session on this machine that refuses
+  inbound messages … now reports 'refused' to the sender instead of a silent success."</em></p>
+  <p>For some period, <code>SendMessage</code> returned success for messages that were never
+  delivered. That is the exact failure this repo names in
+  <code>docs/reusable/silent-success.md</code>, in the transport your Orchestrator would depend on.
+  It is fixed — but the lesson generalises: <strong>a successful send is not a delivered message, and
+  a delivered message is not a completed task.</strong> Confirm work by its artefacts, never by the
+  fact that you asked for it.</p>
+</div>
+
+<h2 id="protocols">11. Crossing the boundaries Claude Code won't</h2>
+
+<p>Everything measured so far is bounded by <strong>one Claude account and one unix user</strong>.
+That is fine for your fleet today — a Mac and a box, both yours. It is not fine the moment you want a
+Codex run, a different account, or a machine that isn't signed in. So: what should carry messages
+across those lines?</p>
+
+<p>Judged against this repo's own criteria for taking on a dependency
+(<code>docs/reusable/third-party-library-selection.md</code>): a long-lasting community with plenty of
+docs and examples — so coding models have seen it — and a well-designed, type-safe API.</p>
+
+<div class="tbl">
+<table>
+  <thead><tr><th>Option</th><th>What it is</th><th>Crosses account / vendor?</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="label">A2A</span><br><span class="verdict">Google → Linux Foundation, spec v1.0.1</span></td>
+      <td>HTTP protocol with agent cards, task lifecycles, cancellation, streaming and disconnected push</td>
+      <td class="yes">Yes, by design</td>
+      <td><span class="part">Real, more capable than I first credited, still not now.</span> Its task lifecycle and cancellation are genuinely relevant even between agents you own, and v1 serves multiple agents from one endpoint — so "an HTTP server per agent" is wrong. The honest objection is narrower: it is a new dependency whose TypeScript SDK has modest traction (~576 stars), solving coordination you can get from a table today. Revisit it when you need to reach an agent you don't control</td>
+    </tr>
+    <tr>
+      <td><span class="label">MCP</span><br><span class="verdict">as an agent-to-agent transport</span></td>
+      <td>Tool provision, over stdio or Streamable HTTP</td>
+      <td class="part">The protocol can; <code>claude mcp serve</code> can't</td>
+      <td><span class="part">Wrong role model, not wrong technology.</span> <code>claude mcp serve</code> is stdio and local, but MCP itself has a remote transport, so "single machine" is a property of that CLI mode, not the protocol. <em>Sampling</em> was deprecated in the 2026-07-28 spec, though that release adds a Tasks extension for asynchronous work. The real objection: MCP models a client calling a server's tools, and your agents are symmetric peers</td>
+    </tr>
+    <tr>
+      <td><span class="label">AGNTCY / IBM ACP / AGP</span></td>
+      <td>Earlier agent-interop attempts</td>
+      <td>—</td>
+      <td><span class="no">Dead.</span> IBM's archived Aug 2025, AGNTCY's archived April 2026, both folded into A2A. "ACP" now names at least four unrelated things — treat any mention as a question, not an answer</td>
+    </tr>
+    <tr>
+      <td><span class="label">Agent frameworks</span><br><span class="verdict">LangGraph, CrewAI, AutoGen/AG2, OpenAI Agents SDK</span></td>
+      <td>In-process multi-agent application design</td>
+      <td class="no">Not the problem they solve</td>
+      <td><span class="no">Not a fit.</span> They want to own your orchestration graph. AutoGen went to maintenance mode in 2025 and its successor has no TypeScript. OpenAI's Agents SDK has a genuinely good TS story but models an app's internal agents, not independent CLI processes</td>
+    </tr>
+    <tr style="background:var(--remote-bg)">
+      <td><span class="label">Postgres <code>LISTEN</code>/<code>NOTIFY</code></span><br><span class="verdict">plus an ordinary table</span></td>
+      <td>Rows as the durable source of truth; a channel as an optional wake-up hint</td>
+      <td class="yes">Yes — once each participant has credentials</td>
+      <td><span class="yes">Start here.</span> Crosses machines, accounts and vendors because it is just rows. Infrastructure you already run. Transactional, and effectively infinite pretraining data since it is plain SQL and <code>pg</code>. Caveats below — <code>NOTIFY</code> is not durable delivery, and handing out credentials to a database holding real reader data is a real decision, not a free one</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<figure class="fig">
+  <div class="scroll">
+  <svg viewBox="0 0 800 250" role="img" aria-label="What Claude Code's own bus covers versus what a Postgres table covers">
+    <rect x="20" y="46" width="360" height="180" rx="10" fill="var(--local-bg)" stroke="var(--local)" stroke-width="2"/>
+    <text x="200" y="72" font-size="14" font-weight="700" text-anchor="middle" fill="var(--local)">Claude Code's own bus</text>
+    <text x="200" y="92" font-size="12" text-anchor="middle" fill="var(--ink-soft)">sockets + the claude.ai bridge</text>
+    <text x="40" y="122" font-size="13" fill="var(--ink)">✓ your Mac ↔ your Hetzner box</text>
+    <text x="40" y="146" font-size="13" fill="var(--ink)">✓ your cloud sessions</text>
+    <text x="40" y="170" font-size="13" fill="var(--ink-faint)">? a second Claude account — untested</text>
+    <text x="40" y="194" font-size="13" fill="var(--ink-faint)">✗ Codex, or anything not Claude</text>
+    <text x="40" y="215" font-size="13" fill="var(--ink-faint)">✗ a machine that isn't signed in</text>
+
+    <rect x="420" y="46" width="360" height="180" rx="10" fill="var(--remote-bg)" stroke="var(--remote)" stroke-width="2"/>
+    <text x="600" y="72" font-size="14" font-weight="700" text-anchor="middle" fill="var(--remote)">a Postgres table + NOTIFY</text>
+    <text x="600" y="92" font-size="12" text-anchor="middle" fill="var(--ink-soft)">infrastructure you already run</text>
+    <text x="440" y="122" font-size="13" fill="var(--ink)">✓ any machine that can reach the DB</text>
+    <text x="440" y="146" font-size="13" fill="var(--ink)">✓ any account holding a credential</text>
+    <text x="440" y="170" font-size="13" fill="var(--ink)">✓ Codex, a cron job, a shell script</text>
+    <text x="440" y="194" font-size="13" fill="var(--ink)">✓ survives every agent restarting</text>
+    <text x="440" y="215" font-size="13" fill="var(--ink-faint)">✗ no push into a live conversation</text>
+  </svg>
+  </div>
+  <figcaption>The two buses are complements, not competitors. Claude Code's can interrupt a live
+  session, which a database cannot. A database outlives everything, which Claude Code's cannot.</figcaption>
+</figure>
+
+<div class="win">
+  <p><span class="label">Recommendation: don't adopt a protocol yet.</span> Add a small table — or
+  reuse the jobs-shaped machinery already here, which
+  <code>docs/project/ingest-queue.md</code> describes and which already solves claiming and leasing —
+  and put the handoff to Codex through the same table. Use Claude Code's own messaging for the one
+  thing a database can't do: poking a live session that is already running.</p>
+  <p>Revisit A2A when you need to hand work to an agent <em>you don't control</em>. That is the job it
+  is genuinely built for, and you don't have it today.</p>
+</div>
+
+<div class="warn">
+  <p><span class="label">Three things to get right, because "just use Postgres" hides them.</span></p>
+  <ul style="margin:0.4rem 0 0">
+    <li><span class="label"><code>NOTIFY</code> is a hint, not delivery.</span> It reaches sessions
+    currently listening, folds duplicates, caps the payload at 8KB, and needs a persistent connection.
+    A listener that drops loses every notification while it was away. <strong>The table must be the
+    source of truth and polling/reconciliation mandatory</strong>; treat <code>NOTIFY</code> purely as
+    latency reduction.</li>
+    <li><span class="label">Supabase's transaction pooler doesn't support <code>LISTEN</code>/<code>NOTIFY</code>.</span>
+    It needs a direct or session-mode connection — a real constraint given how this project connects.</li>
+    <li><span class="label">Credentials are the actual cost.</span> "Crosses accounts trivially" is
+    true only after every participant holds a credential to a database containing real readers'
+    articles and notes. Use least privilege and a separate control-plane schema, and weigh that
+    against the alternative — because a leaked production credential is worse than adopting a
+    slightly larger protocol.</li>
+  </ul>
+</div>
+
+<h2 id="judgment">12. Designing the Orchestrator</h2>
+
+<h3>Trade-offs and decision points</h3>
+
+<div class="tbl">
+<table>
+  <thead><tr><th>Decision</th><th>Option A</th><th>Option B</th><th>Recommendation</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="label">Build one at all?</span></td>
+      <td>Hand-roll an Orchestrator session that fans out and collects</td>
+      <td>Use the <a href="#scale">Workflow</a> surface for the bounded-batch part</td>
+      <td><strong>Depends which job you have.</strong> Bounded fan-out → B, and don't hand-roll it.
+      Long-lived supervision → A, but keep the plan in the database, not the conversation, because a
+      coordinator's context compacts and it forgets what it was coordinating</td>
+    </tr>
+    <tr>
+      <td><span class="label">What is a worker?</span></td>
+      <td>In-process subagents — cheap, disposable, results return automatically, die with you</td>
+      <td>Background sessions — durable, independently resumable, survive your restart</td>
+      <td>Subagents for anything under an hour. Sessions only when the work must outlive the Orchestrator</td>
+    </tr>
+    <tr>
+      <td><span class="label">How do results come back?</span></td>
+      <td><code>SendMessage</code> — immediate, but depends on fragile names</td>
+      <td>A file or DB row per worker, Orchestrator reads it</td>
+      <td><strong>B.</strong> Messages for signalling, files for results. Survives everything restarting</td>
+    </tr>
+    <tr>
+      <td><span class="label">How does it know a worker's state?</span></td>
+      <td>Ask it, and wait for a reply</td>
+      <td>Read its transcript on disk; subscribe with <code>notify_when_idle</code> for the "done" edge</td>
+      <td><strong>B</strong>, decisively. Free, honest, needs no cooperation, works on a dead session
+      too — and the idle notice even carries a one-line summary of what the worker just did</td>
+    </tr>
+    <tr>
+      <td><span class="label">Where does the Orchestrator run?</span></td>
+      <td>A session on Greg's Mac</td>
+      <td>A session on the Hetzner box</td>
+      <td>The box — always on, so workers' sockets stay alive and the fleet doesn't vanish when the
+      laptop sleeps. Note it must be an <em>interactive</em> session if you want teammates, since
+      teams don't work under <code>-p</code></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3>If I were building it tomorrow</h3>
+
+<p>One concrete shape, following from everything above. Every choice here is a consequence of
+something measured earlier, not a preference.</p>
+
+<ol>
+  <li><span class="label">Try the <a href="#scale">Workflow</a> surface first.</span> If the job is
+  "fan out, collect, verify", it already exists and keeps the plan out of a conversation that
+  compacts. Only hand-roll if the work is genuinely long-lived and interactive.</li>
+
+  <li><span class="label">Put the state in Postgres, not in the Orchestrator's head.</span> Every fact
+  the Orchestrator needs must survive it being restarted, compacted, or rate-limited. This is also the
+  bus that reaches Codex and any second account (<a href="#protocols">§11</a>).
+  <br><span class="verdict">A row with "status" and "result" is a demo, not a contract. What separates
+  it from an Orchestrator that survives a crash: an explicit task <strong>state machine</strong>;
+  <strong>claim leases with fencing</strong> so a woken zombie worker can't overwrite a newer attempt;
+  heartbeats and expiry; retries with backoff; idempotency; cancellation and timeouts; an
+  attempt history rather than one mutable row; and reconciliation after a missed notification. This
+  repo already solved most of that once — reuse the pattern in
+  <code>docs/project/ingest-queue.md</code> rather than reinventing it.</span></li>
+
+  <li><span class="label">One worker per worktree.</span> Not a refinement —
+  <code>AGENTS.md</code> requires it for code changes, and a fan-out into one checkout creates exactly
+  the collisions those rules exist to prevent. <code>isolation: worktree</code> in an agent definition
+  does this for subagents.</li>
+
+  <li><span class="label">Read the session id back; never assume it.</span> Capture it from the
+  <code>backgrounded ·</code> line and write it into the task row. <code>--session-id</code> is
+  silently ignored under <code>--bg</code>, and names drift, collide and differ by observer.</li>
+
+  <li><span class="label">Results go in the row; messages are only for nudging.</span> A worker
+  finishes by writing its artefact and updating its row. <code>SendMessage</code> is for the one thing
+  a database cannot do — poking a session that is already running.</li>
+
+  <li><span class="label">Log the quota, and spend it deliberately.</span> A status line script that
+  appends <code>rate_limits</code> to a JSONL file gives the Orchestrator a budget signal. Gate
+  fan-out width on it: at 80% of the weekly window, three workers rather than ten.</li>
+
+  <li><span class="label">Put a supervisor outside the fleet.</span> Background sessions are not
+  offered the wait-and-resume behaviour at all, so a rate-limited fleet stays stopped. Something that
+  is not itself an agent — a cron job on the box running <code>claude agents --json</code> and
+  <code>claude --bg --resume &lt;full-uuid&gt;</code> — has to notice and restart them.</li>
+
+  <li><span class="label">Verify by artefact, never by report.</span> A successful send is not a
+  delivered message; a delivered message is not a completed task; and a worker that has compacted
+  three times is an unreliable narrator of its own history. Check the file, the row, the test.</li>
+</ol>
+
+<div class="note">
+  <p><span class="label">The shape this converges on is not "an agent that commands other agents".</span>
+  It is a queue with a Claude session at each end, plus a small amount of poking. That is duller than
+  the word "Orchestrator" suggests, and it is the version that still works after the laptop sleeps,
+  the quota runs out and three of the workers forget what they were doing.</p>
+</div>
+
+<h3>Risks and fragilities</h3>
+
+<ul>
+  <li><span class="label">Unsafe or duplicated writes.</span> Several workers in one checkout, or a
+  woken zombie worker overwriting a newer attempt, is how this goes wrong <em>destructively</em>
+  rather than merely expensively. Worktree isolation and fenced writes are the mitigations, and both
+  have to be in from the start.</li>
+  <li><span class="label">Work marked complete that isn't.</span> An idle notice, a successful send
+  and a worker's own account of itself are all evidence of activity, not of completion — and a worker
+  that has compacted has become an unreliable narrator. Verify by artefact.</li>
+  <li><span class="label">Credential exposure.</span> If the coordination bus is the production
+  database, then every agent that joins the fleet holds a credential to real readers' data
+  (<a href="#protocols">§11</a>).</li>
+  <li><span class="label">Quota is a shared resource, and the fleet does not restart itself.</span>
+  Ten workers spend one account's budget ten times faster. You <em>can</em> see it coming via the
+  status line payload (<a href="#watching">§6</a>), but background sessions are not offered the
+  wait-and-resume behaviour at all — so the fleet stops together and stays stopped. Expensive and
+  annoying rather than dangerous, which is why it sits below the three above.</li>
+  <li><span class="label">Addressing fails in four directions, and only some of them shout.</span>
+  Drifting names, colliding names and observer-dependent names can all deliver to the wrong session or
+  nowhere; ambiguity, by contrast, is <em>explicitly refused</em> with a ref to retry with
+  (<a href="#identity">§5d</a>). Treat a send as having several possible outcomes — delivered, held,
+  refused, ambiguous, unreachable, unknown — rather than success or failure.</li>
+  <li><span class="label"><code>--session-id</code> is ignored under <code>--bg</code>.</span> Any
+  design that pre-assigns addresses is built on sand until this is worked around.</li>
+  <li><span class="label">Workers forget.</span> Long-lived sessions compact, dropping hundreds of
+  thousands of tokens. A worker's own account of its history degrades over time; its artefacts do
+  not.</li>
+  <li><span class="label">This repo's own rules cut against a naive fleet.</span> AGENTS.md requires
+  worktrees for code changes, forbids several git commands outright, and warns that agents sharing a
+  tree will trip over each other. An Orchestrator that fans five workers into one checkout will
+  create exactly the mess those rules exist to prevent. Worker isolation is a prerequisite, not a
+  refinement.</li>
+</ul>
+
+<h3>Open questions</h3>
+
+<ul>
+  <li>Two Claude accounts under one unix user — do they see each other in the local registry? The
+  socket permissions suggest they might, since those are unix-level, not account-level. Untested, and
+  worth testing before assuming isolation.</li>
+  <li>Since quota is metered per-machine in the status line payload but pooled server-side, how far
+  apart do the Mac's and the box's numbers drift under a real fan-out? Worth measuring before trusting
+  either one as the budget signal.</li>
+  <li>What is the practical ceiling on concurrent background sessions on one machine — memory, file
+  descriptors, or quota? I ran three; the answer at thirty is unknown.</li>
+  <li>Would the <a href="#scale">Workflow tool</a> do the whole job better than a hand-rolled
+  Orchestrator? It is the documented answer for scale, and I have not tried it.</li>
+</ul>
+
+<h2 id="faq">FAQ</h2>
+
+<h4>Can I just tell a worker "report back when you're done"?</h4>
+<p>Only if you name the tool. "Reply with the answer" gets you an answer printed into an empty room.
+"Call SendMessage with <code>to=…</code>" gets you an answer.</p>
+
+<h4>Can another agent read my conversation?</h4>
+<p>Any process running as your unix user can read every transcript, including yours, live. Within one
+machine and one login, there is no privacy between sessions. Across users or machines, there is.</p>
+
+<h4>If I close my laptop, do my background workers die?</h4>
+<p>Background sessions are separate processes, so they comfortably survive the session that spawned
+them, and a reboot kills them. Sleep is the awkward middle case: the processes are still there when
+you wake the machine, but nothing ran while it was shut, and anything that was mid-request has been
+sitting on a dead network connection. That is the argument for running the fleet on the box, which is
+never asleep.</p>
+
+<h4>Does a worker inherit my context?</h4>
+<p>Only <code>subagent_type: "fork"</code> does. Ordinary subagents get a clean context plus your
+prompt; separate sessions get nothing of yours at all.</p>
+
+<h4>What is the cheapest way to know when a worker finishes?</h4>
+<p><code>SendMessage</code> with <code>notify_when_idle: true</code> and no message body. One notice,
+no polling, and it costs the other session nothing.</p>
+
+<h4>Can the Orchestrator talk to Codex this way?</h4>
+<p>No — the bus is Claude-only and account-bound. Keep driving Codex as a subprocess via
+<code>scripts/run-codex.ts</code>, and if the Orchestrator needs to coordinate with it, put the
+handoff in a database row rather than inventing a channel (<a href="#protocols">§11</a>).</p>
+
+<h4>How do I see my own quota right now?</h4>
+<p><code>/usage</code> in an interactive session. Bear in mind it counts <em>this machine's</em>
+sessions only, so with a fleet across the Mac and the box, neither machine's figure is the real
+total.</p>
+
+<h4>Is any of this in the product?</h4>
+<p>No. This is Claude Code's own machinery, on the development machines. Nothing here touches
+Spideryarn's pipeline, database or reading view.</p>
+
+<h2 id="appendix">Appendix</h2>
+
+<h3>Command reference</h3>
+<div class="tbl">
+<table>
+  <thead><tr><th>Want to</th><th>From inside a session</th><th>From a shell</th></tr></thead>
+  <tbody>
+    <tr><td>List who exists</td><td><code>ListAgents</code></td><td><code>claude agents --json</code></td></tr>
+    <tr><td>Message someone</td><td><code>SendMessage</code></td><td>—</td></tr>
+    <tr><td>Spawn a disposable worker</td><td><code>Agent</code></td><td><code>claude -p</code> / <code>scripts/run-claude.ts</code></td></tr>
+    <tr><td>Spawn a durable worker</td><td>—</td><td><code>claude --bg -n &lt;name&gt;</code></td></tr>
+    <tr><td>Stop a worker</td><td><code>TaskStop</code></td><td><code>claude stop &lt;id&gt;</code></td></tr>
+    <tr><td>Wake a stopped session</td><td>—</td><td><code>claude --bg --resume &lt;full-uuid&gt;</code></td></tr>
+    <tr><td>Watch a file or log</td><td><code>Monitor</code></td><td><code>tail -f</code></td></tr>
+    <tr><td>See a session's output</td><td>read its transcript</td><td><code>claude logs &lt;id&gt;</code> (ANSI soup)</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>File map</h3>
+<div class="tbl">
+<table>
+  <thead><tr><th>Path</th><th>What it is</th></tr></thead>
+  <tbody>
+    <tr><td><code>~/.claude/sessions/&lt;pid&gt;.json</code></td><td>The peer registry — name, status, cwd, socket path, bridge id</td></tr>
+    <tr><td><code>~/.claude/sessions/&lt;pid&gt;.&lt;hash&gt;.key</code></td><td>That session's <code>peerToken</code>, mode 0600</td></tr>
+    <tr><td><code>/tmp/cc-socks/&lt;pid&gt;.sock</code></td><td>Same-machine message transport, owner-only</td></tr>
+    <tr><td><code>~/.claude/projects/&lt;cwd-slug&gt;/&lt;uuid&gt;.jsonl</code></td><td>Full transcript: every message, tool call, token count, compaction and rate-limit event</td></tr>
+    <tr><td><code>~/.claude/teams/session-&lt;id&gt;/config.json</code></td><td>In-process subagent roster, including each one's full prompt</td></tr>
+    <tr><td><code>.claude/settings.json</code></td><td>Per-repo permissions and hooks (this repo wires <code>PreToolUse</code> and <code>SessionStart</code>)</td></tr>
+    <tr><td><code>.claude/agents/*.md</code></td><td>Custom agent definitions — only <code>name</code> and <code>description</code> are required; also <code>model</code>, <code>tools</code>, <code>skills</code>, <code>permissionMode</code>, <code>maxTurns</code>, <code>isolation: worktree</code></td></tr>
+    <tr><td><code>~/.claude/settings.json</code> → <code>statusLine</code></td><td>The command that receives live <code>rate_limits</code> and <code>context_window</code> JSON on stdin every turn — the Orchestrator's quota feed (<a href="#watching">§6</a>)</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>Glossary</h3>
+<ul>
+  <li><span class="label">Peer</span> — any other Claude Code session you can address. Not a subagent.</li>
+  <li><span class="label">Ref</span> — the six-character code in brackets after a name, e.g.
+  <code>[e064e7]</code>. Used to disambiguate colliding names. Observer-specific.</li>
+  <li><span class="label">Bridge</span> — the claude.ai relay that carries messages between machines
+  on one account. Reply addresses through it are prefixed <code>bridge:</code>.</li>
+  <li><span class="label">Remote Control</span> — a session reachable over the bridge rather than a
+  local socket. <em>Offline</em> means its machine is unreachable; mail is queued.</li>
+  <li><span class="label">Compaction</span> — summarising a conversation to reclaim context. Recorded
+  as a <code>compact_boundary</code> entry with before/after token counts.</li>
+  <li><span class="label">Permission laundering</span> — asking a peer to do what you were denied.
+  Explicitly defended against in the note attached to every delivered message.</li>
+</ul>
+
+<h3>Related reading in this repo</h3>
+<ul>
+  <li><code>docs/reusable/claude-cli-as-subagent.md</code> — driving <code>claude -p</code> from
+  outside a session; flags measured against this same CLI version.</li>
+  <li><code>docs/reusable/trawl-session-transcripts.md</code> — the bulk recipe for mining transcripts.</li>
+  <li><code>docs/reusable/engineering-manager.md</code> — how delegation is meant to be run here.</li>
+  <li><code>docs/reusable/silent-success.md</code> — the class both <code>--resume</code> gotchas
+  belong to.</li>
+</ul>
+
+</main>
