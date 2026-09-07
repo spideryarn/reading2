@@ -4343,6 +4343,13 @@ export const ingestEvents = spideryarn.table(
      * read them together with this. The alternative — `on delete restrict` —
      * would make the ledger able to veto a deletion, which is worse.
      *
+     * Since 2026-09-07 the `set null` is a **backstop that finds nothing**: the
+     * freeze trigger unlinks and stamps in the same `UPDATE`, so the FK's action
+     * has no rows left to touch by the time it runs. It stays declared because
+     * if that trigger ever drifts away the FK still unlinks — and
+     * `ingest_events_require_price_on_unlink` then makes the delete fail loudly
+     * rather than quietly change the bill (GPT Sol's F8).
+     *
      * A deletion path must still take the owner's `billing_accounts` lock before
      * the article row (the lock order in src/store/pg-billing.ts). It no longer
      * has to *say what it will cost*, because it costs nothing.
@@ -4368,18 +4375,24 @@ export const ingestEvents = spideryarn.table(
      * It is null while the article exists, so there is nothing here for
      * `articles.visibility` to disagree with; the two are never both readable.
      * That is the whole reason it is safe (GPT Sol, F2, 2026-09-06), and it is
-     * why nothing may stamp it early.
+     * why nothing may stamp it early. Since 2026-09-07 that is a rule the
+     * database keeps rather than one the comments assert — see
+     * `ingest_events_frozen_only_after_unlink` below (Sol's F9).
      *
      * ## Written by a trigger, not by the application
      *
      * `ingest_events_freeze_article_price`, a `BEFORE DELETE` on
      * `spideryarn.articles`
-     * (drizzle/20260906193737_ingest_events_freeze_price_at_delete.sql) — so it
+     * (drizzle/20260906230500_ingest_events_freeze_price_at_delete.sql) — so it
      * holds for *every* route out of existence: the store method, a future admin
      * path, a cascade, a statement somebody runs by hand. Application code that
      * has to remember is application code that will one day forget, and the
      * ledger is not a place to find that out. drizzle's snapshot knows nothing
      * about triggers, so tests/db-schema.test.ts is the drift guard.
+     *
+     * It stamps this column **and** nulls `article_id` in one `UPDATE`
+     * (drizzle/20260907200800_ingest_events_unlink_atomically.sql), which is
+     * what leaves the forbidden state unreachable rather than merely brief.
      *
      * Read by `isPublicPrice` in src/store/pg-billing.ts, which is the one
      * spelling both the quota wall and the admin page use.
@@ -4417,8 +4430,42 @@ export const ingestEvents = spideryarn.table(
       sql`${t.articleVisibilityAtDelete} is null
           or ${t.articleVisibilityAtDelete} in ('private','public')`,
     ),
+    /**
+     * **Never both readable, enforced rather than asserted.** The frozen price
+     * is a *second* answer to what an ingest cost, and the only thing that makes
+     * a second answer safe is that it is unreadable while the first one exists.
+     * The vocabulary check above did not say that, so a live public article's
+     * row could carry a frozen `'private'` — no wrong bill today, because
+     * `isPublicPrice` reads the live column first, and a trap for whoever
+     * reorders that `coalesce`. GPT Sol's F9, 2026-09-07.
+     *
+     * It is only a constraint the deletion path can satisfy because
+     * `ingest_events_freeze_article_price` unlinks and stamps in ONE statement.
+     * If it went back to stamping and letting the FK's `on delete set null`
+     * unlink afterwards, the intermediate row would violate this and every
+     * delete would fail — which is the loud version of the drift.
+     */
+    check(
+      "ingest_events_frozen_only_after_unlink",
+      sql`${t.articleId} is null or ${t.articleVisibilityAtDelete} is null`,
+    ),
     /* The admission query, which runs on the critical path of every ingest. */
     index("ingest_events_owner_reserved").on(t.ownerId, t.reservedAt.desc()),
+    /**
+     * **Postgres does not index the referencing side of a foreign key**, and
+     * deleting an article reads exactly this column: the freeze trigger's
+     * `update ... where article_id = OLD.id`. The ledger is append-only and
+     * unbounded, so without this every deletion is a sequential scan of it, and
+     * the way that finally shows up is a delete exceeding the runtime role's
+     * two-minute statement timeout — a symptom nobody would trace back to a
+     * missing index. GPT Sol's F7, 2026-09-07.
+     *
+     * **Partial**, because a row with no article can never match the predicate
+     * that reads this, and those are the rows that accumulate for ever.
+     */
+    index("ingest_events_article_id_live")
+      .on(t.articleId)
+      .where(sql`${t.articleId} is not null`),
     /**
      * **Redundant as a uniqueness claim, and not here for that.** `id` is
      * already the primary key, so `(id, owner_id)` cannot repeat. It exists so

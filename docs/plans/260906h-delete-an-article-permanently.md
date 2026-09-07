@@ -292,7 +292,7 @@ the article exists, and freeze only when it stops existing.
       suite notices.
 - [ ] Sol review. Commit.
 
-**What landed, 2026-09-06.** `drizzle/20260906193737_ingest_events_freeze_price_at_delete.sql` — the
+**What landed, 2026-09-06.** `drizzle/20260906230500_ingest_events_freeze_price_at_delete.sql` — the
 nullable column, a CHECK matching `articles_visibility`, and
 `spideryarn.ingest_events_freeze_article_price()` on a `BEFORE DELETE` row trigger. The trigger is
 drift drizzle's snapshot cannot see, the same class as the guards in `0001`, so
@@ -410,6 +410,44 @@ sites' generated predicates are tested; the behavioural test is an adequate trig
 against a freshly migrated database; and **no safe backfill exists** for rows whose article was
 deleted before the migration — their article identity is gone and slug is mutable, so full price is
 the only non-gameable answer.
+
+#### Stage B P2s applied, 2026-09-07
+
+All three in one migration,
+[drizzle/20260907200800_ingest_events_unlink_atomically.sql](../../drizzle/20260907200800_ingest_events_unlink_atomically.sql),
+with a case each in `tests/db-schema.test.ts`. Each test was written first and watched fail against
+the pre-migration schema, then each finished guard was mutated and the suite re-run to confirm it
+noticed.
+
+- **F7** — partial index `ingest_events_article_id_live` on `article_id where article_id is not
+  null`. Declared in `src/db/schema.ts`, so it is in drizzle's snapshot; the test pins the `where`
+  clause, which is the part an edit would drop silently. Removing the predicate turns it red.
+- **F9** — `ingest_events_freeze_article_price` now sets `article_visibility_at_delete` **and**
+  `article_id = NULL` in one `UPDATE`, and `check (article_id is null or
+  article_visibility_at_delete is null)` enforces what the Stage B comments only claimed. The one
+  statement is what makes the constraint satisfiable: a CHECK is evaluated as each row is written,
+  so stamping first and letting the FK unlink afterwards would put **every** delete through the
+  forbidden state. That is exactly what the mutation showed — reverting the function to stamp-only
+  turns *"deleting an article freezes what it cost"* red with a
+  `check constraint "ingest_events_frozen_only_after_unlink"` violation. The FK's `on delete set
+  null` is untouched and now finds nothing, which is the backstop F8 needs.
+- **F8** — `ingest_events_require_price_on_unlink`, `BEFORE UPDATE OF article_id`, raising `23514`
+  when `article_id` goes non-null → null with no frozen price. It does not fire on the legitimate
+  path, because that path carries the price in the same statement; the test asserts both halves,
+  since a guard that also broke deletion would be found within the hour and one that quietly
+  allowed the stray write would not.
+
+**One thing to know about the migration as generated.** `db:generate` also emitted a `DROP`/`ADD` of
+`revision_step_runs_step`, identical to the one
+[drizzle/20260906190000_labels_step.sql](../../drizzle/20260906190000_labels_step.sql) had already
+applied. It appeared because Stage B's snapshot was re-stamped by hand after the merge from a base
+that predated `'labels'`, so the snapshot had lost a step name the database has. The DDL was removed
+from the `.sql`; the snapshot beside this migration carries the correct list again, which is the
+repair. Left in, it would have been a second full validation scan of an unrelated table.
+
+**Correction to the review's framing of F7:** with F9 in place the FK's `SET NULL` no longer does a
+second pass — the trigger has already taken the rows — so the index answers one scan per delete, not
+two. The index is still needed, for that one.
 
 #### One mutation the behavioural tests do not catch, 2026-09-06
 

@@ -1,6 +1,6 @@
 {
-  "id": "5a466712-2153-4990-9e1c-2d7b14974c64",
-  "prevId": "193606a8-a16f-471a-939a-b39cdc54cbd8",
+  "id": "48bddabe-409b-446a-9dc7-12491a55e3ea",
+  "prevId": "5a466712-2153-4990-9e1c-2d7b14974c64",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2476,6 +2476,22 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "ingest_events_article_id_live": {
+          "name": "ingest_events_article_id_live",
+          "columns": [
+            {
+              "expression": "article_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"spideryarn\".\"ingest_events\".\"article_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2518,6 +2534,10 @@
         "ingest_events_visibility_at_delete": {
           "name": "ingest_events_visibility_at_delete",
           "value": "\"spideryarn\".\"ingest_events\".\"article_visibility_at_delete\" is null\n          or \"spideryarn\".\"ingest_events\".\"article_visibility_at_delete\" in ('private','public')"
+        },
+        "ingest_events_frozen_only_after_unlink": {
+          "name": "ingest_events_frozen_only_after_unlink",
+          "value": "\"spideryarn\".\"ingest_events\".\"article_id\" is null or \"spideryarn\".\"ingest_events\".\"article_visibility_at_delete\" is null"
         }
       },
       "isRLSEnabled": false
