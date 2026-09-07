@@ -56,7 +56,7 @@ import path from "node:path";
 import { isBody } from "../../src/block-policy.js";
 import { parseJsonAnswer } from "../../src/parse-json.js";
 import { splitBlocks } from "../../src/supplement.js";
-import { anchors, isAnchorId } from "./anchors.js";
+import { anchors, isAnchorId, permutationOf } from "./anchors.js";
 import type { LoadedDocument } from "./corpus.js";
 import type { Cell, RequestedNode } from "./generate.js";
 
@@ -292,6 +292,30 @@ export function buildLineup(
  * **It applies to every arm equally**, which is what separates adding a
  * criterion from rigging one: the rule it measures is in every variant's own
  * prompt, including the incumbent's and the pinned pre-V4 control's.
+ *
+ * ### Its examples were coached, and were changed on 2026-09-07 for the NEXT run
+ *
+ * The wording that shipped taught the axis with *"how many arguments are
+ * there?"* — anchor 2 almost verbatim — and *"is computation sufficient for
+ * consciousness?"*, which is the core of V3's worked example. Both are in the
+ * lineup the axis was about to be used on, so a judge could reject the anchor
+ * and reward the arm by **surface resemblance** and never apply the criterion at
+ * all; the gate would then pass on a match, not a measurement. ⟨GPT Sol, F23 on
+ * 260907d — reasoned rather than reproduced, and cheap enough to fix either
+ * way.⟩
+ *
+ * The examples are now sourdough, which no candidate, no anchor and no corpus
+ * article is about. **The result of 2026-09-07 was produced under the coached
+ * wording** and is not re-scored by this change: it applies to the next run, and
+ * anything read off the old one is read off the old rubric.
+ *
+ * The half that is **not** fixed here, deliberately: anchor 2 stays as it is and
+ * no anchor is added. Those are pre-registered in
+ * [`variants.md`](variants.md) § *The five negative anchors*, and editing them
+ * after a run is exactly the argument this file's gate exists to refuse. Sol's
+ * other observation about it — that anchor 2 scored 2.5 on triage and 3.0 on
+ * orientation against ~4.5–5 for the real arms, so its rejection is not isolated
+ * to `demand` — stands unaddressed and is a question for the next run's design.
  */
 export const RUBRIC = `You are judging candidate summary lines for the sections of an article, one
 section at a time. For each section you get the prose it covers, then two
@@ -342,8 +366,9 @@ QUESTION axes
                 it. A well-made question about exactly the right topic can still
                 score 1: this is about what the reader must DO, not about how
                 good the line is. A yes/no question is not automatically low —
-                "is computation sufficient for consciousness?" demands the
-                argument; "how many arguments are there?" does not.
+                for a section on sourdough, "does a longer ferment really
+                improve the crumb?" makes you follow the case, while "what
+                temperature does the recipe call for?" is settled by one line.
   shapeHint     "none" if it makes no claim about the shape of the answer,
                 "true" if it claims a count or kind the prose supports,
                 "false" if it claims one the prose does not support,
@@ -500,6 +525,133 @@ export function unblind(
     };
   }
   return { nodes, unknownLabels };
+}
+
+/* ------------------------------------------------- the answer, validated -- */
+
+interface AxisSpec {
+  /** Integers 1-5. Every one is required of every label. */
+  numeric: readonly string[];
+  /** Word axes, and the only words allowed. */
+  enums: Readonly<Record<string, readonly string[]>>;
+}
+
+/**
+ * **The axes the rubric asks for, in a form code can check.**
+ *
+ * The rubric is prose to a model and this is the same list to a program; they
+ * are two statements of one fact and `tests/summaries-eval.test.ts` holds them
+ * to each other, because an axis described in one and absent from the other is
+ * either a field nobody defined or a check nobody makes.
+ */
+export const AXES: Readonly<Record<"gists" | "questions", AxisSpec>> = {
+  gists: {
+    numeric: ["fidelity", "distinctive", "triage", "orientation", "simplicity"],
+    enums: { length: ["short", "right", "long"] },
+  },
+  questions: {
+    numeric: ["fidelity", "distinctive", "triage", "orientation", "simplicity", "leakage", "demand"],
+    enums: { shapeHint: ["none", "true", "false", "unverifiable"] },
+  },
+};
+
+/**
+ * **Does this answer answer the question that was asked?** Every complaint it
+ * can make, in words; an empty array is the whole of "yes".
+ *
+ * ## Where this check belongs, and why it is not in the gate
+ *
+ * `anchors.ts` § `calibrationOf` already checks that a ranking is a permutation
+ * of its lineup, and this does not duplicate it, because the two run over
+ * different things and answer different questions:
+ *
+ * - The **gate** is about ORDER, over **candidate ids**, after unblinding, and
+ *   only in the one lineup that carries anchors. It is the pre-registered
+ *   verdict, and it has to keep meaning what it says when `judged.json` is read
+ *   back weeks later by something that never called this function.
+ * - **This** is about SHAPE, over **the judge's own labels**, before unblinding,
+ *   in every lineup of every node. It is an *acceptance* check: an answer that
+ *   fails it is not a bad judgement, it is not a judgement.
+ *
+ * So this sits at the seam where the answer arrives and the gate stays where the
+ * verdict is computed. The shared set arithmetic is `permutationOf`, imported
+ * from `anchors.ts` rather than written twice.
+ *
+ * ## Why the whole answer, and not the offending node
+ *
+ * A caller is expected to treat any complaint as a failed judging call and drop
+ * the whole document's answer. Keeping the nodes that happened to parse would
+ * leave some arms ranked over more lineups than others inside one repeat, which
+ * is the exact shape the clean bill exists to refuse — and a model that
+ * disobeyed the schema on one node has told you something about the answer, not
+ * about the node. The raw answer is still on disk either way.
+ *
+ * ⟨GPT Sol, F26 on 260907d: the `demand` axis was requested by the rubric and
+ * required by nothing. A complete ranking with no axes at all passed the gate,
+ * stripping every `demand` field left calibration and ranking usable, and the
+ * stub judge — the judge on every free run — never wrote one.⟩
+ */
+/** One label's scores against one lineup's axis spec. Every complaint, in words. */
+function axisComplaints(spec: AxisSpec, scores: Record<string, number | string> | undefined, where: string): string[] {
+  if (!scores) return [`${where}: not scored on any axis`];
+  const complaints: string[] = [];
+  for (const axis of spec.numeric) {
+    const v = scores[axis];
+    if (typeof v !== "number" || !Number.isFinite(v)) {
+      complaints.push(`${where}: ${axis} is ${JSON.stringify(v ?? null)}, not a number`);
+    } else if (v < 1 || v > 5) {
+      complaints.push(`${where}: ${axis} is ${v}, outside 1-5`);
+    }
+  }
+  for (const [axis, allowed] of Object.entries(spec.enums)) {
+    const v = scores[axis];
+    if (typeof v !== "string" || !allowed.includes(v)) {
+      complaints.push(`${where}: ${axis} is ${JSON.stringify(v ?? null)}, not one of ${allowed.join(" | ")}`);
+    }
+  }
+  return complaints;
+}
+
+/** One lineup — a node's gists or its questions — against what came back for it. */
+function lineupComplaints(
+  candidates: readonly Candidate[],
+  lines: JudgedLineup | undefined,
+  where: string,
+  spec: AxisSpec,
+): string[] {
+  /* A node below the question depth has no question lineup, so there is nothing
+     owed for it and nothing to complain about. */
+  if (candidates.length === 0) return [];
+  if (!lines) return [`${where}: ${candidates.length} line(s) shown and none judged`];
+  const labels = candidates.map((c) => c.label);
+  const complaints: string[] = [];
+  const { duplicated, absent, foreign } = permutationOf(labels, lines.ranking ?? []);
+  if (duplicated.length) complaints.push(`${where}: ranked twice — ${duplicated.join(", ")}`);
+  if (absent.length) complaints.push(`${where}: left out of the ranking — ${absent.join(", ")}`);
+  if (foreign.length) complaints.push(`${where}: ranked something that was not in the lineup — ${foreign.join(", ")}`);
+  for (const label of labels) complaints.push(...axisComplaints(spec, lines.axes?.[label], `${where}/${label}`));
+  return complaints;
+}
+
+export function validateAnswer(lineup: DocumentLineup, answer: JudgeAnswer): string[] {
+  const complaints: string[] = [];
+  const nodes = answer?.nodes;
+  if (!nodes || typeof nodes !== "object") return [`the answer has no "nodes" object`];
+  const shown = new Set(lineup.nodes.map((n) => n.nodeId));
+  for (const nodeId of Object.keys(nodes)) {
+    if (!shown.has(nodeId)) complaints.push(`${nodeId}: judged, and it was not in the lineup`);
+  }
+  for (const node of lineup.nodes) {
+    const judged = nodes[node.nodeId];
+    if (!judged) {
+      complaints.push(`${node.nodeId}: in the lineup and not in the answer`);
+      continue;
+    }
+    for (const which of ["gists", "questions"] as const) {
+      complaints.push(...lineupComplaints(node[which], judged[which], `${node.nodeId}/${which}`, AXES[which]));
+    }
+  }
+  return complaints;
 }
 
 /** Candidate ids present in a node's question lineup — what the calibration gate is measured over. */

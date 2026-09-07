@@ -44,7 +44,18 @@ import {
 import { ARMS, armByName, armsNeedingCodeChange, promptBlocksFor } from "../evals/summaries/arms.js";
 import { CORPUS, defaultCorpus, loadDocument } from "../evals/summaries/corpus.js";
 import type { LoadedDocument } from "../evals/summaries/corpus.js";
-import { proseWindows, rngFrom, RUBRIC, seedFrom, shuffled } from "../evals/summaries/judge.js";
+import {
+  AXES,
+  type DocumentLineup,
+  type JudgeAnswer,
+  proseWindows,
+  rngFrom,
+  RUBRIC,
+  seedFrom,
+  shuffled,
+  validateAnswer,
+} from "../evals/summaries/judge.js";
+import { stubJudge } from "../evals/summaries/run.js";
 import { productionGists, productionQuestions, productionSystem, sectionOf, THE_DIAGNOSED_SENTENCE } from "../evals/summaries/production-prompt.js";
 import { structureRequest } from "../src/hierarchy.js";
 import {
@@ -101,6 +112,37 @@ describe("the judge's rubric", () => {
        a word of it. */
     expect(RUBRIC).toContain("including a yes/no question — is legitimate");
     expect(RUBRIC).toContain("A yes/no question is not automatically low");
+  });
+
+  /**
+   * **The examples must not let the judge pattern-match its way to the answer.**
+   * ⟨GPT Sol, F23 on 260907d.⟩ The first `demand` wording taught the axis with
+   * *"how many arguments are there?"* — which is anchor 2 almost verbatim — and
+   * *"is computation sufficient for consciousness?"*, which is the core of V3's
+   * worked example. A judge shown those can reject anchor 2 and reward V3 by
+   * surface resemblance without ever applying the criterion, and the gate would
+   * pass while measuring nothing. So the examples come from a domain no
+   * candidate, no anchor and no corpus article is about.
+   */
+  it("teaches the demand axis from a domain nothing in the run is about", () => {
+    const demand = /^ {2}demand[\s\S]*?^ {2}shapeHint/m.exec(RUBRIC)?.[0] ?? "";
+    expect(demand, "the demand paragraph was found").not.toBe("");
+    /* The subjects of the calibration lineup. The criterion's own word,
+       "argument", is fine and unavoidable; what must not appear is what the
+       candidates and anchors are ABOUT. */
+    for (const subject of ["computation", "conscious", "functionalism", "how many arguments"]) {
+      expect(demand.toLowerCase(), `${subject} kept out of the examples`).not.toContain(subject);
+    }
+  });
+
+  /** The validator and the rubric have to name the same axes, or one of them is fiction. */
+  it("validates exactly the axes it asks for", () => {
+    for (const which of ["gists", "questions"] as const) {
+      for (const axis of AXES[which].numeric) expect(RUBRIC, `${axis} in the rubric`).toMatch(new RegExp(`^  ${axis}\\s`, "m"));
+      for (const axis of Object.keys(AXES[which].enums)) expect(RUBRIC, `${axis} in the rubric`).toMatch(new RegExp(`^  ${axis}\\s`, "m"));
+    }
+    expect(AXES.questions.numeric).toContain("demand");
+    expect(AXES.gists.numeric).not.toContain("demand");
   });
 });
 
@@ -679,6 +721,119 @@ describe("the calibration gate", () => {
   });
 });
 
+/**
+ * **The answer is checked against the lineup before any of it is believed.**
+ * ⟨GPT Sol, F26 on 260907d.⟩ The `demand` axis was requested by the rubric and
+ * required by nothing: a complete ranking with no axes at all passed the
+ * calibration gate, removing every `demand` field from a valid answer left
+ * calibration and ranking usable, and the stub judge — the thing that stands in
+ * for the real one on every free run — did not answer the schema it was
+ * pretending to be.
+ */
+describe("the judge's answer is validated against the lineup", () => {
+  const lineup = (): DocumentLineup => ({
+    slug: "d",
+    title: "D",
+    repeat: 1,
+    seed: 1,
+    nodes: [
+      {
+        nodeId: "n1",
+        title: "N",
+        depth: 1,
+        prose: "p",
+        proseComplete: true,
+        proseChars: 1,
+        gists: [
+          { id: "v1", label: "G1", text: "a" },
+          { id: "incumbent", label: "G2", text: "b" },
+        ],
+        questions: [
+          { id: "v1", label: "Q1", text: "a?" },
+          { id: "incumbent", label: "Q2", text: "b?" },
+        ],
+      },
+    ],
+  });
+
+  const scores = (which: "gists" | "questions") =>
+    Object.fromEntries(
+      (which === "gists" ? ["G1", "G2"] : ["Q1", "Q2"]).map((l) => [
+        l,
+        which === "gists"
+          ? { fidelity: 3, distinctive: 3, triage: 3, orientation: 3, simplicity: 3, length: "right" }
+          : { fidelity: 3, distinctive: 3, triage: 3, orientation: 3, simplicity: 3, leakage: 2, demand: 3, shapeHint: "none" },
+      ]),
+    );
+
+  const wholeAnswer = (): JudgeAnswer => ({
+    nodes: {
+      n1: {
+        gists: { axes: scores("gists"), ranking: ["G1", "G2"] },
+        questions: { axes: scores("questions"), ranking: ["Q1", "Q2"] },
+        rowForm: "both",
+      },
+    },
+  });
+
+  it("accepts an answer that fills in everything the rubric asked for", () => {
+    expect(validateAnswer(lineup(), wholeAnswer())).toEqual([]);
+  });
+
+  it("refuses an answer with no axes at all, which the calibration gate passes", () => {
+    const bare: JudgeAnswer = {
+      nodes: { n1: { gists: { axes: {}, ranking: ["G1", "G2"] }, questions: { axes: {}, ranking: ["Q1", "Q2"] } } },
+    };
+    /* The gate is about ORDER and says so: it passes this, correctly. */
+    expect(calibrationOf([{ where: "d/n1", ranking: ["v1", "incumbent", "anchor-1"], present: ["v1", "incumbent", "anchor-1"] }]).passed).toBe(true);
+    expect(validateAnswer(lineup(), bare).join(" ")).toContain("not scored");
+  });
+
+  it("refuses an answer that drops the new demand axis", () => {
+    const a = wholeAnswer();
+    for (const s of Object.values(a.nodes.n1!.questions!.axes)) delete (s as Record<string, unknown>).demand;
+    expect(validateAnswer(lineup(), a).join(" ")).toContain("demand");
+  });
+
+  it("refuses a score outside 1-5 and an enum outside its allowed values", () => {
+    const low = wholeAnswer();
+    low.nodes.n1!.questions!.axes.Q1!.demand = 0;
+    expect(validateAnswer(lineup(), low).join(" ")).toContain("outside 1-5");
+    const enumish = wholeAnswer();
+    enumish.nodes.n1!.questions!.axes.Q2!.shapeHint = "maybe";
+    expect(validateAnswer(lineup(), enumish).join(" ")).toContain("shapeHint");
+  });
+
+  it("refuses a ranking that is not a permutation of its own lineup", () => {
+    const short = wholeAnswer();
+    short.nodes.n1!.gists!.ranking = ["G1"];
+    expect(validateAnswer(lineup(), short).join(" ")).toContain("left out of the ranking — G2");
+    const twice = wholeAnswer();
+    twice.nodes.n1!.questions!.ranking = ["Q1", "Q1"];
+    expect(validateAnswer(lineup(), twice).join(" ")).toContain("ranked twice — Q1");
+  });
+
+  it("refuses a node the lineup never showed, and notices one left unanswered", () => {
+    const extra = wholeAnswer();
+    extra.nodes.n9 = { gists: { axes: {}, ranking: [] } };
+    expect(validateAnswer(lineup(), extra).join(" ")).toContain("n9");
+    expect(validateAnswer(lineup(), { nodes: {} }).join(" ")).toContain("n1");
+  });
+
+  /**
+   * **The stub is the judge on every free run**, so a stub that answers a
+   * different schema from the one the rubric asks for is a harness exercising a
+   * seam it does not have. It omitted `demand` from the day the axis was added.
+   */
+  it("holds the stub judge to the schema it is pretending to be", async () => {
+    const l = lineup();
+    const answer = await stubJudge("good", new Map([["d-r1", l]]))("", "d-r1");
+    expect(validateAnswer(l, answer)).toEqual([]);
+    const bad = await stubJudge("bad", new Map([["d-r1", l]]))("", "d-r1");
+    expect(validateAnswer(l, bad)).toEqual([]);
+  });
+});
+
 describe("the prose the judge is shown", () => {
   it("samples across the section rather than taking its head", () => {
     /* **GPT Sol's P0-2.** The calibration node is 30,187 characters; its opening
@@ -781,16 +936,22 @@ describe("ranking, the noise floor and the threshold", () => {
     expect(ranks.find((r) => r.arm === "incumbent")!.meanRank).toBe(1);
   });
 
+  /** Two repeats, each led outright by `v1` — the shape everything else varies from. */
+  const LED_BY_V1 = [
+    { repeat: 1, leaders: ["v1"] },
+    { repeat: 2, leaders: ["v1"] },
+  ];
+
   it("calls a gap inside the threshold not a gap", () => {
     const ranks = [
       { arm: "v1", meanRank: 1.0, lineups: 10 },
       { arm: "incumbent", meanRank: 1.4, lineups: 10 },
       { arm: "v3", meanRank: 3.9, lineups: 10 },
     ];
-    const sep = separate(ranks, 0.5, { perRepeatLeaders: ["v1", "v1"], coverageClean: true });
+    const sep = separate(ranks, 0.5, { perRepeatLeaders: LED_BY_V1, coverageClean: true, judgingComplete: true });
     expect(sep.separable).toBe(false);
     expect(sep.tiedWithLeader).toEqual(["v1", "incumbent"]);
-    expect(separate(ranks, 0.2, { perRepeatLeaders: ["v1", "v1"], coverageClean: true }).separable).toBe(true);
+    expect(separate(ranks, 0.2, { perRepeatLeaders: LED_BY_V1, coverageClean: true, judgingComplete: true }).separable).toBe(true);
   });
 
   it("refuses a leader that did not lead in every repeat", () => {
@@ -801,9 +962,16 @@ describe("ranking, the noise floor and the threshold", () => {
       { arm: "v1", meanRank: 1.0, lineups: 10 },
       { arm: "v3", meanRank: 3.9, lineups: 10 },
     ];
-    const sep = separate(ranks, 0.2, { perRepeatLeaders: ["v1", "v3"], coverageClean: true });
+    const sep = separate(ranks, 0.2, {
+      perRepeatLeaders: [
+        { repeat: 1, leaders: ["v1"] },
+        { repeat: 2, leaders: ["v3"] },
+      ],
+      coverageClean: true,
+      judgingComplete: true,
+    });
     expect(sep.separable).toBe(false);
-    expect(sep.refusedBecause.join(" ")).toContain("not the same in every repeat");
+    expect(sep.refusedBecause.join(" ")).toContain("not the sole leader of every repeat");
   });
 
   it("refuses a leader on a run that is not a clean bill", () => {
@@ -813,7 +981,7 @@ describe("ranking, the noise floor and the threshold", () => {
       { arm: "v1", meanRank: 1.0, lineups: 4 },
       { arm: "v3", meanRank: 3.9, lineups: 10 },
     ];
-    const sep = separate(ranks, 0.2, { perRepeatLeaders: ["v1", "v1"], coverageClean: false });
+    const sep = separate(ranks, 0.2, { perRepeatLeaders: LED_BY_V1, coverageClean: false, judgingComplete: true });
     expect(sep.separable).toBe(false);
     expect(sep.refusedBecause.join(" ")).toContain("not a clean bill");
   });
@@ -883,7 +1051,79 @@ describe("ranking, the noise floor and the threshold", () => {
   it("names the leader of each repeat's own table", () => {
     expect(
       perRepeatLeaders([judged("d", 1, ["v1", "v3"]), judged("d", 2, ["v3", "v1"])], "questions"),
-    ).toEqual(["v1", "v3"]);
+    ).toEqual([
+      { repeat: 1, leaders: ["v1"] },
+      { repeat: 2, leaders: ["v3"] },
+    ]);
+  });
+
+  /**
+   * **A tie is not a leader, and insertion order is not a tie-break.** ⟨GPT Sol,
+   * F25 on 260907d.⟩ `perRepeatLeaders` took `[0]` of each repeat's table, so
+   * two arms on the same mean rank were separated by whichever `meanRanks`
+   * happened to have inserted first — and the 2026-09-07 run's repeat 3 was an
+   * exact tie at 1.6667 between `questions-toc6` and `incumbent`, reported as a
+   * leader flip. Here the two arms swap places on two lineups of one repeat, so
+   * their means are equal by construction.
+   */
+  it("calls a per-repeat tie a tie rather than letting insertion order pick", () => {
+    const tie: Judgement[] = [
+      {
+        slug: "d",
+        repeat: 1,
+        nodes: {
+          n1: { questions: { axes: {}, ranking: ["v1", "incumbent"] } },
+          n2: { questions: { axes: {}, ranking: ["incumbent", "v1"] } },
+        },
+      },
+      { slug: "d", repeat: 2, nodes: { n1: { questions: { axes: {}, ranking: ["v1", "incumbent"] } } } },
+    ];
+    const leaders = perRepeatLeaders(tie, "questions");
+    expect(leaders[0]!.leaders.slice().sort()).toEqual(["incumbent", "v1"]);
+    expect(leaders[1]!.leaders).toEqual(["v1"]);
+  });
+
+  it("refuses a leader that only tied at the top of a repeat", () => {
+    const ranks = [
+      { arm: "v1", meanRank: 1.0, lineups: 10 },
+      { arm: "incumbent", meanRank: 3.9, lineups: 10 },
+    ];
+    const sep = separate(ranks, 0.2, {
+      perRepeatLeaders: [
+        { repeat: 1, leaders: ["v1"] },
+        { repeat: 2, leaders: ["v1", "incumbent"] },
+      ],
+      coverageClean: true,
+      judgingComplete: true,
+    });
+    expect(sep.separable).toBe(false);
+    expect(sep.refusedBecause.join(" ")).toContain("tied");
+    /* And the wording says WHICH repeat tied, so a reader is not left to guess. */
+    expect(sep.refusedBecause.join(" ")).toContain("repeat 2");
+  });
+
+  /**
+   * **A judging pass that did not finish may show its table and may not name a
+   * leader.** ⟨GPT Sol, F24 on 260907d.⟩ `failures` was never passed into
+   * `separate`, so two agreeing repeats could name a leader while the third
+   * requested repeat had failed — and the repeat that failed is exactly the one
+   * that might have moved it.
+   */
+  it("refuses a leader when a requested judging call failed", () => {
+    const ranks = [
+      { arm: "v1", meanRank: 1.0, lineups: 10 },
+      { arm: "v3", meanRank: 3.9, lineups: 10 },
+    ];
+    const leaders = [
+      { repeat: 1, leaders: ["v1"] },
+      { repeat: 2, leaders: ["v1"] },
+    ];
+    expect(separate(ranks, 0.2, { perRepeatLeaders: leaders, coverageClean: true, judgingComplete: true }).separable).toBe(true);
+    const partial = separate(ranks, 0.2, { perRepeatLeaders: leaders, coverageClean: true, judgingComplete: false });
+    expect(partial.separable).toBe(false);
+    expect(partial.refusedBecause.join(" ")).toContain("judging");
+    /* The table itself is still there — a partial run is shown, not suppressed. */
+    expect(partial.ordered.map((r) => r.arm)).toEqual(["v1", "v3"]);
   });
 });
 
@@ -1079,6 +1319,24 @@ describe("every eval that imports coverage.ts takes its exit code from it", () =
        computes the verdict and only prints it. */
     const shrugs = "const verdict = calibrationOf(x);\nconsole.log(verdict.passed);\n";
     expect(shrugs.match(RAISES_ON_GATE) ?? []).toHaveLength(0);
+  });
+
+  /**
+   * **A judging pass that did not finish has to reach the shell too**, for the
+   * same reason a failed gate does. The saved 2026-09-07 run asked for three
+   * repeats, completed two, recorded one failure — and `report` exited `0` over
+   * it while naming a leader on the gists. ⟨GPT Sol, F24 on 260907d.⟩
+   *
+   * Counted in both commands, like the gate above: `judge` is where the calls
+   * are made and where a caller that stops early finds out, `report` is where a
+   * caller reading the frozen artefact does.
+   */
+  it("raises process.exitCode when judging calls failed, in both commands", () => {
+    const src = fs.readFileSync(path.join(REPO, "evals/summaries/run.ts"), "utf8");
+    const RAISES_ON_FAILURES = /failures\.length\) process\.exitCode = 1/g;
+    expect((src.match(RAISES_ON_FAILURES) ?? []).length, "commands that raise on a failed judging call").toBe(2);
+    const shrugs = 'if (failures.length) console.log(failures.length + " judging call(s) failed.");\n';
+    expect(shrugs.match(RAISES_ON_FAILURES) ?? []).toHaveLength(0);
   });
 
   it("can still fire — the guard, against a file that counts and shrugs", () => {

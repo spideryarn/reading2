@@ -36,7 +36,8 @@ Five known-bad lines (#1 fabricated count — the child count (6) where the text
 Generation noise floor (incumbent vs incumbent-repeat, PAIRED within each lineup): 1.83 ranks over 12 lineups — their mean ranks differ by 0.67, which cancels and is not the floor
 Judge instability (same output, fresh shuffle): 0.40 ranks — how far an arm's MEAN rank moves between 2 repeats, which is the unit the gaps below are in. Per-lineup churn, comparable with the generation floor above and NOT the threshold: 0.80 over 30 comparisons.
 Separability threshold: 0.40 ranks
-Leader in each repeat's own table: incumbent, questions-toc6
+Leader in each repeat's own table: repeat 1: incumbent; repeat 3: questions-toc6
+1 judging call(s) failed, so the repeats below are fewer than were asked for.
 
 | arm | mean rank | lineups | comparison |
 |---|---|---|---|
@@ -47,7 +48,8 @@ Leader in each repeat's own table: incumbent, questions-toc6
 | gists-toc6 | 3.08 | 12 | bakeoff (one block vs `gists-toc5`) |
 
 **No leader is named.** The honest output is that this screen rejected nothing among the arms above:
-- the leader is not the same in every repeat (incumbent, questions-toc6)
+- `questions-toc6` is not the sole leader of every repeat (repeat 1: incumbent; repeat 3: questions-toc6)
+- some judging calls failed, so this table is missing repeats that were asked for and might have moved the leader
 
 ## Axes — questions, scored before any preference was asked for
 
@@ -85,7 +87,8 @@ Lower is better for `leakage` alone. "Before" is a request made in the prompt an
 Generation noise floor (incumbent vs incumbent-repeat, PAIRED within each lineup): 1.83 ranks over 12 lineups — their mean ranks differ by 0.83, which cancels and is not the floor
 Judge instability (same output, fresh shuffle): 0.47 ranks — how far an arm's MEAN rank moves between 2 repeats, which is the unit the gaps below are in. Per-lineup churn, comparable with the generation floor above and NOT the threshold: 0.60 over 30 comparisons.
 Separability threshold: 0.47 ranks
-Leader in each repeat's own table: incumbent, questions-toc6
+Leader in each repeat's own table: repeat 1: incumbent; repeat 3: questions-toc6 = incumbent tied
+1 judging call(s) failed, so the repeats below are fewer than were asked for.
 
 | arm | mean rank | lineups | comparison |
 |---|---|---|---|
@@ -97,7 +100,8 @@ Leader in each repeat's own table: incumbent, questions-toc6
 
 **No leader is named.** The honest output is that this screen rejected nothing among the arms above:
 - incumbent, v1 sit within 0.47 ranks of each other
-- the leader is not the same in every repeat (incumbent, questions-toc6)
+- `incumbent` is not the sole leader of every repeat (repeat 1: incumbent; repeat 3: questions-toc6 = incumbent tied)
+- some judging calls failed, so this table is missing repeats that were asked for and might have moved the leader
 
 ## Axes — gists, scored before any preference was asked for
 

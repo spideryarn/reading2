@@ -83,6 +83,7 @@ import {
   questionIdsIn,
   renderPrompt,
   unblind,
+  validateAnswer,
 } from "./judge.js";
 import {
   type ArmPlan,
@@ -90,6 +91,7 @@ import {
   generationNoiseFloor,
   type Judgement,
   judgeInstability,
+  leadersLine,
   meanRanks,
   perRepeatLeaders,
   separabilityThreshold,
@@ -251,7 +253,7 @@ function stubGenerator(arm: ArmSpec, silent: readonly string[]): Generator {
  * anchor at the top — which is how the calibration gate gets **seen red** rather
  * than merely believed (`docs/reusable/silent-success.md`).
  */
-function stubJudge(kind: "good" | "bad", lineups: Map<string, DocumentLineup>): Judge {
+export function stubJudge(kind: "good" | "bad", lineups: Map<string, DocumentLineup>): Judge {
   return async (_prompt, label) => {
     const lineup = lineups.get(label);
     if (!lineup) throw new Error(`the stub judge has no lineup for ${label}`);
@@ -270,7 +272,13 @@ function stubJudge(kind: "good" | "bad", lineups: Map<string, DocumentLineup>): 
         );
       nodes[node.nodeId] = {
         gists: { axes: axesFor(node.gists, { length: "right" }), ranking: rank(node.gists) },
-        questions: { axes: axesFor(node.questions, { leakage: 2, shapeHint: "none" }), ranking: rank(node.questions) },
+        /* **Every axis the rubric asks for, `demand` included.** A stub that
+           answers a different schema from the real judge is a harness
+           exercising a seam it does not have — and this one omitted `demand`
+           from the day the axis was added, which is also how the harness came
+           to have no check that anything ever filled it in. ⟨GPT Sol, F26 on
+           260907d.⟩ */
+        questions: { axes: axesFor(node.questions, { leakage: 2, demand: 3, shapeHint: "none" }), ranking: rank(node.questions) },
         rowForm: "both",
         why: "stub judge: no judgement was made.",
       };
@@ -532,6 +540,17 @@ async function commandJudge(o: Options): Promise<void> {
   for (const [label, lineup] of lineups) {
     try {
       const answer = await judge(renderPrompt(lineup), label);
+      /* **Before a word of it is believed.** An answer that is not a
+         permutation of its own lineup, or that leaves an axis the rubric asked
+         for unscored, is not a bad judgement — it is not a judgement. So it is
+         thrown here and lands in `failures`, which now costs the run its
+         leader and its exit code rather than passing quietly into an aggregate.
+         `judge.ts` § `validateAnswer` says why this is not the calibration
+         gate's permutation check. ⟨GPT Sol, F26 on 260907d.⟩ */
+      const complaints = validateAnswer(lineup, answer);
+      if (complaints.length) {
+        throw new Error(`the answer does not match the lineup it was asked about:\n    - ${complaints.join("\n    - ")}`);
+      }
       const { nodes, unknownLabels } = unblind(lineup, answer);
       if (unknownLabels.length) console.log(`  ! ${label}: ${unknownLabels.join("; ")}`);
       judged.push({ label, slug: lineup.slug, repeat: lineup.repeat, nodes });
@@ -567,6 +586,11 @@ async function commandJudge(o: Options): Promise<void> {
   console.log(`\nCalibration: ${verdict.passed ? "PASSED" : "FAILED"} over ${verdict.checked} lineup(s)`);
   for (const line of [...verdict.malformed, ...verdict.inversions, ...verdict.unranked]) console.log(`  - ${line}`);
   if (failures.length) console.log(`\n${failures.length} judging call(s) failed.`);
+  /* **And the shell is told**, for the same reason the gate below tells it: a
+     pass that asked for three repeats and completed two leaves a table no
+     leader may be read off, and until 2026-09-07 that was a printed sentence
+     and an exit code of 0. ⟨GPT Sol, F24 on 260907d.⟩ */
+  if (failures.length) process.exitCode = 1;
   /* The same reasoning as at the end of `commandReport`, one command earlier:
      this is where the gate is actually computed, and a caller that stops after
      `judge` never reaches `report` to find out. Both commands raise it, because
@@ -683,7 +707,10 @@ function rankingSection(runFile: RunFile, judgedFile: JudgedFile, which: "questi
   const instability = judgeInstability(judgedFile.judged, which);
   const threshold = separabilityThreshold(instability);
   const leaders = perRepeatLeaders(judgedFile.judged, which);
-  const sep = separate(ranks, threshold, { perRepeatLeaders: leaders, coverageClean: clean });
+  /* **A repeat that was asked for and failed is a repeat this table is missing**,
+     so it gates the leader exactly as an unclean bill does. ⟨GPT Sol, F24.⟩ */
+  const judgingComplete = judgedFile.failures.length === 0;
+  const sep = separate(ranks, threshold, { perRepeatLeaders: leaders, coverageClean: clean, judgingComplete });
   say();
   say(`## Ranking — ${which}`);
   say();
@@ -702,7 +729,13 @@ function rankingSection(runFile: RunFile, judgedFile: JudgedFile, which: "questi
         : "not measured — fewer than two repeats"),
   );
   say(`Separability threshold: ${threshold === null ? "none, so no gap may be called real" : `${threshold.toFixed(2)} ranks`}`);
-  say(`Leader in each repeat's own table: ${leaders.length ? leaders.join(", ") : "(not measurable)"}`);
+  /* Printed through `leadersLine` so a tie prints as a tie. Reading `[0]` of
+     each repeat's table made insertion order the tie-break, and this line then
+     described a leader flip on a run where a repeat had tied. ⟨GPT Sol, F25.⟩ */
+  say(`Leader in each repeat's own table: ${leaders.length ? leadersLine(leaders) : "(not measurable)"}`);
+  if (!judgingComplete) {
+    say(`${judgedFile.failures.length} judging call(s) failed, so the repeats below are fewer than were asked for.`);
+  }
   say();
   say(`| arm | mean rank | lineups | comparison |`);
   say(`|---|---|---|---|`);
@@ -712,7 +745,7 @@ function rankingSection(runFile: RunFile, judgedFile: JudgedFile, which: "questi
   }
   say();
   if (sep.separable) {
-    say(`**\`${sep.ordered[0]!.arm}\` leads by more than the threshold and led every repeat.** That is a reason to render it for Greg, not to ship it.`);
+    say(`**\`${sep.ordered[0]!.arm}\` leads by more than the threshold and was the sole leader of every repeat.** That is a reason to render it for Greg, not to ship it.`);
   } else {
     say(`**No leader is named.** The honest output is that this screen rejected nothing among the arms above:`);
     for (const line of sep.refusedBecause) say(`- ${line}`);
@@ -923,6 +956,13 @@ async function commandReport(o: Options): Promise<void> {
      that a gate failure is a result; the exit code says only that there is no
      answer in the file, which is exactly what a caller needs to branch on. */
   if (judgedFile && !judgedFile.calibration.passed) process.exitCode = 1;
+  /* **And a judging pass that did not finish is the same category**: the run
+     produced a table, and nothing in it may be read as an answer, because a
+     repeat that was pre-registered and asked for never came back. This
+     reproduced on the saved 2026-09-07 artefact — three repeats requested, two
+     completed, one failure recorded, `report` exiting 0 and naming a leader on
+     the gists. ⟨GPT Sol, F24 on 260907d.⟩ */
+  if (judgedFile?.failures.length) process.exitCode = 1;
 }
 
 /* ----------------------------------------------------------------- main --- */

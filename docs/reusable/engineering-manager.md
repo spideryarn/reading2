@@ -45,6 +45,14 @@ asked. In a shared tree, name your files on both commands —
 - **At the end of every stage, as an obligatory review.** Not optional, and not skippable because
   the stage felt small.
 
+**"Fix it" and "overrule it" are not the only endings.** A good objection sometimes shows that the
+plan itself is wrong — that the stage costs more than it's worth, that a smaller version gets most
+of the value, or that the whole thing should be reframed or dropped. Reframing, reducing or
+cancelling is a legitimate conclusion, and reaching it is your job: you are running the work, not
+executing a ticket. When the call is genuinely balanced, ask Fable to arbitrate before you commit to
+it. When it changes what the user gets, it is a product call — say so and ask. Either way, write the
+reasoning into the plan doc, including the version you decided not to build.
+
 **Two rounds per stage, then you decide.** The cadence above is right; what goes wrong is that
 nothing ends it. Refusing costs a reviewer nothing and P2s are infinite, so chains here have run to
 round seven and round twelve without converging. After two rounds, settle it yourself and write
