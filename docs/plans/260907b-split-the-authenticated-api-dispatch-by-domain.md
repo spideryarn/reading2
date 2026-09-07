@@ -312,6 +312,18 @@ a 405 policy; and pre-committing to extract all fourteen domains — Greg's requ
 override 260905b's "Tier 3, do not start", but not enough to make every domain automatically worth
 extracting.
 
+## The baseline, so a later red is attributable
+
+Full `npm test` on this worktree at `c916e1b5`, before any stage-1 code: **2 failed, 783 passed,
+1 skipped of 786 files; 14,320 tests passed; 21 minutes.** Both failures are one environmental
+cause — `api-dist/vercel.js` is missing because a fresh worktree has not run `npm run build` —
+in `tests/cold-start-lazy-imports.test.ts` and `tests/pdf-bundle-trace.test.ts`.
+
+`npm run worktree:setup` predicts "~14 of 477 files red". That is stale in both numbers and was
+worth measuring rather than believing. Note both failures are *loud*: each says the artefact is
+missing and that the assertion below would otherwise check nothing — the discipline in
+[silent-success.md](../reusable/silent-success.md), working.
+
 ## Open
 
 - Whether stage 1 alone is a defensible finish. I think it may be.

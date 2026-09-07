@@ -159,7 +159,12 @@ if (existsSync(path.join(ROOT, ".env.local"))) {
 }
 
 say();
-info(`npm test         — expect ~14 of 477 files red, about what the primary has`);
+// Measured 2026-09-07 in a fresh worktree: 2 of 786 files, and both are the same
+// missing build artefact rather than fourteen unrelated things. The "~14 of 477"
+// this said until then was measured 2026-09-01 and had gone stale in both numbers,
+// which matters because the figure is what tells a new agent whether its own red is
+// normal — docs/reusable/written-down-is-not-checked.md.
+info(`npm test         — expect 2 of 786 files red, both wanting \`npm run build\``);
 info(`npm run dev      — walks up from ${PRIMARY_PORT}; a port outside the range warns at startup`);
 info("and read docs/project/worktrees.md before landing anything");
 say();
