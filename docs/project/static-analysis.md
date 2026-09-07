@@ -8,6 +8,7 @@ npm run check          # everything below, gates first, ~20s (--fast skips the b
 npm run check -- --offline   # the same, minus the database suites — NOT the real gate
 npm run knip           # unused files, exports, dependencies
 npm run cycles         # import cycles
+npm run check:conflicts # unresolved merge conflicts in tracked files
 npm run complexity     # the functions worth looking at
 npm run dupes          # copy-paste
 ```
@@ -31,6 +32,7 @@ That single fact is why the list below is so short, and why two obvious names ar
 |---|---|---|
 | **[Knip](https://knip.dev) 6.32.2** (`npm run knip`) | unused **files**, **exports**, **dependencies** | advisory |
 | **Biome `noImportCycles`** (`npm run cycles`) | import cycles | **gate** |
+| **[`conflict-markers.ts`](../../scripts/conflict-markers.ts)** (`npm run check:conflicts`) | unresolved merge conflicts in tracked files | **gate** |
 | **Biome `noExcessiveCognitiveComplexity`** (`npm run complexity`) | functions worth a second look | advisory |
 | **[jscpd](https://github.com/kucherenko/jscpd) 5.0.16** (`npm run dupes`) | copy-paste | advisory |
 
@@ -66,6 +68,35 @@ parser, so it is untouched by the TypeScript 7 problem, and it checks 183 files 
 
 It was **proved red against a two-file fixture before being switched on**. A check nobody has watched
 fail is not yet a check — [silent-success.md](../reusable/silent-success.md).
+
+### Conflict markers gate, and the false-positive story is the design
+
+A half-finished merge left markers in `drizzle/meta/_journal.json` on 2026-09-02; every migration
+command went blind at once and reported a byte offset in a `SyntaxError`, and the hour that followed
+went on clearing a ledger that had been correct all along
+([260903b](../postmortems/260903b-the-ledger-took-the-blame-for-a-half-finished-merge.md)). Its
+recommendation 3 — a repo-wide check rather than one file's guard — is this, and it calls it *"the
+widest fix, and the one not yet done"*. It matters here because a dozen agents integrate with
+`git merge` in trees they share, so this is a standing risk rather than an accident.
+
+**Gates from day one**, on this page's own rule: zero findings over 3,935 tracked files today, no
+database, no network, about 400 ms.
+
+Most of the work is in *not* firing, because a marker is seven identical characters and this repo
+quotes merge conflicts in its own documentation. Three rules, each paying for a measured case:
+markers must be at **column zero** and followed by a space or the line's end (every legitimate
+quotation here is inline in backticks or `+`-prefixed inside a diff — 30 files match an unanchored
+pattern, none matches an anchored one); `<`, `>` and `|` always fail while `=` counts **only in a
+file that already carries one of those**, because a line of `=` is a valid Markdown setext heading
+underline; and seven **or more**, since `conflict-marker-size` is configurable and diff3 adds
+`|||||||`. The one accepted blind spot is a file left holding a lone `=======`.
+
+Binary detection is ours rather than git's: `git grep -I` reads
+`evals/pdf/much-harder/source.pdf` as text and reports 69 lines beginning `<<`, so the scanner
+skips a file with a NUL byte in its first 8 KB.
+
+**To quote a marker at column zero in a doc**, indent it, prefix it as a diff line, or build it with
+`repeat()` — which is what the check and its test both do, so neither fails itself.
 
 ### Complexity is triage, not a target
 
