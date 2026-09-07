@@ -313,15 +313,25 @@ export function PrivacyPage() {
               was true of a Gemini chat model routed with `zdr: true`. Dictation
               moved to `openai/gpt-transcribe` on 2026-09-07 because it is the
               one model that takes a list of an article's own words, and
-              **OpenRouter ignores the `provider` block entirely on its
-              transcription endpoint** — an impossible `only: ["anthropic"]`
-              answers 200 with a transcript, and so does `zdr: true` for a model
-              absent from their ZDR list. So the guarantee is not merely unset,
-              it is unavailable; docs/plans/260907c-dictation-onto-an-openai-transcriber.md
-              has the probe.
+              **OpenRouter does not apply routing or `zdr` on its transcription
+              endpoint** — an impossible `only: ["anthropic"]` answers 200 with
+              a transcript, and so does `zdr: true` for a model absent from
+              their ZDR list. Not the whole block: `provider.options` *is*
+              forwarded, and is how the vocabulary gets there at all. So the
+              guarantee is not merely unset, it is unreachable from this route;
+              docs/plans/260907c-dictation-onto-an-openai-transcriber.md has the
+              probe.
 
               Every factual clause below is quoted from a published policy and
               cited in docs/project/privacy.md § Where a reader's voice goes.
+
+              **"its API customer", not "we".** On this route OpenRouter is
+              OpenAI's API customer and we are OpenRouter's, so a sentence
+              saying *we* have not opted in to OpenAI's training would be
+              describing a setting that is not ours to hold. GPT Sol's third
+              review. The OpenRouter clause above is the one where "ours" is
+              correct, and it is marked as a commitment rather than as something
+              this page can prove.
               **Do not warm this up.** The temptation is "and they say they keep
               nothing", which their own per-endpoint table does say — but
               `gpt-transcribe` is listed under two OpenAI endpoints with
@@ -331,16 +341,19 @@ export function PrivacyPage() {
           <strong className="tw:text-foreground">Dictation is the exception, and it changed.</strong>{" "}
           When you talk into a box here, the recording goes from us to OpenRouter and on to OpenAI’s
           <code className="tw:mx-1">gpt-transcribe</code>, because that is the route that will take a
-          list of the words your article actually uses — which is what stops it guessing at names.
-          What each of them says is on their pages, linked above: OpenRouter says it does not store
-          what passes through unless an account opts in, ours does not, and it keeps audio no longer
-          than routing needs except where it says it must — abuse detection, security, billing, or
-          the law; OpenAI says nothing sent to its API is used to train its models.{" "}
+          list of the words your article actually uses, which helps it spell names out of the piece
+          you are reading. What each of them says is on their pages, linked above: OpenRouter says it
+          does not store what passes through unless an account opts in — ours is not opted in, and
+          that is a setting we hold ourselves to rather than something this page can prove — and that
+          it keeps audio no longer than routing needs except where it says it must, for abuse
+          detection, security, billing or the law; OpenAI says data sent to its API is not used to
+          train its models by default, unless its API customer opts in.{" "}
           <strong className="tw:text-foreground">
-            What changed is that we now pass those on rather than enforce them.
+            What changed is that we now rely on those policies rather than enforcing a
+            zero-retention route.
           </strong>{" "}
           We used to route dictation so that only providers keeping nothing could serve it, and on
-          this endpoint that setting is ignored, so we cannot. We do not save the recording on our
+          this endpoint that setting is not applied, so we cannot. We do not save the recording on our
           servers — it arrives in one request, goes out in the next, and is gone when the request
           ends — and the fact that a request happened is still recorded.
         </p>

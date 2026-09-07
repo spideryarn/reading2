@@ -38,7 +38,9 @@
  *  - **"Zero-data-retention models."** `zdr: true` is now set on **nothing**
  *    (`AI_JOB_ROUTE`, src/ai-call.ts), and live conversation does not go through
  *    the gateway at all. It was set on dictation alone until 2026-09-07, when
- *    dictation moved to a transcription endpoint that ignores the flag —
+ *    dictation moved to `/v1/audio/transcriptions`, where OpenRouter does not
+ *    apply routing preferences or `zdr` (it does forward `provider.options`,
+ *    which is how the vocabulary gets through) —
  *    docs/plans/260907c-dictation-onto-an-openai-transcriber.md. So the claim
  *    this page declined to make has gone from *misleading* to *flatly false*,
  *    which is a good argument for having declined it. What this page claims is

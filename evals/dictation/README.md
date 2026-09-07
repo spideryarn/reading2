@@ -7,7 +7,8 @@ nobody can argue with.
 
 ```
 node  evals/dictation/bench-transcribers.mjs         # 16 models, OpenRouter's transcription endpoint
-node  evals/dictation/bench-vocabulary.mjs           # Gemini chat, with a vocabulary prompt and without
+node  evals/dictation/bench-vocabulary.mjs           # Gemini chat, with a vocabulary prompt and
+                                                     #   without — the route dictation left on 2026-09-07
 npm run eval:dictation-vocab                         # which sources, and how much is too much
 npm run eval:dictation-gate                          # which candidates can serve our request at all
 npm run eval:dictation-models                        # and which of those transcribes best
@@ -22,6 +23,15 @@ vocabulary one cost **$0.1833** at five runs (`RUNS=5`, 650 calls) and defaults 
 a minute and pennies; the model bake-off cost **$0.1283** at three runs (210 calls) on 2026-09-03,
 and defaults to three.
 
+**Every one of those figures came off the chat endpoint and no run since 2026-09-07 can produce
+another**, because `openai/gpt-transcribe` through OpenRouter answered `usage.cost: 0` on both calls
+anybody has measured — 3 seconds of audio and 22, on 2026-09-07. That is an observation about this
+model on this route, not a property of the protocol: OpenRouter documents per-request costs on the
+transcription endpoint, so another model may well price properly and the day this one starts to,
+`unpriceZero` in src/ai-call.ts uses the number. Both benches
+have dropped their `$` column rather than printing a zero; § *The cost figure* at the foot of this
+file is where the arithmetic went.
+
 ## Run the gate before the bake-off
 
 `gate-models.ts` is the cheap half of a model comparison, and the reason it is separate is that a
@@ -32,14 +42,16 @@ in the gate costs a minute; finding it out in the bake-off costs an hour.
 keeping as the record of what it sent before: *"Dictation sends `provider: { zdr: true,
 require_parameters: true }` plus a strict `json_schema` plus webm/opus audio, and each of those four
 can leave a model with no endpoint."* All four are gone. Dictation is now a **transcription**
-request — `openai/gpt-transcribe`, no `provider` block at all, and the vocabulary as
+request — `openai/gpt-transcribe`, no routing policy at all, and the vocabulary as
 `provider.options.openai.keywords` — so the gate probes that endpoint, and the four-constraint
 diagnosis survives further down the same file as the record of why the chat endpoint was abandoned.
 [260907c](../../docs/plans/260907c-dictation-onto-an-openai-transcriber.md).
 
 It is also where the answer to "should we use OpenAI?" actually lives — see
-[260903i](../../docs/plans/260903i-which-model-transcribes-dictation.md). Both `openai/gpt-audio`
-models 404 under `zdr`, and 400 on webm even without it.
+[260903i](../../docs/plans/260903i-which-model-transcribes-dictation.md). **On the chat endpoint**,
+both `openai/gpt-audio` models 404 under `zdr`, and 400 on webm even without it. That is what sent
+dictation to the transcription endpoint rather than to a transcode, and it is why the `diagnose`
+half of `gate-models.ts` still probes a path the app no longer uses.
 
 ## The bake-off, and its noise floor
 
@@ -54,8 +66,11 @@ thing here that says anything about its own precision — 0.2 points of word err
 in the 2026-09-03 run — and nothing smaller than it is a finding. One replicate pair is a sample of
 the noise, not a bound on it.
 
-It also checks `answeredBy` and prints a mismatch loudly. `zdr` routing means OpenRouter is picking
-an upstream under a constraint, so an arm named after the slug we *sent* can be scoring a fallback.
+It also checks `answeredBy` and prints a mismatch loudly. **The reason changed on 2026-09-07 and
+the check did not.** It used to be `zdr` routing: OpenRouter was picking an upstream under a
+constraint, so an arm named after the slug we *sent* could be scoring a fallback. There is no
+routing policy on the transcription request at all now — so we have said even less about which
+upstream answers, and an arm named after what we sent can still be scoring something else.
 
 ## Scoring is one file
 
@@ -71,10 +86,16 @@ article's glossary, the article's own proper nouns — and, the part nobody meas
 list starts putting words in the reader's mouth.
 
 It **sends the app's own request**: `transcribeWith` from `src/transcribe.ts`, which is the function
-the server calls once it has a vocabulary, so the system prompt, the JSON schema,
-`require_parameters`, the truncation and refusal checks and `tidy()` are shared rather than
-described twice. One condition — `production (vocabularyFor)` — builds its vocabulary through the
-shipped composition too.
+the server calls once it has a vocabulary, so whatever that request is made of is shared rather than
+described twice. One condition — `production (vocabularyTermsFor)` — builds its vocabulary through
+the shipped composition too.
+
+What that list used to name is worth keeping, because it is most of what the move to
+`/v1/audio/transcriptions` deleted: a system prompt, a strict JSON schema, `require_parameters` so
+no upstream could drop the schema, and a truncation check. All four went on 2026-09-07
+([260907c](../../docs/plans/260907c-dictation-onto-an-openai-transcriber.md)). What is shared now is
+the model, the `keywords` array, the size and length guards, `MAX_TRANSCRIPT_CHARS` and `tidy()` —
+and the point of the sentence is unchanged: the harness must not be a second implementation of it.
 
 That was not true at first. The harness had its own `fetch`, its own weaker system prompt and no
 schema, while this file claimed it "imports the real builder"; every number it produced was about a
@@ -102,7 +123,7 @@ All of it normalises away case, punctuation and diacritics before comparing, whi
 way worth knowing: `Muller Lyer` scores as a hit for `Müller-Lyer`. So recall here means *the model
 found the word*, not *the model spelled it exactly*. It is not lenient about `-ise` against `-ize`,
 and the `purpose-box` clip is where that shows: the model wrote `realization` in 54 of 55
-transcripts, including the five where `relevance realisation` was sitting in the prompt with an `s`.
+transcripts, including the five where `relevance realisation` was sitting in the vocabulary with an `s`.
 A term list settles which word, not which spelling of it.
 
 A call that will not come back after five attempts is **recorded as lost and the run continues**,
@@ -202,8 +223,21 @@ would settle the rest, and they are still not here.
 
 ## The cost figure
 
-`usage.cost` from OpenRouter, and it disagrees with itself across the two routes: the transcription
-endpoint reports `0` for several models that are definitely not free, while the chat route reports a
-real number. The chat route's is the one the plans quote — **$0.00040 for 22 seconds, which is
-$0.0011 a minute**, about a tenth of a cent. The first plan originally said a twentieth; GPT Sol did
-the arithmetic and it was wrong.
+`usage.cost` from OpenRouter disagrees with itself across the two routes: **the transcription
+endpoint reports `0`** for models that are definitely not free, while the chat route reports a real
+number. That used to be a footnote about the benches, and since 2026-09-07 it is a fact about the
+product, because dictation ships on the route that answers zero.
+
+- **The chat-route figure the plans quote is history**: $0.00040 for 22 seconds, which is $0.0011 a
+  minute, about a tenth of a cent, on `gemini-3.1-flash-lite`. (The first plan said a twentieth;
+  GPT Sol did the arithmetic and it was wrong.) It is what dictation used to cost, not what it costs.
+- **Nothing on the wire prices the current route.** `openai/gpt-transcribe` is listed at $0.0045 a
+  minute — [260907c](../../docs/plans/260907c-dictation-onto-an-openai-transcriber.md) — and that is
+  a published rate rather than something a run here measured.
+- **The zero is not recorded as a price.** `unpriceZero` in `src/ai-call.ts` drops an exact zero, so
+  a dictation row in the ledger says its cost came from nowhere — short by an unknown amount, and
+  saying so — instead of asserting the provider told us it was free. Both benches dropped their `$`
+  column for the same reason: a column of zeroes that sums to a number the run did not cost is worse
+  than no column.
+- **What to ask instead**: `npm run cost -- --reconcile`, which asks the account rather than the
+  response body.

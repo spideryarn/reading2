@@ -228,8 +228,11 @@ ignored on that endpoint**, which is worse, because a request carrying it succee
 | `provider: {"zdr": true}` | **200**, for a model absent from `GET /api/v1/endpoints/zdr` |
 | the same `zdr: true` on `/v1/chat/completions` | 404, *"No endpoints found matching your data policy"* |
 
-The first row shows the block is not read; the second and third together prove it, because an
-enforced flag must 404 for a model with no qualifying endpoint, and on the chat endpoint it does.
+The first row shows routing is not applied; the second and third together prove `zdr` is not
+either, because an enforced flag must 404 for a model with no qualifying endpoint, and on the chat
+endpoint it does. **Not the whole block** — `provider.options` *is* forwarded, and is how the
+vocabulary reaches the model at all. Routing and options live in one object and are treated
+completely differently by the far end.
 OpenRouter's STT guide documents the first row's half — *"Routing preferences (`order`, `only`,
 `ignore`) are not applied to transcription requests"* — and says nothing about `zdr`, so the
 measurement is the authority. It is re-runnable:
@@ -262,6 +265,10 @@ before editing it**, and do not add a warmer clause that none of them supports.
 - **OpenAI, on training** — *"data sent to the OpenAI API is not used to train or improve OpenAI
   models (unless you explicitly opt in)"*.
   <https://developers.openai.com/api/docs/guides/your-data>
+  **"You" there is OpenAI's API customer, which on this route is OpenRouter and not us.** The page
+  says "its API customer" for that reason: we could not opt in or out of it if we wanted to. The
+  clause where "ours" *is* the right word is OpenRouter's logging setting, and the page marks that
+  one as a commitment we hold ourselves to rather than something a reader can check.
 - **OpenAI, on retention** — the general API default is *"abuse monitoring logs … retained for up to
   30 days"*, but their per-endpoint table gives `/v1/audio/transcriptions` an abuse-monitoring
   retention of **None** and an application-state retention of **None**, one of only three rows in
@@ -273,7 +280,7 @@ before editing it**, and do not add a warmer clause that none of them supports.
 under both `/v1/audio/transcriptions` (retention None) and `/v1/realtime/transcription_sessions`
 (30 days), and nothing OpenRouter publishes says which it uses. So the strong sentence — *"and they
 say they keep nothing"* — rests on a fact nobody outside OpenRouter can check, and this page's whole
-register is that a reader could check it. Hence *"we no longer promise they don't"* beside the
+register is that a reader could check it. Hence *"they may keep it under their own policies"* beside the
 button, and a paragraph on `/privacy` that says what each party publishes and stops.
 
 **The two ways to close it**, neither taken here and both real, are in

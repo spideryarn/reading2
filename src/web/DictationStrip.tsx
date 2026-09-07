@@ -98,8 +98,9 @@ function dictationWords(d: UseDictation): string {
  * 2026-09-07.**
  *
  * Dictation moved to `openai/gpt-transcribe`, which cannot be routed with zero
- * data retention — OpenRouter ignores the flag on its transcription endpoint
- * rather than refusing it (docs/plans/260907c-dictation-onto-an-openai-transcriber.md).
+ * data retention — OpenRouter does not apply the flag on its transcription
+ * endpoint, rather than refusing it
+ * (docs/plans/260907c-dictation-onto-an-openai-transcriber.md).
  *
  * Three words in it are load-bearing, and a shorter draft lost two of them to
  * GPT Sol's review:
@@ -110,19 +111,22 @@ function dictationWords(d: UseDictation): string {
  *   fails, `mic-recording.ts` deliberately holds the Blob in the tab so the
  *   reader can download what they said — so an unqualified "we don't keep it"
  *   is wrong about the reader's own browser.
- * - **"can't promise they don't"** under-claims on purpose, and a future edit
- *   will want to warm it up. OpenAI's per-endpoint table gives
- *   `/v1/audio/transcriptions` no retention at all, so *"and they don't
+ * - **"they may keep it under their own policies"** under-claims on purpose,
+ *   and a future edit will want to warm it up. OpenAI's per-endpoint table
+ *   gives `/v1/audio/transcriptions` no retention at all, so *"and they don't
  *   either"* is probably true. Probably is not the standard for the line beside
  *   a button: `gpt-transcribe` is listed under two OpenAI endpoints whose
  *   retention differs, and nothing documents which of them OpenRouter calls.
+ *   It also replaced *"we can't promise they don't"*, which GPT Sol found
+ *   grammatically ambiguous — "they don't" could be read as attaching to *"save
+ *   it on our servers"*, which would say nothing at all.
  *
  * `/privacy` has room to set the position out; this has a line, so it takes the
  * half we can stand behind. Read docs/project/privacy.md § Where a reader's
  * voice goes before changing it.
  */
 const DICTATION_PROMISE =
-  "Your voice goes to OpenRouter and OpenAI to be transcribed. We don't save it on our servers, and we can't promise they don't.";
+  "Your voice goes to OpenRouter and OpenAI to be transcribed. We don't save it on our servers; they may keep it under their own policies.";
 
 /**
  * **What the button says instead when there is no network**, and why it is not

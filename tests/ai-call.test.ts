@@ -26,6 +26,7 @@ import {
   openRouterStream,
   openRouterTranscription,
   pathFor,
+  UnreadableAnswer,
 } from "../src/ai-call.js";
 import { AI_JOB_WIRE } from "../src/models.js";
 import { collectSpend } from "../src/ai-spend.js";
@@ -1203,7 +1204,12 @@ describe("the transcription wire", () => {
 
   it("refuses an answer with no transcript in it rather than returning nothing", async () => {
     /* A `{}` body read as an empty transcript is the failure that looks exactly
-       like a reader who said nothing — docs/reusable/silent-success.md. */
+       like a reader who said nothing — docs/reusable/silent-success.md.
+
+       **The class, not the message.** `transcribe.ts` branches on it to tell a
+       service that answered nonsense from one that never answered, and those
+       get different reader-facing sentences and different codes. Asserting the
+       words would leave that branch free to break. */
     stubTransport(
       () =>
         ({
@@ -1221,6 +1227,132 @@ describe("the transcription wire", () => {
           format: "webm",
         }),
       ),
-    ).rejects.toThrow(/unreadable/);
+    ).rejects.toThrowError(UnreadableAnswer);
+  });
+});
+
+/**
+ * **The four things GPT Sol's review of the built code found**, each pinned by
+ * the test that would have caught it.
+ *
+ * They are together because they are one lesson: this wire was written by
+ * copying `openRouterImage`, and copying carries the shape but not the
+ * decisions. Every one of these is a place where the copy needed a different
+ * answer from its original.
+ */
+describe("what the transcription wire had to be told twice", () => {
+  function transcribed(body: unknown): Response {
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ "x-generation-id": "gen-test-stt" }),
+      text: async () => JSON.stringify(body),
+    } as unknown as Response;
+  }
+
+  const ask = (opts?: { signal?: AbortSignal }) =>
+    openRouterTranscription(
+      "dictation",
+      { model: "openai/gpt-transcribe", audio: "AAAA", format: "webm" },
+      opts,
+    );
+
+  /**
+   * **A zero from a paid model is "unpriced", not "free".**
+   *
+   * The endpoint reports `cost: 0` for every call. Recording that as the
+   * provider's settled price makes every dictation row say the call was free,
+   * and `source: "provider"` asserts the provider told us so — an understated
+   * total that reads as a measured one.
+   */
+  it("records a plain zero as unpriced rather than as free", async () => {
+    stubTransport(() => transcribed({ text: "hello", usage: { seconds: 3, cost: 0 } }));
+    const { report } = await collectSpend(() => ask());
+    expect(report.calls[0]?.cost.source).toBe("none");
+  });
+
+  /**
+   * **Except a BYOK zero, which is a real price with the amount somewhere else.**
+   *
+   * `normaliseByokUpstream` only stores `cost_details.upstream_inference_cost`
+   * when the row's source is `"provider"`, so unpricing this zero would throw
+   * away a charge we actually know. The rule is "drop an unexplained zero",
+   * not "drop every zero", and this is the half that says which.
+   */
+  it("keeps a BYOK zero, because the real figure hangs off it", async () => {
+    stubTransport(() =>
+      transcribed({
+        text: "hello",
+        usage: {
+          seconds: 3,
+          cost: 0,
+          is_byok: true,
+          cost_details: { upstream_inference_cost: 0.004 },
+        },
+      }),
+    );
+    const { report } = await collectSpend(() => ask());
+    expect(report.calls[0]?.cost.source).toBe("provider");
+  });
+
+  /**
+   * **No request, no row.**
+   *
+   * `routes.ts` installs the reader-disconnected signal before `transcribe`
+   * builds a vocabulary, so the gateway can be reached with a signal that has
+   * already fired. `fetch` rejects such a signal without sending a byte, and
+   * the meter used to be constructed first — writing an `aborted` row for a
+   * call that never happened.
+   */
+  it("writes no spend row when the reader had already gone", async () => {
+    const sent = stubTransport(() => transcribed({ text: "hello" }));
+    const gone = AbortSignal.abort();
+    const { report } = await collectSpend(async () => {
+      await expect(ask({ signal: gone })).rejects.toThrow();
+    });
+    expect(sent).toHaveLength(0);
+    expect(report.calls).toHaveLength(0);
+  });
+
+  /**
+   * **The vocabulary survives a route that has a policy of its own.**
+   *
+   * `dictation.provider` is `null` today, which means the buggy and the correct
+   * versions of `outgoingTranscription` emit identical bytes and no ordinary
+   * test can tell them apart. So this one puts a policy on the row — a
+   * top-level flag, another provider's options, and another OpenAI option — and
+   * asserts all four survive beside the keywords. The row is restored in
+   * `finally`, because `AI_JOB_ROUTE` is module state every other test shares.
+   *
+   * The failure it pins is silent by construction: the keywords would simply
+   * stop being sent, and the only symptom is a slightly worse transcript.
+   */
+  it("keeps every existing provider option when it adds the keywords", async () => {
+    const row = AI_JOB_ROUTE.dictation;
+    const original = row.provider;
+    row.provider = {
+      zdr: true,
+      options: { groq: { keep: "me" }, openai: { language: "en" } },
+    };
+    try {
+      const sent = stubTransport(() => transcribed({ text: "hello" }));
+      await collectSpend(() =>
+        openRouterTranscription("dictation", {
+          model: "openai/gpt-transcribe",
+          audio: "AAAA",
+          format: "webm",
+          keywords: ["Spideryarn"],
+        }),
+      );
+      expect(sent[0]?.body.provider).toEqual({
+        zdr: true,
+        options: {
+          groq: { keep: "me" },
+          openai: { language: "en", keywords: ["Spideryarn"] },
+        },
+      });
+    } finally {
+      row.provider = original;
+    }
   });
 });

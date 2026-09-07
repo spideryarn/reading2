@@ -158,7 +158,7 @@ hide is a reader talking for four minutes and getting nothing back.
 
 Measured, `probe-stt-routes.ts --long`: **300 seconds of audio, 12.2 MB of base64, `200` in
 8.7 seconds.** Seven times inside the upstream timeout and well inside `transcribe.ts`'s own 90-second
-bound. Two things make that margin bigger than it looks and one makes it smaller:
+bound — for a tone, which is the caveat the third bullet below makes. Two things make that margin bigger than it looks and one makes it smaller:
 
 - The recording we would really send is **smaller than the one tested**. `MAX_AUDIO_BASE64` is 3 MB,
   so five minutes of webm/opus is about 1.6 MB of base64 — an eighth of what went up here.
@@ -210,9 +210,11 @@ Three alternatives, each rejected for a reason rather than on taste:
   `provider.options.openai`, dictation gets quietly worse at the one thing it exists to do and
   nothing goes red. Guarded in stage 2 by a test that asserts the *transcript changes* — the
   `Spiderrion`/`Spideryarn` pair above — rather than that the request succeeded.
-- **The `provider` block is dead weight on this endpoint.** `AI_JOB_ROUTE`'s dictation row must stop
+- **Route-level routing is dead weight on this endpoint.** `AI_JOB_ROUTE`'s dictation row must stop
   carrying `zdr: true`, because a routing flag nobody enforces is a false statement in the one file
-  the privacy page is checked against.
+  the privacy page is checked against. **Not the `provider` key itself** — the outgoing request still
+  carries one, because `provider.options.openai.keywords` is where the vocabulary goes. Routing and
+  options share an object and are read completely differently at the far end.
 - **What we do *not* pay:** no second gateway exception, no second billing account, and so no new
   hole in the spend cap. Both hazards in the brief are consequences of the direct route, and the
   route chosen has neither. `tests/no-undeclared-spend.test.ts` and the register in
@@ -299,7 +301,7 @@ page's register forbids. `/privacy` has room to set out the position; one line d
 the cautious half.
 
 **3. `docs/project/privacy.md`** — the doc that owns the subject. Not reader-facing; it gains the
-measurement above (the `provider` block is ignored on the transcription endpoint) as the reason the
+measurement above (routing and `zdr` are not applied on the transcription endpoint) as the reason the
 claim went, so the next person to wonder whether we can put it back finds the probe rather than the
 conclusion.
 
@@ -409,6 +411,56 @@ endpoint. The browser run below produced exactly that container and it transcrib
 gap is measured rather than argued. What is still untested is **Safari's** MP4 specifically, which
 carries AAC where Chrome's carried Opus.
 
+## What the second review changed, and it found three real bugs
+
+The code went back to GPT Sol after it was built, which CLAUDE.md says to weight higher than the
+plan review — *"a plan-stage review can't find a `PATCH` that writes one field and then rejects the
+request"*. It was right to. **Three correctness bugs, none of which any test would have caught**,
+and each is now pinned by a test watched to go red against the old code:
+
+1. **Permanent refusals were offered a Retry that could not work.** Only 401, 402 and 429 got their
+   own sentence; everything else became a 502 with *"could not transcribe that"*. The browser decides
+   whether to offer Retry from the status alone (`429 || (>=500 && !== 503)`), so a **400** — the
+   service saying the request is malformed — invited the reader to resend identical bytes for an
+   identical refusal. 403 and 404 the same. Every status now goes through `providerHttpFailure` and
+   `canRetry`, which is a total map over `FailureKind` so a fifth kind is a compile error. Eight
+   statuses pinned; all eight go red on the old branch.
+2. **A BYOK zero was being thrown away.** `unpriceZero` dropped an exact `cost: 0` so the ledger says
+   *unpriced* rather than *free* — right for this endpoint, and wrong for the one shape where zero is
+   the truth: `is_byok: true`, where OpenRouter charged nothing because another key paid and the real
+   figure hangs off `cost_details.upstream_inference_cost`. `normaliseByokUpstream` only stores that
+   when the source is `"provider"`, so unpricing it turned a fully-known cost into an unknown one.
+3. **An already-aborted request wrote a spend row for a call that never left the process.** `routes.ts`
+   installs the disconnect signal before `transcribe` builds a vocabulary, so the gateway can be
+   reached with a signal that has already fired; `fetch` rejects it without sending a byte, and the
+   meter was constructed first. `signal.throwIfAborted()` now precedes it. (The image wire has the
+   same hole and a test that characterises it; this one does not.)
+
+And a fourth, from the subagent that updated the evals rather than from Sol: **the `provider` merge
+only looked fixed.** `{...route.provider, options: {openai: {keywords}}}` keeps top-level fields and
+replaces the whole `options` bag, so another provider's options or another OpenAI option would have
+been dropped exactly as the keywords were. It is a two-level merge now, and the test that pins it has
+to put a policy on `AI_JOB_ROUTE.dictation` temporarily, because with `provider: null` the broken and
+the correct versions emit identical bytes.
+
+**Two claims were retracted rather than defended.** *"The provider block is ignored"* is too strong
+and contradicts the feature's own mechanism — routing and `zdr` are not applied; `provider.options`
+is forwarded, and is how the vocabulary travels. And *"a transcription endpoint cannot answer a
+question"* was never an invariant: it is a generative model returning free text, and the old schema
+only ever proved a string existed.
+
+**The privacy copy changed again**, in four places: *"which is what stops it guessing at names"* was
+stronger than one measured spelling supports; *"nothing sent to its API is used to train"* dropped
+OpenAI's opt-in exception; *"ours does not"* opt in to logging is an account setting rather than
+anything this repo can prove, and now says so; and *"we pass those on rather than enforce them"* was
+opaque about what is passed on. The microphone line lost *"we can't promise they don't"*, which can
+be misread as attaching to *"save it on our servers"*.
+
+**What was raised and not done**, so the next person does not have to re-derive it: a paid regression
+set for dictated questions, imperative speech, silence and noise, and an output-length bound
+calibrated against `usage.seconds` from real speech. Both are the real-human-speech measurement this
+plan is not allowed to take, and neither is a stub away.
+
 ## A real browser, which is where two of these claims stopped being theoretical
 
 [`scripts/spike-dictation-browser.ts`](../../scripts/spike-dictation-browser.ts), on the box,
@@ -441,6 +493,31 @@ Two things this run settled that argument could not:
   job put at risk, so the script feeds a `MediaStreamAudioDestinationNode` into the recorder instead
   and exercises the real encoder with no device at all. The script says so at the top, so nobody
   reads it as a microphone test.
+
+## A third review, and the two things it caught that mattered
+
+The final pass over the built code and the sweep found two real errors and three tidyings:
+
+- **A reader-facing clause named the wrong customer.** *"OpenAI says data sent to its API is not used
+  to train its models unless a customer opts in, **and we have not**"* — on this route OpenRouter is
+  OpenAI's API customer and we are OpenRouter's, so that last clause described a setting that is not
+  ours to hold. It now says "unless its API customer opts in" and stops. The OpenRouter logging
+  clause is the one where "ours" is the right word, and it is marked as a commitment rather than as
+  something the page can prove.
+- **"No tokens at all" was a claim about the protocol and only true of the model.** OpenRouter
+  documents optional `input_tokens` / `output_tokens` / `total_tokens` on the transcription endpoint,
+  in different spellings from the chat wire's — which `Meter` did not read. `gpt-transcribe` sends
+  none of them, so nothing was being lost today; a model that did would have been silently
+  uncounted. `WireUsage` reads both spellings now, and four comments were narrowed from "this wire"
+  to "this model, measured twice".
+- **429 was being flattened to 502.** Caught by the full suite rather than by the review — the
+  retryability was identical, but `request-spend.test.ts` asserts the endpoint's contract, and
+  losing a standard status that an access log can read buys nothing. 401, 402 and 429 pass through;
+  everything else maps, because a 404 from OpenRouter would be a lie about *our* route.
+- **A provider 413 would have told a dictating reader to "select a shorter passage".** It now gets
+  `tooLongMessage()`, the sentence this endpoint already gives for its own size cap.
+- **"The provider block is not sent" survived in three more places**, one of them two lines above the
+  paragraph explaining that `provider.options` is exactly what *is* sent.
 
 ## Open questions for Greg
 

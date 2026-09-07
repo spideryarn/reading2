@@ -272,10 +272,21 @@ export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
  * PDF reader is not: a tier is a judgment about how much reasoning a job needs,
  * and this one needs none — it needs ears and a vocabulary list.
  *
- * A *chat* model rather than one of OpenRouter's nineteen dedicated
- * speech-to-text models, and that is the whole finding of
- * docs/plans/260827x-dictation-two-pass.md. Measured on 2026-08-27, one 22-second
- * sample, three runs each:
+ * **It is `openai/gpt-transcribe` on `/v1/audio/transcriptions`, since
+ * 2026-09-07**, with the vocabulary in a `keywords` array. Everything between
+ * here and § *Changed to an OpenAI transcriber* below is the history of how it
+ * got there, and every claim in it is written in the past tense on purpose —
+ * that section is the current state and this is the record of two earlier
+ * answers to the same question. The short version of why it moved: the sentence
+ * that ruled the dedicated transcribers out stopped being true when
+ * `gpt-transcribe` grew a real biasing parameter.
+ *
+ * ---
+ *
+ * **2026-08-27 — a *chat* model rather than one of OpenRouter's nineteen
+ * dedicated speech-to-text models**, which was the whole finding of
+ * docs/plans/260827x-dictation-two-pass.md. Measured on one 22-second sample,
+ * three runs each:
  *
  * | | latency | word errors |
  * |---|---|---|
@@ -287,16 +298,18 @@ export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
  * Every dedicated model got `Spideryarn` and the block id `spya-k3m9qt` wrong.
  * This one, *told what the words might be*, got them right every run.
  *
- * **The dedicated endpoint ignores the parameter OpenAI uses for that**:
- * `POST /api/v1/audio/transcriptions` accepts `prompt`, returns 200, and
- * changes nothing — verified by sending a field called
+ * **The dedicated endpoint ignored the parameter OpenAI used for that**, and
+ * this is the claim that eventually expired:
+ * `POST /api/v1/audio/transcriptions` accepted `prompt`, returned 200, and
+ * changed nothing — verified by sending a field called
  * `wibble_not_a_real_field` and getting the same 200.
  * docs/reusable/silent-success.md, with a status code on it. That is the
  * precise claim and it used to be written here as the broader one, that a
  * dedicated transcriber "cannot be told" its vocabulary at all — which a GPT
  * Sol review on 2026-09-03 pointed out is false: Deepgram's `keyterm` and
  * Groq's own `prompt` live under `provider.options` and were never tried. That
- * route is open and unmeasured; see the plan below.
+ * route was open and unmeasured; it was measured on 2026-09-07 and it is the
+ * route this job now takes. See § Changed to an OpenAI transcriber.
  *
  * ## Re-opened and kept, 2026-09-03
  *
@@ -344,9 +357,10 @@ export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
  *   longer sends a `provider` block for this job, and why /privacy no longer
  *   promises a reader their voice is unstored.
  * - **The bill comes back as zero.** `usage.cost` is `0` on this endpoint at 3
- *   seconds and at 22; `npm run cost --reconcile` still gets the truth from the
- *   account, so the cap holds and the total holds, but the per-row attribution
- *   for dictation does not.
+ *   seconds and at 22. The cap is at OpenRouter and holds regardless; our own
+ *   ledger records these rows as *unpriced* rather than free, and
+ *   `npm run cost --reconcile` can show the account-level gap but cannot
+ *   attribute it back to a request.
  *
  * `npm run eval:dictation-gate` re-checks the chat endpoint and
  * `evals/dictation/probe-stt-routes.ts` the transcription one; run them before
@@ -858,12 +872,14 @@ export type Wire =
    * (2026-09-07).
    *
    * Its own value rather than `chat` for the reason the doc above gives about
-   * summing across the column: this wire reports **no tokens at all**. A
-   * transcription's `usage` is `{seconds, cost}`, so every token column on the
-   * row is null, and a `SUM(reported_input_tokens)` that did not read `wire`
-   * would be quietly counting a different population than it thought. It also
-   * reports `cost: 0` — measured at 3 seconds and at 22 — which is a second
-   * reason a row on this wire should not be read like a chat row.
+   * summing across the column: the model we transcribe with reports **no tokens
+   * at all** (`gpt-transcribe`, measured at 3 seconds of audio and at 22; the
+   * protocol allows optional ones under different names, and `WireUsage` reads
+   * those too). So every token column on such a row is null, and a
+   * `SUM(reported_input_tokens)` that did not read `wire` would be quietly
+   * counting a different population than it thought. It also reports `cost: 0`
+   * on both calls anybody has measured, which is a second reason a row on this
+   * wire should not be read like a chat row.
    */
   | "transcription";
 

@@ -527,8 +527,90 @@ describe("the answer", () => {
   ])("refuses %s", async (_label, sent) => {
     reply = sent;
     await expect(transcribe(AUDIO, "webm", { kind: "profile" })).rejects.toThrow(
-      /\[mic-no-upstream\]/,
+      /\[mic-unreadable\]/,
     );
+  });
+
+  /**
+   * **"Answered nonsense" and "never answered" are different things to look
+   * into, and this used to be the second.**
+   *
+   * The three cases above all reached the service and got a 200; they were
+   * reported as `[mic-no-upstream]` — *"could not be reached"* — because the
+   * gateway threw a bare `Error` that `transcribe` could only catch alongside a
+   * DNS failure. A reader quoting four characters would have sent somebody to
+   * check the network. GPT Sol's review of the built code.
+   */
+  it("says the service answered badly, not that it was unreachable", async () => {
+    reply = { usage: { seconds: 3 } };
+    await expect(transcribe(AUDIO, "webm", { kind: "profile" })).rejects.toThrow(
+      /could not read/,
+    );
+  });
+
+  /**
+   * **The tripwire that replaced the JSON schema.**
+   *
+   * A chat model asked to transcribe could start writing instead, and the
+   * schema made it put the prose in a field labelled `transcript` where it was
+   * obvious. There is no schema here, so the only property left worth enforcing
+   * is that a transcript is roughly the size of the thing that was said —
+   * `MAX_TRANSCRIPT_CHARS`. Deliberately loose: a dictated question is a valid
+   * transcript and no check on the *words* can tell one from an answer, so this
+   * catches only a reply far longer than anybody could have spoken.
+   *
+   * It matters because the failure is silent: the words *replace* what the
+   * reader said, and a plausible-looking essay in the box reads as a working
+   * feature.
+   */
+  it("refuses a reply longer than anything that could have been said", async () => {
+    reply = { text: "x".repeat(20_001) };
+    await expect(transcribe(AUDIO, "webm", { kind: "profile" })).rejects.toThrow(
+      /\[mic-upstream\]/,
+    );
+  });
+
+  it("takes a long transcript that is merely long", async () => {
+    reply = { text: "x".repeat(19_000) };
+    const out = await transcribe(AUDIO, "webm", { kind: "profile" });
+    expect(out.text).toHaveLength(19_000);
+  });
+
+  /**
+   * **Every provider status gets the sentence and the retryability that go with
+   * it**, and until GPT Sol's review of the built code only three did.
+   *
+   * The browser decides whether to offer a **Retry** from the status alone
+   * (`retryable` in web/dictation-upload.ts: `429 || (>=500 && !== 503)`), so
+   * everything that fell through to a 502 was offered one. A 400 means the
+   * service found the request malformed — pressing Retry resends identical
+   * bytes for an identical refusal, which is the mistake docs/project/copy.md
+   * singles out. 403 and 404 had the same shape.
+   *
+   * The statuses are spelled out rather than derived from `providerHttpFailure`,
+   * because a test that computes its expectation from the code under test
+   * asserts nothing.
+   */
+  it.each([
+    /* Mapped, because the provider's status would misdescribe *our* endpoint:
+       a 404 from OpenRouter does not mean this route was not found. */
+    [400, 503, /\[ai-bad-request\]/],
+    [403, 503, /\[ai-refused\]/],
+    [404, 503, /\[ai-no-model\]/],
+    [500, 502, /\[ai-upstream\]/],
+    [503, 502, /\[ai-upstream\]/],
+    /* Passed through: standard, meaningful, and already this endpoint's
+       contract before the mapping existed. */
+    [401, 401, /\[ai-key\]/],
+    [402, 402, /\[ai-no-credit\]/],
+    [429, 429, /\[ai-busy\]/],
+  ])("turns a provider %i into a %i with its own words", async (given, want, code) => {
+    status = given;
+    reply = { error: { message: "whatever the provider said" } };
+    await expect(transcribe(AUDIO, "webm", { kind: "profile" })).rejects.toMatchObject({
+      status: want,
+      message: expect.stringMatching(code),
+    });
   });
 
   /* **Neither to the reader nor to the log.** The reader half was always here;

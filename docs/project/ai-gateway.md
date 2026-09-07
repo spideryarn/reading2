@@ -170,9 +170,13 @@ pin does nothing at all while looking like it did something.
 
 **Dictation is now the sharper version of the same lesson, and it is the only row whose `provider` is
 `null`.** It moved to `/v1/audio/transcriptions` on 2026-09-07
-([260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md)), and **OpenRouter ignores the
-`provider` block entirely on that endpoint** — `only: ["anthropic"]` answers 200 with a transcript,
-and so does `zdr: true` for a model absent from their own ZDR list, where the chat endpoint 404s. So
+([260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md)), and **OpenRouter does not
+apply routing preferences or `zdr` on that endpoint** — `only: ["anthropic"]` answers 200 with a
+transcript, and so does `zdr: true` for a model absent from their own ZDR list, where the chat
+endpoint 404s. **Not "the block is ignored", which is the tempting shorthand and is false**:
+`provider.options` on the very same request *is* forwarded, and is how the vocabulary reaches the
+model as `provider.options.openai.keywords`. One half of the block does something and the other half
+silently does not, which is worse than either. So
 the danger here is not a pin that quietly does nothing; it is a pin that quietly does nothing **and
 gets quoted on a privacy page**, which is exactly what happened — `zdr` on this row is what
 `/privacy` told readers their voice was protected by. `null` rather than `{}` means "send no block at

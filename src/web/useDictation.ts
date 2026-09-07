@@ -20,6 +20,12 @@
  * the vocabulary is assembled on the server from the article the reader is
  * looking at. [`src/transcribe.ts`](../transcribe.ts).
  *
+ * **The conclusion outlived the chat model.** On 2026-09-07 dictation moved to
+ * `openai/gpt-transcribe`, a dedicated transcriber after all — one that takes
+ * the vocabulary as a `keywords` array rather than as words in a prompt. The
+ * finding above was never about chat; it was about being told the words, and
+ * that is now a request field. Nothing in this hook changed.
+ *
  * This reverses the argument the previous version of this header made at
  * length, and it is worth saying which part of it fell. *"It is free and there
  * is no server in it"* was true and is now paid for on purpose. **The audio of

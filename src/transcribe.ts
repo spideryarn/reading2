@@ -76,7 +76,7 @@
 import { stripFillers } from "./dictation-fillers.js";
 import { loadEnvLocal } from "./env.js";
 import { errorFields, log, since } from "./log.js";
-import { providerHttpFailure } from "./messages.js";
+import { canRetry, providerHttpFailure } from "./messages.js";
 import { DICTATION_MODEL } from "./models.js";
 /* **The words, and nothing about where they came from.** Everything that turns
    a place into a term list lives in vocabulary-sources.ts, so this file is
@@ -104,6 +104,7 @@ export type { AudioFormat };
 import {
   ProviderRefused,
   type TranscriptionCall,
+  UnreadableAnswer,
   openRouterTranscription,
 } from "./ai-call.js";
 const line = log("model");
@@ -116,11 +117,14 @@ const MIN_AUDIO_BASE64 = 2_000;
  *
  * A transcription endpoint gives no way to constrain the answer's shape, so the
  * one property still worth enforcing is that a transcript is roughly the size of
- * the thing that was said. The recorder stops at five minutes; speech runs about
- * 150 words a minute, so a very talkative 750 words is ~5,000 characters and
- * this is four times that. A reply longer than this is not a long dictation, it
- * is a model that started writing — the failure the old schema existed to make
- * obvious, arriving by a different door.
+ * the thing that was said. **The number is a heuristic and not a measurement**,
+ * which matters because everything else in this file's comments is measured: the
+ * recorder stops at five minutes, speech is conventionally reckoned at ~150
+ * words a minute, so a very talkative 750 words is ~5,000 characters and this is
+ * four times that. Nobody has measured the longest real dictation. A reply
+ * longer than this is not a long dictation, it is a model that started writing —
+ * the failure the old schema existed to make obvious, arriving by a different
+ * door.
  *
  * Deliberately loose. It is a tripwire for a model that has gone somewhere else
  * entirely, not an opinion about how much anybody may say, and the failure it
@@ -132,10 +136,19 @@ const MAX_TRANSCRIPT_CHARS = 20_000;
 /**
  * How long a reader will wait before we say it did not work.
  *
- * Measured round trips for 22 seconds of audio sat at 2.0–3.4 seconds, and
- * OpenRouter's own upstream processing timeout on the audio path is 60. This is
- * the outer bound on the whole request, so a slow network on a five-minute
- * recording is inside it and a hung upstream is not.
+ * Measured round trips for 22 seconds of audio sat at 2.0–3.4 seconds on the
+ * old chat route and at 0.8–1.4 on this one, and OpenRouter's own upstream
+ * processing timeout on the audio path is 60. This is the outer bound on the
+ * whole request, so a hung upstream is outside it.
+ *
+ * **What is measured at the long end is a tone, not speech.** 300 seconds of
+ * generated tone came back in 8.7 seconds
+ * (`evals/dictation/probe-stt-routes.ts --long`), which says the payload and
+ * the duration are not the constraint; it does not say how long five minutes of
+ * *dense speech* takes, and nobody has measured that. So "a five-minute
+ * recording is comfortably inside this" is the expectation rather than a
+ * finding — which is worth knowing if reports of `[mic-no-upstream]` on long
+ * dictations ever appear.
  */
 const TIMEOUT_MS = 90_000;
 
@@ -153,10 +166,11 @@ export interface Transcription {
   /* **There is no `usd` here any more, and that is a statement rather than an
      omission.** It carried OpenRouter's `usage.cost` so a benchmark could check
      its own arithmetic (GPT Sol's second review, item 7). The transcription
-     endpoint reports `cost: 0` for every call — 3 seconds and 22 both measured
+     endpoint reported `cost: 0` on both calls anybody has measured — 3 seconds and 22,
      on 2026-09-07 — so the field could only ever have been a zero that a
-     results file then totalled. A benchmark that wants this figure has to ask
-     the account for it: `npm run cost --reconcile`. */
+     results file then totalled. A benchmark that wants a figure has to take it
+     from the account — and will get a total for the run, never a per-call
+     number, because OpenRouter does not send one here. */
   /**
    * **What actually answered**, when OpenRouter says — which is not always what
    * `model` asked for.
@@ -240,9 +254,15 @@ export async function transcribe(
  * one function, and `evals/dictation/bench-vocabulary-sources.ts` therefore
  * built its own `fetch` with its own system prompt and no JSON schema — which
  * meant every number it produced was about a request this app never sends. GPT
- * Sol's review, item 3, found it by reading the two side by side. The eval now
- * calls this, so the prompt, the schema, `require_parameters`, the truncation
- * and refusal checks and `tidy()` are the same code in both.
+ * Sol's review, item 3, found it by reading the two side by side.
+ *
+ * The eval calls this, so what is shared is whatever the request currently is.
+ * That list used to read *"the prompt, the schema, `require_parameters`, the
+ * truncation and refusal checks and `tidy()`"* and none of the first four exists
+ * any more; today it is the endpoint, the `keywords` array, the size and length
+ * guards, the status mapping and `tidy()`. **The point was never the list** — it
+ * is that there is one implementation, so a list here can go stale without the
+ * property doing so.
  *
  * Not exported for any other reason. Callers in the app should use
  * {@link transcribe}, which is the one that knows how to build a vocabulary and
@@ -297,9 +317,15 @@ export async function transcribeWith(
 
   /* **The request, the status check and the spend record are one operation now**
      — src/ai-call.ts. `provider` moved to `AI_JOB_ROUTE` there, comment and
-     all: `zdr` is what lets the copy beside the microphone say the reader's
-     voice is not stored, and a routing flag that load-bearing should not be one
-     of six independent copies of a routing flag. */
+     all, on the reasoning that `zdr` was what let the copy beside the
+     microphone say a reader's voice was not stored and a flag that load-bearing
+     should not be one of six independent copies.
+
+     **That flag is gone and the argument survived it.** The `dictation` row
+     sends no `provider` block now — routing is not applied on this endpoint —
+     so the thing the table centralises is the *absence*, together with the
+     measurement saying why. A routing constraint nobody reads, sitting in six
+     places, is worse than one nobody reads sitting in one. */
   let call: TranscriptionCall;
   try {
     call = await openRouterTranscription(
@@ -342,33 +368,81 @@ export async function transcribeWith(
         { status: err.status, model, ms: since(started) },
         "dictation service refused",
       );
-      /* **429 and 402 get their own words**, from the file that owns
-         reader-facing model-failure copy. "Could not transcribe that" is right
-         for a 400 and wrong for a busy service: it reads as *your recording is
-         the problem*, when the fix is to wait ten seconds. `providerHttpFailure`
-         already says exactly that and already carries the `kind` that decides
-         whether a retry is offered. GPT Sol's code review, item 10. */
-      const known =
-        err.status === 429 || err.status === 402 || err.status === 401;
+      /* **Every status goes through `providerHttpFailure`, and it used to be
+         three.**
+
+         The old line read `const known = 429 || 402 || 401`, and everything
+         else fell through to *"could not transcribe that"* with a 502. GPT Sol's
+         code review of the built code found what that costs: the browser
+         decides whether to offer a **Retry** from the status alone
+         (`retryable` in web/dictation-upload.ts, which is
+         `429 || (>=500 && !== 503)`), so a **400** — the service saying this
+         request is malformed — arrived as a retryable 502. The reader is then
+         invited to press a button that resends identical bytes for an identical
+         refusal, which is the exact mistake docs/project/copy.md singles out.
+         403 and 404 had the same shape.
+
+         `providerHttpFailure` already writes the right sentence for each of
+         them and already carries the `kind` that decides retryability, so the
+         mapping below is the whole fix: `canRetry` — a total map over
+         `FailureKind`, so a fifth kind is a compile error rather than a silent
+         non-retry — chooses between a 502 the browser will offer a retry on and
+         a 503 it will not.
+
+         **503 rather than passing the provider's status through.** It already
+         means "this will not work if you try again" on this endpoint
+         (`mic-not-set-up` above), and it is what the browser reads as
+         non-retryable. Passing a 404 or a 403 straight out would have the
+         browser treat it as non-retryable too, but it would also claim *our*
+         endpoint 404'd, which is a different and wrong thing to tell whatever
+         reads the log. */
+      const failure = providerHttpFailure(err.status);
+      /* **The three that keep their own status, and why the rest do not.**
+         401, 402 and 429 are standard, meaningful, and were already the
+         endpoint's contract — a rate limit and a dead key read differently in an
+         access log, and flattening them buys nothing. Everything else becomes a
+         502 or a 503 because the provider's status would be a lie about *our*
+         endpoint: a 404 from OpenRouter does not mean this route was not found.
+         Retryability is identical either way — the browser reads
+         `429 || (>=500 && !== 503)`, and 429, 502 are retryable while 401, 402,
+         503 are not, which is exactly what `canRetry` says of their kinds. */
+      const passThrough =
+        err.status === 401 || err.status === 402 || err.status === 429;
+      /* **413 is the one status whose shared sentence is wrong here.**
+         `providerHttpFailure(413)` says *"Select a shorter passage, or ask about
+         a smaller part of the article"*, which is right for a reader who chose
+         a selection and meaningless to one who has just spoken for four minutes.
+         `tooLongMessage()` is the sentence this endpoint already gives for its
+         own size cap, and a recording the provider will not take is the same
+         problem arriving one hop later. GPT Sol's third review.
+
+         `[mic-too-long]` therefore covers both, which is what
+         `tests/dictation-codes.test.ts` requires of a code: one code, one
+         sentence, however many branches reach it. */
+      if (err.status === 413) {
+        throw Object.assign(new Error(tooLongMessage()), { status: 413 });
+      }
+      throw Object.assign(new Error(failure.message), {
+        status: passThrough ? err.status : canRetry(failure.kind) ? 502 : 503,
+      });
+    }
+    /* **A 200 nobody could read is not a service that could not be reached**,
+       and until GPT Sol's review of the built code it was reported as one. The
+       gateway throws `UnreadableAnswer` for a body with no `text` in it; a DNS
+       failure, a dropped socket and an expired deadline arrive here too, and
+       they are a different thing to look into. Retryable, because an answer
+       that arrived mangled once may well arrive whole next time — which is the
+       opposite of the 400 above. */
+    if (err instanceof UnreadableAnswer) {
+      line.error(
+        { model, ms: since(started) },
+        "dictation answer could not be read",
+      );
       throw Object.assign(
         new Error(
-          known
-            ? providerHttpFailure(err.status).message
-            : "The transcription service could not transcribe that. [mic-upstream]",
+          "The transcription service sent back something we could not read. [mic-unreadable]",
         ),
-        /* **401 and 402 keep their own status**, and that is not cosmetic: the
-           browser decides whether to offer a Retry from the status alone
-           (`retryable` in `web/dictation-upload.ts`), and flattening a dead key
-           or an exhausted balance into 502 made both look like a service that
-           had merely broken. The reader would then be invited to press a button
-           that cannot work, which is the mistake docs/project/copy.md singles
-           out. GPT Sol's code review, R2. */
-        {
-          status:
-            err.status === 429 || err.status === 402 || err.status === 401
-              ? err.status
-              : 502,
-        },
+        { status: 502 },
       );
     }
     line.error(
@@ -451,9 +525,9 @@ export async function transcribeWith(
       /* **No `cost` field, and its absence is the honest reading.** This
          endpoint answers `usage: {seconds, cost}` with `cost: 0` — measured at
          3 seconds and at 22 — so logging it would put a zero beside every
-         dictation and invite somebody to sum them. What the call really cost is
-         recoverable from the account by `npm run cost --reconcile`; what it
-         cost *this request* is not something OpenRouter tells us here. */
+         dictation and invite somebody to sum them. `npm run cost --reconcile`
+         can show that the account was charged more than our rows add up to; it
+         cannot say which request spent it, and nothing here can. */
     },
     "dictation transcribed",
   );

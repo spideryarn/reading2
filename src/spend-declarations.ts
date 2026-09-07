@@ -215,9 +215,24 @@ export const DECLARATIONS: readonly Declaration[] = [
     account: "openrouter",
     file: "evals/dictation/bench-transcribers.mjs",
     job: "dictation",
-    wire: "chat",
+    /* `chat` until 2026-09-07, and it was never right: this file has posted to
+       `/v1/audio/transcriptions` since the day it was written. The value was
+       wrong rather than stale, and it survived because nothing checks a
+       declaration's wire against the path the file actually names. */
+    wire: "transcription",
     metered: false,
-    why: "Posts to `/v1/audio/transcriptions`, which the seam deliberately does not serve — `OpenRouterPath` is a closed union of the two paths the app uses, and widening the app's surface for an eval is the wrong trade. Wiring it needs a fourth `Wire` (`audio`), and that file is being rewritten by another agent as of 2026-08-28.",
+    /* **The reason below expired on 2026-09-07 and is kept as history**, because
+       it is the argument somebody will otherwise make again. It said the seam
+       deliberately did not serve this path and that wiring the file up would
+       need a fourth `Wire`. Both were true until dictation moved endpoint:
+       `OpenRouterPath` now carries `/v1/audio/transcriptions`,
+       `openRouterTranscription` sends to it, and `Wire` has a `transcription`
+       member — so the widening this entry refused happened anyway, for the app's
+       own sake. What is left is a scrappy sixteen-model sweep that nobody has
+       rewired, not a call the seam is wrong for. Converting it would be the same
+       one-line job as the three `unscoped` dictation entries below.
+       docs/plans/260907c-dictation-onto-an-openai-transcriber.md. */
+    why: "Posts a raw `fetch` to `/v1/audio/transcriptions` over sixteen candidate models, from before the seam served that path at all. Since 2026-09-07 `transcribeWith`'s `model` option would do the same job through the seam — as `bench-models.ts` does — so this is now an unconverted file rather than a call the seam cannot make.",
   },
   {
     id: "dictation-bench-vocabulary-sources",
@@ -226,7 +241,14 @@ export const DECLARATIONS: readonly Declaration[] = [
     account: "openrouter",
     file: "evals/dictation/bench-vocabulary-sources.ts",
     job: "dictation",
-    wire: "chat",
+    /* `chat` until 2026-09-07, when dictation moved from a chat completion on
+       `google/gemini-3.1-flash-lite` to a transcription request on
+       `openai/gpt-transcribe`. This file never chose a wire of its own — it
+       calls `transcribeWith`, so it speaks whatever the production seam speaks,
+       and the old value was simply the production wire of the day left behind.
+       Same story as `dictation-gate-models` and `dictation-bench-models` below.
+       docs/plans/260907c-dictation-onto-an-openai-transcriber.md. */
+    wire: "transcription",
     metered: false,
     why: "Not a bypass at all — it calls `transcribeWith`, which goes through the seam and is metered. It simply never opens a collector, so every call warns \"no spend collector open\" and the row is dropped. One `withLedger(\"eval\", …)` fixes it, in a file another agent was actively writing on the day this was found.",
   },
@@ -309,9 +331,14 @@ export const DECLARATIONS: readonly Declaration[] = [
     account: "openrouter",
     file: "evals/dictation/bench-vocabulary.mjs",
     job: "dictation",
+    /* **`chat` is right here and is the only dictation row where it still is.**
+       This file is a record of the route dictation used until 2026-09-07: a chat
+       completion to a Gemini model with the vocabulary pasted into a system
+       prompt. It measures that route, so it stays on that wire; it just no
+       longer measures what dictation does. */
     wire: "chat",
     metered: false,
-    why: "Ordinary chat/completions and could go through `openRouterJson` today — the only reason it has not is that a successor (`bench-vocabulary-sources.ts`) was being written in the same directory on 2026-08-28 and re-plumbing a file mid-rewrite loses somebody's work.",
+    why: "Ordinary chat/completions, from when dictation was one. It could have gone through `openRouterJson` until 2026-09-07 and now cannot — dictation left `ChatJob` when it moved to the transcription endpoint, so `openRouterJson(\"dictation\", …)` no longer compiles. It was left alone on 2026-08-28 because a successor (`bench-vocabulary-sources.ts`) was being written in the same directory and re-plumbing a file mid-rewrite loses somebody's work; it is left alone now because the route it measures is gone.",
   },
   {
     id: "hierarchy-structure-messages",
