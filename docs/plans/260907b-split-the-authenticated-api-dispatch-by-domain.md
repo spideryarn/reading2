@@ -1,7 +1,10 @@
 # The authenticated API's dispatch becomes enumerable — and the matrix test that has to come first
 
-Status as of 2026-09-07: **reviewed; stages 1, 1b, 1c and 2 landed, stage 3 not started.** Evidence gathered at `d4b503b4`;
-`src/routes.ts` is byte-identical at the worktree HEAD, so every line number below is live. Design
+Status as of 2026-09-07: **reviewed; stages 1, 1b, 1c, 2 and 3a landed; the table exists and billing
+is the only domain in it.** Evidence gathered at `d4b503b4`;
+every line number below was live at `d4b503b4` and stage 3a has since moved them — the four billing
+guards are gone from the chain and roughly 280 lines were added above `serveAuthenticatedApi`, so
+read a line number as "which statement", not "which line". Design
 input from GPT 6 Astra (high) and Fable, and a plan review from GPT Sol
 ([review](260907b-split-the-authenticated-api-dispatch-by-domain-review-sol.md),
 [prompt](260907b-split-the-authenticated-api-dispatch-by-domain-review-prompt.md)), are folded in
@@ -423,10 +426,42 @@ assert their extraction was non-empty, or count over the whole file, and need no
 (P1-SOURCE-INVENTORY) and stage 1b wrote. Ideally the cacheable test eventually reuses stage 1's
 checked parser instead of a second grep.
 
-**Stage 3 — extract two or three same-module domains, then reassess.** Top-level
-`async function tryXRoutes(request: ApiRequest): Promise<boolean>` in the same file, gates outside,
-handlers unchanged. **Billing first**, as Sol suggests: it is a good control, four guards, no shared
-module state. One domain per commit, suite green each time.
+**Stage 3 — move domains into the ordered table, then reassess.** Gates outside it, handlers
+unchanged, one domain per commit, suite green each time. (An earlier draft of this line said
+`async function tryXRoutes(request): Promise<boolean>`; that was the shape the mis-read review
+argued for. The settled shape is § *The shape* above.)
+
+**Stage 3a — the table exists and billing is in it. ✅ Landed.** `AUTH_ROUTES` and
+`dispatchAuthRoute` in `src/routes.ts`, above `serveAuthenticatedApi`; the four billing guards are
+now four rows; `serveAuthenticatedApi` gained one statement,
+`if (await dispatchAuthRoute(AUTH_ROUTES, { user, request })) { return; }`, placed after every
+remaining guard and before the terminal 404 — the position billing already occupied, so the move
+reorders nothing. Biome's score on the dispatcher: 244 → 234.
+
+**The fixed point is `EXPECTED_AUTH_ROUTES`: not one row and not one witness changed**, and the
+block is byte-identical to stage 1c's (md5 `c36bdcb…`). What changed is the *reader* inside
+`tests/authenticated-api-route-contract.test.ts`, which now normalises both an
+`if (matcher && req.method === "…")` and a table row into the same `(method, match)` pair — and
+still refuses everything it does not recognise, at module scope, before a case runs. 305 cases → 316.
+
+Three properties the chain did not have, each checked where it lives:
+
+- **Registration is side-effect-free** (Sol, P2-ISOLATION-SCOPE). Enforced by a whitelist rather than
+  by watching for effects: every key of every row is named, every value must be a string literal, a
+  regex literal or a function written out in place. Eight refusal cases are its control — a call
+  building the path, a call building the row, a spread, a handler named elsewhere, a pattern named
+  elsewhere, a computed key, an extra key, a non-literal method.
+- **Every handler is awaited** — § [LIFETIME]. `assertHandlersAwaited` reads `dispatchAuthRoute` and
+  refuses an un-awaited `.handler(…)`, or none at all. Billing opens no stream, so nothing about
+  billing would have gone red; the check exists **before** the domain that needs it.
+- **No `g` or `y` pattern**, refused at registration by `src/routes.ts` itself, not only by a test —
+  § [REGEX]. A table's regexes are shared across requests where the chain's are rebuilt per request,
+  so this is the one constraint that becomes live the moment the table exists.
+
+Four mutations watched red and edited back; the transcripts are in the test file's header, § *Stage
+3a*. `npm run check` at EXIT=0, 791 files, 14,699 tests. `referee-scan-route.test.ts`'s four-space
+brace is untouched, as expected — billing is not referee, and that test will break loudly at the
+domain that is.
 
 Two corrections from Sol here. First, the lock-registry inventory was wrong and incomplete — there
 are **six**, not four: `answering` (`:1010`), `streaming` (`:2069`), `turnOrder` (`:2120`),
