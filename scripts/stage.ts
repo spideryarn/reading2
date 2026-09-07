@@ -4,7 +4,7 @@
  *
  * ```
  * npx tsx scripts/stage.ts ingest <url> [--force]
- * npx tsx scripts/stage.ts ingest <file.pdf>
+ * npx tsx scripts/stage.ts ingest <file.pdf|file.html>
  * npx tsx scripts/stage.ts <step> <slug> [--force]
  * ```
  *
@@ -110,7 +110,8 @@ const { slugFromFilename, slugFromUrl } = await import("../src/ingest.js");
 const { advanceJob, enqueue, getJob } = await import("../src/jobs.js");
 const { environmentOwnerId } = await import("../src/owner.js");
 const { isStepName, STEP_ORDER } = await import("../src/pipeline.js");
-const { looksLikePdf, stagingKey } = await import("../src/source.js");
+const { stagingKey } = await import("../src/source.js");
+const { uploadedDocumentKind } = await import("../src/fetch.js");
 const { CONTENT_TYPE, postgresBlobStore } = await import("../src/store/blobs.js");
 const { claimUpload, mintUpload, noteSlug, readUpload } = await import(
   "../src/upload-records.js"
@@ -122,7 +123,7 @@ type Job = Awaited<ReturnType<typeof enqueue>>;
 const USAGE =
   "Usage:\n" +
   "  npm run ingest    -- <url> [--force]      make an article from an address\n" +
-  "  npm run ingest    -- <file.pdf>           make an article from a PDF on this disk\n" +
+  "  npm run ingest    -- <file>               make an article from a PDF or HTML file here\n" +
   "  npm run extract   -- <slug> [--force]     re-run one stage on an article you have\n" +
   "  npm run blocks    -- <slug> [--force]\n" +
   "  npm run hierarchy -- <slug> [--force]\n" +
@@ -337,7 +338,7 @@ async function ingestUrl(url: string, force: boolean): Promise<never> {
 }
 
 /**
- * **A PDF off this machine's disk, ingested as an upload.**
+  * **A PDF or a web page off this machine's disk, ingested as an upload.**
  *
  * The order is `queueAnUpload`'s (src/routes.ts) and it is copied rather than
  * summarised, because two of its five moves are the ones that go wrong quietly:
@@ -375,9 +376,7 @@ async function ingestFile(file: string): Promise<never> {
      Sol, 2026-09-05⟩. The route checks the name, the type and a positive size
      before it mints; this checked only the cap, so an empty file or a `.txt`
      minted a record and put bytes into Storage before the pipeline refused it —
-     rubble for a mistake that costs four bytes to catch. `looksLikePdf` is the
-     same function `acquireUpload` uses, so the two cannot disagree about what a
-     PDF is. */
+     rubble for a mistake that costs four bytes to catch. */
   if (bytes.byteLength === 0) die(`${file} is empty.`);
   if (bytes.byteLength > MAX_UPLOAD_BYTES) {
     die(
@@ -385,13 +384,20 @@ async function ingestFile(file: string): Promise<never> {
         `${MAX_UPLOAD_BYTES / 1024 / 1024} MB upload cap (src/uploads.ts).`,
     );
   }
-  if (!looksLikePdf(bytes)) {
+  const filename = path.basename(file);
+  /* **`uploadedDocumentKind` is the same function `acquireUpload` uses**, so
+     the two cannot disagree about what a file is — and since 2026-09-07 that
+     matters twice over, because the answer is no longer a boolean. It decides
+     the `Content-Type` the bytes go into the bucket under a few lines down, and
+     a CLI that guessed `application/pdf` for a web page would be refused by the
+     bucket's own allowlist with a status nobody could read. */
+  const kind = uploadedDocumentKind(filename, bytes);
+  if (kind === null) {
     die(
-      `${file} does not start with %PDF, so nothing here can read it.\n` +
-        "  A PDF is the only kind of file this takes; a web page is `npm run ingest -- <url>`.",
+      `${file} is neither a PDF nor a web page, so nothing here can read it.\n` +
+        "  This takes a `.pdf` or an `.html`; an address is `npm run ingest -- <url>`.",
     );
   }
-  const filename = path.basename(file);
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const store = postgresBlobStore("npm run ingest");
 
@@ -407,7 +413,7 @@ async function ingestFile(file: string): Promise<never> {
     stagingKey,
   );
   const id = minted.record.id;
-  await store.putIfAbsent(stagingKey(id), bytes, CONTENT_TYPE.pdf);
+  await store.putIfAbsent(stagingKey(id), bytes, CONTENT_TYPE[kind]);
 
   const claim = await claimUpload(id, { owner, arrived: true });
   if (!claim.ok) die(`Could not claim the upload we had just minted: ${claim.why}.`);

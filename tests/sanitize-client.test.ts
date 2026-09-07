@@ -19,6 +19,7 @@
  * and docs/project/security.md § Known gaps.
  */
 import { globSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { sanitizeArticle, sanitizeBlockHtml } from "../src/web/sanitize.js";
 import { sanitizeHtml as sanitizeOnServer } from "../src/sanitize.js";
@@ -142,7 +143,7 @@ describe("sanitizeArticle", () => {
  * Wiring guards.
  *
  * Everything above tests `sanitizeArticle` as a function. None of it would
- * notice if somebody deleted the one call to it in App.tsx — every test here
+ * notice if somebody deleted the one call to it in `resolveAccess` — every test here
  * would stay green while the original XSS path quietly reopened. GPT-5's review
  * called that out, 2026-08-25.
  *
@@ -158,7 +159,11 @@ describe("the ingress is wired up", () => {
   // A cwd-relative path, not `new URL(..., import.meta.url)`: this file runs in
   // vitest's jsdom environment, where `import.meta.url` is an http:// URL and
   // readFileSync rejects it. Vitest runs from the repo root.
-  const APP = readFileSync("src/web/App.tsx", "utf8");
+  /* The doorway left `App.tsx` for src/web/article/access.ts on 2026-09-06,
+     with `ArticlePage` and the rest of the access unit. The read is what fails
+     if it moves again: a path that no longer exists throws, where an assertion
+     pointed at the wrong file would simply stop finding the call. */
+  const ACCESS = readFileSync("src/web/article/access.ts", "utf8");
 
   /** The argument text of every `name(...)` call, brackets balanced. */
   function callArgs(src: string, name: string): string[] {
@@ -195,7 +200,7 @@ describe("the ingress is wired up", () => {
    * a way past it.
    */
   it("every article that reaches state has been sanitised", () => {
-    const calls = callArgs(APP, "sanitizeArticle");
+    const calls = callArgs(ACCESS, "sanitizeArticle");
     expect(calls.length).toBeGreaterThan(0); // the scan itself must not silently find nothing
     /* Exactly one, which is what makes the rest of this checkable at all: two
        doorways would need two proofs, and the second is the one nobody
@@ -215,22 +220,35 @@ describe("the ingress is wired up", () => {
        an `(article: Article)` parameter. A declaration cannot be a source of an
        unsanitised payload, where every other right-hand side can.
 
-       **The delimiter is load-bearing and the first draft did not have it.**
+       **The delimiter narrows the exemption; it does not make it exact.**
        Exempting the bare word let `{ article: Article }` and
-       `{ article: Article as Article }` through as value expressions — GPT Sol
-       found it. `article: found.article` still fails, which is the assignment
-       this test exists for.
+       `{ article: Article as Article }` through as value expressions, which is
+       what the delimiter was added to stop. It does not stop the comma arm:
+       `{ article: Article, other: 1 }` is an object property and is still
+       exempted, so the rule separates a parameter annotation from a value
+       expression only in the `)` case. Nothing reaches it today because
+       `Article` is a type-only import and cannot be a value — which is an
+       accident of another file, not a property of this scan. GPT Sol, merge
+       review, 2026-09-07. `article: found.article` still fails, which is the
+       assignment this test exists for.
 
        **And be honest about what this proves.** It is a wiring check, not a
        data-flow proof: `const article = found.article; return { …, article }`
        has always passed it, because the shorthand is matched by shape and not by
-       origin. An AST check would be the real thing. The scan's value is that a
-       *deletion* or a *rename* — the two ways this has actually broken, twice —
-       cannot be silent. */
-    const doorway = APP.slice(
-      APP.indexOf("async function resolveAccess"),
-      APP.indexOf("async function findArticle"),
-    );
+       origin. An AST check would be the real thing, and `tests/helpers/ts-ast.ts`
+       is already in hand for it. The scan's value is that a *deletion* or a
+       *rename* — the two ways this has actually broken, twice — cannot be
+       silent. */
+    const start = ACCESS.indexOf("async function resolveAccess");
+    const end = ACCESS.indexOf("async function findArticle");
+    /* Both anchors, checked before the slice. `indexOf` returning -1 would make
+       `slice` read from the end of the file and the two assertions below would
+       then hold against nothing — docs/reusable/silent-success.md. This is the
+       same failure the doorway moving to `src/web/article/access.ts` on
+       2026-09-06 would otherwise have caused, silently. */
+    expect(start, "resolveAccess must exist in src/web/article/access.ts").toBeGreaterThan(-1);
+    expect(end, "findArticle must follow it there").toBeGreaterThan(start);
+    const doorway = ACCESS.slice(start, end);
     expect(doorway).toContain("sanitizeArticle(");
     expect(doorway).not.toMatch(/article:\s*(?!article\b|Article[,)])\S/);
   });
@@ -241,10 +259,32 @@ describe("the ingress is wired up", () => {
     // build, on a good day. The shared policy is the supported route.
     const clientFiles = globSync("src/web/**/*.{ts,tsx}");
     expect(clientFiles.length).toBeGreaterThan(0);
+    /* **The specifier is resolved, not pattern-matched on its dots.** This was
+       `/(\.\.\/)+sanitize\.js/` until 2026-09-06, which asks how many levels an
+       import climbs rather than where it lands — so it read `src/web/` as flat.
+       That stopped being true the moment a client file moved into a
+       subdirectory: `src/web/article/access.ts` imports `../sanitize.js`, which
+       is `src/web/sanitize.ts`, the client binding this whole file is *about*,
+       and the old pattern called it the jsdom one. Resolving says which file,
+       at any depth, and it is wrong in neither direction. */
+    const nodeSanitiser = path.resolve("src/sanitize.ts");
+    let resolved = 0;
     for (const file of clientFiles) {
       const src = readFileSync(file, "utf8");
-      expect(src, file).not.toMatch(/from\s+["'](\.\.\/)+sanitize\.js["']/);
+      for (const [, spec] of src.matchAll(/from\s+["'](\.{1,2}\/[^"']*sanitize\.js)["']/g)) {
+        resolved++;
+        const target = path.resolve(path.dirname(file), spec as string).replace(/\.js$/, ".ts");
+        expect(target, `${file} imports ${spec}`).not.toBe(nodeSanitiser);
+      }
       expect(src, file).not.toMatch(/from\s+["']jsdom["']/);
     }
+    /* The scan must have found something to resolve. Client files importing the
+       *client* sanitiser are what make the loop above meaningful, and a regex
+       that matched nothing would pass this test in silence —
+       docs/reusable/silent-success.md. */
+    expect(
+      resolved,
+      "no client file imports a sanitiser at all; the scan matched nothing",
+    ).toBeGreaterThan(0);
   });
 });

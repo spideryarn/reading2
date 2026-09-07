@@ -4,8 +4,15 @@
  * `SPINE_W` in layout.ts and `--spine-w` in styles.css are the same number
  * written twice, and two `@media` queries are *derived* from it by hand —
  * both of them `GIST_MIN + PROSE_MIN + SPINE_W - 1` — because a media query
- * cannot read a custom property and `@custom-media` is not shipped anywhere. A
- * third copy of that sum lives in `scroll.ts` as a `matchMedia` string.
+ * cannot read a custom property and `@custom-media` is not shipped anywhere.
+ *
+ * **There was a third copy, in `scroll.ts` as a `matchMedia` string, and it went
+ * on 2026-09-07** — `watchBarVisibility` asked the breakpoint so a large window
+ * would attach no scroll listener, and then the top bar started hiding at every
+ * width and there was nothing left to gate
+ * (docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md). The
+ * last describe below keeps the half of that guard which still has a subject:
+ * the query is written once, and no copy of it has come back.
  *
  * **There was a fourth, the mode crossover, and it is gone rather than
  * checked** — the last describe in this file says why, and stands where it was.
@@ -18,8 +25,9 @@
  * layout.ts and nothing in the stylesheet had to move with it. Had the query
  * still been there it would have been a fifth hand-copy to find.
  *
- * So there are five places one number lives, no tool checks any of them against
- * the others, and **the failure is silent in the direction that matters**. Move
+ * So there are four places one number lives — five until 2026-09-07 — no tool
+ * checks any of them against the others, and **the failure is silent in the
+ * direction that matters**. Move
  * `SPINE_W` and leave the stylesheet behind and there is a band of window widths
  * where `fitView` offers a gist column the stylesheet has already decided there
  * is no room for; move the mode query and leave `fitMode` behind and every mode
@@ -340,7 +348,7 @@ function coversRule(): { selector: string; gates: string[] } {
   return { selector: chain[0] ?? "", gates: chain.slice(1) };
 }
 
-/** The class App.tsx puts on `.reader` when the band has no room beside the prose. */
+/** The class `Reader` puts on `.reader` when the band has no room beside the prose. */
 const COVERS_CLASS = "band-covers";
 
 const bandFit = (windowWidth: number, spineOff: boolean) =>
@@ -369,12 +377,15 @@ describe("the band covers the article on a fact, not on a width", () => {
     expect(selector).toContain(`.${COVERS_CLASS}`);
   });
 
-  it("App.tsx writes that class from fit.modeW, beside --mode-w", () => {
+  it("Reader.tsx writes that class from fit.modeW, beside --mode-w", () => {
     /* The two must come from the same number or the stylesheet is guessing
-       again — with the guess hidden in a component rather than in a query. */
-    const app = readFileSync(new URL("../src/web/App.tsx", import.meta.url), "utf8");
-    expect(app).toContain(`"--mode-w": \`\${fit.modeW}px\``);
-    expect(app).toMatch(new RegExp(`fit\\.modeW === 0[^\\n]*\\n?[^\\n]*${COVERS_CLASS}`));
+       again — with the guess hidden in a component rather than in a query.
+
+       `Reader` left `App.tsx` for src/web/reader/Reader.tsx on 2026-09-06; the
+       read is what fails if it moves again. */
+    const reader = readFileSync(new URL("../src/web/reader/Reader.tsx", import.meta.url), "utf8");
+    expect(reader).toContain(`"--mode-w": \`\${fit.modeW}px\``);
+    expect(reader).toMatch(new RegExp(`fit\\.modeW === 0[^\\n]*\\n?[^\\n]*${COVERS_CLASS}`));
   });
 
   it("agrees with fitMode across 650–730, rail on and rail off", () => {

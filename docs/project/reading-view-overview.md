@@ -202,7 +202,9 @@ The key itself, and the four things the chord refuses to do, are
 ## Where the code is
 
 Under [`src/web/`](../../src/web): [`main.tsx`](../../src/web/main.tsx) →
-[`App.tsx`](../../src/web/App.tsx) → [`TableView.tsx`](../../src/web/TableView.tsx), with
+[`App.tsx`](../../src/web/App.tsx) → [`article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx)
+→ [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) →
+[`TableView.tsx`](../../src/web/TableView.tsx), with
 [`layout.ts`](../../src/web/layout.ts) deciding what fits, [`tree.ts`](../../src/web/tree.ts) turning
 the tree into table geometry, and [`scroll.ts`](../../src/web/scroll.ts) owning every jump. Reader-facing
 strings: [`src/messages.ts`](../../src/messages.ts).

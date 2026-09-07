@@ -267,8 +267,8 @@ it goes wrong by waiting. The table below is the ones worth a note, not an inven
 | File | Page |
 |---|---|
 | [`Library.tsx`](../../src/web/Library.tsx) | the shelf, with its query and filter |
-| [`App.tsx`](../../src/web/App.tsx) — `ArticlePage` | loading and error, **and nothing else** |
-| [`App.tsx`](../../src/web/App.tsx) — `Reader` | the reading view, with its mode |
+| [`article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx) — `ArticlePage` | loading and error, **and nothing else** |
+| [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) — `Reader` | the reading view, with its mode |
 | [`Metadata.tsx`](../../src/web/Metadata.tsx) | `/read/<slug>/metadata` |
 | [`Tweets.tsx`](../../src/web/Tweets.tsx) | `/read/<slug>/tweets` |
 | [`AddPage.tsx`](../../src/web/AddPage.tsx) | both `/add/` routes |
@@ -569,7 +569,7 @@ Better than a test that catches a mutation is a mutation that will not compile, 
 there in the end:
 
 - **`TitleSpec` splits the reading view from the other two.** `mode` was one optional field, so
-  deleting it from the call in `App.tsx` compiled and silently cost the tab its `· Glossary`. The
+  deleting it from the call in `Reader` compiled and silently cost the tab its `· Glossary`. The
   reading-view variant now requires `mode` and the other two forbid it with `mode?: never` — the
   `never` because a union rejects a bad *literal* by excess-property checking but accepts a value
   assembled in a variable.

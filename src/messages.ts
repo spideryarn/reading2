@@ -1835,19 +1835,27 @@ export const UPLOAD_TOO_BIG: ReaderFacingFailure = {
 };
 
 /**
- * The bytes are not a PDF, whatever the file is called.
+ * The bytes are neither a PDF nor a web page, whatever the file is called.
  *
  * `blocked` for the same reason: renaming a file does not change what is in it.
  * Phrased around the *contents* rather than the name, because a `.pdf` that is
  * really something else is exactly the case this catches, and telling somebody
  * their PDF is not a PDF without saying why reads like a bug.
+ *
+ * **Two kinds since 2026-09-07** (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md).
+ * The constant was `UPLOAD_NOT_A_PDF`, and the rename is worth the churn because
+ * the compiler does it for free. **The `[up-pdf]` code and the `"not-a-pdf"`
+ * `RejectReason` did not move**, and those are the two that matter: a code is
+ * what a reader quotes back to us (docs/project/copy.md), and the reason is a
+ * string already written into `uploads.reason` rows that a rename would orphan
+ * for nothing. Neither is a spelling anybody but us reads.
  */
-export const UPLOAD_NOT_A_PDF: ReaderFacingFailure = {
+export const UPLOAD_UNREADABLE_FILE: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "That file isn't a PDF inside, whatever its name says. Sending it again will not help, " +
-    "because it will be the same file — but if it opens in a PDF reader, saving it again from " +
-    "there usually produces one this app can read. [up-pdf]",
+    "That file isn't a PDF or a web page inside, whatever its name says. Sending it again will " +
+    "not help, because it will be the same file — but if it opens in a PDF reader or a browser, " +
+    "saving it again from there usually produces one this app can read. [up-pdf]",
 };
 
 /**
@@ -2463,7 +2471,7 @@ export const SESSION_UNCONFIRMED_CHIP = "sign-in unconfirmed";
  * The action beside `SESSION_UNCONFIRMED`, and the label is the honest one.
  *
  * Signed out at `/read/:slug` the app does not show sign-in — it goes straight
- * back through `ArticlePage` with no reader (src/web/App.tsx), so on a shared
+ * back through `ArticlePage` with no reader (src/web/article/ArticlePage.tsx), so on a shared
  * article this reload returns the reader to this same page as an ordinary
  * visitor. Calling it *"sign in again"* would be a button that does not do what
  * it says; GPT Sol caught exactly that in the first draft of this fix.

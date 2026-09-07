@@ -364,7 +364,8 @@ const CJK_SEGMENT_BREAK = new RegExp(`(?<=[${CJK}])[^\\S\\n]*\\n\\s*(?=[${CJK}])
  */
 export function readArticle(
   html: string,
-  url: string,
+  /** `null` for a document with no address — see `sourceDom`. */
+  url: string | null,
 ): {
   article: ReturnType<Readability["parse"]>;
   refusal: TooLittleTextToRead | null;
@@ -511,9 +512,27 @@ function capabilityFloor(
  * the same class, and the first one where the leak was a dependency's rather
  * than ours. See docs/project/logging.md.
  */
-function sourceDom(html: string, url: string): InstanceType<ReturnType<typeof jsdom>["JSDOM"]> {
+function sourceDom(
+  html: string,
+  /**
+   * **The base relative links resolve against, or `null` for a document that
+   * has no address** — an uploaded HTML file, since 2026-09-07
+   * (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md).
+   *
+   * Omitting the option is not the same as passing something harmless. `""`
+   * throws `TypeError: Invalid URL` out of the JSDOM constructor, where nothing
+   * here would catch it; `"about:blank"` is what JSDOM defaults to anyway, so
+   * spelling it here would only look like a decision. What omission buys is
+   * that `document.baseURI` stays `about:blank`, `new URL(relative, base)`
+   * throws inside Readability's own `toAbsoluteURI`, and the relative URI is
+   * left exactly as the document wrote it — which `src/assets.ts` already knows
+   * how to refuse. And a document carrying `<base href="…">` resolves properly
+   * with no help from us, because that element *is* the document's base URL.
+   */
+  url: string | null,
+): InstanceType<ReturnType<typeof jsdom>["JSDOM"]> {
   const { JSDOM, VirtualConsole } = jsdom();
-  return new JSDOM(html, { url, virtualConsole: new VirtualConsole() });
+  return new JSDOM(html, { ...(url === null ? {} : { url }), virtualConsole: new VirtualConsole() });
 }
 
 /**
@@ -900,7 +919,19 @@ export class TooLittleTextToRead extends Error {
  */
 export async function runExtract(opts: {
   html: string;
-  url: string;
+  /**
+   * **`null` for a document the reader uploaded**, which has no address at all —
+   * docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md.
+   *
+   * It is used for exactly two things and they want the same answer: as the
+   * base relative links resolve against (`sourceDom`), and as `meta.url`. A
+   * placeholder would have been wrong in both — a fake base silently resolves
+   * relative links to an origin nobody named, and a fake `meta.url` reads as an
+   * address to the masthead, the metadata page and every dedup check. Absent is
+   * what `Meta.url` already allows, because an uploaded PDF has been arriving
+   * without one since 2026-08-27.
+   */
+  url: string | null;
   slug: string;
 }): Promise<ExtractResult> {
   const { slug } = opts;
@@ -953,7 +984,11 @@ export async function runExtract(opts: {
     ...(byline ? { byline } : {}),
     ...(article.siteName ? { siteName: article.siteName } : {}),
     ...(article.lang ? { lang: article.lang } : {}),
-    url: opts.url,
+    /* **Spread rather than assigned**, since 2026-09-07, for the same reason
+       every optional field above is: `url: undefined` and no `url` key are
+       different artefacts, and the round-trip test compares them. An uploaded
+       document has no address and must not carry one. */
+    ...(opts.url === null ? {} : { url: opts.url }),
     fetchedAt: new Date().toISOString(),
     ...(publishedAt ? { publishedAt } : {}),
     ...(article.excerpt ? { excerpt: article.excerpt } : {}),

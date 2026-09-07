@@ -75,7 +75,12 @@ import {
   type JobEnding,
   type JobStore,
 } from "./store/jobs.js";
-import { failureKindOf, jobWorthRetrying, readerFailureOf } from "./job-failure.js";
+import {
+  failureKindOf,
+  jobWorthRetrying,
+  readerFailureOf,
+  undeclaredBlocked,
+} from "./job-failure.js";
 import { slugWithShortId, urlKey } from "./ingest.js";
 import { errorFields, log, type Log, since } from "./log.js";
 import { captureFailure } from "./monitoring.js";
@@ -97,7 +102,12 @@ import {
   stepLabel,
   urlForSlug,
 } from "./pipeline.js";
-import { INTERRUPTED, STEP_STOPPED, type FailureKind } from "./messages.js";
+import {
+  INTERRUPTED,
+  type FailureKind,
+  type ReaderFacingFailure,
+  STEP_STOPPED,
+} from "./messages.js";
 import type { Job, JobStep, JobUpload, StepName } from "./types.js";
 
 /* `JobStatus` and `StepStatus` were on this line too and nothing imported them
@@ -1182,6 +1192,7 @@ async function runStep(
      */
     const stopping = ranOutOfTime ? INTERRUPTED : STEP_STOPPED;
     const reader = stopped ? stopping : readerFailureOf(err, step.label);
+    if (!stopped) noteUndeclaredBlocked(jlog, err, reader, step.label);
     step.status = "error";
     /* **The reader's sentence on both fields, and it has to be both.** The band
        renders `job.error` and the shelf card renders `step.error`
@@ -1214,6 +1225,46 @@ async function runStep(
     delete job.cancelling;
     return { outcome: "failed" };
   }
+}
+
+/**
+ * **Say out loud when a `blocked` step gave the reader no way out.**
+ *
+ * The condition is `undeclaredBlocked` in src/job-failure.ts, which shares
+ * `declaredFailure` with `readerFailureOf` so the log line and the sentence on
+ * the card cannot disagree about the same error. This function is only the
+ * destination — docs/project/logging.md's rule is that a request path logs
+ * through src/log.ts, and src/job-failure.ts is in the client bundle and may
+ * not import it.
+ *
+ * **`warn`, not `error`.** Nothing is broken: the step refused correctly and
+ * the reader was told, badly. It is a copy defect for whoever is running this
+ * to go and fix, and an `error` line would put it beside the failures that
+ * cost money.
+ *
+ * **The label, the kind, and nothing off the error.** A step's diagnostic is
+ * free text and is exactly where a provider's body or a stretch of the article
+ * turns up (`stageFailure` § the detail goes on verbatim); `msg` is also the
+ * one place `redact` in src/log.ts cannot reach. So the line carries two
+ * strings that are both ours. `tests/a-blocked-step-that-named-no-way-out.test.ts`
+ * pins that with a sentinel.
+ *
+ * **Exported for that test**, which drives it with a recording `Log`. The
+ * alternative was a child process with `LOG_LEVEL` set — what
+ * tests/stop-details.test.ts pays for a bigger question — and this line is not
+ * worth it.
+ */
+export function noteUndeclaredBlocked(
+  jlog: Log,
+  err: unknown,
+  reader: ReaderFacingFailure,
+  step: string,
+): void {
+  if (!undeclaredBlocked(err, reader)) return;
+  jlog.warn(
+    { step, kind: reader.kind },
+    "a blocked step gave the reader no way out — it needs a sentence of its own",
+  );
 }
 
 /**

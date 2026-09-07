@@ -490,7 +490,7 @@ for whatever is left over
 **That is the one place in this stylesheet where a container query decides what
 is drawn**, and it is worth knowing about before reaching for a media query for
 something a box already knows; and
-since 2026-09-03 the mode band going full-screen is a *class*, not a query — `App.tsx` writes
+since 2026-09-03 the mode band going full-screen is a *class*, not a query — `Reader` writes
 `band-covers` on `.reader` from `fit.modeW === 0`. That one could never have been a width: the
 crossover is the window minus the rail, so it moves with `?spine=0`, and the `@media (max-width:
 843px)` that guessed it disagreed with `fitMode` from 832 to 843 with the rail off, laying the band

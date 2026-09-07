@@ -397,8 +397,13 @@
    OR. 620px so a landscape phone with browser chrome is comfortably inside it
    and no laptop ever is; 731px is § a narrow window's own number, reused here
    deliberately rather than picked again, so "small" means one thing in this
-   file. **`watchBarVisibility` in scroll.ts carries this whole string** and
-   attaches its listener only while it matches — change one and change both.
+   file. **`watchBarVisibility` in scroll.ts used to carry this whole string**
+   and attach its listener only while it matched; that copy went on 2026-09-07
+   with the gate, when the *top* bar started hiding at every width
+   (docs/plans/260907b-the-top-bar-leaves-while-you-read-at-every-width.md). So
+   this query has one home again, and what it still governs is the **dock's**
+   half of the switch and the rest of this section — not the top bar's, which is
+   in shell.css § the bar that leaves while you read.
 
    The bar and everything pinned under it move together because they are all
    driven by `--bar-bottom` — see the token's own note in § tokens for the
