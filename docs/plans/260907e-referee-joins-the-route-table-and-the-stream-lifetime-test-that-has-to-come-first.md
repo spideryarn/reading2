@@ -531,6 +531,42 @@ The cheap shape, if someone takes it deliberately: **a static assertion that no 
 call inside any `AUTH_ROUTES` handler body is left un-awaited** — the same AST machinery the contract
 reader already has, and no database. Do not build it during a migration.
 
+### The ruling was narrowed at 23:40, and `chat` needs an oracle after all
+
+260907b put the sharper question to Sol — is *"once, not per domain"* **safe**, or was `searches`
+merely lucky? The ruling holds only as an argument about a **verified verbatim** move, and search's
+runtime coverage is **incidental and does not generalise**. Asked which domains would redden on a
+dropped `await`, Sol found four that would not. **One is inside the `chat` slice.**
+
+**`DELETE /api/chat/:slug/:threadId` holds a lock and has no server-side test.** Verified here on
+2026-09-07: `src/routes.ts:8449` is
+``threads: await inTurnOrder(`${slug}/${id}`, () => chatStore.remove(slug, id))``. Drop that `await`
+and the response reports the thread deleted while the deletion is still in flight. Nothing catches
+it — `tests/turn-order.test.ts` states in its own header that it does not check the routes use the
+lock, and says why (a test that tried **passed with the lock removed**, which is worse than no test);
+`tests/chat-delete-live-turn.test.ts` and `tests/api-fetch-offline.test.ts` are `jsdom` client tests
+with a stubbed `fetch`; the only other hit is the static contract reader. **So the `chat` slice opens
+with a red-first server-side oracle for thread DELETE, before the guards move.** Chat POST does
+*not* need one: `tests/chat-route.test.ts` awaits `handleApi` and requires frames plus stored rows.
+
+Three more gaps, for whoever takes those slices: `POST /api/comments/:slug/:id/answer` (SSE plus the
+`answering` registry; the only HTTP test is a pre-stream 409 at `routes.test.ts:1400`),
+`similar`/`projection` (paid single-flight in `INFLIGHT`, linked by `return withSpendAttribution(…)`
+rather than an `await`, so the equivalent mutation is `return` → `void`), and
+`GET /api/link-summary` (SSE plus a database single-flight claim).
+
+### The `return;` model in this doc was wrong
+
+Both sessions had it backwards, and Sol corrected it. A **retained** early return in a table handler
+does not fall through — `dispatchAuthRoute` returns `true` after the handler either way. **The
+dangerous transformation is the opposite one: *removing* a return, so later statements in the same
+handler execute.** The normaliser should therefore **refuse automatic comparison** whenever a guard's
+own function scope holds any return other than exactly one final argumentless `return;` (nested
+function returns excluded) — the same principle as "more than one is a fact to fail on".
+
+That rail fires on **chat GET**, which has two returns where every other chat guard has one. That is
+the point: it forces the one case that needs a human to look at it, rather than passing twelve.
+
 Two corrections to carry forward, both from Sol:
 
 - **`quizMark` streams.** It calls `markOneAnswer`, which writes its own headers and ends the
