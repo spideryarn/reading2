@@ -75,9 +75,11 @@
  *    nothing. `withSpendAttribution` re-enters the **same** box with a patched
  *    attribution, and `scopeKind` is read at row-write time — so every call
  *    inside a step writes an `eval` row while keeping the owner, slug, job id
- *    and step name `runStep` set. `scripts/ai-cost.ts` already defines Product
- *    as `scopeKind !== "eval"`, so eval spend stays out of it with **no change
- *    to the cost machinery**.
+ *    and step name `runStep` set. Product is `request | job_step`
+ *    (`partitionByScope` in src/cost-report.ts), so eval spend stays out of it
+ *    with **no change to the cost machinery**. ⟨This said Product was
+ *    `scopeKind !== "eval"`, which was true of the code and was the F2 defect:
+ *    the negative form also swept in `cli`. Corrected 2026-09-07.⟩
  * 2. **Fixture ingress — only stage 1 is replaced**, through the existing
  *    `AdvanceParts.steps` seam. The fixture step reads the committed bytes and
  *    calls the exported `writeRaw()`; extract, blocks, hierarchy and assets are
