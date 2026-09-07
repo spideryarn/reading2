@@ -51,11 +51,8 @@
  * Postgres.
  * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § B.
  *
- * So the flag is now pinned to `postgres` before any import, `expect(STORE)`
- * flips with it, and the fixture is the real `pgJobStore` and the real
- * `claimSession` over a seeded article. The self-check is not lost, it changed
- * sides: a flag that failed to take now fails the first case rather than
- * quietly running the test that does not deploy.
+ * So the fixture is the real `pgJobStore` and the real `claimSession` over a
+ * seeded article.
  *
  * ## The mutations, watched red
  *
@@ -73,18 +70,11 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 /**
- * Two environment variables, before any import.
+ * One environment variable, before any import.
  *
  * **The log level**, because `level()` in src/log.ts reads `LOG_LEVEL` once, at
  * that module's load, and vitest's `NODE_ENV=test` otherwise makes the logger
  * `silent` — which writes nothing, which satisfies every `not.toContain` below.
- *
- * **The store flag**, because `src/store/live.ts` reads it once and imports are
- * hoisted above every statement in a module. It used to be a `delete` here, on
- * the argument that unset is the state a fresh clone is in; the argument stands
- * and is no longer the one that matters, because unset is also the store that is
- * not deployed. A plain assignment below the imports would leave `claimSession`
- * handing back the filesystem session with nothing saying so.
  */
 const HOISTED = vi.hoisted(() => {
   const previousLevel = process.env.LOG_LEVEL;
@@ -112,7 +102,7 @@ import { logLinesWhile } from "./helpers/log-capture.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 
-/* Both put back straight after the imports: vitest reuses a worker across files
+/* Put back straight after the imports: vitest reuses a worker across files
    and does not reset `process.env` between them. */
 if (HOISTED.previousLevel === undefined) delete process.env.LOG_LEVEL;
 else process.env.LOG_LEVEL = HOISTED.previousLevel;

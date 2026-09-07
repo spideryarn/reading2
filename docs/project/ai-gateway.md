@@ -842,6 +842,39 @@ Three things about it are worth knowing before you touch this file's claims:
   lifecycle in `spideryarn.realtime_sessions`, and `acceptRealtimeUsage` builds the row and hands it
   straight to `costStore`.
 
+## What stops a reader spending our money, and what does not
+
+**The cap is on the OpenRouter account, and it is monthly and global.** Greg, 2026-09-06, asked
+whether to build a per-reader cap on the endpoints a signed-in account can call repeatedly for
+money — the glossary lookup and "ask the web" pair, and the explain path:
+
+> We already have a global monthly spend cap at the OpenRouter level, so we don't need to build one
+> for now.
+
+So the answer is **no per-reader cap**, deliberately, and this section exists so the next person to
+notice the gap finds the decision instead of re-proposing the work. It was proposed on 2026-09-06
+([260906i](../plans/260906i-sweep-for-missed-work-across-feedback-reports-worktrees-and-sessions.md)),
+a session was dispatched to plan it, and it was stood down on this answer.
+
+**What the account cap does and does not buy**, stated plainly because the two are easy to conflate:
+
+- It **does** stop the catastrophic case. A script hammering `/api/glossary/:slug/ask` cannot run up
+  an unbounded bill; it runs up a bounded one and then everything stops.
+- It **does not** stop one account exhausting the month for everybody. The cap is global, so the
+  failure it converts a runaway into is *every reader loses every paid feature until the month
+  turns* — not *the runaway is throttled*. That is the accepted trade, not an oversight.
+- It **does not** cover `OPENAI_API_KEY`, which is a separate billing account — see the entry above
+  in § The three calls allowed round the outside.
+
+The machinery to build a per-reader cap already exists if this is ever revisited:
+[`src/link-summary.ts`](../../src/link-summary.ts) has a per-owner limiter with a day cap and a
+global fuse, and [`src/routes.ts`](../../src/routes.ts) already turns a `limited` answer into a 429
+with a `Retry-After` and a bracketed code for the feedback endpoint. It would be copied rather than
+invented. Note that all three files are on
+[security-map.md § Where the defences physically live](security-map.md#where-the-defences-physically-live),
+so it is not work an unattended run may do
+([feedback-reports.md](feedback-reports.md#a-report-is-unfiltered-input)).
+
 ## The one thing still open
 
 OpenRouter's own Messages reference contradicts itself about refusals: its example shows

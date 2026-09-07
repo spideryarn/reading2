@@ -129,6 +129,15 @@ Two consequences worth stating, because they are easy to get wrong:
   about the same subtopic, so three words do not. An entry needs only enough words to tell itself
   apart from its neighbours — and that demand rises as you descend. See
   [hierarchy.md](hierarchy.md) for the length rules.
+- **An absent `navLabel` means *deliberately unlabelled*, and only that** — a caption, a
+  pull-quote, a rule. *Not written yet* is a different fact and it does not live on the node: it is
+  `Article.navLabelStatus`, one value for the whole revision
+  ([hierarchy.md § Absence on a node](hierarchy.md#absence-on-a-node-is-deliberately-unlabelled-not-written-yet-is-a-column)).
+  While that says `pending` or `failed`, every surface below **withholds the whole paragraph-label
+  layer** rather than drawing what happens to exist —
+  [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) is the one rule. The `Paragraphs` pill and
+  the leaf column say so in one sentence, because there the reader asked for the layer by name;
+  outline mode's rung 5 simply does not climb that far, because nobody asked.
 
 ### The supplement node
 
@@ -327,7 +336,7 @@ one column meant a rename could land in two of them and look correct.
 Greg, 2026-09-05: *"I'm even wondering if we can get rid of the row of column-header-labels in
 Hierarchy mode … to save on vertical space."* It went — as a row. **The `<thead>` is still there**,
 one `<th>` per column, `height: 0`, no padding, no border, its label in an `.sr-only` span
-(`--head-h` in [styles.css](../../src/web/styles.css) § tokens). Deleting it was the first draft of
+(`--head-h` in [styles/tokens.css](../../src/web/styles/tokens.css) § tokens). Deleting it was the first draft of
 this change and GPT Sol refused the plan over it, correctly: three things read that row and none of
 them reads a pixel of it.
 
@@ -391,6 +400,23 @@ with the **`Paragraphs`** pill, it sits between the gists and the prose, so read
 everything outline mode had *plus* the article, each label on the same row as the paragraph it
 labels. Opt-in, never chosen by auto-fit, because it costs a column's width and most reading doesn't
 want it.
+
+**Where there are no labels to draw the pill is replaced by the reason**, not disabled with the
+reason in a tooltip — a touch reader cannot open one, which is the same argument that named these
+pills `Paragraphs` rather than `L3`. So a reader cannot open the column while it is empty; what is
+left is a reader who already had it open, or a `?cols=` naming the leaf depth by hand, and for them
+the column carries the sentence **once**, in one cell spanning the article, instead of a blank cell
+per paragraph. Where the column is not on screen at all nothing is said, because there is nothing
+to say. [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts).
+
+> [!WARNING]
+> The first version of that cell was drawn whenever the labels were missing, without checking that
+> the leaf column was one of the table's columns — and it is not, by default. `<colgroup>` allocates
+> one `<col>` per column plus one for the prose, so the extra `<td>` took the **prose** column's
+> width and the article went invisible, off the right edge of the window, with nothing thrown and
+> nothing logged. Found in a browser on 2026-09-06; the guard and its test are in
+> [`TableView.tsx`](../../src/web/TableView.tsx) § `withheldLeafCell` and
+> `tests/paragraph-labels-withheld.test.tsx`.
 
 **This does not breach the navLabel contract** ([node shape](#node-shape)), and the distinction is
 worth being precise about. The rule is that a navLabel must never be shown *instead of* prose that

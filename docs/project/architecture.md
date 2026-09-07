@@ -159,8 +159,8 @@ one article, and the `db:export` rollback it shares its queries with.
 
 **Moved, as of 2026-09-01, and since 2026-09-05 the only store there is.** A pipeline job commits
 each step's product into a draft revision and publishes it in one transaction with the job's own
-finish, rather than writing the filesystem layout below. `SPIDERYARN_STORE=files` throws
-([`src/store/live.ts`](../../src/store/live.ts)) rather than falling back to it.
+finish, rather than writing the filesystem layout below. There is no way back: neither the flag nor
+a second store exists to ask for.
 [database.md](database.md) has the mechanism;
 [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 3 is the
 write-up, and [260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md) the

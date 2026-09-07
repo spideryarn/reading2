@@ -77,8 +77,18 @@ import {
   SHIPPED_ARM,
   armNamed,
   preparedSourceHtml,
+  withoutTheCapabilityFloor,
 } from "../evals/extraction/arms.mjs";
 import { SCORABLE_FIXTURES } from "../evals/extraction/corpus.mjs";
+/**
+ * **The shapes live in the corpus now, not in this file.** Every synthetic page
+ * and candidate below is defined once, under a name for its SHAPE, in
+ * `evals/extraction/shapes.mts` — where the runner can report exposure over it
+ * and where the next person can see what other shapes exist beside it. What
+ * stays here is what this file is for: the pair assertions, the `detects`
+ * readings, and the story of what each shape was watched doing.
+ */
+import { shapeCandidate, shapePage } from "../evals/extraction/shapes.mjs";
 import {
   MIN_REGION_PRECISION,
   regionTextById,
@@ -1652,12 +1662,8 @@ describe("the degenerate arms — each has to lose, and the test names where", (
        * cards were *identical*: attribution passed at exposure 3, order passed
        * at exposure 2, every assertion held, `detects` empty.
        */
-      const src =
-        `<div ${SREF}="s1"><i ${SREF}="s2">child first</i>loose text second</div>` +
-        `<p ${SREF}="s3">omega omega omega</p>`;
-      const moved =
-        `<p>loose text second<i ${SREF}="s2">child first</i></p>` +
-        `<p ${SREF}="s3">omega omega omega</p>`;
+      const src = shapePage("wrapper-with-loose-text-after-its-child");
+      const moved = shapeCandidate("loose-wrapper-text-hoisted-in-front-of-its-child");
       const clean = card(src, src, "as-source");
       const bad = card(src, moved, "loose-text-first");
       expect(clean.gates.sourceOrder.passed, "the correct order must start green").toBe(true);
@@ -1687,16 +1693,9 @@ describe("the degenerate arms — each has to lose, and the test names where", (
        * The retry is the ancestor's subtree, which is where a flattened node's
        * text provably came from and is strictly tighter than the page.
        */
-      const src =
-        `<div ${SREF}="s1">Alpha alpha <i ${SREF}="s2">Xray xray</i> Bravo bravo</div>` +
-        `<p ${SREF}="s3">Tail tail tail</p><p ${SREF}="s4">Zulu zulu zulu</p>`;
-      const flattened =
-        `<div ${SREF}="s1"><p>Alpha alpha Xray xray Bravo bravo</p></div>` +
-        `<p ${SREF}="s3">Tail tail tail</p><p ${SREF}="s4">Zulu zulu zulu</p>`;
-      const moved =
-        `<p ${SREF}="s3">Tail tail tail</p>` +
-        `<div ${SREF}="s1"><p>Alpha alpha Xray xray Bravo bravo</p></div>` +
-        `<p ${SREF}="s4">Zulu zulu zulu</p>`;
+      const src = shapePage("wrapper-whose-children-are-all-worth-keeping");
+      const flattened = shapeCandidate("wholly-flattened-subtree");
+      const moved = shapeCandidate("wholly-flattened-subtree-moved");
 
       const clean = card(src, flattened, "flattened");
       expect(clean.gates.attribution.passed, "flattening invents nothing").toBe(true);
@@ -1725,14 +1724,8 @@ describe("the degenerate arms — each has to lose, and the test names where", (
        * A monotone alignment lets a retained second occurrence map to the second
        * occurrence, which is the whole point of asking the question globally.
        */
-      const src =
-        `<div ${SREF}="s1">Alpha alpha alpha<i ${SREF}="s2">Xray xray xray</i>` +
-        `Bravo bravo bravo<span ${SREF}="s3">Yankee yankee yankee</span>` +
-        `Alpha alpha alpha<em ${SREF}="s4">Zulu zulu zulu</em></div>`;
-      const wrapped =
-        `<div ${SREF}="s1"><p>Alpha alpha alpha<i ${SREF}="s2">Xray xray xray</i>` +
-        `Bravo bravo bravo</p><span ${SREF}="s3">Yankee yankee yankee</span>` +
-        `Alpha alpha alpha<em ${SREF}="s4">Zulu zulu zulu</em></div>`;
+      const src = shapePage("container-whose-own-text-repeats-across-a-child");
+      const wrapped = shapeCandidate("generated-p-wrapping-a-child-and-the-text-either-side-of-it");
       const clean = card(src, src, "as-source");
       const restructured = card(src, wrapped, "wrapped-in-a-generated-p");
       expect(clean.gates.sourceOrder.passed).toBe(true);
@@ -1758,11 +1751,8 @@ describe("the degenerate arms — each has to lose, and the test names where", (
       /* A second paragraph, so that an output which drops the link still has two
          runs and the gate can PASS rather than abstain — `sourceOrder` reports
          `null` below two, and an abstention is not a green. */
-      const tail = `<p ${SREF}="s3">And a second paragraph after it.</p>`;
-      const src =
-        `<p ${SREF}="s1">See note <a ${SREF}="s2">1</a> above and below the line.</p>${tail}`;
-      const moved =
-        `<p ${SREF}="s1"><a ${SREF}="s2">1</a>See note  above and below the line.</p>${tail}`;
+      const src = shapePage("inline-child-between-two-runs-of-parent-text");
+      const moved = shapeCandidate("inline-child-moved-to-the-front-of-its-parent");
       const clean = card(src, src, "as-source");
       expect(clean.gates.sourceOrder.passed, "the link between two runs must stay green").toBe(true);
       expect(clean.gates.attribution.passed).toBe(true);
@@ -1781,13 +1771,215 @@ describe("the degenerate arms — each has to lose, and the test names where", (
        * rule condemns every legitimate inline removal on the corpus. Found by
        * breaking the straddle and watching this file stay green.
        */
-      const removed = `<p ${SREF}="s1">See note  above and below the line.</p>${tail}`;
+      const removed = shapeCandidate("inline-child-removed-joining-its-neighbours-text");
       const dropped = card(src, removed, "link-removed");
       expect(
         dropped.gates.sourceOrder.passed,
         "removing an inline child joins its neighbours' text, and that is not a reordering",
       ).toBe(true);
       expect(dropped.gates.attribution.passed).toBe(true);
+    });
+  });
+
+  describe("two shapes the order gate condemned that are correct — GPT Sol's ninth review", () => {
+    /**
+     * **The only defect this gate has had whose direction is a false RED.** Nine
+     * reviews found degraded extractions scoring well; these two are correct
+     * extractions scoring badly, and the corpus was green on all fifteen only
+     * because no fixture makes either shape.
+     *
+     * Both come from the same cause: an `ancestor` run was matched **exactly**,
+     * first against the ancestor's own text and then, as a fallback, against its
+     * subtree. A flattening that legitimately drops a child is neither. The
+     * subtree is the right *spatial* boundary; what it could not be is an
+     * exact-match fallback applied after the owner. `scorecard.mts`
+     * § `provenanceForm` now places an ancestor run **inside its subtree, as a
+     * cover** — the same in-order, run-floored subsequence attribution already
+     * uses — and takes whichever admissible placement **ends earliest**.
+     *
+     * The letters in the plan (`A <i>X</i> B <button>nav</button> C`) are
+     * shorthand for the shape. Written with real words here, because a
+     * four-character run is placed by the short-join forgiveness inside
+     * `coverOf` rather than by the cover itself, and a case that goes green for
+     * a reason unrelated to the fix is the silent success this file exists to
+     * refuse.
+     */
+    const SREF = RESERVED_ATTRS.sourceRef;
+    const card = (sourceHtml: string, out: string, arm: string) =>
+      score({
+        fixture: "synthetic-ninth-review", arm,
+        html: out.replace(new RegExp(` ${SREF}="[^"]*"`, "g"), ""),
+        stampedHtml: out, refused: false, title: null, byline: null,
+        sourceHtml: `<body>${sourceHtml}</body>`, manifest: null,
+      });
+
+    /** `<div s1>A <i s2>X</i> B <button s3>nav</button> C</div>`, in words. */
+    const partial = {
+      src: shapePage("wrapper-with-a-child-worth-dropping"),
+      out: shapeCandidate("partial-flattening-with-one-child-dropped"),
+      moved: shapeCandidate("partially-flattened-run-moved-after-the-paragraph-that-followed-it"),
+      /** The same children, emitted in the wrong order inside the flattened run. */
+      scrambled: shapeCandidate("retained-children-scrambled-inside-a-flattened-run"),
+    };
+
+    it("allows a PARTIAL flattening — one child dropped, every retained character in order", () => {
+      /**
+       * The `<p>` resolves to ancestor `s1`. Its run is neither `s1`'s own text
+       * (`Alpha…Bravo…Charlie`, no `Xray`) nor a substring of `s1`'s subtree
+       * (which still has `Navigation` between `Bravo` and `Charlie`), so the
+       * exact-match fallback reported *"could not be placed in the source at
+       * all"* on an extraction that invented nothing and moved nothing.
+       */
+      const clean = card(partial.src, partial.out, "partially-flattened");
+      expect(clean.gates.attribution.passed, "dropping a child invents nothing").toBe(true);
+      expect(
+        clean.gates.sourceOrder.detail,
+        "a correct partial flattening was condemned",
+      ).not.toContain("could not be placed");
+      expect(clean.gates.sourceOrder.passed).toBe(true);
+      /* **And the flattened run is IN the alignment.** Twice in this harness's
+         history a green was green because the run was silently skipped, which
+         from outside looks exactly like this. Three runs: the flattened one, and
+         the two tail paragraphs. */
+      expect(clean.gates.sourceOrder.exercised, "the flattened run was not judged").toBe(3);
+    });
+
+    it("still catches that same flattened run MOVED, and the retained children scrambled", () => {
+      /** Two ways of proving the run is load-bearing rather than waved through. */
+      const clean = card(partial.src, partial.out, "partially-flattened");
+
+      const moved = card(partial.src, partial.moved, "partially-flattened-and-moved");
+      expect(moved.gates.attribution.passed, "nothing was invented, only moved").toBe(true);
+      expect(moved.gates.sourceOrder.passed, "the flattened subtree was moved").toBe(false);
+      expect(moved.gates.sourceOrder.detail).toContain("a reordering");
+      expect(detects(clean, moved).byGate).toEqual(["sourceOrder"]);
+
+      /* A cover is a subsequence **in order**, so the retained children swapped
+         inside the run is still a red — the placement permits deletion, never
+         rearrangement. Attribution reddens too, and that is not a duplicate
+         assertion by accident: a generated node is judged against the whole page
+         by the same in-order cover, so both gates see the same rearrangement
+         from their own end. If a change ever leaves only one of them red, the
+         other has stopped asking. */
+      const scrambled = card(partial.src, partial.scrambled, "children-scrambled");
+      expect(scrambled.gates.sourceOrder.passed, "the children were rearranged").toBe(false);
+      expect(detects(clean, scrambled).byGate).toEqual(["attribution", "sourceOrder"]);
+    });
+
+    /** `<div s1><i s2>Alpha</i>Alpha</div>` — the container repeats its child. */
+    const repeated = {
+      src: shapePage("container-that-repeats-its-childs-phrase"),
+      out: shapeCandidate("generated-node-placed-at-the-earliest-of-two-identical-phrases"),
+      moved: shapeCandidate("container-repeating-its-childs-phrase-moved"),
+    };
+
+    it("places a generated node at the EARLIEST occurrence, not its owner's later one", () => {
+      /**
+       * `s1`'s **own** text is the second `Alpha alpha alpha`; the first belongs
+       * to the child `s2`. Matching the generated `<p>` against the owner first
+       * put it at character 15, and the direct run left behind then had nowhere
+       * to go but character 15 again — reported as a reordering on a page that
+       * had not been reordered.
+       *
+       * Earliest-admissible is what the walk's docstring always claimed, and
+       * under a subsequence placement the quantity to minimise is the **end** of
+       * the placement, because the end is all the cursor carries forward.
+       */
+      const clean = card(repeated.src, repeated.out, "repeats-its-child");
+      expect(clean.gates.attribution.passed).toBe(true);
+      expect(
+        clean.gates.sourceOrder.detail,
+        "a correct extraction of a container that repeats its child was called a reordering",
+      ).not.toContain("reordering");
+      expect(clean.gates.sourceOrder.passed).toBe(true);
+      /* The generated run, the container's own run, and the tail. */
+      expect(clean.gates.sourceOrder.exercised, "a run went missing from the alignment").toBe(3);
+    });
+
+    it("is not a hand-built shape only: `pmc-article` makes it, and was scored red for it", () => {
+      /**
+       * **The one real-page witness, and it was hiding in the corpus.** § B's
+       * honest limit on these gates is that every case which found a blocker was
+       * hand-built by whoever was fixing it. This one is a committed fixture: the
+       * PMC bot wall says `Click <a>here</a> if you are not automatically
+       * redirected after 5 seconds.`, and `drop-every-short-block` removes the
+       * `<a>` — partial flattening, exactly Sol's first shape, made by an arm
+       * rather than by hand.
+       *
+       * Until 2026-09-06 the corpus run scored that as the arm *losing* on
+       * `sourceOrder`, with *"could not be placed in the source at all — …
+       * attribution should have reported the same text as invented"* **while
+       * attribution passed on the same card**. The message contradicted the card
+       * beside it, and nobody read it: `pmc-article` declares no article region,
+       * so it is exempt from the rule that every degenerate arm must lose, and
+       * the false red cost nothing visible. The plan's *"no fixture produces
+       * either shape"* was true of the shipped arm and false of the corpus.
+       *
+       * It is asserted here rather than left to `score.mts`, which is a run and
+       * not a test.
+       */
+      const { raw, url, manifest, prepared } = fixtureBytes("pmc-article");
+      /* **The floor is held open for this one call, and only this one.** Stage
+         2 refuses `pmc-article` since 2026-09-06 — 130 characters, below
+         Readability's own threshold (src/extract.ts § `capabilityFloor`) — so
+         the shipped candidate is empty and the arm has nothing to flatten. That
+         is right for the corpus and wrong for this oracle, which asks what the
+         SCORER can see rather than what we publish, and would otherwise become
+         an assertion about the empty string with nothing to say so.
+         `withoutTheCapabilityFloor` (evals/extraction/arms.mts) has no other
+         caller. */
+      const dropped = withoutTheCapabilityFloor(() =>
+        armNamed("drop-every-short-block").run(raw, url, { manifest, url }),
+      );
+      expect(
+        dropped.html.includes("if you are not automatically redirected"),
+        "the arm no longer makes the flattening this test is about",
+      ).toBe(true);
+      const card = score({
+        fixture: "pmc-article", arm: "drop-every-short-block",
+        html: dropped.html, stampedHtml: dropped.stampedHtml, refused: dropped.refused,
+        title: dropped.title, byline: dropped.byline, sourceHtml: prepared, manifest,
+      });
+      expect(card.gates.attribution.passed, "the sentence is on the page").toBe(true);
+      expect(
+        card.gates.sourceOrder.passed,
+        "a real page's flattening, condemned by the exact-match fallback",
+      ).toBe(true);
+      expect(card.gates.sourceOrder.exercised, "the flattened run was not judged").toBe(2);
+    });
+
+    it("keeps the SUBTREE the boundary — a generated node may not borrow another container's text", () => {
+      /**
+       * **The half of the old rule that stands, and nothing was testing it.**
+       * The fix loosens the *match* from a substring to a cover; it must not
+       * loosen the *place*. Asked against the whole page instead of the
+       * ancestor's subtree, this output passes: the borrowed text really is on
+       * the page, earlier, so a page-wide window places it and the tail
+       * paragraph still follows. Asked against `s1`'s subtree — which is where a
+       * flattened node's text provably came from — there is nowhere to put it.
+       *
+       * Attribution cannot see this at all: a generated node is judged against
+       * the whole page, and the words are on the page.
+       */
+      const src = shapePage("wrapper-whose-children-are-all-worth-keeping");
+      const borrowed = shapeCandidate("generated-node-borrowing-a-container-it-does-not-descend-from");
+      const bad = card(src, borrowed, "borrows-another-containers-text");
+      expect(bad.gates.attribution.passed, "the borrowed words ARE on the page").toBe(true);
+      expect(
+        bad.gates.sourceOrder.passed,
+        "a generated node took text from a container it does not descend from",
+      ).toBe(false);
+      expect(bad.gates.sourceOrder.detail).toContain("the subtree of source element s1");
+    });
+
+    it("still catches that container moved after the paragraph that followed it", () => {
+      const clean = card(repeated.src, repeated.out, "repeats-its-child");
+      const moved = card(repeated.src, repeated.moved, "repeats-its-child-moved");
+      expect(moved.gates.attribution.passed, "nothing was invented, only moved").toBe(true);
+      expect(moved.gates.sourceOrder.passed, "the container was moved and nothing saw it")
+        .toBe(false);
+      expect(moved.gates.sourceOrder.detail).toContain("a reordering");
+      expect(detects(clean, moved).byGate).toEqual(["sourceOrder"]);
     });
   });
 
@@ -1807,20 +1999,14 @@ describe("the degenerate arms — each has to lose, and the test names where", (
       });
 
     /* Sol's first example: a container whose own text sits AFTER its child. */
-    const mixedSource =
-      `<div ${SREF}="s2"><p ${SREF}="s3">Alpha first.</p>Middle second.</div>` +
-      `<p ${SREF}="s4">Omega third.</p>`;
-    const mixedReversed =
-      `<div ${SREF}="s2">Middle second.<p ${SREF}="s3">Alpha first.</p></div>` +
-      `<p ${SREF}="s4">Omega third.</p>`;
+    const mixedSource = shapePage("container-whose-own-text-follows-its-child");
+    const mixedReversed = shapeCandidate("container-own-text-moved-in-front-of-its-child");
 
     /* Sol's second example: the first child hoisted out of its wrapper, the
        wrapper left around the second. The reader sees Alpha then Beta either
        way, so this must stay green. */
-    const hoistSource =
-      `<div ${SREF}="s2"><p ${SREF}="s3">Alpha.</p><p ${SREF}="s4">Beta.</p></div>`;
-    const hoisted =
-      `<p ${SREF}="s3">Alpha.</p><div ${SREF}="s2"><p ${SREF}="s4">Beta.</p></div>`;
+    const hoistSource = shapePage("wrapper-around-two-stamped-children");
+    const hoisted = shapeCandidate("first-child-hoisted-out-of-its-wrapper");
 
     it("catches a container's own text moved in front of its child", () => {
       /**

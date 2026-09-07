@@ -52,12 +52,22 @@ const SLUG = "test-end-to-end-probe";
 
 /* Long enough for Readability to keep: it drops short paragraphs, and an
    article that came back empty would fail this file for a reason that has
-   nothing to do with what it is about. */
+   nothing to do with what it is about.
+
+   **And long enough to clear the capability floor**, which is why there are six
+   paragraphs and not three. Stage 2 refuses a page whose extracted text is under
+   500 characters (src/extract.ts § `capabilityFloor`), and this page had 310 —
+   so on 2026-09-06 four cases in this file went red for a reason that is not
+   about ids, content addressing or the queue. That is the floor doing exactly
+   what it says on a genuinely short real page, met here in our own suite. */
 const HTML = `<!doctype html><html><head><title>A Probe Article</title></head><body>
 <article><h1>A Probe Article</h1>
 <p>The first paragraph says something long enough for Readability to keep it, because a short one is dropped.</p>
 <p>The second paragraph is also long enough to survive the extractor's minimum content length rule.</p>
 <p>A third paragraph, so that the block splitter has more than two things to give ids to.</p>
+<p>A fourth paragraph, because the extractor refuses a page with less than five hundred characters of text on it, and a document this file can carry all the way through has to be a document the pipeline would accept.</p>
+<p>A fifth paragraph, saying nothing in particular at some length, so that the total clears that floor with room to spare rather than sitting one character above it.</p>
+<p>A sixth and last paragraph, which exists so that the ids minted here are minted for a document nobody would call a stub.</p>
 </article></body></html>`;
 
 /**

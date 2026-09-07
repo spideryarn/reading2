@@ -152,6 +152,7 @@ import type {
   DebateRelation,
   DebateValence,
   DirectDebateRow,
+  IdentificationSignal,
   Meta,
   SearchEvidence,
   Tree,
@@ -164,6 +165,9 @@ import { sameTarget, webLinks } from "./urls.js";
    a stage with a CLI and two model calls in it. Re-exported rather than
    imported by every server caller so the stage still has one name for them. */
 import { anyLost, distinctSources, isDebateDocument } from "./types.js";
+/* The model-free half of group one's evidence: what this page shares with this
+   article, both ways round. src/shingles.ts. */
+import { articleShingles, isCopy, shingleOverlap } from "./shingles.js";
 
 export { anyLost, distinctSources, isDebateDocument };
 export type {
@@ -336,6 +340,7 @@ export function emptyLosses(): DebateLosses {
     selfSource: 0,
     unverifiedSource: 0,
     directnessUnverified: 0,
+    sourceIsCopy: 0,
     claimNotInBlock: 0,
     unknownBlockId: 0,
     malformed: 0,
@@ -490,21 +495,59 @@ export function isSubstantiveQuote(quote: string): boolean {
  * spacing and its punctuation are whatever the extractor left behind.
  */
 export function namesArticle(witness: string, article: ArticleIdentity): boolean {
+  return namesArticleBy(witness, article) !== null;
+}
+
+/**
+ * **Which of the three ways it named it** — the same question as `namesArticle`,
+ * answered with the evidence instead of a bit.
+ *
+ * `readDirectGroup` turns this into the row's `IdentificationSignal[]`, because
+ * *how* a page identified the piece is the thing the reader is shown and the
+ * thing a threshold sits on. The alternative was a second URL test beside the
+ * first, which is how two rules that must agree stop agreeing.
+ *
+ * **Both halves are asked, not just the first that fires.** The boolean above is
+ * unchanged by that — a page that links the article was already `true` — but a
+ * page that links it *and* names it should say both in the tooltip.
+ */
+export function namesArticleBy(witness: string, article: ArticleIdentity): ArticleNaming | null {
+  let url: string | null = null;
   if (article.url) {
     /* `webLinks` rather than a second URL pattern: it already knows where a bare
        address stops, hands back the sentence's full stop, and refuses the
        credential form. */
     for (const link of webLinks(witness)) {
-      if (sameTarget(link.url, article.url)) return true;
+      if (sameTarget(link.url, article.url)) {
+        url = link.url;
+        break;
+      }
     }
   }
 
+  const by = namedInText(witness, article);
+  return url === null && by === null ? null : { url, by };
+}
+
+/** The title branch of the rule above, on its own. */
+function namedInText(witness: string, article: ArticleIdentity): ArticleNaming["by"] {
   const title = collapse(article.title ?? "");
-  if (title === "" || !appearsIn(witness, title)) return false;
-  if (title.length >= MIN_TITLE_EVIDENCE_CHARS) return true;
+  if (title === "" || !appearsIn(witness, title)) return null;
+  if (title.length >= MIN_TITLE_EVIDENCE_CHARS) return "title";
 
   const byline = collapse(article.byline ?? "");
-  return byline !== "" && appearsIn(witness, byline);
+  return byline !== "" && appearsIn(witness, byline) ? "title-and-byline" : null;
+}
+
+/**
+ * **What the page did to name the article**, with at least one of the two
+ * present — `namesArticleBy` returns `null` rather than an empty one.
+ */
+export interface ArticleNaming {
+  /** The article's own address as the page spelled it, or `null` if it did not link it. */
+  url: string | null;
+  /** Which text branch proved it, or `null` if the words alone did not. */
+  by: "title" | "title-and-byline" | null;
 }
 
 /**
@@ -612,17 +655,28 @@ export interface GroupInput {
    * the correct rule, so the code and its own documentation disagreed.
    */
   article: ArticleIdentity;
-}
-
-/** Group two additionally has to resolve a block id and a quote inside it. */
-export interface ClaimGroupInput extends GroupInput {
-  /** Every block this article has, by id, with the text a `claimQuote` is looked up in. */
+  /**
+   * **Every block this article has, by id, with its text.**
+   *
+   * Group two looks a `claimQuote` up in the block the model named. Group one
+   * shingles the whole lot against the page's extract, which is what gives a
+   * `quoted` signal a real block id to point at — so this moved up from
+   * `ClaimGroupInput` on 2026-09-06 and that interface, having nothing else in
+   * it, went with it.
+   */
   blockText: ReadonlyMap<string, string>;
 }
 
 /** The shared half of one row, or the reason it is not shown. */
 type SharedVerdict =
-  | { ok: true; base: Omit<DirectDebateRow, "articleReferenceQuote">; evidence: SearchEvidence }
+  | {
+      ok: true;
+      /* Everything both groups share. The two group-one fields — the witness and
+         the evidence list — are the direct reader's own work and are added
+         there. */
+      base: Omit<DirectDebateRow, "articleReferenceQuote" | "identifies">;
+      evidence: SearchEvidence;
+    }
   | { ok: false; reason: keyof DebateLosses };
 
 /**
@@ -727,25 +781,64 @@ function readShared(row: Record<string, unknown>, opts: GroupInput): SharedVerdi
  * and nothing about whom they are about — so two genuine quotations from an
  * unrelated returned page kept a row here with every counter clean. A docblock
  * that states a rule the code does not make is worse than a silent gap.
+ *
+ * ## What a kept row carries, since 2026-09-06
+ *
+ * The naming rule is a bit, and a bit is not enough: on a 2023 article with a
+ * same-named 2026 successor, six pages about the *other* document passed it. So
+ * every kept row also records **the evidence that was found** — its
+ * `identifies` list — and one page is refused outright:
+ *
+ *  - `linked` when the witness contains the article's own address;
+ *  - `quoted` when the page's extract contains a run of the article's own words;
+ *  - `named` for the branch of the title rule that fired;
+ *  - and **`sourceIsCopy` when the extract is mostly the article**, which is a
+ *    mirror rather than a response. That is asked *before* the row is kept, so a
+ *    copy is dropped even though it links and quotes the piece perfectly.
  */
 export function readDirectGroup(
   rows: unknown[],
   opts: GroupInput,
   webSearches: number,
 ): DebateGroup<DirectDebateRow> {
+  /* Once for the pass rather than once per row: a long article is a couple of
+     thousand windows and this loop sees up to `MAX_DIRECT_ROWS` of them. */
+  const article = articleShingles(opts.blockText);
   return readGroupWith(rows, MAX_DIRECT_ROWS, opts, webSearches, (row, shared) => {
     if (!shared.ok) return shared;
-    const witness = locate(shared.evidence.excerpt ?? "", str(row.articleReferenceQuote));
+    const excerpt = shared.evidence.excerpt ?? "";
+    const witness = locate(excerpt, str(row.articleReferenceQuote));
     /* **Two questions, and the second is the one that matters.** Locating the
        witness says the page contains those words; `namesArticle` says the words
        are about *this* piece. Sol passed two genuine quotations from an
        unrelated returned page — one as `sourceQuote`, one as
        `articleReferenceQuote` — and the row was kept here with nothing counted.
        Same loss reason for both halves: the reader's sentence is the same. */
-    if (witness === null || !namesArticle(witness, opts.article)) {
+    const naming = witness === null ? null : namesArticleBy(witness, opts.article);
+    if (witness === null || naming === null) {
       return { ok: false, reason: "directnessUnverified" };
     }
-    return { ok: true, row: { ...shared.base, articleReferenceQuote: witness } };
+
+    const overlap = shingleOverlap(article, excerpt);
+    /* **The ceiling, before the row is kept.** A mirror is the most convincing
+       row on the screen and the least worth showing. */
+    if (isCopy(overlap)) return { ok: false, reason: "sourceIsCopy" };
+
+    const identifies: IdentificationSignal[] = [];
+    if (naming.url !== null) identifies.push({ kind: "linked", url: naming.url });
+    if (overlap.hit) {
+      identifies.push({
+        kind: "quoted",
+        quote: overlap.hit.quote,
+        blockId: overlap.hit.blockId as BlockId,
+        coverage: overlap.coverage,
+        density: overlap.density,
+      });
+    }
+    if (naming.by !== null) identifies.push({ kind: "named", by: naming.by, witness });
+    /* Non-empty by construction: `naming` is one or both of its two halves, and
+       either one puts a signal in this list. */
+    return { ok: true, row: { ...shared.base, articleReferenceQuote: witness, identifies } };
   });
 }
 
@@ -763,7 +856,7 @@ export function readDirectGroup(
  */
 export function readClaimGroup(
   rows: unknown[],
-  opts: ClaimGroupInput,
+  opts: GroupInput,
   webSearches: number,
 ): DebateGroup<ClaimDebateRow> {
   return readGroupWith(rows, MAX_CLAIM_ROWS, opts, webSearches, (row, shared) => {
@@ -1568,9 +1661,13 @@ export async function generateDebate(opts: {
     ...(opts.signal ? { signal: opts.signal } : {}),
     ...(opts.journal ? { journal: opts.journal, attempt: { pass: "direct" as const, article: journalled } } : {}),
   });
+  /* **The same blocks both passes are judged against**, built once: group two
+     resolves a `claimQuote` in the block the model named, and group one asks
+     whether the page's extract is made of these words. */
+  const blockText = blockTextById(evidence);
   const directRows = readDirectGroup(
     direct.rows,
-    { admissible: direct.admissible, article: identity },
+    { admissible: direct.admissible, article: identity, blockText },
     direct.webSearches,
   );
 
@@ -1591,7 +1688,7 @@ export async function generateDebate(opts: {
     {
       admissible: claims.admissible,
       article: identity,
-      blockText: blockTextById(evidence),
+      blockText,
     },
     claims.webSearches,
   );

@@ -33,8 +33,10 @@
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
  * § F; docs/project/testing.md § When a skip is not acceptable).
  *
- * The flag is still set below and nothing reads it. It stays for the length of
- * one deployment beside the tombstone in src/store/live.ts, and goes with it.
+ * It was still being set here, read by nothing, until 2026-09-06 — a variable
+ * that decides nothing, which is the exact shape the plan above spent a week
+ * deleting. The suite headers that cite it still do, correctly, in the past
+ * tense: it is how a skip *used to* be turned into a failure.
  *
  * **`--offline` no longer buys a usable run of the test gate** — there is
  * nothing left for it to switch off — and it says so in the summary rather than
@@ -53,8 +55,6 @@ type Step = {
   /** Fails `npm run check` when non-zero. */
   gate: boolean;
   argv: string[];
-  /** Added to the environment of this step only. */
-  env?: Record<string, string>;
   /** Why it is advisory rather than a gate, printed when it has findings. */
   note?: string;
   /**
@@ -107,7 +107,6 @@ const STEPS: Step[] = [
     name: "test",
     gate: true,
     argv: ["run", "--silent", "test"],
-    ...(OFFLINE ? {} : { env: { REQUIRE_POSTGRES: "1" } }),
   },
   {
     // Import cycles. Zero of them today, across four independent tools, so
@@ -227,10 +226,9 @@ for (const step of STEPS) {
   const argv = FAST && step.name === "build" ? ["run", "--silent", "build:api"] : step.argv;
   const fast = argv !== step.argv ? " (--fast: API build only)" : "";
 
-  const requiring = step.env?.REQUIRE_POSTGRES === "1" ? " REQUIRE_POSTGRES=1" : "";
-  console.log(`\n── ${step.name} ${step.gate ? "(gate)" : "(advisory)"}${requiring}${fast}`);
+  console.log(`\n── ${step.name} ${step.gate ? "(gate)" : "(advisory)"}${fast}`);
 
-  const env = { ...process.env, ...step.env };
+  const env = { ...process.env };
 
   if (!step.count) {
     const run = spawnSync("npm", argv, { cwd: ROOT, stdio: "inherit", env });

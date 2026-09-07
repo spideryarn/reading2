@@ -1,6 +1,6 @@
 # The labels leave the blocking step
 
-**Status: reviewed, stages agreed, stage 1 in progress.** Written 2026-09-06, out of
+**Status: stage 1 landed and reviewed; the stamp question settled ([below](#two-steps-one-stamp)); stage 2 building.** Written 2026-09-06, out of
 [260904d](260904d-deepen-fat-sections.md) § *Question 5*, where a measured run found that the thing
 blowing the ingest deadline was not the feature that plan was building.
 
@@ -117,10 +117,19 @@ ideas, notes or diagrams. Surveyed 2026-09-06, it reaches a reader through exact
 | spine hover card ([`Spine.tsx`](../../src/web/Spine.tsx):912) | **yes**, but hover-only | ≤ 5 (`MAX_CHILDREN`) | falls to `title`, then `""`; empty rows are filtered out, so the row **disappears** |
 | outline mode rung 5 ([`outline.ts`](../../src/web/outline.ts):118) | opt-in mode, current section only | ≤ 8 (`PARAGRAPH_CAP`) | `rowText` returns `null`, **row not drawn** |
 | `Paragraphs` column ([`TableView.tsx`](../../src/web/TableView.tsx):985) | opt-in, never auto-fit | whole article in the DOM | `{navLabel ?? title}` → **a visible blank cell** |
-| outline mode's leaf column | it *is* the view | whole article | as above |
+| outline mode's leaf column | ~~it *is* the view~~ **unreachable** | — | — |
 
 Default mode is `plain` ([`src/modes.ts`](../../src/modes.ts):179) and draws none of it. Across the
 eight articles in `data/`, 853 of 888 depth-3 nodes carry a label (~96%).
+
+**The fourth row of that table was wrong and is struck through above.** The table's own outline mode
+— `showText` false, the leaf column as the whole view — cannot be reached: nothing sets that flag any
+more, and `?text=0` is rewritten at boot to `?mode=outline`, which is the *band*
+([`OutlinePanel.tsx`](../../src/web/OutlinePanel.tsx)) and a different feature.
+[browser-testing.md](../project/browser-testing.md) already said so; this survey did not check it, and
+stage 1 built a whole arm of the client against a state no reader can be in before a browser found
+out. So the `Paragraphs` column reaches a reader by exactly two routes — the pill, and a `?cols=`
+naming the leaf depth — and both are opt-in.
 
 **The one visible regression risk is the blank cell**, and [`tree.ts`](../../src/web/tree.ts):161
 already documents the hazard — "a run of forty blank leaf cells".
@@ -349,6 +358,108 @@ Checkpoint rows survive the split unchanged — `batchFingerprint` contains no s
 stored row and buy the next run nothing. My own guess said the same; the difference is that this one
 names the condition under which it stops being true.
 
+## What stage 1 landed <a id="stage1"></a>
+
+Built 2026-09-06. **No behaviour change**: everything writes `ready`, which is what every existing
+revision already is.
+
+- **The column.** `article_revisions.nav_label_status`, `text not null default 'ready'` with a CHECK,
+  in [`drizzle/20260906070017_nav_label_status.sql`](../../drizzle/20260906070017_nav_label_status.sql).
+  Applied to the local database; **222 existing rows all read `ready`**, which is true of them — the
+  `hierarchy` step could not finish without producing the labels. Nothing was backfilled and no null
+  exists to be read as a fourth state. `revision_step_runs_step` is untouched: this adds no step.
+- **The type.** `NavLabelStatus` in [`src/types.ts`](../../src/types.ts), beside a note on
+  `TreeNode.navLabel` saying what an absence there does and does not mean.
+- **The write, and it is the seam stage 2 edits rather than invents.** `writeArtefacts`
+  ([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts)) sets the status in the same `UPDATE` as the
+  artefacts whenever a step writes `labels` — keyed on the **artefact**, not on the step's name,
+  which is the half stage 2 changes. Atomic with the artefact, so a revision cannot publish saying
+  `ready` over labels that did not land.
+- **`carry` in `REVISION_CARRY_POLICY`**, beside `tree` and `labels`.
+- **Both DTOs**, each with the enum and nothing else — no reason, no provider message.
+- **The client**, in [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts): one rule, `=== "ready"`
+  so an unrecognised value withholds rather than draws. The `Paragraphs` pill is *replaced by* the
+  sentence rather than disabled with it in a tooltip (a touch reader cannot open one); Outline's rung
+  5 is simply not climbed, because nobody asked for it.
+
+### The bug a browser found, and the jsdom test that did not
+
+The withheld leaf cell was drawn whenever the status was not `ready`, with no test that the leaf
+column was one of the table's columns — and by default it is not. `<colgroup>` allocates one `<col>`
+per column plus one for the prose, so the extra `<td>` took the **prose** column's width: `td.text`
+came out 0px wide and off the right edge of the window, and **every article's body was invisible** in
+the default reading view. Nothing threw, nothing logged, and the jsdom suite was green — it asserted
+what the cell contained and never that the row still fitted the table.
+
+Fixed by a `columns.includes(leafDepth)` guard in `withheldLeafCell`, with a case that counts `<td>`s
+against `<col>`s ([`tests/paragraph-labels-withheld.test.tsx`](../../tests/paragraph-labels-withheld.test.tsx)),
+watched red on the unguarded code. The lesson for stage 2 is the one in
+[silent-success.md](../reusable/silent-success.md): a renderer test that only inspects the element it
+added cannot see the element it displaced.
+
+### What the stage 1 review found <a id="stage1-review"></a>
+
+GPT Sol, 2026-09-06, at `high`, on the live pre-commit tree, closed against commit `bea197dc`.
+**No P0 and no P1 — it would not refuse the stage.** Two P2s, both real when checked and both fixed:
+
+- **F1 — the drift test did not pin what it claimed.** `NavLabelStatus` and `NAV_LABEL_STATUSES`
+  were *independent* declarations, and `readonly NavLabelStatus[]` proves only that every value
+  listed belongs to the union — never that the list exhausts it. A fourth member added to the union
+  and forgotten in the list would have compiled, and the drift test built on that list would then
+  have compared the migration against an incomplete set and passed. Worse, the test read only
+  `drizzle/` and never the **second** hand-kept CHECK literal in
+  [`schema.ts`](../../src/db/schema.ts) — whose own comment already claimed the test compared the
+  two. Fixed by deriving the union from an `as const` list, so the two cannot disagree, and by a case
+  that reads the `schema.ts` literal as text. Watched red by adding a fourth value to that literal.
+- **F2 — a withheld column that was already open could not be closed.** `toggle` in
+  [`App.tsx`](../../src/web/App.tsx) is the only caller of `setCols`, so replacing the `Paragraphs`
+  pill with the notice removed the only way to *close* the leaf column as well as the only way to
+  open it. The column can already be open without the pill — a `?cols=` naming the leaf depth,
+  shared or bookmarked — and that reader was left with a wide column of one repeated sentence and
+  nothing to shut it with, **for ever if the status is `failed`**. Unreachable through stage 1's
+  writes, which is why it is a P2; user-visible the moment stage 2 writes `pending`.
+
+  Fixed by `paragraphPill(status, leafOn)` in [`nav-labels.ts`](../../src/web/nav-labels.ts): the
+  notice stands in only while the column is **shut**, which is the case it was written for; once the
+  column is open the pill returns, because the column is already carrying the sentence. Extracting it
+  from the ternary is what makes it testable at all — Sol's own note was that the existing test
+  renders `TableView` directly and so *"cannot catch this integration issue"*.
+
+**Two answers worth keeping.** First, the review is right that *"no behaviour change"* was broader
+than the truth: both article JSON responses gain a field, and the reader's export gains
+`navLabelStatus: "ready"` through the whole-row `content/revision.json`. Nothing **rendered** changes.
+
+Second, it correctly refused my evidence for the migration: the query I sent reported *statuses*, not
+label contents, so it could not establish that all 225 rows actually hold completed labels. I had
+measured that separately and after sending the prompt, so it is recorded here instead — grouped by
+status and by whether `labels` is null:
+
+```
+  published   labels present   ready    94    (39 current)
+  draft       labels present   ready     2
+  draft       no labels        ready     5
+  failed      labels present   ready     4
+  failed      no labels        ready   120
+```
+
+**Every published revision has its labels**, and reachable false-`ready` — published or current, with
+no labels — is **0**. The 125 rows where `ready` is untrue are all failed or draft and none is
+current, so the no-backfill decision is measured rather than argued.
+
+**And it independently confirmed the stage 2 trap** I had found in the write seam: artefact presence
+cannot remain the discriminator, because both the stamped-empty manifest and the completed one
+contain `parts.labels`. Stage 2 needs an explicit producer-to-status decision, *"otherwise any mapped
+future writer of `labels` implicitly claims `ready`, exposing incomplete labels as article
+structure."*
+
+### Both suite failures were the box, not the change
+
+The full suite came back `2 failed / 737 passed`. Run alone, `tests/step-failure-seam.test.ts` passes
+and `tests/admin-store.test.ts` passes (3/3) — the latter had failed on a **20 s timeout** rather
+than an assertion, at load average 61.5 on 16 cores. Neither touches this change.
+The standing rule held again: on this box, re-run each failure alone before
+believing a red batch — [testing.md](../project/testing.md).
+
 ## What this deliberately does not fix
 
 Moving the label pass out of the blocking step **moves the cost rather than removing it**: 450–680 s
@@ -393,3 +504,285 @@ in this plan's scope unless the review says otherwise:
 - **Leave it and raise the deadline.** Rejected: `DEFAULT_JOB_CONCURRENCY = 3` means a step that is
   marginal alone is not marginal under load, and the lease exists to stop a wedged job holding a
   claim for ever.
+
+## Groundwork for stage 2, established before any code <a id="stage2-groundwork"></a>
+
+Researched 2026-09-06, against the code rather than from memory. Read this before starting stage 2;
+several of these reverse an assumption the stages above were written on.
+
+**Merge `origin/dev` before you start, and again before each commit.** Greg, 2026-09-06: *"pull the
+latest changes to avoid a big merge conflict at the end"*. Stage 2 touches the step registry, the job
+layer and the publication path — all of them shared — so a week-old base is where the expensive
+conflict comes from. Fetch and merge; never rebase.
+
+### The P0 is satisfied by omission, not by a guard
+
+**The discriminator is one ternary**, [`routes.ts`](../../src/routes.ts):7927 — `request.url === undefined`
+takes the free arm (`queue({})`), anything else goes through `withIngestSlot`. Nothing downstream
+re-derives it; the only durable fact is `jobs.ingest_event_id`, and for a slug-scoped rerun it is
+null because `EnqueueRequest.ingestEventId` is simply absent. `settleReservation`'s first line is
+`if (!ingestEventId) return;`, so a free job settles nothing on every ending.
+
+So **you have to work to charge**, and there are exactly two ways to do it by accident: route the
+successor through a body carrying a `url`, or copy the parent's `ingestEventId` onto it. The second
+is refused by `jobs_ingest_event_unique` — but it surfaces as *"Too many articles already called X"*
+after twenty allocation passes, which is safe and completely unintelligible. **Write the test that
+names it.**
+
+Note `Job.url` cannot be asked the billing question: `enqueue` fills it from `urlForSlug(slug)`
+([`jobs.ts`](../../src/jobs.ts):3043), so a free rerun's row carries a URL too. That normalisation is
+why the wall lives in the route rather than in `enqueue`
+([`admission.ts`](../../src/billing/admission.ts):8).
+
+### Enqueueing inside the publication transaction does not exist yet
+
+`tryEnqueue` ([`pg-jobs.ts`](../../src/store/pg-jobs.ts):219) opens `const db = getDb()` and inserts on
+the **pool**. It is the only thing in the codebase that inserts a `jobs` row, and the file's
+`type Executor = Db | Tx` doctrine (:97) is drawn deliberately around *transitions* — `settleIn` can
+pass its transaction to `finishIn` and `releaseStepIn`, and `enqueueOrGet` is pointedly not on that
+list. The recorded reason is that `enqueueOrGet` takes a **second pooled connection** and
+`DATABASE_POOL_MAX` is 5 — an argument against calling it while holding the billing lock, **not**
+against inserting on an executor you already hold.
+
+**There is no precedent for a job spawning a job.** Two production callers of `enqueue` (the routes
+and `retryJob`), no post-publication hook of any kind. Stage 2 invents this pattern, so there is no
+existing test and no written failure mode to copy.
+
+What it needs is a narrow `enqueueSuccessorIn(tx, …)` of roughly thirty lines rather than threading
+`tx` through `enqueue`'s 320. The successor's shape is the simplest one `enqueue` supports:
+`reservesName: false`, `urlKey` null, no `ingestEventId`, no `retryOf`. `drive()`/`pump` stays
+**outside** the transaction and is a no-op on Vercel anyway. Lock order is already article-then-job
+and this adds none.
+
+### "One job per slug" is gone, and the successor is never refused
+
+The index that would have blocked this was **deleted on 2026-09-02** and split three ways
+([`schema.ts`](../../src/db/schema.ts):2085), precisely so a second request for one article queues
+rather than 409s. The successor is inserted `queued`, so it collides with none of the four surviving
+indexes; the only conflict it can hit is `jobs_active_work`, which resolves to `sameWork` — the
+dedupe we want. And because the parent's `finishIn` runs in the same transaction as the insert, a
+claimant arriving after commit sees no predecessor.
+
+**One thing in our favour that the stages above did not know:** `STEP_BUDGET_MS` is consulted only
+for the *next* step after one has finished ([`jobs.ts`](../../src/jobs.ts):2411). The first runnable
+step of any claim runs ungated, so a one-step `labels` job **always gets the full 740 s deadline**
+whatever number goes in the table. The measured worst case is 682 s. It fits — only just, and only
+because it starts its own claim.
+
+### The hand-kept registrations, which are where this will drift
+
+Compiler-enforced and therefore safe: `StepName`, `STEP_ORDER`, `STEPS`, `STEP_BUDGET_MS`,
+`STORAGE`, `STEP_STORAGE`, `STAMP_SOURCE`, `STAGE_ICONS`. `labels` is **already** an `ArtifactKind`
+and already a `Task`, so no `SHAPE` row, no DTO change, no export line.
+
+The ones nothing checks:
+
+- **The `revision_step_runs_step` CHECK** — a migration plus a hand-copied literal at
+  [`schema.ts`](../../src/db/schema.ts):2294. **It has drifted three times.** Its comment currently
+  says *"`labels` is deliberately NOT here"*; that sentence becomes false and must be replaced.
+- **`FORCE_ONLY_WHEN_NAMED`** ([`pipeline.ts`](../../src/pipeline.ts):366) — a bare `ReadonlySet`.
+  Omitting `labels` leaves it in the positional cascade, so forcing `hierarchy` sweeps it in. Decide
+  it, with a comment, either way.
+- **`DEFAULT_INGEST_STEPS`** — `labels` must not be added, and nothing checks that.
+- **`isCurrent`'s switch** ([`pg.ts`](../../src/store/pg.ts):2488) — falling through to `default: true`
+  makes the step report itself current for ever, on the one page whose job is to say otherwise. It
+  has already happened to `ideas` and to `sketch`.
+- **`STEP_TIMING`** ([`job-state.ts`](../../src/job-state.ts):417) — falls back to 180 s, so a 680 s
+  labels run raises a false alarm every time.
+
+### What `arc` actually cost, since it is the rehearsal
+
+From [260829f](260829f-defer-arc-and-rename-hierarchy.md). Two lessons, and the second is the one
+that bites us:
+
+1. **The freshness check came first, while the step was still in the defaults**, and the removal from
+   `DEFAULT_INGEST_STEPS` happened only afterwards, in one commit with `FORCE_ONLY_WHEN_NAMED`. The
+   order was forced by review. *"Its position **is** the signal, and this change removes its
+   position."*
+2. **Every existing artefact went stale the day it shipped** — *"the visitor problem arriving for the
+   whole existing library at once."* That is F4/F5 in this plan, and `arc` walked straight into it.
+
+Also: **a test's name was the old specification.** `tests/jobs.test.ts` § *"keeps `arc` in the
+cascade, because it cannot check itself"* had to be rewritten, and four other assertions in the same
+file silently expected the positional sweep. Grep `tests/jobs.test.ts` for `labels` before starting.
+
+### Who actually runs the successor, since nothing on the server does <a id="who-drives"></a>
+
+Measured 2026-09-06 by reading the client, because Sol's F3 called a permanent `pending` a normal-use
+defect and the answer decides whether it is one.
+
+**The queue is driven by a module singleton, not by a mounted component**, and it drives **every**
+queued job the signed-in owner has — no slug filter, no "did this tab create it" filter:
+
+```ts
+/* src/web/jobEngine.ts:486 */
+for (const job of jobs) {
+  if (job.status === "queued" || job.status === "running") void drive(job.id);
+}
+```
+
+`jobEngine.start(readerId)` is called from `App()` itself, above every early return
+([`App.tsx`](../../src/web/App.tsx):350 → [`useJobs.ts`](../../src/web/useJobs.ts):185), and `start`
+polls immediately. So **any signed-in page in any tab is a driver** — the shelf, `/profile`, the
+landing page, not only the article. That was the point of lifting it out of `useJobs` on 2026-09-01:
+*"whether an import kept moving depended on whether the page you happened to open mounted one of
+those three."* Subscribers pick the **cadence** only; they never grant permission.
+
+So the three cases:
+
+- **The owner watches the ingest finish and closes the tab.** Driven, in that same tab, usually
+  within a second — the busy cadence is 1 s, so the next `GET /api/jobs` after publication already
+  carries the successor. The ingest card itself does not follow it (`AddPage` binds to the id it
+  created), which is right: the successor is not what the reader is watching.
+- **The owner never returns to the article, but opens Spideryarn anywhere.** Driven on that page
+  load, from the first poll.
+- **The owner never signs in again, anywhere.** **Queued for ever.** `settleExpired` is gated on
+  `status = 'running'` ([`pg-jobs.ts`](../../src/store/pg-jobs.ts):1052), `trimFinished` deletes only
+  terminal rows, `vercel.json` has no `crons` key, and `pump` returns early under `VERCEL`. Nothing
+  reaps a queued row and nothing else will run it: a stranger's advance is a 404
+  ([`jobs.ts`](../../src/jobs.ts):1975 scopes by `currentOwnerId`), and a signed-out reader gets no
+  engine at all.
+
+**The one shape worth naming for Greg** is the last case crossed with `/read/public`: an article
+whose owner abandoned it, shared publicly, shows *"Paragraph labels are still arriving"* to strangers
+indefinitely, and no stranger can make it stop. Narrow, and stage 1 already made the state honest
+rather than blank. Not a blocker; a thing to decide once somebody hits it.
+
+**A second job for the same article does not race it.** `blockedByAnother`
+([`pg-jobs.ts`](../../src/store/pg-jobs.ts):400) makes claims per-slug FIFO on `(created_at, id)`, so
+a lazy `arc` job queued behind the successor simply answers `busy` until the labels finish — and
+`useStepJob`'s own memo picks running-first-then-oldest with the same tie-break, so the reading
+view's spinner sits over the successor too.
+
+### The question that had to be settled first, and its answer <a id="two-steps-one-stamp"></a>
+
+**Settled 2026-09-06, before any stage 2 code.** The question was whether two steps could read their
+stamp off the same artefact — this plan keeps `STAMP_SOURCE.hierarchy = "labels"`
+([§ the stamp route](#stamp-route)) *and* adds a `labels` step that also writes the `labels` column,
+against `assertStampAgrees`, `recordStamp` and `stampForStep`'s `StampDisagrees` throw.
+
+**They can, and the reason was already in the code.** `hasArtefacts`
+([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts):684) asks the **asking step's own** run row
+before it looks at any artefact:
+
+```ts
+const run = await runRowFor(ref, exec, step);
+if (run?.status !== "done") return false;
+```
+
+`stepIsDone` ([`pipeline.ts`](../../src/pipeline.ts):966) is `interrupted → has(produces) →
+stamp/isDone`, so a step with no `done` row of its own cannot be skipped by an artefact somebody else
+wrote. Doneness is keyed on the receipt, not on the file.
+
+**And the pattern already exists.** `STORAGE` ([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts):200)
+maps **both** `blocks/blocks` and `hierarchy/blocks` to the same rows — *"The same rows as
+`blocks`/`blocks` above, not a second copy."* Two steps have shared one site all along; nobody had
+connected it to this question. [`tests/shared-site-run-row-gate.test.ts`](../../tests/shared-site-run-row-gate.test.ts)
+now pins it on that existing pair, watched red by neutering the run-row line (3 of its 5 cases fail,
+every one on an assertion rather than a timeout).
+
+#### The P0 the answer uncovered, which two reviewers found independently
+
+**Receipts are inherited, so "there is no `labels` run row" is false on re-ingest.** `beginDraftIn`
+([`pg-revisions.ts`](../../src/store/pg-revisions.ts):853) copies **every** `revision_step_runs` row
+forward into a new draft, in the same transaction as the columns and the block rows. So a second
+ingest of an article that already has labels starts with a `labels = done` receipt, and then
+`hierarchy` overwrites the labels column underneath it. Two ways that ends badly:
+
+- the blocks changed, so the carried row's `input_hash` and the fresh manifest's `sourceHash`
+  disagree, and `stampForStep` **throws** — inside `stepIsDone`, before `runStep`'s catch, so it
+  escapes as a 409 and leaves the claim to recovery;
+- or they happen to agree and the labels step **skips**, leaving the empty manifest for ever.
+
+The fix is one statement in the transaction that creates the inconsistency: **when `hierarchy` writes
+the pending manifest it deletes that revision's `labels` receipt**, atomically with the artefacts and
+the `pending` status. It is the honest thing to write down — the labels are not done in this revision
+— and it is what makes everything else fall out, because with no receipt `has` is false and
+`stepIsDone` returns before it ever reads a stamp.
+
+**It is also the structure-currency check**, which is why this plan carries no composite fingerprint.
+A re-cut tree can only come from `hierarchy` running, and `hierarchy` always writes a pending manifest
+and always invalidates. `StepStamp` has four fixed fields with no room for `structureHash`, and it
+does not need one.
+
+#### What the pending manifest carries
+
+`sourceHash`, `structureHash`, `structureVersion`, `slug`, `labels: {}`, `batches: null` — and
+**not** `version` or `generator`, which stay required on a completed file. Sol's option (c), and the
+honest one: no labels prompt and no model produced that payload. Recording the labels provenance
+anyway (option (a)) invents it and can make a carried receipt look current; recording the tree's
+`toc/N` in a field whose established meaning is the labels prompt (option (b)) re-introduces the
+exact clash that kept the stamp where it is, and `structureVersion` already holds the tree version.
+
+Omitting them costs nothing live: `hierarchy` has no `PipelineStep.stamp`, `isCurrent("hierarchy")`
+([`pg.ts`](../../src/store/pg.ts):2519) reads the run row's `input_hash` directly, and the remaining
+consumer of the hierarchy stamp is `copyArtefacts`, which has no production caller.
+
+#### Where Sol's remedy was not taken
+
+Sol's F2 (P1) asked for `STAMP_SOURCE` to become a per-step **extractor** — each step declaring which
+fields it reads and under what meaning, rather than just which artefact. The diagnosis is accepted:
+after the split, `stampForStep("hierarchy")` really does report `promptVersion: "labels/2"`, which is
+a different pass's provenance. The remedy is not, because the receipt invalidation above already
+closes both holes it was aimed at, and a fifth registration point is the opposite of fewer moving
+parts. ⟨Put to Fable as a declined P1 before landing — see below.⟩
+
+What *is* taken from it: **`beginStepRun` clears `prompt_version` and `model` when it reopens a
+row.** It already resets `input_hash` to a sentinel and leaves those two, so a stale value from an
+older code version sticks for the life of the row — which is why 3 live revisions carry `labels/1`
+on the row against `labels/2` in the artefact. A running row has no completed provenance yet. Those
+3 self-heal on their next `hierarchy` run; nothing is migrated.
+
+#### Fable's arbitration, and the one thing it moved <a id="fable-invalidation"></a>
+
+Put to Fable 2026-09-06 as a declined P1, per
+[engineering-manager.md](../reusable/engineering-manager.md). **Verdict: B, with one relocation** —
+and the relocation is better than what I had.
+
+**Key the invalidation on the artefact, not on the step's name.** I had the `hierarchy` step deleting
+the receipt. But `writeArtefacts` already has exactly this seam, and its own comment already states
+the principle — *"`parts.labels` rather than `step === "hierarchy"`, so the rule follows the
+artefact"* ([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts):1340). So the rule becomes:
+
+- `parts.labels` with **`batches === null`** → `nav_label_status = 'pending'` **and** delete this
+  revision's `labels` receipt.
+- `parts.labels` with a real `batches` → `'ready'`.
+- **`parts.tree` present and `parts.labels` absent → throw.** A tree written with no manifest beside
+  it is refused, so any future writer of the tree has to say what it did to the labels.
+
+**The reason is a writer we already know is coming.** The deepening wave
+([260904d](260904d-deepen-fat-sections.md), this same branch) is the obvious next thing to leave the
+blocking step the way the labels are leaving now — and it re-cuts the tree *without* running
+`hierarchy`. Under my version it would have had to remember a convention living inside one step's
+`run`. Under this one the store refuses it. That is the difference between a rule and a habit.
+
+Fable verified the structure-currency claim against the paths rather than the step registry, and it
+holds **today**: one code path writes the `tree` column (`writeArtefacts`, via
+`STORAGE.tree = {at:"column"}`), one step produces `tree`, the deepen wave has no entry point outside
+`generateHierarchy`, and `beginDraftIn` moves `tree`, `labels`, `navLabelStatus` and every run row in
+one transaction so a copy is never a re-cut. It also closed a race I had not asked about:
+`publishRevisionIn` ([`pg-revisions.ts`](../../src/store/pg-revisions.ts):1758) refuses a draft whose
+base is no longer current, so a slow labels job cannot publish an old tree over a newer one.
+
+**Three more things it asked for, all taken:**
+
+- **`LabelsFile` becomes a discriminated union.** The pending shape omits `version` and `generator`,
+  so it is two types pretending to be one bag of optionals — and this repo's rule is to let the
+  compiler refuse the wrong state.
+- **No `isDone` for `labels`.** It would be a second check of the fact the receipt already carries.
+  Keep a `stamp()` of `{inputHash: hashBlocks, promptVersion, model}` — which catches a prompt bump
+  *without* a `hierarchy` run — and one sentence saying that structure currency is the receipt
+  deletion, not this stamp.
+- **The F4 backfill is a second writer of `labels` run rows**, so it must copy `prompt_version` and
+  `model` off the manifest or leave them null. Otherwise the first successor job for a legacy article
+  throws `StampDisagrees` inside `stepIsDone`, before `runStep`'s catch — the same 409 as the carried
+  receipt.
+
+**And one cost, named rather than discovered.** Every `hierarchy` run buys a successor labels job,
+including one that resumes an identical tree from checkpoint. Cheap, because the batch checkpoints
+hit and a resumed batch costs nothing — but it is one job per publication, and it is the price of
+simplest-first here.
+
+Two smaller undecideds: whether the successor should carry a `profile` (the route resolves it from
+the reader today, and a server-enqueued job has no route), and whether `enqueueSuccessorIn` belongs
+in `pg-jobs.ts` or as a bespoke insert in `pg-session.ts`.

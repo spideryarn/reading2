@@ -30,11 +30,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /**
- * **Postgres, and set before anything imports the code under test.**
- *
- * `STORE` is a module-load constant (src/store/live.ts), so a `beforeAll` here
- * would be read after the branch it is meant to choose. Every import below is
- * therefore dynamic.
+ * **`STORE` was a module-load constant (src/store/live.ts)**, so the store had
+ * to be pinned above the imports below. The flag and that file went on
+ * 2026-09-06.
  */
 
 import { eq } from "drizzle-orm";

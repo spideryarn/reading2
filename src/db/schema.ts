@@ -4,13 +4,11 @@
  * Written ahead of the storage contracts (step 3 of
  * docs/plans/260825f-postgres-migration.md) because it is the artefact everything else
  * is judged against. **These tables are live for both reads and writes**: src/store/pg.ts
- * serves the reading view and the library out of them when
- * `SPIDERYARN_STORE=postgres`, src/store/pg-comments.ts writes to them, and a
- * pipeline job under Postgres commits its steps straight into a draft revision
- * here instead of writing `data/<slug>/*.json` — there is no importer keeping
- * the two in step any more (docs/project/database.md). Under the `files`
- * default these tables sit unused and the pipeline writes JSON as it always
- * has. docs/plans/260826e-postgres-storage-implementation.md tracks the rest of the cutover.
+ * serves the reading view and the library out of them, src/store/pg-comments.ts
+ * writes to them, and a pipeline job commits its steps straight into a draft
+ * revision here instead of writing `data/<slug>/*.json` — there is no importer
+ * keeping the two in step any more (docs/project/database.md).
+ * docs/plans/260826e-postgres-storage-implementation.md tracks the rest of the cutover.
  *
  * Two rules that outrank convenience, both from docs/project/block-ids.md:
  *
@@ -86,6 +84,7 @@ import type {
   Glossary,
   Ideas,
   JobStep,
+  NavLabelStatus,
   Quiz,
   Quotes,
   SearchHit,
@@ -192,8 +191,8 @@ export const articles = spideryarn.table("articles", {
   /**
    * **This article is the shipped demo, not something a reader added.**
    *
-   * `example/` is a checked-in fixture that the filesystem reader serves as an
-   * ordinary article (src/api.ts § `FIXTURE_SLUG`), and at cutover it has to
+   * `example/` is a checked-in fixture that the filesystem reader served as an
+   * ordinary article, and at cutover it has to
    * exist in Postgres or a fresh clone opens onto an empty shelf. Greg's call
    * on 2026-08-26 was that it **goes in, marked as one** — so the flag is a
    * column rather than a slug the code special-cases, because "is this the
@@ -957,6 +956,51 @@ export const articleRevisions = spideryarn.table(
     labels: jsonb("labels").$type<LabelsFile>(),
 
     /**
+     * **Where this revision's paragraph nav labels are** — `NavLabelStatus` in
+     * src/types.ts, one of `pending` / `ready` / `failed`.
+     *
+     * **It sits among the artefact columns and is not one of them**: it holds a
+     * lifecycle rather than a thing, which on this table only `status` above
+     * does, and `status` is about the revision where this is about one artefact
+     * inside it. It exists because absence on `TreeNode.navLabel` already means
+     * something else. A leaf with no label is
+     * a caption or a pull-quote, deliberately unlabelled and legal since the
+     * tree was written; *not written yet* is a different claim and had nowhere
+     * to live. src/hierarchy.ts asked for it by name — deferring the labels
+     * "needs a state that says 'still arriving' rather than an absence that says
+     * nothing".
+     *
+     * **A column rather than a field on `tree` or on `labels`**, and that is
+     * GPT Sol's F6 rather than a preference: a labels run that fails has to mark
+     * **the revision the reader is actually looking at**, which is the published
+     * one — its own candidate tree is thrown away, and a terminal job's history
+     * is not permanent. So the state has to be reachable and writable
+     * independently of whatever draft was in flight, exactly as
+     * `pgGlossaryStore.deleteGlossary` reaches the published revision (see the
+     * `glossary` note above for the price that exception pays).
+     *
+     * **`not null default 'ready'`, and the default is a true statement about
+     * every existing row**: they have their labels, because until stage 2 of
+     * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md the
+     * `hierarchy` step could not finish without producing them. So the migration
+     * backfills nothing and there is no null to read as a fourth state.
+     *
+     * **`carry` in `REVISION_CARRY_POLICY`**, beside `tree` and `labels`: a
+     * `{ steps: ["blocks"] }` job copies those two forward, and a status that
+     * did not travel with them would say `ready` about labels the draft had not
+     * inherited — or, worse, `pending` for ever about labels that are right
+     * there.
+     *
+     * The CHECK is the guard the type cannot be: `text` with a two-word typo in
+     * it compiles, and the client's `switch` would then fall to whichever arm it
+     * happens to have. Drizzle does not validate a `$type` at runtime.
+     */
+    navLabelStatus: text("nav_label_status")
+      .$type<NavLabelStatus>()
+      .notNull()
+      .default("ready"),
+
+    /**
      * The library's scalars, computed once here instead of by a directory walk
      * per request — the discipline `LibraryEntry` was already written to.
      */
@@ -970,6 +1014,20 @@ export const articleRevisions = spideryarn.table(
   },
   (t) => [
     check("article_revisions_status", sql`${t.status} in ('draft','published','failed')`),
+    /**
+     * The three of `NavLabelStatus`, and **this literal is hand-kept** — the
+     * same standing hazard `revision_step_runs_step` has, which has drifted
+     * twice and has `tests/db-step-constraint.test.ts` watching it.
+     * `drizzle-kit generate` diffs the TypeScript and knows nothing about a
+     * CHECK expression, so a fourth member added to the union in src/types.ts
+     * would compile, migrate cleanly and then be rejected at the UPDATE with a
+     * `23514 check_violation` naming none of this.
+     * `tests/nav-label-status.test.ts` compares the two.
+     */
+    check(
+      "article_revisions_nav_label_status",
+      sql`${t.navLabelStatus} in ('pending','ready','failed')`,
+    ),
     /** Lets children key on (article_id, revision_id) and inherit the article. */
     unique("article_revisions_article_id_id").on(t.articleId, t.id),
     /**

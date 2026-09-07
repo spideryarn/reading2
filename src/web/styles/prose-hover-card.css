@@ -1,0 +1,328 @@
+/* prose-hover-card.css — the single hover card the whole prose column shares,
+   for a glossary term, one of the article's own hyperlinks, or a phrase that is
+   both. ProseHoverCard.tsx. It styles only the inside; the surface is
+   `.tooltip`, in tooltip.css. */
+
+/* ------------------------------------------------- the prose hover card --
+   What a reader gets for pointing at something in the prose — an underlined
+   glossary term, one of the article's own hyperlinks, or a phrase that is both.
+   ProseHoverCard.tsx, one panel for the whole page rather than one per target.
+
+   It reuses `.tooltip` for the surface, so it is the same object as every other
+   hover panel here and inherits the raised ground, the border and the shadow.
+   Everything below is only the inside of it.
+
+   Deliberately narrower than the panel's own rendering of the same entry is
+   wide: this floats over the prose the reader is in the middle of, so it has to
+   be readable in one glance and not cover the paragraph it is explaining. When
+   the reader wants the rest — the scores, the occurrence list, the web check —
+   the foot of the card takes them to the band, which is where all of that
+   already lives. */
+.tooltip.prose-card { max-width: 21rem; }
+
+/* Two entries only where two terms overlap the same words. A rule between
+   them, because they are separate claims about separate terms and running them
+   together would read as one long entry. */
+.prose-card-body + .prose-card-body {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--rule);
+}
+
+.prose-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0 0 0.35rem;
+}
+.prose-card-name {
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.91rem;
+  font-weight: 600;
+  /* A long canonical name wraps rather than widening the card past its
+     max-width and pushing the whole panel off the flip axis. */
+  overflow-wrap: break-word;
+}
+
+/* The same left rules the panel uses, and that is the point: the difference
+   between "in this piece" and "background" is a claim about where the words
+   came from, and a reader who learned it in the band should not have to learn
+   it again here. See `.gloss-part-senseHere`. */
+.prose-card-part { margin-bottom: 0.4rem; }
+.prose-card-part:last-child { margin-bottom: 0; }
+.prose-card-part-senseHere { border-left: 2px solid var(--rule-strong); padding-left: 0.5rem; }
+.prose-card-part-background { border-left: 2px dotted var(--rule-strong); padding-left: 0.5rem; }
+/* Checked on a day, by a search, which is a different kind of thing from either
+   of the two above — so a ground rather than a rule, exactly as `.gloss-look`
+   does it in the band. */
+.prose-card-part-looked {
+  padding: 0.35rem 0.45rem;
+  border-radius: 4px;
+  background: var(--panel);
+}
+.prose-card-label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0 0 0.15rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+.prose-card-label svg { flex: none; }
+.prose-card-text {
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+/* The link half of the card. Three shapes for the three honest answers — an
+   anchor into this article, a link out, and something we could not parse — and
+   they are visibly different so a reader learns to tell them apart at a glance.
+   See ProseHoverCard.tsx § LinkCard, and link-preview.ts for why these facts. */
+
+/* A rule when a term card is sitting on top of it. The two halves are separate
+   claims about the same phrase — what the author means by it, and where they
+   are sending you — and running them together would read as one entry. */
+.prose-card-body.divided {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--rule);
+}
+
+/* The destination, big enough to be the answer. The host IS the answer for most
+   links, so it gets the weight the term's name gets in the half above. */
+.prose-card-host {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0 0 0.2rem;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.91rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+/* `PDF` — a chip rather than a word in the sentence, because it answers a
+   different question from the host ("what will I get" rather than "where"). */
+.prose-card-file {
+  flex: none;
+  padding: 0.05rem 0.28rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+/* What the path says, when it says anything. Faint: it is a hint read off an
+   address, not a title anybody wrote. Dropped entirely once a real title has
+   arrived — see LinkCard, `titled`. */
+.prose-card-trail {
+  color: var(--ink-faint);
+  font-size: 0.81rem;
+  overflow-wrap: anywhere;
+}
+/* `arXiv 2212.13345`. Monospace because it is an identifier meant to be copied
+   and compared character by character, which is the one job a proportional
+   face is bad at. */
+.prose-card-cite {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin: 0 0 0.25rem;
+  color: var(--ink-soft);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.79rem;
+  overflow-wrap: anywhere;
+}
+.prose-card-cite-label {
+  flex: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+/* The three sections somebody else filled in. All are indented behind a rule for
+   the reason the glossary's are: the card is now several claims from several
+   sources, and a reader who cannot see where one ends and the next begins has
+   lost the thing the labels exist to give them. `.prose-card-part` supplies the
+   spacing; these three supply the mark.
+
+   The rule gets fainter as the source gets further away, which is the ranking
+   the card already applies when it decides which of the three to draw
+   (ProseHoverCard.tsx § ExternalBody): solid for a piece on the reader's own
+   shelf, dotted for Wikipedia, dashed for a page we fetched once and know
+   nothing else about. */
+.prose-card-part-shelf { border-left: 2px solid var(--rule-strong); padding-left: 0.5rem; }
+.prose-card-part-wiki { border-left: 2px dotted var(--rule-strong); padding-left: 0.5rem; }
+.prose-card-part-page { border-left: 2px dashed var(--rule-strong); padding-left: 0.5rem; }
+/* **And the fourth, which is the one nobody else filled in.** Same indent, and
+   deliberately NOT another weight of the same rule: the three above are a
+   ranking of how far away the source is, and this one is not on that scale at
+   all — it is ours. So it takes the accent the rest of the app uses for a model's
+   own words, which is the same distinction `Sparkles` is making one line up in
+   the label. */
+.prose-card-part-relation { border-left: 2px solid var(--highlight); padding-left: 0.5rem; }
+/* The cursor, while the paragraph is still arriving. A block that blinks where
+   the next word will be — so a reader can tell a summary that stopped from a
+   summary that finished, which is the one thing streamed text cannot say for
+   itself.
+
+   `--highlight` and NOT `--accent`: in this palette `--accent` is a raised dark
+   SURFACE rather than the brand orange, so a caret painted with it is dark grey
+   on a near-black card — not an error, not visibly broken, just gone. The same
+   warning is on `.dock-btn.on` and in tokens.css. */
+.prose-card-caret {
+  display: inline-block;
+  width: 0.4em;
+  height: 0.85em;
+  margin-left: 0.1em;
+  translate: 0 0.08em;
+  background: var(--highlight);
+  animation: prose-card-caret-blink 1.1s steps(2, start) infinite;
+}
+@keyframes prose-card-caret-blink {
+  to { visibility: hidden; }
+}
+/* Somebody who has asked not to be moved gets a steady mark rather than none:
+   the caret still says "more is coming", it simply stops flashing. */
+@media (prefers-reduced-motion: reduce) {
+  .prose-card-caret { animation: none; opacity: 0.6; }
+}
+/* A real title — the article's own name, not a guess read off a path. It gets
+   the weight the host has, because once there is one it IS the answer. */
+.prose-card-title {
+  margin: 0 0 0.15rem;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: break-word;
+}
+/* Length, or Wikidata's one-liner. Facts about the piece rather than any of it. */
+.prose-card-meta {
+  margin: 0.15rem 0 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.77rem;
+}
+/* The wait, and only ever where there is nothing else yet. `.cmt-spinner` is
+   the house animation — see docs/project/icons.md. */
+.prose-card-waiting {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--ink-faint);
+  font-size: 0.81rem;
+}
+.prose-card-waiting svg { flex: none; }
+/* The queue said no — a quota refusal with its way out beside it, or an ingest
+   that failed. Louder than `.prose-card-waiting` because the reader pressed a
+   button and this is the answer, and it wraps rather than clamps: a refusal the
+   card cut in half is a refusal nobody can act on. */
+.prose-card-refused {
+  margin-top: 0.35rem;
+  color: var(--destructive);
+  font-size: 0.81rem;
+  overflow-wrap: break-word;
+}
+/* The address itself. On an external card it sits above the foot, deliberately
+   quiet: it is there for the reader who wants to judge the URL rather than our
+   reading of it, not for the one skimming. Also the whole body of an href we
+   could not describe, where letting the reader look at it is all that is left. */
+.prose-card-url {
+  margin-top: 0.35rem;
+  color: var(--ink-faint);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  /* Three lines is enough to recognise any URL and to read most of them whole;
+     past that it is a tracking payload pushing the card off the screen. A cap
+     on what is *drawn* rather than on what is there: the whole string is in the
+     DOM, selectable, and on the element's `title`. */
+  user-select: text;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+/* The one destination we can actually SHOW, because it is on this page. The
+   author's own words, quoted — hence the rule down the side, which is the same
+   mark the glossary's "in this piece" section uses for the same reason. */
+.prose-card-quote {
+  border-left: 2px solid var(--rule-strong);
+  padding-left: 0.5rem;
+  font-style: italic;
+}
+
+/* The two ways out: the term's own page, and the entry in the band. Both are
+   why this tooltip takes pointer events at all — see `.tooltip-anchor.interactive`. */
+.prose-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin: 0.5rem 0 0;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-ui);
+  font-size: 0.79rem;
+}
+/* The card's two ways out: "open in a new tab" on a link, and "in the glossary"
+   on a term.
+
+   **The padding is the tap target, and it is not behind a media query.** These
+   were 17px tall, which a browser pass at 390×844 flagged on 2026-09-03. The
+   obvious answer — grow them under `(pointer: coarse)` — is the one this
+   codebase has already been stopped for once, because that query describes only
+   the *primary* pointer and a touchscreen laptop is neither thing (touch.md).
+   Everything else here decides per event, from `pointerType`, and CSS cannot
+   see that.
+
+   So everyone gets the bigger target, and the reason that costs nothing is
+   Fable's, 2026-09-03: on touch the small button already satisfies WCAG 2.5.8,
+   because tapping the words a second time is the equivalent control the
+   exception is written for — so this is comfort rather than compliance, and 44px
+   would be paying Apple's price for a primary control that this is not. **The
+   reader with no second route is the one holding a mouse**, for whom a click on
+   the words selects text and this button is the only way through. ~30px,
+   one rule, no device detection. */
+.prose-card-link,
+.prose-card-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-block: 0.4rem;
+  color: var(--ink-faint);
+  font-family: inherit;
+  font-size: inherit;
+}
+.prose-card-link:hover,
+.prose-card-open:hover { color: var(--highlight-ink); }
+.prose-card-link svg,
+.prose-card-open svg { flex: none; }
+/* Pushed right whether or not there is a link to its left, so the button does
+   not jump about between one term and the next. */
+.prose-card-open {
+  margin-left: auto;
+  /* Horizontal only. A `padding: 0` shorthand here — which is what this was —
+     silently puts back the 17px target the rule above exists to fix. */
+  padding-inline: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.prose-card-open:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+

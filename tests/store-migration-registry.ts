@@ -75,10 +75,12 @@
  *   [`src/store/ai-calls.ts`](../src/store/ai-calls.ts) returned `fsCostStore`
  *   whenever `NODE_ENV === "test"`, whatever the flag said, so any suite driving
  *   a request through `handleApi` wrote ledger rows to a file. **Stage C removed
- *   that line and nothing else about the selection**, so the mechanism now
- *   reaches only the files that leave `SPIDERYARN_STORE` unset and take
- *   `fsCostStore` from the `files` branch — which survives until stage F. The
- *   twenty-two that pin the flag record into the run's private database instead,
+ *   that line and nothing else about the selection**, so the mechanism then
+ *   reached only the files that left `SPIDERYARN_STORE` unset and took
+ *   `fsCostStore` from the `files` branch. **That branch went with stage F on
+ *   2026-09-05 and the flag itself on 2026-09-06, so the mechanism reaches
+ *   nothing at all now.** The twenty-two that pinned the flag recorded into the
+ *   run's private database instead,
  *   and for them this mechanism is history rather than outstanding work; the
  *   entries are left saying so rather than rewritten one by one.
  * - **`step-context-paths`** — `runStep` in [`src/jobs.ts`](../src/jobs.ts)
@@ -1536,9 +1538,9 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "store: the flag is pinned before any import and one corpus article is seeded under a " +
       "throwaway slug with an extra glossary entry the text never matches. **One assertion was " +
       "dropped rather than translated**: `lookUpTerm('example', …)` rejecting with " +
-      "`/built-in example/` exercised `assertWritable`, which `index.ts` supplies only when the " +
-      "store is not Postgres, because the 403 exists to protect a committed directory Postgres " +
-      "does not have — the file's header records the drop, and the 404-for-an-unknown-slug half " +
+      "`/built-in example/` exercised `assertWritable`, which `index.ts` supplied only when the " +
+      "store was not Postgres, because the 403 existed to protect a committed directory Postgres " +
+      "never had (the dependency itself went on 2026-09-06) — the file's header records the drop, and the 404-for-an-unknown-slug half " +
       "is kept in a case of its own. Mutation watched red: `entries` emptied in " +
       "`pgArticleReader.loadGlossary`. The category is left alone deliberately — a converted file " +
       "may only leave this map once `store-migration-witness.json` is re-run at the end of stage " +
@@ -1732,8 +1734,8 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * then fans out across the condemned filesystem modules — but this file
    * `vi.mock`s `src/store/index.js` outright, so the hinge module is never
    * evaluated and not one of them is ever loaded, let alone called. Witness 1
-   * buckets it `flag-selection-only` with no path that avoids a flag reader,
-   * which is the mildest reach it records.
+   * bucketed it `flag-selection-only`, the mildest reach it recorded, before
+   * that bucket went with the flag on 2026-09-06.
    */
   "tests/feedback-dictation-vocabulary.test.tsx": {
     category: "shared-mechanism-collateral",
@@ -1748,6 +1750,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "path read. Its whole static reach is `src/transcribe.ts` importing " +
       "`src/vocabulary-sources.ts`, which imports the store hinge this file has already " +
       "replaced. Re-run witness 2 to confirm.",
+  },
+  "tests/nav-label-status-pg.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran. A pure Postgres suite for the nav-label lifecycle column " +
+      "(docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md, stage 1) — the write " +
+      "beside the artefacts, both DTOs, the carry-forward and the CHECK. It seeds through " +
+      "`scratchArticleInPg`, which loads a corpus article into Postgres and reads no `data/` " +
+      "directory of its own. Re-run witness 2 to confirm.",
   },
   "tests/store-glossary-delete-pg.test.ts": {
     category: "shared-mechanism-collateral",
@@ -2425,6 +2438,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/load-article-serialisation.test.ts": "private-postgres",
   "tests/lock-lifecycle.test.ts": "private-postgres",
   "tests/migration-reconciliations.test.ts": "private-postgres",
+  /* New on 2026-09-06. Nothing it asserts is about state the shared stack has:
+     it seeds its own throwaway article per run and reads back one column. */
+  "tests/nav-label-status-pg.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. The lane follows from what arbitrates:
      the refusal this file's repair handles is `jobs_active_source`, a partial
      unique index over *every* active reserving job for a URL — global on the

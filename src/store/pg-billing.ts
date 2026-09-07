@@ -2,12 +2,10 @@
  * The ingest quota: reserving a slot, settling it, and counting what is used.
  *
  * Postgres only — there is no filesystem half and there will not be one. The
- * settlement joins the publish transaction in src/store/pg-session.ts, which has
- * no filesystem counterpart, so quota is enforced when `SPIDERYARN_STORE=postgres`
- * and not otherwise. That is a decision rather than an oversight, and it cannot
- * leak into production: src/store/index.ts throws at *import* when a filesystem
- * store is live there, so the app fails to start rather than serving unmetered
- * ingests. docs/project/billing.md.
+ * settlement joins the publish transaction in src/store/pg-session.ts, so quota
+ * is enforced on every ingest: there is no second store to leak through, and the
+ * boot refusal that used to guard against one went with it.
+ * docs/project/billing.md.
  *
  * **It is wired up, as of 2026-09-03.** `settleReservation` is called at every
  * site that ends a job — the two in `settleIn` (src/store/pg-session.ts), the

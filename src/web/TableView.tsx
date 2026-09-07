@@ -17,15 +17,25 @@
 import {
   memo,
   type CSSProperties,
+  type ReactElement,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import type { Article, Block, BlockId, Comment, NodeId, TreeNode } from "../types.js";
+import type {
+  Article,
+  Block,
+  BlockId,
+  Comment,
+  NavLabelStatus,
+  NodeId,
+  TreeNode,
+} from "../types.js";
 import { useRenderCount } from "./perf.js";
 import { columnLabel, type Geometry } from "./tree.js";
+import { paragraphLabelNotice } from "./nav-labels.js";
 import type { Layout } from "./layout.js";
 import {
   annotateHtml,
@@ -277,6 +287,62 @@ function applyOpen(
     );
   }
   return out;
+}
+
+/**
+ * **The leaf column for an article whose paragraph labels are not there**, or
+ * `null` when they are and it should draw itself as usual.
+ *
+ * One `<td>` for the whole table rather than one per paragraph, because that is
+ * the difference between saying something once and repeating it two thousand
+ * times. It carries the gist columns' own classes so it is still visibly that
+ * column, plus `labels-withheld`, which is what takes the pointer off it —
+ * there is nothing here to jump to.
+ *
+ * A free function rather than a branch inside the cell map, so the map keeps a
+ * single job. `paragraphLabelNotice` is the rule and the words
+ * (src/web/nav-labels.ts); nothing about the decision varies with the row.
+ */
+function withheldLeafCell(
+  status: NavLabelStatus,
+  columns: readonly number[],
+  leafDepth: number,
+  rows: number,
+  pinLeft: number | undefined,
+  pinRight: number | "text" | undefined,
+): ReactElement | null {
+  const notice = paragraphLabelNotice(status);
+  if (notice === null) return null;
+  /* **Only where the column would have been drawn**, and this line is a bug
+     found in a browser on 2026-09-06 rather than a precaution. `columns` is what
+     `<colgroup>` allocates a `<col>` for, and the leaf is not in it unless the
+     reader asked (`fitView` never opens it by itself). Without this test the row
+     emitted one more `<td>` than the table had columns, so the extra cell took
+     the *prose* column's width and `td.text` came out 0px wide, off the right
+     edge of the window: the whole article invisible, with nothing thrown and
+     nothing logged. Withholding a layer that is not on screen is not a thing to
+     announce. */
+  if (!columns.includes(leafDepth)) return null;
+  return (
+    <td
+      rowSpan={rows}
+      data-nav-depth={leafDepth}
+      className={[
+        "gist",
+        `depth-${leafDepth}`,
+        "leaf",
+        "labels-withheld",
+        leafDepth === pinLeft ? "pin-left" : "",
+        leafDepth === pinRight ? "pin-right" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <div className="sticky">
+        <div className="nav-label nav-label-absent">{notice}</div>
+      </div>
+    </td>
+  );
 }
 
 interface Props {
@@ -1004,6 +1070,60 @@ function TableViewInner({
   const pinLeft = columns[0];
   const pinRight = showText ? "text" : columns[columns.length - 1];
 
+  /**
+   * **The leaf column, for an article with no paragraph labels to put in it** —
+   * one `<td>` spanning the whole table, or `null` when the labels are there and
+   * the column draws itself as usual. nav-labels.ts owns the rule and the words.
+   *
+   * Built once, out here, rather than decided per cell, and both halves of that
+   * matter. The whole column makes **one** decision, where a per-row test could
+   * withhold some rows and draw others — the partly-drawn level `outline.ts`
+   * calls "a lie about the structure". And nothing in it varies with the row, so
+   * the body below only has to place it.
+   *
+   * The cells it stands in for are `navLabel ?? title`, and on a leaf `title` is
+   * normally `""` — so without this the column is a run of blank rows, which
+   * reads as forty paragraphs the article could not name rather than as work
+   * that has not finished (tree.ts § "a run of forty blank leaf cells"). The
+   * sticky wrapper is the gist columns' own, so the sentence stays on screen
+   * wherever the reader is standing.
+   *
+   * **Which readers see it, checked in a browser rather than assumed.** The pill
+   * offers the notice instead of the column (App.tsx), so a reader cannot open
+   * this column while the labels are missing — what is left is a `?cols=` that
+   * names the leaf depth by hand, and a reader who had it open when the labels
+   * went. The table's own outline mode (`showText` false), where this column
+   * would have been the view, is unreachable: nothing sets that flag any more
+   * and `?text=0` is rewritten to `?mode=outline`, which is the band
+   * (`OutlinePanel`) and a different feature — docs/project/browser-testing.md
+   * says so, and it was confirmed on 2026-09-06.
+   */
+  const withheldLeaf = withheldLeafCell(
+    article.navLabelStatus,
+    columns,
+    geometry.leafDepth,
+    blocks.length,
+    pinLeft,
+    pinRight,
+  );
+
+  /**
+   * The columns the cell loop still draws — every one of them, unless the leaf
+   * column has been withheld, in which case that one is not a cell loop's
+   * business at all.
+   *
+   * **Taken out here rather than branched on per cell**, and the reason is that
+   * the loop runs once per column per block: a withheld column is one fact about
+   * the article, and asking it again for every paragraph would be the same
+   * answer two thousand times. It also keeps the loop to the one job it had.
+   *
+   * The withheld cell is drawn straight after this list, which is where it
+   * belongs: `fitView` returns `[...gists, leafDepth]`, so the leaf is always
+   * the rightmost of the table's own columns (only the prose sits right of it).
+   */
+  const drawnColumns =
+    withheldLeaf === null ? columns : columns.filter((d) => d !== geometry.leafDepth);
+
   return (
     <>
     <table
@@ -1267,7 +1387,7 @@ function TableViewInner({
             onMouseEnter={() => setHoveredRow(row)}
             className={hoveredRow === row ? "row-active" : undefined}
           >
-            {columns.map((depth) => {
+            {drawnColumns.map((depth) => {
               const cell = geometry.cellAt.get(`${depth}:${row}`);
               if (!cell) return null; // covered by a rowSpan above
               const { node } = cell;
@@ -1326,6 +1446,14 @@ function TableViewInner({
                 </td>
               );
             })}
+            {/* **The leaf column, when there is nothing to put in it** — drawn
+                on the first row and spanning the rest, so it is one sentence
+                about the article rather than a blank cell per paragraph.
+                `withheldLeafCell` above says why, and `drawnColumns` is what
+                took the leaf out of the loop that would otherwise have drawn
+                it here. `null` on every other row, which is exactly what a
+                rowSpan needs from the rows it covers. */}
+            {row === 0 && withheldLeaf}
             {showText && (
               <td
                 data-nav-depth={geometry.leafDepth}

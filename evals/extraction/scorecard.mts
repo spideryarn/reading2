@@ -307,12 +307,101 @@ export interface GateResult {
   detail: string;
 }
 
+/**
+ * **Which branch of the gates each output node and each text run actually took.**
+ *
+ * A gate reports `passed` and `exercised`, and neither says *how* a green was
+ * reached. That gap is not theoretical: twice in this file's history a green was
+ * green because a run had been silently dropped from the alignment, and from
+ * outside a dropped run and a placed one look identical — `provenanceForm`'s
+ * "could not be placed" red exists because the second of those went unnoticed
+ * for a day.
+ *
+ * So every card carries the census. The shape corpus
+ * ([shapes.mts](shapes.mts)) pins these numbers per case, which is what makes a
+ * green there evidence rather than a shrug: a case cannot go green by abstaining,
+ * because the branch it claims to exercise is a number it has to hit.
+ */
+export type RunPlacement =
+  /** Placed inside its own element's own text, where the stamp says it belongs. */
+  | "owner"
+  /** The owner placed it, and the ancestor's subtree placed it *earlier*. */
+  | "subtreeEarlier"
+  /** **The owner could not supply it at all, and the subtree did.** GPT Sol's
+   *  eighth review. Zero across the fifteen shipped extractions. */
+  | "subtreeOnly"
+  /** No owner to ask — a `descendant` or unstamped node, matched page-wide. */
+  | "page"
+  /** The only place its owner or the page has it is behind the cursor. */
+  | "behind"
+  /** The same, diagnosed inside the ancestor's subtree. */
+  | "behindSubtree"
+  /** Nowhere its owner, its subtree or the page could supply it. */
+  | "unplaceable";
+
+export const RUN_PLACEMENTS = [
+  "owner", "subtreeEarlier", "subtreeOnly", "page", "behind", "behindSubtree", "unplaceable",
+] as const;
+
+export interface ProvenanceTally {
+  /** Which form of the gates answered. `provenance` is the strong one. */
+  form: "provenance" | "text" | "abstained";
+  /** Output nodes carrying own text, by how `sourceRefOf` resolved them. Sums to
+   *  the attribution gate's exposure count. */
+  carriers: Record<"direct" | "descendant" | "ancestor" | "none", number>;
+  /** Every text run the order walk judged, by the branch that placed it. Sums to
+   *  the source-order gate's exposure count. */
+  runs: Record<RunPlacement, number>;
+  /**
+   * **Runs whose element carried a `direct` or `ancestor` stamp and for which
+   * `owners` holds no `Ownership` at all**, so `placeRun` took its ownerless,
+   * page-wide branch.
+   *
+   * `owners` is populated only from text nodes, so a wrapper with no own text —
+   * `<div s1><p s2>…</p></div>` — is invisible to it, and a generated node under
+   * such a wrapper may be placed anywhere on the page. It is a known hole rather
+   * than a bug being reported: see [shapes.mts](shapes.mts)
+   * § `borrowing-under-a-text-free-wrapper`, which pins it and is deliberately
+   * green on the behaviour as it stands.
+   *
+   * **And it is not hypothetical.** Measured 2026-09-06 over the shipped
+   * extraction of all fifteen fixtures: **9 runs on 5 of them** — `medium-about`
+   * 4, `quanta-year-physics` 2, `wiki-gdp-table` 1, `plos-biology` 1,
+   * `pmc-article` 1, reproduced independently. **4 on 3 of them since C1a landed
+   * the same day**: stage 2 now refuses `medium-about` and `pmc-article`
+   * outright (src/extract.ts § `capabilityFloor`), so their runs are no longer
+   * shipped and no longer counted. The branch is still live on
+   * `wiki-gdp-table`, `plos-biology` and `quanta-year-physics`. Their **global
+   * order is still checked**; what is missing is any claim about which container
+   * they belong in. [score.mts](score.mts) prints the line, so the number is
+   * read from the run rather than quoted from here.
+   */
+  ownerlessStamped: number;
+}
+
+function emptyTally(form: ProvenanceTally["form"]): ProvenanceTally {
+  return {
+    form,
+    carriers: { direct: 0, descendant: 0, ancestor: 0, none: 0 },
+    runs: {
+      owner: 0, subtreeEarlier: 0, subtreeOnly: 0, page: 0,
+      behind: 0, behindSubtree: 0, unplaceable: 0,
+    },
+    ownerlessStamped: 0,
+  };
+}
+
 export interface Scorecard {
   fixture: string;
   arm: string;
   tier: "gold" | "manifest" | "none";
   metrics: Record<MetricName, Metric>;
   gates: Record<GateName, GateResult>;
+  /**
+   * **How each gate reached its verdict**, branch by branch. Never a verdict of
+   * its own; the thing that makes a verdict readable. See `ProvenanceTally`.
+   */
+  placements: ProvenanceTally;
   /**
    * **Binary, per fixture, never averaged.** Every declared assertion held.
    * `null` when there was no manifest to hold.
@@ -1102,12 +1191,14 @@ export function score(input: ScoreInput): Scorecard {
     structureFidelity, metadataExactness, blockCleanliness,
   };
 
+  const { gates, tally } = gatesFor(input, blocks);
   return {
     fixture: input.fixture,
     arm: input.arm,
     tier: gold ? "gold" : manifest ? "manifest" : "none",
     metrics,
-    gates: gatesFor(input, blocks),
+    gates,
+    placements: tally,
     assertionsPassed: manifest ? failures.length === 0 : null,
     article,
     failures,
@@ -1202,18 +1293,26 @@ export function score(input: ScoreInput): Scorecard {
  *   that half.
  * - **A word swapped inside a node Readability generated**, which resolves only
  *   to an ancestor and is therefore judged against the whole page.
+ * - **Where a run under an own-text-free wrapper belongs.** Such a wrapper has no
+ *   `Ownership`, so its runs take `placeRun`'s page-wide branch and any
+ *   occurrence anywhere will do — see `ProvenanceTally.ownerlessStamped`, which
+ *   counts them, and `shapes.mts` § `borrowing-under-a-text-free-wrapper`, which
+ *   shows the same borrowing caught when the wrapper carries one word of its own.
  */
 function gatesFor(
   input: ScoreInput,
   blocks: ReturnType<typeof splitIntoBlocks>["blocks"],
-): Record<GateName, GateResult> {
+): { gates: Record<GateName, GateResult>; tally: ProvenanceTally } {
   const abstain = (name: GateName, why: string): GateResult => ({
     name, passed: null, exercised: 0, detail: why,
   });
   if (!input.sourceHtml) {
     return {
-      attribution: abstain("attribution", "no source HTML supplied"),
-      sourceOrder: abstain("sourceOrder", "no source HTML supplied"),
+      gates: {
+        attribution: abstain("attribution", "no source HTML supplied"),
+        sourceOrder: abstain("sourceOrder", "no source HTML supplied"),
+      },
+      tally: emptyTally("abstained"),
     };
   }
   /**
@@ -1233,25 +1332,28 @@ function gatesFor(
    */
   const form =
     input.stampedHtml === undefined
-      ? { ...textForm(input.sourceHtml, blocks), strong: false }
+      ? { ...textForm(input.sourceHtml, blocks), strong: false, tally: emptyTally("text") }
       : { ...provenanceForm(input.stampedHtml, input.sourceHtml), strong: true };
 
   return {
-    attribution: {
-      name: "attribution",
-      passed: form.judged ? form.attribution.length === 0 : null,
-      exercised: form.judged,
-      detail: form.attribution.length
-        ? `${form.attribution.length} problem(s): ${form.attribution[0]}`
-        : `${form.judged} ${form.strong ? "output node(s) each say what their own source element said" : "block(s) found in the source — the WEAK text form, no stamped output"}`,
-    },
-    sourceOrder: {
-      name: "sourceOrder",
-      passed: form.ordered > 1 ? form.order.length === 0 : null,
-      exercised: form.ordered,
-      detail: form.order.length
-        ? `${form.order.length} problem(s): ${form.order[0]}`
-        : `${form.ordered} ${form.strong ? "text run(s) placed in source order; no DIRECTLY stamped node said twice" : "block(s) in source order (WEAK text form)"}`,
+    tally: form.tally,
+    gates: {
+      attribution: {
+        name: "attribution",
+        passed: form.judged ? form.attribution.length === 0 : null,
+        exercised: form.judged,
+        detail: form.attribution.length
+          ? `${form.attribution.length} problem(s): ${form.attribution[0]}`
+          : `${form.judged} ${form.strong ? "output node(s) each say what their own source element said" : "block(s) found in the source — the WEAK text form, no stamped output"}`,
+      },
+      sourceOrder: {
+        name: "sourceOrder",
+        passed: form.ordered > 1 ? form.order.length === 0 : null,
+        exercised: form.ordered,
+        detail: form.order.length
+          ? `${form.order.length} problem(s): ${form.order[0]}`
+          : `${form.ordered} ${form.strong ? "text run(s) placed in source order; no DIRECTLY stamped node said twice" : "block(s) in source order (WEAK text form)"}`,
+      },
     },
   };
 }
@@ -1638,7 +1740,14 @@ function textForm(
 function provenanceForm(
   stampedHtml: string,
   sourceHtml: string,
-): { attribution: string[]; order: string[]; judged: number; ordered: number } {
+): {
+  attribution: string[];
+  order: string[];
+  judged: number;
+  ordered: number;
+  tally: ProvenanceTally;
+} {
+  const tally = emptyTally("provenance");
   const doc = docOf(stampedHtml);
   const wholePage = squeeze(textOf(sourceHtml));
   const attribution: string[] = [];
@@ -1653,6 +1762,7 @@ function provenanceForm(
     const { id, how } = sourceRefOf(el);
     if (carriesText) {
       carriers += 1;
+      tally.carriers[how] += 1;
       if (how === "none") {
         attribution.push(
           `no source element for ${JSON.stringify(own.slice(0, 60))} — this node was fabricated`,
@@ -1772,11 +1882,29 @@ function provenanceForm(
    *
    * ## The algorithm, and what it costs
    *
-   * Greedy earliest-admissible, in output order. For each run, take the earliest
-   * position at or after the cursor that its **owner** could supply, and advance
-   * the cursor past it. Greedy is optimal here by the usual exchange argument:
-   * taking the earliest admissible occurrence never rules out a later run that a
-   * later occurrence would have allowed.
+   * Greedy earliest-admissible, in output order. For each run, take the admissible
+   * placement that **ends** earliest, and advance the cursor to that end.
+   *
+   * **Earliest end, not earliest start**, and the distinction is not pedantry —
+   * getting it wrong is what condemned a container that repeats its child's phrase
+   * (§ the ninth review, at the bottom of this walk). The exchange argument is
+   * unchanged in substance: the only thing a placement hands to the runs after it
+   * is the cursor, feasibility is monotone in the cursor — anything placeable from
+   * `c` is placeable from any `c' ≤ c` — so taking the smallest reachable cursor
+   * never rules out a completion. What changes is which quantity that is. Where a
+   * placement is an exact span its length is fixed, so earliest start *is* earliest
+   * end and the two readings coincide; where it is a subsequence permitting
+   * dropped children (`placeInSpan`) they come apart, and it is the end that the
+   * argument is about.
+   *
+   * **What is not proven optimal** is the placement `coverOf` finds *within* one
+   * stretch: it anchors at the earliest chunk it can and then takes the longest
+   * run at each step, which is not guaranteed to be the cover that ends soonest.
+   * Making it so would mean a search over chunk boundaries for a gain nothing has
+   * yet needed — the candidates are compared by end, so the ordering between the
+   * owner and the subtree is right, and only a subtree holding the same phrase
+   * twice at chunk granularity could be placed later than necessary. Recorded
+   * because the next false red of this family will start here.
    *
    * The owner is the run's element resolved by stamp — its **own text**, which
    * may be several pieces with other elements' text between them, and which a run
@@ -1816,6 +1944,22 @@ function provenanceForm(
     if (INVISIBLE_TAGS.has(el.tagName)) return;
     const { id, how } = sourceRefOf(el);
     const owner = (how === "direct" || how === "ancestor") && id ? owners.get(id) : undefined;
+    /**
+     * **A stamp that `owners` has never heard of.** `sourceOwnership` builds an
+     * `Ownership` only from text nodes, so a wrapper with no own text of its own
+     * has none — and every run under it takes `placeRun`'s ownerless, page-wide
+     * branch, where any occurrence anywhere on the page will do. Counted rather
+     * than fixed: [shapes.mts](shapes.mts)
+     * § `borrowing-under-a-text-free-wrapper` pins what that costs.
+     */
+    const stampedWithoutOwner = (how === "direct" || how === "ancestor") && !!id && !owner;
+    /**
+     * **A generated node's admissible set is its ancestor's whole subtree**, and
+     * the ancestor's own text is only part of it — the rest is whatever children
+     * the flattening kept. Looked up once per element rather than once per run;
+     * `undefined` for every other resolution, which is what turns the branch off.
+     */
+    const subtree = how === "ancestor" && id ? subtrees.get(id) : undefined;
     for (const node of Array.from(el.childNodes)) {
       if (node.nodeType === 1) {
         walk(node as Element);
@@ -1825,97 +1969,131 @@ function provenanceForm(
       const run = squeeze(node.textContent ?? "");
       if (!run) continue;
       judged += 1;
+      if (stampedWithoutOwner) tally.ownerlessStamped += 1;
       const placed = placeRun(pageText, run, cursor, owner);
-      if (placed.span) { cursor = placed.span[1]; continue; }
-      if (placed.behind) { reordering(run, id ? `source element ${id}` : "the page"); continue; }
+      let span = placed.span;
+      /** Which branch placed this run. Exactly one is counted, always. */
+      let via: RunPlacement = owner ? "owner" : "page";
 
       /**
-       * **The owner could not supply this run at all, and this branch used to
-       * drop it in silence** — on the reasoning that attribution had already
-       * rejected it. GPT Sol's eighth review: attribution deliberately judges a
-       * generated node against the *whole page*, so it had passed it, and the run
-       * simply vanished from the alignment. His case is a `<div s1>A <i s2>X</i>
-       * B</div>` flattened to `<div s1><p>A X B</p></div>`: the `<p>` resolves to
-       * ancestor `s1`, whose own text is only `AB`, so the `AXB` run was omitted —
-       * and moving that whole `<div>` after a later paragraph produced a card
-       * *identical* to the correct one.
+       * **The ancestor's subtree, as an alignment rather than an exact match.**
+       * See the two shapes above. The window stops at the owner's own placement
+       * because a subtree placement is only worth having if it **ends earlier**:
+       * the end is the whole of what the cursor carries forward, and bounding
+       * the window by it is also what keeps this linear — the windows telescope,
+       * one per step the cursor takes.
        *
-       * **Fail open into a tighter set, not closed.** Failing closed would
-       * condemn that flattening, which is a correct extraction: a node
-       * Readability builds out of a subtree carries the ancestor's own text *and*
-       * its children's, and no element owns that combination. Measured
-       * 2026-09-06, this branch is taken **zero times** across all fifteen
-       * shipped extractions, so the corpus could never have found it and cannot
-       * price the choice either — which is the argument for reasoning about the
-       * shape rather than the count.
-       *
-       * The retry is the ancestor's **subtree**, not the whole page: that is
-       * where a flattened node's text provably came from, it is one contiguous
-       * stretch, and it is strictly tighter than the page. `descendant` and
-       * unstamped runs already use the page and are unaffected.
-       *
-       * ## KNOWN DEFECT — this retry is an exact match, not an alignment
-       *
-       * **It does not do what the walk's own docstring above says**, and the
-       * gap is stated here rather than left to be inferred. `placeRun` looks for
-       * the run as a *substring* of the subtree; the documented rule is earliest
-       * *admissible* placement over the candidate set. GPT Sol's ninth review
-       * reproduced two correct extractions that this condemns:
-       *
-       * - **partial flattening** — `<div s1>A <i s2>X</i> B <button s3>nav</button> C</div>`
-       *   extracted as `<div s1><p>A X B C</p></div>` fails, because `AXBC` is
-       *   neither the own text `ABC` nor a substring of the subtree
-       *   `AXBnavC`, although every retained character is in order;
-       * - **repeated text** — `<div s1><i s2>Alpha</i>Alpha</div>` extracted as
-       *   `<div s1><p>Alpha</p>Alpha</div>` fails, because the generated
-       *   paragraph takes the *later* occurrence in the own text and the direct
-       *   run left behind then reads as reordered.
-       *
-       * **The direction matters more than the size**: every other defect this
-       * gate has had let a bad extraction through, and this one condemns a good
-       * one. A red from this branch is a reason to suspect the ruler first.
-       *
-       * The subtree is the right *spatial* boundary and that part stands. What it
-       * cannot be is an **exact-match fallback after owner matching**: the fix is
-       * subtree-local monotone placement that permits legitimate child deletion
-       * and takes the earliest result across valid placements. Recorded as a limit
-       * in § B rather than fixed, because no fixture produces either shape and the
-       * change belongs with the shape corpus that could test it.
+       * When the owner could not place the run at all — including when its only
+       * occurrence is behind the cursor — the window is the whole subtree, which
+       * is the branch GPT Sol's eighth review opened; the fifteen **shipped**
+       * extractions take it zero times, one degenerate arm does, and the note at
+       * the bottom of this walk says which.
        */
-      if (how === "ancestor" && id) {
-        const bounds = subtrees.get(id);
-        if (bounds) {
-          /* Cut here rather than for every element up front — see `subtrees`. */
-          const subtree: Ownership = {
-            own: pageText.slice(bounds.from, bounds.to),
-            pieces: [{ at: 0, len: bounds.to - bounds.from, global: bounds.from }],
-          };
-          const again = placeRun(pageText, run, cursor, subtree);
-          if (again.span) { cursor = again.span[1]; continue; }
-          if (again.behind) { reordering(run, `the subtree of source element ${id}`); continue; }
+      if (subtree) {
+        const lo = Math.max(cursor, subtree.from);
+        const hi = Math.min(subtree.to, span ? span[1] : subtree.to);
+        const inSubtree = lo < hi ? placeInSpan(pageText, run, lo, hi) : null;
+        if (inSubtree) {
+          /* **`subtreeEarlier` means the subtree actually moved the answer.** The
+             window is bounded above by the owner's placement, so a subtree cover
+             can only end where the owner did or sooner; counting the equal case
+             as a subtree placement would make the branch fire on every ordinary
+             `ancestor` node and say nothing. */
+          if (!span) via = "subtreeOnly";
+          else if (inSubtree[1] < span[1]) via = "subtreeEarlier";
+          span = inSubtree;
         }
       }
 
+      if (span) { tally.runs[via] += 1; cursor = span[1]; continue; }
+      if (placed.behind) {
+        tally.runs.behind += 1;
+        reordering(run, id ? `source element ${id}` : "the page");
+        continue;
+      }
+      if (subtree && placeInSpan(pageText, run, subtree.from, subtree.to)) {
+        tally.runs.behindSubtree += 1;
+        reordering(run, `the subtree of source element ${id}`);
+        continue;
+      }
+
       /**
-       * **Nowhere its owner, its subtree or the page could supply it — and that
-       * is named rather than skipped.**
+       * **Nothing above could place this run.** Kept as a named red rather than
+       * a silent skip — the two branches that lead here are worth stating,
+       * because both were bugs.
        *
-       * This is text the page does not have, so attribution has reported it too,
-       * and two reds for one fault is the cost. It is deliberate: *"assume
-       * another check caught it"* is the shape of every hole this gate has had,
-       * and a redundant red is cheaper than a silent skip. Measured zero across
-       * the fifteen.
+       * **The owner could not supply it, and that used to drop it in silence**
+       * on the reasoning that attribution had already rejected it. GPT Sol's
+       * eighth review: attribution deliberately judges a generated node against
+       * the *whole page*, so it had passed it, and the run simply vanished from
+       * the alignment. `<div s1>A <i s2>X</i> B</div>` flattened to
+       * `<div s1><p>A X B</p></div>` resolves to ancestor `s1`, whose own text is
+       * only `AB`, so the `AXB` run was omitted — and moving that whole `<div>`
+       * after a later paragraph produced a card *identical* to the correct one.
+       *
+       * **And the retry was an exact match rather than an alignment**, which is
+       * GPT Sol's ninth, and the only defect this gate has had that condemned a
+       * *correct* extraction rather than passing a bad one. `placeRun` looked for
+       * the run as a substring of the subtree, so a flattening that legitimately
+       * drops a child — `A <i>X</i> B <button>nav</button> C` becoming `AXBC` —
+       * matched neither the own text `ABC` nor the subtree `AXBnavC`; and,
+       * because the subtree was reached only *after* the owner, a container that
+       * repeats its child's phrase placed the generated node at the owner's
+       * later occurrence and then called the direct run left behind a reordering.
+       *
+       * The subtree was the right *spatial* boundary and that part stood. It is
+       * a **cover** inside that boundary now — the same in-order, run-floored
+       * subsequence `coverOf` gives attribution, so a dropped child costs a join
+       * and nothing else — and it is one candidate among the placements rather
+       * than a fallback behind one. See `placeInSpan`, and the tests named for
+       * the ninth review in `tests/extraction-scorer.test.ts`.
+       *
+       * **Reaching here means nowhere its owner, its subtree or the page could
+       * supply it.** This is text the page does not have, so attribution has
+       * reported it too, and two reds for one fault is the cost. It is
+       * deliberate: *"assume another check caught it"* is the shape of every hole
+       * this gate has had, and a redundant red is cheaper than a silent skip.
+       * Measured zero across the fifteen **shipped** extractions, and it was not
+       * zero across the run until C1a: `drop-every-short-block` on `pmc-article`
+       * removes the `<a>here</a>` from the bot wall's *"Click here if you are not
+       * automatically redirected"*, and until this was fixed the card said that
+       * run was invented while the attribution gate beside it said it was not.
+       * **Stage 2 refuses `pmc-article` since 2026-09-06**, so the runner no
+       * longer reaches that shape on a real page; the oracle for it is the case
+       * named for the ninth review in `tests/extraction-scorer.test.ts`, which
+       * holds the floor open for that one call to keep the witness.
+       * The one thing this red is *not* is proof of invention on its own: a run
+       * whose retained pieces are all present but in the wrong order inside the
+       * subtree arrives here too, so the message below names both possibilities
+       * rather than asserting the one the old wording asserted.
        */
+      tally.runs.unplaceable += 1;
       order.push(
         `${JSON.stringify(run.slice(0, 60))} could not be placed in the source at all — the ` +
-          "order gate can say nothing about where it belongs, and attribution should have " +
-          "reported the same text as invented",
+          "order gate can say nothing about where it belongs" +
+          (subtree
+            ? `: the subtree of source element ${id} does not have it in this order, so either ` +
+              "the words were invented or a generated node is saying what another container said"
+            : ", and attribution should have reported the same text as invented"),
       );
     }
   };
   if (doc.body) walk(doc.body);
 
-  return { attribution, order, judged: carriers, ordered: judged };
+  /**
+   * **Every judged run took exactly one branch, and this is where that is
+   * checked rather than assumed.** The tally is what the shape corpus pins, so a
+   * run that fell out of the census would let a case claim a branch it never
+   * exercised — the abstention-shaped green this whole file is built against.
+   */
+  const counted = RUN_PLACEMENTS.reduce((n, k) => n + tally.runs[k], 0);
+  if (counted !== judged) {
+    throw new Error(
+      `the order walk judged ${judged} run(s) and accounted for ${counted} — a run took no ` +
+        "branch of the placement census, which is an instrument bug",
+    );
+  }
+  return { attribution, order, judged: carriers, ordered: judged, tally };
 }
 
 /**
@@ -2039,6 +2217,127 @@ function placeRun(
     return { span: [globalOf(owner, k), globalOf(owner, k + run.length - 1) + 1], behind: false };
   }
   return { behind: owner.own.includes(run) };
+}
+
+/**
+ * **The mutation-testing seam for the placement floor, and nothing else.**
+ *
+ * `null` in every normal run, and the shape corpus asserts that it is. It exists
+ * because this file's own rule is that a check nobody has seen fail is not
+ * evidence, and until 2026-09-06 the floor below was in exactly that position:
+ * dropping it from 8 to 1 — which turns the cover into a bare character
+ * subsequence, so the subtree boundary stops being a boundary — left all 66
+ * cases in `tests/extraction-scorer.test.ts` green, while the six other
+ * mutations of this branch were each caught.
+ *
+ * A constant nobody can move is a constant nobody can watch fail. So the corpus
+ * moves it, under `withPlacementFloor`, and
+ * [shapes.mts](shapes.mts) § `borrowed-phrase-spelled-out-by-the-subtree` is the
+ * shape that comes apart when it does.
+ */
+let placementFloor: number | null = null;
+
+/**
+ * Run `fn` with `placeInSpan`'s run floor moved. **For mutation testing only** —
+ * restored in a `finally`, so a throwing case cannot leave the instrument
+ * mutated for the next one, and nesting restores the outer floor rather than the
+ * default.
+ *
+ * **Synchronous only, and it says so rather than hoping.** `finally` runs when
+ * the callback *returns*, so an `async` callback would restore the floor at its
+ * first `await` and every line after that would run at the shipped floor while
+ * looking as though it ran at the mutated one — a silent success inside the seam
+ * built to prevent one. `score()` is synchronous and nothing here needs a
+ * promise, so a thenable is refused rather than documented. GPT Sol, 2026-09-06.
+ */
+export function withPlacementFloor<T>(floor: number, fn: () => T): T {
+  const was = placementFloor;
+  placementFloor = floor;
+  try {
+    const out = fn();
+    if (out !== null && typeof (out as { then?: unknown } | null)?.then === "function") {
+      throw new Error(
+        "withPlacementFloor was given an asynchronous callback — the floor is restored when the " +
+          "callback returns, so anything after an await would run at the shipped floor while " +
+          "appearing to run at the mutated one",
+      );
+    }
+    return out;
+  } finally {
+    placementFloor = was;
+  }
+}
+
+/** The floor as it stands, so the corpus can assert nothing left it moved. */
+export function currentPlacementFloor(): number {
+  return placementFloor ?? MIN_RUN_IN_ELEMENT;
+}
+
+/**
+ * **Where this run sits inside one stretch of the page, allowing for children
+ * the extraction dropped.** `null` when it does not sit there at all.
+ *
+ * The caller is the `ancestor` branch of the order walk: a node Readability
+ * built by flattening a subtree carries the ancestor's own text *and* whichever
+ * children survived, and **no element owns that combination**, so an exact match
+ * — against the own text or against the subtree — condemns a correct extraction.
+ * That was the ninth review's finding, in both of its shapes.
+ *
+ * So the question asked here is `coverOf`'s: **is every character of the run
+ * inside a run of at least `MIN_RUN_IN_ELEMENT` characters that this stretch
+ * has, in this stretch's own order?** A dropped child costs one join and nothing
+ * else, which is exactly the property the attribution gate is already built on,
+ * so there is one mechanism here rather than a second one — and a *rearrangement*
+ * of the retained children still fails, because a cover is a subsequence in
+ * order.
+ *
+ * `MIN_RUN_IN_ELEMENT` rather than `MIN_RUN`, because the haystack is one
+ * element's subtree rather than the page: the floor is what makes a match
+ * evidence, and a coincidental one is far less likely here. Invention is not
+ * this function's question in any case — attribution asks that of a generated
+ * node against the whole page, at the 24-character floor.
+ *
+ * **The window is cut here, and only here.** Storing every element's subtree
+ * text up front is quadratic in the nesting and killed the corpus run at 4 GB —
+ * `gutenberg-pride` has 3,542 stamped elements inside 589,000 characters. The
+ * caller passes `[lo, hi)` bounded by where the cursor is and by the placement
+ * it already has, so what is cut is the distance the cursor travels rather than
+ * a subtree apiece. Measured 2026-09-06, whole `score()` calls, warm, mean of
+ * three: `gutenberg-pride` 587 → 598 ms, `python-docs-itertools` 371 → 393 ms,
+ * `pg-greatwork` 65 → 103 ms — the last is where the 216 generated leaves are,
+ * and 38 ms is what asking this question of every one of them costs.
+ *
+ * **The floor is pinned by one shape, and by nothing else.** It was pinned by
+ * nothing at all until 2026-09-06: dropping it to 1 — which turns the cover into
+ * a bare character subsequence — left all 66 cases in
+ * `tests/extraction-scorer.test.ts` green, while the six other mutations of this
+ * branch were each caught. What distinguishes the two is a **generated node
+ * borrowing a phrase from another container, where the ancestor's own subtree
+ * happens to spell that phrase letter by letter**: at floor 8 the subtree cannot
+ * cover it and the gate reddens, at floor 1 it can and the gate passes. So the
+ * floor is what stops the subtree from being a boundary in name only, and
+ * [shapes.mts](shapes.mts) § `borrowed-phrase-spelled-out-by-the-subtree`
+ * asserts both sides of that through `withPlacementFloor`.
+ *
+ * **Where that case puts the boundary, measured rather than assumed.** Run at
+ * every floor from 1 to 12 on 2026-09-06: **green at 1 and 2, red at 3 and
+ * above.** So it rejects a floor of 1 or 2 and says nothing about **3 through
+ * 8** — the genuinely unpinned interval, and the first version of this note
+ * said 2 through 8 because nobody had run the sweep. GPT Sol's third finding.
+ * The case pins all three of those floors, so the sweep cannot go stale.
+ */
+function placeInSpan(
+  pageText: string,
+  run: string,
+  lo: number,
+  hi: number,
+): [number, number] | null {
+  if (hi <= lo) return null;
+  const cover = coverOf(pageText.slice(lo, hi), run, placementFloor ?? MIN_RUN_IN_ELEMENT);
+  /* `from < 0` is a cover made entirely of forgiven fragments — nothing was
+     actually matched, so there is no position to claim. */
+  if (cover.uncovered !== null || cover.from < 0) return null;
+  return [lo + cover.from, lo + cover.to];
 }
 
 /**

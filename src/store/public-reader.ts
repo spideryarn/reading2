@@ -31,7 +31,7 @@
  * ## What this file may import
  *
  * The schema, the connection, `publicSlug`, the sanitiser, and pure helpers.
- * **Not** `src/api.ts`, `src/store/index.ts`, `src/store/pg.ts`, any writer, or
+ * **Not** `src/store/index.ts`, `src/store/pg.ts`, any writer, or
  * anything that can reach the AI gateway — tests/public-imports.test.ts walks
  * the graph from `src/public/routes.ts` and fails if any of those appear.
  * `currentOwnerId` is not in the graph either, and that is the fourth of the
@@ -331,6 +331,19 @@ const PUBLIC_PROJECTIONS = {
        another. docs/project/security-map.md § the hazard this section is really
        about. */
     sketch: articleRevisions.sketch,
+    /* **Not an artefact but a lifecycle**: where this revision's paragraph nav
+       labels are, so a visitor's client can withhold that layer rather than draw
+       a run of blank cells. That is the same job `tree.provisional` does inside
+       the `tree` above, and it crosses for the same reason — a client that
+       cannot tell *still arriving* from *this article has none* draws the blanks
+       either way. Three words about our pipeline, none of them about a person,
+       and never a reason or a provider message (src/public-types.ts §
+       `navLabelStatus`).
+       It is a `not null` column, so unlike the artefacts above there is no
+       absent reading of it — which is what makes the silent failure the
+       `timeline` note describes impossible here, and why `publicArticle`
+       requires the field rather than spreading it conditionally. */
+    navLabelStatus: articleRevisions.navLabelStatus,
   },
   /**
    * **Enough to fill in a `<head>`, and deliberately not enough to render.**
@@ -739,6 +752,7 @@ export const pgPublicReader: PublicArticleReader = {
         tweets: found.revision.tweets,
         timeline: found.revision.timeline,
         sketch: found.revision.sketch,
+        navLabelStatus: found.revision.navLabelStatus,
         /* `null` columns become absent keys, exactly as the artefacts do — the
            mapping is here rather than in the DTO because Drizzle hands back
            `null` and `Comment` says `undefined`. */

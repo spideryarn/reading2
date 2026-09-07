@@ -283,8 +283,7 @@ function report(runFile: RunFile, malformedLines: number[], writeFailures: numbe
  * *published* revision rather than a job's draft, which for an article that has
  * already been ingested is the same bytes.
  *
- * There is no `SPIDERYARN_STORE` to set: the flag is a tombstone and
- * docs/project/setup-dev.md asks you not to set it.
+ * There is no `SPIDERYARN_STORE` to set: the flag went on 2026-09-06.
  */
 async function loadArticleFor(slug: string): Promise<Article> {
   /* **Imported here rather than at the top**, so that `check` touches no

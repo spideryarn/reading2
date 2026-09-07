@@ -54,14 +54,13 @@
  * standing where the compiler cannot is worth having even when it is cruder than
  * the real thing.
  */
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Dock, visibleModes } from "../src/web/Dock.js";
 import { MODES } from "../src/modes.js";
 import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
+import { readerCss } from "./helpers/stylesheets.js";
 import { chooseDockFit, DOCK_FIT_CLASSES } from "../src/web/dock-fit.js";
 
 /**
@@ -194,7 +193,10 @@ describe("the bar chooses the widest rung that fits", () => {
 });
 
 
-const CSS = readFileSync(path.join(import.meta.dirname, "../src/web/styles.css"), "utf8");
+/* The reading-view sheets as a set, comments and all — the assertions below
+   strip them where they need to. `src/web/styles.css` is thirty-eight
+   `@import` lines since 2026-09-06; tests/helpers/stylesheets.ts. */
+const CSS = readerCss();
 
 /** Selectors in a stylesheet that set `display: none` on a bar label. */
 function labelHiders(css: string): string[] {

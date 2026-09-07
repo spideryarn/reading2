@@ -31,6 +31,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/uploadEngine.ts`](../../src/web/uploadEngine.ts) + [`useUpload.ts`](../../src/web/useUpload.ts) | **the second one**, and it exists for the same reason: getting a PDF from the reader's disk into an article — hash, grant, PUT, `POST /api/jobs` — takes minutes, and the reader is meant to walk away from it. Held in a mount, it died the moment they did. One transfer at a time, bound to `user.id` in the same `useJobSession`, every reply fenced so a PUT landing after a sign-out or a Stop writes nothing. It reports its queue POST through `jobEngine.epoch()` / `actionSucceeded` rather than waking the poller itself. [ingest-queue.md § Add commits, and does not wait](ingest-queue.md#add-commits-and-does-not-wait) |
 | [`src/web/tree.ts`](../../src/web/tree.ts) | tree → table geometry (`rowSpan` per node range) |
 | [`src/web/TableView.tsx`](../../src/web/TableView.tsx) | the table itself: the gist columns, the hover chain and deep links — [granularity-zoom.md](granularity-zoom.md) |
+| [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) | **whether to draw the paragraph-label layer at all, and what to say instead** — four surfaces read the one rule, so it is not four `=== "ready"`s. An absent `navLabel` has always meant *deliberately unlabelled*, so a label that is merely not written yet draws a blank cell; while `Article.navLabelStatus` says otherwise the whole layer is withheld — [hierarchy.md § Absence on a node](hierarchy.md#absence-on-a-node-is-deliberately-unlabelled-not-written-yet-is-a-column) |
 | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | title, byline, source and counts — everything about the article that does not vary with position. The provenance behind a `▾` used to be here and is now a drawer panel. Directly under the title is the **origin line**: the article's own web address, host first with the path faded and truncated after it, or — for the owner, and never for a visitor — the words *Uploaded from a file* / *No web address was recorded*. It was a ↗ glyph beside the title until 2026-09-06, when Greg asked to be *"prominent about the origin"*. Beside the title, for the owner only, one mark is left, saying **who can read it**: a globe or a lock linking to the metadata page's sharing switch ([library.md § The Shared badge](library.md#the-shared-badge)) |
 | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar and the drawer that rises out of it: the mode switch (fourteen of them, `MODES_UI`), your questions, and the links to the tweets and metadata pages — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md). Its buttons are **five** kinds — navigate, open a drawer, switch mode, the experimental-features toggle, and, since 2026-09-06, open a modal (Feedback) — and the markup says which (`aria-current` / `aria-expanded` / `aria-checked` / `aria-pressed`; the modal opener carries none of them, because it neither goes anywhere nor holds a state). The order is Greg's, set by hand. **The way home came back on 2026-09-06** as `DockHome` at the left-hand end, along with a Feedback trigger at the right, when both left the window's top corners on the pages that mount a bar (the article, its metadata page and its tweets page, in both an owner's and a visitor's shape) — [260905g](../plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md). Neither is a mode: the wordmark is outside the `role="radiogroup"`, is a `Link`, and wears `.dock-home` rather than `.dock-btn` so it cannot take the hover wash |
 | [`src/web/dock-fit.ts`](../../src/web/dock-fit.ts) | how much of itself that bar spells out, **measured rather than keyed to a width**: it asks the row whether it overflows and drops labels until it does not. A `max-width: 1100px` media query did this until 2026-09-02 and the number went stale as the modes multiplied — [260902k-the-bottom-bar-measures-its-own-fit.md](../plans/260902k-the-bottom-bar-measures-its-own-fit.md). **Four rungs since 2026-09-06**, the new first one shedding only the wordmark's and Feedback's words, so a 1280 or 1366 laptop keeps its mode labels; the numbering shifted with it |
@@ -42,7 +43,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/BlockRef.tsx`](../../src/web/BlockRef.tsx) | one block id, drawn small and faint and linked to itself — [block-ids.md § Showing an id](block-ids.md#showing-an-id) |
 | [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the narrow column beside every paragraph: mark, permalink, chat, "?", and a "…" for whatever the row has no room to draw — [prose-gutter-icons.md](../plans/prose-gutter-icons.md), [260905c-icons](../plans/260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md). **The chat chip opens what it is counting**: on a paragraph that already has a conversation a press reopens one rather than starting another, whole-block ahead of a newer selection ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts) § `threadFor`, [`App.tsx`](../../src/web/App.tsx) § `chatAboutBlock`) — so the door to a *second* conversation is "New conversation" in the panel it opens. [260905c-chip](../plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md) |
 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the CSS entry point.** Four guards, the token bridge, and the `@import` that puts `styles.css` in a layer — [§ Tailwind and shadcn](#tailwind-and-shadcn-components) |
-| [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version/overview.md). Both now load *inside* `@layer app`, via `tailwind.css` — the map of all four stylesheets is [design-css-overview.md](design-css-overview.md) |
+| [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version/overview.md). `styles.css` is an entry point of nothing but `@import`s; every rule is in one of the 37 files under [`src/web/styles/`](../../src/web/styles/). Both now load *inside* `@layer app`, via `tailwind.css` — the map of the stylesheets is [design-css-overview.md](design-css-overview.md) |
 | [`src/web/components/ui/`](../../src/web/components/ui/) | shadcn components, generated then owned by us — `button`, `toggle` |
 | [`src/web/lib/utils.ts`](../../src/web/lib/utils.ts) | `cn()`, the class-name helper every shadcn component imports as `@/lib/utils` |
 | [`components.json`](../../components.json) | what `shadcn add` reads: our paths, our `tw` prefix, Lucide — [setup-dev.md](setup-dev.md#adding-a-ui-component) |
@@ -53,7 +54,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/citations.ts`](../../src/web/citations.ts) | the block ids in a model's answer, found and checked against the article — pure, DOM-free, and the piece of chat that carries the contract — [260826a-chat-mode.md § The citation contract](../plans/260826a-chat-mode.md#the-citation-contract) |
 | [`src/web/params.ts`](../../src/web/params.ts) | what every URL parameter means — [url-state.md](url-state.md) |
 | [`src/web/position.ts`](../../src/web/position.ts) | reading position → what goes in `?at=`, and the one rule about when the scroll spy may overwrite it |
-| [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) — and, since 2026-08-25, how wide the **mode band** is when the middle is something other than the columns, and since 2026-09-03 how wide the reading column goes when it is the only column there is (`PROSE_ALONE_MAX_REM`, `Fit.alone`, and the centring in styles.css § plain, centred) |
+| [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) — and, since 2026-08-25, how wide the **mode band** is when the middle is something other than the columns, and since 2026-09-03 how wide the reading column goes when it is the only column there is (`PROSE_ALONE_MAX_REM`, `Fit.alone`, and the centring in [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css) § plain, centred) |
 | [`src/web/scroll.ts`](../../src/web/scroll.ts) | `scrollToBlock`, shared so a restore and a jump land identically; the flat-duration glide, and `stickyOffset()` |
 | [`src/web/keynav.ts`](../../src/web/keynav.ts) | ↑ / ↓ nav, aimed by the pointer — [keyboard.md](keyboard.md) |
 | `src/store/index.ts` | server side: `loadArticle(slug)`, `listArticles()` and `articleMetadata(slug)`, bound to the Postgres reader and reached through [`src/routes.ts`](../../src/routes.ts). These lived in `src/api.ts` — the filesystem reader — until it went with the store on 2026-09-05 |
@@ -180,7 +181,11 @@ place in an order that already exists than 40 lines of CSS that simply state the
 **What is staying hand-written, and always will be:** the spine, the table geometry and its
 `rowSpan` arithmetic, the sticky-bar ladder and its z-index order, the reading measure, `mark.cmt`
 and the annotation layer, the modeless comment shell, and the runtime pixel geometry
-[`layout.ts`](../../src/web/layout.ts) computes. That is about 1,060 of `styles.css`'s 1,212 lines.
+[`layout.ts`](../../src/web/layout.ts) computes. That is the large majority of the hand-written
+CSS — `wc -l src/web/styles.css src/web/styles/*.css` was 15,951 lines over 38 files on 2026-09-06.
+*(This said "about 1,060 of `styles.css`'s 1,212 lines" until then, which was right when it was
+written and had been wrong by an order of magnitude for a while: a proportion pinned to two
+absolute numbers goes stale twice as fast as one.)*
 **So there are two ways of styling here, permanently** — utilities for chrome, semantic CSS for
 everything utilities cannot express. Nobody is going to convert the rest, and nobody should try.
 
@@ -262,7 +267,7 @@ second is the one that mattered:
   rule for the rest, so it was made to state its box in full. Both it and the `×` went on
   2026-09-05, when the bar was cut down to the granularity pills
   ([260905d](../plans/260905d-declutter-the-reading-view-top-bars.md)), and their rules went with
-  them. The lesson outlives them and is written above `.mode` in `styles.css`: **any button put
+  them. The lesson outlives them and is written above `.mode` in [`styles/shell.css`](../../src/web/styles/shell.css): **any button put
   back in this bar states its own reset in full**, because there is no `.controls button` left to
   inherit one from.
 
@@ -307,8 +312,9 @@ the element, and it only exists while Tab is held. It is also not a misconfigura
 Two fixes, both in [tokens.css](../../styles/tokens.css) and
 [`toggle.tsx`](../../src/web/components/ui/toggle.tsx):
 
-- `--ring` is the app's orange, 7.3:1, matching the focus convention `styles.css` already had in
-  `.spine-hit` and `.cmt-search`. The token alone could not fix it — halved, even the orange is
+- `--ring` is the app's orange, 7.3:1, matching the focus convention the hand-written CSS already
+  had in `.spine-hit` ([`styles/spine.css`](../../src/web/styles/spine.css)) and `.cmt-search`
+  ([`styles/annotations.css`](../../src/web/styles/annotations.css)). The token alone could not fix it — halved, even the orange is
   2.6:1 — so the `/50` came off.
 - `focus-visible:border-ring` is gone from `Toggle`. Upstream has focus repaint the border to match
   the ring, which is right where a border is decoration. On these pills the border colour **is** the
@@ -350,7 +356,7 @@ How it's put together, and what to know before touching it:
   light-on-dark bloom is about the contrast, not the face. The other half of the same fix is
   `--reading-weight: 450`; see
   [design-css-overview.md § Typography](design-css-overview.md#typography).
-- **Soft and faint greys run the other way.** In [`src/web/styles.css`](../../src/web/styles.css),
+- **Soft and faint greys run the other way.** In [`src/web/styles/tokens.css`](../../src/web/styles/tokens.css),
   `--ink-soft` / `--ink-faint` now *descend* in lightness from `--ink` instead of ascending. Anything
   that read `color-mix(…, black)` to darken the orange became `color-mix(…, white)` to lift it — that
   one lives in `--highlight-ink` now, so it's stated once.

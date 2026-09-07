@@ -1,7 +1,7 @@
 /**
  * **The visitor's notice must go wherever the masthead goes.**
  *
- * At iPad-portrait and below the mode band is full width, so `styles.css` hides
+ * On a narrow window the mode band is full width, so `styles.css` hides
  * the article's masthead while one is open — the reasoning is written out at
  * that rule, and it ends *"the controls bar sticks at zero immediately and the
  * band sits exactly underneath it"*. The controls bar was the next thing in the
@@ -33,14 +33,16 @@
  * docs/plans/260827ai-public-read-only-access.md § The logo sat on the sentence, with the
  * numbers either side of the fix.
  */
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { readerCss } from "./helpers/stylesheets.js";
 import { SHARED_WITH_YOU } from "../src/messages.js";
 import { SharedNotice } from "../src/web/PublicChrome.js";
 
-const CSS = readFileSync(path.join(process.cwd(), "src/web/styles.css"), "utf8");
+/* The reading-view sheets as a set. The pairing this file is about is an
+   *ordering* fact, and the helper concatenates in cascade order, so the two
+   rules stay in the order the browser reads them. tests/helpers/stylesheets.ts. */
+const CSS = readerCss();
 
 /**
  * The rule the whole thing hangs off, verbatim.

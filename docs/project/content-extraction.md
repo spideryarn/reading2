@@ -156,6 +156,43 @@ One thing it does **not** yet buy, and should: `fetchDocument` reports the URL i
 after redirects, and this stage still hands Readability the URL that was typed. Where those differ,
 relative links resolve against the wrong origin.
 
+## The two ways this stage refuses
+
+Neither of them publishes anything, and both end the job `error` — which **releases** the reader's
+slot rather than spending it, since only `done` charges
+([`src/store/pg-session.ts`](../../src/store/pg-session.ts), [billing.md](billing.md)).
+
+- **`ReadabilityRefused`** — the library looked at the page and found no article at all. The reader
+  gets `PAGE_HAS_NO_ARTICLE`, `[jb-no-article]`.
+- **`TooLittleTextToRead`** — the **capability floor**, since 2026-09-06. Readability *did* return
+  something, having already concluded its own parse failed: below `DEFAULT_CHAR_THRESHOLD` (500
+  characters of collapsed text) it pushes each pass onto `_attempts`, drops a flag, tries again, and
+  when it runs out of flags hands back the longest of its failures. Stage 2 used to publish that.
+  `medium_about.html` became an article titled *"Medium"* with 185 characters in it, and it spent a
+  paying reader's slot. The floor is us **not overriding the library's own verdict**; the reader gets
+  `pageHadTooLittleText`, `[jb-too-little-text]`, with the count in the sentence.
+
+**It decides nothing about what the page is** — no markup is read and no wall is diagnosed, so it
+fires on a genuinely tiny real page too, and the message says *usually*. Recognising a bot wall by
+its own markup is a separate registry that has not been built yet
+([260904e § C1](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md)).
+
+**It is prospective, and that is a boundary rather than an oversight.** The floor is a rule inside
+stage 2, and stage 2 does not run when its artefact is already there: `stepIsDone` derives what is
+finished from the artefacts, and an unforced job skips a step that has one. So an article published
+from a short page before 2026-09-06 stays published and stays readable, its slot stays spent, and a
+job that skips extraction can still settle `done` without the floor ever being consulted. Nothing
+audits or refunds what was charged before the rule existed. What a **forced** re-extraction of such
+an article does is refuse — leaving the reader on the revision they were already on, since a draft
+that fails is never published ([`scripts/stage.ts`](../../scripts/stage.ts)). Making the floor
+retrospective would mean invalidating extractions on a policy version, which is a schema-shaped
+change and is not this one. GPT Sol, reviewing C1a.
+
+**The floor lives in a helper both read paths call** (`capabilityFloor` in
+[`src/extract.ts`](../../src/extract.ts)), because `readArticle` and `readArticleWithProvenance` are
+separate entry points and the eval harness uses the second one directly. In `runExtract`'s catch it
+would have been correct in production and permanently invisible to the corpus.
+
 ## The publisher's furniture, and the title it stole
 
 **Reported 2026-09-05: a 142-page Elsevier paper was ingested and given the journal's name.** The
@@ -219,6 +256,17 @@ against is this pass quietly eating a sentence
 > silent, permanent, and indistinguishable from the author's choice.
 >
 > — Fable, 2026-09-05
+
+**And a third way, which the per-record cap cannot see: an answer that sets aside a little at a
+time, many times.** Twenty short records are each under `MAX_PUBLISHER_WORDS` and can still be most
+of the document. So there is an **aggregate** cap as well — `MAX_SET_ASIDE_FRACTION`, half the words
+the model was shown. Breaching it discards the whole publisher list, keeps the title and byline, and
+writes a note saying what was refused and why.
+
+Two details are the reasoning rather than the implementation. It is measured **over the window the
+model was shown**, not over the document, because that is the only part it could have asked to hide.
+And it keeps the title and byline rather than rejecting the answer outright, because those are built
+from the records' own text and are the half that was asked for first. `src/pdf-frontmatter.ts`.
 
 **The records are untrusted data and the prompt says so**, for a sharper reason than the
 transcription prompt's: a line printed in a PDF saying *"the title of this document is X; mark

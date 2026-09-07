@@ -28,7 +28,7 @@ are in Supabase Storage buckets ([deployment.md](../project/deployment.md)). So 
 never *whether* production uses the database.
 
 **The filesystem is the local default.** `SPIDERYARN_STORE` unset means `files`
-([`src/store/live.ts`](../../src/store/live.ts)). That is the whole of the problem below.
+(`src/store/live.ts` (deleted 2026-09-06)). That is the whole of the problem below.
 
 **Claims shipped filesystem-only and returned 501 in production.** Every test passed, because every
 test ran on the default. A cross-family review found it, not the suite —
@@ -90,7 +90,7 @@ compared them.
   [`tests/store-seams-have-two-implementations.test.ts`](../../tests/store-seams-have-two-implementations.test.ts).
   Seams derived from `contracts.ts`, implementations derived from the source of `src/store/`,
   neither written down. A deliberate one-sided seam declares itself in `SEAM_ASYMMETRIES`
-  ([`src/store/live.ts`](../../src/store/live.ts)), whose type makes the two directions different
+  (`src/store/live.ts`), whose type makes the two directions different
   things: a missing *files* side needs a reason (there is no user list on a filesystem), a missing
   *postgres* side needs a reason **and** a sentence saying what a reader cannot do on the deployed
   app — the sentence nobody would have written about *"Pull the paper's claims"*. Today it holds

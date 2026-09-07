@@ -534,6 +534,28 @@ The inverse case is a warning rather than an error: a **gistable** leaf with no 
 flagged as "unreachable in the ToC". That is the escape hatch for a genuinely trivial transition,
 and it is deliberately noisy — skipping prose should be a decision someone made, not a default.
 
+### Absence on a node is *deliberately unlabelled*; "not written yet" is a column
+
+Everything above is about the first kind of absence, and every consumer reads it that way. The
+second kind arrives with
+[260906a](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md), which takes the label pass
+out of the blocking `hierarchy` step — so for a minute or two after an ingest an article has a real
+tree and no labels at all, and a missing field would have meant both things at once.
+[`hierarchy.ts`](../../src/hierarchy.ts) had already named the problem: deferring the labels *"needs
+a state that says 'still arriving' rather than an absence that says nothing."*
+
+So it is a **revision-scoped column** — `article_revisions.nav_label_status`, `NavLabelStatus` in
+[`src/types.ts`](../../src/types.ts), one of `pending` / `ready` / `failed`. Not a field on the tree:
+a labels run that fails has to mark the revision **the reader is looking at**, and its own candidate
+tree is thrown away. Written beside the artefact by `writeArtefacts`, so it cannot disagree with the
+labels it is about; `carry` in `REVISION_CARRY_POLICY`, so it travels with `tree` and `labels`.
+
+While it is not `ready` the client withholds the **whole** paragraph-label layer rather than drawing
+what happens to exist — [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) is the one rule, and it
+says why: a column of blank cells reports our unfinished work as the article's own shape, and a
+partly-drawn outline rung is worse. Stage 1 writes `ready` everywhere, so nothing visible has changed
+yet.
+
 ## Headings: verbatim unless genuinely uninformative
 
 Greg's call: use the author's heading text, rewriting only when it tells the reader nothing. A row
@@ -1108,6 +1130,35 @@ It takes a *directory* holding both `blocks.json` and `tree.json`, not two file 
 Structural failures exit non-zero; editorial ones (label lengths, a title ending in a full stop, a
 gistable leaf with no label) print as warnings and do not fail the run. The check is cheap and it is
 the only thing standing between a plausible-looking sidebar and one that silently drops a paragraph.
+
+## A new prompt reaches new articles only, and that is the decision <a id="prompt-versions"></a>
+
+**Nothing backfills the tree.** [`src/pipeline.ts`](../../src/pipeline.ts) imports only
+`generateHierarchy` from [`src/hierarchy.ts`](../../src/hierarchy.ts) and no version constant; the
+tree has no `outdated` mechanism of the kind glossary, quotes and ideas each have; and the
+tree-version chip came off the reading view on 2026-09-05. So when the prompt changes, an article
+already on somebody's shelf keeps the gists it was built with, silently and indefinitely.
+
+That was put to Greg on 2026-09-06, after the `toc/6` gist-length change (coarse lines shorter, fine
+lines longer, plainer words) turned out to be invisible on everything he had already read:
+
+> Leave it, new articles only.
+
+**So this is chosen, not merely what happens.** Nothing is broken, nobody is charged for a summary
+they did not ask to be regenerated, and no reader is shown a warning about a line that reads
+perfectly well. The cost is the one that prompted the question: a change you make today is not
+visible on the articles you know best, so it is hard to judge whether it was an improvement.
+
+The escape is per-article rather than library-wide, and it is being built —
+**re-run the stage from the article's metadata page**. Greg, in the same breath:
+
+> there should be a way to re-run any of the generated modes (either within the UI for the mode, or
+> perhaps in the Metadata section)
+
+Note what that does *not* need. The re-run was blocked for days on being able to say *honestly* that
+a stage is stale, which needs the artefacts to record what they were built from — an open gap named
+in [ingest-queue.md](ingest-queue.md). A button that regenerates and claims nothing about staleness
+needs none of it, and declining the backfill is what made that the right shape.
 
 ## Worked example: the derived sidebar
 

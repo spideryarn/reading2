@@ -95,9 +95,9 @@ async function assertStoreReachable(): Promise<void> {
  * themselves, and for the seam a standalone server slots into later.
  *
  * **`src/routes.js` is imported here, dynamically, and not at the top of this
- * file.** It reaches `src/store/index.ts`, which refuses at module load when
- * the filesystem store is selected in production — rightly, because that store
- * has no owner column. But `vite build` sets `NODE_ENV=production`, so a
+ * file.** It reaches `src/store/index.ts`, which refused at module load when
+ * the filesystem store was selected in production — rightly, because that store
+ * had no owner column. But `vite build` sets `NODE_ENV=production`, so a
  * top-level import made *building the client bundle* boot the server store and
  * trip a guard that is about serving. `npm run build`, a documented gate, then
  * failed on any machine with the default `SPIDERYARN_STORE=files`. The client

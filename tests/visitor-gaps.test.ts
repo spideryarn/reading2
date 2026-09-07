@@ -414,6 +414,7 @@ describe("what the payload says it has", () => {
     /* Absent, and that is the third state: this article has never been through the
        `assets` step, so the reader hot-links exactly as before. src/assets.ts. */
     assets: undefined,
+    navLabelStatus: "ready",
     comments: [],
     searches: [],
     tree: { version: "t", generator: "t", slug: "a-piece", rootId: "n0", nodes: {} },

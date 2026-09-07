@@ -111,6 +111,7 @@ import {
 import { hiddenNote } from "./threshold.js";
 import type { HitOrder, Matcher } from "./params.js";
 import { PALETTE_BY_HUE } from "./hit-colours.js";
+import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 import { useSlow } from "./useSlow.js";
@@ -278,12 +279,12 @@ export function SearchPanel({
   const searching = runs.some((r) => active.includes(r.id) && r.status === "pending");
 
   return (
-    <aside className="mode-band srch" aria-label="Search this article">
-      {/* **No title row**, for the reason SummaryPanel.tsx gives at length: it
-          said the mode's own name and the Dock is already saying it (Greg,
-          2026-09-05). The search box below is the mode, and it explains itself
-          better than a word above it did. `aria-label` on the `<aside>` names
-          the region. */}
+    <ModeSurface label="Search this article" feature="srch">
+      {/* **No head slot, and therefore no title row**, for the reason
+          SummaryPanel.tsx gives at length: it said the mode's own name and the
+          Dock is already saying it (Greg, 2026-09-05). The search box below is
+          the mode, and it explains itself better than a word above it did. The
+          `label` above — `aria-label` on the `<aside>` — names the region. */}
 
       {/* **Absent for a visitor, not disabled**, and it takes the words matcher
           with it — the box is one input over both, so there is no half of it to
@@ -353,7 +354,7 @@ export function SearchPanel({
         active={active}
         typed={(find ?? "").trim().length}
       />
-    </aside>
+    </ModeSurface>
   );
 }
 

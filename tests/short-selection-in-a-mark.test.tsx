@@ -120,6 +120,7 @@ async function withAMarkedPassage(): Promise<{
     blocks: loaded.blocks,
     tree: loaded.tree,
     assets: undefined,
+    navLabelStatus: "ready",
   };
   const spies: Spies = { onSelect: vi.fn(), onOpenComment: vi.fn(), onOpenChat: vi.fn() };
 

@@ -63,6 +63,12 @@ const NO_ARTEFACTS = {
   comments: [],
   searches: [],
   sketch: null,
+  /* **Not an artefact, and not a slice-1b column** — it is where this
+     revision's paragraph nav labels are (src/types.ts § `NavLabelStatus`), and
+     it sits here for the same reason the two arrays above do: `publicArticle`
+     requires it, so a call site cannot forget it. `"ready"` is what every
+     revision says today. */
+  navLabelStatus: "ready",
 } as const;
 
 /** Every key path in a value, dotted, with array elements collapsed to `[]`. */
@@ -380,6 +386,14 @@ describe("the public article payload", () => {
            provenance-url to all reader[s]."* It is `publicSourceUrl`'s answer,
            never `articles.final_url` itself. */
         "meta.url",
+        /* **Where this revision's paragraph nav labels are** — the enum and
+           nothing else, no reason and no provider message. It crosses for the
+           reason `tree.provisional` does: a client that cannot tell *still
+           arriving* from *this article has none* draws a run of blank cells
+           either way, and reports our unfinished work as the article's own
+           shape. src/web/nav-labels.ts, and
+           docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md § F8. */
+        "navLabelStatus",
         /* The same "an empty array is still a present key" as `comments`
            above, and for the same reason: `PublicArticle.searches` is required.
            docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
@@ -952,6 +966,7 @@ describe("the artefacts a shared link carries", () => {
     tree: TREE,
     arc: null,
     assets: null,
+    navLabelStatus: "ready" as const,
     /* **No `as const`.** It would freeze `blocks` into a readonly tuple, which
        `publicArticle` will not take — and vitest would never have said so,
        because it does not typecheck. `npm run typecheck` is the only thing that
@@ -1402,6 +1417,7 @@ describe("the artefacts a shared link carries", () => {
       comments: [],
       searches: [],
       sketch: null,
+      navLabelStatus: "ready",
     });
     expect("glossary" in empty).toBe(true);
     expect(empty.glossary?.entries).toEqual([]);
