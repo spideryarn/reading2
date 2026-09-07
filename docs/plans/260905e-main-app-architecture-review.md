@@ -695,13 +695,21 @@ both would apply to any future schema change here.
   behaviour of a fake, and the real-Chrome-in-vitest pattern
   (`tests/mark-sign-in-chrome.test.ts`) is what makes an honest Tab test possible.
 
-  **This box stays unticked, and deliberately.** Two defects are established and neither is fixed
-  yet: the two prose hover cards are `role="dialog"` with a link and a button inside, portalled to
-  the end of `<body>`, **keyboard-openable and keyboard-unusable** — A5's own "no close control may
-  be unreachable" — and that fix is a **product call flagged to Greg**, because a card you can Tab
-  into is a card you must Tab out of on every hyperlink in the article. And the masthead rename's
-  focus-on-open can be deleted with all 13 of its tests still green, established by mutation.
-  Stage 5a of 260906f is the preparatory half; the checkbox waits on 5b.
+  **Built since (stage 5a, `3381e700` and `38a7cca6`), 25 tests:** the backdrop press on all five
+  native dialogs, which **no test anywhere had ever dispatched** — delete the close call from one and
+  the whole 15,000-test suite went red on exactly one test, the new one; focus restore for
+  `ChatDialog` and for `RefereeHowCard`, a seventeenth surface the first inventory had wrongly
+  excluded for being in flow; Floating UI's outside press in both consumers; the rename's
+  focus-on-open, which had been deletable in silence; and **Tab itself, in a real Chrome** —
+  `tests/tab-traversal-in-chrome.test.ts`, the first Tab traversal test in this repo, over the real
+  components' own rendered markup rather than a replica. The contract is written down in
+  [keyboard.md § Tab, and the surfaces it walks through](../project/keyboard.md).
+
+  **The box stays unticked, and deliberately.** The remaining defect is the one A5's wording names
+  outright: the two prose hover cards are `role="dialog"` with a link and a button inside, portalled
+  to the end of `<body>`, **keyboard-openable and keyboard-unusable**, so Tab goes to the next link
+  in the article instead of into the card. Fixing it is a **product call flagged to Greg** — a card
+  you can Tab into is a card you must Tab out of, on every hyperlink in the article. Stage 5b.
 - [ ] Migrate remaining surfaces in batches, including visitor/empty/error variants. Delete the
   replaced geometry rules after checking all callers, retaining feature-specific scrolling. —
   **migration done, deletion not.** All twelve bands are migrated, visitor and empty variants
@@ -718,8 +726,10 @@ both would apply to any future schema change here.
   2026-09-07 and the reading view's own narrow-window arithmetic lives in
   [narrow-windows.md](../project/narrow-windows.md). [new-mode.md](../project/new-mode.md) has been
   updated (render the band with `ModeSurface`; decide whether the header row should *persist* or
-  *not exist*), but the four above wait on the fit being settled — writing down an arithmetic no
-  device has chosen is how a doc starts lying.
+  *not exist*), and so has [keyboard.md](../project/keyboard.md), which gained the modal/modeless
+  contract in stage 5a — a sixth destination, and the one that needed no device. The four above still
+  wait on the fit being settled: writing down an arithmetic no device has chosen is how a doc starts
+  lying.
 
 ### Stage: Make style ownership visible
 

@@ -366,16 +366,15 @@ buys focus management we do not need.
 
 **Almost nothing in this app traps Tab, and that is the design rather than an omission.** Of the
 seventeen overlay surfaces a reader can open, twelve have no focus trap — every one that is not a
-native `<dialog>` — and for ten of those it is correct. `aria-modal` appears nowhere in the app as an
-attribute, and `inert` is used nowhere in the UI. Both absences are deliberate and argued at the
-surfaces themselves.
+native `<dialog>`. `aria-modal` appears nowhere in the app as an attribute, and `inert` is used
+nowhere in the UI. Both absences are deliberate and argued at the surfaces themselves.
 
-So there are two kinds of surface, and which kind a thing is decides everything about its keyboard:
+The first split is modal against modeless:
 
 | | **Modal** | **Modeless** |
 | --- | --- | --- |
 | what it is | a native `<dialog>` opened with `showModal()` | an `<aside role="dialog">`, a popover, an in-flow disclosure |
-| Tab | trapped inside it, **by the platform** | walks straight through, on purpose |
+| Tab | trapped inside it, **by the platform** | not trapped |
 | the article behind | inert, by the platform | fully live |
 | who closes it | the platform, on Escape | our own handler, in a fixed tier order |
 | when it closes | the platform restores focus | **we** put focus back, or the reader loses their place |
@@ -383,25 +382,48 @@ So there are two kinds of surface, and which kind a thing is decides everything 
 
 **Modeless is the default here, and the reason is the reading.** The Comment panel dodges out of the
 way while you drag out a new selection, because asking about several passages at once is the point;
-a trap would fight that. Trapping a surface is therefore a product decision, not a tidy-up.
+a trap would fight that. Trapping a surface is a product decision, not a tidy-up.
 
-**What a modeless surface owes in exchange for not trapping** is the one thing the platform is doing
-for the modal ones, and it is where the defects were:
+### "Not trapped" is not one contract, it is three
 
-- **If it takes focus when it opens, it must give it back when it closes.** Otherwise it unmounts the
-  element the reader is standing on, focus falls to `<body>`, and their next Tab starts again from
-  the top of the article. Invisible with a mouse, which is why three surfaces shipped without it.
-- **Give it back only if focus went nowhere.** A reader who has already clicked something real must
-  be left there. The test is `activeElement === null || activeElement === document.body`, written
-  once in `TitleEditor.tsx` and copied since.
-- **Name a destination for when the opener has gone.** Often it has: the gutter's Help button closes
-  its own disclosure before opening a chat, so the control that opened the panel is never there when
-  the panel closes.
+**Not trapping does not mean Tab may skip your controls.** A modeless surface's controls belong in
+the sequential order, near the thing that opened them — that is what
+[the W3C's focus-order guidance](https://www.w3.org/WAI/WCAG21/Understanding/focus-order.html) asks,
+and it is the difference between a surface that is *untrapped* and one that is *unreachable*. So
+which of these a surface is decides what it owes:
 
-A surface that takes no focus at all owes nothing — the hover cards and the tooltips are in that
-class, and "no restore" is right for them.
+- **Passive.** No focusable content at all — a tooltip is the case. It owes nothing: nothing to
+  reach, nothing to give back.
+- **Interactive but focus-taking-on-open: no.** It has controls a reader might use, and it appears
+  without moving focus. It owes **reachability**: Tab from the thing that opened it must arrive at
+  its controls rather than sail past them into the article. A surface portalled to the end of
+  `<body>` does not get this for free — its controls land after everything else in document order.
+- **Focus-taking.** It moves focus into itself when it opens. It owes reachability *and* **giving
+  focus back**, because it will unmount the element the reader is standing on.
 
-The inventory of all seventeen, and what each one does, is
+**Where each surface actually stands, 2026-09-07:** twelve are untrapped; ten of those have correct
+traversal for their class; and **two do not** — the prose and Debate hover cards are `role="dialog"`
+holding a link and a button, portalled to the end of `<body>`, opened by keyboard focus and then
+skipped by Tab. That is a known defect awaiting a product decision, **not** an example of the rule
+above. Anything new should look like the ten, not the two.
+
+### What giving focus back means in practice
+
+- **Only rescue focus that went nowhere.** A reader who has already clicked something real must be
+  left there. Two shapes, and which you need depends on when you ask: a surface that closes by
+  *unmounting itself* asks whether focus is still inside it, because React runs cleanup **before**
+  detaching and `activeElement` has not fallen to `<body>` yet (`ChatDialog`); one that reacts to a
+  flag going false can ask the simpler `activeElement === null || activeElement === document.body`
+  afterwards (`TitleEditor`, `RefereeCard`).
+- **Name a destination for when the opener has gone**, because often it has: the gutter's Help button
+  closes its own disclosure before opening a chat, so the control that opened the panel is never
+  there when the panel closes.
+- **A cleanup is not proof of an unmount.** `main.tsx` runs the app in `<StrictMode>`, which fires
+  every effect setup → cleanup → setup on mount; restoring in that cleanup takes focus away from a
+  panel that is still open. `ChatDialog` defers by a microtask and checks `isConnected`, which is the
+  only way to tell the two apart.
+
+The inventory of all seventeen is
 [the focus inventory](../plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-focus-inventory.md).
 **Escape is a separate question with a separate answer** — five tiers in a fixed dispatch order, a
 surface's tier being the whole of its authority, because nothing anywhere reads a z-index or another
@@ -412,8 +434,8 @@ surface's state:
 navigation, no `showModal`, and no `inert` — all three of the mechanisms a trap is built from — and
 `input.select()` does not move focus there as it does in a browser. A jsdom test claiming to prove a
 trap is asserting the behaviour of a fake. `tests/tab-traversal-in-chrome.test.ts` drives a real
-Chrome for the two cases above; `tests/the-dock-drawer-is-not-a-modal.test.tsx` tests the two
-mechanisms a trap would *need*, which is what jsdom can honestly do.
+Chrome; `tests/the-dock-drawer-is-not-a-modal.test.tsx` tests the two mechanisms a trap would *need*,
+which is what jsdom can honestly do.
 
 ## Where this leaves an older sketch
 
