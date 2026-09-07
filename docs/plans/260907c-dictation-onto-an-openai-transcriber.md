@@ -12,10 +12,20 @@
 removes a published zero-data-retention promise about a reader's voice, and until it is approved
 `dev` carries a `/privacy` page whose dictation paragraph is false.**
 
-Dictation moves from `google/gemini-3.1-flash-lite` on the chat endpoint to **`openai/gpt-transcribe`
-on OpenRouter's transcription endpoint**. It stays on OpenRouter, it keeps sending the browser's webm
+**Status: built and landed on `dev` (2026-09-07, `5149b922`). Not deployed, and blocked from being
+deployed until the wording below is signed off.** Everything in the Stages section is done except the
+bake-off, which was deliberately dropped and says why. The one thing an agent could still usefully do
+without Greg is nothing — what is left is a decision, not work.
+
+Dictation moved from `google/gemini-3.1-flash-lite` on the chat endpoint to **`openai/gpt-transcribe`
+on OpenRouter's transcription endpoint**. It stays on OpenRouter, it sends the browser's own recording
 unchanged, and it loses zero-data-retention routing, which is the half of this that is copy rather
 than code.
+
+*(That sentence said "the browser's webm" until the browser stage, which is when it turned out that
+Chrome's recorder prefers **MP4** and gets it. Nothing in the code assumed otherwise — `formatOf`
+already mapped it — but a dozen sentences in this plan had been written about a container most
+readers do not send.)*
 
 The two documents that set the table are [260903i](260903i-which-model-transcribes-dictation.md) (why
 OpenAI was ruled out four days ago) and

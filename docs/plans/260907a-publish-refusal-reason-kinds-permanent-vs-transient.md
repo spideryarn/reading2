@@ -1,5 +1,10 @@
 # Publish refusal reason kinds — permanent, transient
 
+**Status: built, reviewed twice, landed on `dev` as `6d38e979`, 2026-09-07.** Both reviews'
+findings are recorded below — § *What Sol's plan review changed* and § *What Sol's code review
+changed* — along with what was deliberately left undone in § *Deferred* and § *Known limits*.
+Nothing was deployed.
+
 **2026-09-07.** `PublishRefused` carries `readonly reasons: readonly string[]` and nothing else, so
 no caller can tell a refusal that will never come out differently from one that genuinely will. The
 consequence, on 2026-09-05, was four refusals on one article in thirteen minutes, each after its
