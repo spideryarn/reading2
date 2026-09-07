@@ -134,6 +134,40 @@ That is twelve of the fourteen; `plain` and `hierarchy` are the two that open no
 - **[url-state.md](url-state.md)** — every parameter, which push history and which replace, and why
   position is a *section* rather than an offset.
 
+### The command bar
+
+**⌘/Ctrl-K, or the ⌘ button in the bottom bar, and you type the name of a mode.** Enter opens it
+**exactly as pressing its Dock button does** — same activation, same generate-on-open, same cost. It
+is an *additional door*, never a replacement: the Dock keeps every button it has, and the bar lists
+exactly what the Dock lists, because the Dock hands it the list it just drew rather than computing a
+second one.
+
+It has no doc of its own because there is very little to say that is not the four decisions Greg made
+before it was written ([260906h](../plans/260906h-mode-catalog-and-a-command-bar.md) § The four
+product calls). **It is modes only.** No passage jump, no generation rows, no chat, no model call —
+each of those needs a verb this bar does not have, and the plan names every one of them as deferred
+rather than forgotten. A query that matches nothing says `No command matches.` and nothing else: no
+search fallback, no "did you mean", an honest empty state preferred to a helpful guess.
+
+Two pieces of it are worth knowing about:
+
+- **The words it will accept** are the mode's name, its description, and its **aliases** — `toc` for
+  Hierarchy, `define` and `terms` for Glossary — which live in
+  [`src/mode-catalog.ts`](../../src/mode-catalog.ts) beside the sentence each mode is described by.
+  Aliases are deliberately sparse: the cost of a loose one is not a missed match, it is the *wrong*
+  mode ranked first for somebody who typed the right thing. The ranking is five named tiers in
+  [`src/web/command-match.ts`](../../src/web/command-match.ts), and ties break in Dock order.
+- **A row that would start work says so**, in one muted trailing word: `generates`. No figure and no
+  readiness check — readers hold slots rather than paying per call, and a bar with a price on it
+  would be *more* disclosed than the button beside it, which reverses a decision Greg made on
+  2026-09-06. It is derived from `MODE_TARGET`
+  ([`src/web/activation.ts`](../../src/web/activation.ts) § `modeGenerates`), which is already total,
+  so a fifteenth mode cannot arrive unmarked. It over-warns when the artefact is already there; the
+  Dock under-warns in exactly the same case.
+
+The key itself, and the four things the chord refuses to do, are
+[keyboard.md § the one chord that is not an arrow](keyboard.md#the-one-chord-that-is-not-an-arrow).
+
 ### Getting in and out
 
 - **[library.md](library.md)** — the shelf: `/read/<slug>`, what a card says, what you can do to

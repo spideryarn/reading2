@@ -154,12 +154,13 @@
    `useRef` came back on 2026-09-06, for the drawer's focus rather than the
    bar's — see § the drawer takes focus, and gives it back. The aliased type
    has not. */
-import { useEffect, useRef, useId, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useId, useState, type ReactNode } from "react";
 import {
   AlignLeft,
   BookA,
   Brain,
   ClipboardCheck,
+  Command,
   Lightbulb,
   ChevronUp,
   Clock,
@@ -189,6 +190,11 @@ import { MODE_CATALOG } from "../mode-catalog.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { Comment } from "../types.js";
 import { armActivationForMode, armActivationForTweets } from "./activation.js";
+/* **This direction only.** `CommandBar` deliberately imports nothing from this
+   file — the visible list and the one activation callback go down as props —
+   because an import back the other way would close a cycle. GPT Sol, F3 on
+   docs/plans/260906h-mode-catalog-and-a-command-bar.md. */
+import { CommandBar } from "./CommandBar.js";
 import { useDockFit } from "./dock-fit.js";
 /* Type only: the bar is *handed* the switch, it does not subscribe to the store
    — see the `experimental` prop. A type import cannot become a subscription. */
@@ -206,6 +212,8 @@ import {
 /* The one rule both this bar and Diagram's picture chips draw by — see
    `visibleModes` below. experimental-visibility.ts. */
 import { shownBehindTheSwitch } from "./experimental-visibility.js";
+/* Type only, for `useActivateMode` below: the picture a Diagram press would land
+   on, already degraded by `diagramInSearch`. */
 import type { DiagramKind } from "./diagram.js";
 import { DEFAULT_MODE, diagramInSearch, type Mode, type Panel } from "./params.js";
 import { Link } from "./Link.js";
@@ -979,6 +987,167 @@ export function fitSignature(
   }|${feedback ? "fb" : "no-fb"}`;
 }
 
+/**
+ * **Is the reader writing?** Then a chord that means something in a text box
+ * is theirs, not ours.
+ *
+ * A second copy of `isTyping` in keynav.ts, and the duplication is deliberate:
+ * that module reaches `position.ts` and `scroll.ts` — the article's geometry,
+ * and another agent's ground — so importing it here to borrow four lines would
+ * drag the whole reading machinery into the bottom bar's import graph, and into
+ * every test that renders the bar. Four lines are cheaper than that edge, and
+ * they cannot drift in a way that matters: this is the DOM's own vocabulary
+ * rather than a policy of ours.
+ *
+ * `SELECT` is in the list for the reason PlaceOnCriterion gives: a native
+ * dropdown is a control taking its own keys, whatever it looks like.
+ */
+function isTyping(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el || typeof el.tagName !== "string") return false;
+  return (
+    el.tagName === "INPUT" ||
+    el.tagName === "TEXTAREA" ||
+    el.tagName === "SELECT" ||
+    el.isContentEditable === true
+  );
+}
+
+/**
+ * **⌘-K on a Mac, Ctrl-K everywhere else, and the four presses it refuses.**
+ *
+ * One `window` listener holding whether the command bar is open. A hook rather
+ * than an effect inside `Dock` because `Dock` was already over Biome's
+ * cognitive-complexity ceiling before this landed (27 of a permitted 25 —
+ * `DockFeedback` was split out for the same reason and says so), and five
+ * guarded branches is exactly the kind of thing that belongs in a named piece.
+ *
+ * The chord was verified free before it was taken: a grep of `src/web/` and
+ * `tests/` for `metaKey`/`ctrlKey` with `"k"` returned nothing, 2026-09-06.
+ *
+ *  - **Not on a repeat.** A held ⌘-K would otherwise reopen the bar every few
+ *    milliseconds under whatever the reader had already typed. The same rule
+ *    the arrows keep — docs/project/keyboard.md § auto-repeat is ignored.
+ *  - **Not while a text field has focus.** The chat box, the comment box, the
+ *    search field and the referee's criteria are all places a reader is
+ *    writing, and ⌘-K is a text-editing chord in several editors. `isTyping`
+ *    above is the list.
+ *  - **Not over another native modal.** `showModal()` on a dialog while another
+ *    modal dialog is showing stacks two in the top layer and traps focus in the
+ *    newer one — the Feedback dialog, the Lightbox and the comment dialogs are
+ *    all `<dialog>`s, so one query answers for every one of them.
+ *  - **Not before the drawer is shut.** The drawer's Escape handler is on
+ *    `window` in the **capture** phase and calls `stopImmediatePropagation`, so
+ *    with both open one Escape would close the drawer the reader cannot see and
+ *    the bar in front of them would never hear the key at all. Closing the
+ *    drawer first is the whole fix — and it is the reason this listener is in
+ *    the `Dock` rather than in `CommandBar`, which has no way to reach
+ *    `onPanel`. GPT Sol's F6 on
+ *    docs/plans/260906h-mode-catalog-and-a-command-bar.md.
+ *
+ * `preventDefault()` **only when the press is claimed**: Firefox focuses the
+ * address bar on ⌘-K, and a listener that suppressed that without opening
+ * anything would be a chord that quietly breaks a browser feature.
+ */
+function useCommandBarChord(
+  /** Whether there is a band to change at all — off the reading view, there is not. */
+  enabled: boolean,
+  /** The drawer's own setter, so the drawer can be shut before the bar opens. */
+  onPanel: ((next: Panel | null) => void) | undefined,
+): { open: boolean; show(): void; hide(): void } {
+  const [open, setOpen] = useState(false);
+  /**
+   * **The whole opening policy, in the one place both doors go through.**
+   *
+   * It lived in the keydown handler until GPT Sol's F2 on stage 2, and the
+   * button called a bare setter beside it — so clicking **Commands** while the
+   * Questions drawer was open left both open and put the capture-phase Escape
+   * collision straight back. The drawer is deliberately non-modal, which is
+   * exactly why the Dock stays clickable underneath it and why this could
+   * happen at all.
+   *
+   * Refusing to open over another native modal is here for the same reason: two
+   * `showModal()` dialogs stack in the top layer, and the one underneath is
+   * unreachable rather than closed.
+   */
+  const show = useCallback(() => {
+    if (document.querySelector("dialog[open]") !== null) return;
+    onPanel?.(null);
+    setOpen(true);
+  }, [onPanel]);
+  useEffect(() => {
+    if (!enabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "k" && e.key !== "K") return;
+      /* **Shift is rejected, not ignored.** Ctrl-Shift-K is Firefox's Web
+         Console, and matching it here would both steal a browser feature and
+         `preventDefault()` it. Alt likewise. `e.key` is matched in both cases
+         for Caps Lock, which is not a modifier. GPT Sol's F3 on stage 2. */
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.repeat) return;
+      if (isTyping(document.activeElement)) return;
+      /* Checked here as well as inside `show`, because this one decides whether
+         the press is *claimed* — calling `preventDefault()` and then declining
+         to open is the one outcome that is worse than doing nothing. */
+      if (document.querySelector("dialog[open]") !== null) return;
+      e.preventDefault();
+      show();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enabled, show]);
+  /* Named rather than an inline arrow in the markup, which is also one fewer
+     nested function inside `Dock` — a component this file has already had to
+     split twice for Biome's complexity ceiling. */
+  const hide = useCallback(() => setOpen(false), []);
+  return { open, show, hide };
+}
+
+/**
+ * **Opening a mode, as a callback both doors hold.**
+ *
+ * The two calls — mint the token, then move the band — must stay paired and in
+ * that order, and until 2026-09-07 there was exactly one caller, inside
+ * `DockModes`' `onClick`. The command bar is the second, and two copies of a
+ * two-line sequence is how they drift: a later change made to one of them
+ * leaves the other opening the same mode without paying for it, or paying
+ * twice. One callback cannot do that. GPT Sol, F2 on
+ * docs/plans/260906h-mode-catalog-and-a-command-bar.md.
+ *
+ * **The token is minted here and not in `onMode`**, which is the older half of
+ * this and still the reason the arming is not simply part of the query state:
+ * `setMode` is a query-state setter, and Back and Forward move it too. Five of
+ * the fourteen modes open on an artefact nobody has paid for yet, and this is
+ * what tells that panel the difference between a press and a pasted link.
+ * src/web/activation.ts.
+ *
+ * **One call for all fourteen.** Diagram had an `if` of its own at the press
+ * site until 2026-09-06; the table it needed the branch for is now total and
+ * executes its own row, so what a surface hands over is what it knows — the
+ * picture a Diagram press would land on. activation.ts § `MODE_TARGET`.
+ *
+ * **What each surface keeps for itself is presentation**, and only that: the
+ * Dock button's conditional blur after a mouse click, the command bar's close
+ * and clear. Neither is part of activating a mode, so neither is in here.
+ *
+ * `onMode?.()` rather than a guard, because this callback is only ever handed
+ * to the two surfaces the bar draws when `onMode` is present — the optional
+ * call is the compiler's price for the prop being optional at all, not a second
+ * arrangement anything reaches.
+ */
+function useActivateMode(
+  slug: string,
+  diagram: DiagramKind,
+  onMode: Props["onMode"],
+): (next: Mode) => void {
+  return useCallback(
+    (next: Mode) => {
+      armActivationForMode(slug, next, { diagram });
+      onMode?.(next);
+    },
+    [slug, diagram, onMode],
+  );
+}
+
 export function Dock({
   slug,
   view,
@@ -1044,6 +1213,24 @@ export function Dock({
      the next change to only half-land. */
   const feedback = experimental.signedIn;
 
+  /**
+   * **Which picture a Diagram press would land on**, read once here rather than
+   * at each surface that can make that press.
+   *
+   * **`diagramInSearch`, not the raw parameter.** A link from August saying
+   * `?diagram=tree` names a picture that was cut, and `diagramParam` opens the
+   * Sketch for it — so arming the raw word would arm nothing while the mode
+   * opened something else, which is precisely the extra button-click the
+   * auto-run rule removed. params.ts owns the degrade rule and every reader
+   * takes it from there.
+   */
+  const diagram = diagramInSearch(search);
+
+  /* **Opening a mode**, and it is one callback rather than two calls made
+     twice — `useActivateMode` above holds the whole of the reasoning, which
+     is the reason it is a named thing at all. */
+  const activateMode = useActivateMode(slug, diagram, onMode);
+
   /* **How much of itself the bar spells out is measured, not guessed** — the
      row is asked whether it overflows and drops labels until it does not. It
      was a `max-width: 1100px` media query until 2026-09-02, and that number was
@@ -1086,6 +1273,29 @@ export function Dock({
     window.addEventListener("keydown", onKey, { capture: true });
     return () => window.removeEventListener("keydown", onKey, { capture: true });
   }, [open, onPanel]);
+
+  /**
+   * **⌘/Ctrl-K opens the command bar**, and the bar lives here rather than in
+   * `App.tsx` because everything it needs is already in this component:
+   * `slug`, `mode`, `onMode`, the visible list, and the picture a Diagram press
+   * would land on. A native `<dialog>` paints in the top layer, so where in the
+   * markup it sits does not matter. It costs no edit to `App.tsx`, which is
+   * being rewritten this week by somebody else.
+   *
+   * State on the bar as a whole rather than on `DockModes`: the bar is drawn on
+   * the metadata and tweets pages too, where there is no `onMode` and therefore
+   * nothing for a command to do, and all three parts of it — the listener, the
+   * button and the dialog — stand down there.
+   *
+   * **The two gates are inside `DockCommands` and `DockCommandBar` rather than
+   * in a `&&` here**, which is Biome rather than taste and is the same reason
+   * `DockFeedback` carries its own: this function was already over the
+   * cognitive-complexity ceiling (27 of a permitted 25) before the command bar
+   * existed, and two more conditionals in the markup take it further out. Each
+   * component states the condition it is under, which is where it is readable
+   * anyway.
+   */
+  const commandBar = useCommandBarChord(onMode !== undefined, onPanel);
 
   /**
    * ## The drawer takes focus, and gives it back
@@ -1212,6 +1422,24 @@ export function Dock({
           has not dismissed it — install-hint.ts. */}
       <InstallHint />
 
+      {/* **The command bar, mounted from here rather than from `App.tsx`.**
+          Everything it needs is already in this component — `slug`, `mode`,
+          `onMode`, the visible list, and the picture a Diagram press would land
+          on — so mounting it here costs no edit to `App.tsx`, which is another
+          agent's ground this week. 260906h § The command bar. Its own gate, and
+          why the gate is inside it, are on `DockCommandBar` below. */}
+      <DockCommandBar
+        mode={mode}
+        onMode={onMode}
+        /* The list the Dock drew, not a second computation of it: requirement
+           4 — *the bar lists exactly what the Dock lists* — is true by
+           construction this way, and would be a promise between two copies of
+           `visibleModes` any other way. */
+        modes={visible}
+        activateMode={activateMode}
+        bar={commandBar}
+      />
+
       <div className={`dock${fitClass}`} ref={dockRef}>
         {/* **The way off this page, and the first thing in the bar.** See the
             header for why it is back here after 2026-08-26 took it away, and
@@ -1236,17 +1464,11 @@ export function Dock({
             so the same five degrade to links back to it. */}
         {mode !== undefined && onMode ? (
           <DockModes
-            slug={slug}
-            /* **`diagramInSearch`, not the raw parameter.** A link from August
-               saying `?diagram=tree` names a picture that was cut, and
-               `diagramParam` opens the Sketch for it — so arming the raw word
-               would arm nothing and the press would do nothing, which is the
-               behaviour this change exists to remove. params.ts owns the
-               degrade rule and both readers take it from there. */
-            diagram={diagramInSearch(search)}
             modes={visible}
             mode={mode}
-            onMode={onMode}
+            /* One callback for both doors into a mode — see `activateMode`
+               above, which is where the arming and the `?mode=` write live. */
+            onActivate={activateMode}
             marked={marked}
           />
         ) : (
@@ -1270,6 +1492,15 @@ export function Dock({
             />
           ))
         )}
+
+        {/* **The other door into the same fourteen**, immediately after them
+            because that is what it is about — and only where there is a band to
+            change, which is the same condition the segment itself is under.
+
+            Greg asked for the button as well as the chord (260906h, answer 2)
+            for one reason: **⌘-K does not exist on a phone**, and the bar is
+            the only surface a phone has. */}
+        <DockCommands mode={mode} onMode={onMode} onOpen={commandBar.show} />
 
         {/* Two shapes of the same button. On the reading view it opens the
             drawer in place. Everywhere else it goes back to the reading view
@@ -1575,33 +1806,11 @@ export function withMode(search: string, mode: Mode): string {
 const MARKED = "tw:opacity-55";
 
 function DockModes({
-  slug,
-  diagram,
   modes,
   mode,
-  onMode,
+  onActivate,
   marked,
 }: {
-  /** The article a press is about, for the activation token. */
-  slug: string;
-  /**
-   * **Which picture a press on Diagram would land on** — `?diagram=`, or
-   * `sketch` where the address bar is silent, which is `diagramParam`'s default.
-   *
-   * Read here rather than baked into a **fixed** `MODE_TARGET` row, because the
-   * answer is not fixed, and arming a fixed one leaves a token that a later Back
-   * step can spend: activation.ts § `activationForDiagram` has the sequence.
-   * Since 2026-09-06 Diagram *does* have a row — a `delegated` one, whose
-   * target function consumes exactly this value, which is why it is still a
-   * prop.
-   *
-   * **Already degraded** — `diagramInSearch` in params.ts, which applies the
-   * same rule `diagramParam` does, so an unrecognised `?diagram=` arrives here
-   * as `sketch` rather than as itself. Reading the raw parameter instead made a
-   * press on an old `?diagram=tree` link arm nothing while the mode opened the
-   * Sketch, which is precisely the extra button-click this change removes.
-   */
-  diagram: DiagramKind;
   /**
    * The rows to draw, already filtered — `visibleModes` above, which is where
    * the two rules live. Handed in rather than read from `MODES_UI` here so that
@@ -1610,7 +1819,17 @@ function DockModes({
    */
   modes: readonly ModeUi[];
   mode: Mode;
-  onMode(next: Mode): void;
+  /**
+   * **Opening a mode**, which since 2026-09-07 is one callback rather than the
+   * two calls this component used to make for itself — `Dock` § `activateMode`,
+   * which also holds the `slug` and the Diagram picture those two calls needed
+   * and this component no longer has to be told.
+   *
+   * It arms and it moves the band, and it does **not** blur: leaving focus
+   * where the reader put it is a fact about a bar button rather than about
+   * opening a mode, so it stays on the button below.
+   */
+  onActivate(next: Mode): void;
   marked?: ReadonlyMap<Mode, string> | undefined;
 }) {
   /**
@@ -1693,24 +1912,20 @@ function DockModes({
                  unreachable by keyboard. */
               tabIndex={0}
               onClick={(e) => {
-                /* **The one place in the app that knows a mode was pressed**,
-                   which is why the token is minted here and not in `onMode` —
-                   `setMode` is a query-state setter, and Back and Forward move
-                   it too. Five of the fourteen modes open on an artefact
-                   nobody has paid for yet, and this is what tells that panel
-                   the difference between a press and a pasted link.
-                   src/web/activation.ts. */
-                /* **One call for all fourteen.** Diagram had an `if` of its own
-                   here until 2026-09-06; the table it needed the branch for is
-                   now total and executes its own row, so what the bar hands over
-                   is what it knows — the picture a Diagram press would land on.
-                   activation.ts § `MODE_TARGET`, and see `diagram` on the props
-                   above. */
-                armActivationForMode(slug, m.mode, { diagram });
-                onMode(m.mode);
+                /* **The whole of what a press on a mode does**, and it is one
+                   call rather than two since 2026-09-07 — the token and the
+                   `?mode=` write are `Dock` § `activateMode`, which the command
+                   bar calls too so that the two doors cannot come to mean
+                   different things. */
+                onActivate(m.mode);
                 // A real click leaves the keyboard to the article; Enter and
                 // Space (detail 0) leave focus where the reader put it. See the
                 // header — this is Greg's ← / → complaint, 2026-08-26.
+                //
+                // **Presentation, and deliberately not inside `activateMode`**:
+                // it is about this button having been clicked, not about the
+                // mode being opened, and the command bar's own after-work
+                // (close, clear, hand focus back) is the mirror of it.
                 if (e.detail > 0) e.currentTarget.blur();
               }}
             >
@@ -1836,6 +2051,126 @@ function DockHome() {
 function DockFeedback({ signedIn }: { signedIn: boolean }) {
   if (!signedIn) return null;
   return <FeedbackTrigger variant="dock" />;
+}
+
+/**
+ * **The command bar's button — the fifth kind of button in this bar, and it
+ * says so in ARIA.**
+ *
+ * `DockLink` navigates and says `aria-current="page"`; `DockTab` opens a drawer
+ * and says `aria-expanded`; `DockModes` is a radiogroup and says
+ * `aria-checked`; `DockExperimentalSwitch` is a toggle and says
+ * `aria-pressed`. This one **opens a modal dialog**, which is
+ * `aria-haspopup="dialog"` and none of the other four. `aria-expanded` would be
+ * the near miss: it says a thing rises out of this control and stays part of
+ * the page, and a `showModal()` dialog makes the page inert instead.
+ *
+ * ## Three ways it says it is not a fifteenth mode
+ *
+ * The same three `DockHome` makes at the other end of the row, for the same
+ * reason — it sits *beside* the modes, where being mistaken for one is the
+ * cheap failure:
+ *
+ *  - **Outside the `role="radiogroup"`** — a sibling of `.dock-modes`, never a
+ *    child, so a screen reader is never told it is one of a set. The hairline
+ *    frame is the sighted half of the same claim.
+ *  - **None of `aria-checked`, `aria-current` or `aria-pressed`.** It is not
+ *    one of a set, it is not the page you are on, and it is not a toggle: it is
+ *    the same press every time and the state it produces is a dialog.
+ *  - **Never `.dock-btn.on`.** A wash in this bar means hovered-or-selected,
+ *    and this button is never selected — the dialog it opens is not a state the
+ *    bar is in.
+ *
+ * ## The glyph is `Command`, not a magnifier
+ *
+ * `Search` is taken, and taken by a *mode* — the one that searches the article
+ * — three inches to the left in the same row. Two magnifiers side by side, one
+ * of which finds words in the piece and one of which opens modes, is the exact
+ * confusion this glyph exists to avoid, and `SearchCode` is the same magnifier
+ * with brackets on it. `Command` (⌘) is what a command palette is drawn as
+ * nearly everywhere a reader will have met one, and it is a different shape
+ * from every other icon in this bar rather than a variation on one of them.
+ *
+ * Its weakness, recorded rather than argued away: ⌘ is a Mac key, and this
+ * button matters most on a phone, where there is no such key and no keyboard
+ * shortcut at all. The word beside it is what carries the meaning there — which
+ * is why the label is `Commands` (what the button opens) rather than `⌘K` (how
+ * else to open it), and why the chord is in the hover sentence and not in the
+ * name.
+ */
+function DockCommands({
+  mode,
+  onMode,
+  onOpen,
+}: {
+  /**
+   * The two props that say there is a band to change. **They are read here
+   * rather than in a `&&` at the call site** for the reason `DockFeedback`
+   * gives: `Dock` is over Biome's cognitive-complexity ceiling and every extra
+   * conditional in its markup takes it further out. Off the reading view a
+   * command would have nothing to open, so there is no button.
+   */
+  mode: Mode | undefined;
+  onMode: Props["onMode"];
+  onOpen(): void;
+}) {
+  if (mode === undefined || onMode === undefined) return null;
+  return (
+    <button
+      type="button"
+      className="dock-btn dock-commands"
+      /* Not `aria-expanded` — see the docblock. The dialog makes the rest of
+         the page inert; it does not rise out of this control. */
+      aria-haspopup="dialog"
+      title="Type the name of a mode and press Enter (⌘K / Ctrl-K)"
+      /* Explicit, for the reason every other button in this bar gives: the
+         visible word is dropped by § the bar's fit ladder on a narrow window,
+         and a name computed from the text would go with it. */
+      aria-label="Commands"
+      onClick={onOpen}
+    >
+      <Command size={15} />
+      <span className="dock-btn-label">Commands</span>
+    </button>
+  );
+}
+
+/**
+ * **The command bar itself, under the same gate as its button.**
+ *
+ * A wrapper around one element, and the reason it is a component is the gate
+ * rather than the markup — exactly as `DockFeedback` above. It also does the
+ * `ModeUi[]` → `Mode[]` narrowing in one place, so `CommandBar` never learns
+ * that a Dock row is a thing with an icon on it.
+ *
+ * It renders outside `.dock` in the markup, and that is worth a line: a
+ * `<dialog>` opened with `showModal()` paints in the top layer, so its position
+ * in the tree is irrelevant to what the reader sees — but the bar scrolls
+ * horizontally on a phone, and a child of a scroll container is a thing
+ * somebody will one day try to clip.
+ */
+function DockCommandBar({
+  mode,
+  onMode,
+  modes,
+  activateMode,
+  bar,
+}: {
+  mode: Mode | undefined;
+  onMode: Props["onMode"];
+  modes: readonly ModeUi[];
+  activateMode(next: Mode): void;
+  bar: { open: boolean; show(): void; hide(): void };
+}) {
+  if (mode === undefined || onMode === undefined) return null;
+  return (
+    <CommandBar
+      modes={modes.map((m) => m.mode)}
+      activateMode={activateMode}
+      open={bar.open}
+      onClose={bar.hide}
+    />
+  );
 }
 
 /**

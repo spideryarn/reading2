@@ -36,22 +36,32 @@ import { describe, expect, it } from "vitest";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import { MODES, type Mode } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
+/* The command bar's own normaliser — see § the one form these are compared in,
+   below, for why this is imported rather than written out again here. */
+import { canonical } from "../src/web/command-match.js";
 
 /**
  * **The one form these are all compared in**, and the shape the command bar's
- * matcher will normalise a reader's typing into: lowercase, trimmed, and
- * internal runs of whitespace collapsed to one space.
+ * matcher normalises a reader's typing into: lowercase, trimmed, and internal
+ * runs of whitespace collapsed to one space.
  *
  * The collapse is the part that is easy to leave out, and leaving it out opens
  * a hole GPT Sol reproduced on 2026-09-07: `"peer review"` and `"peer  review"`
  * are different strings, so they pass a uniqueness test that compares raw text,
  * and identical queries, so they collide the moment anybody types either. Every
  * assertion below therefore compares canonical forms, and the last one asserts
- * the table is *stored* canonical — which is what makes the matcher agree with
- * this file by construction rather than by a second normaliser somebody has to
- * remember to point at it.
+ * the table is *stored* canonical.
+ *
+ * **Imported from the matcher rather than written here**, since 2026-09-07.
+ * This was a local `const` while the bar did not exist yet, and the note on it
+ * said the point was to make the two agree "by construction rather than by a
+ * second normaliser somebody has to remember to point at it" — which a copy in
+ * this file could not deliver. Now there is one function: this file checks the
+ * table under exactly the rule the bar will apply to it.
+ *
+ * The import itself is at the top of this file with the others; this is where
+ * the reasoning about it lives, because this is where the reasoning was written.
  */
-const canonical = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, " ");
 
 /** Every alias in the table, with the mode that claims it. */
 const claims: readonly { mode: Mode; alias: string }[] = MODES.flatMap((mode) =>

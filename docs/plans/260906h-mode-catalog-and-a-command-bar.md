@@ -1,6 +1,6 @@
 # A mode catalog, and a command bar that opens a mode
 
-Status: **Stage 1 landed** 2026-09-07 (the catalog). Stage 2 — the command bar — not yet built.
+Status: **done.** Both stages landed 2026-09-07 — the catalog, and the command bar.
 
 This is the build plan for the design set out in
 [260905e-mode-catalog-and-command-bar.md](260905e-mode-catalog-and-command-bar.md), which stays the
@@ -260,36 +260,36 @@ outside `src/web/` imports React because of this change.
 
 ### Stage 2 — the command bar
 
-- [ ] Extract `activateMode(next)` in `Dock.tsx` and route `DockModes`' existing `onClick` through
+- [x] Extract `activateMode(next)` in `Dock.tsx` and route `DockModes`' existing `onClick` through
   it. This lands **first**, on its own, so the refactor is reviewable separately from the feature.
-- [ ] `src/web/CommandBar.tsx` — native `<dialog>`, input, ranked rows, empty state, and the
+- [x] `src/web/CommandBar.tsx` — native `<dialog>`, input, ranked rows, empty state, and the
   visual-viewport treatment copied from `FeedbackDialog.tsx` rather than reinvented.
-- [ ] Mounted from `Dock.tsx`, guarded on `onMode`, taking `activateMode` and the visible mode list
+- [x] Mounted from `Dock.tsx`, guarded on `onMode`, taking `activateMode` and the visible mode list
   as props. **No edit to `App.tsx`.**
-- [ ] Pure `rankModes()` matcher in its own module, exported, with the shared normaliser.
-- [ ] The `generates` marker: a small read-only accessor exported from `activation.ts` answering
+- [x] Pure `rankModes()` matcher in its own module, exported, with the shared normaliser.
+- [x] The `generates` marker: a small read-only accessor exported from `activation.ts` answering
   "would opening this mode start work?" — `true` for `fixed` and `delegated`, `false` for `none` —
   and a muted trailing word on those rows. No cost figure, no readiness check. See F1 below.
-- [ ] Test: the marker is total — every mode is either marked or not, decided by `MODE_TARGET`, with
+- [x] Test: the marker is total — every mode is either marked or not, decided by `MODE_TARGET`, with
   no default. Mode fifteen cannot arrive unmarked by accident.
-- [ ] Cmd/Ctrl-K opens it: ignores repeat, `preventDefault()` when claimed, inert while a text field
+- [x] Cmd/Ctrl-K opens it: ignores repeat, `preventDefault()` when claimed, inert while a text field
   has focus, closes the Dock drawer first, refuses to open over another native modal.
-- [ ] The Dock gains **one** search-icon button. Smallest possible edit in contested ground, and the
+- [x] The Dock gains **one** search-icon button. Smallest possible edit in contested ground, and the
   commit message will say whose ground it is.
-- [ ] Test: the bar lists exactly what the Dock lists, switch on and switch off.
-- [ ] Test — **cost parity, through the real harness.** `pendingActivation` is *not* sufficient
+- [x] Test: the bar lists exactly what the Dock lists, switch on and switch off.
+- [x] Test — **cost parity, through the real harness.** `pendingActivation` is *not* sufficient
   evidence: `tests/every-mode-draws-its-surface.test.tsx` explains why a token is not a post, and
   Diagram's Force, Drift and Trail paths spend through **mount-time POSTs that leave no token at
   all**. So parameterise that file's existing phase-A trigger to fire from the command bar as well
   as the Dock, and assert on all four of: selected mode and URL, queued job steps, direct paid
   requests, and no unsafe pending token left after settlement. Cover `none`, `fixed` and every
   delegated Diagram context.
-- [ ] Test: `rankModes()` directly — ordering, ties in Dock order, normalisation.
-- [ ] Test: nonsense input renders `No command matches.` and no rows.
-- [ ] Test: keyboard contract — first row selected, Up/Down clamp, reset on filter change.
-- [ ] Browser check in a subagent, phone viewport as well as desktop.
-- [ ] Docs: `keyboard.md` gains Cmd/Ctrl-K; `reading-view-overview.md` gains the bar.
-- [ ] Mutation check: break the ranking tie-breaker and confirm the suite notices.
+- [x] Test: `rankModes()` directly — ordering, ties in Dock order, normalisation.
+- [x] Test: nonsense input renders `No command matches.` and no rows.
+- [x] Test: keyboard contract — first row selected, Up/Down clamp, reset on filter change.
+- [x] Browser check in a subagent, phone viewport as well as desktop.
+- [x] Docs: `keyboard.md` gains Cmd/Ctrl-K; `reading-view-overview.md` gains the bar.
+- [x] Mutation check: break the ranking tie-breaker and confirm the suite notices.
 
 Done looks like: a reader presses Cmd-K, types `toc`, presses Enter, and is in Hierarchy — having
 spent exactly what the Dock button would have spent.
@@ -312,7 +312,8 @@ and mount. Both are attributed in their commit messages. `App.tsx` is not edited
   Stage 2 unchanged, however."*
 - [x] GPT Sol at the end of Stage 1 — 2026-09-07, five findings, no P0 or P1, in
   [260906h-stage1-review-sol.md](260906h-stage1-review-sol.md). All five accepted and fixed.
-- [ ] GPT Sol at the end of Stage 2.
+- [x] GPT Sol at the end of Stage 2 — 2026-09-07, three findings, no P0 or P1, in
+  [260906h-stage2-review-sol.md](260906h-stage2-review-sol.md). All three accepted and fixed.
 
 Two rounds each, then settled here in writing.
 
@@ -349,6 +350,54 @@ mechanically compared all 14 descriptions and all 14 booleans against `3ac53baa`
 F3 and F4 are the two worth noting: both were aliases that would have shipped a small lie, and
 neither was reachable by any test in the file. That is the class — **an alias is product copy, and
 product copy is checked by a person or not at all.**
+
+### Stage 2 dispositions — all three accepted
+
+Reviewed 2026-09-07, **no P0 and no P1**. It cleared the things the stage rests on: the
+`activateMode` extraction preserves the old call order exactly; Diagram's context is derived and
+passed correctly and all five of its paths pass the real-spend matrix; `modeGenerates` is total and
+exposes a boolean rather than the table; `rankModes` is deterministic and neither drops nor
+duplicates; `CommandBar` does not import `Dock` and the cycle gate passes; and — the one I most
+wanted confirmed — **the cost-parity test is the requested parameterisation of the real phase-A
+harness, not a second weaker one**.
+
+| ID | Sev | Finding | Fix |
+|---|---|---|---|
+| F1 | P2 | The draft was cleared in a *passive* effect on open, so a reopen after Escape or a backdrop click painted one frame of the last query — or of the empty state — before the reset | Reset moved into the layout effect that calls `showModal()`, which runs before that paint |
+| F2 | P2 | The opening policy lived in the keydown handler, and the Dock button called a bare setter beside it. So clicking **Commands** while the non-modal Questions drawer was open left both open and put the capture-phase Escape collision straight back | The whole policy moved into `show()`, which both doors go through |
+| F3 | P2 | ⌘/Ctrl-**Shift**-K was claimed and `preventDefault()`ed. That is Firefox's Web Console | `shiftKey` rejected, with a regression test for it and for Alt |
+
+**F2 is the one worth naming as a class.** The fix for a previous finding (F6 on the plan: close the
+drawer before opening) was written into the *chord*, and the button was added beside it — so the
+policy was correct on one door and absent on the other. A rule implemented at a call site rather
+than in the thing both call sites share is a rule that holds until someone adds a second call site.
+It is the same shape as F2 on the plan, about `activateMode`, and it recurred in the same stage.
+
+**One test does not prove what it looks like it proves, and this is recorded rather than papered
+over.** The F1 regression test passes with the bug put back: in jsdom a layout effect and a passive
+effect both run inside `act`, so there is no frame between them to observe. It was checked by
+reverting the fix and watching it stay green. It holds the invariant underneath — a reopened bar is
+empty — and its docblock says plainly that it does not hold the timing.
+[silent-success.md](../reusable/silent-success.md).
+
+### The browser pass, and the one gap it found
+
+Driven in a real Chrome on desktop and at 390×844, signed in as an owner. It works end to end: both
+doors open the bar, `gl` ranks Glossary first, `toc` finds Hierarchy by alias, `zzzz` says
+`No command matches.` and draws nothing, arrows move a visibly selected row, Enter opens the mode and
+the URL follows, Escape returns focus to the opener. The `generates` marker appears on exactly
+Glossary, Ideas, Quotes, Timeline, Diagram and Debate, and on none of the other eight.
+
+**The gap: on a phone, the Dock scrolls horizontally, and with the experimental switch on the
+Commands button sits mid-scroll rather than in the first visible slice.** ⌘-K does not exist on a
+phone, so that button is the *only* door there — which was the entire reason Greg asked for it
+(answer 2). The feature is therefore not fully delivered on the case it was added for.
+
+This is **not** something this change introduced — it is the Dock's existing fit ladder, and the bar
+is one more control in a row that was already over-full. It is left as it is, and flagged, because
+the fix is a placement decision in a bar whose order is Greg's and hand-maintained: the obvious
+answer is to put Commands outside the mode segment at the left end beside `DockHome`, the way
+260905g placed the wordmark and Feedback, and that is his call rather than an executor's.
 
 ### F1, and why the premise does not hold
 
