@@ -2602,6 +2602,210 @@ ruler's five recorded preconditions, which are conditions on **how stage C may u
 
 - **C5 — the admonition join**, ArchWiki adapter first, per correction 2 above.
 
+  ##### What landed, 2026-09-07 — **the adapter shipped and the join did not, on the measurement**
+
+  One line of selector in [`src/callouts.ts`](../../src/callouts.ts) —
+  `[class~="archwiki-template-box"]`, with its own `CalloutShape` — plus its exposure ladder in
+  [tests/callouts.test.ts](../../tests/callouts.test.ts), written red-first: six cases in, all six
+  red, then the selector. **Only one of them is really a negative** — Sol counted, and it is
+  `acx.html`; the other three of the "adversarial" four are positive recognition tests with a
+  splitting or de-duplication assertion attached. And C0's rule is that a *different agent* writes
+  the negative, which one agent cannot satisfy by ordering its own work however carefully. **A real
+  adversarial set for this recogniser is still owed**, and its author must not be whoever wrote
+  `CONTAINER_SELECTOR`. The test file says so where somebody will read it.
+
+  **The ladder, on `archwiki_install.html`:** 13 source candidates → 13 accepted (7 note, 5 tip, 1
+  warning; 0 skipped) → 109 stamps in the DOM → 78 surviving Readability → **17 affected blocks in 9
+  contexts** → 9 of the 13 boxes reach a block that carries a context. Every rung is asserted, the
+  two middle ones because Sol pointed out that without them a green could be reached with the
+  endpoints intact and the mechanism gutted.
+
+  The counterfactual is in the suite rather than in a scratch file: the same page with the class
+  token misspelt, extracted and split, is **identical for all 221 blocks on tag, kind, level, words,
+  gistable, note and text**, and all 221 ids carry. **It is not identical on `html`**, and the first
+  draft of this section said it was. Sol compared the fields the test was not comparing and found
+  four: `wrapLooseRuns` pulls the whitespace between `<strong>Note</strong>` and its sibling `<ul>`
+  into the paragraph it builds. **Four block HTML strings differ and they do not all differ the same
+  way** — the second draft said they did, and Sol measured it: three are `<p>` label blocks gaining
+  `" \n"`, and the fourth is an `<li>` whose nested label paragraph gains only `"\n"`. It renders the
+  same,
+  moves no id and is not in `hashBlocks` — but an overclaim is the one thing a counterfactual may not
+  have, so the four are now asserted by name.
+
+  **`score.mts` is byte-identical, all 273 lines — and that is the whole of what it can say.**
+  `archwiki-install` is in `EXTRA_FIXTURES` with no manifest, and `score.mts` scores the 15
+  manifest-bearing fixtures only, so the fixture this stage is about cannot appear in that report in
+  either direction. Nor would a manifest help: the card has no column for a context. The zero is the
+  *"nothing else changed"* half of the counterfactual and is worth having; the positive half lives in
+  the test above, and any future recogniser measured only by `score.mts` should be read with that in
+  mind.
+
+  **Three numbers that were wrong before this and are corrected in place:**
+
+  1. `fixtures/README.md` said the page has *twelve `Note`/`Tip` boxes whose label sits before a
+     sibling `<ul>`*. The twelve was **incomplete, not wrong** — 7 + 5, with the one `-warning` left
+     out of the population, and Sol was right to make me soften that. The shape claim *was* wrong:
+     the detached label is **4 of the 13**, the other nine carrying it inline, so the row was written
+     for a shape that is under a third of the page it names.
+  2. `tests/callouts.test.ts`'s header said **not one extraction fixture produces a callout block**.
+     `mkdocs_tabs` produces 8, in 2 contexts, and had been doing so since before this stage began.
+  3. `theme-admonition` was in `CONTAINER_SELECTOR` and had no branch in `shapeOf`, so a Docusaurus
+     box fell through to `"aside"` — the one shape `isNavigation` runs on. A declared admonition that
+     is mostly a link was being *skipped*, which that guard's own note says must never happen.
+     Reproduced, fixed, and provably corpus-inert: no fixture carries the class.
+
+  **The join has exposure and every way of building it today is forbidden by a rule this repo already
+  paid for.** After the adapter the corpus holds **5** detached labels — `Note`, `Note`, `Tip` on
+  ArchWiki and `Readable anchor links`, `Example` on MkDocs, the last two pre-dating this stage. Two
+  are already `gistable: false`, and by an accident worth knowing: `BOILERPLATE_LABEL` in
+  [`src/blocks.ts`](../../src/blocks.ts) matches `notes?`, so *"Note"* is excluded by a word list
+  written for reference-section headings while *"Tip"* and *"Example"* are structural, embeddable,
+  searchable and on the clock. Then the four candidate joins:
+
+  - **Merge the label's text into the next block.** Churns that block's id, produces an `<li>` whose
+    text begins "Note", and on MkDocs destroys a real distinction — `Readable anchor links` is a box
+    *heading*, not the front of a sentence. One transformation, two different right answers.
+  - **A `Block` field** saying *this is the box's label*. Correct, and the C5 brief rules it out by
+    name. **It is not stage D's** — this line said it was, and the passage twenty lines below
+    correctly says the plan's text does not put callout labels under stage D. Sol found the two
+    sitting in one section (P1-03). The later statement is the true one: an unassigned scope call.
+  - **A `Note`/`Tip` word list.** Correction 2 forbids it, and ArchWiki is precisely the page that
+    proves why.
+  - **`gistable: false` when a block is the short first block of a multi-block context.** This is the
+    join by stamp, and it is the exact line `describeBlock` carries a paragraph of postmortem about:
+    a context deciding policy, through a field `hashBlocks` cannot see. Half a day, GPT Sol, already
+    paid for once.
+
+  **Sol found the fifth option, and it is a real one.** Not a text merge and not a word list: a
+  **label-specific provenance stamp** at stage 2 — `p.admonition-title` where MkDocs marks it, and,
+  for ArchWiki, the paragraph `wrapLooseRuns` creates *only when the leading `<strong>` forms a
+  label-only run before block content*. That reads publisher markup and position, never the word, and
+  the emphasis case already in the suite (`<strong>Never</strong> run…`, one inline block) is its
+  negative. Stage 3 then persists the label/body relationship as a context role or a label block id,
+  and — Sol's condition, and it is the one that matters — **anything that changes policy from it goes
+  into the fingerprint**, or it is the `gistable` bug again wearing a new name.
+
+  **That is the right design and it is not this stage's to land.** It needs a `Block` representation
+  and a `hashBlocks` change, and the C5 brief withheld exactly that: *not a `Block` field, not a new
+  downstream concept*. Sol is right that the plan's own text does not put callout labels under stage
+  D — I asserted that and it is unsupported — so this is a **scope call for Greg** rather than a
+  settled deferral. **The recommendation is to take it, as its own small stage, with the fingerprint
+  change in the same commit.** Until then the honest statement of where C5 stopped is: the adapter
+  landed, the grouping fact is carried by `context.id`, and the label is still an ordinary block —
+  one word of it, `Tip`, in the gist column of two real pages.
+
+  **One correction to my own account of the instruments:** I wrote that `tests/callouts.test.ts` is
+  the only place a context is measured at all. It is the only *extraction* instrument — no eval
+  reports `Block.context` — but `tests/store-block-roles-pg.test.ts` measures synthetic contexts
+  through the Postgres round-trip. Sol, and the narrower claim is the true one.
+
+  ##### The adversarial pass, by a second agent — and the two things it changed
+
+  The section above says a real adversarial set was still owed and that its author must not be
+  whoever wrote `CONTAINER_SELECTOR`. A different agent ran it: **15 attacks, twelve mutations of
+  `src/callouts.ts` each applied and reverted, every new test killed by at least one of them.**
+
+  **The recogniser is sound.** `~=` is genuine token matching, not substring — `not-archwiki-template-box`,
+  `archwiki-template-boxed` and `archwiki-template-box-note` alone all correctly fail to match.
+  Nesting in all three directions yields one container and one context id. And the scoping is right
+  for the right reason, checked against ArchWiki's live `MediaWiki:Common.css` rather than guessed:
+  the wiki gives each kind of box its own class, and **`archwiki-template-message` — the maintenance
+  banner an editor writes *about* the article, which would be genuinely wrong to set as the author
+  speaking — does not carry the `-box` token**. The recogniser is scoped by intent, not merely by
+  position, which is the second rule the C4a review produced.
+
+  **1. `acx.html` proves less than this plan has been claiming, and the corpus already held the
+  proof it needed.** Three places said acx was the standing negative for a callout recogniser.
+  Measured — by the adversary and then again independently, because the first check I wrote was
+  itself wrong — **acx contains zero elements leading with a `<strong>` label**. It says "Note" ten
+  times, all mid-sentence. So it kills a rule matching the word *anywhere*, and says nothing at all
+  about a rule matching a **leading `<strong>Note</strong>`**, which is the shortcut ArchWiki's own
+  markup invites and therefore the rule anybody would actually write. Proved by mutation: a
+  leading-label recogniser leaves both acx tests green.
+
+  The negative that bites was in the corpus the whole time. **`rfc9110.html` has 32 paragraphs
+  written exactly as ArchWiki writes a box** — `<aside><p><strong>Note:</strong> …` — and
+  `mdn_cache.html` has 3, none carrying any callout class. The new test takes rfc9110's real bytes,
+  renames `<aside>`→`<div>` so the markup is gone and all 32 labels remain, and asserts silence. It
+  is the only test the leading-label mutation reddens. `src/callouts.ts` and
+  `content-extraction.md` now name rfc9110 rather than acx. **The general lesson is worth more than
+  the instance: a corpus can hold the negative you need and still not be the negative you cited**,
+  and nobody notices while the recogniser is honest.
+
+  **2. A pre-existing defect in `wrapLooseRuns`, found beside the new entry and fixed here.** A
+  callout container that is *itself* a `<p>` had a `<p>` built inside it — legal to build in a DOM,
+  impossible to parse back. Stage 2 serialises, stage 3 reparses, the parser closes the outer
+  paragraph at the inner one, and **one paragraph reaches the reader as three blocks: the real one
+  flanked by an empty block on each side**, the first carrying the callout's context. The suite
+  already forbade this shape — *"does not sweep a list into a paragraph of its own making"* asserts
+  no block is empty — and the assertion had never been pointed at a `<p>` container.
+
+  ArchWiki cannot reach it: its stylesheet says `div.archwiki-template-box` and all 13 fixture boxes
+  are `div`s. What reaches it is `[class~="pullquote"]` and `[class~="callout"]`, both of which a CMS
+  routinely writes on a `<p>`, and **both in `CONTAINER_SELECTOR` since 2026-08-31**. The fix is one
+  line — a container that cannot hold a paragraph is already the block, and `canonicaliseCallouts`
+  has stamped it before this runs, so building nothing loses no stamp. The adversary left it as
+  `it.fails` plus a test measuring the two empty blocks and did not fix it, which was the right call
+  for an adversary; the fix turned the first green and the second red, and the second is gone. The
+  guard was mutated away afterwards and the test watched go red.
+
+  This is the same class as C4a's `hoistEmptiedHeadingWrapper` — a recogniser that leaves an empty
+  wrapper behind, and a reading view that draws one row per block whatever the block holds. Twice in
+  two stages, which is worth someone noticing.
+
+  ##### The second Sol review — one P0, and it was in the fix rather than the feature
+
+  The adapter had already had a Sol round (7 findings, all acted on). The **adversarial pass and the
+  fix it produced** had not, so they got their own. Six findings, all six acted on, none overruled.
+
+  **P0-01, and it is the one worth reading.** The first version of the `wrapLooseRuns` guard read
+  `container.tagName === "P" || PHRASING.has(container.tagName)`. `PHRASING` answers *may this
+  element join a phrasing run* — a question about a container's **children** — and the guard needed
+  to ask whether a container may **hold a paragraph**. Different question, overlapping answers, and
+  the gap is real: `<summary>`, `<legend>`, `<pre>` and every heading take phrasing content only, are
+  absent from `PHRASING`, and can all carry a class, so `CONTAINER_SELECTOR`'s attribute arms reach
+  them. Reproduced through the real pipeline before believing it: **`<summary class="callout">` and
+  `<legend class="callout">` came back as `p` blocks with reminted ids**, and `<h2>`/`<pre>` reached
+  stored block HTML as `<h2><p>…</p></h2>`. Reminted ids are the one contract
+  ([block-ids.md](../../docs/project/block-ids.md)), so this was a P0 and not a tidiness note.
+
+  Fixed with `CANNOT_HOLD_A_PARAGRAPH`, a set of its own rather than a reuse — Sol's second point,
+  and the better half of the finding: coupling the two meant that adding a tag to the
+  run-membership list would silently change which containers get rewritten. Four tests, one per tag,
+  each watched red first and the guard then mutated back to the rejected version to watch them red
+  again.
+
+  **A test of mine that proved nothing, caught in passing.** The first draft compared block ids
+  between two independent extractions. A first extraction mints ids at random, so those differ
+  whatever the code does — the assertion could only ever have failed. It now extracts the plain page,
+  passes those blocks as `previous`, and asks the question a reader actually lives with: *does adding
+  the class remint an id that already existed?*
+
+  **P1-01 — the new negative is better and still not sufficient**, and the test file now says which
+  rule escapes it. rfc9110's labels sit in a `<p>` inside an `<aside>`; ArchWiki's sit directly in
+  the `<div>`. So a rule keying on *an unclassed `<div>` whose direct first child is the label* takes
+  ArchWiki's 13 and none of rfc9110's 32 or mdn_cache's 3. Measured across all 39 fixtures: **no page
+  carries that shape unclassed**, so unlike the rfc9110 case there is no real page to point at and
+  the negative for it is synthetic and labelled as such. The general form is worth keeping: **each
+  negative rules out one rule, not the idea of keying on words.** The class is the argument; the
+  negatives are only evidence.
+
+  **P1-02, P1-03, P1-04 — three claims of mine that were not true**, all corrected in place: the
+  four differing blocks do not all differ the same way (three `<p>`s gain `" \n"`, an `<li>`'s nested
+  paragraph gains `"\n"`); this section asserted a `Block` field "is stage D's" twenty lines above
+  correctly saying the plan does not put callout labels there; and the acx heading correction counted
+  `h1` on one side and not the other — it is **139 → 19 in the `h2`–`h6` domain**, or 141 → 20 across
+  all six, and the two must not be mixed. **P2-01**: the `<p>` regression asserted no empty blocks
+  and the block count, so it would have passed just as happily had the fix stopped stamping the
+  container altogether; it now asserts the context and the carried id.
+
+  **One honest limitation, measured:** box 3 of the 13 survives to a block and gets no context,
+  because it sits inside an `<li>` that stage 3 emits as a single block and `contextFor` resolves by
+  `closest`, which reads a block's ancestors and never what is inside it. A callout nested in a list
+  item is invisible to this mechanism. Boxes 4, 5 and 12 are dropped by Readability outright and
+  **the stamp rescues none of them** — the answer to the open question in the brief, and not the one
+  anybody guessed.
+
 **Deferred out of stage C, deliberately:**
 
 - **`dir`/`lang`.** Sol P1-C06 shows it is a data-contract change, not a recogniser: correctness needs

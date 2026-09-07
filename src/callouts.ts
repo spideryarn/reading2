@@ -46,9 +46,33 @@
  *
  * ## Recognised shapes, and nothing else
  *
- * The four in the corpus plus hand-written ARIA. Recognition is by the markup a
- * publisher actually writes, never by inference from shape or length: notes.ts
- * has the write-up of what happened the one time this stage guessed.
+ * The ones in the corpus plus hand-written ARIA. **Recognition is by the markup
+ * a publisher actually writes, never by inference from shape, length or the
+ * visible words** — notes.ts has the write-up of what happened the one time this
+ * stage guessed. ArchWiki is the case that puts the rule under most pressure and
+ * is the reason to state it here: its box has no titled element and no
+ * attribute, only `<strong>Note</strong>` at the front of the body, so the word
+ * is the one thing that *looks* like a signal.
+ *
+ * **The negative for that is rfc9110, not acx**, and the difference is the
+ * whole lesson. `acx.html` says "Note" ten times in ordinary prose and was
+ * cited here as the standing proof — but measured, **not one of its elements
+ * leads with a `<strong>` label**, so it kills a rule matching the word
+ * *anywhere* and sails past a rule matching a *leading `<strong>Note</strong>`*,
+ * which is the shortcut ArchWiki's markup actually invites and therefore the
+ * one anybody would write. `rfc9110.html` has **32 paragraphs shaped exactly as
+ * ArchWiki writes a box** — `<aside><p><strong>Note:</strong> …` — and
+ * `mdn_cache.html` has 3, none of them carrying any callout class. Those are
+ * the negatives that bite, and they were in the corpus all along.
+ *
+ * **They are still not sufficient, and the test file says which rule escapes.**
+ * Sol, P1-01: rfc9110's labels sit in a `<p>` inside an `<aside>` and ArchWiki's
+ * sit directly in the `<div>`, so a rule keying on *an unclassed `<div>` whose
+ * direct first child is the label* would take ArchWiki's 13 and none of these
+ * 35. No fixture has that shape unclassed, so the negative for it is synthetic
+ * and labelled as such. Recognising by the class is what makes all of this
+ * moot; the ladder of near-misses is here so the next person choosing a
+ * shortcut can see what each one fails to rule out.
  *
  * Epigraphs are deliberately absent. gwern's `.epigraph` already wraps a
  * `<blockquote>`, so it is a quote today and is set as one.
@@ -91,6 +115,29 @@ const CONTAINER_SELECTOR = [
   '[class~="callout-block"]',
   '[class~="admonition"]', // gwern, MkDocs, Sphinx
   '[class~="theme-admonition"]', // Docusaurus, whose own class map names this exact token
+  /* **ArchWiki's `Template:Note`, `Template:Tip` and `Template:Warning`**, and
+     the one shape here whose label is not an element of its own: the wiki writes
+     `<div class="archwiki-template-box archwiki-template-box-note"><strong>Note</strong> …body…</div>`,
+     so there is nothing like MkDocs's `p.admonition-title` to find and the only
+     thing that *reads* like a signal is the visible word. Which is exactly why
+     the selector is the class, and the proof that this matters is `rfc9110.html`:
+     **32 paragraphs shaped exactly as ArchWiki writes a box**,
+     `<aside><p><strong>Note:</strong> …`, carrying no callout class at all, plus
+     3 more in `mdn_cache.html`. A leading-label rule would claim all 35.
+     See the header for why `acx.html`, which this comment cited first, is the
+     weaker negative (tests/callouts.test.ts).
+
+     The bare `-box` token rather than the three suffixed ones, so a box type
+     the wiki adds next year is recognised rather than silently missed; the
+     suffix is the *severity*, which nothing downstream represents yet.
+
+     Before this line a reader of the Arch install guide saw its warnings with
+     nothing marking them as warnings. **The stamp buys recognition and not
+     recall**: the boxes Readability drops stay dropped, which was worth checking
+     because the opposite was plausible. Every count is in
+     tests/callouts.test.ts, which asserts the whole ladder rather than restating
+     it — one home per fact, and the executable one wins. */
+  '[class~="archwiki-template-box"]',
   '[class~="pullquote"]',
   '[class~="pull-quote"]',
   "aside", // RFCs, and every CMS's sidebar — see `isNavigation`
@@ -129,6 +176,30 @@ const INSIDE_SELECTOR = "*";
  * Unknown elements end a run as well — a custom element is more likely to be a
  * wrapper than a word.
  */
+/**
+ * **Elements a `<p>` may not sit inside**, because their content model is
+ * phrasing only. Deliberately *not* `PHRASING`, and the distinction cost a P0:
+ * `PHRASING` answers *may this element join a phrasing run*, which is a
+ * question about a container's **children**, and this asks whether a container
+ * may **hold a paragraph**. `<summary>`, `<legend>`, `<pre>` and every heading
+ * answer no to the second and are absent from the first, and every one of them
+ * can carry a class — so `CONTAINER_SELECTOR`'s attribute arms reach them.
+ *
+ * Reusing `PHRASING` here also coupled two sets that must move independently:
+ * adding a tag to the run-membership list would silently change which
+ * containers get wrapped. Kept separate so neither edit implies the other.
+ *
+ * (`A`, `DEL` and `INS` are *transparent* — legal around flow content when
+ * their parent allows it — so they are strictly over-included here. That is the
+ * safe direction: over-including means a container is left alone and stamped
+ * rather than rewritten, and Sol found no case where wrapping inside one was
+ * load-bearing.)
+ */
+const CANNOT_HOLD_A_PARAGRAPH = new Set([
+  "P", "PRE", "H1", "H2", "H3", "H4", "H5", "H6",
+  "SUMMARY", "LEGEND", "OPTION", "OPTGROUP", "TEXTAREA", "TITLE", "DT",
+]);
+
 const PHRASING = new Set([
   "A", "ABBR", "AREA", "AUDIO", "B", "BDI", "BDO", "BR", "BUTTON", "CANVAS", "CITE", "CODE",
   "DATA", "DATALIST", "DEL", "DFN", "EM", "EMBED", "I", "IFRAME", "IMG", "INPUT", "INS", "KBD",
@@ -162,6 +233,27 @@ const PHRASING = new Set([
  * single block that swallows both.
  */
 function wrapLooseRuns(container: Element): Element[] {
+  /* **A container that cannot hold a paragraph is already the block**, so there
+     is nothing loose in it to wrap. Without this, a callout a CMS wrote as
+     `<p class="pullquote">` — or as `<summary>`, `<legend>`, `<pre>` or a
+     heading, all of which take phrasing content only and all of which can carry
+     a class — got a `<p>` built *inside* it, buildable in a DOM and unparseable
+     as HTML. Stage 2 serialises it, stage 3 reparses, the
+     parser closes the outer paragraph at the inner one, and one paragraph
+     reaches the reader as **three blocks: the real one flanked by an empty
+     block on each side**, the first carrying the callout's context.
+     `canonicaliseCallouts` stamps the container itself before calling this, so
+     returning nothing here loses no stamp.
+
+     Found 2026-09-07 by the adversarial pass on the ArchWiki entry, which
+     cannot reach it — every ArchWiki box is a `<div>`. What reaches it is
+     `[class~="pullquote"]` and `[class~="callout"]`, both of which a CMS
+     routinely writes on a `<p>` and both in `CONTAINER_SELECTOR` since
+     2026-08-31. The suite already forbade this shape — *"does not sweep a list
+     into a paragraph of its own making"* asserts no block is empty — and the
+     assertion had simply never been pointed at a `<p>` container. */
+  if (CANNOT_HOLD_A_PARAGRAPH.has(container.tagName) || PHRASING.has(container.tagName)) return [];
+
   const doc = container.ownerDocument;
   const wrapped: Element[] = [];
   let run: ChildNode[] = [];
@@ -195,7 +287,7 @@ function wrapLooseRuns(container: Element): Element[] {
  * visible in the stats. Not exported: `CalloutStats` carries it in its own
  * shape and nothing outside this file names it.
  */
-type CalloutShape = "callout" | "admonition" | "pullquote" | "aside";
+type CalloutShape = "callout" | "admonition" | "archwiki" | "pullquote" | "aside";
 
 export interface CalloutStats {
   /** Containers recognised — one context each. Not the number of blocks, which is usually larger. */
@@ -211,7 +303,7 @@ const EMPTY_STATS = (): CalloutStats => ({
   containers: 0,
   stamped: 0,
   skipped: 0,
-  shapes: { callout: 0, admonition: 0, pullquote: 0, aside: 0 },
+  shapes: { callout: 0, admonition: 0, archwiki: 0, pullquote: 0, aside: 0 },
 });
 
 function shapeOf(el: Element): CalloutShape {
@@ -221,6 +313,21 @@ function shapeOf(el: Element): CalloutShape {
     return "callout";
   }
   if (named("admonition")) return "admonition";
+  /* **`theme-admonition` was in the selector and not here, and that is a bug
+     rather than an omission.** With no branch of its own a Docusaurus box fell
+     through to `"aside"`, which is the one shape the call site runs
+     `isNavigation` over — so a declared admonition whose text is mostly a link
+     was silently skipped, which the guard's own note says must never happen:
+     *a heuristic must not overrule a declaration*. It also counted Docusaurus's
+     boxes as asides in the stats. Reproduced 2026-09-07, and it costs nothing
+     on today's corpus because no fixture carries the class — found while adding
+     ArchWiki below, which needed the same branch. */
+  if (named("theme-admonition")) return "admonition";
+  /* Named for the publisher rather than folded into `admonition`, following
+     `NoteShape` next door (src/notes.ts): the token is one wiki's own, so
+     counting it as the generic shape would let ArchWiki's boxes go missing
+     behind gwern's and MkDocs's in the one place that would have shown it. */
+  if (named("archwiki-template-box")) return "archwiki";
   if (named("pullquote") || named("pull-quote")) return "pullquote";
   return "aside";
 }
@@ -253,11 +360,14 @@ function shapeOf(el: Element): CalloutShape {
  *
  * **It also throws the good ones out**, which is worth knowing before anybody
  * reads the corpus numbers as a result: none of rfc9110's 32 editorial asides
- * and none of gwern's 3 admonitions survive Readability at all, so `<aside>` and
- * `admonition` buy nothing on today's fixtures. They are in the list because the
- * shapes are real and because the day extraction stops dropping them is not the
- * day anybody will remember this file. What is measured working end to end is
- * Substack's `<div class="callout-block">`.
+ * and none of gwern's 3 admonitions survive Readability at all, so `<aside>`
+ * buys nothing on today's fixtures. It is in the list because the shape is real
+ * and because the day extraction stops dropping them is not the day anybody will
+ * remember this file.
+ *
+ * What is measured working end to end: Substack's `<div class="callout-block">`
+ * off the corpus, `mkdocs_tabs` (2 contexts, 8 blocks) and — since 2026-09-07 —
+ * `archwiki_install` (13 boxes, 9 contexts, 17 blocks) on it.
  */
 function isNavigation(el: Element): boolean {
   if (el.querySelector("nav") !== null) return true;
