@@ -104,7 +104,7 @@ class ChunkBoundary extends Component<BoundaryProps, { broken: boolean }> {
     return { broken: true };
   }
 
-  override componentDidCatch(error: Error, info: ErrorInfo): void {
+  override componentDidCatch(error: unknown, info: ErrorInfo): void {
     /* `componentStack` deliberately not sent — one free-text blob, and this is
        not the file that starts making exceptions to "no free text leaves the
        machine". AppBoundary.tsx makes the argument in full. */
@@ -116,9 +116,11 @@ class ChunkBoundary extends Component<BoundaryProps, { broken: boolean }> {
        tore a subtree down — and the vocabulary in log-buffer.ts is closed. The
        Sentry tag above is where "which boundary" is recorded. The name only:
        `error.message` is not sent, for the reason at ClientErrorLogEntry. And
-       not `error.name`: the parameter is typed `Error` and the runtime value
-       need not be one, so the read is `nameOfThrown`'s job and not this file's
-       — src/web/log-buffer.ts § nameOfThrown. */
+       not `error.name`: the read is `nameOfThrown`'s job and not this file's —
+       src/web/log-buffer.ts § nameOfThrown. **The parameter is `unknown` rather
+       than React's own `Error`**, so the compiler refuses that read rather than
+       accepting one that can throw out of the handler on a value that is not an
+       `Error`. AppBoundary.tsx makes the argument in full. */
     recordLog({ kind: "client-error", source: "boundary", name: nameOfThrown(error) });
   }
 
