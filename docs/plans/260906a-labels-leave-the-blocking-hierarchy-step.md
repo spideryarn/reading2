@@ -1,6 +1,6 @@
 # The labels leave the blocking step
 
-**Status: stage 1 landed and reviewed; the stamp question settled ([below](#two-steps-one-stamp)); stage 2 building.** Written 2026-09-06, out of
+**Status: stages 1, 2a and 2b landed; 2b reviewed and NOT yet clean — one P1 open ([below](#stage2b-review)). Stage 3 not started.** Written 2026-09-06, out of
 [260904d](260904d-deepen-fat-sections.md) § *Question 5*, where a measured run found that the thing
 blowing the ingest deadline was not the feature that plan was building.
 
@@ -715,6 +715,76 @@ whatever the article is serving when it finally claims. It is only correct at al
 publication comes from a running job on the same slug. A standalone `publishRevision` from a script
 sidesteps that, and would leave the newer revision waiting on a job whose base has moved. Narrow, and
 written down rather than closed.
+
+## What the stage 2b review found, and the P1 still open <a id="stage2b-review"></a>
+
+GPT Sol, 2026-09-07, at `high`, against commit `021ff146`. **It would not ship it unchanged.** No
+billing, transaction, cross-article dedupe or connection-pool defect — the three things the stage was
+most at risk of — and one real hole in the failure path.
+
+### F1 — P1, open. A labels job that runs out of lease leaves the article saying *"still arriving"* for ever
+
+`markNavLabelsFailedIn` is reached **only** from the session settlement path
+([`pg-session.ts`](../../src/store/pg-session.ts):518). A claimant that exhausts its requeue budget
+does not go through there: `settleExpired` ends the job itself
+([`pg-jobs.ts`](../../src/store/pg-jobs.ts):1278), setting `status = 'error'` and clearing
+`draft_revision_id`, and it never touches `nav_label_status`. The job ends; the published revision
+goes on promising labels that nobody is buying, with no successor queued.
+
+**This is the likeliest failure this feature has**, which is why it matters more than its severity
+suggests. The labels pass is the slowest thing in the app — 682 s measured against a 740 s claimant
+deadline — so it is precisely the step that runs out of lease. A manual Retry recovers the article,
+which is what keeps it a P1 rather than a P0, and the committed tests exercise `settleJob` and not
+terminal expiry, so nothing would have caught it.
+
+### F2 — P2. The dedupe can bind a new publication to a successor that belongs to an older base
+
+Broader than the plan admitted. Not only a *running* successor: a `queued` one that kept its
+`draft_revision_id` through a deadline pause or a lease requeue does it too. The unconditional
+collapse at [`pg-jobs.ts`](../../src/store/pg-jobs.ts):298 then queues nothing for the new revision,
+and the old job's exact-base guard correctly refuses to touch the newer one — so that revision is
+left `pending` with no active successor. Confined to out-of-band publication, because ordinary
+pipeline publication is serialised per slug. Case 9 of the test builds this state and stops at
+*"the newer revision is still pending"* without asserting that a successor exists.
+
+**The honest fix is to classify the conflict** rather than swallow every one of them: collapse only
+onto a holder with no draft, refuse when the holder has one. That closes F3 as well.
+
+### F3 — P2. A broad `onConflictDoNothing` swallows more than the dedupe
+
+`enqueueSuccessorIn` mints an id once and reads *any* unique conflict as "somebody already queued
+this". Today the unintended one is `jobs_pkey`, which is improbable but not impossible over a
+771-million-value id space — and the real cost is the future: it will silently absorb any unique
+index somebody adds later, and publication will commit with `successorJobId = null` and no labels
+job. `tryEnqueue` already classifies exactly this ambiguity ([`pg-jobs.ts`](../../src/store/pg-jobs.ts):409)
+and says why in its own comment.
+
+### F4 — P2, and it is my error rather than the builder's
+
+**`pg-glossary.ts` does not call `publishRevisionIn`.** I asserted it did, in the stage brief, without
+checking; it went into a source comment at [`pg-revisions.ts`](../../src/store/pg-revisions.ts):2057,
+into this plan, into [hierarchy.md](../project/hierarchy.md) and into the test's header. What
+`pg-glossary.ts` actually says is the opposite, at length: it *"mutates a published revision, which
+nothing else here does"*, deliberately not opening a draft.
+
+The **argument** survives — there really is a second entry path, the standalone `publishRevision`
+wrapper at [`pg-revisions.ts`](../../src/store/pg-revisions.ts):1833, and a guard living in one
+caller is still a guard the next caller forgets. Only the named example was wrong, and it is now
+wrong in four places. The lesson is the one this plan keeps relearning: **a claim in a brief is
+repeated verbatim by whoever builds from it**, so an unchecked one propagates further than it would
+have as a thought.
+
+### What it confirmed rather than found
+
+- **Billing.** No path spends a reader slot: `ingest_event_id` is null, settlement returns early,
+  retries read the same null provenance, admission is never entered, and the usage views count
+  `ingest_events` rather than jobs. Worth keeping its distinction, though — the successor *is*
+  quota-free, and it is **not** cost-free: it takes a global execution slot while it runs and its
+  model spend lands in the AI ledger like anything else.
+- **The transaction.** Pointer move and insert share one `tx`, rollback removes both, no second
+  pooled connection, no lock-order inversion against the claim path.
+- **`workKeyFor`'s move.** The cycle argument is right, the sweep is complete, and `sameWork` still
+  agrees with the moved hash on the exercised grid.
 
 ## Groundwork for stage 2, established before any code <a id="stage2-groundwork"></a>
 
