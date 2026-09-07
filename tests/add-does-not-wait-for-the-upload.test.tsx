@@ -178,7 +178,7 @@ describe("Add, with a PDF chosen", () => {
 
     /* The label is the reader's only warning about which of the two ways in the
        button will take, so it is asserted rather than assumed. */
-    expect(addButton().textContent).toBe("Add PDF");
+    expect(addButton().textContent).toBe("Add file");
 
     await act(async () => {
       addButton().click();
@@ -247,7 +247,7 @@ describe("Add, with a URL", () => {
        it is the assertion here for the same reason. */
     render();
     choose(aFile());
-    expect(addButton().textContent).toBe("Add PDF");
+    expect(addButton().textContent).toBe("Add file");
 
     type("example.com/an-essay");
     expect(addButton().textContent, "the file kept winning after the URL was typed").toBe("Add");

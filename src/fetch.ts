@@ -41,6 +41,7 @@ import { TextDecoder as SpecTextDecoder } from "@exodus/bytes/encoding.js";
 import { Agent } from "undici";
 import sniffHTMLEncoding from "html-encoding-sniffer";
 import { canonicalKey } from "./source.js";
+import { uploadContentType } from "./uploads.js";
 import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
 
 /* ------------------------------------------------------------------ *
@@ -203,6 +204,31 @@ export interface RawManifest {
 export type StoredRawManifest = RawManifest & { storedSha256: string; storedBytes: number };
 
 /**
+ * **Did this document come off a reader's disk?** — asked of a manifest that
+ * may have been through the store, which is the whole reason this exists.
+ *
+ * **`origin` is the field you would reach for, and it is the one that does not
+ * survive.** `readRaw` in src/store/artifacts-pg.ts rebuilds a manifest from
+ * columns, there is no `origin` column, and that adapter deliberately declines
+ * to invent one — *"an invented `origin: "url"` would be a false statement every
+ * later reader would believe"*. So `origin` is set by `acquireUpload`, read by
+ * the step immediately after it if at all, and **absent from every manifest
+ * loaded back**. Written on 2026-09-07 after `manifest.origin === "upload"` in
+ * the `extract` step failed on the first real end-to-end upload, having passed
+ * every unit test — because the tests asserted the manifest the step *returns*
+ * and the pipeline reads the one the store *kept*
+ * (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md;
+ * docs/reusable/silent-success.md is the class).
+ *
+ * `filename` does survive: it is the `raw_filename` column, written from this
+ * field and null for everything fetched. It is the same fact `cameOffADisk`
+ * (src/web/SourceLink.tsx) asks on the client, for the same reason.
+ */
+export function cameFromAnUpload(manifest: RawManifest): boolean {
+  return manifest.filename !== undefined || manifest.origin === "upload";
+}
+
+/**
  * **Stage 1's product: the bytes into the object store, and the manifest that
  * names them.** One function, so the two cannot disagree.
  *
@@ -236,7 +262,16 @@ export type StoredRawManifest = RawManifest & { storedSha256: string; storedByte
  * Two copies of one expression is precisely how `npm run fetch` and the
  * pipeline produced different files at the same path once before.
  */
-export function storedDocumentBytes(doc: FetchedDocument): Uint8Array {
+export function storedDocumentBytes(
+  /* **Only the two fields it reads**, since 2026-09-07 and for the same reason
+     the function exists at all. `acquireUpload` (src/pipeline.ts) has to store
+     an uploaded web page under exactly this rule or stage 2 reads mojibake —
+     it decodes with no encoding branch, on the strength of this line — and it
+     has no `FetchedDocument`, because an upload has no URL, no redirect chain
+     and no status. Narrowing the parameter is what lets it call this instead of
+     writing the rule out a third time. */
+  doc: Pick<FetchedDocument, "kind" | "bytes" | "text">,
+): Uint8Array {
   return doc.kind === "pdf" ? doc.bytes : new TextEncoder().encode(doc.text ?? "");
 }
 
@@ -1172,6 +1207,17 @@ export function charsetFromContentType(contentType: string | null): string | nul
 const PDF_HEADER = /%PDF-\d\.\d/;
 
 /**
+ * **A document-level HTML marker**, which is the only kind worth believing.
+ *
+ * Matching `<p>` or `<div>` would classify `{"template":"<p>hello</p>"}` as a
+ * web page. Named rather than inlined because `uploadedDocumentKind` has to ask
+ * the same question of *decoded text* — a UTF-16 page's markup is invisible to
+ * the Latin-1 scan `sniffKind` does — and two spellings of this regex would be
+ * two answers to one question.
+ */
+const DOCUMENT_MARKUP = /<\s*(!doctype\s+html|html[\s>]|head[\s>]|body[\s>])/i;
+
+/**
  * HTML, PDF, or something we can't read — decided by the bytes first.
  *
  * Header and body disagree often enough that one of them has to win, and the
@@ -1198,11 +1244,64 @@ export function sniffKind(contentType: string | null, bytes: Uint8Array): Docume
   /* No usable header, or a server shrugging with octet-stream: believe the
      markup, but only a **document-level** marker. Matching `<p>` or `<div>`
      would classify `{"template":"<p>hello</p>"}` as a web page. */
-  const looksLikeHtml = /<\s*(!doctype\s+html|html[\s>]|head[\s>]|body[\s>])/i.test(head);
+  const looksLikeHtml = DOCUMENT_MARKUP.test(head);
   const mimeIsVague =
     mime === null || mime === "text/plain" || mime === "application/octet-stream" || mime === "application/pdf";
   if (looksLikeHtml && mimeIsVague) return "html";
   return null;
+}
+
+/**
+ * **The same question, asked of a file somebody uploaded** — html, pdf, or
+ * nothing we can read.
+ *
+ * Here rather than in src/source.ts, which is otherwise the upload module and
+ * where `looksLikePdf` lived: that file imports `canonicalKey`'s neighbours
+ * *from* here, so a value import the other way is an import cycle and
+ * `npm run cycles` is a gate. Both halves of stage 1 are stage 1, and this is
+ * where the byte-level primitives already are.
+ *
+ * **Two questions, and they are genuinely two.**
+ *
+ *  1. **Which of the two kinds?** — `sniffKind(claimed, bytes)`. An upload
+ *     carries no `Content-Type`, so the filename is the only claim there is,
+ *     and `sniffKind` weighs it exactly as it weighs a server's header: the
+ *     bytes win, and the claim only breaks a tie. That tie is real and costs
+ *     money. `%PDF-` at byte zero is a PDF whatever anybody says, but `%PDF-`
+ *     further in is a PDF only when nothing has declared HTML — so without the
+ *     claim, a saved web page that merely *mentions* `%PDF-` in its first
+ *     kilobyte would go to the transcriber as a PDF.
+ *  2. **Is there byte evidence at all?** — because the answer above believes a
+ *     declared `text/html` outright, and here the "declaration" is nothing but
+ *     the reader's own file extension. Without this a `.html` suffix would
+ *     admit a renamed video, and the principle this whole path rests on is that
+ *     the name is a **claim** and the bytes are the fact.
+ *
+ * A `"pdf"` answer needs no second check: `sniffKind` returns it only when
+ * `PDF_HEADER` actually matched, which is the evidence.
+ *
+ * **The HTML check is asked of the raw bytes first and the decoded text
+ * second**, and the second half is not belt and braces — it is the whole of
+ * ⟨Sol, 2026-09-07⟩. `sniffKind` scans bytes as Latin-1, and a UTF-16 page's
+ * markup is `<\0!\0d\0o…`, which no Latin-1 scan can match. So a perfectly good
+ * UTF-16LE file that `decodeHtml` reads flawlessly was refused as *"not a PDF
+ * or a web page"*. Reproduced, then fixed: when the raw scan sees nothing, ask
+ * the decoder, which is the thing that knows about encodings. A head slice is
+ * enough — `DOCUMENT_MARKUP` matches in the first tag — so the fallback does
+ * not decode 50 MB to answer a question about the first line.
+ *
+ * **What it deliberately lets through** is a `.html` file that parses as markup
+ * and holds no article. Stage 2 refuses that, with a sentence about the thing
+ * that is actually wrong with it, at no cost and with the reader's slot
+ * released. Guessing at the article from the bytes is stage 2's job.
+ */
+export function uploadedDocumentKind(filename: string, bytes: Uint8Array): DocumentKind | null {
+  const claimed = uploadContentType({ name: filename, type: "", size: bytes.byteLength });
+  const kind = sniffKind(claimed, bytes);
+  /* `null`, or a PDF that `PDF_HEADER` proved. Neither wants a second opinion. */
+  if (kind !== "html") return kind;
+  if (DOCUMENT_MARKUP.test(latin1(bytes.subarray(0, 1030)))) return "html";
+  return DOCUMENT_MARKUP.test(decodeHtml(bytes.subarray(0, 4096), null).text) ? "html" : null;
 }
 
 /** Bytes as characters, one for one. Only ever used to look at markup, never to keep. */

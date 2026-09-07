@@ -181,7 +181,7 @@ export function UploadPicker({
     }
     if (files.length > 1) {
       setChosen(null);
-      setProblem("One at a time, please — drop a single PDF.");
+      setProblem("One at a time, please — drop a single file.");
       return false;
     }
     // Named separately because `File` is a `ChosenFile` and nothing more is
@@ -262,7 +262,7 @@ export function UploadPicker({
       <input
         ref={input}
         type="file"
-        accept="application/pdf,.pdf"
+        accept="application/pdf,.pdf,text/html,.html,.htm"
         className="tw:hidden"
         onChange={(e) => {
           take(e.target.files);
@@ -278,7 +278,7 @@ export function UploadPicker({
         /* The words the dashed box used to say. They were the only thing
            advertising that dropping works at all, so they move to the title of
            the control that replaced it rather than disappearing. */
-        title="Choose a PDF — or drop one anywhere on this box"
+        title="Choose a PDF or an HTML file — or drop one anywhere on this box"
         /* **The caps, for somebody who cannot see the caption.** The line under
            this row states them; this is what makes a screen reader read it out
            as part of the control rather than as a stray paragraph after it.
@@ -286,7 +286,7 @@ export function UploadPicker({
         aria-describedby={limitsShown ? LIMITS_ID : undefined}
         onClick={() => input.current?.click()}
       >
-        <Upload size={14} /> PDF
+        <Upload size={14} /> File
       </Button>
     </>
   );
