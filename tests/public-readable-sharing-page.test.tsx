@@ -237,20 +237,44 @@ describe("the public-readable-sharing page", () => {
   });
 
   /**
-   * **The image sentence is the claim most likely to go stale**, and
-   * `src/web/rehost.ts` says so itself: a later stage turns on serving the
-   * stored copies of a web article's images, and that is one addition to that
-   * file. On the day it lands, this page's "we do not serve those copies" stops
-   * being true and nothing else would notice. GPT Sol, 2026-09-06.
+   * **The image sentence is the claim most likely to go stale, and it went
+   * stale exactly as predicted.** Written 2026-09-06 pinning *we do not serve
+   * those copies* and saying in its own comment that the assertion failing would
+   * mean stage E had landed and the paragraph had to be rewritten. Stage E
+   * landed on 2026-09-07 and it did fail. The tripwire worked, so it is kept —
+   * re-aimed rather than deleted.
+   *
+   * **What it pins now is the shape of the truth rather than the state**, which
+   * is what stops it going stale a second time. Three things have to agree:
+   *
+   *  - `rehost.ts` walks **both** collections, so the page may say the traffic
+   *    has moved;
+   *  - the fallback to the publisher still exists — `IMAGE_WAIT_MS` and the
+   *    second draw rebuilt from the original html are what implement it — so the
+   *    page **must** hedge;
+   *  - the page does both: it claims the move and it names the exceptions.
+   *
+   * The last assertion is the one that matters most, and it is negative: the
+   * page must not promise that a reader never reaches the author's servers. That
+   * is the "notes stay private" mistake in a different paragraph — a sentence
+   * this page's own reader cannot check, written from what feels like the point
+   * of the feature rather than from what the code does.
    */
   it("describes the image state that rehost.ts is actually in", () => {
     const rehost = read("src/web/rehost.ts");
-    /* Today: the walk is PDF figures only. When this assertion fails, stage E
-       has landed and the page's paragraph has to be rewritten with it. */
-    expect(rehost).toMatch(/This walks only the second/);
-    expect(PAGE).toMatch(/we do not serve those copies/);
+    /* Both halves are on. If this fails, somebody turned web images back off and
+       the page's paragraph is now over-claiming. */
+    expect(rehost).toMatch(/holds two collections and this walks both/);
+    /* And the fallback is still real, which is why the page hedges. Pinned on
+       the mechanism rather than the prose: the second draw is rebuilt from the
+       original html, so *leave it alone* is the whole implementation. */
+    expect(rehost).toMatch(/IMAGE_WAIT_MS/);
+    expect(PAGE).toMatch(/serves it from us/);
+    expect(PAGE).toMatch(/falls back to your URL/);
+    /* The over-claim, refused by name — the shape of the older mistake. */
+    expect(PAGE).not.toMatch(/never (?:asks|reaches|touches) your servers/i);
     /* And we *do* store them, which the first draft denied outright. */
-    expect(PAGE).toMatch(/We do keep our own copies/);
+    expect(PAGE).toMatch(/store its own copy/);
     expect(read("src/collect-assets.ts")).toMatch(/maxImageBytes/);
   });
 

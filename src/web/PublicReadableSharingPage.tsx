@@ -191,13 +191,32 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
             may also have been shaped by the sharer's profile, though the profile itself is never
             published.
           </p>
+          {/* **This paragraph was false for a day and a tripwire caught it.**
+              It said "today we do not serve those copies", which stopped being
+              true the moment stage E of
+              docs/plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md
+              landed. Nothing about turning image serving on would make anybody
+              open this page, so the agreement is pinned in
+              tests/public-readable-sharing-page.test.tsx rather than trusted to
+              a careful reader — the test that fired here was written for this
+              exact day by GPT Sol, 2026-09-06, and fired on 2026-09-07.
+
+              **The hedge is the load-bearing half.** An author reading this
+              wants to know whether their servers still see the traffic, and the
+              honest answer is *mostly not, and not never*: an image our ingest
+              did not store, and one of ours that fails or is slow to arrive,
+              both fall back to their URL. Promising more than that would be the
+              same class of mistake as the "notes stay private" sentence above.
+              rehost.ts § The two halves. */}
           <p>
-            On pictures we are in an in-between state and it is worth saying which. In the reading
-            view a web article's images are still loaded from your servers rather than ours. We do
-            keep our own copies of them, and today we do not serve those copies; figures recovered
-            from a PDF are both stored and served by us. We also keep a private snapshot of the page
-            or PDF we fetched, so that we can extract it again — that snapshot is not part of the
-            public copy.
+            On pictures, most of the traffic has moved to us. Where our ingest managed to store its
+            own copy of an image, the public copy serves it from us and a reader's browser does not
+            ask your servers for it at all. That is usually most of an article and it is not
+            reliably all of it: an image we could not store — and one of ours that fails to load, or
+            is too slow arriving — falls back to your URL and is fetched from you as it always was.
+            Figures recovered from a PDF are stored and served by us, and have nowhere else to fall
+            back to. We also keep a private snapshot of the page or PDF we fetched, so that we can
+            extract it again — that snapshot is not part of the public copy.
           </p>
         </Section>
 

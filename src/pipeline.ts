@@ -1854,6 +1854,31 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         const html = new TextDecoder().decode(bytes);
         try {
           const result = await runExtract({ html, url, slug: ctx.slug });
+          /* **The audit line for the one step that deletes by policy.**
+             `removePlatformFurniture` (src/furniture.ts) is the only place in
+             this pipeline that removes an element *because of what the
+             publisher called it*, and a delete nothing records is a delete
+             nobody can check — so the counts go somewhere a person can read
+             them.
+
+             In the log rather than in `detail`, which is persisted with the step
+             and rendered on the reader's progress card: `.mw-editsection × 47`
+             is an operator's number, and the card is the wrong audience for a
+             CSS selector. It is also *not* in `Meta`, which would be a column
+             and a migration for a field stage D has not been built to read yet —
+             `ExtractResult.removed` says why.
+
+             Silent when nothing was removed, which is nearly every page: a line
+             saying zero on every article is how the one page that matters gets
+             lost. Selector names and integers only; nothing here can carry a
+             word of the article. */
+          const removals = Object.entries(result.removed);
+          if (removals.length > 0) {
+            plog.info(
+              { slug: ctx.slug, step: "extract", removed: result.removed },
+              `extract ${ctx.slug}: removed ${removals.map(([sel, n]) => `${n}× ${sel}`).join(", ")}`,
+            );
+          }
           return {
             parts: { extractedHtml: result.extractedHtml, meta: result.meta },
             detail: result.meta.title,
