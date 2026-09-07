@@ -27,7 +27,7 @@ how we were doing fonts in the previous version."* We are now on Geist Sans and 
 self-hosted via `@fontsource-variable/*` rather than through Next's font pipeline, with Courier kept
 for block ids and Trebuchet still scoped to the wordmark. See [typography.md](typography.md) for
 what the check actually found, and
-[../design-css-overview.md § Typography](../design-css-overview.md#typography) for where it landed.
+[../typography.md](../typography.md) for where it landed.
 
 ## Icons
 

@@ -376,11 +376,23 @@ shared with every other worktree on this box.
 [quotes.md](../project/quotes.md) § *Still slate, not yellow* becomes § *The stroke*, and records
 what was decided. This doc gets the findings from every round.
 
-**[design-css-overview.md](../project/design-css-overview.md) is deliberately NOT edited**, and it
-should be. It is one of the seven entry points, and CLAUDE.md requires those to be edited one
-approved set at a time with before and after shown — which this run could not do, having nobody to
-ask. What it wants is a line for `--quote-stroke-rgb` / `--quote-stroke-color` beside the other
-colour tokens. Left for Greg rather than slipped in.
+**[design-css-overview.md](../project/design-css-overview.md) was deliberately NOT edited by the
+autonomous run**, because it is one of the seven entry points and CLAUDE.md requires those to be
+edited one approved set at a time with before and after shown — which a run with nobody to ask
+cannot do. Greg approved it on 2026-09-07 and it is done: `--quote-stroke-rgb` /
+`--quote-stroke-color` now have a paragraph beside the other colour tokens, as the third half of
+the sentence that already had two — *search hits fill, quotes outline* — pointing at
+[quotes.md § The stroke](../project/quotes.md#the-stroke-which-is-how-a-quote-says-how-much-it-matters)
+for the mechanism rather than restating it.
+
+**The same approval carried a split**, which is not part of this feature but is the reason the entry
+point could take another paragraph at all. It had grown to 660 lines — 61% longer than the next
+biggest entry point, six times the two smallest — and was still calling itself a stub. Three essays
+moved out verbatim, one per area, and are signposted from it and from AGENTS.md:
+[typography.md](../project/typography.md), [controls.md](../project/controls.md),
+[narrow-windows.md](../project/narrow-windows.md). The map is 272 lines again. Nothing was reworded
+on the way: the only edits inside the moved text are the two "see above" links that had to become
+cross-doc ones, and a diff against the original proves it.
 
 ## Stage 0, round 1: the gate passes, three sub-designs fail
 

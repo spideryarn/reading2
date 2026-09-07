@@ -54,7 +54,7 @@
  *
  * The stage-2 block records `VisitorBand`, Summary, Glossary, Ideas, Quotes,
  * Timeline, Quiz, Debate, Diagram, Outline and Referee — the eleven the plan's
- * § Stage 2 migrates — in nineteen shapes. The order matters more than the
+ * § Stage 2 migrates — in twenty shapes. The order matters more than the
  * count: a literal read off a panel *after* it has been migrated is the
  * implementation agreeing with itself, which is the failure the section above
  * is about. So the capture is a step of its own and it comes first
@@ -894,7 +894,9 @@ describe("ModeSurface adds no DOM of its own", () => {
 
 /* ================================================================ stage 2 ==
 
-   The eleven bands the migration has not touched yet. */
+   The eleven bands stage 2 migrated, as they stood before it. Every literal
+   below was recorded at commit e4952ecb, while all eleven were still
+   hand-written asides — see the provenance section at the top of this file. */
 
 /**
  * **The article every panel below is given** — two paragraphs under a heading,
@@ -1489,9 +1491,13 @@ function mountDebate(debate: Debate | null): ReactNode {
  * `RememberBand` (src/web/modes/conversation/ConversationModes.tsx) passes
  * one on every render, so a Quiz band with an
  * empty header is not a state a reader can reach — but the prop is optional, so
- * one *is* a state stage 2 can create by accident. That is what
- * `treats a true head the same as an absent one` above is guarding; here the
- * production shape is what gets pinned.
+ * one *is* a state a refactor can create by accident. **`QUIZ_NO_SUBMODE` is
+ * what guards that**; this helper pins the production shape.
+ *
+ * An earlier version of this comment pointed at `treats a true head the same as
+ * an absent one` instead. That test is about `ModeSurface`'s guard in isolation
+ * and says nothing about Quiz, so the case was in fact unguarded until GPT Sol's
+ * F25 on 2026-09-07.
  */
 function mountQuiz(quiz: Quiz | null): ReactNode {
   return createElement(QuizPanel, {
@@ -1710,6 +1716,29 @@ const QUIZ_SHAPE: BandShape = {
   headChildren: ["div.rmb-sub"],
 };
 
+/**
+ * Quiz with **no** `subMode`, which is the one shape that pins Quiz's trap.
+ *
+ * `subMode` is an optional prop and it is Quiz's *only* header child, so
+ * `head={subMode}` hands `ModeSurface` `undefined` and the row disappears
+ * instead of sitting empty. Every other Quiz shape here supplies one, and
+ * `tests/quiz-panel.test.tsx` omits it but never looks at `.band-head` — so
+ * before this shape existed, changing Quiz to the conditional form left the
+ * whole suite green while deleting a row. That is exactly the regression the
+ * fragment was written to prevent, and it was unpinned. GPT Sol F25,
+ * 2026-09-07.
+ *
+ * Not a state a reader reaches — `RememberBand` always passes one — but very
+ * much a state the next refactor can create, which is what this file is for.
+ */
+const QUIZ_NO_SUBMODE: BandShape = {
+  className: "mode-band gloss quiz",
+  label: "Quiz",
+  head: true,
+  children: ["div.band-head", "div.quiz-one", "div.quiz-rewrite"],
+  headChildren: [],
+};
+
 /** No questions written yet: the one question and the rewrite footer are
  *  replaced by a single empty-state box. */
 const QUIZ_NONE: BandShape = {
@@ -1785,7 +1814,7 @@ const REFEREE: BandShape = {
   headChildren: ["button.ref-how-btn[aria-expanded,type]"],
 };
 
-describe("the bands stage 2 has not migrated yet, as they stand today", () => {
+describe("the bands stage 2 migrated, as they stood before it", () => {
   it("draws the visitor's band, the one with no hook class", async () => {
     await paint(mountVisitor());
     expectShape(VISITOR);
@@ -1859,6 +1888,25 @@ describe("the bands stage 2 has not migrated yet, as they stand today", () => {
   it("draws Quiz's band with the empty state where the question was", async () => {
     await paint(mountQuiz(null));
     expectShape(QUIZ_NONE);
+  });
+
+  it("keeps Quiz's header row even with no sub-mode control to put in it", async () => {
+    /* The shape that pins the trap — see `QUIZ_NO_SUBMODE`. Without it, moving
+       Quiz to `head={subMode}` deletes the row and nothing anywhere goes red.
+
+       A mount of its own rather than a parameter on `mountQuiz`: a default
+       parameter is chosen by `undefined`, so `mountQuiz(QUIZ, undefined)` would
+       have handed the panel the default sub-mode and pinned the wrong shape —
+       which is what the first attempt at this test did, and what it caught
+       about itself. The prop is genuinely absent here. */
+    await paint(
+      createElement(QuizPanel, {
+        owner: quizOwner(QUIZ),
+        blocks: new Map<string, string>([["spya-bbbbbb", PARAGRAPH]]),
+        onJump: noop,
+      }),
+    );
+    expectShape(QUIZ_NO_SUBMODE);
   });
 
   it("draws Diagram's band with an empty header, which is its ordinary shape", async () => {

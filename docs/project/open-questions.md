@@ -185,7 +185,7 @@ has the detail.
 Article figures currently sit on `--figure-sheet` **unconditionally** — every image in the reading
 column gets an off-white ground, because a transparent PNG carrying black ink is otherwise invisible
 on our page ([design-css-overview.md § the light sheet under a
-figure](design-css-overview.md#content-that-cannot-be-read-at-all-the-light-sheet-under-a-figure),
+figure](typography.md#content-that-cannot-be-read-at-all-the-light-sheet-under-a-figure),
 [../plans/260828az-figures-in-the-prose.md](../plans/260828az-figures-in-the-prose.md)). Greg, 2026-08-29:
 
 > Perhaps this could be part of the post-processing that the LLM does after Readability to notice
