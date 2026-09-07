@@ -748,6 +748,36 @@ vitest reported three files passing rather than complaining about the fourth. Re
 passed` count against the number of paths you passed; when a test is load-bearing evidence, that
 count is part of the evidence.
 
+### The four slices that need an oracle written before they move
+
+Sol's stage 5 review answered the question stage 5 raised. The **"once, not per domain" ruling holds**
+as an argument about a *verified verbatim move* — the dispatcher's await is tested once, and the body
+comparison protects each caller's own await. What does **not** generalise is the runtime safety net:
+search's behavioural coverage is **incidental**, so "search turned out to be covered" is not evidence
+that the next one will be. Sol went looking, and named the gaps:
+
+| Route | Stateful behaviour | Coverage |
+|---|---|---|
+| `DELETE /api/chat/:slug/:threadId` | holds `inTurnOrder` until deletion completes | **Gap.** No server-side DELETE test at all; `tests/turn-order.test.ts:9` says the helper suite does not test route wiring. **In the chat slice.** |
+| `POST /api/comments/:slug/:id/answer` | SSE plus the `answering` registry | **Gap.** Only HTTP test is a pre-stream 409 refusal (`routes.test.ts:1400`); no successful-path test. |
+| `POST /api/similar/:slug`, `/api/projection/:slug` | paid single-flight promises in `INFLIGHT` | **Gap.** Their lifetime link is `return withSpendAttribution(…)` rather than an `await`, so the equivalent mutation is `return` → `void`. |
+| `GET /api/link-summary` | SSE plus a database single-flight claim | **Gap.** Nothing drives a successful HTTP stream through it. |
+
+Covered, and safe to move on the existing recipe: **chat POST** (`chat-route.test.ts:114` awaits
+`handleApi` then requires frames and stored rows), **quiz mark**, the live-session routes, and the
+non-streaming domains — glossary, ideas, quotes, timeline, arc, sketch, illustrated.
+
+### The normaliser should refuse, not rely on a hand check
+
+Sol's **P2-RETURN-NORMALIZER**: the body comparison should refuse automatic comparison whenever the
+guard's own function scope holds any return other than exactly one final, argumentless `return;`,
+excluding nested-function returns. **And it corrected the model both this plan and 260907e were using
+for the hazard.** A retained early `return;` in a table handler does *not* fall through to another
+route — `dispatchAuthRoute` still returns `true` after the handler. **The dangerous transformation is
+the opposite: *removing* a return and letting later statements in the same handler execute.** The
+refusal boundary is right either way, and it will force deliberate handling of chat GET and of the
+existing `similar`/`projection` promise returns.
+
 ## Where stage 3 stands, and what the next slice costs
 
 **21 of 81 guards migrated** (billing 4, jobs/uploads 9, referee 8 — stage 4b, 2026-09-07). 60 remain
