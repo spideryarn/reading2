@@ -322,8 +322,8 @@ question on any row and shows its gists exactly as before; only a row with neith
 
 **But a *mixed* panel is a different thing**, and drawing one line per row is what made it visible: a
 question on one part and a bare claim on its neighbour, with nothing to explain the difference. That
-was invisible while the question was a faint second line. § *Two places a part could end up with no
-question* has the two causes and which of them is now closed.
+was invisible while the question was a faint second line. § *Three ways a part could end up with no
+question* has the causes, which of them is counted, and the one that was closed.
 
 ### Punctuation is normalised, never read for meaning
 
@@ -342,23 +342,38 @@ ignoring case and punctuation.
 [collapsed rung](../../src/hierarchy.ts) — nothing on screen distinguishes a question that was
 thrown away from one the model chose not to write.
 
-**Two places a part could end up with no question**, both benign absence rather than breakage. **One
-of them was closed on 2026-09-07 and the other is structural.**
+**Three ways a part could end up with no question**, all of them benign absence rather than
+breakage. A fourth was closed on 2026-09-07; the three that remain are what asking politely gets
+you, and they are not equally visible.
 
-- **A flat article deepened through stage 5** grew its parts from the expansion call, whose prompt
-  did not ask for questions. `EXPAND_SYSTEM` now has its own QUESTIONS block (`expand/4`) carrying
-  the same V4 rules, and the request marks each target `ASK QUESTION ON CHILDREN` or `OMIT QUESTION`
-  — per target, because one call batches parents at different depths and a single instruction would
-  be wrong for some of them. Only the children of the whole work are asked, which is the only depth
-  `questionFor` keeps one at.
 - **A rung that restated its parent** is spliced away and its children come up in its place carrying
-  none. That one stays: those children were at depth 2 when the model wrote them, and nothing asks a
-  question at depth 2 — asking would be the noise `MAX_QUESTION_DEPTH` exists to prevent, and filling
-  it in afterwards would be a second model call. It is **counted** rather than silent:
-  `BuildReport.droppedQuestions` records it, and the panel draws the gist.
+  none. Those children were at depth 2 when the model wrote them, and nothing asks a question at
+  depth 2 — asking would be the noise `MAX_QUESTION_DEPTH` exists to prevent, and filling it in
+  afterwards would be a second model call. It is **counted**: `BuildReport.droppedQuestions` is
+  every question that was *written and then discarded*, this case included, and the panel draws the
+  gist.
+- **An expansion was asked for a question and did not write one.** The closed fourth case is why
+  this one exists: `EXPAND_SYSTEM` now has its own QUESTIONS block (`expand/4`) carrying the same V4
+  rules, and the request marks each target `ASK QUESTION ON CHILDREN` or `OMIT QUESTION` — per
+  target, because one call batches parents at different depths and a single instruction would be
+  wrong for some of them. Only the children of the whole work are asked, which is the only depth
+  `questionFor` keeps one at. But **the request asks; it does not insist**. An answer that comes
+  back without a question for one of its children is accepted as it stands — nothing throws,
+  nothing is redrawn, no second call is bought — so that child reaches the panel with a gist and no
+  question. It is **counted, and by name**: `DeepenStats.missingQuestions` lists the positions, and
+  it is deliberately not the same number as `droppedQuestions`, because *the model wrote one and the
+  tree threw it away* and *the model wrote none* have different fixes.
+- **Wave 1 wrote none for that part.** The structure call is asked for questions too, and the same
+  politeness applies: a part it simply left without one keeps its gist. This is the case **nothing
+  counts** — `droppedQuestions` only fires where a question existed to be dropped, and
+  `missingQuestions` only covers children an expansion request actually marked. So a wave-1 omission
+  is invisible in every number we keep, and saying otherwise would be the quiet zero that
+  [silent-success.md](../reusable/silent-success.md) is about. If it ever matters, it needs a
+  counter of its own.
 
-So a mixed panel — a question on one part, a claim on its neighbour — is now only ever the second
-case, and it is a number somebody can look at.
+So a mixed panel — a question on one part, a claim on its neighbour — is not evidence of any one of
+these. Two of the three leave a number somebody can look at; the third leaves nothing, and that is
+the honest state of it.
 
 ### Existing articles have none until their hierarchy is re-run
 

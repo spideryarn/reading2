@@ -1206,12 +1206,23 @@ export function describeFailure(err: unknown): string {
  * — and carries a `cache_control` marker on it, so on a cold cache all of them
  * pay the 1.25× write premium and none of them reads. src/labels.ts answers that
  * by running its first batch alone and widening afterwards, and this deliberately
- * does not. The arithmetic is why: that prefix is 1,150–1,400 tokens against
- * per-call evidence measured at 14,889 and 76,558, so serialising the first call
- * of a book's wave buys about 1% of the wave's input tokens and costs a whole
- * call's latency — 45 s out of a share of roughly 300. The trade goes the other
- * way for labels, whose batches are small and whose prefix is most of the
- * request. docs/project/prompt-caching.md § The floor.
+ * does not. The arithmetic is why, and two prompt versions have moved it. The
+ * prompt alone is 1,631 estimated tokens now `expand/4` has put a QUESTIONS block
+ * in it — 893 when 1,150–1,400 was the figure, 1,078 at `expand/3` — and
+ * the frozen outline of either book adds about 590 more, so the prefix is roughly
+ * 2,200 rather than the range this used to quote. Against per-call
+ * inputs measured at 14,889 and 76,558 (evals/results/hierarchy-waves-2026-09-04/),
+ * serialising the first call of a book's wave therefore buys about 3% of the
+ * wave's input tokens rather than about 1%, and still costs a whole call's latency
+ * — 45 s out of a share of roughly 300.
+ *
+ * **The answer is still no, with less room than it had**, so the figure is written
+ * down rather than left as "small": a prefix that grows this much again, or a
+ * wave of short calls like the 14,889 one, where the same prefix is nearer 15%, is
+ * what would turn it over. The trade already goes the other way for labels, whose
+ * batches are small and whose prefix is most of the request. Cacheability itself
+ * is not in question and got safer: `EXPAND_SYSTEM` now clears the 1,024-token
+ * floor on its own. docs/project/prompt-caching.md § The floor.
  *
  * ## Stopping on time, cleanly
  *
@@ -1797,8 +1808,19 @@ export interface DeepenRecordsFile {
    * whole story, since in `/2` a refusal killed the run before it could be
    * written down. Refusing the older file is the only reading that is not a
    * quiet zero. docs/reusable/silent-success.md.
+   *
+   * `deepen-records/4`, 2026-09-07: `stats` gained `missingQuestions` — the
+   * children an expansion request marked ASK QUESTION ON CHILDREN and whose
+   * answer came back without one (`expand/4`). **The bump is not bookkeeping
+   * here either.** A `/3` file has no such field, so a reader given one as a
+   * `/4` gets `undefined` where the type promises a `string[]`: either it
+   * crashes on `.length`, or — worse, and the likelier of the two — it reads the
+   * absence as *nothing was missing*, over exactly the runs that were made
+   * before anything asked. The honest reading of an older file is *nobody
+   * asked*, and there is no field to say so, so the file is refused instead.
+   * docs/reusable/silent-success.md.
    */
-  version: "deepen-records/3";
+  version: "deepen-records/4";
   slug: string;
   /** ISO 8601, so files from several runs sort and can be told apart. */
   writtenAt: string;
@@ -1874,7 +1896,7 @@ export async function saveDeepenRecords(
   const dir = process.env[DEEPEN_RECORDS_ENV];
   if (dir === undefined || dir.trim() === "") return;
   const file: DeepenRecordsFile = {
-    version: "deepen-records/3",
+    version: "deepen-records/4",
     slug,
     writtenAt: new Date().toISOString(),
     failed: failure !== undefined,

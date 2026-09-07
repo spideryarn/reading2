@@ -511,11 +511,14 @@ export interface ExpansionRequest {
    * Sonnet 5 will not cache a prefix under 1,024 tokens; below that a
    * `cache_control` marker is accepted and does nothing, with zeros in both
    * usage fields. src/labels.ts spent months writing a marker that bought
-   * nothing for exactly this reason, and the plan's own estimate for this
-   * prefix lands at 1,150–1,400 — near enough the floor that it could fall
-   * either side. A zero in `cache_read_input_tokens` is also what a run of one
-   * fresh call reports, so the flag is what separates *"there was nothing to
-   * read"* from *"there was, and it did not"*.
+   * nothing for exactly this reason. The plan's estimate for this prefix was
+   * 1,150–1,400, near enough the floor to fall either side; since `expand/4`
+   * added the QUESTIONS block, `EXPAND_SYSTEM` is 1,631 estimated tokens and
+   * clears the floor on its own, so this is `true` for every outline including
+   * none at all. It is still reported rather than assumed, because that margin
+   * is one prompt edit wide. A zero in `cache_read_input_tokens` is also what
+   * a run of one fresh call reports, so the flag is what separates *"there was
+   * nothing to read"* from *"there was, and it did not"*.
    *
    * An estimate at four characters a token, like every other caller of
    * `estimateTokens`. docs/project/prompt-caching.md § The floor.

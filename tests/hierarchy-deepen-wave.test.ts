@@ -1654,7 +1654,7 @@ describe("the run's token totals", () => {
       for (const file of files) {
         expect(JSON.parse(await readFile(path.join(dir, file), "utf-8"))).toMatchObject({
           slug: SLUG,
-          version: "deepen-records/3",
+          version: "deepen-records/4",
         });
       }
     } finally {

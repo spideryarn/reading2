@@ -929,8 +929,11 @@ export function assertSeamProof(proof: SeamProof): void {
  * to refuse an older file: `deepen-records/1` has no `range` on its candidates,
  * and a harness that read one anyway would fall back to pairing on `where` —
  * the ordinal path — and report a boundary that moved as a verdict that held.
+ * `deepen-records/3` is refused for the same shape of reason and not the same
+ * reason: its `stats` has no `missingQuestions`, so reading one here would turn
+ * *the question had not been invented yet* into *the model answered every one*.
  */
-export const RECORDS_VERSION: DeepenRecordsFile["version"] = "deepen-records/3";
+export const RECORDS_VERSION: DeepenRecordsFile["version"] = "deepen-records/4";
 
 /** One records file, read back with its shape checked rather than cast. */
 export function parseRecordsFile(raw: string, where: string): DeepenRecordsFile {
@@ -941,7 +944,9 @@ export function parseRecordsFile(raw: string, where: string): DeepenRecordsFile 
         `${JSON.stringify(RECORDS_VERSION)}. The format moved; read src/hierarchy-deepen.ts ` +
         "§ DeepenRecordsFile before reading any number out of it. `deepen-records/1` in " +
         "particular carries no `range` on its candidates, and pairing repeats without one is " +
-        "exactly the mistake this harness refuses to make.",
+        "exactly the mistake this harness refuses to make; `deepen-records/3` has no " +
+        "`missingQuestions` on its stats, and an absent field would read as a question that " +
+        "nothing failed to answer.",
     );
   }
   if (typeof value.slug !== "string" || !Array.isArray(value.records) || value.stats === undefined) {
