@@ -470,6 +470,108 @@ sweep that does no judging cannot produce.
   `evals/results/debate/` and the section in `evals/README.md`; update the parent plan and the spike
   results. ~$2.
 
+### Stage P — the identification level, the one list, and the bar — **gates Stage F**
+
+The product work Greg commissioned, § "The two product questions" below. It is not an eval stage and
+it is not optional scaffolding for one: **Stage F may not land before it**, because fetching raises
+recall on a rule whose precision is broken, and the level plus its default threshold is what contains
+the precision it costs.
+
+Three parts, in this order, each a commit.
+
+**P1 — the field and the matcher.** `identifies` on `DirectDebateRow`, a non-empty array of
+`IdentificationSignal`, plus `identificationLevel(row)` returning the strongest — a lookup over a
+fixed order, never a sum. The shingle matcher is model-free and lives in its own module beside
+`src/quote-match.ts`: article windows of 8 words and ≥ 40 characters, `findQuote(…, "spaced")` as the
+one matcher, **coverage as the floor and density as the ceiling** at the numbers measured above.
+Refusing a copy is a new drop reason, `sourceIsCopy`, counted and shown — never a silent filter
+([silent-success.md](../reusable/silent-success.md)). Artefacts written before the field read as
+`named` with the existing `articleReferenceQuote` as witness, so nothing needs re-running and no
+migration is required.
+
+**Done — landed 2026-09-06, `35db7d53`.** `src/shingles.ts`, `IdentificationSignal` /
+`identifiesOf` / `identificationLevel` in `src/types.ts`, the wiring and `sourceIsCopy` in
+`src/debate.ts`, and `blockText` moved up to `GroupInput` (`ClaimGroupInput`, left with nothing in it,
+was collapsed). The measured table above is reproduced exactly on the real journals. Seven mutations
+were applied and all seven were caught.
+
+**Three things the stage turned up, none of them in the brief:**
+
+- **`anyLost` claimed an exhaustiveness it did not have.** Its docblock said a new `DebateLosses`
+  field would be a compile error at its hand-written sum. It was not — `sourceIsCopy` compiled clean,
+  and the new counter would have vanished from the reader's foot line in silence. That is F24's shape
+  exactly, a docblock stating a rule with no code under it, in the same file. A `...rest` destructure
+  assigned to `Record<string, never>` now makes the claim true, checked by adding an unlisted field
+  and watching it fail at that line.
+- **The matcher was quadratic for this caller.** `findQuote` reduces its haystack per call: 8.6
+  seconds a row on Cargo Cult, on a step a reader waits for. `quoteFinder` (src/quote-match.ts)
+  prepares it once and lazily, and `findQuote` is now that function asked one question, so there is
+  still one definition. **1.76s for twelve rows.** Verified against the pre-refactor implementation
+  over **5,548 comparisons** — three articles, both passes, two `near` values, needles damaged with
+  double spaces, curly quotes, em-dashes, uppercasing and stripped whitespace — **zero
+  disagreements**, and the differential was itself mutated to prove it can fail.
+- **The Layer 1 replay guard was in the wrong place.** A *direct* replay without blocks would have
+  come back **clean** — no `quoted` signal, no copy refused — which is a fact about the replay
+  reported as a fact about the run, and the quieter of its two failure modes. The guard moved above
+  the branch.
+
+**P2 — one list.** The panel loses its two headings, two blurbs and two foot lines. Direct rows
+first, then claim rows, search order within each — `DEBATE_NO_RANKING` stands and the list is **not**
+sorted by level. Each row self-labels: direct rows carry the identification chip with the tooltip
+listing every signal found, claim rows keep `On what it claims` and their *Answering "…"* line. The
+empty first section becomes the one sentence from § 1.
+
+**§ 1 listed three forms and the panel needed four** — found while building it. The plan's pair covers
+only *direct empty, claims present*: if the **claims** search also comes back empty, *"What follows
+takes up what it argues"* is false and the claims-side finding vanishes with it. So the lead says both
+facts when both are empty, and promises what follows only when something does. The third form
+(everything hidden by the bar) stays P3's, and stays silent because `hiddenNote` already says it.
+
+**Done — landed 2026-09-06.** The `Group` component is gone; one list, direct rows then claim rows,
+search order within each, no sort by level. Each row self-labels with a chip — *Links this piece* /
+*Quotes this piece* / *Names this piece*, or *On what it claims* — and the direct chip's tooltip lists
+every signal from `identifiesOf` with the matched URL, the located quote, and coverage and density as
+two separately-named percentages. **The three levels are drawn identically**, ordered but not
+coloured along that order: a ramp over one fact is the composite this plan refused.
+
+**The bug the browser found and the tests could not.** Every debate artefact in the local database
+predates `sourceIsCopy`, and `isDebateDocument` validates two arrays and nothing else — so the counter
+read back `undefined`, `Math.min` made it `NaN`, `NaN` failed every clause guard, and the foot line
+printed *"offered 5 of these; 3 are shown — ."* with both counts intact and the whole explanation
+gone. **That is the exact failure the counter was added to prevent, arriving through the counter
+itself.** Reproduced red first, then fixed.
+
+That fix and `anyLost`'s hole — the same field, unguarded, in `src/types.ts` — were consolidated into
+one **`lossesOf`**, which fills every counter off a stored artefact *and* is the exhaustiveness gate:
+a new field stops its literal compiling, so both readers pick it up instead of dropping it. Checked by
+adding an unlisted field and watching it fail. It also hardens against a stored `null`, string or
+negative, because the type says `number` and the row came from a database.
+
+**Two findings from the screenshots, both left for the review to judge:**
+
+- **The density ceiling catches a *near-self* mirror, which `sameTarget` cannot.** Cargo Cult's own
+  address is `calteches.library.caltech.edu/51/2/CargoCult.htm`, and the search returned a different
+  path on that same host — admissible, 65% density. `selfSource` misses it because the paths differ,
+  and the plan cut "same host, different path" as zero information because anthropic.com hosts both
+  constitutions. Density answers both cases without a host rule.
+- **Two different numbers on one screen are both called "pages".** The panel header shows
+  `distinctSources` of the rows shown (*"7 pages"*), and the lead sentence shows the direct pass's
+  `returnedSources` (*"found 10 pages"*). Both are true and they are different facts. The header
+  predates this stage, but the headings that used to scope the sentence are gone, so the collision is
+  new. A wording call, not a counting bug.
+
+**P3 — the bar.** `src/web/threshold.ts` unchanged and reused, on the one fact, over direct rows only;
+claim rows carry no level and never sit under it. Three stops labelled with the words. New `?name` in
+the URL state. **Default hides `named`-only rows**, and the default is re-measured on the corpus: if
+`writes` or Carr loses a verified reply at it, the default moves and that is a product fact worth
+recording here.
+
+**Done:** `?name` round-trips, `hiddenNote` says what is held back, the decoy's six rows are hidden by
+default and reachable by dragging, and the re-measurement is written into this doc whichever way it
+comes out.
+
+**Then the obligatory Sol review**, on all three commits together.
+
 ### Stage F — full-page verification fallback — **Stage A said yes, and it must not land alone**
 
 **Answered 2026-09-06: `recovered 6 of 6`.** Every quotation the model reported that was missing from
@@ -593,16 +695,73 @@ hit count would rank a mirror above every genuine reply: maximal identification,
 show it. It is `selfSource` wearing a new hat, and `sameTarget` does not catch it because a `www.`
 host and an archive are different addresses.
 
-**So the measure carries a ceiling as well as a floor**, and the numbers give both: a page reproducing
-essentially all of the article is a copy and is refused, not ranked. The band that matters is the one
-real commentary lives in — a few per cent to a quarter.
+**So the measure carries a ceiling as well as a floor.** What the ceiling *counts* changed once it was
+measured on more than one article — see below, because the first answer was wrong.
+
+##### The ceiling counts density, not coverage — corrected 2026-09-06, after measuring
+
+The paragraph above chose the obvious ceiling: **coverage**, the share of the article's windows found
+in the extract, refusing a page at ~100%. That is the number `writes` produced, and it is an artefact
+of `writes` being short. The essay is 3,146 characters, so a copy of it *fits inside one extract* and
+scores 100%. **On a long article a mirror is truncated like everything else**, its coverage collapses,
+and the ceiling never fires.
+
+The alternative asks the question the other way round. **Density** is the share of the *extract's own*
+windows that are found in the article: a copy is almost entirely article words however little of it we
+were handed, a commentary is mostly its own words. Both computed over the same sources:
+
+| source | article | extract | coverage | **density** |
+|---|---|---|---|---|
+| `archive.ph` | `writes` (349 windows) | 3,209 | 100.0% | **95.3%** |
+| `www.paulgraham.com` | `writes` | 3,136 | 100.0% | **79.5%** |
+| `www.hamtyped.com` (real reply) | `writes` | 3,760 | 22.3% | **16.4%** |
+| `robinsonraju.blog` (real reply) | `writes` | 765 | 4.9% | **17.3%** |
+| **`www.anthropic.com`** | constitution (2,308) | 253 | **1.3%** | **100.0%** |
+| **`calteches.library.caltech.edu`** | Cargo Cult (2,455) | 252 | **0.5%** | **65.0%** |
+| `sites.stat.columbia.edu` (real reply) | Cargo Cult | 5,287 | 4.0% | **13.9%** |
+
+**The last three rows are the whole finding.** Caltech's library hosts the original text of Cargo Cult
+Science and `www.anthropic.com` was serving a slice of the constitution — both copies, both invisible
+to a coverage ceiling at 0.5% and 1.3%, both obvious to density at 65% and 100%. Under the coverage
+rule a row citing either is kept and shown as a page that quotes the piece, which is the failure the
+ceiling exists to prevent, and only the density form of it fires.
+
+**What the ceiling does not do — corrected before it was built.** I first wrote here that the
+`anthropic.com` copy was *the one decoy row that reached the kept set*, which conflated two different
+things: it was an admissible **source**, and the kept row was a different page. Running production's
+own `parsePass` over the three journals says so plainly — of the ten rows the model reported across
+`writes`, Cargo Cult and the constitution, **not one cites a mirror**, and not one has a `sourceQuote`
+that is article text. So:
+
+- **The ceiling's positive case is unmeasured.** No mirror has yet been *reported as a row*;
+  `sourceIsCopy` will read `0` on today's whole corpus. It is a precaution, not a fix, and it is worth
+  building because a mirror row would carry the strongest chip on the panel — a copy of the article
+  presented as the best-identified response to it — but the plan should not claim it repairs anything
+  observed. **A counter that has only ever read zero is indistinguishable from a broken one**, so the
+  ceiling's proof is the unit tests at the measured densities, not the corpus.
+- **What actually fixes the decoy is the floor plus the default threshold.** All six reported rows
+  have zero coverage — none of them quotes the 2023 article — so all six are `named`-only, and § "The
+  bar" hides `named`-only rows by default. That is Stage P3's job, not the ceiling's.
+- **A sharper per-row guard exists and is deliberately not built.** A mirror has no words of its own,
+  so a row citing one must have a `sourceQuote` that is article text; testing that is nearly free.
+  Measured: it would refuse **none** of the ten rows we have. Building a second guard with no
+  demonstrated positive case is the machinery *"simplest version first"* refuses — recorded here so
+  the next reader knows it was considered, and it is what to reach for if a mirror ever does surface
+  as a row.
+
+**Threshold 50%**, sitting in an empty band: every copy measured is ≥ 65%, every genuine reply ≤ 17.3%.
+The ceiling requires **at least 5 extract windows** before it may fire, because a 250-character extract
+carries only a couple of dozen and a ratio over three of them is noise.
+
+**Coverage is still computed and still shown** — it is the floor (any hit at all makes the row
+`quoted`) and it is a number for the tooltip. What it is not is the copy test.
 
 #### What is built, and what is cut
 
 | signal | decision |
 |---|---|
 | links the exact URL (`sameTarget`) | **keep, free** — already computed inside `namesArticle`; surface which branch fired |
-| quotes text that is in this article | **build** — shingles, model-free, floor 8 words / 40 chars, **ceiling for mirrors** |
+| quotes text that is in this article | **build** — shingles, model-free, floor 8 words / 40 chars, **density ceiling for mirrors** at 50% over ≥ 5 extract windows |
 | title + byline vs title alone | **tooltip detail, not a level** — free, but Anthropic is the byline of both versions, so it does not discriminate here |
 | source date vs article date | **cut.** `SearchEvidence` carries no date; it would need Stage F plus meta parsing, and the decoy's commentary is *later* than both documents, so it never fires |
 | the article announcing a successor | **cut as a detector** — no reliable structure, and a heuristic banner is the shape [silent-success](../reusable/silent-success.md) warns about. Six rows all at the bottom level *is* the tell |

@@ -27,9 +27,8 @@
  * token goes out* — was being asserted about **a file nothing in production
  * reads**, on the store that does not deploy
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § B).
- * The flag is now pinned to `postgres` before any import, one article is seeded
- * under this slug, and every read-back goes through `realtimeSessionStore` — the
- * same object `src/routes.ts` holds.
+ * One article is now seeded under this slug, and every read-back goes through
+ * `realtimeSessionStore` — the same object `src/routes.ts` holds.
  *
  * **What the move bought, and it is more than tidiness.** The Postgres `issue`
  * resolves `article_slug` to an `article_id` and writes a row under a real

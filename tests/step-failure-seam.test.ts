@@ -206,14 +206,24 @@ async function failingJob(slug: string, err: unknown) {
  * and this function is kept for that difference and for the plainness of the
  * claim it makes: *what is in the database is not a leak*.
  */
-async function persisted(id: string): Promise<{ error: string | null; steps: Job["steps"] }> {
+async function persisted(
+  id: string,
+): Promise<{ error: string | null; steps: Job["steps"]; failureKind: string | null }> {
   const rows = await getDb()
-    .select({ error: jobsTable.error, steps: jobsTable.steps })
+    /* `failure_kind` joined the projection on 2026-09-07: it is what
+       `jobWorthRetrying` reads, so a sentence checked without it is half the
+       card. The in-memory `Job` can carry the right kind while the column is
+       null, and the reader gets the button back on the next page load. */
+    .select({
+      error: jobsTable.error,
+      steps: jobsTable.steps,
+      failureKind: jobsTable.failureKind,
+    })
     .from(jobsTable)
     .where(eq(jobsTable.id, id));
   const row = rows[0];
   if (!row) throw new Error(`no row in spideryarn.jobs for job ${id}`);
-  return { error: row.error, steps: row.steps as Job["steps"] };
+  return { error: row.error, steps: row.steps as Job["steps"], failureKind: row.failureKind };
 }
 
 /**
@@ -359,7 +369,11 @@ describe("an error that declared its reader sentence", () => {
 describe("a publication that was refused", () => {
   it("tells the reader the publication failed, not why the tree was rejected", async () => {
     const slug = "test-seam-publish-refused";
-    const refusal = new PublishRefused(slug, [
+    /* `permanent`, because that is what the real reason is: a hash mismatch is
+       read straight back off the same rows by the next retry. It is also the
+       kind that has something to prove here — the sentence below has to be the
+       door's, not the refusal's, whichever kind the refusal claims. */
+    const refusal = new PublishRefused(slug, "permanent", [
       "the tree was built from different blocks (hierarchy ran against abc123, these blocks are def456) — re-run hierarchy",
     ]);
 
@@ -447,6 +461,33 @@ describe("a publication that was refused", () => {
       expect(message, `nothing was said ${where}`).toMatch(
         /putting the finished article on your shelf/,
       );
+    }
+
+    /**
+     * **The last clause of that sentence, and the field the button reads.**
+     *
+     * This door never looks at `readerFailure` — `endAsStorageFailure` writes
+     * its own opening (`COULD_NOT_PUBLISH`) and then appends `RETRY_IS_SAFE` or
+     * `RETRY_WILL_NOT_HELP` according to `jobWorthRetrying`, which reads the
+     * kind `recordFailureKind` persisted. So a refusal that says nothing about
+     * itself gets *"Trying again is safe"* on a failure that is deterministic,
+     * permanent and charged — which is precisely what four readers were told on
+     * 2026-09-05, and it is the half a test on `readerFailureOf` alone cannot
+     * see. GPT Sol asked for this, reviewing 260907a.
+     *
+     * Watched red against a `PublishRefused` carrying no kind: `failureKind`
+     * came back `retry` and the sentence ended *"Trying again is safe."*
+     */
+    expect(advanced?.job.failureKind, "the refusal's kind reached the job").toBe("bug");
+    expect((await persisted(queued.id)).failureKind).toBe("bug");
+    for (const [where, message] of [
+      ["in memory", advanced?.job.error],
+      ["on disk", (await persisted(queued.id)).error],
+    ] as const) {
+      expect(message, `the reader was invited to pay for it again ${where}`).not.toMatch(
+        /Trying again is safe/,
+      );
+      expect(message, `no clause said what to expect ${where}`).toMatch(/will not help/);
     }
   });
 });

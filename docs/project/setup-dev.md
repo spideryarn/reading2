@@ -118,9 +118,12 @@ That is deliberate — [architecture.md § Server and client](architecture.md#se
 the filesystem store and the `SPIDERYARN_STORE` flag went
 ([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F). The
 dev server, the CLI stages, seeding, the evals and the test suite all read one store, and nothing has
-to be told which. **Do not set `SPIDERYARN_STORE`**: what is left of it is a tombstone that throws on
-any value but `postgres` ([`src/store/live.ts`](../../src/store/live.ts)), because silently ignoring
-somebody who asked for the store that is gone is the failure this whole migration was leaving behind.
+to be told which. **Do not set `SPIDERYARN_STORE`**: it decides nothing and is read by nothing. A
+tombstone in `src/store/live.ts` threw on any value but `postgres` while
+Vercel still carried the variable — silently ignoring somebody who asked for the store that is gone
+is the failure this whole migration was leaving behind — and stage I deleted it on 2026-09-06 once
+Greg had taken the variable out of Preview and Production.
+[`tests/one-store-only.test.ts`](../../tests/one-store-only.test.ts) is what keeps the name unread.
 
 `npm run dev` had defaulted the flag to `postgres` since 2026-09-02, and the reason it did is the
 reason the store move happened at all: the filesystem adapter cannot fence two servers over one
@@ -539,8 +542,9 @@ knowing here:
   gave three new revisions and **one distinct id set**, measured 2026-09-05.
 - **`--force` re-runs the step; it does not buy a fresh answer.** These runs share the article's
   `checkpoints` rows, which is what makes a killed run cheap to repeat — and it means a forced
-  `hierarchy` on an unchanged article replays the structure and labels it already paid for. Two
-  consecutive forced runs, measured 2026-09-05: two model calls, then **zero**. Changing what a
+  `hierarchy` on an unchanged article replays the structure call it already paid for, and a forced
+  `labels` replays the batches. Two consecutive forced `hierarchy` runs, measured 2026-09-05 while
+  the two were still one step: two model calls, then **zero**. Changing what a
   `force` means to a checkpoint is a queue-wide question, not a CLI one — the browser's Refresh does
   the same thing.
 - **Naming one step runs one step.** `--force` cascades over the steps *in that job*, which for a
@@ -555,7 +559,8 @@ knowing here:
 | `npm run ingest -- <file.pdf>` | the same, entered through an upload | Mints an upload record, puts the bytes, **claims** it, enqueues and notes the slug — `queueAnUpload`'s order (`src/routes.ts`), and the claim is the move that fails silently: without it the article is perfect and the record stays `pending` with no verified size. `--force` is refused here and only here: every upload mints a fresh slug, so two runs of one file are two articles |
 | `npm run extract -- <slug> [--force]` | 2, Readability over the stored document ([content-extraction.md](content-extraction.md)) | |
 | `npm run blocks -- <slug> [--force]` | 3, split into blocks and mint stable ids ([block-ids.md](block-ids.md)) | Freshness is structural: the stored HTML is re-split and compared block for block ([architecture.md § Conventions](architecture.md#conventions)) |
-| `npm run hierarchy -- <slug> [--force]` | 4, the tree **and** its nav labels ([hierarchy.md](hierarchy.md)). Two model passes — the structure in one call, the labels in parallel batches — but one step, and nothing is written until both finish | **`npm run labels` is retired.** There is no `labels` step and adding one would be a pipeline redesign to keep a debugging command: stage 4 produces structure, gists, blocks and labels as one typed atomic result. **What that command was for has no replacement**: the plan expected `--force` here to be the re-labelling route, and measurement on 2026-09-05 says it is not — a forced re-run replays the structure and the label batches out of the article's checkpoints and buys nothing. Judging a label-prompt change is `npm run eval:hierarchy`; making `force` mean something to a checkpoint is a queue-wide decision |
+| `npm run hierarchy -- <slug> [--force]` | 4, the tree and an **empty** labels manifest ([hierarchy.md](hierarchy.md)). One model pass since 2026-09-06 — the structure — and the labels are the row below | Writing a pending manifest **deletes this revision's `labels` receipt**, so running this always makes the labels step runnable again. A forced re-run still replays the structure out of the article's checkpoints and buys nothing new (measured 2026-09-05); judging a *structure*-prompt change is `npm run eval:hierarchy-structure` |
+| `npm run labels -- <slug> [--force]` | 4b, the `navLabel` on every paragraph, in parallel batches ([hierarchy.md § Why they are two steps](hierarchy.md#two-steps)) | **Back since 2026-09-06**, and this row said the opposite until then: *"`npm run labels` is retired. There is no `labels` step and adding one would be a pipeline redesign to keep a debugging command."* It is a step now, so the command is one line of `package.json` rather than a redesign. What has **not** changed is what `--force` buys: the batches come back out of the article's checkpoints, so a forced re-run on an unchanged tree costs nothing and answers the same. Judging a label-prompt change is still `npm run eval:hierarchy`; making `force` mean something to a checkpoint is a queue-wide decision |
 | `npm run pdf:pass0 -- <file.pdf>` | 2, what a PDF says for free: pages, words, scan or not, running headers. No model, no network | prints; writes nothing |
 | `npm run eval:pdf-read -- <file.pdf> [slug]` | **not a stage runner** — the PDF extraction-quality tool, and it was `npm run pdf` until 2026-09-05 | It prints the pages, the chunk plan and the per-chunk recall table ([`src/pdf-score.ts`](../../src/pdf-score.ts)), which is where the numbers in [evals/pdf/README.md](../../evals/pdf/README.md) come from; the queue's `detail` for that step is the title and nothing else. It writes `output/<slug>.html` and `data/<slug>/meta.json` **for a person to look at**, not as store artefacts. Ingesting a PDF is `npm run ingest -- <file.pdf>`. Nothing is remembered between runs: the chunk checkpoints are rows keyed on an `articles` row this command does not have ([database.md § Checkpoints](database.md#checkpoints-work-a-failed-attempt-already-paid-for)) |
 | `npm run hierarchy:flatten -- …` | 4, tree → the flat sidebar rows ([hierarchy.md](hierarchy.md)) | — |

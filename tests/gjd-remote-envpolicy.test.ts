@@ -41,7 +41,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * `withLedger` runs for real in the last describe of this file — the collector,
  * the attribution, the row-building and its own printed total — because those
  * are the parts that were never exercised. Only the last inch is swapped: a real
- * `costStore` would write into `data/_ai-calls.jsonl` or Postgres, and a test
+ * `costStore` would write into Postgres, and a test
  * that spends money into the actual ledger is a test that corrupts the thing it
  * is checking. `importOriginal` keeps every other export of that module real.
  */

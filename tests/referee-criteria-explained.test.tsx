@@ -40,12 +40,12 @@
  * Harness: `CriteriaBand` over a stubbed API, from
  * tests/referee-criteria-panel.test.tsx.
  */
-import { readFileSync } from "node:fs";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { readerCssNoComments } from "./helpers/stylesheets.js";
 import type { SavedCriterion } from "../src/saved-criteria.js";
 import type { Block, BlockId } from "../src/types.js";
 
@@ -209,7 +209,7 @@ function text(): string {
  * but a test that is right by luck about the wording of a comment is not right.
  */
 function rules(): string {
-  return readFileSync("src/web/styles.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  return readerCssNoComments();
 }
 
 function run(): HTMLButtonElement {
@@ -311,7 +311,19 @@ describe("what the big number on a result is", () => {
    * invisible in every browser.
    */
   it("is not hidden by a rule in the stylesheet", () => {
-    expect(rules(), "a rule in styles.css hides the line this test says is visible").not.toMatch(
+    /* **The vacuity guard, and this assertion cannot do without one.** What
+       follows is a `not.toMatch`, which is satisfied by an empty string — so a
+       `.crit-how` renamed, or a sheet the reader set stopped reaching, would
+       read here as "nothing hides it" rather than as a broken scan.
+
+       A boundary after the name, not `toContain`: `.crit-how-x` contains
+       `.crit-how`, so a substring guard is satisfied by the very rename it
+       exists to catch. Watched pass that way before this line was written. */
+    expect(rules(), "no `.crit-how` rule in the reader stylesheets").toMatch(/\.crit-how[\s,{]/);
+    expect(
+      rules(),
+      "a rule in the reader stylesheets hides the line this test says is visible",
+    ).not.toMatch(
       /\.crit-how[^{}]*\{[^}]*(display:\s*none|visibility:\s*hidden|font-size:\s*0(?![.\d]))/,
     );
   });

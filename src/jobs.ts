@@ -574,6 +574,28 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      number: greater than what the worst measured PDF `extract` leaves behind,
      and less than the claimant's own deadline. */
   hierarchy: 700_000,
+  /* **MEASURED** 2026-09-06, from the runs that motivated the split: the label
+     pass is 79.5–92% of what `hierarchy` used to cost, and the worst whole pass
+     recorded is **682 s**, of which one call was 602 s.
+     docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
+
+     **This is a ceiling, for `extract`'s and `hierarchy`'s reason**, and the
+     same 700 s: as much of the window as can be reserved without the step
+     becoming unstartable. The claimant's deadline is `LEASE_MS -
+     DEADLINE_MARGIN_MS` = 740 s, so a budget at or over that never fits and the
+     job would sit `queued` for ever.
+
+     **And it is very nearly decorative, which is worth saying rather than
+     leaving to be discovered.** This table is consulted only for the step
+     *after* one has finished (`advanceJobWith`'s loop, below), and a `labels`
+     job is one step — the free successor a publication enqueues. Its first
+     runnable step always starts ungated, so it always gets the whole 740 s
+     whatever number is written here. What this row actually governs is the
+     other shape: a job that names `hierarchy` and `labels` together, where 700 s
+     is what makes the claim hand back after the tree rather than start a label
+     pass on a remnant of the window. Round up anyway, for the reason this
+     table's header gives. */
+  labels: 700_000,
   /* Its own wall-clock cap rather than a measurement — `ASSETS_BUDGET_MS` in
      src/collect-assets.ts, which the step enforces on itself. Measured cost on
      the corpus's worst article (10 images) is 7.1s; the cap is there for a
@@ -1820,10 +1842,8 @@ export type StepRegistry = { [K in StepName]: PipelineStep<K> };
 /**
  * The session one claim runs on, and **the one place a finished job publishes.**
  *
- * Two stores, one seam. Which one a claim gets is decided here and nowhere else,
- * on the live flag and nothing else — `SPIDERYARN_STORE` unset is a laptop and
- * gets the filesystem session it has always had; `postgres` gets a session over
- * this claim's own draft revision, whose `commit` is one transaction.
+ * One store, one seam. Every claim gets a session over its own draft revision,
+ * whose `commit` is one transaction.
  *
  * ## The Postgres side
  *

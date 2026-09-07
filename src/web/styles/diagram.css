@@ -1,0 +1,415 @@
+/* diagram.css — Diagram mode's band and the parts every picture in it shares:
+   the step bar, the nodes and their hit boxes, "you are here", and the footer
+   card. DiagramPanel.tsx, diagram.ts, docs/project/diagram.md.
+
+   The sub-modes that need more than these have files of their own further down
+   — the force graph at the end of ideas.css, then diagram-sketch.css,
+   diagram-illustrated.css and diagram-drift.css. */
+
+/* -------------------------------------------------------- § diagram mode ----
+   The article's structure as a picture, in the mode band. The shell is
+   `.mode-band` far above; everything here is what goes inside it.
+
+   Read DiagramPanel.tsx and diagram.ts before changing what is on screen. Two
+   things in particular were decided rather than skipped:
+
+   **No colour carries meaning.** The eight `--cat-*` hues are positional — one
+   per part, reused round the article — so the eye can group a column of sections
+   without reading any of them. They are the SAME eight the saved searches use
+   (docs/project/colour-scales.md), because a reader who has learnt that this
+   green is a search colour should not also have to learn that it is part 3.
+
+   **Every fill is a wash and every stroke is the hue.** On a near-black ground a
+   saturated fill at 20px tall is a shout, and thirty of them is a mess; the ramp
+   that reads is a quiet fill with a bright edge. This is the same finding
+   colour-scales.css writes up for the sequential ramp, applied to flat areas.
+
+   The picture is SVG, and SVG does not clip text. Labels are cut to fit by
+   `wrapText` in diagram.ts — so anything here that changes a font size, a font
+   family or a padding is changing arithmetic that lives in TypeScript, and the
+   two will disagree silently. `CHAR_W` there is the number to move. */
+
+/* The title row is `.band-head`, § mode band — where this panel's
+   one-line-cut four now live, for every band. The row holds the caveat icon so
+   that the caveat costs no vertical space, and § `.diag-about` below is the
+   whole argument for why that claim needs those four to be true. */
+
+/* The three pictures, as one control. Same shape as `.gloss-sort`, because it
+   is the same kind of thing — a small quiet row of exclusive choices under the
+   heading — and a second visual idiom for it would be a third thing to learn. */
+/* Six of them now, in a band that can be 288px. `wrap` rather than a smaller
+   font or a scroller: a control the reader has to scroll to find is a control
+   they do not know exists, and these six are the whole of what this mode does. */
+.diag-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.diag-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--rule);
+  border-radius: calc(var(--radius) * 0.5);
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+  cursor: pointer;
+}
+.diag-kind:hover { color: var(--ink); border-color: var(--rule-strong); }
+.diag-kind.on {
+  border-color: var(--highlight);
+  background: var(--highlight-wash);
+  color: var(--highlight-ink);
+}
+
+/* The second paragraph of a kind's hover card — where it comes from and what it
+   costs, under what it shows. Quieter than the blurb above it, because it is
+   the footnote to a sentence rather than a second sentence. `.tip-soon p` sets
+   the shared shape; this only takes the colour down. */
+.tip-soon p.tip-soon-how { color: var(--ink-faint); }
+
+/* ---- the step bar ----
+ *
+ * ↑ / ↓ under the picture, big enough for a thumb. Greg asked for these for the
+ * iPad (2026-08-27), and the size is the whole feature: the picture's own hit
+ * targets are a 6px band or a 3px dot, which is fine for a mouse and is not a
+ * touch target at all. 44px is Apple's own minimum and WCAG 2.2's Target Size
+ * (Minimum) is 24 — this takes the larger, because the two buttons sit next to
+ * each other and the cost of missing is going somewhere you did not mean to.
+ *
+ * A grid of three rather than `space-between`, so the readout is centred on the
+ * panel rather than centred on whatever is left over — the two buttons are the
+ * same width today and a `space-between` layout would move the number the
+ * moment one of them was not.
+ *
+ * `border-top` and no `border-bottom`: the footer card under it already has
+ * one, and two rules 44px apart read as a boxed-off widget rather than as part
+ * of the panel. */
+.diag-step {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+/* **Transparent, not filled**, which is a correction rather than a preference.
+   The first pass gave these `--surface-raised`, and at 160×44 that is two big
+   mid-grey slabs in a panel whose every other control is a thin outline — they
+   read as *disabled* even when live, which is the same mistake
+   design-css-overview.md records against the shelf's primary button. Seen in a
+   browser, 2026-08-27. The border and the chevron carry the affordance; the
+   fill arrives on hover, where it means something. */
+.diag-step-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 1px solid var(--rule);
+  border-radius: calc(var(--radius) * 0.5);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color 120ms, border-color 120ms, background-color 120ms;
+  /* The buttons fill their thirds, which is what makes them the biggest thing
+     a finger can land on in this panel. */
+  width: 100%;
+}
+.diag-step-btn:hover:not([aria-disabled="true"]) {
+  color: var(--highlight);
+  border-color: var(--highlight);
+  background: var(--highlight-wash);
+}
+.diag-step-btn:active:not([aria-disabled="true"]) { background: var(--surface-raised); }
+/* **Unavailable, not hidden, and not `:disabled` either.** At the two ends of
+   the article one of these does nothing, and a button that disappeared would
+   move the other one under the reader's thumb between presses. It is
+   `aria-disabled` rather than `disabled` so that it keeps its place in the tab
+   order — a keyboard reader stepping to the last paragraph should not have
+   focus vanish from under them. The stronger reason was the hover card that
+   said *why* it was dead, which a `disabled` button fires no events to open;
+   that card was removed on 2026-08-31 at Greg's request. See DiagramPanel.tsx
+   § the step bar. */
+.diag-step-btn[aria-disabled="true"] { opacity: 0.3; cursor: default; }
+.diag-step-at {
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+  color: var(--ink-faint);
+  /* Tabular figures, or the number jitters sideways as it counts past 9 and 99
+     — which on a control the reader is holding down reads as the layout being
+     unstable rather than as a number changing. */
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.diag-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* **Load-bearing.** The picture is laid out against this element's measured
+     `clientWidth`, and a picture whose height depends on that width — the cut
+     Tree got taller as it got narrower, because labels wrapped onto more lines
+     — makes a loop of it: content just fits → no scrollbar → wider → wraps to
+     fewer lines → still fits… and on the way back, content just overflows →
+     scrollbar → narrower → wraps to more lines → overflows more. On macOS
+     overlay scrollbars take no width and it never happens, which is exactly why
+     it would have shipped. Nothing drawn today wraps a label, so this is a
+     guard rather than a fix — and the next picture that wraps one must not have
+     to rediscover it. */
+  scrollbar-gutter: stable;
+  padding: 0 0.5rem;
+}
+/* The one frame before the ResizeObserver has measured. It must occupy the
+   scroller, or the scroller has no height to report and the measure never
+   settles — a blank picture that stays blank, with nothing in the console. */
+.diag-measuring { min-height: 100%; }
+.diag-quiet {
+  margin: 0.9rem 0.2rem;
+  color: var(--ink-faint);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+/* **The wait, and only ever where the picture is missing.** Drift and Trail
+   have nothing at all to draw until the projection lands; until 2026-08-30 they
+   borrowed the Tree, which is the picture this app no longer has. Centred
+   rather than pinned to the top, because it stands in for the whole band and a
+   line of grey text at the top of an empty column reads as a caption for
+   nothing. `.cmt-spinner` is the app's one spinner — docs/project/icons.md. */
+.diag-wait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  /* Not `height: 100%`: the scroller is a flex child with `min-height: 0`, and
+     a percentage height against it collapses to nothing when the panel is
+     short. `min-height` on the paragraph itself is what makes the box real. */
+  min-height: 8rem;
+  margin: 0.9rem 0.2rem;
+  padding: 0 0.6rem;
+  color: var(--ink-faint);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  text-align: center;
+  text-wrap: balance;
+}
+.diag-wait .cmt-spinner { flex: none; }
+/* The failure that has a button under it. A row is right for a spinner beside
+   six words and wrong for the server's own reason, which runs to three lines in
+   this band — side by side, the sentence and the button squeeze each other. */
+.diag-wait.wide { flex-direction: column; gap: 0.55rem; }
+
+/* **The second try, drawn as a link and sized as a target.** It sits inside a
+   sentence in both places it appears — the wait, and the Force strip above the
+   picture — so a real filled button would change the line height around the
+   words it belongs to. Underlined rather than coloured alone, because at 10.5px
+   on this ground a hue change is not a reliable affordance and
+   docs/project/colour-scales.md is emphatic that colour is never the only
+   carrier. The padding gives it a little more to land on without taking a line
+   of its own — **not** a touch target: it comes out around 23px, under WCAG
+   2.2's 24 and a long way under Apple's 44. What this panel offers a thumb is
+   the step bar. (This said "hittable on a touch device" while the component's
+   own comment had already been corrected to say the opposite. ⟨Sol⟩.) */
+.diag-again {
+  display: inline;
+  border: 0;
+  margin: 0;
+  padding: 0.15rem 0.1rem;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.diag-again:hover, .diag-again:focus-visible { color: var(--ink); }
+
+.diag-svg { display: block; }
+
+/* ---- nodes ---- */
+
+.diag-node { cursor: pointer; outline: none; }
+.diag-box {
+  fill: rgb(var(--cat-rgb) / 0.16);
+  stroke: rgb(var(--cat-rgb) / 0.45);
+  stroke-width: 0.75;
+  transition: fill 90ms ease-out;
+}
+/* Depth 0 is the whole article: one rail, and it is not a part, so it takes the
+   neutral rather than a hue. Depth 1 is a solid-ish band because it is the
+   thing the eye groups by; depth 2 is quieter because there are ten times as
+   many of them and they carry the text. */
+.diag-node.diag-d0 .diag-box { fill: rgb(var(--cat-rgb) / 0.22); stroke: none; }
+.diag-node.diag-d1 .diag-box { fill: rgb(var(--cat-rgb) / 0.34); }
+.diag-node.diag-d2 .diag-box { fill: rgb(var(--cat-rgb) / 0.11); }
+
+.diag-node:hover .diag-box,
+.diag-node:focus-visible .diag-box { fill: rgb(var(--cat-rgb) / 0.42); }
+.diag-node.on .diag-box { fill: rgb(var(--cat-rgb) / 0.42); }
+
+/* Where the reader is. A ring rather than a fill: the fill already means
+   "which part", and overloading it would make the you-are-here mark change
+   colour as you read, which is exactly the property a position marker must not
+   have. Orange, because that is what "here" is everywhere else in this app. */
+.diag-node.here .diag-box {
+  stroke: var(--highlight);
+  stroke-width: 1.5;
+}
+.diag-node:focus-visible .diag-box {
+  stroke: var(--highlight);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
+}
+
+.diag-label {
+  fill: var(--ink);
+  font-family: var(--font-ui);
+  pointer-events: none;
+}
+.diag-node.diag-d1 .diag-label { fill: var(--ink-soft); }
+.diag-node.diag-d0 .diag-label { font-weight: 600; }
+
+/* **These three numbers are duplicated in TypeScript and must not drift.**
+   `LABEL_PX` in diagram.ts cuts every label to fit by counting characters at
+   these sizes; this is where they are actually painted. Disagree and nothing
+   errors — too small wastes the band, too large runs the text out over the
+   article, and SVG neither wraps nor clips. tests/diagram-css.test.ts reads this
+   block and asserts it matches, so a drift is a red test rather than a
+   rendering nobody questions.
+
+   Written one rule per picture per depth, at one uniform specificity, rather
+   than as a base plus overrides — a base rule beaten by a longer selector is
+   exactly how the cut Tree's titles ended up painted at 10px after being
+   budgeted for 12. There were nine of these until Tree went and the two
+   scatters, which write nothing on a dot, are exempt by name (`UNLABELLED` in
+   diagram.ts); one picture left is not a reason to collapse them to a base
+   rule. */
+.diag-force .diag-node.diag-d0 .diag-label { font-size: 10px; }
+.diag-force .diag-node.diag-d1 .diag-label { font-size: 10px; }
+.diag-force .diag-node.diag-d2 .diag-label { font-size: 10px; }
+
+/* The mark inside a scatter's hit rectangle — 3px of dot in a target big enough
+   for a finger. The Tree drew one of these on every row too, and its `.closed`
+   variant (a hollow dot for a folded part) went with it. */
+.diag-dot {
+  fill: rgb(var(--cat-rgb) / 0.9);
+  stroke: var(--panel);
+  stroke-width: 1;
+}
+
+.diag-link {
+  stroke: var(--rule-strong);
+  stroke-width: 1;
+}
+
+/* ---- you are here ---- */
+
+line.diag-now {
+  stroke: var(--highlight);
+  stroke-width: 1.25;
+  stroke-dasharray: 2 3;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* ---- the footer card ---- */
+
+/* Fixed under the picture rather than floating over it. A hover target here can
+   be 6px tall, and a floating card over a 6px band covers its neighbours — which
+   are the thing the reader is comparing it against, and the whole point of a
+   picture that is to scale. See DiagramPanel.tsx. */
+.diag-card {
+  flex: none;
+  border-top: 1px solid var(--rule);
+  /* The fallback must be a TRIPLET, not a colour: `--ink-faint` is an
+     `oklch()` value, and `rgb(oklch(…) / 0.8)` is invalid at computed-value
+     time — which drops the whole declaration silently and leaves the card with
+     an inherited border colour. `--cat-7-rgb` is the palette's neutral. */
+  border-left: 3px solid rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.8);
+  padding: 0.5rem 0.65rem 0.6rem;
+  background: var(--panel);
+  /* Fixed height, so the picture above does not resize every time the pointer
+     crosses a band — a diagram that reflows under the pointer is unusable at
+     these sizes. Sized for a two-line title plus three lines of gist, which is
+     what a 288px band needs: at that width a six-word section title does not
+     fit on one line, and ellipsizing it was the thing that made the card's
+     promise ("the full title") false. Found by GPT Sol, 2026-08-26.
+
+     **The height is arithmetic, not taste, and it has to be redone whenever the
+     text changes size.** 2 × 0.91rem × 1.3 (title) + 0.3rem (gist margin) +
+     3 × 0.85rem × 1.4 (gist) = 99.8px, plus 0.5rem + 0.6rem of padding and the
+     1px border = 118px = 7.4rem. It was 6.4rem, which was 5px short of its own
+     promise even before the 2026-09-03 lift (§ mode band) and 16px short after
+     — and `overflow: hidden` is deliberate here, so nothing looked wrong: the
+     third gist line was simply not there. GPT Sol again, 2026-09-03. */
+  min-height: 7.4rem;
+  max-height: 7.4rem;
+  overflow: hidden;
+}
+.diag-card.empty {
+  border-left-color: transparent;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  display: flex;
+  align-items: center;
+}
+.diag-card.empty p { margin: 0; }
+.diag-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.diag-card-live {
+  flex: none;
+  padding: 0.05rem 0.3rem;
+  border-radius: calc(var(--radius) * 0.35);
+  background: var(--highlight-wash);
+  color: var(--highlight-ink);
+  font-size: 0.74rem;
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+.diag-card-title {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.91rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  /* It WRAPS. This is the one place in the mode where a label is not cut, and
+     that is the point of the card: everything in the picture is truncated by
+     `wrapText`, so if the card truncated too there would be nowhere the full
+     name existed. Two lines is enough for a 2–6 word title at 288px; anything
+     longer still has its `title` attribute. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.diag-card-title:hover { color: var(--highlight-ink); }
+.diag-card-num { color: var(--ink-faint); margin-right: 0.35rem; font-weight: 500; }
+.diag-card-count { flex: none; color: var(--ink-faint); font-size: 0.83rem; }
+.diag-card-gist {
+  margin: 0.3rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+

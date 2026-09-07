@@ -1,8 +1,28 @@
 # Hosting the article's own images
 
-**Status:** plan, not built. Written 2026-08-29, then **revised after GPT Sol's review** — which
+**Status:** built. Written 2026-08-29, then **revised after GPT Sol's review** — which
 found a blocker, and found one claim in the first draft that was simply false. Both are kept in
 place rather than edited out, because a plan that hides what it got wrong teaches nobody.
+
+Stages 1-3 and A-B landed in the days after it was written; **C and D then sat unbuilt for a week**
+and were finished on 2026-09-06 by
+[260906a](260906a-figures-from-a-pdf-are-placeholders-with-no-image.md), which needed the same
+delivery path for a PDF's own figures and built it generic. So until that day the step downloaded
+every image, hashed it, put it in the bucket and wrote a manifest, and **not one byte of it was ever
+served**.
+
+Two things in this plan were decided differently when they were finally built, both in
+[article-images.md § The two draws](../project/article-images.md):
+
+- the reading view returns **two articles** rather than one, because awaiting the images before the
+  prose would have cost 7.04 MB and 102 requests on the worst article in the corpus. What did *not*
+  change is [the bold rule](#delivery) that a publisher's URL must never be in the markup while our
+  copy is resolving — that is the reason the first draw blanks rather than waits;
+- `assetIndex` finally acquired a caller, and `imageSourceOf` was split out of `imageSourcesIn` so
+  that [trap 3](#the-traps) is closed by construction rather than by two `getAttribute` calls
+  agreeing.
+
+*What follows is the plan as written on 2026-08-29, in the present tense it was written in.*
 
 Today an article's images are **hot-linked**. Stage 1 fetches the document and nothing else; the
 `<img src>` in `blocks.json` still points at `content.wolfram.com` or `noemamag.imgix.net`, and it is
@@ -541,9 +561,9 @@ starts. **Nothing a reader sees changes until stage D.**
 | 3 | **The bucket** | `sources` accepts png/jpeg/gif, locally | ✅ `e5f421c` |
 | A | **`fetchAsset`** | `fetchBytes` split out of `fetchDocument`; images fetchable | ✅ |
 | B | **The artefact and the step** | `assets` through all its homes, the migration, the step that fills it | ✅ |
-| C | **Delivery** | the owned route and the public one | |
-| D | **The reading view** | `rehostImages`, and images that come from us | |
-| E | **Proof and docs** | the browser pass, `architecture.md`, `deployment.md`, Q11 | |
+| C | **Delivery** | the owned route and the public one | ✅ `1b8fdc30` — built by [260906a](260906a-figures-from-a-pdf-are-placeholders-with-no-image.md) stage D, generic from the start |
+| D | **The reading view** | `rehostImages`, and images that come from us | ✅ 2026-09-06, [260906a](260906a-figures-from-a-pdf-are-placeholders-with-no-image.md) stages D and E |
+| E | **Proof and docs** | the browser pass, `architecture.md`, `deployment.md`, Q11 | in [260906a](260906a-figures-from-a-pdf-are-placeholders-with-no-image.md) stage F |
 
 A and B were built in parallel against **one agreed seam**, so neither waited on the other:
 

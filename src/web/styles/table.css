@@ -1,0 +1,349 @@
+/* table.css — the granularity table itself: `table.zoom`, the head that is not
+   a row, the pinned end columns, the aimed column, and a gist cell's furniture
+   (title, gist text, depth bar, block range). App.tsx § TableView.
+
+   The column widths are deliberately not here — App.tsx § fitting decides them
+   and sets them inline, because it is also what decides which columns fit. */
+
+/* ----------------------------------------------------------------- table -- */
+/* border-collapse must be `separate` for `position: sticky` to work reliably on
+   cells, which is what pins the end columns. Only border-right/border-bottom are
+   ever set, so nothing doubles up. */
+table.zoom {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* ------------------------------------------------- § the head with no row ----
+   **A row of column names that is not a row.** Greg asked for the vertical
+   space back (§ tokens, `--head-h`) and the element had to stay, so what is
+   left is a strip of zero height that is still exactly where the head was:
+   sticky under the controls bar, one cell per column, each one carrying its
+   name in an `.sr-only` span.
+
+   Three things read it, and none of them reads a pixel of it:
+
+    - `useColumnContext.ts` takes each column's `left`, `width` and `bottom`
+      from `thead th[data-col]`. With no height, `bottom === top`, which is the
+      bar's own bottom edge — so a fisheye panel now starts directly under the
+      bar instead of a head's height below it. Better, not merely unbroken.
+    - A screen reader reads `<th scope="col">` as the name of every cell in the
+      column. The pills in the controls bar are outside the table and can never
+      do this job, which is why the text is hidden rather than deleted.
+    - `--head-h` is what `td.gist .sticky` adds to `--bar-bottom` below.
+
+   **Everything visual went, and `overflow: hidden` is the belt to the
+   `.sr-only` braces**: a table cell treats `height` as a *minimum*, so this
+   collapses only because nothing inside it is in flow. The old type tokens
+   (`--head-pad-x` and the two `--head-type-*`) went with it, along with
+   § the header over the article's column — 40 lines that moved `Text verbatim`
+   onto the prose's left edge, added 2026-09-04 and inert the moment the word
+   stopped being drawn. */
+/* **Scoped to the zoom table, and the spelling is load-bearing twice over.**
+
+   Both of these were bare element selectors until 2026-09-06 — `thead th` and
+   `td` — so they reached EVERY table in the app. On the shelf that put the
+   header cells 44px down the page, overlapping the first article's title by
+   their whole height (measured: th at 495.3–527.8, first row at 484.3–536.8),
+   and drew a vertical column grid `lib/DataTable.tsx` never asked for. It had
+   been worked around three times and fixed none: `.design-table td` writes
+   `border-right: 0` with a comment naming this rule, and `.prose th, .prose td`
+   restate `border` in full for the same reason.
+   docs/plans/260906g-the-shelf-table-is-ugly-because-the-reading-view-s-css-leaks-into-it.md.
+
+   **Direct children, not descendants.** `table.zoom td` would not have fixed
+   it: an article's own <table> renders inside `td.text`, which is inside
+   `table.zoom`, so a descendant selector goes on reaching every `.prose` cell
+   exactly as the bare one did.
+
+   **`:where()`, so the specificity does not move.** The obvious
+   `table.zoom > thead > tr > th` is (0,1,4) and would beat `thead th.pin-left`
+   (0,1,2) below — the base `z-index: 25` overriding the pinned header's 35, and
+   the base `border-right` overriding `td.pin-right`'s `none`. That breaks the
+   pinned end columns in the one view these rules exist for. `:where()`
+   contributes zero, so these stay (0,0,2) and (0,0,1) — exactly what the bare
+   selectors were. GPT Sol, 2026-09-06.
+
+   Safe against the markup: TableView.tsx always sets `className="zoom …"`, and
+   the <thead>, <tr> and <tbody> are written explicitly rather than left to the
+   parser. */
+:where(table.zoom > thead) > tr > th {
+  position: sticky;
+  top: var(--bar-bottom);
+  z-index: 25;
+  height: var(--head-h);
+  padding: 0;
+  overflow: hidden;
+}
+
+:where(table.zoom > tbody > tr) > td {
+  vertical-align: top;
+  border-bottom: 1px solid var(--rule);
+  border-right: 1px solid var(--rule-strong);
+}
+
+/* ---- column widths and the pinned ends ----------------------------------
+   Widths are NOT set here. The table is `table-layout: fixed` and every column
+   gets an explicit pixel width from App § fitting, because automatic table
+   layout sizes columns by their content and the content is prose — which
+   answered `max-content` with a 4231px table inside a 1600px window. One place
+   decides the geometry, and it is the one that also decides which columns fit.
+   See src/web/App.tsx. */
+table.zoom { table-layout: fixed; }
+td.text { background: var(--page); }
+
+/* ------------------------------------------------------ § the aimed column ----
+   **Which column ← / → are pointed at, said by tinting the column itself.**
+
+   It used to be an underline on the `<th>` (`thead th.nav-aim`), and there used
+   to be an `↑↓ SECTIONS` readout in the controls bar beside it. The readout went
+   with the rest of the bar on 2026-09-05 and the header row lost its height in
+   the same pass, so both of the things that could name an aim went at once —
+   while the keys stayed, at Greg's asking. So the aim moved onto the one surface
+   that is left: the column.
+
+   Five constraints, and every one is a thing that was got wrong first — three
+   by reasoning, two by looking at the rendered page:
+
+    - **One attribute on `.reader`, never a class on the cells.** A deep article
+      renders thousands of `<td>`s and the aim changes on every sideways twitch
+      of the pointer, so re-classing them would defeat `memo(TableView)`. It
+      lives on `.reader` rather than on the table because **the panels are not
+      inside the table** — see below — and because that is the level where
+      `navDepth` already is: `TableView` no longer takes it as a prop at all, so
+      moving the pointer stops re-rendering the table entirely, which it did not
+      before this change.
+    - **The gist columns are tinted through their *panel*, not their cells.**
+      Every gist column in Hierarchy is covered by an opaque `position: fixed`
+      `.ctx-panel` (§ the column context), and the cell underneath deliberately
+      draws nothing while one is there — so a tint on `td.gist` is invisible in
+      exactly the case Greg reaches by pressing ←. Found in a browser; every
+      unit check passed. Both surfaces are named on each line below, and the
+      cell half is still doing work: the *leaf* gist column has no panel, and
+      neither does the prose.
+    - **`background-image`, not `box-shadow`.** `.pin-left` already owns
+      `box-shadow` for the overflow-layer cue below, and a second `box-shadow`
+      declaration *replaces* it rather than composing with it — so the aim would
+      silently delete the shadow that tells the reader a column is a layer. A
+      `background-color` is no good either: `td.text`, `td.gist.active`,
+      `td.gist.continuation` and `.ctx-panel` all set opaque backgrounds of
+      their own, which is also why the tint cannot ride on the `<col>`.
+    - **`[data-nav-depth]` and not `.depth-N`.** The prose `<td>` carries no
+      `depth-N` class, and it is the rung the reader reaches by pressing → all
+      the way — so a matrix written over the class silently does nothing on the
+      column Greg is most likely to be aiming at. Both kinds of cell already
+      carry `data-nav-depth`, which is what `keynav.ts` resolves a pointer with.
+    - **`:not(.only-prose)`, or Plain washes the whole page.** With no gist
+      columns the prose is the only rung there is, the pointer sits on it
+      permanently, and the tint would be a permanent orange cast over the
+      article rather than a choice between columns. An indicator that says
+      *which of several* means nothing when there is one.
+
+   **The spine is deliberately not in here.** An aim is a *depth*, and the spine
+   is depth 1 drawn a second way — so when depth 1 is aimed the Parts column
+   already says so, and tinting a fixed rail as well would say it twice on a
+   surface the arrows are not stepping through. The one case that shows nothing
+   is a pointer resting on the spine with the Parts column fitted away, which lit
+   nothing before this change either.
+
+   **The ladder is written out to depth 7**, which is well past anything
+   `buildGeometry` produces today (three, or five after
+   docs/plans/260904d-deepen-fat-sections.md). CSS cannot compare one element's
+   attribute with another's, so a matrix is the whole of the mechanism; past the
+   bound the tint simply does not draw, which is a missing hint rather than a
+   broken key. `tests/aimed-column.test.ts` pins the bound, the property, the
+   panel and the prose cell. */
+.reader[data-aim] {
+  /* Quieter than a switched-on granularity pill, because this one follows the
+     mouse and a thing that changes on every twitch must not shout. Faint enough
+     that it still reads over `--highlight-wash` on the active cell without
+     competing with it. */
+  --aim-wash: color-mix(in oklab, var(--highlight) 7%, transparent);
+}
+.reader[data-aim="0"] :is(table.zoom:not(.only-prose) td[data-nav-depth="0"], .ctx-panel.depth-0),
+.reader[data-aim="1"] :is(table.zoom:not(.only-prose) td[data-nav-depth="1"], .ctx-panel.depth-1),
+.reader[data-aim="2"] :is(table.zoom:not(.only-prose) td[data-nav-depth="2"], .ctx-panel.depth-2),
+.reader[data-aim="3"] :is(table.zoom:not(.only-prose) td[data-nav-depth="3"], .ctx-panel.depth-3),
+.reader[data-aim="4"] :is(table.zoom:not(.only-prose) td[data-nav-depth="4"], .ctx-panel.depth-4),
+.reader[data-aim="5"] :is(table.zoom:not(.only-prose) td[data-nav-depth="5"], .ctx-panel.depth-5),
+.reader[data-aim="6"] :is(table.zoom:not(.only-prose) td[data-nav-depth="6"], .ctx-panel.depth-6),
+.reader[data-aim="7"] :is(table.zoom:not(.only-prose) td[data-nav-depth="7"], .ctx-panel.depth-7) {
+  background-image: linear-gradient(var(--aim-wash), var(--aim-wash));
+}
+
+/* The pinned columns sit ON TOP of the scrolling ones, so they need to read as
+   a layer rather than as a neighbour — otherwise a column half-hidden under the
+   prose looks like a rendering bug instead of like more to scroll. Hence a real
+   drop shadow, not a hairline. */
+td.pin-left, thead th.pin-left {
+  position: sticky;
+  /* Not `left: 0` — that is the viewport edge, which is underneath the spine.
+     The rail is `position: fixed`, so it does not push the sticky edge along
+     for us, and neither does the mode band. `--mode-w` is 0 in the
+     table-of-contents mode, where this rule does all its work today; the term
+     is here so that a mode which keeps a pinned column cannot slide it under
+     the band. `--safe-left` for the same reason one step further out: the rail
+     itself now starts after the notch, so a column pinning to where the rail
+     used to end pins into the cut-out. GPT Sol, 2026-08-28. */
+  left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left));
+  z-index: 15;
+  box-shadow: 1px 0 0 var(--rule-strong), 8px 0 14px -8px rgb(0 0 0 / 0.75);
+}
+
+/* The rightmost column does NOT pin, and the asymmetry is the whole point.
+   Greg's brief said "always keep the leftmost and perhaps the rightmost
+   visible" — the hedge in "perhaps" turns out to be load-bearing.
+
+   Pinning left is free when you haven't scrolled: the column's static position
+   is already the left edge, so `left:` holds it exactly where it would be, and
+   it only starts covering its neighbours once you deliberately scroll away.
+   Pinning right is not free. A sticky element is painted without any space
+   being reserved for it, so `right: 0` shifts the last column LEFT by the
+   entire horizontal overflow the moment the page loads — covering that many
+   pixels of live content at rest, before the reader has touched anything. At
+   700px with `?cols=0,1,2` that was the whole Sections column, 396px of it,
+   hidden under the prose on arrival with nothing to say so.
+   (Mechanism diagnosed by the narrow-layout-probe agent, 2026-08-25.)
+
+   Reserving the space properly means lifting the column out of the table's
+   scroll extent — the frozen-pane pattern, two tables kept in sync — and that
+   is a large restructure to buy back a behaviour that is only useful while
+   overflowing, which auto-fit now makes rare. So: no right pin. Scrolling right
+   reveals the prose; the coarse column stays pinned on the left, which is the
+   half of the idea that pays for itself. */
+td.pin-right, thead th.pin-right {
+  border-right: none;
+}
+
+/* Nothing to sit on top of when the table already fits, and whether it fits
+   depends on the table's real width — the number of columns changes with the
+   mode as well as with the window, so a viewport breakpoint gets this wrong in
+   both directions. TableView measures and sets `.overflowing`. */
+table.zoom:not(.overflowing) td.pin-left,
+table.zoom:not(.overflowing) thead th.pin-left {
+  box-shadow: none;
+  border-right: 1px solid var(--rule-strong);
+}
+
+thead th.pin-left { z-index: 35; }
+
+/* Overflow has to be discoverable. macOS hides its scrollbars until you move,
+   so a table that runs off the right edge looks identical to one that simply
+   ends there — the probe agent checked, and there is no persistent scrollbar to
+   see. A fade at the trailing edge says "this continues" without claiming a
+   row of chrome. Only drawn while there is actually something out there. */
+.reader:has(table.zoom.overflowing)::after {
+  content: "";
+  position: fixed;
+  top: var(--bar-bottom);
+  right: 0;
+  /* Stops at the bar. Run to 0 and the gradient washes over the dock's right
+     end, which does not scroll and has nothing more to the right of it.
+     `--dock-bottom` rather than `--dock-h` so it follows the bar down when the
+     bar slides away, and the fade covers the strip the bar has vacated.
+     `max(…, --safe-bottom)` so it stops at the home indicator rather than
+     running behind it — see the same expression on `.mode-band`, where it
+     matters more because that one holds controls. */
+  bottom: calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-h));
+  width: 2rem;
+  z-index: 20;
+  pointer-events: none;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in oklab, var(--page) 80%, transparent)
+  );
+}
+
+/* Below the collision width, stop pinning the left column horizontally. Two
+   layers stacked on the same pixels is not a layout, and a gist column you can
+   scroll away from is better than one permanently underneath the prose.
+
+   `left: auto`, NOT `position: static`. Going static also cancels the element's
+   *vertical* stickiness, and the left-hand `<th>` is one of the column headers —
+   so the table head silently stopped pinning under the controls bar on exactly
+   the narrow screens where it is least affordable to lose. A sticky element with
+   `left: auto` simply has no horizontal anchor, and keeps its `top` one. */
+@media (max-width: 760px) {
+  td.pin-left, thead th.pin-left {
+    left: auto;
+    box-shadow: none;
+    border-right: 1px solid var(--rule-strong);
+  }
+}
+
+/* Gist cells span their whole range; the inner div sticks so the summary stays
+   in view for as long as the text it summarises does. */
+td.gist {
+  padding: 0;
+  cursor: pointer;
+  background: var(--panel);
+  transition: background 0.15s;
+}
+
+td.gist .sticky {
+  position: sticky;
+  /* Clears the controls bar and the table head. The second term has been `0`
+     since 2026-09-05 (§ the head with no row) and stays in the sum on purpose:
+     it is the token that says how tall that row is, and a head that grew again
+     would move this with it rather than leave it stranded. */
+  top: calc(var(--bar-bottom) + var(--head-h));
+  padding: 0.85rem 1rem 1rem;
+}
+
+td.gist .title {
+  font-family: var(--font-ui);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+  margin-bottom: 0.3rem;
+}
+
+td.gist .own {
+  margin-left: 0.3rem;
+  color: var(--highlight);
+  font-weight: 400;
+}
+
+td.gist .gist-text {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* Only the spacing lives here. The type is .block-ref's, wherever it appears —
+   see BlockRef.tsx. */
+td.gist .range { margin-top: 0.5rem; }
+
+/* Continuation cells must stay opaque: when pinned, transparent would let the
+   scrolling columns show through them. */
+td.gist.continuation { background: var(--panel); }
+td.gist.active { background: var(--highlight-wash); }
+td.gist.active .title { color: var(--highlight-ink); }
+
+/* On the cell, not the column. `<col>` is not a DOM ancestor of `<td>`, and
+   custom properties inherit down the DOM tree — the handful of properties that
+   do cross from column to cell (background, border, width, visibility) do so by
+   a special table mechanism that is not inheritance. Set on `.col-depth-*` this
+   resolved on an element nothing ever read it from, so every bar in every
+   column painted the `--rule-strong` fallback grey. */
+td.gist.depth-1 { --tint: var(--depth-1); }
+td.gist.depth-2 { --tint: var(--depth-2); }
+td.gist.depth-3 { --tint: var(--depth-3); }
+/* The L0 column and its arc styling left on 2026-09-05 —
+   docs/plans/260905d-declutter-the-reading-view-top-bars.md. `.outln-arc` in
+   § outline mode is a different rule, and is where the arc is drawn now. */
+
+td.gist .title::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 0.72em;
+  margin-right: 0.45rem;
+  vertical-align: -0.02em;
+  background: var(--tint, var(--rule-strong));
+  border-radius: 2px;
+}
+

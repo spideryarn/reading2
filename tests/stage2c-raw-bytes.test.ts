@@ -702,8 +702,8 @@ describe("npm run eval:pdf-read keeps the original where the reader can reach it
  *
  * `blobStore()` (src/store/blobs.ts) chooses from `SUPABASE_URL` and
  * `SUPABASE_SERVICE_ROLE_KEY`, so the selection is made by *how the process was
- * started*. The server gets them from `.env.local` — through `vite.config.ts`
- * and `src/store/live.ts` — and `npm run fetch` did not, so the command wrote
+ * started*. The server gets them from `.env.local` — through `vite.config.ts` —
+ * and `npm run fetch` did not, so the command wrote
  * `data/_blobs/` and `raw.json`, the queue counted the fetch step done, and
  * extraction then dereferenced the manifest against Supabase and blocked on an
  * object that exists. GPT Sol found it, 2026-08-31; it is the same split as
@@ -715,12 +715,12 @@ describe("npm run eval:pdf-read keeps the original where the reader can reach it
  * and it needs `.env.local` for *more* reasons than the old command did, not
  * fewer.
  *
- * **Two things now satisfy this, and it took three mutations to find that out.**
- * `scripts/stage.ts` calls `loadEnvLocal()` above its imports — which are
- * dynamic for exactly that reason, since static ones are hoisted above every
- * statement in a module. But `src/store/live.ts` **also** calls it, at module
- * top level, and the script's graph reaches that file. Measured 2026-09-05, on
- * the no-argument run:
+ * **Two things satisfied this on 2026-09-05, and it took three mutations to
+ * find that out.** `scripts/stage.ts` calls `loadEnvLocal()` above its imports
+ * — which are dynamic for exactly that reason, since static ones are hoisted
+ * above every statement in a module. But `src/store/live.ts` **also** called
+ * it, at module top level, until that file went on 2026-09-06. Measured
+ * 2026-09-05, on the no-argument run:
  *
  * - move the script's call below its dynamic imports → **still green**;
  * - move it below the argument check → **still green**;

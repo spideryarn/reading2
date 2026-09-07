@@ -77,7 +77,12 @@ function labelsFile(dropped: string[]): LabelsFile {
     structureHash: "0000000000000000",
     structureVersion: "toc/1",
     labels,
-    batches: null,
+    /* `[]` rather than `null` since the union landed (src/labels.ts §
+       `PendingLabelsFile`): `null` now means *no run happened*, and this
+       fixture is a run that happened and dropped some blocks. The eval reads
+       `batches` only to report `batched` and a count, neither of which any
+       assertion here touches. */
+    batches: [],
     dropped,
   };
 }

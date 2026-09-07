@@ -29,6 +29,7 @@
  * broken.
  */
 import type { BlockId } from "../types.js";
+import type { JumpOrigin } from "./jump-history.js";
 import type { BlockMatch, MatchingSearch } from "./search-hits.js";
 
 /** One block's row, in the rail's document-pixel space. */
@@ -211,4 +212,55 @@ export function bandMatchCounts(
     if (n > 0) counts.set(band.id, n);
   }
   return counts;
+}
+
+/* ------------------------------------------ where the reader jumped from -- */
+
+/**
+ * A bar in the rail that belongs to no lane — where and how tall, and nothing
+ * else.
+ *
+ * **Deliberately not a `SpineMark`.** That type carries a `lane` and an `rgb`,
+ * and both are search vocabulary: lanes are *packed* by `laneOrder`, so
+ * anything holding one has to be given a track out of the same 10px gutter, and
+ * every search would move sideways to make room for it. Being a different shape
+ * is what makes that impossible rather than merely avoided.
+ */
+export interface OriginMark {
+  top: number;
+  height: number;
+}
+
+/**
+ * **One faint tick at the block the reader jumped from**, or `null` for nothing
+ * to draw — Stage C of docs/plans/260906g-back-to-where-you-jumped-from.md.
+ *
+ * The chip (ReturnChip.tsx) says *where* the reader can go back to, in words;
+ * this answers the thing a label cannot, which is **how far they came**. Same
+ * datum as the chip — `readStamp(history.state)`, through `useJumpOrigin` — so
+ * there is no second record to keep in sync and no decay curve to learn. Greg
+ * asked for a fading trail of previous locations; the plan's § Why not the
+ * fading spine trail is the argument for one mark instead, and it is the rail's
+ * own rule: it acquires marks when the reader asks for them and at no other
+ * time.
+ *
+ * **Two of the three ways to draw nothing are the point of the function**, and
+ * neither looks wrong if you get it wrong:
+ *
+ * - **`top` is not a block.** The origin is `top` precisely because no row had
+ *   reached the reading line (jump-history.ts § JumpOrigin, GPT Sol F8), so
+ *   marking the first row would claim the reader was standing in the first
+ *   paragraph when they were looking at the masthead. The chip says "back to
+ *   the beginning", which is the whole of the information.
+ * - **A block this page no longer has** — a stamp that outlived a
+ *   re-extraction — is skipped rather than placed at zero, the same choice
+ *   `spineMarks` makes for a stale search result and for the same reason.
+ */
+export function jumpOriginMark(
+  rows: Map<string, Row>,
+  origin: JumpOrigin | null,
+): OriginMark | null {
+  if (origin === null || origin.kind === "top") return null;
+  const row = rows.get(origin.blockId);
+  return row ? { top: row.top, height: row.height } : null;
 }

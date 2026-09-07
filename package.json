@@ -33,6 +33,7 @@
     "hierarchy:flatten": "tsx src/hierarchy-flatten.ts",
     "test:watch": "vitest",
     "hierarchy": "tsx scripts/stage.ts hierarchy",
+    "labels": "tsx scripts/stage.ts labels",
     "eval:pdf-read": "tsx src/pdf-read.ts",
     "eval:hierarchy": "tsx evals/hierarchy-labels.ts",
     "eval:hierarchy-structure": "tsx evals/hierarchy-structure/run.ts",

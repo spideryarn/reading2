@@ -19,9 +19,8 @@
  *    illustration, for ever, with nothing going red;
  *  - **the carry**, and whether a new draft inherits the plates.
  *
- * `SPIDERYARN_STORE` is not consulted here: this file talks to
- * `pgArticleReader` directly, which is the store the app uses when that
- * variable says `postgres`.
+ * This file talks to `pgArticleReader` directly, which is the store the app
+ * uses.
  *
  * Skips loudly when there is no database, for the reason
  * tests/db-schema.test.ts explains at length.

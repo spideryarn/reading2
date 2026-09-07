@@ -50,7 +50,7 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Assets } from "../src/assets.js";
@@ -66,6 +66,7 @@ import {
 import { loadEnvLocal } from "../src/env.js";
 import { PROMPT_VERSION as GLOSSARY_PROMPT_VERSION } from "../src/glossary.js";
 import { mintUniqueId } from "../src/ids.js";
+import { LABELS_PROMPT_VERSION } from "../src/labels.js";
 import { CAPABLE_MODEL } from "../src/models.js";
 import { articleFingerprint, hashBlocks } from "../src/source-hash.js";
 import { PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "../src/tweets.js";
@@ -458,6 +459,21 @@ describe("a re-extraction, through beginRevision and publishRevision", () => {
       await step(firstRevision, name);
     }
     await step(firstRevision, "hierarchy", { inputHash: HASH1 });
+    /* **The label pass, which has been its own step since 2026-09-06** and so
+       is part of what a finished article carries into its next draft.
+       docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
+
+       All three fields, because all three are what `STEPS.labels.stamp`
+       declares and what `isCurrent`'s `case "labels"` reads back off the row —
+       and that arm is asked of the *row* rather than of the artefact, unlike
+       every arm below it, because a re-cut tree deletes this row rather than
+       changing a hash on it. Only writing `inputHash` here would leave two of
+       the three comparisons untested. */
+    await step(firstRevision, "labels", {
+      inputHash: HASH1,
+      promptVersion: LABELS_PROMPT_VERSION,
+      model: CAPABLE_MODEL,
+    });
     /* **A `done` run row for `assets` as well as the column**, and it is the
        row that makes the staleness assertion below mean anything: `done` on the
        metadata page is `run.status === "done" && isCurrent(step)`, so without a
@@ -520,7 +536,7 @@ describe("a re-extraction, through beginRevision and publishRevision", () => {
        paragraphs; without the step runs the metadata page reports a stage that
        never ran while the column beside it holds a thread. */
     expect(begun.blocksCopied).toBe(3);
-    expect(begun.stepRunsCopied).toBe(8);
+    expect(begun.stepRunsCopied).toBe(9);
 
     const draft = await revisionRow(secondRevision);
     expect(draft?.status).toBe("draft");
@@ -620,9 +636,86 @@ describe("a re-extraction, through beginRevision and publishRevision", () => {
     for (const name of ["assets", "glossary", "tweets"] as StepName[]) {
       expect(pg[name], `Postgres should offer to regenerate ${name}`).toBe(false);
     }
+    /* **`labels` is the fourth, and its arm reads the run row rather than the
+       artefact.** The row was carried forward stamped against B1 while the
+       revision's blocks are B2, which is precisely the state that used to make
+       `stepIsDone` throw before `writeArtefacts` learned to delete the receipt —
+       here it is only a page, and the page has to say the labels want buying
+       again rather than showing a green tick over labels written for paragraphs
+       that have changed underneath them. Deleting `case "labels"` from
+       src/store/pg.ts reddens this, the same way `case "assets"` does above. */
+    expect(pg.labels, "Postgres should offer to regenerate labels").toBe(false);
     /* The step that WAS re-run, so this is not a test that everything is
        false — which is the shape this assertion could rot into. */
     expect(pg.hierarchy).toBe(true);
+  }, 30_000);
+
+  /**
+   * **What `isCurrent`'s `case "labels"` actually compares**, which the arm's
+   * mere existence does not say.
+   *
+   * `tests/store-revision-columns.test.ts` holds every stamped step to *having*
+   * an arm, and `tests/labels-step-registration.test.ts` holds the step to
+   * declaring a `stamp()`. Neither can see an arm that compares the wrong
+   * things — and the wrong things here are cheap to write, because the row
+   * carries four columns and only three of them are the stamp. GPT Sol's F3 on
+   * stage 2a: the semantics were unchecked.
+   *
+   * Driven by moving the row rather than the article, so each field is the only
+   * thing that changed. The row is put back after each, so the cases below stay
+   * order-independent.
+   */
+  it("asks all three of the labels stamp's fields, not just the blocks", async () => {
+    const db = getDb();
+    const current = {
+      inputHash: HASH2,
+      promptVersion: LABELS_PROMPT_VERSION,
+      model: CAPABLE_MODEL,
+    };
+    const setRow = (values: Partial<typeof current>) =>
+      db
+        .update(revisionStepRuns)
+        .set({ ...current, ...values })
+        .where(
+          and(
+            eq(revisionStepRuns.revisionId, secondRevision),
+            eq(revisionStepRuns.stepName, "labels"),
+          ),
+        );
+    const labelsAreCurrent = async () => {
+      const meta = await pgArticleReader.articleMetadata(SLUG);
+      return meta.stages.find((s) => s.step === "labels")?.done;
+    };
+
+    /* The premise, and the case the three below are departures from: a row
+       stamped exactly as `STEPS.labels.stamp` would stamp it today reads
+       current. Without this the three `false`s prove only that something is
+       wrong, not that this arm can ever say yes. */
+    await setRow({});
+    expect(await labelsAreCurrent(), "a row stamped as today's run would stamp it").toBe(true);
+
+    await setRow({ inputHash: HASH1 });
+    expect(await labelsAreCurrent(), "labels written against the previous blocks").toBe(false);
+
+    await setRow({ promptVersion: "labels/0" });
+    expect(await labelsAreCurrent(), "labels written by an older prompt").toBe(false);
+
+    await setRow({ model: "some-other-model" });
+    expect(await labelsAreCurrent(), "labels written by a different model").toBe(false);
+
+    /* And the fourth cause, which is not a comparison at all: no row. That is
+       what `writeArtefacts` leaves behind when a pending manifest lands, and it
+       has to read the same as stale rather than as current.
+       src/store/artifacts-pg.ts § Why the deletion is not optional. */
+    await db
+      .delete(revisionStepRuns)
+      .where(
+        and(
+          eq(revisionStepRuns.revisionId, secondRevision),
+          eq(revisionStepRuns.stepName, "labels"),
+        ),
+      );
+    expect(await labelsAreCurrent(), "no receipt at all").toBe(false);
   }, 30_000);
 
   it("keeps the identity of a paragraph the re-extraction dropped", async () => {

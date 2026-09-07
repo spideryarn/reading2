@@ -203,7 +203,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
      default and therefore the ordinary case. The bar arms the picture the press
      will land on rather than a fixed one, so a press that opens Illustrated
      cannot leave a sketch token behind for a later Back step to spend:
-     src/web/activation.ts § `armActivationForDiagram`. */
+     src/web/activation.ts § `activationForDiagram`. */
   const auto = useAutoRun(slug, "sketch", status, ensure, reload);
 
   return {

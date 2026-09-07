@@ -39,12 +39,12 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readerCssNoComments } from "./helpers/stylesheets.js";
 
-const stripBlockComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "");
-
-const css = stripBlockComments(
-  readFileSync(new URL("../src/web/styles.css", import.meta.url), "utf8"),
-);
+/* The reading-view sheets as a set — one file until 2026-09-06 and thirty-eight
+   since, and asking for the set is what makes a rule that has *moved* go on
+   being found while a rule that is gone still fails. */
+const css = readerCssNoComments();
 
 /**
  * One CSS rule body, by selector, with whitespace flattened.
@@ -56,7 +56,7 @@ const css = stripBlockComments(
 function rule(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const found = new RegExp(`^${escaped}\\s*\\{([^}]*)\\}`, "m").exec(css);
-  expect(found, `no rule for \`${selector}\` in styles.css`).not.toBeNull();
+  expect(found, `no rule for \`${selector}\` in the reader stylesheets`).not.toBeNull();
   return (found?.[1] ?? "").replace(/\s+/g, " ").trim();
 }
 
@@ -96,7 +96,13 @@ describe("the reading column is centred in its cell", () => {
    * open, because a table cell treats `height` as a *minimum*.
    */
   it("the column-header row has no height left to align anything in", () => {
-    const head = rule("thead th");
+    /* The selector was bare `thead th` until 2026-09-06, when it was scoped to
+       the zoom table because it had been reaching every table in the app
+       (docs/postmortems/260906g-an-unscoped-element-selector-in-styles-css-reached-every-table-in-the-app.md).
+       This assertion is about the geometry, not the spelling, but `rule()`
+       matches a selector literally — so a later rescoping breaks this test
+       again, and the fix is to respell it here, never to relax the rule. */
+    const head = rule(":where(table.zoom > thead) > tr > th");
     expect(head).toContain("height: var(--head-h)");
     expect(head).toContain("padding: 0");
     expect(head).not.toContain("border-bottom");

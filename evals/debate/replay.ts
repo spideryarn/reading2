@@ -62,10 +62,12 @@ export type ReplayedAttempt =
  * Replay every attempt a journal holds.
  *
  * `blockText` is the article's blocks by id — the same map `generateDebate`
- * builds with `blockTextById`. Without it a **claims** attempt is skipped rather
- * than replayed, because every row would come back `unknownBlockId` and the
- * replay would report a catastrophe that belongs to the replay and not to the
- * run.
+ * builds with `blockTextById`. Without it an attempt is skipped rather than
+ * replayed, because the replay would report facts about itself rather than about
+ * the run: a **claims** pass would come back entirely `unknownBlockId`, and
+ * since 2026-09-06 a **direct** pass would come back clean with no `quoted`
+ * signal on any row and no copy refused — the quieter of the two failures, and
+ * the reason the guard moved above the branch.
  */
 export function replayJournal(
   events: readonly DebateJournalEvent[],
@@ -141,17 +143,17 @@ function replayOne(
     return skip("the answer's fence would not parse");
   }
 
+  if (!blockText) {
+    return skip("this pass needs the article's blocks, and none was supplied");
+  }
   if (start.pass === "direct") {
     return {
       ok: true,
       attemptId: start.attemptId,
       pass: "direct",
       returnedSources: admissible.size,
-      group: readDirectGroup(rows, { admissible, article: identity }, searches),
+      group: readDirectGroup(rows, { admissible, article: identity, blockText }, searches),
     };
-  }
-  if (!blockText) {
-    return skip("a claims pass needs the article's blocks, and none was supplied");
   }
   return {
     ok: true,

@@ -173,6 +173,7 @@ import {
   PenLine,
   RefreshCw,
   ScanLine,
+  Tag,
   Target,
   TriangleAlert,
   Undo2,
@@ -251,6 +252,12 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   extract: FileText,
   blocks: Blocks,
   hierarchy: ListTree,
+  /* A luggage tag: the short label each paragraph is given so it can be told
+     apart from its neighbours. Beside the tree it is written onto, and
+     deliberately not another tree glyph — the two are one stage of the pipeline
+     and two steps, and the rows have to be distinguishable at a glance.
+     docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md. */
+  labels: Tag,
   assets: Image,
   arc: Waypoints,
   tweets: ListOrdered,
@@ -463,9 +470,9 @@ export function Metadata({
   /**
    * This address has no article of its own and is being shown the fixture.
    *
-   * `loadArticle` falls through to `example/` for an unknown slug and
-   * `articleMetadata` follows it, deliberately, so that the two pages describe
-   * the same thing (src/api.ts). Two places on this page need to know: the
+   * `loadArticle` fell through to `example/` for an unknown slug and
+   * `articleMetadata` followed it, deliberately, so that the two pages described
+   * the same thing. Two places on this page need to know: the
    * `fixture` chip below, which has said so since the page was built, and —
    * since 2026-08-27 — Archive, which must not be offered. The shelf has no
    * entry under this slug, so the PATCH behind it would 404; a button that can
@@ -477,7 +484,7 @@ export function Metadata({
    * state it describes — this page showing `example/`'s files under somebody
    * else's slug — cannot happen any more: `candidateDirs` offers the fixture to
    * its own slug and to no other, so `articleMetadata` 404s where it used to
-   * answer with a foreign `dir` (src/api.ts § `candidateDirs`, and the commit
+   * answer with a foreign `dir` (the commit
    * that closed it). The right half of the `&&` was always what made it
    * *false* for `example` itself, so removing the whole thing changes nothing
    * a reader can see.
@@ -1251,7 +1258,7 @@ function Origin({ meta, slug, owner }: { meta: Meta; slug: string; owner: boolea
     );
   }
   /* **`meta.source` is the evidence, not the absent URL.** A missing `meta.json`
-     is tolerated (src/api.ts) and a revision may be published with neither
+     is tolerated and a revision may be published with neither
      `requested_url` nor `final_url` (src/db/schema.ts), so an owner can hold an
      ordinary web article with no address — and "you uploaded this" is a claim about what
      they did, assembled from a gap in our own files. GPT Sol, 2026-08-30. The
@@ -2280,7 +2287,7 @@ function StageRow({ stage, generator }: { stage: StageState; generator: string |
  * reports the minute somebody cloned this repo. Saying so in the tooltip is the
  * difference between a fact and a verdict, and this page owes the reader the
  * first and refuses to give them the second
- * (see the docstring at the top of this file, and src/api.ts § articleMetadata).
+ * (see the docstring at the top of this file, and src/store/pg.ts § articleMetadata).
  *
  * Renders nothing when the store cannot say — Postgres has no files, so it has
  * no size, and a stage that has written nothing has neither.

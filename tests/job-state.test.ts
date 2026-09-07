@@ -54,6 +54,10 @@ import {
   TAKING_LONGER,
   WAITING_TO_CONTINUE,
 } from "../src/job-state.js";
+/* The leaf, not src/pipeline.ts: this file is the browser-side mapper's test and
+   `STEP_ORDER` is the whole of what it needs to ask whether the table below is
+   over every step. src/step-order.ts § why the array lives there. */
+import { STEP_ORDER } from "../src/step-order.js";
 import type { Job, JobStatus, JobStep, StepName } from "../src/types.js";
 
 beforeEach(() => {
@@ -157,29 +161,65 @@ it("takes longer than usual per step, not per job", () => {
 });
 
 /**
- * **The three numbers themselves, pinned either side.**
+ * **Every threshold, pinned either side — and exhaustively, so the next step
+ * cannot be left out.**
  *
  * The test above only proves `hierarchy` and `fetch` differ at six minutes, so
  * every threshold in `STEP_TIMING` could move by minutes and stay green — which
  * is the whole of what those numbers are, and each of them is argued for from
  * evidence in that table's comment. If one changes, this is what should say so.
+ *
+ * **It used to claim that and check three of them.** `STEP_TIMING` had four
+ * rows by 2026-09-06 and this list named two, plus the fallback: `labels` and
+ * `illustrated` could move by any amount and stay green under a heading saying
+ * they could not. GPT Sol's F3 on stage 2a, and the fix is the shape rather
+ * than two more lines — `Record<StepName, number>` is total, so `npm run
+ * typecheck` asks for the row when a step is added and this asks for the
+ * evidence.
+ *
+ * The number here is what `displayJob` should still call *working* at; one
+ * millisecond later is *slow*. A step with no `STEP_TIMING` row of its own gets
+ * `SLOW_AFTER_MS`, and writing that out per step rather than defaulting it is
+ * the point: an unmeasured step is a decision too.
  */
+const EXPECTED_THRESHOLD_MS: Record<StepName, number> = {
+  /* The guess everything unmeasured falls back to: three minutes, past every
+     successful step in the ledger that is not `hierarchy` or `sketch`. */
+  fetch: 180_000,
+  extract: 180_000,
+  blocks: 180_000,
+  /* Ten minutes: past every hierarchy attempt on record (the longest ran 498s)
+     and ~140s short of the claimant's own 740s self-abort. */
+  hierarchy: 600_000,
+  /* The same ten minutes, and the same argument: the worst recorded label pass
+     is 682s, against a 180s fallback that would raise a false alarm on every
+     long article. docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md. */
+  labels: 600_000,
+  assets: 180_000,
+  arc: 180_000,
+  tweets: 180_000,
+  glossary: 180_000,
+  ideas: 180_000,
+  quotes: 180_000,
+  timeline: 180_000,
+  quiz: 180_000,
+  /* Seven minutes: past twice the worst of the thirteen sketch runs (199s). */
+  sketch: 420_000,
+  illustrated: 600_000,
+  debate: 180_000,
+};
+
 const stateAt = (name: StepName, ms: number) =>
   displayJob(job("running", { steps: [running(name)] }), START + ms).state;
 
 it("puts each threshold exactly where the evidence put it", () => {
-  /* Ten minutes: past every hierarchy attempt on record (the longest ran 498s)
-     and ~140s short of the claimant's own 740s self-abort. */
-  expect(stateAt("hierarchy", 600_000)).toBe("working");
-  expect(stateAt("hierarchy", 600_001)).toBe("slow");
-
-  /* Seven minutes: past twice the worst of the thirteen sketch runs (199s). */
-  expect(stateAt("sketch", 420_000)).toBe("working");
-  expect(stateAt("sketch", 420_001)).toBe("slow");
-
-  /* Three minutes, the guess everything unmeasured falls back to. */
-  expect(stateAt("fetch", 180_000)).toBe("working");
-  expect(stateAt("fetch", 180_001)).toBe("slow");
+  /* The premise: the table is over every step there is, so a step added to the
+     pipeline and forgotten here cannot pass by not being asked about. */
+  expect(Object.keys(EXPECTED_THRESHOLD_MS).sort()).toEqual([...STEP_ORDER].sort());
+  for (const [name, ms] of Object.entries(EXPECTED_THRESHOLD_MS) as [StepName, number][]) {
+    expect(stateAt(name, ms), `${name} should still be working at ${ms}ms`).toBe("working");
+    expect(stateAt(name, ms + 1), `${name} should be slow at ${ms + 1}ms`).toBe("slow");
+  }
 });
 
 /**

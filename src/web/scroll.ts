@@ -11,6 +11,7 @@
  * Everything addresses the block by its stable id — never by offset or selector
  * path. See docs/project/block-ids.md.
  */
+import { blockRow } from "./rows.js";
 import { safeAreaInsets } from "./safe-area.js";
 
 /**
@@ -526,9 +527,7 @@ export function scrollToTop() {
 }
 
 export function scrollToBlock(id: string, behavior: ScrollBehavior = "smooth") {
-  const row = document.querySelector<HTMLElement>(
-    `tr[data-block="${CSS.escape(id)}"]`,
-  );
+  const row = blockRow(id);
   if (!row) return;
   // Explicit and clamped rather than scrollIntoView(): we want the row's own
   // top edge, offset to clear the bars, and no surprise when the row sits
@@ -665,9 +664,59 @@ export function arrivalTarget(
  * window rather than a constant, so it scales with the viewport.
  */
 export function isBlockOnScreen(id: string): boolean {
-  const row = document.querySelector<HTMLElement>(`tr[data-block="${CSS.escape(id)}"]`);
+  const row = blockRow(id);
   if (!row) return false;
   const { top, bottom } = row.getBoundingClientRect();
   const margin = window.innerHeight * 0.1;
   return top >= stickyOffset() && bottom <= window.innerHeight - margin;
+}
+
+/**
+ * **Where a block is relative to the reader**, in the three answers a caller
+ * that wants to *move* them actually needs.
+ *
+ * `isBlockOnScreen` above answers two of them and folds the third in with the
+ * wrong one: it says `false` both for a row far below the fold and for a row
+ * that **is not in the document at all**. That is right for its own callers,
+ * which only ask whether to bother scrolling — and wrong for anything that
+ * takes a history entry for the journey, because a missing row means no journey
+ * happens and the entry is a promise of a return that was never made. GPT Sol
+ * F23, 2026-09-06.
+ *
+ * It also answers `false` for a paragraph **taller than the viewport**, which
+ * cannot satisfy "fits between the bars" at any scroll position — so a reader
+ * stepping between two comments inside one such paragraph was jolted to its
+ * top, which is exactly the no-jolt case the guard exists to prevent. Here a
+ * row *crossing the reading line* counts as `here`, the same line
+ * `measureRow` uses for "which item am I in" (keynav.ts). GPT Sol F10.
+ */
+export type Whereabouts = "nowhere" | "here" | "away";
+
+export function whereIsBlock(id: string): Whereabouts {
+  const row = blockRow(id);
+  if (!row) return "nowhere";
+  const { top, bottom } = row.getBoundingClientRect();
+  const line = stickyOffset();
+  const margin = window.innerHeight * 0.1;
+  if (top >= line && bottom <= window.innerHeight - margin) return "here";
+  /* Crossing the line: its top is above the reader and its bottom below, so
+     they are standing *inside* it however tall it is. */
+  return top <= line && bottom >= line ? "here" : "away";
+}
+
+/**
+ * **Stop a movement we started.** For a caller that has just decided the reader
+ * is already where they asked to be, and must therefore not be carried off by a
+ * glide that is still running from the last thing they asked for.
+ *
+ * The sequence: a step to question A starts the 200ms glide; while it is
+ * passing question B — comfortably on screen at that instant — the reader
+ * presses Prev. Without this the note changes to B and the glide carries
+ * serenely on to A, leaving B off screen. GPT Sol F22, 2026-09-06.
+ *
+ * Narrowly named because it is `cancel` with none of `cancel`'s other duties:
+ * the reader has not taken over, and nothing here is starting a new movement.
+ */
+export function abandonScroll(): void {
+  cancel();
 }

@@ -53,9 +53,7 @@ const HOISTED = vi.hoisted(() => {
 
 import { closeDb, getDb } from "../src/db/client.js";
 /**
- * **Statically, not with a dynamic `import()` inside the test.** Nothing here
- * needs the store flag changed — `SPIDERYARN_STORE` is unset under `npm test`,
- * which is exactly the files branch this file is asking about — and importing
+ * **Statically, not with a dynamic `import()` inside the test.** Importing
  * the whole store layer inside an `it` puts five seconds of module transform
  * inside a five-second test timeout on a busy machine.
  */

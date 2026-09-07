@@ -1,0 +1,202 @@
+/* tooltip.css — the hover panel's surface, and the hierarchy tooltip's contents
+   (`.tip-*`). Tooltip.tsx, over Floating UI, which ships no styles of its own.
+
+   `.tooltip` is borrowed rather than copied: annotations.css,
+   column-context.css, dock.css, prose-hover-card.css, footnotes.css,
+   search.css, chat-actions.css, profile.css and debate.css each style only the
+   inside of it. A change to the surface here reaches all of them. */
+
+/* --------------------------------------------------------------- tooltip --
+   The hover panel — Tooltip.tsx, over Floating UI, which positions and ships no
+   styles of its own. Everything visual is here.
+
+   The panel is a raised surface: on a dark page a *lighter* grey reads as
+   forward, so it sits above --panel, which already sits above --page (see the
+   note in tokens.css). It must be opaque — it is drawn over prose. */
+.tooltip-anchor {
+  /* Above EVERYTHING, drawer included. It was 80 — above the spine (45) and
+     both sticky bars — which was true until the bottom drawer arrived at 95 and
+     took the bar's own tooltips underneath it with it. A tooltip is always
+     about the thing you are pointing at, so it is always the frontmost thing on
+     screen; anything else is a hover that appears to do nothing. */
+  z-index: 100;
+  /* The panel takes hover of its own only where that is wanted; for the spine
+     it must not, or a tooltip that lands under the pointer keeps itself open. */
+  pointer-events: none;
+}
+
+.tooltip {
+  position: relative; /* the arrow is measured against this box */
+  /* 22rem is the reading width this was designed at, and the `min()` is what
+     stops it becoming the *whole* of a narrow window. Floating UI's `shift`
+     keeps the panel on screen, but shifting a 352px box inside a 390px viewport
+     leaves it pinned to one edge with nowhere to go; capping the width instead
+     lets it stay near the thing it is about. The subtraction is the 10px
+     `shift` padding on each side plus a little air. Measured: in a 390px
+     viewport this still resolves to 352px, so the cap only bites below 380. */
+  max-width: min(22rem, calc(100vw - 1.75rem));
+  padding: 0.6rem 0.75rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.5),
+    0 8px 24px -6px rgb(0 0 0 / 0.65);
+  font-family: var(--font-ui);
+  /* No transform-origin here on purpose: useTransitionStyles writes a
+     placement-aware one inline, so the panel grows out of the band it belongs
+     to rather than out of its own middle. */
+}
+
+/* The one tooltip the pointer may enter. Every other one on this page must not
+   take hover — a spine tooltip that landed under the pointer would keep itself
+   open — but the prose hover card carries links out and buttons in, and a link
+   you cannot reach is a picture of a link. ProseHoverCard.tsx.
+
+   The `hover-card` class it is always paired with is not decoration: it is what
+   the delegated `pointerover` listener tests to tell "the pointer moved into
+   the panel" from "the pointer left the words". useHoverCard.ts. */
+.tooltip-anchor.interactive { pointer-events: auto; }
+
+/* Colour is set on the element in Tooltip.tsx, not here — see the note there.
+   A stylesheet rule beats the presentation attributes FloatingArrow relies on
+   and paints a seam across the arrow's mouth. */
+.tooltip-arrow { z-index: 1; }
+
+/* The band card. Reads top to bottom: which part, which section, what it says,
+   what is inside it, how big it is. See BandCard in Spine.tsx. */
+.tip-crumb {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--highlight-ink);
+  margin-bottom: 0.2rem;
+  /* One line: a long part title must not push the section title out of view.
+     A flex row rather than plain text since 2026-08-28, because the position
+     pair sits at the far end of it — `gap` and `justify-content` are what keep
+     "3 of 7" pinned right however long the part's name is. */
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+/* The part's name. It is the half that yields: `min-width: 0` is what lets a
+   flex item shrink below its content, without which the ellipsis never appears
+   and the position pair is pushed out of the panel instead. */
+.tip-crumb-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* `3 of 7` — how far through this *part*, as opposed to the footer's how far
+   through the article. Dimmer than the part's name and never wrapped: it is
+   orientation you take in without reading, and it must not be what your eye
+   lands on first. */
+.tip-crumb-pos {
+  flex: none;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  color: var(--ink-faint);
+}
+
+.tip-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+/* Matches the § in the gist cells: the author's own heading, not a generated one. */
+.tip-own {
+  margin-left: 0.3rem;
+  font-weight: 400;
+  color: var(--highlight);
+}
+
+.tip-gist {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* A leaf has no gist, only nav chrome, and it should not be mistaken for one. */
+.tip-navlabel { font-style: italic; color: var(--ink-faint); }
+
+.tip-kids {
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--rule);
+  padding-top: 0.4rem;
+}
+
+.tip-kids li {
+  position: relative;
+  padding-left: 0.7rem;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tip-kids li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--depth-2);
+}
+
+.tip-more { color: var(--ink-faint); font-style: italic; }
+.tip-more::before { display: none; }
+
+.tip-foot {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1;
+  color: var(--ink-faint);
+  opacity: 0.8;
+}
+
+/* The match count, which is the one thing in the foot that is not always there
+   and the one thing worth spotting. Brighter than its neighbours rather than a
+   different size, so the row keeps its single baseline. */
+.tip-matches {
+  color: var(--highlight-ink);
+  opacity: 1;
+}
+
+/* **you are here** — the reading line is inside this band.
+
+   Pushed to the far end of the footer rather than sitting in the run of
+   counts, because it is not a measurement: everything to its left is a number
+   about the section, and this is a statement about the *reader*. Same brightness
+   as the match count, which is the footer's other "look at this one" — and the
+   two can appear together without competing, since one is at each end. */
+.tip-here {
+  margin-left: auto;
+  color: var(--highlight-ink);
+  opacity: 1;
+  font-style: italic;
+}
+
+/* Somebody who has asked not to be moved gets the panel, not the animation.
+   Floating UI's transition styles are inline, so this has to !important its
+   way past them. */
+@media (prefers-reduced-motion: reduce) {
+  .tooltip { transition: none !important; transform: none !important; }
+}
+

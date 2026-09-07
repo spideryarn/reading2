@@ -119,10 +119,18 @@
    cannot avoid (docs/project/granularity-zoom.md § Interaction).
 
    In `base`, so any rule in `app` or `utilities` still wins on layer order
-   alone; the `!important` is what carries it past them. The four narrower
-   blocks in styles.css stay: this one flattens durations, and they turn off
+   alone; the `!important` is what carries it past them. The narrower blocks
+   under src/web/styles/ stay: this one flattens durations, and they turn off
    things that are wrong when reduced rather than merely fast — a tooltip's
-   transform, the scroll-behaviour on the context panel. */
+   transform, the scroll-behaviour on the context panel.
+
+   **This said "the four narrower blocks in styles.css" until 2026-09-06, and
+   both halves were wrong.** `grep -rc "prefers-reduced-motion" src/web/styles/*.css`
+   that day found **18, across 13 files** — so the count was out by more than
+   four times, and it had been for long enough that nobody knew when. The file
+   name went stale the same day, when styles.css was split into 37 sheets. A
+   number written into prose is a number nobody re-runs: the command and its run
+   date are the citation, per CLAUDE.md § Cite, don't restate. */
 @layer base {
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
