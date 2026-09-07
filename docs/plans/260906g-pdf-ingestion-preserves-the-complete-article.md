@@ -226,11 +226,17 @@ run passed its isolated rerun and the subsequent complete concurrent suite witho
 change. A later non-fast-forward push was safely refused when peer commits advanced `dev`.
 Their merge was conflict-free.
 
-The final combined code at `a1d99ebe` passed `npm run check`: **14,392 tests passed**,
+The combined code at `a1d99ebe` passed `npm run check`: **14,392 tests passed**,
 58 expected skips, and all build, typecheck, cycle, migration-chain, conflict-marker and
 committed-source gates green. Repository-wide advisory findings remain advisory; touched-file
 lint has no errors or warnings. Sol's narrow final verification confirmed both late review
 fixes and the fixture corrections.
+
+Before landing, `dev` had advanced again to `5149b922`. The preview and merge were
+conflict-free; the incoming work did not change the PDF reader. The final combined code
+at `18e72a69` passed `npm run check`: **14,803 tests passed** across 798 passed files,
+with 58 expected skips in one skipped file. All seven gates were green. Host and local
+database clocks matched before interpreting this run.
 
 The worktree safety check verified the environment copy and fixture data/output byte for byte;
 its sole pre-push blocker was the unlanded commits. It must be repeated after landing before
