@@ -533,7 +533,7 @@ few dollars instead of $8–20 and two hours. By `hierarchy-structure/arms.ts`'s
 makes every arm here a `bakeoff` and none of them `isolated` — the control arm is production's
 *rules* under a different request, not production's call — and what it cannot catch is an
 interaction between the new wording and the structure the model proposes in the same breath. It also
-touches nothing in `EXPAND_SYSTEM`, which has no question field at all, so no result from it covers
+touches nothing in `EXPAND_SYSTEM`, so no result from it covers
 the deepening cascade. Every results file repeats all of that.
 
 `isolatedAgainst` is the one thing the template did not have: an arm names the *other arm* it
@@ -620,11 +620,20 @@ table (where they are a gate, not a competitor).
 point for yes/no would decide against it before the judge read a word. `tests/summaries-eval.test.ts`
 pins that.
 
-`v4` is the only arm that would need a change to `src/hierarchy.ts` if it won: Greg's literal reading
-order puts the hint after the question mark, and `questionFor` appends a second one, so the stored
-value becomes *"…consciousness? (4 arguments)?"*. The harness applies V4's rule to V4's lines only,
-the report names the arm, and the test asserts **production's own `questionFor` doing the mangling**
-— so the cost of that variant is a red test rather than a sentence.
+`v4` **was** the only arm that would need a change to `src/hierarchy.ts` if it won: Greg's literal
+reading order puts the hint after the question mark, and `questionFor` appended a second one, so the
+stored value became *"…consciousness? (4 arguments)?"*. The harness applied V4's rule to V4's lines
+only, the report named the arm, and the test asserted **production's own `questionFor` doing the
+mangling** — so the cost of that variant was a red test rather than a sentence.
+
+**It won and shipped on 2026-09-07 as `toc/7`**, production took the patch, and each of those pieces
+has a successor rather than a deletion: `armsNeedingCodeChange()` returns `(none)`, which is now the
+true statement about the lineup; the test asserts production *keeps* the line, inverted rather than
+removed; and the QUESTIONS block V4 replaced is **pinned** in `summaries/variants.md` § *The shipped
+QUESTIONS block, toc/6*, carried by a new `questions-toc6` arm. That last one is not bookkeeping:
+`incumbent` slices the live SYSTEM, so from that commit it *is* V4, and without a pinned before-half
+the eval could never again return *"the control was better all along"* — an outcome it was
+deliberately built to be able to give.
 
 ### The corpus is real articles, pinned by two hashes
 

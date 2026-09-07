@@ -59,7 +59,10 @@
  *
  *  - `.cmt-dialog` sits bottom-right and would have been half under the bar.
  *  - the "there is more over here" fade ran to `bottom: 0`.
- *  - `.tooltip` was at z-index 80, under the drawer — see the note on Z below.
+ *  - `.tooltip` was at z-index 80, under the drawer at 95. It is 100 now, and
+ *    the reasoning is beside the rule in styles/tooltip.css § `.tooltip-anchor`
+ *    rather than "the note on Z below", which this line pointed at until
+ *    2026-09-07 and which is not in this file.
  *
  * ## Three kinds of button, said out loud
  *
@@ -1280,12 +1283,29 @@ export function Dock({
    * `stopPropagation` stops nothing — the dialog closes underneath the dim
    * anyway. Nothing in the app dispatches such an event today, and that is
    * exactly the sort of thing that stays true until it doesn't.
+   *
+   * **The one thing the drawer yields to is the platform.** A `<dialog>` opened
+   * with `showModal()` is in the top layer, above everything the drawer can
+   * reach, and its Escape is the browser's own close request rather than a
+   * listener — so `stopImmediatePropagation` cannot touch it, and with both up
+   * one press closed the dialog the reader was looking at *and* the drawer
+   * behind it (pair 16). Reachable because the bar sits above the scrim at
+   * z-96, so **Feedback** can be pressed with the drawer open. The same query
+   * `useCommandBarChord` above already makes, twice, for the same reason and
+   * with the same caveat about `.show()`; `useEscapeToClose` makes it too, and
+   * carries the full argument for asking the platform rather than keeping a
+   * registry.
+   *
+   * It does not fire for the command bar, which cannot be open over the drawer:
+   * `useCommandBarChord`'s `show()` shuts the drawer on its way in,
+   * deliberately, and says why.
    */
   const onPanel = drawer?.onPanel;
   useEffect(() => {
     if (!open || !onPanel) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (document.querySelector("dialog[open]") !== null) return;
       e.stopImmediatePropagation();
       onPanel(null);
     };

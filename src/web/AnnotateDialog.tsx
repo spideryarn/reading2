@@ -89,9 +89,35 @@ interface Props {
    */
   onSave(id: string, body: string, ask: boolean, mark: Mark): void;
   onCancel(): void;
+  /**
+   * **Does Escape belong to this box?** False while `CommentDialog` or
+   * `ChatDialog` is in front of it — both are reachable with a selection still
+   * live, both paint over this one at the same z-70, and until 2026-09-07 one
+   * press closed this box *and* the one in front, discarding a half-typed
+   * annotation on the way.
+   *
+   * The rule is *the surface the reader sees in front owns the press*, and this
+   * is how the caller says so. It is not mutual exclusion: this box stays
+   * mounted with its draft and becomes the owner again the moment the surface in
+   * front closes. Nothing else changes — the ×, Cancel and the textarea's own
+   * two-stage Escape are untouched.
+   *
+   * **Defaults to `true`**, so the previews and tests that mount this box alone
+   * behave exactly as they did. That default is also why
+   * tests/one-escape-closes-one-surface.test.tsx reads `Reader.tsx`'s source:
+   * every behavioural assertion about yielding would pass with the real caller
+   * never passing this at all. docs/reusable/silent-success.md.
+   */
+  escapeEnabled?: boolean;
 }
 
-export function AnnotateDialog({ anchor, placing, onSave, onCancel }: Props) {
+export function AnnotateDialog({
+  anchor,
+  placing,
+  onSave,
+  onCancel,
+  escapeEnabled = true,
+}: Props) {
   const [body, setBody] = useState("");
   const [ask, setAsk] = useState(false);
   /* The placement, as a draft. Nothing is stored until Save, so unlike
@@ -157,7 +183,7 @@ export function AnnotateDialog({ anchor, placing, onSave, onCancel }: Props) {
     box.current?.focus();
   }, []);
 
-  useEscapeToClose(onCancel);
+  useEscapeToClose(onCancel, escapeEnabled);
 
   /* Mounted means on screen: the selection opens this and closing it unmounts. */
   const visible = useVisualViewport(true);

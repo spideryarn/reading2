@@ -639,19 +639,60 @@ both would apply to any future schema change here.
 
 ### Stage: Make the common mode surface fit and behave consistently
 
-- [ ] Write failing checks for any reproduced keyboard/focus/scroll defect before changing it.
-  Otherwise capture a behaviour baseline rather than inventing a bug the test pretends to fix.
-- [ ] Pilot `ModeSurface` in Search and Chat, keeping header/body/footer roles explicit. Match
-  current desktop dimensions and current covering-band behaviour; share visible-viewport fit.
+- [x] Write failing checks for any reproduced keyboard/focus/scroll defect before changing it.
+  Otherwise capture a behaviour baseline rather than inventing a bug the test pretends to fix. —
+  **the baseline, since no defect was reproduced**: `tests/mode-surface-changes-no-markup.test.tsx`
+  pins the rendered shape of all twelve bands, and it was committed **before** anything was migrated
+  (`e4952ecb`, deliberately on its own so the ordering is provable from history). It caught two
+  wrong guesses at markup and, more usefully, that **five bands ship an empty `.band-head`** —
+  Diagram's in its ordinary state — which the obvious migration would have deleted silently with the
+  whole suite green. **No mobile defect has been claimed**: this box cannot produce the iPhone trace
+  that would justify one, which is what the last box below waits on.
+- [x] Pilot `ModeSurface` in Search and Chat, keeping header/body/footer roles explicit. Match
+  current desktop dimensions and current covering-band behaviour; share visible-viewport fit. —
+  piloted in both (`8cef3161`), then the remaining ten migrated, so all twelve product bands are one
+  component. Dimensions and covering-band behaviour are unchanged, and the oracle above is what says
+  so. **`ModeSurface` owns only the container** — label, `head`/`foot` slots, class — and knows
+  nothing about jobs, `Found`, statuses or model output. The **visible-viewport fit is deliberately
+  not shared yet**; see the last box.
 - [ ] Verify narrow portrait, landscape/notch, keyboard open/closed, pinch/viewport pan, large text,
-  long labels and touch selection. No footer/composer or close control may be unreachable.
+  long labels and touch selection. No footer/composer or close control may be unreachable. —
+  **blocked, and correctly so.** No machine here has an iPhone with a keyboard, and A5 is explicit
+  that the device chooses the arithmetic. What exists instead is the instrument that would settle it:
+  `?probe=1` renders `src/web/ViewportProbe.tsx`, which uses `ModeSurface` itself rather than copied
+  markup and retains timestamped, copyable samples on every visual-viewport `resize` and `scroll`
+  (`2dfa5235`). **Until a trace arrives, no viewport-fit arithmetic is chosen and A5 is incomplete.**
 - [ ] Check true modals separately from modeless annotations. Tab, Shift-Tab, Escape, click-away
-  and return focus must follow the declared contract, including nested help/lightbox/tooltips.
+  and return focus must follow the declared contract, including nested help/lightbox/tooltips. —
+  **the Escape half is built; Tab, Shift-Tab and click-away are not audited.**
+  [The escape inventory](260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-escape-inventory.md)
+  is 16 surfaces and 18 reachable pairs, and its organising finding is that Escape is **tiers in a
+  fixed order**, a surface's tier being the whole of its authority because nothing anywhere reads a
+  z-index or another surface's state. One press now closes one surface, with `tests/one-escape-closes-one-surface.test.tsx`
+  holding 30 of them over real components — where before, nine test files mentioned Escape and
+  **every one painted a single surface**. Two pairs are **renounced rather than fixed** (12 and 18),
+  because reaching them needs registration-order ownership, which § A6 forbids; the limit on that is
+  written down — no surface that can lose a reader's unsaved words is on the list. The focus/restore
+  half was A2's and is done. **Still open**: Tab and Shift-Tab order, and click-away, across the
+  nested help/lightbox/tooltip cases — Escape was the half with a reproduced loss behind it.
 - [ ] Migrate remaining surfaces in batches, including visitor/empty/error variants. Delete the
-  replaced geometry rules after checking all callers, retaining feature-specific scrolling.
+  replaced geometry rules after checking all callers, retaining feature-specific scrolling. —
+  **migration done, deletion not.** All twelve bands are migrated, visitor and empty variants
+  included, with four documented raw exceptions: `FeatureBoundary`'s fallback is a **circuit
+  breaker** (a fallback rendering `ModeSurface` would re-invoke the component that had just thrown,
+  and the second throw replaces the whole reader — `tests/the-band-fallback-must-not-use-modesurface.test.tsx`
+  mocks it to throw and watches the article's own text survive), the `/design` band is a specimen,
+  and two preview shells are demos. **No geometry rule has been deleted**, because which rules are
+  replaced is decided by the box above.
 - [ ] Update [touch](../project/touch.md), [tooltips](../project/tooltips.md),
   [reading-view-overview](../project/reading-view-overview.md) and [design CSS](../project/design-css-overview.md).
-  Any changed rule wording follows the important-doc process; signpost moves do not need approval.
+  Any changed rule wording follows the important-doc process; signpost moves do not need approval. —
+  **not done, and there is now a fifth destination**: `design-css-overview.md` was split on
+  2026-09-07 and the reading view's own narrow-window arithmetic lives in
+  [narrow-windows.md](../project/narrow-windows.md). [new-mode.md](../project/new-mode.md) has been
+  updated (render the band with `ModeSurface`; decide whether the header row should *persist* or
+  *not exist*), but the four above wait on the fit being settled — writing down an arithmetic no
+  device has chosen is how a doc starts lying.
 
 ### Stage: Make style ownership visible
 

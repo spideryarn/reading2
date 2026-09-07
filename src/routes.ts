@@ -1948,8 +1948,18 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
         continue;
       }
       /* **The one explicit `done`**, and the only frame that lets the client
-         tick this question answered. */
-      frame("done", { reply: event.reply, model: event.model });
+         tick this question answered.
+
+         `verdict` rides here and only here — never on a `delta` — so the word
+         that decides how hard the next question is cannot reach the reader's
+         screen even by accident, because nothing renders this frame's fields
+         except the tick. It is often absent, which is normal: the ladder reads
+         absence as *hold the band*. docs/plans/260907d-make-the-quiz-adaptive.md. */
+      frame("done", {
+        reply: event.reply,
+        model: event.model,
+        ...(event.verdict ? { verdict: event.verdict } : {}),
+      });
     }
   } catch (err) {
     /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this

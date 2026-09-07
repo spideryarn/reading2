@@ -49,7 +49,7 @@ Shipping unverified viewport geometry would be inventing a bug and a fix for it 
 | 2 step 0 — capture every band before touching it | **Done**, on `dev` (`e4952ecb`), committed on its own so the ordering is provable. |
 | 2 — the remaining eleven bands | **Done and committed** (`af589082`), two review rounds, F25–F33. Merged with `origin/dev` at `285437a8`; the collision below is **resolved**. |
 | 4 step 1 — the diagnostic | **Done**, on `dev` (`2dfa5235`). |
-| 3 — A6, who owns Escape | **Inventory done and committed**; the implementation is **not started**. |
+| 3 — A6, who owns Escape | **Done**, on `dev` (`3f2b37ad`). Two review rounds, eleven findings, all accepted. 30 one-press tests over real components; pairs 12 and 18 renounced with the reasoning written down. |
 | 4 — the fit itself | **Blocked**, and correctly so: it needs a trace from a real iPhone, which no machine here can produce. **A5 is therefore incomplete**, and the fit is not delivered. |
 
 **The collision with A1, and how it was settled.** A1
@@ -396,10 +396,90 @@ listener that never asks whether anything is in front of it.
 
 | Q | The call |
 |---|----------|
-| **Q1** — when "later" and "topmost" come apart, which wins? | **Topmost.** § Stage 3 above said "the later and visually topmost surface", which conflates two things that pair 6 splits. Topmost is what the reader can see; "later" was only ever a proxy for it. The rule is now: **the surface the reader sees in front owns the press.** |
-| **Q2** — does the Dock drawer keep winning over a tooltip painted above it (pair 12)? | **Yes, and it is written down rather than fixed.** This is the one pair local ownership cannot express — beating a `window`-capture listener needs either registration order, which § A6 forbids, or a global signal, which is the thin end of the manager it also forbids. The only reachable instance is a hover/focus tooltip on the dock bar, which costs nothing to leave standing and closes itself when the pointer moves. Renouncing the requirement is cheaper than the machinery, and **no other pair asks for a manager**. |
+| **Q1** — when "later" and "topmost" come apart, which wins? | **Topmost — but only where the two surfaces actually overlap.** § Stage 3 above said "the later and visually topmost surface", which conflates two things that pair 6 splits. Topmost is what the reader can see; "later" was only ever a proxy for it. The rule is: **the surface the reader sees in front owns the press** — and where nothing is in front, because the two do not share any part of the screen, it is the one the reader just opened. See the amendment below, which was written after the stage was built. |
+| **Q2** — does the Dock drawer keep winning over a tooltip painted above it (pair 12)? | **Yes, and it is written down rather than fixed.** This is the one pair local ownership cannot express — beating a `window`-capture listener needs either registration order, which § A6 forbids, or a global signal, which is the thin end of the manager it also forbids. The only reachable instance is a hover/focus tooltip on the dock bar, which costs nothing to leave standing and closes itself when the pointer moves. Renouncing the requirement is cheaper than the machinery. **A second pair joins it below** — pair 18, for the same reason and by the same reckoning — and **neither asks for a manager**. |
 | **Q3** — how does a native modal silence the JS tiers? | **A target test inside `useEscapeToClose`**, not a new `useNativeModalOpen()` hook. Asking `dialog[open]` is asking *the platform what the platform already owns* — the top layer is the authority, so this reads an existing fact rather than building a parallel registry. Fewer parts touching each other, and the same test goes in the Dock for pair 16. |
 | **Q4** — should an annotation draft survive a close at all? | **Not here. This is a product call and it is Greg's.** The ordering fix below is already authorised and makes the draft survive *these* pairs, because Annotate is never closed by a press that belongs to something in front of it. Making the draft survive a **deliberate** close of Annotate is a different, user-visible change that nobody asked for, and A5's own § *What is out of scope* is explicit that a refactor does not get to decide product quietly. Flagged to Greg, not built. |
+
+#### Two amendments, made after the stage was built and reviewed
+
+Both came out of GPT Sol's review of the built code, 2026-09-07. Neither is a change of mind about
+what A6 asks for; both are places where the answers above turned out to be **under-specified rather
+than wrong**, and the code had already been written one particular way. Recording the reasoning here
+rather than in a comment is the point — a code comment asserting an exception is not the same thing
+as the exception having been decided.
+
+**Q1 is amended: "topmost" only decides between surfaces that overlap.** Sol's reading was literal
+and correct — the inventory puts the gutter disclosure at `z-index: 3` and the three modeless dialogs
+at 70, so a bare "topmost wins" makes pair 6 close the *dialog* and leave the gutter open, and both
+the implementation and its test do the opposite. The amendment, rather than the rewrite:
+
+- **A z-index only compares surfaces that share some of the screen.** The gutter disclosure opens in
+  the prose margin, beside a paragraph; the three dialogs are corner overlays. Nothing is in front of
+  anything, so there is no "topmost" to read, and the number is a fact about painting rather than
+  about attention.
+- **Where nothing overlaps, the surface the reader just opened is the one they are looking at.** The
+  disclosure was opened by a press a moment ago; the dialog may have been sitting there for a minute.
+- **And decisively: the other answer discards a draft.** Closing Annotate — with a half-typed note in
+  it — because the reader pressed Escape over a gutter row they had just opened is precisely the loss
+  A6 exists to end. Between two readings of an ambiguous rule, the one that throws a reader's words
+  away loses.
+
+This needs no machinery: tier order already encodes it, the gutter being T2 and the dialogs T3.
+
+**And the amendment has to be ordered, or it is not a rule.** Sol's second round made the fair
+objection that "topmost, and otherwise the one last opened" leaves *"most recently opened"* and
+*"currently interacting with"* undefined against each other — which is not a quibble, because the
+hover card's 220ms close delay produces exactly that state: focus has moved from the card into a text
+field, the card is **still on screen**, and Escape arrives. So the rule is written as two clauses in
+order, and the first one settles that case:
+
+1. **A surface that is visibly in front owns the press.** Visible is the test, not recency: the card
+   in its close delay is still painted over the page, so it is still what the reader sees in front,
+   and the code claiming the press there is right. This is the clause that decides almost everything.
+2. **Where neither is in front of the other** — because they do not share any screen space at all,
+   like a gutter row in the prose margin and a dialog in the corner — **the one the reader last acted
+   on owns it.**
+
+The 220ms window is therefore **decided rather than overlooked**: Escape closes the card, not the
+field, and the field's own Escape is one further press away. It costs a keystroke and loses nothing,
+where the alternative — teaching the card what has focus elsewhere — is the lifted state § A6
+forbids.
+
+**Pair 18 joins pair 12 as declared rather than fixed.** All of tier T2 are *siblings* on `document`,
+and `stopPropagation` does not stop a sibling — only `stopImmediatePropagation` does, and that
+resolves by **registration order**, which § A6 forbids in as many words. The alternative is a shared
+signal, which is the manager it also forbids. So a tooltip and the search colour picker, or a tooltip
+and a gutter row, still both close on one press.
+
+What was *not* left standing: the prose hover card moved to the **capture** phase during this review
+(for a different reason — see below), which puts it ahead of every T2 sibling as well. Since the card
+is `z-index: 100`, that is Q1 being satisfied rather than dodged, and it removes the card from pair 18
+entirely. What remains is Floating UI against a hand-rolled sibling, and Floating UI's phase is not
+ours to choose.
+
+The cost of leaving it is one extra surface closing, never a draft: **no member of T2 holds editable
+or unsaved reader input.** An earlier wording said "nothing a reader has typed", and that is
+literally false — `ProfilePanel` shows the reader's own profile and reading purpose. But those words
+are saved and read-only, so closing the panel loses nothing, which is the property the renunciation
+actually rests on. GPT Sol, round 2. **That is the line** — pairs 12 and 18 are renounced because
+what they cost is a surface that would have closed itself anyway, and **no pair that can lose words
+is on this list**.
+
+**Also fixed during the review, and not in the build list above:**
+
+- **Pair 3 was not actually fixed by the first attempt, and its test said it was.** `AnnotateDialog`
+  focuses its textarea on mount, and *hovering* a term moves no focus — so the press landed on the
+  textarea's own two-stage Escape (tier T1, ahead of the card on the bubble path), which wiped the
+  draft while leaving the card open. The test had blurred the box first, justified by a comment that
+  is true of a click and false of a hover, which is the pair's whole point: it needs no click. Fixed
+  by moving `useHoverCard`'s listener to `document` **capture**, which is ahead of every React
+  handler; pinned by a test that does not blur, watched red beforehand.
+- **Pair 17**, the same platform fact as pairs 13–15 one tier out: neither the hover card nor the
+  gutter asked whether a native `<dialog>` was open, so a press that the platform was going to spend
+  on the dialog closed one of them too. Both now make the same `dialog[open]` query.
+- **Pair 7**, the masthead rename, which no build item named: `TitleEditor`'s input stopped nothing,
+  so cancelling a rename with any of the three dialogs open closed that too.
 
 #### What gets built, from the inventory
 

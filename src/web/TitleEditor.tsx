@@ -94,7 +94,26 @@ export function TitleEditor({
         aria-describedby={hintId}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Escape") onDone(undefined);
+          if (e.key !== "Escape") return;
+          /* **The press stops here.** This is tier T1 of five — React's own
+             root container, which is a descendant of `document` — so the hover
+             cards and the gutter (T2, `document`) and the three modeless
+             dialogs (T3, `window`) all listen further along the same bubble
+             path. Without this, cancelling a rename while a comment, a chat or
+             an annotation was open closed that too, and for the annotation that
+             meant a half-typed note thrown away by a reader who only meant to
+             stop renaming.
+
+             `stopPropagation` on a synthetic event calls the native event's, so
+             it really does cut the path rather than only React's view of it.
+             **Conditional on the press being Escape**, which the early return
+             above is: an unconditional stop here would swallow every key the
+             rest of the reader listens for, for as long as a title is being
+             edited. The inventory's pair 7 —
+             docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-escape-inventory.md;
+             both halves are tests/one-escape-closes-one-surface.test.tsx. */
+          e.stopPropagation();
+          onDone(undefined);
         }}
         // Blur commits rather than cancels: clicking away from a field you have
         // typed into and losing the typing is the more annoying of the two.

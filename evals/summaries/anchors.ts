@@ -178,6 +178,36 @@ export interface RankedLineup {
 }
 
 /**
+ * **Is one list a permutation of another** — the set arithmetic, with no words
+ * attached to it.
+ *
+ * It lives here because the gate was the first thing that needed it, and it is
+ * exported because [`judge.ts`](judge.ts) § `validateAnswer` needs the same
+ * arithmetic over a different domain: the gate asks it about **candidate ids**
+ * in the one lineup that carries anchors, and after unblinding; the acceptance
+ * check asks it about **the judge's own labels**, in every lineup, before a word
+ * of the answer is believed. Two questions, one piece of counting, and each
+ * caller phrases its own complaint — the gate's, for instance, has to route a
+ * missing *anchor* to `unranked` rather than to `malformed`, because an anchor
+ * left out of a ranking is not an anchor rejected.
+ *
+ * `judge.ts` already imports this module, so this is the direction that does not
+ * make a cycle.
+ */
+export function permutationOf(
+  present: readonly string[],
+  ranking: readonly string[],
+): { duplicated: string[]; absent: string[]; foreign: string[] } {
+  const counts = new Map<string, number>();
+  for (const id of ranking) counts.set(id, (counts.get(id) ?? 0) + 1);
+  return {
+    duplicated: [...counts].filter(([, n]) => n > 1).map(([id]) => id),
+    absent: present.filter((id) => !counts.has(id)),
+    foreign: [...counts.keys()].filter((id) => !present.includes(id)),
+  };
+}
+
+/**
  * Did the judge put all five below every real line, everywhere it was asked?
  *
  * Three things have to be true, and the first is the one that was missing:
@@ -201,12 +231,14 @@ export function calibrationOf(lineups: readonly RankedLineup[]): CalibrationVerd
     if (anchorsHere.length === 0 || realHere.length === 0) continue;
     checked += 1;
 
-    /* The permutation check, before anything is read off the order. */
-    const counts = new Map<string, number>();
-    for (const id of lineup.ranking) counts.set(id, (counts.get(id) ?? 0) + 1);
-    const duplicated = [...counts].filter(([, n]) => n > 1).map(([id]) => id);
-    const absent = lineup.present.filter((id) => !counts.has(id));
-    const foreign = [...counts.keys()].filter((id) => !lineup.present.includes(id));
+    /* The permutation check, before anything is read off the order. **This is
+       about ORDER and only order**: an axis the judge left out, or a `demand`
+       score of 9, is not this gate's business and is refused one step earlier,
+       at `judge.ts` § `validateAnswer`, where the raw answer is accepted or
+       not. ⟨GPT Sol, F26 on 260907d, who passed this function a complete
+       ranking with no axes at all and was right that it returned `passed:
+       true`.⟩ */
+    const { duplicated, absent, foreign } = permutationOf(lineup.present, lineup.ranking);
     if (duplicated.length) malformed.push(`${lineup.where}: ranked twice — ${duplicated.join(", ")}`);
     if (foreign.length) malformed.push(`${lineup.where}: ranked something that was not in the lineup — ${foreign.join(", ")}`);
     const missingReal = absent.filter((id) => !isAnchorId(id));

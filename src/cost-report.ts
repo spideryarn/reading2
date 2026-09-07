@@ -18,7 +18,8 @@
  * stands.
  */
 
-import type { SpendGroup } from "./store/ai-calls-spend-pg.js";
+import { formatNanos } from "./ai-spend.js";
+import type { AccountTally, SpendGroup } from "./store/ai-calls-spend-pg.js";
 import {
   type CostCategory,
   assertCategoriesCoverRows,
@@ -244,4 +245,150 @@ export function spendPerAccount(
     }
     return sum;
   });
+}
+
+/**
+ * **Whose money a row is** — the split the ordinary report leads with, and the
+ * one Greg sets a price against.
+ *
+ * ## Why this is a function rather than a `filter`
+ *
+ * It was a `filter`, and there were two of them that disagreed.
+ * `scripts/ai-cost.ts` defined product as `scopeKind !== "eval"` — everything
+ * that is not a bake-off — while [cost-categories.ts](cost-categories.ts),
+ * which the `--owners` pricing report groups by, has always put `cli` in
+ * `non-product`. So the same rows were a product's cost in one report and ours
+ * in the other, and the ordinary report's headline **Product spend** silently
+ * carried our own CLI runs: **$2.85 across 349 CLI calls** on 2026-09-07, found
+ * by GPT Sol. (Product read $21.19 over 837 calls before the fix and $18.51 over
+ * 489 after; the two runs are minutes apart and one further row arrived between
+ * them, so the call counts are two snapshots rather than one.)
+ *
+ * The `filter` sat three lines under a comment arguing the exact principle it
+ * broke — *"a bake-off over forty PDF pages landing in the figure he prices
+ * against is how a price gets set wrong."* It excluded `eval` and forgot `cli`,
+ * which is what a negative predicate does the moment a third case appears: it
+ * keeps being *written* correctly and stops being *true*. Hence a positive
+ * enumeration, in one place, with tests.
+ *
+ * ## Four buckets, because losing a row is worse than either mistake
+ *
+ * `other` exists for a scope name this build does not know. The ledger is
+ * append-only and holds historical strings, so that is a real possibility rather
+ * than a defensive nicety, and both alternatives are silent: folding it into
+ * `product` overstates the basis a price is set from, and dropping it
+ * understates every total. It gets a bucket and the report prints it — the same
+ * argument `unknown` makes in [cost-categories.ts](cost-categories.ts).
+ */
+export interface ScopePartition<T> {
+  /** A reader's work: an HTTP request, or a pipeline step run for their article. */
+  product: T[];
+  /** Ours — a developer at a terminal. Real money on the bill, not a reader's. */
+  devCli: T[];
+  /** Ours — a bake-off. Real money, and the reason `eval` scope exists at all. */
+  evals: T[];
+  /** A scope name this build does not recognise. Printed, never folded. */
+  other: T[];
+}
+
+export function partitionByScope<T extends { scopeKind: string }>(
+  rows: readonly T[],
+): ScopePartition<T> {
+  const split: ScopePartition<T> = { product: [], devCli: [], evals: [], other: [] };
+  for (const row of rows) {
+    if (row.scopeKind === "request" || row.scopeKind === "job_step") split.product.push(row);
+    else if (row.scopeKind === "cli") split.devCli.push(row);
+    else if (row.scopeKind === "eval") split.evals.push(row);
+    else split.other.push(row);
+  }
+  return split;
+}
+
+/**
+ * **What the bill block says** — built here, printed by both reports, worded
+ * once.
+ *
+ * ## Why this is not left in `scripts/ai-cost.ts`
+ *
+ * It was, and GPT Sol's Stage 8 review (F8) showed what that cost: the Postgres
+ * tests proved the *query* and then re-implemented the outside-cap sum in the
+ * test file, so **deleting the call to `printBills`, or returning zero from its
+ * reducer, or dropping the headroom warning entirely, left all twelve of them
+ * green**. A reducer written twice is a reducer nothing checks. The arithmetic
+ * and the wording both live here now, where a test with no database can reach
+ * them, which is the same split the rest of this file exists for.
+ *
+ * It is also what let the ordinary `npm run cost` go on saying nothing about
+ * accounts while `--owners` said everything (F6). One builder, two callers, and
+ * **no second wording of the caveat** — Sol was explicit about that, and a
+ * second wording is how the two drift into disagreeing about what the cap does.
+ */
+export interface BillLine {
+  account: string;
+  calls: number;
+  unpricedCalls: number;
+  /** The three pockets, already formatted, in one string. */
+  pockets: string;
+}
+
+export interface BillReport {
+  lines: BillLine[];
+  /**
+   * **Recorded known-dollar spend outside the OpenRouter cap.** Named at that
+   * length on purpose: every word of it is a limit. *Recorded* — a row exists.
+   * *Known-dollar* — it was priced. *Outside the cap* — and nothing here knows
+   * what the cap is.
+   */
+  outsideCapNanos: number;
+  /** The fixed note, one entry per printed line. */
+  caveat: string[];
+}
+
+/**
+ * **The pockets outside the OpenRouter ceiling.**
+ *
+ * `byok` from *every* account plus everything on any account that is not
+ * OpenRouter. The BYOK term is the subtle one and is the whole reason this is
+ * not a filter on `account` — a BYOK row carries `provider_account =
+ * 'openrouter'` while its upstream figure was charged to somebody else's key.
+ *
+ * Adding BYOK across all accounts rather than only OpenRouter's looks like it
+ * could double-count, and cannot: `ai_calls_byok_upstream_only` permits a BYOK
+ * value **only** when `provider_account = 'openrouter'`, so the term is zero on
+ * every other account in valid data. GPT Sol confirmed that reading of the CHECK
+ * when reviewing Stage 8. Written as a sum over all accounts anyway, because the
+ * alternative encodes the constraint a second time in a place that would not be
+ * updated if the constraint ever widened.
+ */
+export function outsideCapNanos(bills: readonly AccountTally[]): number {
+  return bills.reduce(
+    (sum, b) =>
+      sum + b.byokNanos + (b.account === "openrouter" ? 0 : b.creditsNanos + b.computedNanos),
+    0,
+  );
+}
+
+export function billReport(bills: readonly AccountTally[]): BillReport {
+  const outside = outsideCapNanos(bills);
+  return {
+    lines: bills.map((b) => ({
+      account: b.account,
+      calls: b.calls,
+      unpricedCalls: b.unpricedCalls,
+      pockets:
+        `${formatNanos(b.creditsNanos)} credits · ${formatNanos(b.byokNanos)} BYOK upstream · ` +
+        `${formatNanos(b.computedNanos)} computed`,
+    })),
+    outsideCapNanos: outside,
+    caveat: [
+      `${formatNanos(outside)} of the above is RECORDED KNOWN-DOLLAR SPEND OUTSIDE THE CAP —`,
+      "direct Anthropic and OpenAI, plus BYOK money that sits on an openrouter row",
+      "and was billed to somebody else's key. The OpenRouter cap is a global MONTHLY",
+      "account total: this report cannot see its amount or the headroom left, so no",
+      "figure here is a distance from a limit. Unpriced rows and every entry under",
+      '"no seam can see" below are missing from it as well. And the cap is not a',
+      "throttle — it is global, so a runaway becomes every reader losing every paid",
+      "feature until the month turns. docs/project/ai-gateway.md.",
+    ],
+  };
 }

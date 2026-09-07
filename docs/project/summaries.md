@@ -222,10 +222,52 @@ is the stable half, so the depth is what a link carries.
 >
 > — Greg, 2026-09-05
 
-So under the gist, on the article and on each of its parts, there is now a second line: **one
-question that node's prose answers and its gist does not**. Italic, a step smaller, fainter — a
-different *kind* of line, so the eye scanning for what the article says can skip the column of them
-and the reader looking for a way in finds one on every part.
+So on the article and on each of its parts there is a second field, `TreeNode.question`, and in this
+panel it is **the line the reader sees** — `question ?? gist`, one line per row, since Greg's
+reversal that evening (§ *The gist stayed for one day*).
+
+### The shape it has, since `toc/7`
+
+Greg drew it himself, in the same brief, and the wording that ships is the one that reproduced his
+drawing almost verbatim without being shown it:
+
+> Computational functionalism - why isn't computation sufficient for consciousness? (4 arguments)
+>
+> — Greg, 2026-09-05
+
+So a question is **`<topic> — <question>? (<shape hint>)`**: the topic in the author's own term, a
+question that **presupposes where the section lands** (*"why isn't computation sufficient"* carries
+the claim; *"is computation sufficient?"* hides it), and a bracketed hint giving the **shape** of
+the answer and never its content — a count or a kind, and never this node's child count, which is a
+different number.
+
+Where a section does not land — it weighs, describes, or leaves the matter open — the question is
+not bent into a conclusion it does not reach; the hint says so instead: *"(two options weighed)"*,
+*"(no settled answer)"*.
+
+**This replaced the first wording on 2026-09-07**, and the first wording is why. It asked for the
+question *"this node's text answers and its gist does NOT"* — an instruction to strip out everything
+the gist carried, whose only honest output is a bare why-question. `antikythera` still carries ten
+of them in the wild and they are lookups, yes/no questions and the gist re-asked. Four candidate
+rewordings were built into an eval and measured over seven real articles;
+[`evals/summaries/variants.md`](../../evals/summaries/variants.md) has all four, the axes that
+separate them, and the code change this one needed. **The block that ships is copied byte-for-byte
+out of that file, and a test asserts it stays that way**, so the prompt production sends and the
+prompt the eval measured cannot drift apart.
+
+The cost, named rather than discovered: **these lines are nearly twice as long** — a median of 18
+words against the old 10 — while the same brief also asked for simpler language and a briefer
+top-level line.
+[260907d](../plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md) is where that
+tension sits, unresolved.
+
+#### One line of production code moved with it
+
+The hint follows the question mark, so `questionFor` — which appends a `?` to anything not ending in
+one — would have stored *"…(4 arguments)?"*. It now treats a `?` followed by nothing but one short
+bracketed hint as a finished line, and `bareWords` strips that bracket **before** the terminal
+punctuation so the gist-echo check still catches a gist re-asked in the new shape. Both halves are
+held by `tests/summaries-eval.test.ts`, which used to assert the defect and now asserts the fix.
 
 ### There is no prompt that generates Summary mode, and that is the whole story
 
@@ -276,11 +318,12 @@ and does not need to** — that is the prompt's business, and which prompt is
 [`evals/summaries`](../../evals/summaries/variants.md).
 
 **Absence is ordinary, not a fault.** Every article whose hierarchy predates 2026-09-05 has no
-question on any row and shows its gists exactly as before; only a row with neither says so. And note
-what § Two places a part can end up with no question now means: a depth-1 node built by the
-deepening cascade has no question, because the expansion prompt has no such field, so **the panel
-can show a question on one part and a gist on its neighbour**. That was invisible while the question
-was a faint second line.
+question on any row and shows its gists exactly as before; only a row with neither says so.
+
+**But a *mixed* panel is a different thing**, and drawing one line per row is what made it visible: a
+question on one part and a bare claim on its neighbour, with nothing to explain the difference. That
+was invisible while the question was a faint second line. § *Three ways a part could end up with no
+question* has the causes, which of them is counted, and the one that was closed.
 
 ### Punctuation is normalised, never read for meaning
 
@@ -299,10 +342,38 @@ ignoring case and punctuation.
 [collapsed rung](../../src/hierarchy.ts) — nothing on screen distinguishes a question that was
 thrown away from one the model chose not to write.
 
-**Two places a part can end up with no question**, both benign absence rather than breakage, both
-named in the plan doc: a rung that restated its parent is spliced away and its children come up in
-its place carrying none; and a flat article deepened through stage 5 grows its parts from the
-expansion call, whose prompt does not ask for questions.
+**Three ways a part could end up with no question**, all of them benign absence rather than
+breakage. A fourth was closed on 2026-09-07; the three that remain are what asking politely gets
+you, and they are not equally visible.
+
+- **A rung that restated its parent** is spliced away and its children come up in its place carrying
+  none. Those children were at depth 2 when the model wrote them, and nothing asks a question at
+  depth 2 — asking would be the noise `MAX_QUESTION_DEPTH` exists to prevent, and filling it in
+  afterwards would be a second model call. It is **counted**: `BuildReport.droppedQuestions` is
+  every question that was *written and then discarded*, this case included, and the panel draws the
+  gist.
+- **An expansion was asked for a question and did not write one.** The closed fourth case is why
+  this one exists: `EXPAND_SYSTEM` now has its own QUESTIONS block (`expand/4`) carrying the same V4
+  rules, and the request marks each target `ASK QUESTION ON CHILDREN` or `OMIT QUESTION` — per
+  target, because one call batches parents at different depths and a single instruction would be
+  wrong for some of them. Only the children of the whole work are asked, which is the only depth
+  `questionFor` keeps one at. But **the request asks; it does not insist**. An answer that comes
+  back without a question for one of its children is accepted as it stands — nothing throws,
+  nothing is redrawn, no second call is bought — so that child reaches the panel with a gist and no
+  question. It is **counted, and by name**: `DeepenStats.missingQuestions` lists the positions, and
+  it is deliberately not the same number as `droppedQuestions`, because *the model wrote one and the
+  tree threw it away* and *the model wrote none* have different fixes.
+- **Wave 1 wrote none for that part.** The structure call is asked for questions too, and the same
+  politeness applies: a part it simply left without one keeps its gist. This is the case **nothing
+  counts** — `droppedQuestions` only fires where a question existed to be dropped, and
+  `missingQuestions` only covers children an expansion request actually marked. So a wave-1 omission
+  is invisible in every number we keep, and saying otherwise would be the quiet zero that
+  [silent-success.md](../reusable/silent-success.md) is about. If it ever matters, it needs a
+  counter of its own.
+
+So a mixed panel — a question on one part, a claim on its neighbour — is not evidence of any one of
+these. Two of the three leave a number somebody can look at; the third leaves nothing, and that is
+the honest state of it.
 
 ### Existing articles have none until their hierarchy is re-run
 

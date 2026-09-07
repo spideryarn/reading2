@@ -14,10 +14,14 @@ import {
   cashNanos,
   foldSpend,
   spendPerAccount,
+  billReport,
+  outsideCapNanos,
+  partitionByScope,
   spread,
   totalNanos,
 } from "../src/cost-report.js";
-import type { SpendGroup } from "../src/store/ai-calls-spend-pg.js";
+import { costCategoryOf } from "../src/cost-categories.js";
+import type { AccountTally, SpendGroup } from "../src/store/ai-calls-spend-pg.js";
 
 const ALICE = "cf000000-0000-4000-8000-000000000001";
 const BOB = "cf000000-0000-4000-8000-000000000002";
@@ -171,5 +175,209 @@ describe("the spread across accounts", () => {
 
   it("does not divide by zero on an empty population", () => {
     expect(spread([])).toMatchObject({ n: 0, median: 0, p95: 0, max: 0, total: 0 });
+  });
+});
+
+/**
+ * **Which scopes are a product's cost, and which are ours** —
+ * `partitionByScope` in [src/cost-report.ts](../src/cost-report.ts).
+ *
+ * This partition existed twice and the two copies disagreed, which is the whole
+ * reason it is now a function with tests under it. `scripts/ai-cost.ts` said
+ * *"everything that is not `eval`"* and so counted **dev-CLI spend as Product**;
+ * `src/cost-categories.ts`, which the `--owners` pricing report uses, correctly
+ * calls `cli` non-product. On 2026-09-07 that was $2.85 of our own CLI runs
+ * sitting inside the figure a subscription price would be set against — found by
+ * GPT Sol (F2), in a file whose own comment three lines above argues the exact
+ * principle it was breaking: *"a bake-off over forty PDF pages landing in the
+ * figure he prices against is how a price gets set wrong."*
+ *
+ * docs/plans/260902g-cost-tracking-that-can-set-a-price.md § F2.
+ */
+describe("partitioning the ledger by whose money it is", () => {
+  const rows = [
+    { scopeKind: "request" },
+    { scopeKind: "job_step" },
+    { scopeKind: "job_step" },
+    { scopeKind: "cli" },
+    { scopeKind: "eval" },
+  ];
+
+  it("keeps dev-CLI spend OUT of product, where it was until 2026-09-07", () => {
+    const split = partitionByScope(rows);
+    expect(split.product.map((r) => r.scopeKind)).toEqual(["request", "job_step", "job_step"]);
+    expect(split.devCli).toHaveLength(1);
+    expect(split.evals).toHaveLength(1);
+  });
+
+  it("agrees with the categoriser about what is not a product's cost", () => {
+    /* The two must not drift apart again: anything this calls non-product must
+       be `non-product` to src/cost-categories.ts, which is what the `--owners`
+       report groups by. A disagreement here is the same defect coming back
+       under a different name. */
+    for (const scopeKind of ["cli", "eval"]) {
+      expect(costCategoryOf({ scopeKind, job: "chat", stepName: null })).toBe("non-product");
+    }
+    for (const scopeKind of ["request", "job_step"]) {
+      expect(costCategoryOf({ scopeKind, job: "chat", stepName: "hierarchy" })).not.toBe(
+        "non-product",
+      );
+    }
+  });
+
+  it("puts a scope it does not recognise somewhere visible rather than into product", () => {
+    /* The ledger is an append-only historical record and a retired scope name is
+       a real possibility. Folding one into `product` would overstate the price
+       basis silently; dropping it would understate the total silently. It gets
+       its own bucket and the report prints it. */
+    const split = partitionByScope([...rows, { scopeKind: "retired-in-2025" }]);
+    expect(split.product).toHaveLength(3);
+    expect(split.other.map((r) => r.scopeKind)).toEqual(["retired-in-2025"]);
+  });
+
+  it("keeps an unrecognised scope out of the pricing basis, not merely out of non-product", () => {
+    /* **The R1 counterexample, from GPT Sol's Stage 6 review.**
+     *
+     * The `--owners` report chose its pricing basis with
+     * `COST_CATEGORIES.filter(c => c !== "non-product")` — a negative filter,
+     * the same shape as the F2 defect it was written alongside. An unrecognised
+     * scope classifies as `unknown`, `unknown` is not `non-product`, so the row
+     * went straight into ALL PRODUCT and into the per-account spread a
+     * subscription price is read off. Sol reproduced it with
+     * `scopeKind: "retired-in-2025"` contributing all its nanos to owner spend.
+     *
+     * The basis is now chosen by scope, before the fold. This holds the two
+     * halves of that apart: the strange row must be absent from the priced fold
+     * **and** present in the full one, because the coverage header and the
+     * category table have to keep showing everything. */
+    const groups = [
+      group({ scopeKind: "request", job: "chat", creditsNanos: 100 }),
+      group({ scopeKind: "retired-in-2025", job: "chat", creditsNanos: 123 }),
+    ];
+    const priced = foldSpend(partitionByScope(groups).product);
+    const everything = foldSpend(groups);
+
+    expect(priced.totalCalls).toBe(1);
+    expect(everything.totalCalls).toBe(2);
+    /* The 123 nanos are the whole of the defect: they used to be in here. */
+    const pricedNanos = [...priced.byCategory.values()].reduce((n, t) => n + totalNanos(t), 0);
+    const allNanos = [...everything.byCategory.values()].reduce((n, t) => n + totalNanos(t), 0);
+    expect(pricedNanos).toBe(100);
+    expect(allNanos).toBe(223);
+  });
+
+  it("keeps an unrecognised JOB in the pricing basis, because a reader still paid for it", () => {
+    /* The other side of the same decision, and the reason the split is by scope
+       rather than by category. A job nobody has placed yet is `unknown`, but if
+       it ran in request scope a reader triggered it and the money is theirs —
+       dropping it would understate the basis. An unrecognised *scope* is the
+       case we cannot make that claim about. */
+    const groups = [group({ scopeKind: "request", job: "a-job-added-next-month", creditsNanos: 7 })];
+    const priced = foldSpend(partitionByScope(groups).product);
+    expect(priced.totalCalls).toBe(1);
+    expect(priced.byCategory.get("unknown")?.calls).toBe(1);
+  });
+
+  it("loses no row, which is the only property a total depends on", () => {
+    const split = partitionByScope(rows);
+    expect(
+      split.product.length + split.devCli.length + split.evals.length + split.other.length,
+    ).toBe(rows.length);
+  });
+});
+
+/**
+ * **The bill block** — `billReport` and `outsideCapNanos` in
+ * [src/cost-report.ts](../src/cost-report.ts).
+ *
+ * These tests exist because GPT Sol's Stage 8 review (F8) pointed out that the
+ * Postgres tests proved the *query* and then re-implemented the outside-cap
+ * reducer in the test file. So deleting the call to `printBills`, or returning
+ * zero from its reducer, or dropping the headroom warning altogether, left all
+ * twelve of them green. A reducer written twice is a reducer nothing checks.
+ *
+ * The caveat's wording is asserted here too, and deliberately. It is the only
+ * place the report says what the cap does *not* do, and it is the sentence most
+ * likely to be shortened by somebody tidying up.
+ */
+describe("what the report says about which bill, and about the cap", () => {
+  const bill = (over: Partial<AccountTally> = {}): AccountTally => ({
+    account: "openrouter",
+    calls: 10,
+    creditsNanos: 1_000_000,
+    byokNanos: 0,
+    computedNanos: 0,
+    unpricedCalls: 0,
+    ...over,
+  });
+
+  it("counts OpenRouter's BYOK pocket as outside the cap", () => {
+    /* The whole of F3. The row says `openrouter` and the money went to somebody
+       else's key, so an account filter gets this wrong in the reassuring
+       direction. */
+    expect(outsideCapNanos([bill({ byokNanos: 5_000_000 })])).toBe(5_000_000);
+  });
+
+  it("counts a direct Anthropic or OpenAI bill as outside the cap, in full", () => {
+    expect(
+      outsideCapNanos([
+        bill({ account: "anthropic", creditsNanos: 0, computedNanos: 3_000_000 }),
+        bill({ account: "openai", creditsNanos: 0, computedNanos: 2_000_000 }),
+      ]),
+    ).toBe(5_000_000);
+  });
+
+  it("counts OpenRouter's own credits as INSIDE the cap", () => {
+    /* The other half, and the one that keeps the figure meaningful: if
+       everything were outside the cap the number would say nothing. */
+    expect(outsideCapNanos([bill({ creditsNanos: 9_000_000 })])).toBe(0);
+  });
+
+  it("adds the two kinds together rather than picking one", () => {
+    const total = outsideCapNanos([
+      bill({ creditsNanos: 9_000_000, byokNanos: 5_000_000 }),
+      bill({ account: "openai", creditsNanos: 0, computedNanos: 3_000_000 }),
+    ]);
+    expect(total).toBe(8_000_000);
+  });
+
+  it("says it cannot see the cap's amount or the headroom left", () => {
+    /* Without this sentence the subtotal above reads as a distance from a limit,
+       which is the one thing it is not: the cap is a monthly account total and
+       this report answers an arbitrary window. */
+    const caveat = billReport([bill()]).caveat.join(" ");
+    expect(caveat).toMatch(/cannot see its amount or the headroom left/);
+    expect(caveat).toMatch(/no\s+figure here is a distance from a limit/);
+  });
+
+  it("refuses to let inside-the-cap read as safe", () => {
+    /* docs/project/ai-gateway.md is explicit that the cap is global, so what it
+       converts a runaway into is every reader losing every paid feature until
+       the month turns. That is a blast radius, not a throttle, and the report
+       must not soften it. */
+    const caveat = billReport([bill()]).caveat.join(" ");
+    expect(caveat).toMatch(/not a\s+throttle/);
+    expect(caveat).toMatch(/every reader losing every paid/);
+  });
+
+  it("says what is missing from the figure as well as what is in it", () => {
+    const caveat = billReport([bill()]).caveat.join(" ");
+    expect(caveat).toMatch(/RECORDED KNOWN-DOLLAR SPEND OUTSIDE THE CAP/);
+    expect(caveat).toMatch(/Unpriced rows/);
+    expect(caveat).toMatch(/no seam can see/);
+  });
+
+  it("carries every account's three pockets and its unpriced count into the lines", () => {
+    const report = billReport([
+      bill({ creditsNanos: 1_500_000, byokNanos: 2_500_000, computedNanos: 0, unpricedCalls: 4 }),
+    ]);
+    expect(report.lines).toHaveLength(1);
+    expect(report.lines[0]?.account).toBe("openrouter");
+    expect(report.lines[0]?.unpricedCalls).toBe(4);
+    /* Three pockets on the line, never one summed figure: a reader has to be
+       able to see which part of it the cap covers. */
+    expect(report.lines[0]?.pockets).toMatch(/credits/);
+    expect(report.lines[0]?.pockets).toMatch(/BYOK upstream/);
+    expect(report.lines[0]?.pockets).toMatch(/computed/);
   });
 });

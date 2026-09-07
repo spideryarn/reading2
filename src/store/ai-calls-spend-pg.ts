@@ -402,3 +402,68 @@ export async function realtimeSessionCoverage(
     silent: Number(row.silent),
   };
 }
+
+/**
+ * **Which bill each row lands on**, and the three money pockets under it.
+ *
+ * ## Why `credential_fingerprint` was not enough
+ *
+ * The coverage header already tallies by fingerprint, which answers *"is this
+ * report all one key"*. It cannot answer the question that matters since
+ * 2026-09-06, when Greg declined a per-reader spend cap on the ground that
+ * **the OpenRouter account already has a global monthly one**
+ * (docs/project/ai-gateway.md § What stops a reader spending our money). With
+ * that decision, the single global ceiling is the only control there is — and
+ * the report that says what things cost never once mentioned which of the three
+ * accounts a figure was on, or that the ceiling does not reach two of them.
+ * `grep providerAccount scripts/ai-cost.ts` returned nothing until 2026-09-07.
+ *
+ * ## `provider_account` is the bill. It is **not** cap coverage — GPT Sol, F3
+ *
+ * The tempting move is to call `openrouter` "capped" and the rest "uncapped".
+ * That is wrong on its own rows: a **BYOK** row says `provider_account =
+ * 'openrouter'` while `byok_upstream_nanos` was charged to somebody else's key
+ * entirely. So the account and the pocket together decide, and the caller needs
+ * both — which is why this returns the three pockets split rather than one
+ * summed figure per account.
+ *
+ * The report is also in no position to say how close anything is to the ceiling.
+ * The cap is a **monthly account total**; this query answers an arbitrary
+ * half-open `[since, until)`, over rows we happen to have recorded. It cannot
+ * see the cap's amount, the headroom left, or a penny of the spend that writes
+ * no row at all (`UNMETERED_SPEND` in src/spend-declarations.ts). Whatever the
+ * report prints from this has to say all three of those out loud, or it invents
+ * a reassurance out of a subtotal.
+ */
+export interface AccountTally {
+  /** `openrouter`, `anthropic` or `openai` — src/ai-spend.ts § `ProviderAccount`. */
+  account: string;
+  calls: number;
+  /** Bought from OpenRouter's balance. The only pocket `--reconcile` can check. */
+  creditsNanos: number;
+  /** Billed to somebody else's key. On an `openrouter` row, and *not* under the cap. */
+  byokNanos: number;
+  /** Our own arithmetic, for a call with nobody to ask. Never reconciled. */
+  computedNanos: number;
+  /** Reported no money at all, so every figure beside it is short. */
+  unpricedCalls: number;
+}
+
+export async function accountsInWindow(
+  since?: string,
+  until?: string,
+): Promise<AccountTally[]> {
+  const rows = await getDb()
+    .select({
+      account: aiCalls.providerAccount,
+      calls: CALLS,
+      creditsNanos: CREDITS,
+      byokNanos: BYOK,
+      computedNanos: COMPUTED,
+      unpricedCalls: UNPRICED_CALLS,
+    })
+    .from(aiCalls)
+    .where(window(since, until))
+    .groupBy(aiCalls.providerAccount);
+  return [...rows].sort((a, b) => b.calls - a.calls);
+}
