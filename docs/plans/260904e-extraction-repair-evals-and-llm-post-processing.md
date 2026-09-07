@@ -2,8 +2,9 @@
 
 **Status: stages A and B are done. C is under way — rewritten 2026-09-06 into C0–C5 after review by
 Fable and GPT Sol and a re-measurement that found one of its six items already fixed and two of them
-misdescribed; C0 is done and on `dev` (C0.1 the order-gate fix, C0.2 the shape corpus), and C1a
-is in progress. D is not started. Scope narrowed after review.** The model repair pass Greg asked for is
+misdescribed. On `dev`: C0.1 the order-gate fix, C0.2 the shape corpus, C1a the capability floor,
+C4a the narrow delete class. C1 is deferred until a long-wall fixture exists — C1a took its argument
+away, and its own § says so. Left: C2, C3, C4b, C5. D is not started. Scope narrowed after review.** The model repair pass Greg asked for is
 **not** in this plan — GPT Sol's review found its operation layer not yet designable, and it moves to
 its own plan with the preconditions named in
 [What this plan deliberately does not build](#what-this-plan-deliberately-does-not-build-the-model-repair-pass).
