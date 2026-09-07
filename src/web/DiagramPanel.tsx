@@ -87,7 +87,6 @@ import { type UseProjection, useProjection } from "./useProjection.js";
 import { RAMP_STEPS, laneTerms, type ScatterAxis, type ScatterHue } from "./scatter.js";
 import type { SummaryNode } from "./tree.js";
 import { useRenderCount } from "./perf.js";
-import { NO_GEOMETRY_CLOCK, noteGeometry, parentGeometryClock } from "./geometry-cost.js";
 import { CHAIN_MS, measureRow, stepTarget } from "./keynav.js";
 import { activeSectionIndex } from "./position.js";
 import { armActivation } from "./activation.js";
@@ -589,24 +588,9 @@ function useReaderRow(enabled: boolean): [number | null, (row: number) => void] 
       return;
     }
     let frame = 0;
-    /**
-     * **A geometry parent that reads nothing of its own** (geometry-cost.ts),
-     * and that is not a broken counter: every layout read it causes happens
-     * inside `measureRow`, which is a leaf with its own bucket, and reads are
-     * counted exclusively so nothing is charged twice. Its `ms` and its `calls`
-     * are what it is here for — `measureRow` is `O(all blocks)`, this runs it on
-     * every scroll frame while a scatter mode is on, and the plan calls it the
-     * heaviest per-frame consumer in the file set.
-     *
-     * It is diagnostic only: the A8 pilot verdict is the two duplicated
-     * section-top scans and nothing else, so a conviction here is a separately
-     * scoped follow-up (Sol F4).
-     */
     const measure = () => {
       frame = 0;
-      const t0 = parentGeometryClock();
       setRow(measureRow());
-      if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("diagramReaderRow", t0, 0);
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(measure);

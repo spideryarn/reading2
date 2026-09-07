@@ -18,7 +18,6 @@
  * had already left.
  */
 import { useEffect, useState } from "react";
-import { NO_FRAME, NO_GEOMETRY_CLOCK, noteGeometry, parentGeometryClock } from "./geometry-cost.js";
 import { activeSectionIndex, type Section } from "./position.js";
 import { rowsForBlockIds } from "./rows.js";
 
@@ -126,54 +125,9 @@ export function useColumnContext({
     let last: LiveContext = EMPTY;
     let frame = 0;
 
-    /**
-     * What one `measure` reads, if anybody is counting — geometry-cost.ts.
-     *
-     * Computed once here rather than tallied inside the loop, because the
-     * element lists are fixed for the life of this effect and a running count
-     * would be an `O(sections)` addition *inside* the interval being timed,
-     * against a 4ms budget. **The resolved rows, not `rows.length`**: a hole
-     * (`rowsForBlockIds` returns `null` for a block with no row) is skipped
-     * without a read, and counting it would report a busy sampler on an article
-     * whose tree never resolved — the exact inversion
-     * docs/reusable/silent-success.md is about.
-     *
-     * **Two** fixed reads since Stage 2 hoisted the duplicate: one
-     * `innerHeight`, serving both the focus line and `viewportH`, and the `svh`
-     * probe's `clientHeight`. Then one rect per resolved row, one per gist
-     * header found, and one for the pinned column if it is there.
-     *
-     * It was three. If you add a read, change this number — it is a
-     * hand-maintained constant and a wrong one is invisible, which is why
-     * tests/geometry-cost.test.ts asserts it exactly rather than `> 0`.
-     */
-    const readsPerMeasure =
-      2 +
-      rows.reduce((n, el) => (el ? n + 1 : n), 0) +
-      [...heads.values()].reduce((n, th) => (th ? n + 1 : n), 0) +
-      (pin ? 1 : 0);
-
-    /**
-     * `at` is the `DOMHighResTimeStamp` `requestAnimationFrame` hands its
-     * callback, and it is only ever used as a **label**: geometry-cost.ts tags
-     * this call's timed sample with it, so the harness can add this sampler's
-     * cost to `useReadingPosition`'s *within the same frame* rather than taking
-     * percentiles over per-repetition means (Sol F11).
-     *
-     * Two callbacks due in one frame receive the identical timestamp, which is
-     * exactly the pairing wanted — and it arrives as an argument, so nothing
-     * here reads a clock to get it. `measure()` is also called directly at
-     * effect setup, and that call belongs to no frame: it defaults to
-     * `NO_FRAME`, and each such call counts as a frame of its own.
-     */
-    const measure = (at: number = NO_FRAME) => {
+    const measure = () => {
       frame = 0;
-      const t0 = parentGeometryClock();
-      /* **One `innerHeight` per frame, not two.** The focus line and
-         `viewportH` both wanted it and each read it. Same hoist, same reason,
-         same measurement as App.tsx § useReadingPosition's `sticky`. */
-      const viewportH = window.innerHeight;
-      const focusLine = viewportH * FOCUS_LINE;
+      const focusLine = window.innerHeight * FOCUS_LINE;
       const tops = rows.map((el) =>
         el ? el.getBoundingClientRect().top : Number.POSITIVE_INFINITY,
       );
@@ -185,6 +139,7 @@ export function useColumnContext({
         const r = th.getBoundingClientRect();
         rects.set(d, { left: r.left, width: r.width, top: r.bottom });
       }
+      const viewportH = window.innerHeight;
       const stableH = probe.clientHeight || viewportH;
       const clipLeft = pin?.getBoundingClientRect().right ?? 0;
 
@@ -198,17 +153,9 @@ export function useColumnContext({
           const o = last.rects.get(d);
           return o && o.left === r.left && o.width === r.width && o.top === r.top;
         });
-      /* Both exits are charged. The reads have all happened by here whichever
-         way it goes, so a frame that changed nothing cost exactly as much
-         layout work as one that did — and only counting the frames that
-         published would report a sampler doing a fraction of its real work. */
-      if (same) {
-        if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("columnContext", t0, readsPerMeasure, 0, at);
-        return;
-      }
+      if (same) return;
       last = { focusRow, rects, viewportH, stableH, clipLeft };
       setLive(last);
-      if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("columnContext", t0, readsPerMeasure, 0, at);
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(measure);

@@ -1,7 +1,21 @@
 # Share measured geometry — after profiling the scroll and layout reads
 
-Status: **CLOSED — deferred with evidence.** Stage 1 convicted the duplicated scan; **Stage 2c's counterfactual then showed the proposed fix does not acquit it**, so Stage 3 was refused under the rule written before the measurement, and Stages 3–5 were never built. What shipped: Stage 2's three read hoists, the geometry instrument, and its harness. What did not: the shared-snapshot service. See § "Stage 2c result" for the numbers and § "Review ledger — round 2" for the five P1s that had to be fixed before those numbers could be trusted.
+Status: **CLOSED — deferred with evidence, and the code reverted.** Stage 1 convicted the duplicated scan; **Stage 2c's counterfactual then showed the proposed fix does not acquit it**, so Stage 3 was refused under the rule written before the measurement. Greg then took the further step of reverting the measurement apparatus too, so **nothing from this job ships**: what lands on `dev` is this document, the postmortem, and one ticked checkbox.
 Source baseline `cc749e0f1061583f1a8877dc3db5b6c1b2c162e3` (branch `worktree-a8-shared-geometry`).
+
+> **The code this document describes is not in the tree.** Every file named below — the
+> `geometry-cost.ts` instrument, the `measure-geometry.ts` harness, the ten instrumented call sites,
+> the Stage 2 hoists, the `reading-position.ts` seam and their four test files — was written, measured
+> and then **reverted**, because the job concluded that the thing it was measuring should not be built
+> and Greg decided the scaffolding should not outlive the question. Paths appear as plain code spans
+> rather than links for that reason.
+>
+> **It is recoverable, not lost.** The work is in the history of `worktree-a8-shared-geometry`:
+> `914f59c4` (instrument, harness, instrumentation), `31d51e6b` and `250c4aa6` (the read hoists),
+> `fa4c2064` (the F14 behaviour fix and its test), `15bd2f67` (the harness corrections),
+> `97bcd4c7` (the measurement seam). Anyone picking up `contextPanelPlace` — the 743 ms site this run
+> found and did not touch — should start by restoring `914f59c4` and `15bd2f67` rather than building a
+> second instrument.
 
 This is item **A8** of
 [the main-app architecture review](260905e-main-app-architecture-review.md#a8-share-measured-geometry-without-forcing-all-navigation-to-mean-the-same-thing),
@@ -476,7 +490,7 @@ From the review, and none of them is in scope:
    counts during the scroll** as a third column, since a per-frame cost that never lands in a long
    task is a different finding from one that does.
 
-   **Built 2026-09-06 as [`geometry-cost.ts`](../../src/web/geometry-cost.ts)**, and its accounting
+   **Built 2026-09-06 as `src/web/geometry-cost.ts`**, and its accounting
    convention has to be stated here because it is easy to get backwards and every later number depends
    on it:
 
@@ -536,7 +550,7 @@ in writing.
 Production build, `vite preview` on port 5310, Playwright against system Chrome on the Hetzner box.
 Three sessions per configuration, `--repeats 6 --warmup 1`, pinned scroll of 30 × 100px = 3,000px at a
 requested 16ms cadence with a 500ms settle, run from the top **and** from the middle. Re-runnable:
-[`scripts/measure-geometry.ts`](../../scripts/measure-geometry.ts).
+`scripts/measure-geometry.ts`.
 
 **Sign-in is not optional and the harness will tell you so.** Each of the three articles has a
 different owner — `dev-admin@spideryarn.local` for `m1-kuhn`, `eval@spideryarn.local` for
@@ -1135,7 +1149,7 @@ scoped follow-up that is plausibly worth more than everything else in this plan.
    it.~~ **Done, 2026-09-07.** `geometry-cost.ts` gains `parentGeometryClockFrom(now)`; `apply` reads
    `performance.now()` once a frame and uses the one value for both the quiet-window comparison and
    the timer. Red first:
-   [tests/probe-does-not-change-the-page.test.ts](../../tests/probe-does-not-change-the-page.test.ts)
+   `tests/probe-does-not-change-the-page.test.ts`
    fails on the old code, passes on the new, and carries two controls so it cannot pass by never
    running the listener. Swept the other eight instrumented files: none of them reads a clock at all,
    so `apply` was the only instance. The postmortem is
@@ -1189,9 +1203,9 @@ scoped follow-up that is plausibly worth more than everything else in this plan.
    calling Stage 4's A/B the discharge — that is the ordering error F10 names.
 4. ~~**F15's seam**, which Stage 3 wants anyway.~~ **Done, 2026-09-07.**
    `useReadingPosition`'s measurement body is lifted out of two nested closures into
-   [reading-position.ts](../../src/web/reading-position.ts) § `measureReadingPosition`, leaving the
+   `src/web/reading-position.ts` § `measureReadingPosition`, leaving the
    hook only the ref and the URL write. No injected accessors: it reads the real DOM, and
-   [tests/reading-position-seam.test.ts](../../tests/reading-position-seam.test.ts) spies on
+   `tests/reading-position-seam.test.ts` spies on
    `Element.prototype.getBoundingClientRect` — a version that took its readers as parameters would be
    a version whose test never exercised the reads.
 

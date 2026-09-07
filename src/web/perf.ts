@@ -43,12 +43,6 @@ import {
   setAnnotationCostMode,
   startAnnotationCost,
 } from "./annotation-cost.js";
-import {
-  geometryCost,
-  resetGeometryCost,
-  setGeometryCostMode,
-  startGeometryCost,
-} from "./geometry-cost.js";
 
 /** One bucket of counts. There are two, and which one you land in is decided
  *  by `document.visibilityState` at the moment of the event. */
@@ -357,14 +351,6 @@ export function startPerf(): void {
      decision is made in; `__perf.setAnnotationCostMode("full")` adds the leaf
      timers for a diagnostic run whose absolute numbers are not the decision. */
   startAnnotationCost();
-  /* And the geometry counters, for the same reason and on the same terms
-     (geometry-cost.ts). They sit in per-scroll-frame code — `stickyOffset`
-     alone runs two to four times a frame across three consumers — so they are
-     off unless asked for, and `?perf=1` is the asking. Two separate switches
-     rather than one, because the two probes answer different questions and a
-     run that wants `"full"` leaf timings from one of them almost never wants
-     the other perturbed at the same time. */
-  startGeometryCost();
 
   const realTimeout = window.setTimeout;
   const realInterval = window.setInterval;
@@ -446,9 +432,6 @@ export function startPerf(): void {
     annotationCost,
     resetAnnotationCost,
     setAnnotationCostMode,
-    geometryCost,
-    resetGeometryCost,
-    setGeometryCostMode,
   };
   // console rather than the app's logger on purpose: this is a developer tool
   // talking to a developer's devtools, not the server talking to an operator.

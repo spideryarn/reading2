@@ -113,7 +113,6 @@ import {
 import { useJumpOrigin } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
-import { NO_GEOMETRY_CLOCK, noteGeometry, parentGeometryClock } from "./geometry-cost.js";
 import { onFontsChanged } from "./fonts.js";
 
 /**
@@ -175,35 +174,12 @@ interface Metrics {
  * contract that already holds everywhere else in this app: every block is
  * addressed by its stable id (docs/project/block-ids.md), and the row carrying
  * a block is `tr[data-block="<id>"]`.
- *
- * **A geometry parent, and the control the others are read against**
- * (geometry-cost.ts). This is the `O(all rows)` scan that already works the way
- * Stage 3 of
- * docs/plans/260906d-share-measured-geometry-after-profiling-scroll-and-layout-reads.md
- * would have the two per-frame samplers work — measured once per invalidation,
- * cached in document space, and then never read again during a scroll. So its
- * numbers are the shape of the answer: one call per layout change, `rows + 1`
- * reads, against `apply`'s one read per frame. `rows + 1` because `window.scrollY`
- * is read once and each row costs one rect; `top`, `bottom` and `height` all
- * come off that same DOMRect, which is a snapshot and free to read again.
  */
 function measure(outline: OutlineEntry[]): Metrics | null {
-  const t0 = parentGeometryClock();
-  const metrics = measureRows(outline);
-  /* Charged even when it returns null: an unmounted table is a call that read
-     nothing, and hiding it would make "the spine never measured" look like
-     "the spine is free". */
-  if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("spineMeasure", t0, metrics.reads);
-  return metrics.value;
-}
-
-/** The scan itself, split out so the measurement above cannot be escaped by a
- *  `return` added later — annotation-cost.ts makes the same move. */
-function measureRows(outline: OutlineEntry[]): { value: Metrics | null; reads: number } {
   const rows = Array.from(
     document.querySelectorAll<HTMLElement>("tbody tr[data-block]"),
   );
-  if (rows.length === 0) return { value: null, reads: 0 };
+  if (rows.length === 0) return null;
 
   const sy = window.scrollY;
   /* One `getBoundingClientRect` per row, kept. Reading it again for the height
@@ -236,7 +212,7 @@ function measureRows(outline: OutlineEntry[]): { value: Metrics | null; reads: n
   // L2s are rendered as siblings in the same track rather than nested inside
   // their parent's element, so every band shares one coordinate system and
   // there is no relative-offset arithmetic to get wrong.
-  const value: Metrics = {
+  return {
     docTop,
     docHeight,
     l1: outline.map((e) => bandFor(e)),
@@ -257,9 +233,6 @@ function measureRows(outline: OutlineEntry[]): { value: Metrics | null; reads: n
       }),
     ),
   };
-  // One `window.scrollY` plus one rect per row. Everything after that is
-  // arithmetic over DOMRects already taken.
-  return { value, reads: rows.length + 1 };
 }
 
 interface Props {
@@ -508,31 +481,12 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
     let hereId: string | null = null;
     let hitId: string | null = null;
 
-    /**
-     * **The geometry parent that should report one read and no more**
-     * (geometry-cost.ts). Everything it needs about the article's shape is in
-     * `metrics`, cached in document space by `measure` above, so the only thing
-     * it asks the browser is where the page is scrolled to. If this ever
-     * reports more than one read, the cache has sprung a leak and that is a
-     * finding rather than a number — it is the evidence the whole
-     * shared-snapshot design in
-     * docs/plans/260906d-share-measured-geometry-after-profiling-scroll-and-layout-reads.md
-     * rests on.
-     *
-     * Its one `writes` is the band's `style.top`, which is a write into the
-     * middle of a frame that other consumers are reading rects in.
-     */
     const apply = () => {
       raf = 0;
-      const t0 = parentGeometryClock();
       const sy = window.scrollY;
 
-      let writes = 0;
       const band = viewportBand.current;
-      if (band) {
-        band.style.top = `${((sy - docTop) / docHeight) * 100}%`;
-        writes = 1;
-      }
+      if (band) band.style.top = `${((sy - docTop) / docHeight) * 100}%`;
 
       const pos = sy + viewportH * READING_LINE - docTop;
       const inBand = (b: Band) => pos >= b.top && pos < b.top + b.height;
@@ -553,7 +507,6 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props)
         hitId = hit;
         setHereHit(hit === null ? null : { id: hit, metrics });
       }
-      if (t0 !== NO_GEOMETRY_CLOCK) noteGeometry("spineApply", t0, 1, writes);
     };
 
     const onScroll = () => {

@@ -179,15 +179,18 @@ import {
 import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   arrivalTarget,
+  glideTarget,
   isBlockOnScreen,
   scrollToBlock,
   scrollToTop,
+  stickyOffset,
   watchBarVisibility,
 } from "./scroll.js";
 import { orderComments, positionOf, stepComment } from "./comment-nav.js";
 import { jumpToComment, stepToComment } from "./comment-jump.js";
 import {
   buildSections,
+  positionToWrite,
   sectionDepth,
   type Section,
 } from "./position.js";
@@ -241,8 +244,6 @@ import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
 import { SmallScreenHint } from "./SmallScreenHint.js";
 import { ViewportProbe } from "./ViewportProbe.js";
 import { useRenderCount } from "./perf.js";
-import { NO_FRAME } from "./geometry-cost.js";
-import { measureReadingPosition } from "./reading-position.js";
 import { rowsForBlockIds } from "./rows.js";
 import {
   REFEREE_DECLARE_IT,
@@ -1747,38 +1748,31 @@ function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: str
        article, and the largest single reason a mode switch there cost 4.7
        seconds (Sentry SPIDERYARN-READING2-1M). */
     const rows = rowsForBlockIds(sections.map((s) => s.blockId));
-    /* How many rects a frame reads, for geometry-cost.ts — the resolved rows,
-       not `rows.length`, since a `null` hole is skipped without a read and
-       counting it would report a busy sampler on an article whose tree never
-       resolved. Once per effect, outside the timed frame. */
-    const resolved = rows.reduce((n, el) => (el ? n + 1 : n), 0);
     let frame = 0;
-    /* `at` is the `DOMHighResTimeStamp` `requestAnimationFrame` hands its
-       callback, and it is used for nothing but labelling this call's timed
-       sample in geometry-cost.ts — so the harness can add this sampler's cost
-       to `useColumnContext`'s *within one frame*, which is the unit the plan's
-       decision rule is written in, instead of taking percentiles over
-       per-repetition means (Sol F11). Two callbacks due in the same frame get
-       the identical timestamp, which is the pairing that makes the sum right.
-       It is an argument: nothing here reads a clock to obtain it, which is the
-       whole of docs/postmortems/260907a-a-probe-that-read-the-same-clock-twice.md.
-       The `measure()` below runs at effect setup, inside no frame at all, and
-       takes the `NO_FRAME` default — each of those is a frame of its own. */
-    const measure = (at: number = NO_FRAME) => {
+    const measure = () => {
       frame = 0;
-      /* The reads, the arithmetic and the instrument all live in
-         reading-position.ts, where a test can drive them — Sol's F15 found that
-         this body's published read count could be changed to `1` and its timer
-         start moved without a single test noticing, which made the one number
-         the whole decision rested on the one number nothing checked. What stays
-         here is the half that makes this a hook: the ref and the URL write. */
-      const next = measureReadingPosition({
+      /* Every rule this makes is in position.ts, and it is pure so that the one
+         that matters can be watched failing — an untested guard against a race
+         is the shape silent-success.md is about.
+
+         `jumpInFlight` is read out here rather than passed inline because
+         arguments are evaluated before the call, so an inline version would do
+         a rect read per section on every frame of a jump only to have the
+         function throw the answer away. The rects are the expensive half of
+         this measurement (performance.md). GPT Sol, 2026-08-30. */
+      const jumpInFlight = glideTarget() !== null;
+      const next = positionToWrite({
         sections,
         rowOf,
-        rows,
-        resolved,
+        tops: jumpInFlight
+          ? []
+          : rows.map((el) =>
+              el ? el.getBoundingClientRect().top : Number.POSITIVE_INFINITY,
+            ),
+        line: stickyOffset() + 1,
+        jumpInFlight,
+        atTop: window.scrollY <= stickyOffset(),
         held: synced.current,
-        at,
       });
       if (next === null) return;
       synced.current = next.at;

@@ -5,6 +5,11 @@ was measuring. It never reached `dev` — GPT Sol found it reviewing Stage 1 as 
 before anybody ran the harness again. It is written up because the cost is not the trigger: the same
 hands will do this again somewhere nothing is watching.
 
+> **None of the code below is in the tree.** The instrument answered its question — that A8's shared
+> snapshot should not be built — and was then reverted along with the rest of the job, so the file
+> names here are historical. They are in `worktree-a8-shared-geometry`: the defect at `914f59c4`, the
+> fix and its test at `fa4c2064`. The lesson is not historical, which is why this file stays.
+
 ## What happened
 
 `src/web/scroll.ts § watchBarVisibility`'s `apply` runs on every scroll frame on a small device. It
@@ -87,7 +92,7 @@ second.
 
 1. **A paired off/on assertion on behaviour, not on counters** — the same gesture, the same scripted
    clock, the probe off and then on, and the resulting page state required to be identical.
-   [tests/probe-does-not-change-the-page.test.ts](../../tests/probe-does-not-change-the-page.test.ts).
+   `tests/probe-does-not-change-the-page.test.ts`.
    Done. It fails on the old code and passes on the new, and it carries two controls — the bar *does*
    hide once the window passes, and *doesn't* inside it — so it cannot pass by never running the
    listener, which is the way this kind of test usually dies.

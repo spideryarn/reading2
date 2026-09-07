@@ -59,7 +59,6 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { Block, BlockId } from "../types.js";
-import { geometryCostOn, leafGeometryClock, noteGeometry } from "./geometry-cost.js";
 import { armJump, clearArmedJump, type JumpOrigin } from "./jump-history.js";
 import { activeSectionIndex } from "./position.js";
 import { SCROLL_MS, scrollToBlock, stickyOffset } from "./scroll.js";
@@ -221,25 +220,9 @@ export function nextAim(
  *
  * Exported for swipe.ts, which steps from the same place by the same rule — a
  * finger and a key must not disagree about which item the reader is in.
- *
- * **Counted as a geometry leaf** (geometry-cost.ts), and it is the heaviest of
- * the three: one rect per row over **every** block, not per section. On a key
- * press or a swipe that is a gesture-rate cost; `DiagramPanel`'s `useReaderRow`
- * calls it on every scroll frame while a scatter mode is on, which is why its
- * `calls` matters as much as its `ms`. The `stickyOffset` inside it is charged
- * to its own leaf, so the reads here are exactly the row count.
  */
 export function measureRow(): number {
-  const counting = geometryCostOn();
-  const t0 = leafGeometryClock();
-  /* `rowTops()` is the read; `readingLine()`'s `stickyOffset` is charged to its
-     own leaf, so the count here is exactly the row count. Taking it from `tops`
-     rather than re-querying keeps the number derived from what was actually
-     read — the hand-maintained constant Sol's F15 warns about is one fewer. */
-  const tops = rowTops();
-  const row = activeSectionIndex(tops, readingLine());
-  if (counting) noteGeometry("measureRow", t0, tops.length);
-  return row;
+  return activeSectionIndex(rowTops(), readingLine());
 }
 
 /** Every article row's distance from the top of the viewport, in order. */
@@ -304,20 +287,12 @@ function readingLine(): number {
 export function measureOrigin(blocks: Block[]): JumpOrigin {
   const tops = rowTops();
   const first = tops[0];
-  /* **One `readingLine()`, not two.** Each call is a `stickyOffset()`, which is
-     a rect on `.controls` plus a `getComputedStyle` in safe-area.ts — so the
-     pair below cost four layout reads where two do. Same hoist and same reason
-     as A8's Stage 2 in App.tsx and useColumnContext.ts; nothing between the two
-     uses writes to the DOM, so the second call could only ever have returned
-     what the first did. Note this is also one call in the early-return branch,
-     which is what it already was. */
-  const line = readingLine();
   /* No rows at all — an empty article, or a mode not drawing the table — or
      every row still below the line. Either way no block is under the reader,
      and `top` is what lets Back restore the actual top of the page rather than
      scrolling the first paragraph under the chrome. */
-  if (first === undefined || first > line) return { kind: "top" };
-  const block = blocks[activeSectionIndex(tops, line)];
+  if (first === undefined || first > readingLine()) return { kind: "top" };
+  const block = blocks[activeSectionIndex(tops, readingLine())];
   /* More rows drawn than blocks handed in. Not reachable today, and a wrong
      block is worse than an honest "the beginning". */
   return block === undefined ? { kind: "top" } : { kind: "block", blockId: block.id };
