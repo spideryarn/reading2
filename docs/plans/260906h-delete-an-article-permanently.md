@@ -679,6 +679,52 @@ and it is the box.
       recommendation was overruled.
 - [ ] Sol review. Commit.
 
+#### The browser pass, 2026-09-07 — two things no component test saw
+
+Playwright against system Chrome on the box, signed in, on a dev server of its own. Two scratch
+articles created by pasting a real URL through `/add` and deleted again, so nothing anybody else
+owns was touched.
+
+**The question named nothing.** It rendered `Delete “” for ever?`. An article whose extraction
+produces no title carries `""` and not null — an ordinary URL paste did it — so `meta.title ?? slug`
+kept the empty string. The one safeguard in that sentence is that the reader reads *which* article,
+and on any untitled article it had silently become empty quotes. Fixed to `meta.title?.trim() || slug`,
+with two cases pinning it; renaming the article through the page's own title editor and watching the
+heading fill in is what proved it was the fallback rather than the wiring. **Twenty-two green tests
+never saw this because every fixture in the file had a title** — the defect lives exactly where the
+fixture was convenient.
+
+**The confirm is nowhere near the trigger, and now that is measured rather than argued.** At
+1280×900 the trigger sits at y 705.06 and *Delete for ever* at y 897.06: vertical overlap **0.0 px**,
+gap **158 px**; at 390×844 the gap is **278 px**. `elementFromPoint` at the trigger's old centre
+returns the question heading, and a real `mouse.dblclick` on the trigger left the article alive. The
+structural assertion in the component tests was a sound proxy, and this is the thing jsdom could
+never answer. Worth knowing: the guard is purely **vertical** — the confirm's x-range sits inside the
+trigger's.
+
+**Red really is only in the confirm step, and proving it needed painted pixels.** A computed-style
+check cannot see this: the token resolves to `oklab(…)`, which neither an `oklch` regex nor
+`canvas.fillStyle` converts, so two scans reported "no red" in both states — a
+[silent success](../reusable/silent-success.md) in the check rather than in the code. Counting red
+pixels in full-page screenshots: 428 at rest (warm accent text and links), 3721 in the confirm, and
+the extra 3156 are one contiguous band exactly the confirm button's box. Contrast 7.03:1.
+
+##### Open, and Greg's to decide: what a deleted article's own URL should say
+
+Going back to `/read/<slug>` after deleting renders **"Not shared — This document isn't shared. If
+somebody sent you the link, ask them to turn sharing on for it."** The owner who just destroyed it is
+being told to ask *them* to turn sharing on.
+
+This is not a bug in Stage D and the obvious fix is not obviously right. The API returns **404 for a
+non-owner, never 403**, deliberately — that conflation is a security property, so after a reload the
+client genuinely cannot tell "deleted" from "not yours", and a page that says "this article is gone"
+would be claiming knowledge it does not have. The honest change is a neutral wording that serves both
+readings — *this isn't available; it may have been deleted, or never shared with you* — on a page
+strangers see, which is why it is recorded here rather than changed on the way past.
+
+Not checked by the browser pass: keyboard activation held on the trigger, and where focus lands after
+the swap.
+
 ### Stage E — the bytes, by way of a blob catalogue
 
 Last, and separately reviewed, because this is the only stage where a bug damages a reader who did

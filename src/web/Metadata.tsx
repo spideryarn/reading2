@@ -1068,7 +1068,14 @@ export function Metadata({
         <Section label="Delete this article">
           <DeletePermanently
             slug={slug}
-            title={meta.title ?? slug}
+            /* **`||`, not `??`, and a browser pass is what found that.** An
+               article whose extraction produced no title carries `""` rather
+               than null — an ordinary URL paste did it — and `??` keeps the
+               empty string, so the question read *Delete “” for ever?* and the
+               one safeguard in it was gone. Naming the article is the cheap
+               ninety per cent of type-the-title: it makes the reader read
+               *which* one. The slug is a poor name and a far better nothing. */
+            title={meta.title?.trim() || slug}
             known={provenance !== null}
             offline={provenanceOffline}
             failed={Boolean(provenanceError)}

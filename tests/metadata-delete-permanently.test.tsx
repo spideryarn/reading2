@@ -198,7 +198,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-async function open(): Promise<void> {
+async function open(article: Article = ARTICLE): Promise<void> {
   await act(async () => {
     root.render(
       createElement(
@@ -206,7 +206,7 @@ async function open(): Promise<void> {
         null,
         createElement(Metadata, {
           slug: SLUG,
-          article: ARTICLE,
+          article,
           onRenamed: () => {},
           onVisibility: () => {},
         }),
@@ -325,6 +325,30 @@ describe("Delete permanently — the two-step confirm", () => {
     await press(trigger());
     expect(section()?.textContent).toContain(TITLE);
     expect(section()?.textContent).toContain("for ever?");
+  });
+
+  /**
+   * **An untitled article still gets named, and a browser pass is what found
+   * this.** Extraction that produces no title leaves `""`, not null — an
+   * ordinary URL paste did it — so `meta.title ?? slug` kept the empty string
+   * and the question rendered as `Delete “” for ever?`. The safeguard in naming
+   * the article is that the reader reads *which* one; empty quotes are not a
+   * name, and the slug at least is. Every case above this one uses a titled
+   * fixture, which is exactly why 22 green tests never saw it.
+   */
+  it("falls back to the slug when the article has no title", async () => {
+    await open({ ...ARTICLE, meta: { ...ARTICLE.meta, title: "" } });
+    await press(trigger());
+    expect(section()?.textContent).toContain(SLUG);
+    expect(section()?.textContent).not.toContain('""');
+    expect(section()?.textContent).not.toContain("“”");
+  });
+
+  /** Whitespace is not a name either, and `||` alone would let it through. */
+  it("falls back to the slug when the title is only whitespace", async () => {
+    await open({ ...ARTICLE, meta: { ...ARTICLE.meta, title: "   " } });
+    await press(trigger());
+    expect(section()?.textContent).toContain(SLUG);
   });
 
   /**
