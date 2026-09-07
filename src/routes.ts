@@ -6599,36 +6599,38 @@ interface PatternAuthRoute {
 type AuthRoute = ExactAuthRoute | PatternAuthRoute;
 
 /**
- * **The six matchers two rows each share**, named once so there is one place
- * that decides what they match.
+ * **The matchers two rows each share**, named once so there is one place that
+ * decides what they match.
  *
- * The chain has bindings read by two guards apiece, and each is still a single
- * `const`. A table row has no such binding, so the same shape has to be a
+ * The chain still declares bindings read by two guards apiece, and each of those
+ * is a single `const`. (It was fourteen when the table was built; every slice
+ * takes some of them, so the number is not written down here — a count that
+ * decays once per commit is a comment that will be wrong more often than right.)
+ * A table row has no such binding, so the same shape has to be a
  * module-scope constant that both rows name. Spelling a regex out twice would
  * compile, run identically today, and let the copies drift apart tomorrow —
  * tests/authenticated-api-route-contract.test.ts § `names each matcher once` is
- * what refuses that, and it counts declaration *sites*, so these six are six
- * matchers and not twelve.
+ * what refuses that, and it counts declaration *sites*, so each of these is one
+ * matcher and not two.
  *
  * A matcher used by exactly one row is written into that row instead: there is
  * nothing to keep in step, and a constant named from one place is a name to
- * chase rather than a fact recorded once. That is why
- * `/api/referee/scan/:slug` and `/api/referee/mirror/:slug` are not here.
+ * chase rather than a fact recorded once. That is why referee's scan and mirror
+ * patterns are not here — one row apiece — while its criteria and claims
+ * patterns are.
  */
 const JOBS_PATH = "/api/jobs";
 const UPLOAD_PATTERN = /^\/api\/uploads\/([\w-]+)$/;
 const JOB_PATTERN = /^\/api\/jobs\/([\w.%-]+)$/;
-/* Referee mode's criteria. Two patterns and the same split as search's two: the
-   collection, and one row. `criteria` sits inside the path rather than as
-   `/api/referee/:slug` because the mode has four sub-modes and three of them
-   will want routes of their own — `/api/referee/claims/:slug` and
-   `/api/referee/mirror/:slug` both arrived under it without a rename — and a
-   namespace decided now is cheaper than a rename later. */
+/* Referee mode's criteria: the collection, and one row. `criteria` sits inside
+   the path rather than as `/api/referee/:slug` because the mode has four
+   sub-modes and three of them will want routes of their own —
+   `/api/referee/claims/:slug` and `/api/referee/mirror/:slug` both arrived under
+   it without a rename — and a namespace decided now is cheaper than a rename
+   later. Claims is **one pattern, not two**: there is one claims run per
+   article, so there is no row to name; GET reads it, POST replaces it. */
 const CRITERIA_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)$/;
 const ONE_CRITERION_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)\/([\w.%-]+)$/;
-/* Claims, the sub-mode the comment above named as next, and the namespace is why
-   it needed no rename to arrive. **One pattern, not two**: there is one claims
-   run per article, so there is no row to name. GET reads it, POST replaces it. */
 const REFEREE_CLAIMS_PATTERN = /^\/api\/referee\/claims\/([\w.%-]+)$/;
 
 /**
@@ -6647,13 +6649,13 @@ const REFEREE_CLAIMS_PATTERN = /^\/api\/referee\/claims\/([\w.%-]+)$/;
  *
  * Because the move is incremental and must reorder nothing. What is here is the
  * **bottom of the chain, taken upward**: billing was its last four guards, jobs
- * and uploads the nine immediately above those, referee the eight above *those*,
+ * and uploads the nine immediately above those, referee the eight above them,
  * and asking the table after every remaining guard and before the terminal 404
  * puts each of the twenty-one in exactly the position it already had.
  *
  * **So the rows are in chain order, and prepending is how a domain arrives.**
- * The next slice up goes above the jobs rows, not below them — the table's order
- * *is* the chain's order, continued. Taking the slice contiguously is also what
+ * The next slice up goes above the referee rows, not below them — the table's
+ * order *is* the chain's order, continued. Taking the slice contiguously is also what
  * preserves the one interleave here for free: `/api/uploads` and
  * `/api/uploads/:id` sit *between* `GET /api/jobs` and `POST /api/jobs`, which is
  * why these rows are not grouped by domain name and must not be tidied into it.
@@ -6678,6 +6680,19 @@ const REFEREE_CLAIMS_PATTERN = /^\/api\/referee\/claims\/([\w.%-]+)$/;
  * **No `g` or `y` flag**, refused by `assertDispatchableRoutes` below.
  */
 const AUTH_ROUTES: readonly AuthRoute[] = [
+  /* **Referee — criteria, claims, scan, mirror.** The chain's last eight guards
+     before this table was consulted, moved here on 2026-09-07 in the order they
+     had, and therefore still answering from the position they answered from.
+     docs/plans/260907e-referee-joins-the-route-table-and-the-stream-lifetime-test-that-has-to-come-first.md.
+
+     **Three of these stream**, which is what made this slice different from the
+     thirteen before it: criteria POST and claims POST each open SSE *and hold a
+     live-run lock*, and mirror POST opens SSE. Each handler therefore has to
+     return its promise — `dispatchAuthRoute` awaits it, and a closure that
+     launched the call and resolved would end the request mid-stream with the
+     lock still held. tests/referee-stream-lifetime.test.ts holds all three open
+     and asks; it was written against these guards *before* they moved, so it
+     says the same thing about both arrangements. */
   {
     kind: "pattern",
     method: "GET",
@@ -6793,7 +6808,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      sub-mode: it belongs to the **mode**, because a hidden instruction is a fact
      about the document that bears on Criteria, Claims, Mirror and Candidates
      alike. GET only, and nothing to POST: the answer is a pure function of bytes
-     already stored, so asking for it is reading. */
+     already stored, so asking for it is reading. One row, so the pattern is
+     written here rather than named above. */
   {
     kind: "pattern",
     method: "GET",
@@ -6826,10 +6842,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* Mirror, the second sub-mode to get a route, and the `/api/referee/`
-     namespace is why it needed no rename to arrive. POST only: a run is a model
-     call the referee asks for and nothing is stored, so there is nothing to GET,
-     nothing to PATCH and nothing to DELETE. */
+  /* Mirror, the second sub-mode to get a route, and the namespace above is why
+     it needed no rename to arrive. POST only: a run is a model call the referee
+     asks for and nothing is stored, so there is nothing to GET, nothing to PATCH
+     and nothing to DELETE. One row, so the pattern is written here. */
   {
     kind: "pattern",
     method: "POST",
@@ -7649,7 +7665,7 @@ export async function serveAuthenticatedApi(
      above, in that same order, and the table is consulted after every guard
      below and before the terminal 404 — the position they already had, so the
      move reorders nothing. `oneRun` is now the last matcher this chain declares,
-     and the search guards are the next slice up. */
+     and `searches` is the next slice up. */
 
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
@@ -8486,6 +8502,11 @@ export async function serveAuthenticatedApi(
      * table exactly here leaves each of them where it already was and reorders
      * nothing — the property that makes each increment a rearrangement rather
      * than a behaviour change.
+     *
+     * **That property is why the queue is consumed bottom-up.** A domain from
+     * the middle of the chain would answer from here instead of from where it
+     * sits, which is a reordering — safe today, since no two guards accept the
+     * same method and path, but safe by an argument rather than by construction.
      *
      * **This is the only place the table is dispatched, and it has to be.** A
      * second call earlier in the chain would give the *whole* table its turn

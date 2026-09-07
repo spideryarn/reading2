@@ -655,6 +655,52 @@ nothing forever, so it was checked: perturbing the route's pattern in `src/route
 with *"the route is not in src/routes.ts under that pattern: expected '' not to be ''"*. The presence
 control still fires.
 
+## The referee slice was built twice, and what the merge nearly hid
+
+**Two worktrees did this slice in parallel and neither knew.** `260907e`
+(`worktree-referee-into-the-route-table`) branched off stage 4a *after* it was pushed at 20:32 and
+landed its own referee migration at 20:43; stage 4b landed here at the same time. The end states were
+the same to the row — 21 rows, 60 guards, and the identical contract hash — differing only in
+comments. **260907e landed first, so it is the one on `dev`, and this worktree's `src/routes.ts` was
+resolved to theirs.** Nothing here was lost that was not also there.
+
+**Their lifetime test is the better one and is the one that survives.**
+`tests/referee-stream-lifetime.test.ts` has nine cases across *all three* streaming referee routes —
+criteria, claims and mirror — and asserts lock *release* as well as lock holding, plus a case
+checking that its own backdating assumption still matches the real grace constants. Stage 4a's
+`tests/streaming-route-request-lifetime.test.ts` did criteria alone in two cases and is strictly
+subsumed, so it was removed rather than left as a second thing to maintain. Both had independently
+found the same grace-window trap, which is at least a good sign about the trap.
+
+**The merge conflict was not the dangerous part.** Git marked five hunks in `src/routes.ts`, and all
+five were comment wording. What it did *not* mark was the important bit: both sides had added eight
+referee rows to `AUTH_ROUTES` in places whose text did not collide, so it took **both** — leaving
+**29 rows where there should be 21, every referee route declared twice.**
+[git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md) says exactly this:
+*"A conflict shows you the files git could not merge; it says nothing about the files it merged
+silently."*
+
+**The safety net catches it, in seven places at once** — including the collision check, whose message
+is the right one: *"two guards accept the same method and path, so the earlier one wins and the order
+of the chain is now behaviour."* Running the contract test immediately after the merge would have
+found this before anything else did. It was actually found by a different route, below, which is luck
+rather than method; the method is to run the checks for whatever a merge touched, not only for the
+files it marked.
+
+**A silent success in the fix for a silent success.** Sol's **P2-LEXICAL-HANDLER-BOUNDARY** said the
+scan-route extractor's `\n    },` terminator was lexical rather than structural — and both 260907b
+and 260907e had independently rewritten it that way. Replacing it with an AST cut through
+`parseSource` was correct but *not sufficient*: the first version assigned `handler = fn` on every
+match, so with the block duplicated it silently inspected the **second** copy while a test mutation
+sat in the first, and reported green. It now collects matches and refuses more than one:
+
+> `expect(handlers.length, "GET /api/referee/scan/:slug is declared more than once").toBe(1)`
+
+Both new assertions were watched fail — a `withSpendAttribution` added at the very end of the handler
+(which the old lexical cut would have missed), and a duplicated row. The general lesson is the one
+this job keeps re-learning in new costumes: **a reader that picks one of several answers cannot tell
+you it had several**, and "assign the last match" is that shape wearing ordinary clothes.
+
 ## Where stage 3 stands, and what the next slice costs
 
 **21 of 81 guards migrated** (billing 4, jobs/uploads 9, referee 8 — stage 4b, 2026-09-07). 60 remain

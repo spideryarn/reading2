@@ -81,11 +81,26 @@ describe("parseArgs", () => {
     expect(() => parseArgs(["--prompt", "x", "--stream", "--print"])).toThrow(/cannot be combined/);
   });
 
-  it("rejects an effort codex would silently accept as a literal string", () => {
-    // `-c model_reasoning_effort=hgih` parses fine as TOML and runs at the model default, so this
-    // is the one validation that has to happen on our side of the boundary.
+  it("rejects a misspelt effort but passes every value some model takes", () => {
     expect(() => parseArgs(["--prompt", "x", "--effort", "hgih"])).toThrow(/--effort must be one of/);
-    expect(parseArgs(["--prompt", "x", "--effort", "xhigh"]).effort).toBe("xhigh");
+    // `max` and `ultra` were absent from this wrapper until 2026-09-07 — not new with GPT-6-Astra,
+    // which is only where we noticed: 0.153.4 advertises both for Sol and Terra as well. Whether
+    // the *chosen* model takes one is codex's to say; the enum is per model, so this list is a
+    // vocabulary rather than a compatibility check.
+    //
+    // Asserting the argv too, not just the parse: deleting the `-c model_reasoning_effort=` line
+    // altogether leaves a parse-only version of this test green, and the wrapper would then run
+    // every review at the model's default effort while reporting the one you asked for. GPT-6-Astra
+    // found that by mutation, 2026-09-07.
+    for (const effort of ["max", "ultra", "none", "minimal", "low", "medium", "high", "xhigh"]) {
+      const parsed = parseArgs(["--prompt", "x", "--model", "gpt-6-astra", "--effort", effort]);
+      expect(parsed.effort).toBe(effort);
+      const built = buildCodexArgs({
+        model: parsed.model, effort: parsed.effort, sandbox: "read-only",
+        repoDir: ".", outFile: "/tmp/o", prompt: "x",
+      });
+      expect(built.join(" ")).toContain(`-c model_reasoning_effort=${effort}`);
+    }
   });
 
   it("requires a prompt and a known sandbox", () => {

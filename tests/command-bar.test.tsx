@@ -102,6 +102,21 @@ const rows = (): HTMLElement[] => [...dialog().querySelectorAll<HTMLElement>('[r
 const listed = (): string[] =>
   rows().map((row) => row.querySelector(".cmdbar-name")?.textContent ?? "");
 
+/**
+ * **The two kinds of row, told apart the way the bar itself tells them apart.**
+ *
+ * By `data-kind`, which `CommandBar` writes off the `Command` union — not by
+ * matching a label against `MODE_LABEL`, and not by looking for a leading `/`
+ * in the row id. Both of those would infer the kind from something that is
+ * *usually* true of it, and would go on passing if a page row started being
+ * built as a mode.
+ */
+const rowsOfKind = (kind: "mode" | "page"): HTMLElement[] =>
+  rows().filter((row) => row.dataset.kind === kind);
+
+const listedOfKind = (kind: "mode" | "page"): string[] =>
+  rowsOfKind(kind).map((row) => row.querySelector(".cmdbar-name")?.textContent ?? "");
+
 /** The mode buttons the Dock itself drew, in the order it drew them. */
 const dockLists = (): string[] =>
   [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"]')].map(
@@ -137,27 +152,34 @@ function selected(): string {
   return (row as HTMLElement).querySelector(".cmdbar-name")?.textContent ?? "";
 }
 
-describe("the bar lists exactly what the Dock lists", () => {
+describe("the bar's mode rows are exactly what the Dock lists", () => {
   /**
    * The one rule, in one place. `visibleModes` in Dock.tsx decides which modes
    * the bar draws, the Dock hands that same array down, and this asserts the
    * two ends of it agree — with the switch in each of its two positions,
    * because the whole risk is a second copy of the rule that is right for one
    * of them.
+   *
+   * **`listedOfKind("mode")` rather than every row, since 2026-09-07**, when
+   * Greg added the changelog to the bar and product call 4 narrowed from *the
+   * bar lists exactly what the Dock lists* to this. The narrowing is the point
+   * of the extra word: the pages are the bar's own and the Dock has no opinion
+   * about them, but the mode rows must still be the Dock's array untouched.
+   * CommandBar.tsx § call 4.
    */
   it("draws the same modes, in the same order, with the switch off", () => {
     reading({ experimental: EXPERIMENTAL_OFF });
     openBar();
-    expect(listed()).toEqual(dockLists());
+    expect(listedOfKind("mode")).toEqual(dockLists());
     /* The vacuity guard: two empty lists are equal. */
-    expect(listed().length).toBeGreaterThan(5);
+    expect(listedOfKind("mode").length).toBeGreaterThan(5);
   });
 
   it("draws the same modes, in the same order, with the switch on", () => {
     reading({ experimental: EXPERIMENTAL_ON });
     openBar();
-    expect(listed()).toEqual(dockLists());
-    expect(listed().length).toBe(MODES.length);
+    expect(listedOfKind("mode")).toEqual(dockLists());
+    expect(listedOfKind("mode").length).toBe(MODES.length);
   });
 
   /**
@@ -168,10 +190,50 @@ describe("the bar lists exactly what the Dock lists", () => {
   it("draws fewer modes with the switch off than with it on", () => {
     reading({ experimental: EXPERIMENTAL_OFF });
     openBar();
-    const off = listed().length;
+    const off = listedOfKind("mode").length;
     reading({ experimental: EXPERIMENTAL_ON });
     openBar();
-    expect(off).toBeLessThan(listed().length);
+    expect(off).toBeLessThan(listedOfKind("mode").length);
+  });
+
+  /**
+   * **The other half of the narrowed call**: the pages exist, and they are
+   * beneath the modes rather than mixed in among them.
+   *
+   * Without this, the three assertions above would all still pass if the page
+   * rows had silently stopped being drawn — they filter to mode rows, and a
+   * list with nothing else in it filters to itself.
+   */
+  /**
+   * **Every row has an id of its own**, over the list the bar really renders —
+   * which is the guard `commandId`'s prefix exists for. Ids share one namespace
+   * (the `id` attribute `aria-activedescendant` points at), and a page whose
+   * href were spelled like a mode's name would have collided under the scheme
+   * this replaced. tests/command-match.test.ts states that as a unit; this
+   * states it over the actual `PAGES`, which is the list a future entry lands
+   * in.
+   */
+  it("gives every row it draws a distinct id", () => {
+    reading({ experimental: EXPERIMENTAL_ON });
+    openBar();
+    const ids = rows().map((row) => row.id);
+    expect(ids.length).toBeGreaterThan(MODES.length);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("draws its page rows after every mode row", () => {
+    reading({ experimental: EXPERIMENTAL_ON });
+    openBar();
+    const kinds = rows().map((row) => row.dataset.kind);
+    const firstPage = kinds.indexOf("page");
+    expect(firstPage, "no page row in the bar at all").toBeGreaterThan(-1);
+    /* Every row from there on is a page — said as a slice rather than as a
+       sort, which would have leaned on `"mode" < "page"` being alphabetical
+       and would keep passing under a rename to `"link"`. */
+    expect(kinds.slice(firstPage).every((k) => k === "page")).toBe(true);
+    /* And there is at least one mode above it, so "pages come last" is not
+       being satisfied by a bar that is nothing but pages. */
+    expect(firstPage).toBeGreaterThan(0);
   });
 
   /**
@@ -442,12 +504,18 @@ describe("the `generates` marker", () => {
     ).toEqual([]);
   });
 
-  it("is on every row that would start work, and on no other row", () => {
+  it("is on every mode row that would start work, and on no other mode row", () => {
     reading({ experimental: EXPERIMENTAL_ON });
     openBar();
-    const marked = rows().map((row) => row.querySelector(".cmdbar-generates")?.textContent ?? null);
-    const names = listed();
-    const wrong = names
+    /* **Mode rows only**, and the `MODES.find` below is why that matters rather
+       than being tidiness: a page row's name is in no `MODE_LABEL`, so it used
+       to fall out of that lookup as `undefined`, index into `GENERATES` as
+       `undefined`, and be reported as a mode that disagreed with itself. The
+       page rows get their own assertion underneath. */
+    const marked = rowsOfKind("mode").map(
+      (row) => row.querySelector(".cmdbar-generates")?.textContent ?? null,
+    );
+    const wrong = listedOfKind("mode")
       .map((name, at) => ({ name, marker: marked[at] }))
       .filter(({ name, marker }) => {
         const mode = MODES.find((m) => MODE_LABEL[m] === name) as Mode;
@@ -457,15 +525,39 @@ describe("the `generates` marker", () => {
   });
 
   /**
+   * **The changelog row carries no marker**, which is all this can honestly
+   * claim. An earlier version of this comment said it would catch a future page
+   * that *did* start work; it would not, and GPT Sol said so on 2026-09-07 —
+   * the renderer excludes every page by `kind`, so such a page would be
+   * unmarked here and this test would stay green while the bar under-warned.
+   * `CommandBar` § the marker records what to do on the day that comes up.
+   *
+   * It is still worth having: it is what would go red if the marker were ever
+   * rendered off something other than `modeGenerates`.
+   */
+  it("is on no page row", () => {
+    reading({ experimental: EXPERIMENTAL_ON });
+    openBar();
+    const pages = rowsOfKind("page");
+    expect(pages.length, "no page rows, so this asserts nothing").toBeGreaterThan(0);
+    for (const row of pages) expect(row.querySelector(".cmdbar-generates")).toBeNull();
+  });
+
+  /**
    * The vacuity guard, and it needs both halves: a bar that marked every row,
    * or none, would satisfy a check that only looked at one of them.
    */
   it("is present on some rows and absent from others", () => {
     reading({ experimental: EXPERIMENTAL_ON });
     openBar();
-    const marked = rows().filter((row) => row.querySelector(".cmdbar-generates") !== null);
+    /* Counted over the **mode** rows, because the page rows never carry it:
+       measured over every row, the "absent from others" half would be satisfied
+       by the changelog row alone, and would go on passing if every mode in the
+       app started generating. */
+    const modeRows = rowsOfKind("mode");
+    const marked = modeRows.filter((row) => row.querySelector(".cmdbar-generates") !== null);
     expect(marked.length).toBeGreaterThan(0);
-    expect(marked.length).toBeLessThan(rows().length);
+    expect(marked.length).toBeLessThan(modeRows.length);
     expect(marked[0]?.textContent).toContain(GENERATES_MARKER);
   });
 });
@@ -590,5 +682,102 @@ describe("⌘/Ctrl-K", () => {
       );
     });
     expect(chord()).toBe(false);
+  });
+});
+
+/**
+ * **The changelog, which is the bar's one row that is not a mode.**
+ *
+ * Greg, 2026-09-07: *"add the Changelog to the footer (e.g. of the Homepage,
+ * and also as a command from the Command Bar."* That overrode product call 1 —
+ * modes only — and narrowed call 4; CommandBar.tsx § the header carries the
+ * reasoning and § `PAGES` carries the list.
+ *
+ * **Against the real `PAGES`, through the real `Dock`**, like everything else
+ * in this file: the words a reader would actually type are the substance of
+ * this change, and a hand-made fixture would let all four of these pass while
+ * the shipped entry answered to nothing. tests/command-match.test.ts covers the
+ * *ranking* of a page with a fixture, which is a different claim.
+ */
+describe("the changelog command", () => {
+  const CHANGELOG_LABEL = "What’s new";
+
+  /** Where the bar sent the reader, or `null` if it did not. */
+  const wentTo = (): string | null =>
+    location.pathname === "/read/a-piece" ? null : location.pathname;
+
+  it("is found by the words a reader would type for it", () => {
+    reading();
+    openBar();
+    for (const query of ["changelog", "releases", "updates"]) {
+      type(query);
+      expect(listed(), `typing ${JSON.stringify(query)} did not offer the changelog`).toContain(
+        CHANGELOG_LABEL,
+      );
+    }
+  });
+
+  /**
+   * **All three ways of typing the label, and the middle one is why this test
+   * exists.** `canonical` does not fold punctuation, so `’`, `'` and no
+   * apostrophe at all are three different strings to the matcher.
+   *
+   * The straight `'` is what a desktop keyboard produces and it matched
+   * *nothing* when this shipped — the likeliest spelling of the label, and the
+   * one form the alias list left out. GPT Sol found it on 2026-09-07; the
+   * loop is written out one query per line so the next person can see all
+   * three are covered rather than trusting a comment.
+   */
+  it("is found however the reader spells the apostrophe", () => {
+    reading();
+    openBar();
+    for (const query of ["what’s new", "what's new", "whats new"]) {
+      type(query);
+      expect(listed(), `typing ${JSON.stringify(query)} did not offer the changelog`).toEqual([
+        CHANGELOG_LABEL,
+      ]);
+    }
+  });
+
+  it("navigates on Enter, and opens no mode", () => {
+    const onMode = vi.fn();
+    reading({ onMode });
+    openBar();
+    type("changelog");
+    expect(listed()).toEqual([CHANGELOG_LABEL]);
+    press("Enter");
+    expect(wentTo()).toBe("/changelog");
+    /* **The half that is easy to leave out.** A page row that also armed a mode
+       would spend on the way out of the article, and nothing the reader could
+       see would say so. */
+    expect(onMode).not.toHaveBeenCalled();
+    expect(dialog().open).toBe(false);
+  });
+
+  it("navigates on a click, like every other row", () => {
+    reading();
+    openBar();
+    type("changelog");
+    act(() => rows()[0]?.click());
+    expect(wentTo()).toBe("/changelog");
+    expect(dialog().open).toBe(false);
+  });
+
+  /**
+   * **A mode row still changes no address**, which is the regression the two
+   * tests above cannot catch: a page-shaped `navigate` that fired on every
+   * Enter would satisfy both of them.
+   *
+   * It is *not* the vacuity guard for `wentTo()`, which an earlier version of
+   * this comment claimed (GPT Sol, 2026-09-07). What guarantees the address did
+   * not simply start at `/changelog` is `beforeEach`, which puts every test at
+   * `/read/a-piece`.
+   */
+  it("leaves the address alone when a mode row is taken", () => {
+    reading({ onMode: () => {} });
+    openBar();
+    type("toc");
+    press("Enter");
+    expect(wentTo()).toBeNull();
   });
 });

@@ -53,6 +53,11 @@ invoked, and `data/` is not writable either. Those are **the orchestrator's to r
 the raw output — not the reviewer's. Promising "you can run a test file" without that caveat is how
 a review comes back with five Postgres assertions quietly skipped.
 
+**And a red test inside the sandbox is not yet a finding.** On 2026-09-07 `tests/run-codex.test.ts`
+ran 69 green in a normal shell and 16 red under `review`, all of them tests that spawn a child or
+write a temp file. Re-run the file yourself before believing a reported failure: the sandbox is a
+second explanation for every red, and it is the likelier one.
+
 **Weight the second review higher than the first — higher, not instead.** A plan-stage review reads
 prose, so it can only catch what the prose says. It cannot find a `PATCH` handler that writes one
 field and then rejects the request — that bug does not exist until somebody writes it. Reviewing the
@@ -601,11 +606,12 @@ that gets dropped.
 
 ## Picking the model and effort
 
-As of 2026-08-24 the Codex CLI offers:
+As of 2026-09-07 the Codex CLI offers:
 
 | Model | Use |
 |---|---|
-| `gpt-5.6-sol` | frontier agentic coding — hard reviews, gnarly implementation |
+| `gpt-6-astra` | the hardest things only — see below |
+| `gpt-5.6-sol` | frontier agentic coding — hard reviews, gnarly implementation. The house default |
 | `gpt-5.6-terra` | balanced, everyday work |
 | `gpt-5.6-luna` | fast and cheap — smoke tests, mechanical edits, quick opinions |
 | `gpt-5.5`, `gpt-5.4` | previous generation; still selectable |
@@ -614,12 +620,29 @@ As of 2026-08-24 the Codex CLI offers:
 ChatGPT-subscription auth and API-key auth, and a model that 400s under one may work under the
 other — check `~/.codex/models_cache.json` or just try it, rather than trusting a hardcoded list.
 
-Reasoning effort is the config key `model_reasoning_effort`, values
-`minimal | low | medium | high | xhigh`. There is **no CLI flag** — it's set with `-c`, which the
-wrapper does for you via `--effort`. A misspelt value is **not** an error: `-c
-model_reasoning_effort=hgih` parses as a perfectly good TOML string and the run quietly proceeds at
-the model's own default effort, so the wrapper validates the value itself before spawning. At `high`/`xhigh` a substantial task can run 20–40 minutes, so
-expect long silences. A trivial `low` run round-trips in about 10 seconds.
+**Astra is opt-in, not the new default.** The house review — every plan, and the code built from it
+— stays on Sol. Greg, 2026-09-07: *"We only want to use it for really difficult stuff, mostly for
+reviewing, because it uses up a lot of tokens."* So reach for it when Sol has already been round
+once and the thing is still not settled — a review that came back split, a bug two passes have
+missed. Everything else on this page holds for it unchanged, the `review` profile included
+(measured 2026-09-07: writes refused, one vitest file runs, no network).
+
+Reasoning effort is the config key `model_reasoning_effort`. There is **no CLI flag** — it's set
+with `-c`, which the wrapper does for you via `--effort`. At `high`/`xhigh` a substantial task can
+run 20–40 minutes, so expect long silences. A trivial `low` run round-trips in about 10 seconds.
+
+**The values are per model**, so no flat list can validate one. Measured 2026-09-07 on 0.153.4:
+`low medium high xhigh max` work on both frontier models, `none` on Sol but not Astra, `minimal` on
+neither any more. `ultra` runs on both although the enum a rejection quotes omits it — codex
+advertises it as maximum reasoning with automatic task delegation, and where it is translated we
+have not established. Neither `max` nor `ultra` is Astra's: 0.153.4 offers both on Sol and Terra
+too, and Astra is only where we noticed the wrapper had gone stale.
+
+So the wrapper's `--effort` list is a **vocabulary, not a compatibility check** — it catches a typo
+for nothing, before a spawn, and codex catches the mismatch with a 400 naming the values that model
+takes. That 400 is new: on 0.146.0 the same misspelling was silent, parsing as a good TOML string
+and running at the model's own default effort, which is why the check exists at all. Don't narrow
+the list back to one model's enum.
 
 Defaults for the whole machine go in `~/.codex/config.toml`, per-project ones in
 `.codex/config.toml`:
