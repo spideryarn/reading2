@@ -84,6 +84,37 @@ export function webSource(meta: Meta): string | null {
   return /^https?:\/\//i.test(url) ? url : null;
 }
 
+/**
+ * **Did this document come off the reader's own disk?** — the question the two
+ * places above `webSource`'s last paragraph have to answer before they may say
+ * *"you uploaded this"*.
+ *
+ * It was `meta.source === "pdf"` in both of them, written down twice, and it
+ * was right for exactly as long as a PDF was the only thing anyone could
+ * upload. A web page became one on 2026-09-07
+ * (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md) and that test then
+ * had both errors at once: it says *no* about an uploaded HTML file, and it
+ * asks about the **media kind** to learn the **origin** — the conflation
+ * src/source.ts's own header warns against, on two axes it calls independent.
+ *
+ * `meta.filename` is `raw_filename`, which stage 1 writes from
+ * `RawManifest.filename` and which nothing fetched ever has. So it is a fact
+ * about provenance, recorded by the step that knew it.
+ *
+ * **The `source === "pdf"` arm stays, and is not redundant.** Every revision
+ * written before `raw_filename` existed has none, and an uploaded PDF from
+ * those weeks would otherwise lose a sentence it has been showing all along.
+ * The two together are wrong only about a *fetched* PDF with no URL at all,
+ * which is what the old test alone was wrong about too.
+ *
+ * **Never for a visitor.** `PublicMeta` carries neither field, deliberately —
+ * see `Meta.filename`. Both callers already establish ownership first, and
+ * `webSource`'s last paragraph says why that is not optional.
+ */
+export function cameOffADisk(meta: Meta): boolean {
+  return meta.filename !== undefined || meta.source === "pdf";
+}
+
 export function SourceLink({
   slug,
   children,

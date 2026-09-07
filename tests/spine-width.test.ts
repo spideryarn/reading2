@@ -328,7 +328,7 @@ function coversRule(): { selector: string; gates: string[] } {
   return { selector: chain[0] ?? "", gates: chain.slice(1) };
 }
 
-/** The class App.tsx puts on `.reader` when the band has no room beside the prose. */
+/** The class `Reader` puts on `.reader` when the band has no room beside the prose. */
 const COVERS_CLASS = "band-covers";
 
 const bandFit = (windowWidth: number, spineOff: boolean) =>
@@ -357,12 +357,15 @@ describe("the band covers the article on a fact, not on a width", () => {
     expect(selector).toContain(`.${COVERS_CLASS}`);
   });
 
-  it("App.tsx writes that class from fit.modeW, beside --mode-w", () => {
+  it("Reader.tsx writes that class from fit.modeW, beside --mode-w", () => {
     /* The two must come from the same number or the stylesheet is guessing
-       again — with the guess hidden in a component rather than in a query. */
-    const app = readFileSync(new URL("../src/web/App.tsx", import.meta.url), "utf8");
-    expect(app).toContain(`"--mode-w": \`\${fit.modeW}px\``);
-    expect(app).toMatch(new RegExp(`fit\\.modeW === 0[^\\n]*\\n?[^\\n]*${COVERS_CLASS}`));
+       again — with the guess hidden in a component rather than in a query.
+
+       `Reader` left `App.tsx` for src/web/reader/Reader.tsx on 2026-09-06; the
+       read is what fails if it moves again. */
+    const reader = readFileSync(new URL("../src/web/reader/Reader.tsx", import.meta.url), "utf8");
+    expect(reader).toContain(`"--mode-w": \`\${fit.modeW}px\``);
+    expect(reader).toMatch(new RegExp(`fit\\.modeW === 0[^\\n]*\\n?[^\\n]*${COVERS_CLASS}`));
   });
 
   it("agrees with fitMode across 650–730, rail on and rail off", () => {

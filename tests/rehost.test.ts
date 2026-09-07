@@ -1204,14 +1204,33 @@ describe("what the reader is told about a figure", () => {
  * nothing else. GPT Sol, 2026-09-06.
  */
 describe("the second draw is wired to the hook", () => {
-  const APP = readFileSync("src/web/App.tsx", "utf8");
+  /* `useArticleAccess` left `App.tsx` for a file of its own on 2026-09-06
+     (260906c § Stage 1a), between this guard being written and dev being merged
+     into that branch. Named here, once, so that a subject which moves again
+     fails on the read. */
+  const ACCESS = readFileSync("src/web/article/access.ts", "utf8");
+
+  /**
+   * The body of the hook's effect, with **both anchors checked before the
+   * slice**.
+   *
+   * `indexOf` returning -1 makes `slice(-1, -1)` the empty string, and an
+   * assertion against the empty string is an assertion against nothing. It
+   * happens to fail loudly here rather than pass — every assertion below looks
+   * for something — but that is a property of what these two tests happen to
+   * ask, not of the scan, and the next assertion added need not share it.
+   * docs/reusable/silent-success.md.
+   */
+  function effect(): string {
+    const start = ACCESS.indexOf("function useArticleAccess");
+    const end = ACCESS.indexOf("async function resolveAccess");
+    expect(start, "useArticleAccess must exist in src/web/article/access.ts").toBeGreaterThan(-1);
+    expect(end, "resolveAccess must follow it there").toBeGreaterThan(start);
+    return ACCESS.slice(start, end);
+  }
 
   it("sets the answer a second time when the images arrive", () => {
-    const effect = APP.slice(
-      APP.indexOf("function useArticleAccess"),
-      APP.indexOf("async function resolveAccess"),
-    );
-    expect(effect, "the scan itself must not silently find nothing").toContain("resolveAccess(");
+    expect(effect(), "the scan itself must not silently find nothing").toContain("resolveAccess(");
     /* **The promise has to be consumed and its value has to reach state**, and
        the two are asserted as one pattern rather than two `toContain`s: written
        apart, `withImages` present anywhere and `setAnswer` present anywhere both
@@ -1219,7 +1238,7 @@ describe("the second draw is wired to the hook", () => {
        this test passed while every image on every article went blank. It pins
        the shape as written, deliberately — a different shape is welcome and has
        to come back here and say so. */
-    expect(effect).toMatch(/withImages\s*\.then\([\s\S]{0,400}setAnswer\(/);
+    expect(effect()).toMatch(/withImages\s*\.then\([\s\S]{0,400}setAnswer\(/);
   });
 
   /**
@@ -1230,14 +1249,12 @@ describe("the second draw is wired to the hook", () => {
    * network round trip, and nothing here can mount one.
    */
   it("claims and releases the load in the effect, not inside rehostImages", () => {
-    const effect = APP.slice(
-      APP.indexOf("function useArticleAccess"),
-      APP.indexOf("async function resolveAccess"),
-    );
-    expect(effect).toContain("beginArticleLoad()");
+    expect(effect()).toContain("beginArticleLoad()");
     /* The claim comes before the call it is for. */
-    expect(effect.indexOf("beginArticleLoad()")).toBeLessThan(effect.indexOf("resolveAccess("));
+    expect(effect().indexOf("beginArticleLoad()")).toBeLessThan(
+      effect().indexOf("resolveAccess("),
+    );
     /* And the cleanup hands it back — `live = false` alone frees nothing. */
-    expect(effect).toMatch(/return \(\) => \{[\s\S]{0,600}load\.release\(\)/);
+    expect(effect()).toMatch(/return \(\) => \{[\s\S]{0,600}load\.release\(\)/);
   });
 });

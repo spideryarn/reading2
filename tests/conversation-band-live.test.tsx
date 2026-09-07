@@ -41,7 +41,13 @@ vi.mock("../src/web/live/useLiveConversation.js", async () => {
   };
 });
 
-const { ConversationBand } = await import("../src/web/App.js");
+/* `ConversationBand` left `App.tsx` for a mode module of its own on
+   2026-09-06 (260906c § Stage 3). A **dynamic** import, which is why the
+   direction guards did not flag this one when the move landed — see
+   `refuseUntraceableImports` in tests/helpers/ts-ast.ts, and F21. */
+const { ConversationBand } = await import(
+  "../src/web/modes/conversation/ConversationModes.js"
+);
 enableHistorySync();
 let host: HTMLDivElement;
 let root: Root;

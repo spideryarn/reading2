@@ -278,7 +278,8 @@ the node shape explicitly sanctions navigation chrome
 ([granularity-zoom.md § Node shape](granularity-zoom.md#node-shape)). It is styled differently, and
 it is never a fallback for a missing gist in the reading view.
 
-Listing the sub-sections is why [`App.tsx`](../../src/web/App.tsx) builds the outline three levels
+Listing the sub-sections is why [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) builds the
+outline three levels
 deep rather than two. The rail itself still only ever draws L1 and L2.
 
 ## Five things that are load-bearing

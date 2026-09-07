@@ -1,5 +1,10 @@
 /**
- * What counts as a PDF worth uploading, decided in one place.
+ * What counts as a file worth uploading, decided in one place.
+ *
+ * **Two kinds since 2026-09-07** — a PDF and a web page — and one function says
+ * which (`uploadKind`). Before that this module was named entirely around PDFs,
+ * and several sentences below still lead with one because a PDF is where every
+ * one of the hard-won details came from.
  *
  * A module of its own for the same reason src/ingest.ts is one: **the answer
  * has to be the same in the browser and on the server**, and they are different
@@ -82,7 +87,7 @@ export const MAX_PAGES = 250;
  * `pdfTooManyPages` for the pages.
  */
 export function uploadLimits(): string {
-  return `PDF, up to ${formatBytes(MAX_UPLOAD_BYTES)} and ${MAX_PAGES} pages.`;
+  return `PDF or web page, up to ${formatBytes(MAX_UPLOAD_BYTES)}. PDFs up to ${MAX_PAGES} pages.`;
 }
 
 /** What the reader chose, in the small part of `File` that matters here. */
@@ -124,15 +129,21 @@ export interface ChosenFile {
  * plain prose, which is exactly right for a refusal with no button under it.
  */
 export function uploadProblem(file: ChosenFile): string | null {
-  if (!looksLikePdf(file)) {
+  if (uploadKind(file) === null) {
     /* **"Doesn't look like"**, not "isn't". All this saw was a name and the
-       browser's guess at a type, and `looksLikePdf` is deliberately generous
-       about both. The check that can be certain is `%PDF-` over the bytes, on
-       the server. A sentence more certain than its evidence is one the reader
-       catches us out on the day it is wrong. */
+       browser's guess at a type, and `uploadKind` is deliberately generous
+       about both. The check that can be certain is over the bytes, on the
+       server. A sentence more certain than its evidence is one the reader
+       catches us out on the day it is wrong.
+
+       **The code stays `[pick-pdf]` now that a second kind is legal**, and that
+       is deliberate. A code names a branch so that somebody can quote four
+       characters and be understood (docs/project/copy.md), and this is the same
+       branch it always was — renaming it would strand every report that already
+       quotes it in exchange for a tidier spelling. */
     return (
-      "That doesn't look like a PDF. Uploads are PDFs for now — a web page can go in the box " +
-      "above instead. [pick-pdf]"
+      "That doesn't look like a PDF or a web page. Uploads are PDF and HTML files — or a web " +
+      "address can go in the box above instead. [pick-pdf]"
     );
   }
   if (file.size === 0) {
@@ -145,7 +156,8 @@ export function uploadProblem(file: ChosenFile): string | null {
 }
 
 /**
- * A PDF as far as anything before the bytes can tell.
+ * **What this file claims to be**, before anybody has looked at a single byte —
+ * or `null` for a claim we will not take.
  *
  * **Either the type or the name**, rather than both. Browsers disagree about
  * `File.type`: it is `application/pdf` from most file pickers, and it is the
@@ -154,11 +166,68 @@ export function uploadProblem(file: ChosenFile): string | null {
  * good files. And the name alone is not enough either, because a picker can
  * hand over a `.PDF` with any type at all. So this is deliberately generous,
  * and the strict check happens over the bytes on the server.
+ *
+ * **A second kind since 2026-09-07**, which is what
+ * docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md is about — and note
+ * what this function now is and is not. It answers the same question
+ * `sniffKind` (src/fetch.ts) answers, which is why it returns a kind rather
+ * than a boolean; but it answers it from a **claim**, and the two are allowed
+ * to disagree. A `.html` whose bytes begin `%PDF-` is a PDF, and
+ * `acquireUpload` is where that is settled.
+ *
+ * This module deliberately does not import `DocumentKind` for the return type.
+ * It has no dependencies at all — that is the whole reason it exists, so the
+ * browser can hold it — and src/fetch.ts brings the network stack with it.
+ * `tests/uploads.test.ts` pins that the two spellings stay the same two words.
  */
-function looksLikePdf(file: ChosenFile): boolean {
-  if (file.type === "application/pdf") return true;
-  if (file.type !== "" && file.type !== "application/octet-stream") return false;
-  return file.name.toLowerCase().endsWith(".pdf");
+export function uploadKind(file: ChosenFile): "pdf" | "html" | null {
+  if (file.type === "application/pdf") return "pdf";
+  if (file.type === "text/html") return "html";
+  const name = file.name.toLowerCase();
+  const html = name.endsWith(".html") || name.endsWith(".htm");
+
+  /* **No usable guess** — the empty string, or a shrug. The name decides. */
+  if (file.type === "" || file.type === "application/octet-stream") {
+    if (name.endsWith(".pdf")) return "pdf";
+    return html ? "html" : null;
+  }
+
+  /* **A type the OS was definite about, and it is neither of ours.** The name
+     does not get to overrule it, so a `.pdf` the browser is sure is an archive
+     is refused here rather than after the transfer.
+
+     **One exception, and it is not a softening of that rule.** `text/plain` on
+     a `.html` is not a contradiction — a web page *is* text, and an OS that
+     does not know the extension says exactly this — so refusing it would turn a
+     good file away on the strength of a guess. `sniffKind` (src/fetch.ts) calls
+     `text/plain` vague for the same reason. It stays a refusal for a `.pdf`,
+     where it *is* a contradiction, which is a distinction
+     `tests/uploads.test.ts` was already pinning before this second kind existed
+     and which a blanket "treat text/plain as vague" would have broken.
+     ⟨Sol, 2026-09-07, raised the case; the split is the answer to it.⟩ */
+  return file.type === "text/plain" && html ? "html" : null;
+}
+
+/**
+ * **The `Content-Type` the browser puts on its PUT to Storage.**
+ *
+ * The bucket has an allowlist and enforces it against the service key too
+ * (`allowed_mime_types` in supabase/config.toml; what it costs to get that
+ * wrong is docs/postmortems/260828a-the-config-file-is-not-the-bucket.md), so a
+ * mislabelled file is refused at the door with a 415 rather than after 50 MB.
+ *
+ * It is still only a **claim**, checked against the bytes on the server — which
+ * is exactly why it belongs here, in the module both sides share, rather than
+ * being spelled out as a literal in src/web/upload.ts. That literal was
+ * `application/pdf` for every file until 2026-09-07, which is the one line that
+ * would have made an HTML upload fail at the bucket with a status nobody could
+ * read.
+ *
+ * Falls back to `application/pdf` for a file `uploadKind` refused, because
+ * `uploadProblem` has already stopped that file and there is no PUT to label.
+ */
+export function uploadContentType(file: ChosenFile): string {
+  return uploadKind(file) === "html" ? "text/html" : "application/pdf";
 }
 
 /**

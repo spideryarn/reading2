@@ -1241,6 +1241,38 @@ export interface Meta {
   excerpt?: string;
   note?: string;
 
+  /**
+   * **The reader's own name for a file they uploaded** — `raw_filename`, which
+   * stage 1 writes from `RawManifest.filename` and which is null for everything
+   * that was fetched.
+   *
+   * So its presence is the honest answer to *did this come off your disk?*, and
+   * that question stopped being answerable by `source === "pdf"` on 2026-09-07,
+   * when a web page became a legal upload
+   * (docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md). `source` is the
+   * **media kind**; conflating the two axes is the thing src/source.ts's own
+   * header warns against, and the masthead and the metadata page were both
+   * doing it because until that day it happened to be true.
+   *
+   * **Owner-facing only.** It is not in `PublicMeta` and must not be — the
+   * public SQL projection does not select it and `publicMeta` is a hand-built
+   * allowlist, so it is withheld twice.
+   *
+   * **But do not read that as "nobody else can see what they called it."** The
+   * *stem* of the filename is already public for a published article, and has
+   * been since uploads existed: `slugFromFilename` (src/ingest.ts) mints the
+   * article's slug from it, and the slug is in `PublicMeta`. So
+   * `confidential-client-acme.html` becomes `/read/confidential-client-acme-spya-…`.
+   * What this field withholds is the exact string — the extension, the case, the
+   * punctuation, anything the kebabing dropped — and that is worth withholding,
+   * but it is a smaller claim than it first looks. ⟨Sol, 2026-09-07, who caught
+   * an earlier version of this comment claiming the larger one.⟩ The slug
+   * exposure predates this work and is Greg's call, not an agent's:
+   * docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md § A privacy question
+   * this work did not create and did not fix.
+   */
+  filename?: string;
+
   /* ---- PDFs only. Absent on everything Readability extracted. ---- */
 
   /** What this article was made from. Absent means a web page. */
@@ -2901,7 +2933,7 @@ export interface ThreadSummary {
    * prompt. A pasted `?mode=toc&thread=<a Remember thread>` would therefore
    * continue a Remember conversation as a chat. The overlay is gated on this
    * instead. See
-   * src/web/App.tsx § overlay, and GPT Sol's review of
+   * src/web/reader/Reader.tsx § overlay, and GPT Sol's review of
    * docs/plans/260827ah-review-mode.md, finding 7.
    */
   kind: ThreadKind;

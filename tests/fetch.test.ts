@@ -28,6 +28,7 @@ import {
   retryAfterMs,
   retryDelayMs,
   sniffKind,
+  uploadedDocumentKind,
   type FetchLike,
   type FetchOptions,
 } from "../src/fetch.js";
@@ -249,6 +250,63 @@ describe("mimeType", () => {
     expect(mimeType("Text/HTML; charset=utf-8")).toBe("text/html");
     expect(mimeType("application/pdf")).toBe("application/pdf");
     expect(mimeType(null)).toBeNull();
+  });
+});
+
+/**
+ * **The same question, asked of a file somebody uploaded** — where the only
+ * "header" is the reader's own filename.
+ *
+ * Every case here is one where the name and the bytes could disagree, plus the
+ * one that nearly shipped broken: a UTF-16 page. `sniffKind` scans bytes as
+ * Latin-1 and UTF-16 markup is `<\0!\0d\0o…`, so the raw scan sees nothing at
+ * all — and the first version of `uploadedDocumentKind` refused a perfectly good
+ * file that `decodeHtml` reads flawlessly. Found by a GPT Sol review, 2026-09-07,
+ * and this is the case that keeps it fixed.
+ * docs/plans/260907b-upload-an-html-file-and-a-url-for-a-pdf.md.
+ */
+describe("uploadedDocumentKind", () => {
+  const enc = new TextEncoder();
+  const page = "<!doctype html><html><head><title>U</title></head><body><p>Prose.</p></body></html>";
+  const aPdf = enc.encode("%PDF-1.4\nhello\n%%EOF\n");
+
+  /** The same markup in UTF-16, with the BOM a saved file would carry. */
+  const utf16 = (littleEndian: boolean) => {
+    const out = new Uint8Array(2 + page.length * 2);
+    out[0] = littleEndian ? 0xff : 0xfe;
+    out[1] = littleEndian ? 0xfe : 0xff;
+    for (let i = 0; i < page.length; i++) {
+      const c = page.charCodeAt(i);
+      out[2 + i * 2] = littleEndian ? c & 0xff : c >> 8;
+      out[3 + i * 2] = littleEndian ? c >> 8 : c & 0xff;
+    }
+    return out;
+  };
+
+  it("reads a page whose markup no Latin-1 scan can see", () => {
+    expect(uploadedDocumentKind("saved.html", utf16(true))).toBe("html");
+    expect(uploadedDocumentKind("saved.html", utf16(false))).toBe("html");
+    /* The plain case, so the fallback above cannot be the only thing working. */
+    expect(uploadedDocumentKind("saved.html", enc.encode(page))).toBe("html");
+  });
+
+  it("believes the bytes over the name, in both directions", () => {
+    expect(uploadedDocumentKind("mislabelled.html", aPdf)).toBe("pdf");
+    expect(uploadedDocumentKind("mislabelled.pdf", enc.encode(page))).toBe("html");
+  });
+
+  /* The tie the filename exists to break: `%PDF-` at byte zero is a PDF whatever
+     anyone says, but a page that merely *mentions* one is a page — and without
+     the claim it would go to the transcriber and be charged for. */
+  it("does not send a page that mentions a PDF to the transcriber", () => {
+    const mentions = enc.encode(page.replace("<p>", "<p>about %PDF-1.7 files, "));
+    expect(uploadedDocumentKind("p.html", mentions)).toBe("html");
+  });
+
+  it("refuses what the bytes do not support, whatever it is called", () => {
+    expect(uploadedDocumentKind("notes.html", enc.encode(`prose, ${"x".repeat(400)}`))).toBeNull();
+    expect(uploadedDocumentKind("movie.html", new Uint8Array(3000).fill(7))).toBeNull();
+    expect(uploadedDocumentKind("paper.pdf", enc.encode("PK this is a zip"))).toBeNull();
   });
 });
 

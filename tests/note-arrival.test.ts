@@ -3,7 +3,7 @@
  *
  * **A weak test, on purpose, and here is exactly how weak.** The rule that
  * decides where a pasted `?note=` lands is pure and properly tested in
- * scroll.test.ts. The *wiring* — one effect in App.tsx — is React, and this
+ * scroll.test.ts. The *wiring* — one effect in `Reader` — is React, and this
  * repo has no component runner (docs/plans/260826a-chat-mode.md), so nothing here can
  * say the page actually moves. All this catches is the one regression that
  * would otherwise be silent: the effect being deleted or commented out while
@@ -12,7 +12,7 @@
  *
  * > [!WARNING]
  * > **Comments are stripped before the match, and that is the load-bearing
- * > part.** The effect in App.tsx carries a long explanation that names
+ * > part.** The effect in `Reader` carries a long explanation that names
  * > `arrivalTarget` three times. A guard that scanned the raw file would be
  * > satisfied by that prose alone, so deleting the call and leaving the comment
  * > would keep this green — which is precisely the failure this repo hit on
@@ -24,7 +24,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const APP = path.resolve(import.meta.dirname, "..", "src", "web", "App.tsx");
+/**
+ * The file the effect is in — src/web/reader/Reader.tsx since 2026-09-06, when
+ * `Reader` left `App.tsx`. Named as a constant so that a subject which moves
+ * again fails on the read rather than quietly matching nothing.
+ */
+const READER = path.resolve(import.meta.dirname, "..", "src", "web", "reader", "Reader.tsx");
 
 /**
  * Source with every comment removed, so prose cannot satisfy a guard.
@@ -38,7 +43,7 @@ function stripComments(src: string): string {
 }
 
 describe("the ?note= arrival wiring", () => {
-  const code = stripComments(readFileSync(APP, "utf8"));
+  const code = stripComments(readFileSync(READER, "utf8"));
 
   it("calls arrivalTarget rather than only naming it", () => {
     // The paren is what makes this a call. The import names it too, and an

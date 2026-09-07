@@ -35,8 +35,10 @@ nested and numbered, with one control — **Depth** — saying how far down to d
 [original-version/summaries.md](original-version/summaries.md) for the version it came from.
 
 Code: [`src/web/SummaryPanel.tsx`](../../src/web/SummaryPanel.tsx) (the panel),
-[`buildSummaryTree`](../../src/web/tree.ts) in `src/web/tree.ts` (the shape it draws), and
-`§ summary mode` in [`src/web/styles/summary.css`](../../src/web/styles/summary.css). **There is no
+[`src/web/modes/summary/SummaryMode.tsx`](../../src/web/modes/summary/SummaryMode.tsx) (the mode
+controller that mounts it), [`buildSummaryTree`](../../src/web/tree.ts) in `src/web/tree.ts` (the
+shape it draws), and `§ summary mode` in
+[`src/web/styles/summary.css`](../../src/web/styles/summary.css). **There is no
 stage**, no artefact and no route: everything on screen arrives inside the article payload.
 
 ```

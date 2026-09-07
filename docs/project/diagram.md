@@ -14,7 +14,9 @@ not the same shape for every article.
   [`diagram-graph.test.ts`](../../tests/diagram-graph.test.ts) and
   [`scatter.test.ts`](../../tests/scatter.test.ts).
 - **The shell, the interaction and the paint** —
-  [`src/web/DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx),
+  [`src/web/DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx), with
+  [`src/web/modes/diagram/DiagramMode.tsx`](../../src/web/modes/diagram/DiagramMode.tsx)
+  as the mode controller that mounts it,
   `§ diagram mode` in [`src/web/styles/diagram.css`](../../src/web/styles/diagram.css) and
   `§ drift and trail` in [`src/web/styles/diagram-drift.css`](../../src/web/styles/diagram-drift.css).
 - **What the server computes for the last two** —

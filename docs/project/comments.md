@@ -447,10 +447,11 @@ has seen anything. This one lands on a page that is already up and being looked 
 what says the article moved rather than was replaced. It is also the safer of the two: the glide gives
 way to a wheel or a touch, so a reader who started reading during the fetch is not dragged off their
 line. The decision itself is `arrivalTarget`, pure and pinned in
-[`tests/scroll.test.ts`](../../tests/scroll.test.ts). The wiring is one effect in `App.tsx`, and
+[`tests/scroll.test.ts`](../../tests/scroll.test.ts). The wiring is one effect in `Reader`, and
 whether the page *actually moves* can only be checked in a browser — there is no component runner
 here. What is guarded is narrower and worth knowing the shape of:
-[`tests/note-arrival.test.ts`](../../tests/note-arrival.test.ts) reads `App.tsx` and checks the call
+[`tests/note-arrival.test.ts`](../../tests/note-arrival.test.ts) reads
+[`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) and checks the call
 survives, **with comments stripped first**. The effect's own explanation names `arrivalTarget` twice,
 so a guard on the raw file would have been satisfied by prose while the call was gone — the same
 silent pass a `sanitizeStoredBlocks` guard hit on 2026-08-26. Match a call, never a mention.
@@ -776,7 +777,7 @@ nothing to poll.
 3. **The browser's own selection highlight** sits on top of the mark we just drew, so without
    `removeAllRanges()` after asking, the new artefact is invisible until the reader clicks
    elsewhere — and it looks exactly like a mark that was never drawn. The call is in
-   [`App.tsx`](../../src/web/App.tsx) § `onSelect`.
+   [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `onSelect`.
 4. **Retry, which shipped broken and was caught in the browser.** `retry` fired the POST from
    inside a `setComments` updater. An updater must be pure — React StrictMode invokes it twice — so
    one click sent *two* requests; and because `CommentStore.create` refused a client id that was

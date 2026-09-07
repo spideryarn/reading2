@@ -82,9 +82,16 @@
  * work — but read through the whole reader, that assertion becomes "the band is
  * somewhere on the page", and Sol's F16 is the finding it exists to keep.
  *
- * Referee is mounted through `<App/>` anyway, because there is no other way:
- * `RefereeBand` is an unexported function inside `App.tsx`. Its shape carries a
- * `parent` selector instead, which catches the same wrapper one level up. That
+ * Referee is mounted through `<App/>`, and its shape carries a `parent`
+ * selector instead, which catches the same wrapper one level up.
+ *
+ * That was once forced — `RefereeBand` was an unexported function inside
+ * `App.tsx` and there was no other way to reach it. Since 2026-09-06 it is
+ * `export function RefereeBand` in
+ * [`src/web/modes/referee/RefereeMode.tsx`](../src/web/modes/referee/RefereeMode.tsx)
+ * and could be mounted directly; the harness is kept because mounting the whole
+ * reader is what makes this a check of what a reader sees, not because it is
+ * still the only door. That
  * is one harness's worth of cost for one band, and it is why the other ten do
  * not use it.
  *
@@ -1471,7 +1478,8 @@ function mountDebate(debate: Debate | null): ReactNode {
 /**
  * Quiz, always with a `subMode` control.
  *
- * `RememberBand` in App.tsx passes one on every render, so a Quiz band with an
+ * `RememberBand` (src/web/modes/conversation/ConversationModes.tsx) passes
+ * one on every render, so a Quiz band with an
  * empty header is not a state a reader can reach — but the prop is optional, so
  * one *is* a state stage 2 can create by accident. That is what
  * `treats a true head the same as an absent one` above is guarding; here the
@@ -1752,9 +1760,10 @@ const OUTLINE: BandShape = {
 /**
  * Referee, which is the one band that is not a component anybody can mount.
  *
- * `RefereeBand` is an unexported function inside `App.tsx`, so this shape is
- * read through the whole reader — see `mountReader` below — and `parent` stands
- * in for the whole-output check the other ten get.
+ * `RefereeBand` lives in `src/web/modes/referee/RefereeMode.tsx` (it was an
+ * unexported function inside `App.tsx` until 2026-09-06), and this shape is
+ * still read through the whole reader — see `mountReader` below — with `parent`
+ * standing in for the whole-output check the other ten get.
  */
 const REFEREE: BandShape = {
   className: "mode-band gloss referee",

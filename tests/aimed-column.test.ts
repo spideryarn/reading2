@@ -51,7 +51,10 @@ import { readerCssNoComments } from "./helpers/stylesheets.js";
    still fail. tests/helpers/stylesheets.ts. */
 const css = readerCssNoComments();
 const tsx = readFileSync("src/web/TableView.tsx", "utf8");
-const app = readFileSync("src/web/App.tsx", "utf8");
+/* The reading view, which left `App.tsx` for src/web/reader/Reader.tsx on
+   2026-09-06. Named here so that a subject which moves again fails on the read
+   rather than on an assertion against the wrong file. */
+const reader = readFileSync("src/web/reader/Reader.tsx", "utf8");
 
 /** The depths the tint has to cover. `buildGeometry` produces three or five. */
 const LADDER = [0, 1, 2, 3, 4, 5, 6, 7];
@@ -59,8 +62,8 @@ const LADDER = [0, 1, 2, 3, 4, 5, 6, 7];
 describe("the aimed column", () => {
   it("is one attribute on `.reader`, not a class on thousands of cells", () => {
     /* `.reader` and not the table, because the panels the tint has to reach are
-       `position: fixed` siblings of it. App.tsx says so at the call site. */
-    expect(app).toContain("data-aim={navDepth}");
+       `position: fixed` siblings of it. `Reader` says so at the call site. */
+    expect(reader).toContain("data-aim={navDepth}");
     /* And the table is no longer told the aim at all, which is the win that
        came with moving it: `memo(TableView)` reconciles ~2,200 cells and the
        aim changes on every sideways twitch of the pointer. Comments stripped,
