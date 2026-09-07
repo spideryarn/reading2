@@ -1179,6 +1179,27 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`MissingRawObject`, which is the proof that a wrong hash is loud rather than empty. The " +
       "coverage claim is unchanged; only the store under it is.",
   },
+  /**
+   * **Written 2026-09-07, after the witness ran**, so `static-only` for the
+   * ordinary reason the header gives. It was born on Postgres — there is no
+   * filesystem half to finish moving — so it is collateral rather than a
+   * `database-integration`.
+   */
+  "tests/referee-stream-lifetime.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "The three streaming referee routes held open mid-stream, so that moving them into " +
+      "`AUTH_ROUTES` cannot quietly turn an awaited handler into a launched one. It seeds through " +
+      "`scratchArticleInPg` and that copy step is the only condemned module it reaches: all three " +
+      "generators are stubbed, so no model is called and no ledger row is written. Watched red " +
+      "three times against the unmoved routes — dropping the guard's `await`, deleting " +
+      "`refereeing.delete(key)`, and releasing the lock before the stream finishes — each failing " +
+      "on its own assertion. The second of those is the one that matters: an earlier draft of the " +
+      "file stayed green under it, because a freshly begun row is spared by `sweepPending`'s age " +
+      "guard whether or not the lock holds it.",
+  },
   "tests/remember-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
@@ -2550,6 +2571,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/referee-mirror-route.test.ts": "private-postgres",
   "tests/referee-routes-postgres.test.ts": "private-postgres",
   "tests/referee-scan-route.test.ts": "private-postgres",
+  /* Three streaming referee routes held open mid-stream. Private rather than
+     shared because it backdates `attempt_started_at` and `created_at` on this
+     article's rows to reach the sweep's age branch, which a peer suite reading
+     the same table at the same moment would see. */
+  "tests/referee-stream-lifetime.test.ts": "private-postgres",
   /* Converted in the hinge, 2026-09-05: its child wrote a JSONL ledger through
      `fsCostStore`, which `costStore` chose because the flag was unset. The rows
      are `spideryarn.ai_calls` now, and the child reaches the private database

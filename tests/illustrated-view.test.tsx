@@ -487,6 +487,93 @@ describe("what it depicts", () => {
   });
 });
 
+/**
+ * **The backdrop of the full-screen overlay — the one way out of it nothing
+ * tested.**
+ *
+ * Five native `<dialog>`s in this app close on a press outside them, all five
+ * by the same three lines — an `onClick` on the dialog and, here,
+ * `if (e.target === dialog.current) setFull(false)`. Until 2026-09-07 not one
+ * test anywhere dispatched a click whose target was the dialog;
+ * tests/feedback-dialog.test.tsx § *the backdrop* is the first of the five and
+ * carries the measurement of how much of it was really unprotected.
+ *
+ * **Why the target comparison is the whole mechanism.** A modal `<dialog>`'s
+ * `::backdrop` is not a separate element: a press on the dimmed area arrives
+ * with the dialog itself as the target, while a press on anything the dialog
+ * contains arrives with that child and bubbles up through the same handler. So
+ * one equality test separates "outside" from "inside" — and losing it makes
+ * every press on the enlarged plate dismiss it, which is the gesture a reader
+ * uses to look closely at a picture.
+ *
+ * jsdom has no `showModal` and no `::backdrop`, and neither is needed here: the
+ * handler compares targets and nothing else. That a real backdrop press does
+ * target the dialog is the platform's contract, which is why these assert on
+ * the target rather than on a pixel. The per-element stubs below are the ones
+ * the other full-screen tests in this file already use.
+ *
+ * The overlay is entered by pressing Enlarge, because `full` is this
+ * component's own state and there is no prop to nail open — so `setFull(false)`
+ * really has to run for anything below to pass.
+ */
+describe("the backdrop of the full-screen overlay", () => {
+  /** Enlarge, and hand back the `<dialog>` that is now open. */
+  async function enlarge(): Promise<HTMLDialogElement> {
+    const dialog = host.querySelector<HTMLDialogElement>("dialog.ill-full");
+    expect(dialog, "no overlay to enlarge into").not.toBeNull();
+    /* jsdom implements neither, and a `<dialog>` without them never reports open. */
+    if (dialog) {
+      dialog.showModal = function showModal(this: HTMLDialogElement) {
+        this.setAttribute("open", "");
+      };
+      dialog.close = function close(this: HTMLDialogElement) {
+        this.removeAttribute("open");
+        this.dispatchEvent(new Event("close"));
+      };
+    }
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>(".ill-zoom")?.click();
+    });
+    await settle();
+    expect(dialog?.hasAttribute("open"), "Enlarge did not open the overlay").toBe(true);
+    return dialog as HTMLDialogElement;
+  }
+
+  it("closes on a press whose target is the dialog itself", async () => {
+    serving();
+    await mount();
+    const dialog = await enlarge();
+
+    await act(async () => {
+      dialog.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+
+    expect(dialog.hasAttribute("open")).toBe(false);
+    /* And `full` really went back, rather than the dialog closing under a band
+       that still says the picture is full screen. */
+    expect(host.querySelector(".ill-in-full")).toBeNull();
+  });
+
+  it("stays open when the press lands on something inside it", async () => {
+    serving();
+    await mount();
+    const dialog = await enlarge();
+
+    const inside = dialog.querySelector(".ill-in-full");
+    expect(inside, "nothing inside the overlay to press").not.toBeNull();
+    await act(async () => {
+      inside?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+
+    /* Without the comparison, a press anywhere on the enlarged plate would put
+       it away — including the press that scrolls or selects. */
+    expect(dialog.hasAttribute("open")).toBe(true);
+    expect(host.querySelector(".ill-in-full")).not.toBeNull();
+  });
+});
+
 describe("a plate the run could not paint", () => {
   /**
    * A run keeps the plates it managed to draw and records why the others have

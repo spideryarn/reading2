@@ -246,6 +246,47 @@ describe("the colour picker on a saved search", () => {
     expect(recoloured).toEqual([]);
   });
 
+  /* **And on a press anywhere else, which Escape does not stand in for.**
+     `useDismiss(context)` is given no options, so the thing that closes this
+     picker for almost every reader is a default: read out of
+     node_modules/@floating-ui/react on 2026-09-07, `outsidePress = true` and
+     `outsidePressEvent = 'pointerdown'`. Escape was the only dismissal any test
+     in this file dispatched, so that default was unpinned — taking `useDismiss`
+     out of `useInteractions` left the whole file green.
+
+     `pointerdown` rather than `click`, so the popover is gone before the press
+     reaches whatever is under it; a picker floating over the results list would
+     otherwise eat the first press on a hit. tests/block-gutter.test.tsx §
+     "closes on a press anywhere else" is the same shape for the same reason. */
+  it("closes on a press anywhere else on the page, without recolouring anything", async () => {
+    await mount();
+    await press(triggerFor(RUNS[0]!));
+    expect(swatches()).toHaveLength(PALETTE_SLOTS);
+    await act(async () => {
+      document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+    expect(swatches()).toHaveLength(0);
+    expect(recoloured).toEqual([]);
+  });
+
+  /* The other half of that default. A press that lands inside the popover is
+     not a dismissal — the reader is on their way to a swatch, and a picker that
+     closed under the finger reaching for it would need two presses for every
+     colour. The grid rather than a swatch is the target on purpose: a swatch
+     closes the picker anyway, by *choosing*, which is a different mechanism and
+     would hide this one. */
+  it("stays open when the press lands inside the popover", async () => {
+    await mount();
+    await press(triggerFor(RUNS[0]!));
+    const grid = document.querySelector(".srch-picker .srch-picker-grid");
+    if (!grid) throw new Error("the popover opened without its grid");
+    await act(async () => {
+      grid.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+    expect(swatches()).toHaveLength(PALETTE_SLOTS);
+    expect(recoloured).toEqual([]);
+  });
+
   it("names each swatch, because a colour is the one thing a label cannot be", async () => {
     await mount();
     await press(triggerFor(RUNS[0]!));

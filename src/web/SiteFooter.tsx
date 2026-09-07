@@ -99,6 +99,7 @@ import type { ReactNode } from "react";
 import { Link } from "./Link.js";
 import {
   CHANGELOG_HREF,
+  CHANGELOG_LABEL,
   CONTACT_HREF,
   FEATURES_HREF,
   LIBRARY_HREF,
@@ -160,7 +161,7 @@ const LINKS: readonly { href: string; label: string; here: FooterPage }[] = [
      "What's new" rather than "Changelog": the latter is the internal name for
      the process that writes the page (docs/project/changelog.md), and a
      reader has never heard of it. */
-  { href: CHANGELOG_HREF, label: "What’s new", here: "changelog" },
+  { href: CHANGELOG_HREF, label: CHANGELOG_LABEL, here: "changelog" },
 ];
 
 const LINK_CLASS = "tw:text-ink-faint tw:hover:text-highlight";
