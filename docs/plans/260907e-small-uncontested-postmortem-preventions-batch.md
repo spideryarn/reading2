@@ -386,7 +386,7 @@ what `review-prompt-template.md` warns about, observed here for real.
 
 ## What landed
 
-### Stage 1 — built
+### Stage 1 — built, landed as `cd3b1343`
 
 - `src/web/AppBoundary.tsx:52`, `src/web/FeatureBoundary.tsx:186`, `src/web/LazyPage.tsx:107`:
   `componentDidCatch(error: unknown, …)`.
@@ -455,6 +455,40 @@ Then one **real-file** mutation, because the controls prove the logic and not th
 `src/routes.ts:6439 — CommentIdTaken (src/comments.ts): not in mayPassThrough, and no numeric
 non-nullable status`. Reverted, `git diff` clean.
 
+**Review** — [260907e-stage23-review-sol.md](260907e-stage23-review-sol.md), covering Stages 2 and 3
+together because they are disjoint. *"Land with F7 and F8 fixed, plus the F9 wording correction. No
+established P0 or P1."* Both findings against Stage 2 were **false positives in the check itself**,
+which is the worst kind of defect a check like this can have — it certifies something the guard would
+actually scrub, wearing the check's own badge. Both fixed:
+
+- **F7 (P2) — `declaresNumericStatus` accepted five shapes that are not on the instance.**
+  `static readonly status = 409` lives on the constructor; `declare`, `!`, `?` and `abstract` each
+  assert or permit a value the emitted JavaScript never assigns. Sol compiled the `declare` and
+  definite-assignment forms and emitted them: both instances came out with `status: undefined` while
+  the predicate said they were fine. It also walked into method bodies, so a class nested inside a
+  method could certify its enclosing class. Now it reads the class's own members directly and rejects
+  all five modifiers, with a control per shape and one for the nested case.
+- **F8 (P2) — `allowlisted` read the allowlist as names that appear near it.** It collected every
+  `instanceof` under `mayPassThrough` regardless of the left operand, the control flow, or the return
+  value — so `if (err instanceof Unsafe) return false;` (a refusal), `if (!(err instanceof Unsafe))
+  return true;`, an arrow function that never returns, and `err.cause instanceof Unsafe` would all
+  have certified `Unsafe`. And it compared identifier *text*, so `import { Unsafe as ChatConflict }`
+  in `routes.ts` would have been vouched for by the guard's genuine `ChatConflict`. Now the shape is
+  matched exactly — the function's own parameter, an `if`, a `return true`, no nested scopes — and a
+  name on the allowlist must also **resolve to the same binding** in both files, compared as
+  `module#exportedName`. Six new controls.
+
+**And the fixes were themselves checked for discrimination**, not just for going green: removing the
+`static` clause turned the new control red, which is what says the control is testing the fix rather
+than passing for its own reasons.
+
+Sol also enumerated the evasions this check's deliberate scope leaves open, and they are recorded
+rather than closed: a *new* mapping written as a direct return, a `switch`, a helper, a
+namespace-qualified class, or `let status; status = …` slips past, because only a `status`
+initialiser is walked. A wholesale restructure does not, because `KNOWN_MAPPED` then loses all three.
+Every other status form it classified — a constructor-only assignment, an inherited property, a
+getter, `as const`, a numeric enum — is a false *negative*, which is red and therefore safe.
+
 **Left for whoever is next in that function**, per F3 and the postmortem's own follow-up: give
 `ChatConflict` a `readonly status = 409`, drop its `mayPassThrough` branch, and delete the three
 now-unreachable `instanceof` branches from the chain. That is the one-mechanism end state. Not done
@@ -485,6 +519,27 @@ finds no new cycle.
 One of the six cases is there for the leak rather than the count: it feeds an answer whose *key and
 value* are both a prose-shaped needle and asserts the needle appears nowhere in what was logged. A
 test that only counted would be green over a payload leak.
+
+**Review.** Sol walked all six paths through the restructured repair site and confirmed the
+behaviour is **semantically unchanged** for every input — same value returned, same error thrown,
+same fallback — with the one literal difference being that `dropTrailingCommas` now runs outside the
+old `try`, which has no ordinary throw path for a string. It confirmed the counting gate is exactly
+right (every invocation that removes a comma reports once, including the failures; nothing else
+reports), that no model prose reaches the line, and that the separate module is justified: *"It keeps
+the logger — and therefore arbitrary logging capability — out of the parsing module's lexical
+scope."*
+
+One finding, and it was against my prose rather than the code:
+
+- **F9 (P3) — I claimed more than the signature delivers.** I wrote that it "cannot carry the
+  payload". `source` is a `string`, so `noteJsonRepair(raw, …)` would typecheck. The true and
+  narrower statement — now in both files — is that the raw text and the span are not among the things
+  it asks for, that the logger is not in `parse-json.ts`'s scope at all, and that `source` rests on
+  the same caller's-promise the module header has always relied on. A type-level guarantee would need
+  `source` to be a closed union across thirteen call sites: a different stage.
+  Sol also checked the wider tree: three more calls outside `src/` pass literals, and one eval passes
+  a slug-plus-repeat label — permitted log metadata, but not a project-authored constant, so worth
+  knowing.
 
 ## Assumptions and decisions, for the record
 
