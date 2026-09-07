@@ -157,6 +157,13 @@ nothing for a large group of readers ([silent-success.md](../reusable/silent-suc
 `tests/logo-animation.test.tsx` enforces 1, 2, and the registry–stylesheet agreement in both
 directions. All four of its guards were watched go red before being trusted.
 
+**And then look at it in a browser**, because those tests reach none of the things that actually
+went wrong here. [The browser check](../plans/260907f-logo-animations-browser-check.md) found four
+defects in a stylesheet whose every rule was doing exactly what it said; what was wrong was which
+box a rule resolved against, and only a browser knows that. It also confirmed the two mechanisms
+most likely to have failed quietly — `@property` interpolating through the Vite build, and
+`mask-image: url(/spideryarn-logo.png)` clipping to leg-shaped pixels rather than a box.
+
 ### The traps that cost time here
 
 - **`.spya-anim { position: relative }` overrides `.logo-home { position: fixed }`.** Same
@@ -171,6 +178,14 @@ directions. All four of its guards were watched go red before being trusted.
 - **`--i` is not set in the JSX.** The letter index is ten `:nth-child` rules in the base block; a
   stagger written as `calc(var(--i) * 28ms)` without them resolves to an invalid value and the whole
   declaration is dropped, silently.
+- **A pseudo-element on a letter needs the letter to be positioned**, or `left: 100%` means 100% of
+  the 136px anchor rather than of the 8px letter. Three animations hang one off a letter and all
+  three were written without it; the base block now gives every letter `position: relative`, which
+  is a line and retires the whole class.
+- **`animation-fill-mode: both` makes the animation's last frame the resting value**, which is only
+  safe if it is one. `spya-type` used it and left four letters permanently at `opacity: 0.3` under
+  reduced motion. `backwards` fills the delay and then reverts to the base style, which cannot be
+  wrong.
 
 ## What is deliberately not here
 

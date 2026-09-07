@@ -320,4 +320,15 @@
   background: var(--panel);
 }
 .design-logo-cell .design-note { margin: 0; }
+/* **Or the wordmark is stretched to the cell's width and one animation lies.**
+   A column flex container stretches its items across, so `.logo` — content about
+   140px — became a 280px box, and `spya-dawn`'s mask sweep, which is sized as a
+   percentage of that box, spent half its travel crossing empty space. It was
+   correct in the app and looked feeble here (browser check, 2026-09-07). A
+   gallery that misrepresents one of the things it exists to show is worse than
+   no gallery.
+
+   `align-self` on the wordmark rather than `align-items` on the cell, so the
+   caption and the class name below it still fill the width and wrap normally. */
+.design-logo-cell .logo { align-self: flex-start; }
 .design-logo-row { display: flex; gap: 2rem; align-items: center; flex-wrap: wrap; }

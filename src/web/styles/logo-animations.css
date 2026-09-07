@@ -113,6 +113,17 @@
   display: inline-block;
   /* Each letter animates about its own centre unless it says otherwise. */
   transform-origin: 50% 50%;
+  /* **Every letter, not only the three that host a pseudo-element today.**
+     Three animations here hang a `::before` or `::after` off one letter — the
+     seam's thread, the cursor after the `n`, the abseil line — and all three
+     were written without this, which does not error and does not look obviously
+     wrong: the pseudo silently resolves against the whole 136px anchor instead,
+     so `left: 100%` lands 28px past the end of the word rather than beside the
+     letter it belongs to. Found in the browser on 2026-09-07, on one of the
+     three; the other two would have been found one at a time, later, by
+     somebody else. Declaring it once for all ten letters costs a line and
+     retires the class of bug. docs/project/design-logo.md § The traps. */
+  position: relative;
 }
 
 .spya-anim .logo-image {
@@ -480,9 +491,21 @@
    Reduced motion: the guard flattens durations but **not delays**, so the word
    sits faint for up to 670ms and then arrives whole. A dim word is not a broken
    one — but this is the one animation here whose reduced state is a compromise
-   rather than a still, and it is named so nobody has to rediscover it. */
+   rather than a still, and it is named so nobody has to rediscover it. The
+   version that shipped for an hour was worse than a compromise: see the note on
+   `backwards` below. */
 .spya-type .logo-letter {
-  animation: spya-type 60ms steps(1, end) 1 both;
+  /* **`backwards`, not `both`, and this was a real fault.** `both` also fills
+     *forwards*, which makes the animation's own 100% frame the letter's resting
+     value — and under the motion guard, with duration flattened to 0.01ms and
+     delays left alone, four of the ten letters were observed stuck at
+     `opacity: 0.3` indefinitely, leaving a permanently half-faded
+     "Spideryarn" (browser check, 2026-09-07). With `backwards` the fill covers
+     only the delay, and once the active phase is over the letter reverts to its
+     *base* style, which is the fully-lit word — so the resting state cannot
+     depend on an animation having reported itself finished. It is also this
+     file's own rule, applied: return to the resting state. */
+  animation: spya-type 60ms steps(1, end) 1 backwards;
   animation-delay: calc(var(--i) * 55ms + 120ms);
 }
 @keyframes spya-type {
