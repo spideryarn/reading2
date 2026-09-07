@@ -1,6 +1,6 @@
 /**
- * **Type a word, press Enter, be in that mode.** Spotlight for the fourteen
- * modes, and — in v1 — for nothing else at all.
+ * **Type a word, press Enter, be in that mode** — or on that page. Spotlight
+ * for the fourteen modes, and for the one page that is not a mode.
  *
  * Greg asked for it on 2026-09-05:
  *
@@ -9,23 +9,37 @@
  *
  * and the four product calls that shape this file were his, made on 2026-09-06
  * before any of it was written (docs/plans/260906h-mode-catalog-and-a-command-bar.md
- * § The four product calls):
+ * § The four product calls). **Two of them he changed on 2026-09-07**, which is
+ * marked on each rather than tidied away — the reasoning that produced them is
+ * still the reasoning that keeps the bar small:
  *
- *  1. **Modes only.** Enter opens a mode **exactly as pressing its Dock button
- *     does** — same activation, same generate-on-open, same cost. No passage
- *     jump, no generation rows, no model call, no "ask this article". Those are
- *     named as deferred in the plan rather than forgotten; each needs a verb
- *     this bar does not have.
+ *  1. **Modes only** — *until 2026-09-07*, when Greg asked for the changelog
+ *     here too: *"add the Changelog to the footer (e.g. of the Homepage, and
+ *     also as a command from the Command Bar."* Everything else that call
+ *     refused is still refused, and for the reason it gave: a passage jump, a
+ *     generation row, an "ask this article" each need **a verb this bar does
+ *     not have**. A page needs none — "go there" is the verb every link in the
+ *     app already has. `PAGES` below is the whole of the widening, and
+ *     `Command` in command-match.ts is where the type says so.
+ *
+ *     The half of the call that did not change: a mode row's Enter opens it
+ *     **exactly as pressing its Dock button does** — same activation, same
+ *     generate-on-open, same cost.
  *  2. It is reachable by **⌘/Ctrl-K and by a button in the Dock**, because
  *     ⌘-K does not exist on a phone. The Dock keeps every mode button it has —
  *     this is an additional door, never a replacement.
  *  3. **No match says `No command matches.` and nothing else.** That overrode
  *     the recommendation put to him, which was to offer the article search as a
  *     fallback row. An honest empty state was preferred to a helpful guess.
- *  4. **The bar lists exactly what the Dock lists.** Which is true here *by
- *     construction* rather than by agreement: the visible modes arrive as a
- *     prop, computed once by `visibleModes` in Dock.tsx, so there is no second
- *     copy of the experimental-switch rule to keep in step.
+ *  4. **The bar's mode rows are exactly what the Dock lists** — narrowed from
+ *     *the bar lists exactly what the Dock lists* by the same 2026-09-07
+ *     change, since the page rows are the bar's own. The surviving half is
+ *     still true *by construction* rather than by agreement: the visible modes
+ *     arrive as a prop, computed once by `visibleModes` in Dock.tsx, so there
+ *     is no second copy of the experimental-switch rule to keep in step. The
+ *     pages are appended **after** that prop, never mixed into it, which is
+ *     what keeps the halves separable — and tests/command-bar.test.tsx asserts
+ *     both halves rather than the old single one.
  *
  * ## It does not import from `Dock.tsx`, and that is a hard constraint
  *
@@ -61,12 +75,63 @@
  * they are on the elements even while they carry no rules.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { MODE_CATALOG } from "../mode-catalog.js";
-import { MODE_LABEL } from "../title-text.js";
 import { modeGenerates } from "./activation.js";
-import { rankModes } from "./command-match.js";
+import {
+  commandId,
+  commandText,
+  modeCommand,
+  rankCommands,
+  type Command,
+} from "./command-match.js";
 import type { Mode } from "./params.js";
+import { CHANGELOG_HREF, CHANGELOG_LABEL, navigate } from "./router.js";
 import { useVisualViewport } from "./useVisualViewport.js";
+
+/**
+ * **The pages the bar offers, which are not modes**, and this array is the
+ * whole of Greg's 2026-09-07 widening — see call 1 in the header.
+ *
+ * The list lives here rather than in command-match.ts for one mechanical
+ * reason: naming an href means importing router.ts, router.ts imports React,
+ * and that module's first claim about itself is that it imports no React. It
+ * ranks a page; it does not know which pages there are.
+ *
+ * **Why this is a list and not a single constant**, given it holds one entry:
+ * the same argument SiteFooter.tsx § `LINKS` makes and has now been paid off
+ * three times — a second page is one entry here, not an edit to the rendering
+ * below. It is deliberately *not* the footer's list, though. Those two rows
+ * answer different questions: the footer is the site's own navigation and
+ * carries Home, Features, Pricing, Privacy and Contact, none of which a reader
+ * mid-article is reaching for a keyboard to get to. Sharing one array would
+ * make five rows appear in the bar to keep a promise nobody made.
+ */
+const PAGES: readonly Extract<Command, { kind: "page" }>[] = [
+  {
+    kind: "page",
+    href: CHANGELOG_HREF,
+    /* "What's new" rather than "Changelog", the same call SiteFooter.tsx makes
+       and for the same reason: the latter is the internal name for the process
+       that writes the page (docs/project/changelog.md), and a reader has never
+       heard of it. So the word a reader *would* type is an alias below rather
+       than the name here. */
+    label: CHANGELOG_LABEL,
+    description: "Every release since launch, newest first.",
+    /* `changelog` because it is what the address says and what a developer
+       reaches for. `releases` and `updates` are the two other words for the
+       same thing.
+
+       **Then the label itself, twice more, because there are three ways to type
+       it and only one of them is the label.** `canonical` deliberately does not
+       fold punctuation (command-match.ts § `canonical` says why), and the label
+       carries the typographic `’`, so a reader who types the words in front of
+       them matches only if their keyboard happened to produce that character.
+       A phone's does — iOS substitutes `’` automatically — and a desktop's
+       usually does not, which makes `what's new` with a straight apostrophe the
+       single likeliest spelling of all and the one this list shipped without
+       until GPT Sol caught it. `whats new` covers dropping it entirely. */
+    aliases: ["changelog", "releases", "updates", "what's new", "whats new"],
+  },
+];
 
 /**
  * **What a reader is told about a row that would start work**, and it is one
@@ -132,7 +197,15 @@ export function CommandBar({ modes, activateMode, open, onClose }: Props) {
    */
   const [selected, setSelected] = useState(0);
 
-  const results = useMemo(() => rankModes(draft, modes), [draft, modes]);
+  /**
+   * **The Dock's modes, then the pages** — and the concatenation is what makes
+   * call 4 in the header true. `modes` arrives already filtered and is spread
+   * rather than merged into, so the mode rows remain exactly the prop, in
+   * exactly its order; a tie between a mode and a page therefore falls to the
+   * mode, because `rankCommands` breaks ties on input order.
+   */
+  const commands = useMemo(() => [...modes.map(modeCommand), ...PAGES], [modes]);
+  const results = useMemo(() => rankCommands(draft, commands), [draft, commands]);
   const index = Math.min(selected, Math.max(0, results.length - 1));
   const active = results[index];
 
@@ -198,8 +271,21 @@ export function CommandBar({ modes, activateMode, open, onClose }: Props) {
    * be worse than one that did nothing.
    */
   const activate = useCallback(
-    (mode: Mode) => {
-      activateMode(mode);
+    (command: Command) => {
+      /* **Two verbs, and the switch is the whole of the difference between the
+         two kinds of row.** A mode is armed exactly as its Dock button arms it
+         (call 1); a page is navigated to exactly as a `<Link>` navigates —
+         `navigate` is what Link.tsx calls once it has decided the reader wants
+         to stay in this tab, which a reader pressing Enter in a modal dialog
+         has.
+
+         **No ⌘-click into a new tab**, which a real `<a>` would give and this
+         does not. Deferred rather than missed: an `<a>` inside `role="option"`
+         puts an interactive element inside an interactive role, and the rows
+         are `div`s precisely because Biome is right to refuse that. The bar is
+         a keyboard instrument; the footer link is the one to ⌘-click. */
+      if (command.kind === "page") navigate(command.href);
+      else activateMode(command.mode);
       setDraft("");
       setSelected(0);
       onClose();
@@ -249,9 +335,13 @@ export function CommandBar({ modes, activateMode, open, onClose }: Props) {
              whole argument is speed; the placeholder is the hint and this is the
              name. */
           aria-label="Type a command"
-          placeholder="Type a mode…"
+          /* "a command" rather than "a mode" since 2026-09-07: the bar stopped
+             being modes-only (call 1), and a placeholder that names one of the
+             two kinds tells the reader the other one is not here. */
+          placeholder="Type a command…"
           /* **The soft keyboard's Enter key says Go**, because that is what it
-             does: it takes you to the selected mode. Not `search` — the search
+             does: it takes you to the selected command — into a mode, or to a
+             page. Not `search` — the search
              is the typing, and Enter does not run one — and not `send`, which
              in this app means posting something into a conversation.
              docs/project/touch.md § What the Enter key promises, and
@@ -265,7 +355,7 @@ export function CommandBar({ modes, activateMode, open, onClose }: Props) {
           aria-autocomplete="list"
           /* Which row Enter would take, announced without moving focus off the
              box the reader is typing in — the listbox pattern's own answer. */
-          aria-activedescendant={active === undefined ? undefined : `${listId}-${active}`}
+          aria-activedescendant={active === undefined ? undefined : `${listId}-${commandId(active)}`}
           autoComplete="off"
           spellCheck={false}
           onChange={(e) => {
@@ -313,18 +403,28 @@ export function CommandBar({ modes, activateMode, open, onClose }: Props) {
             id={listId}
             className="cmdbar-list tw:m-0 tw:overflow-y-auto tw:p-1"
             role="listbox"
-            aria-label="Modes"
+            /* "Commands", not "Modes", since a page row is neither a mode nor
+               a lie the reader should have to reconcile. */
+            aria-label="Commands"
           >
-            {results.map((mode, at) => (
+            {results.map((command, at) => (
               // biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard equivalent is on the input above — Up/Down move the selection and Enter takes it, which is the listbox pattern; a key handler here would need focus on the row, and focus stays in the box the reader is typing in
               <div
-                key={mode}
-                id={`${listId}-${mode}`}
+                key={commandId(command)}
+                id={`${listId}-${commandId(command)}`}
                 className={`cmdbar-row tw:flex tw:cursor-pointer tw:items-baseline tw:gap-2 tw:rounded tw:px-3 tw:py-2 tw:text-sm ${
                   at === index ? "on tw:bg-accent tw:text-ink" : "tw:text-ink-soft"
                 }`}
                 role="option"
                 aria-selected={at === index}
+                /* **Which kind of row this is, readable from the outside.** Not
+                   styling — the two kinds are drawn identically on purpose, so
+                   that going somewhere and changing the band feel like one
+                   instrument. It is here so that tests/command-bar.test.tsx can
+                   state the surviving half of call 4 ("the *mode* rows are
+                   exactly what the Dock lists") without inferring the kind from
+                   a row's label or from an href's leading slash. */
+                data-kind={command.kind}
                 /* **`-1`, and not a tab stop.** Focus stays in the box the
                    reader is typing in — which is the whole reason the input
                    carries `aria-activedescendant` — so a row is reached by the
@@ -337,17 +437,30 @@ export function CommandBar({ modes, activateMode, open, onClose }: Props) {
                    rather than lag a frame behind it. */
                 onClick={() => {
                   setSelected(at);
-                  activate(mode);
+                  activate(command);
                 }}
               >
-                <span className="cmdbar-name tw:font-medium tw:text-ink">{MODE_LABEL[mode]}</span>
+                <span className="cmdbar-name tw:font-medium tw:text-ink">
+                  {commandText(command).label}
+                </span>
                 <span className="cmdbar-what tw:min-w-0 tw:flex-1 tw:truncate tw:text-muted-foreground">
-                  {MODE_CATALOG[mode].description}
+                  {commandText(command).description}
                 </span>
                 {/* One bit, after the sentence rather than before it: the row is
                     still about what the mode gives you, and this is a note on
-                    the end. `GENERATES_MARKER` says why it is a word. */}
-                {modeGenerates(mode) && (
+                    the end. `GENERATES_MARKER` says why it is a word.
+
+                    **No page row can carry it, and that is a limitation rather
+                    than a fact about pages.** It is true of today's only page —
+                    `/changelog` reads a file the build already shipped — and it
+                    is enforced by this `kind` check, which is exactly why a
+                    page that *did* spend would ship silently under-warning: the
+                    check would go on excluding it and no test could see the
+                    difference (GPT Sol, 2026-09-07). The fix, on the day a
+                    spending page is proposed, is to move "does this start
+                    work?" into `Command` itself and render off the property —
+                    not to add a second name to this condition. */}
+                {command.kind === "mode" && modeGenerates(command.mode) && (
                   <span className="cmdbar-generates tw:shrink-0 tw:text-xs tw:text-ink-faint">
                     {GENERATES_MARKER}
                   </span>
