@@ -33,6 +33,27 @@
  * tax tidying rather than defend anything. Names appear below only inside the
  * parser, to join a guard to the matcher it reads.
  *
+ * ## Two shapes, one contract
+ *
+ * Since stage 3a the dispatch is written two ways. Most of it is still
+ * `if (matcher && req.method === "VERB")` in the chain; billing's four routes are
+ * rows of `AUTH_ROUTES`, a static ordered table of closures that
+ * `serveAuthenticatedApi` consults after every remaining guard and before its
+ * 404. The reader below normalises both into the same `(method, match)` pair, so
+ * **`EXPECTED_AUTH_ROUTES` did not change by one row or one witness** when they
+ * moved — which is the whole evidence that the move was behaviour-preserving. If
+ * a later domain cannot be moved without editing the contract, that is a finding
+ * about the move, not a line to edit.
+ *
+ * The table half brings three properties the chain did not have, and each is
+ * checked where it lives rather than assumed: the entries are **literals**, so
+ * building the table at import calls nothing (§ `building the table has no
+ * effects to have`); the dispatcher **awaits** every handler, so a streaming
+ * route cannot outlive the request that is waiting on it (`assertHandlersAwaited`,
+ * at module scope); and a `g` or `y` pattern is refused at registration, by
+ * src/routes.ts itself, because a table's regexes are shared across requests
+ * where the chain's are rebuilt per request.
+ *
  * ## Why a parser, and why it refuses rather than skips
  *
  * tests/helpers/ts-ast.ts holds the general argument: character scans of this
@@ -64,9 +85,12 @@
  *
  * ## Why the order of the 81 guards is not asserted
  *
- * The chain is written in one order and compared here as a **set**, which
- * records the order without asserting it. Sol raised that (review §
- * P1-ORDER-CONTRACT), and asserting the order would still be the wrong answer:
+ * The chain is written in one order and compared here as a **set**, which does
+ * not record the order at all. The literal below is typed out in declaration
+ * order for whoever reads it next to the source, and that is the whole of what
+ * that ordering does: nothing here asserts it, and a later reordering of either
+ * would go unnoticed. Sol raised the omission (review § P1-ORDER-CONTRACT), and
+ * asserting the order would still be the wrong answer:
  * no two guards accept the same method-and-path pair, so every reordering is an
  * equivalent mutation and a test that reddened for one would be pinning an
  * implementation detail. What is asserted instead is **the property that makes
@@ -106,6 +130,61 @@
  *    the text back; `src/routes.ts` is byte-identical
  *    (`ce53795…`, `git diff HEAD` empty).
  *
+ * The two assertions added in stage 1c are mutated in the **contract** rather
+ * than the source, because each is about what this file asks rather than about
+ * what the dispatcher does. Green unmutated at 305 — the two cases added, the
+ * job-family case deleted for earning nothing (§ below).
+ *
+ * 7. **A contract row under the public namespace** — a row for `literal
+ *    /api/public/mutation`, the mistake § `asks only about paths the
+ *    authenticated dispatcher is the first to see` exists to catch. **7
+ *    failed**: both directions of the matcher/pair comparison, the new case
+ *    (*expected `["/api/public/mutation"]` to deeply equal `[]`*) — and, the
+ *    point of it, four refusal cases that **sent their requests** and were
+ *    answered by the public dispatcher, *expected 'No public API route for POST
+ *    …'*, while `sourceAcceptsIt` had said `false` all four times.
+ * 8. **A sixth verb, agreed on both sides** — a `HEAD` arm on `billingUsage`,
+ *    `HEAD` added to that contract row, and the guard canary moved to 82: a
+ *    coordinated change, of the kind pair equality is blind to by design.
+ *    **1 failed**, § `uses no verb outside the five this file asks about`
+ *    (*expected `["HEAD"]` to deeply equal `[]`*), and nothing else — 304
+ *    passed, including every collision and refusal case, none of which had asked
+ *    a HEAD question. Then the source half reverted and the contract half left
+ *    in place: **2 failed**, the pair comparison and the contract branch of the
+ *    same case. `src/routes.ts` is byte-identical again (md5 `182e2de…`,
+ *    `git diff HEAD` empty).
+ *
+ * ### Stage 3a, 2026-09-07 — the four billing guards become table rows
+ *
+ * Green unmutated at **316**: 305 plus the eleven cases the table half brings.
+ * Each mutation below was applied to `src/routes.ts`, run, and edited back;
+ * `EXPECTED_AUTH_ROUTES` was not touched for any of them, and the block is
+ * byte-identical to the commit stage 1c landed on (md5 `c36bdcb…`).
+ *
+ * 9. **A table row deleted** — the `/api/billing/usage` entry removed. **4
+ *    failed:** *contract rows with no guard in src/routes.ts: `["GET literal
+ *    /api/billing/usage"]`*, the matcher set in the same direction, the canary
+ *    (*expected 66 to be 67*), and § `answers the billing routes from the
+ *    table, not from the chain`.
+ * 10. **A table row's method changed** — `/api/billing/portal` from `POST` to
+ *     `PUT`. **3 failed:** *guards in src/routes.ts that no contract row allows:
+ *     `["PUT literal /api/billing/portal"]`*, the billing-from-the-table case,
+ *     and the negative matrix refusing to send `PUT /api/billing/portal` because
+ *     the source now answers it.
+ * 11. **A row registered with a `/g` pattern** — `/api/billing/usage` rewritten
+ *     as `{ kind: "pattern", pattern: /^\/api\/billing\/usage$/g }`. It never got
+ *     as far as a case: `assertDispatchableRoutes` throws while src/routes.ts is
+ *     being imported, so `Tests: no tests`, `Test Files: 1 failed`, *AUTH_ROUTES:
+ *     GET /^\/api\/billing\/usage$/g uses a `g` or `y` flag*. The refusal is in
+ *     the production module, not here, which is where a registration rule belongs.
+ * 12. **The dispatcher stopped awaiting** — `await route.handler(context,
+ *     captures)` made `route.handler(context, captures)`. Refused at module
+ *     scope: *dispatchAuthRoute: a handler call is not awaited, at line 6793 — a
+ *     floating promise ends the request before the handler does*. `Tests: no
+ *     tests` again. Billing opens no stream, so nothing about billing would have
+ *     gone red; this is the check that has to exist **before** the domain that
+ *     does.
+ *
  * The disjointness check has a **control rather than a mutation**: a real
  * overlap cannot be introduced into `src/routes.ts` without also failing the
  * pair-set comparison, so `would notice if two guards did overlap` feeds two
@@ -128,7 +207,9 @@ import { describe, expect, it } from "vitest";
 
 import { isAdmin } from "../src/admin.js";
 import type { Verifier, VerifyResult } from "../src/auth.js";
+import { WEBHOOK_PATH } from "../src/billing/webhook.js";
 import { loadEnvLocal } from "../src/env.js";
+import { isPublicNamespace } from "../src/public/routes.js";
 import { handleApi } from "../src/routes.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
 import { type AstNode, lineOf, parseSource } from "./helpers/ts-ast.js";
@@ -584,19 +665,66 @@ const EXPECTED_GUARD_COUNT = 81;
 
 /* ------------------------------------------------------------- the source read */
 
+/**
+ * A match written as one comparable line. Defined here rather than beside the
+ * comparison because the reader below puts it in its own failure messages, and
+ * the reader runs at module scope.
+ */
+const describeMatch = (m: MatchSpec): string =>
+  m.kind === "literal" ? `literal ${m.path}` : `regex /${m.source}/${m.flags}`;
+
+const sorted = (xs: string[]): string[] => [...xs].sort();
+
+/**
+ * The two names the table half of the dispatch is written under, pinned so a
+ * rename is a deliberate edit here rather than a silently emptier inventory.
+ */
+const ROUTE_TABLE = "AUTH_ROUTES";
+const TABLE_DISPATCHER = "dispatchAuthRoute";
+
+/**
+ * One place in the source that decides whether a path matches — a `const` in the
+ * `if` chain, or an entry's `path`/`pattern` in `AUTH_ROUTES`.
+ *
+ * **Deliberately not deduplicated.** Fourteen chain matchers are read by two
+ * guards each and are still one `const` apiece; a table that wants the same must
+ * name a module-scope pattern from two entries rather than spell the regex
+ * twice. So two *identical* sites mean two copies of one matcher, which
+ * § `names each matcher once` fails on — the copies can drift apart, and the
+ * counts would go on agreeing while they did.
+ */
 interface ParsedMatcher {
-  /** Only for joining a guard to its matcher; never asserted on. */
-  name: string;
   line: number;
   match: MatchSpec;
+  /** For failure messages only; never asserted on. */
+  where: string;
 }
 
+/**
+ * One (method, matcher) the dispatcher accepts, however it is written.
+ *
+ * The two forms are normalised to the same thing on purpose: an `if (matcher &&
+ * req.method === "…")` in the chain and a row of `AUTH_ROUTES` are the same
+ * statement about what the API answers, and the contract above is the same
+ * literal either way. That is the property the stage-3 move is supposed to have,
+ * so it is the property this reader is built to check.
+ */
 interface ParsedGuard {
-  matcher: string;
+  match: MatchSpec;
   method: string;
+  /**
+   * Where in the dispatch chain this is *consulted* — the `if` itself for a
+   * chain guard, and the `if (await dispatchAuthRoute(…))` statement for a table
+   * entry, because that is the point at which the table gets its turn. It is
+   * what the admin-gate and terminal-404 ordering case compares against.
+   */
   line: number;
+  /** Where it is *written*, for failure messages. Never asserted on. */
+  where: string;
   /** Whether the arm's block ends in a `return` or a `throw`. */
   terminates: boolean;
+  /** Whether it came from `AUTH_ROUTES` rather than from an `if` in the chain. */
+  fromTable: boolean;
 }
 
 interface ParsedDispatch {
@@ -604,6 +732,8 @@ interface ParsedDispatch {
   guards: ParsedGuard[];
   /** The line of `if (<namespace> && !isAdmin(...))`, or 0 if it is not there. */
   adminGateLine: number;
+  /** The line of `if (await dispatchAuthRoute(…))`, or 0 if the table is unused. */
+  tableDispatchLine: number;
   /** The line of the terminal `send(res, 404, …)`, or 0. */
   terminal404Line: number;
 }
@@ -740,6 +870,8 @@ interface Accumulator {
   /** Bindings holding `path === "/api/admin" || path.startsWith(…)`. */
   namespaces: Set<string>;
   adminGateLine: number;
+  /** `if (await dispatchAuthRoute(<table>, …)) { return; }`, once, or not at all. */
+  tableDispatch: { line: number; terminates: boolean; tableName: string } | undefined;
   terminal404Line: number;
 }
 
@@ -775,13 +907,54 @@ function readDeclaration(statement: AstNode, acc: Accumulator): void {
   }
   const match = literalMatch(init) ?? regexMatch(init);
   if (match === undefined) refuse(statement, "a matcher this does not understand");
-  acc.matchers.push({ name, line: lineOf(statement), match });
+  const line = lineOf(statement);
+  acc.matchers.push({ line, match, where: `${describeMatch(match)} declared at line ${line}` });
   acc.byName.set(name, match);
 }
 
-/** A dispatch guard, or the admin gate, or a refusal. */
+/**
+ * `if (await dispatchAuthRoute(<table>, { … })) { return; }` — the one statement
+ * that gives `AUTH_ROUTES` its turn.
+ *
+ * Recognised as its own shape rather than waved through, because everything the
+ * table contributes hangs off it: the entries are guards only if this statement
+ * is really there, really awaited, and really returns. A dispatcher that called
+ * the table and then fell through to the 404 would answer twice on one response.
+ */
+function readTableDispatch(statement: AstNode, test: AstNode, acc: Accumulator): void {
+  const call = test.argument;
+  if (!isNode(call) || nodeType(call) !== "CallExpression") {
+    refuse(statement, "an `await` of something that is not a call");
+  }
+  if (identName(call.callee) !== TABLE_DISPATCHER) {
+    refuse(statement, `an awaited call that is not \`${TABLE_DISPATCHER}\``);
+  }
+  const args = call.arguments as unknown[];
+  const tableName = identName(args[0]);
+  if (args.length !== 2 || tableName === undefined) {
+    refuse(statement, `a \`${TABLE_DISPATCHER}\` call whose first argument is not a table`);
+  }
+  if (acc.tableDispatch !== undefined) refuse(statement, "a second table dispatch");
+  acc.tableDispatch = {
+    line: lineOf(statement),
+    /* The arm has to end the request the way every other arm does. Without the
+       `return` the table's answer would be followed by the terminal 404 on the
+       same response, and `ends every handled arm` is where that shows up. */
+    terminates: armTerminates(statement.consequent),
+    tableName,
+  };
+}
+
+/** A dispatch guard, the admin gate, the table dispatch, or a refusal. */
 function readIf(statement: AstNode, acc: Accumulator): void {
   const test = statement.test;
+  if (isNode(test) && nodeType(test) === "AwaitExpression") {
+    if (statement.alternate !== null && statement.alternate !== undefined) {
+      refuse(statement, "a table dispatch with an `else`");
+    }
+    readTableDispatch(statement, test, acc);
+    return;
+  }
   if (!isNode(test) || nodeType(test) !== "LogicalExpression" || test.operator !== "&&") {
     refuse(statement, "an `if` whose condition is not `<matcher> && <method>`");
   }
@@ -800,16 +973,20 @@ function readIf(statement: AstNode, acc: Accumulator): void {
     return;
   }
 
-  if (!acc.byName.has(binding)) refuse(statement, `a guard on the unknown binding \`${binding}\``);
+  const match = acc.byName.get(binding);
+  if (match === undefined) refuse(statement, `a guard on the unknown binding \`${binding}\``);
   const method = methodTest(test.right);
   if (method === undefined) {
     refuse(statement, 'a guard whose right conjunct is not `req.method === "VERB"`');
   }
+  const line = lineOf(statement);
   acc.guards.push({
-    matcher: binding,
+    match,
     method,
-    line: lineOf(statement),
+    line,
+    where: `${describeMatch(match)} at line ${line}`,
     terminates: armTerminates(statement.consequent),
+    fromTable: false,
   });
 }
 
@@ -826,8 +1003,8 @@ function readCall(statement: AstNode, acc: Accumulator): void {
   if (callee === "send") acc.terminal404Line = lineOf(statement);
 }
 
-/** `serveAuthenticatedApi`'s own declaration, or a refusal. */
-function findDispatcher(source: string): AstNode {
+/** The whole file's statement list, or a refusal. */
+function topLevelStatements(source: string): unknown[] {
   const ast = parseSource(source);
   /* `parseSource` recovers rather than throwing, which is right for the fixture
      fragments its other callers hand it and wrong here: a `src/routes.ts` that
@@ -840,15 +1017,25 @@ function findDispatcher(source: string): AstNode {
       `src/routes.ts did not parse cleanly: ${errors.length} error(s), first at line ${first?.loc?.line ?? "?"}`,
     );
   }
+  return ast.program.body as unknown[];
+}
 
+/** A top-level `function <name>(…)`, exported or not. */
+function findFunction(statements: unknown[], name: string): AstNode | undefined {
   let fn: AstNode | undefined;
-  for (const statement of ast.program.body as unknown[]) {
+  for (const statement of statements) {
     if (!isNode(statement)) continue;
     const declaration =
       nodeType(statement) === "ExportNamedDeclaration" ? statement.declaration : statement;
     if (!isNode(declaration) || nodeType(declaration) !== "FunctionDeclaration") continue;
-    if (identName(declaration.id) === "serveAuthenticatedApi") fn = declaration;
+    if (identName(declaration.id) === name) fn = declaration;
   }
+  return fn;
+}
+
+/** `serveAuthenticatedApi`'s own declaration, or a refusal. */
+function findDispatcher(statements: unknown[]): AstNode {
+  const fn = findFunction(statements, "serveAuthenticatedApi");
   if (fn === undefined) {
     throw new UnsupportedDispatchSyntax(
       "serveAuthenticatedApi is not a top-level function declaration",
@@ -857,13 +1044,178 @@ function findDispatcher(source: string): AstNode {
   return fn;
 }
 
+/** Every node under `root`, in no particular order. */
+function* descend(root: unknown): Generator<AstNode> {
+  if (Array.isArray(root)) {
+    for (const item of root) yield* descend(item);
+    return;
+  }
+  if (!isNode(root)) return;
+  yield root;
+  for (const [key, value] of Object.entries(root)) {
+    if (key === "loc" || key === "leadingComments" || key === "trailingComments") continue;
+    if (typeof value === "object" && value !== null) yield* descend(value);
+  }
+}
+
+/**
+ * **Every `…handler(…)` in the table's dispatcher is awaited.**
+ *
+ * The one property of the mechanism that no set comparison can see. The catch
+ * and the finally live in `serveApi`, which awaits `serveAuthenticatedApi`; a
+ * handler whose promise floated free would have its rejection land nowhere, its
+ * spend counted nowhere, and — for a streaming route — its response still open
+ * when the request was reported finished. § [LIFETIME] in the plan. Billing opens
+ * no stream, so today this defends the domain that moves next rather than the one
+ * that has moved; that is the point of asserting it now.
+ *
+ * Asked as a whitelist, like everything else here: an un-awaited call to
+ * anything named `handler` is a refusal, and *no* handler call at all is a
+ * refusal too, so a dispatcher rewritten past recognition stops the suite
+ * instead of quietly satisfying this.
+ */
+function assertHandlersAwaited(statements: unknown[]): void {
+  const fn = findFunction(statements, TABLE_DISPATCHER);
+  if (fn === undefined) {
+    throw new UnsupportedDispatchSyntax(
+      `${TABLE_DISPATCHER} is not a top-level function declaration`,
+    );
+  }
+  const awaited = new Set<AstNode>();
+  for (const node of descend(fn.body)) {
+    if (nodeType(node) !== "AwaitExpression") continue;
+    const argument = node.argument;
+    if (isNode(argument)) awaited.add(argument);
+  }
+  const calls: AstNode[] = [];
+  for (const node of descend(fn.body)) {
+    if (nodeType(node) !== "CallExpression") continue;
+    const callee = node.callee;
+    if (!isNode(callee) || nodeType(callee) !== "MemberExpression") continue;
+    if (identName(callee.property) !== "handler") continue;
+    calls.push(node);
+  }
+  if (calls.length === 0) {
+    throw new UnsupportedDispatchSyntax(`${TABLE_DISPATCHER} calls no handler at all`);
+  }
+  const floating = calls.filter((c) => !awaited.has(c)).map((c) => lineOf(c));
+  if (floating.length > 0) {
+    throw new UnsupportedDispatchSyntax(
+      `${TABLE_DISPATCHER}: a handler call is not awaited, at line ${floating.join(", ")} — a floating promise ends the request before the handler does`,
+    );
+  }
+}
+
+/**
+ * One row of `AUTH_ROUTES`, read off the literal.
+ *
+ * **The whitelist is the side-effect-free assertion.** Sol asked for one
+ * (review § P2-ISOLATION-SCOPE): building the table must invoke no handler and
+ * no imported service, and `tests/owner-isolation.test.ts` does not cover it.
+ * Rather than watch for effects, this refuses anything that could have one —
+ * every key is named, every value must be a string literal, a regex literal or a
+ * function expression, and a computed key, a spread, a call or a `new` is a
+ * refusal. An array of those evaluates to itself.
+ */
+interface ParsedTableEntry {
+  line: number;
+  match: MatchSpec;
+  method: string;
+}
+
+const ENTRY_KEYS: Record<"exact" | "pattern", string[]> = {
+  exact: ["kind", "method", "path", "handler"],
+  pattern: ["kind", "method", "pattern", "handler"],
+};
+
+function readTableEntry(element: unknown): ParsedTableEntry {
+  if (!isNode(element) || nodeType(element) !== "ObjectExpression") {
+    if (isNode(element)) refuse(element, `an ${ROUTE_TABLE} entry that is not an object literal`);
+    throw new UnsupportedDispatchSyntax(`${ROUTE_TABLE}: an entry that is not a node`);
+  }
+  const byKey = new Map<string, AstNode>();
+  for (const raw of element.properties as unknown[]) {
+    if (!isNode(raw) || nodeType(raw) !== "ObjectProperty" || raw.computed === true) {
+      refuse(element, `an ${ROUTE_TABLE} entry property this does not understand`);
+    }
+    const key = identName(raw.key);
+    const value = raw.value;
+    if (key === undefined || !isNode(value)) {
+      refuse(element, `an ${ROUTE_TABLE} entry property with no plain name`);
+    }
+    byKey.set(key, value);
+  }
+
+  const kind = stringValue(byKey.get("kind"));
+  if (kind !== "exact" && kind !== "pattern") {
+    refuse(element, `an ${ROUTE_TABLE} entry whose \`kind\` is not "exact" or "pattern"`);
+  }
+  const expected = ENTRY_KEYS[kind];
+  if (sorted([...byKey.keys()]).join(",") !== sorted(expected).join(",")) {
+    refuse(element, `an ${ROUTE_TABLE} \`${kind}\` entry whose keys are not ${expected.join(", ")}`);
+  }
+
+  const handler = byKey.get("handler");
+  if (
+    handler === undefined ||
+    (nodeType(handler) !== "ArrowFunctionExpression" && nodeType(handler) !== "FunctionExpression")
+  ) {
+    refuse(element, `an ${ROUTE_TABLE} entry whose \`handler\` is not written out here`);
+  }
+
+  const method = stringValue(byKey.get("method"));
+  if (method === undefined) refuse(element, `an ${ROUTE_TABLE} entry with no literal method`);
+
+  const line = lineOf(element);
+  if (kind === "exact") {
+    const path = stringValue(byKey.get("path"));
+    if (path === undefined) refuse(element, `an ${ROUTE_TABLE} entry with no literal path`);
+    return { line, method, match: { kind: "literal", path } };
+  }
+  const pattern = byKey.get("pattern");
+  /* A regex *literal*, not an identifier naming one. When a domain arrives whose
+     two methods share a pattern, the right shape is a module-scope `const` named
+     from both entries — one matcher site, two guards, exactly as the chain does
+     it — and teaching this to resolve that identifier is the edit that goes with
+     it. Until then an identifier is a refusal rather than a silent omission. */
+  if (pattern === undefined || nodeType(pattern) !== "RegExpLiteral") {
+    refuse(element, `an ${ROUTE_TABLE} entry whose \`pattern\` is not a regex literal`);
+  }
+  return {
+    line,
+    method,
+    match: { kind: "regex", source: pattern.pattern as string, flags: (pattern.flags as string) ?? "" },
+  };
+}
+
+/** `const AUTH_ROUTES: readonly AuthRoute[] = [ … ]`, read row by row. */
+function readRouteTable(statements: unknown[], name: string): ParsedTableEntry[] {
+  let literal: AstNode | undefined;
+  for (const statement of statements) {
+    if (!isNode(statement) || nodeType(statement) !== "VariableDeclaration") continue;
+    for (const raw of statement.declarations as unknown[]) {
+      if (!isNode(raw) || identName(raw.id) !== name) continue;
+      const init = raw.init;
+      if (!isNode(init) || nodeType(init) !== "ArrayExpression") {
+        throw new UnsupportedDispatchSyntax(`${name} is not an array literal`);
+      }
+      literal = init;
+    }
+  }
+  if (literal === undefined) {
+    throw new UnsupportedDispatchSyntax(`${name} is not a top-level const`);
+  }
+  return (literal.elements as unknown[]).map(readTableEntry);
+}
+
 /**
  * Walk `serveAuthenticatedApi`'s own statement list and read the dispatch off
  * it. Every statement must be one of the four recognised shapes; anything else
  * throws, so an unreadable dispatcher is a red suite rather than a short list.
  */
 function extractAuthDispatch(source: string): ParsedDispatch {
-  const body = findDispatcher(source).body;
+  const statements = topLevelStatements(source);
+  const body = findDispatcher(statements).body;
   if (!isNode(body) || nodeType(body) !== "BlockStatement") {
     throw new UnsupportedDispatchSyntax("serveAuthenticatedApi has no block body");
   }
@@ -874,6 +1226,7 @@ function extractAuthDispatch(source: string): ParsedDispatch {
     guards: [],
     namespaces: new Set(),
     adminGateLine: 0,
+    tableDispatch: undefined,
     terminal404Line: 0,
   };
 
@@ -902,8 +1255,56 @@ function extractAuthDispatch(source: string): ParsedDispatch {
     }
   }
 
-  const { matchers, guards, adminGateLine, terminal404Line } = acc;
-  return { matchers, guards, adminGateLine, terminal404Line };
+  /**
+   * The table's rows become matchers and guards of exactly the same shape, so
+   * everything downstream — the two set comparisons, the counts, the negative
+   * matrix, the collision corpus — asks the same questions of both forms without
+   * knowing which it is looking at. That is the whole claim stage 3 makes.
+   *
+   * **The table is read only because the dispatcher was seen to consult it.** A
+   * table nobody dispatches is dead code and its rows are not routes; a dispatch
+   * of a table that is not there is a dispatcher this cannot read. Both are
+   * refusals rather than a shorter list.
+   */
+  const { matchers, guards, adminGateLine, terminal404Line, tableDispatch } = acc;
+  const table = readRouteTable(statements, ROUTE_TABLE);
+  if (tableDispatch === undefined) {
+    if (table.length > 0) {
+      throw new UnsupportedDispatchSyntax(
+        `${ROUTE_TABLE} has ${table.length} entr(ies) but serveAuthenticatedApi never consults it`,
+      );
+    }
+  } else {
+    if (tableDispatch.tableName !== ROUTE_TABLE) {
+      throw new UnsupportedDispatchSyntax(
+        `serveAuthenticatedApi dispatches \`${tableDispatch.tableName}\`, not \`${ROUTE_TABLE}\``,
+      );
+    }
+    assertHandlersAwaited(statements);
+    for (const entry of table) {
+      const where = `${describeMatch(entry.match)} in ${ROUTE_TABLE} at line ${entry.line}`;
+      matchers.push({ line: entry.line, match: entry.match, where });
+      guards.push({
+        match: entry.match,
+        method: entry.method,
+        /* Where it is *consulted*, not where it is written — the table's turn
+           comes at the dispatch statement, which is what the admin-gate and
+           terminal-404 ordering case is about. */
+        line: tableDispatch.line,
+        where,
+        terminates: tableDispatch.terminates,
+        fromTable: true,
+      });
+    }
+  }
+
+  return {
+    matchers,
+    guards,
+    adminGateLine,
+    tableDispatchLine: tableDispatch?.line ?? 0,
+    terminal404Line,
+  };
 }
 
 /**
@@ -915,13 +1316,8 @@ const parsed = extractAuthDispatch(readFileSync(ROUTES_PATH, "utf8"));
 
 /* ------------------------------------------------------------- the comparison */
 
-const describeMatch = (m: MatchSpec): string =>
-  m.kind === "literal" ? `literal ${m.path}` : `regex /${m.source}/${m.flags}`;
-
 /** One accepted pair, as a line a failure message can be read off. */
 const pairKey = (method: string, match: MatchSpec): string => `${method} ${describeMatch(match)}`;
-
-const sorted = (xs: string[]): string[] => [...xs].sort();
 
 const CONTRACT_MATCHES = EXPECTED_AUTH_ROUTES.map((r) => describeMatch(r.match));
 const SOURCE_MATCHES = parsed.matchers.map((m) => describeMatch(m.match));
@@ -929,15 +1325,12 @@ const SOURCE_MATCHES = parsed.matchers.map((m) => describeMatch(m.match));
 const CONTRACT_PAIRS = EXPECTED_AUTH_ROUTES.flatMap((r) =>
   r.methods.map((method) => pairKey(method, r.match)),
 );
-const SOURCE_MATCH_BY_NAME = new Map(parsed.matchers.map((m) => [m.name, m.match]));
-const SOURCE_PAIRS = parsed.guards.map((g) => {
-  const match = SOURCE_MATCH_BY_NAME.get(g.matcher);
-  /* Cannot happen — the extractor refuses a guard on an unknown binding — but
-     an `undefined` silently stringified into a pair key is precisely how a set
-     comparison stops comparing anything. */
-  if (match === undefined) throw new Error(`guard at line ${g.line} names no matcher`);
-  return pairKey(g.method, match);
-});
+/* The guard carries its own matcher, in both forms: a chain guard's binding is
+   resolved as it is read (the extractor refuses one it cannot resolve) and a
+   table entry's is written into the row. So there is no later join to lose, and
+   no `undefined` to stringify into a pair key — which is precisely how a set
+   comparison stops comparing anything. */
+const SOURCE_PAIRS = parsed.guards.map((g) => pairKey(g.method, g.match));
 
 const missingFrom = (a: string[], b: string[]): string[] => {
   const have = new Set(b);
@@ -1024,8 +1417,13 @@ function matches(match: MatchSpec, witness: string): boolean {
 
 /**
  * Every method the **written contract** accepts for a path — the union across
- * every row that matches it, because fourteen matchers overlap and a method one
- * row refuses another may take.
+ * every row that matches it, because two pairs of distinct matchers do both
+ * reach one path (library-search/shelf-entry and chat-thread/live-tool), and a
+ * method one of the pair refuses the other may take.
+ *
+ * Not to be confused with the other count: fourteen matchers accept more than
+ * one method each, which is a fact about rows rather than about paths and is not
+ * why this unions.
  */
 function contractAccepts(witness: string): Set<string> {
   const accepted = new Set<string>();
@@ -1040,8 +1438,7 @@ function contractAccepts(witness: string): Set<string> {
 function sourceAccepts(witness: string): Set<string> {
   const accepted = new Set<string>();
   for (const guard of parsed.guards) {
-    const match = SOURCE_MATCH_BY_NAME.get(guard.matcher);
-    if (match === undefined || !matches(match, witness)) continue;
+    if (!matches(guard.match, witness)) continue;
     accepted.add(guard.method);
   }
   return accepted;
@@ -1083,20 +1480,21 @@ interface SimpleGuard {
   where: string;
 }
 
-const SOURCE_GUARDS: SimpleGuard[] = parsed.guards.map((g) => {
-  const match = SOURCE_MATCH_BY_NAME.get(g.matcher);
-  if (match === undefined) throw new Error(`guard at line ${g.line} names no matcher`);
-  return { method: g.method, match, where: `${describeMatch(match)} at line ${g.line}` };
-});
+const SOURCE_GUARDS: SimpleGuard[] = parsed.guards.map((g) => ({
+  method: g.method,
+  match: g.match,
+  where: g.where,
+}));
 
 /**
  * Paths the disjointness question is asked about, over and above every witness
  * the contract already carries.
  *
- * The two documented intersections and the one pair that has to be *shown*
- * disjoint rather than assumed. All five happen to be witnesses already; they
- * are named again here so that deleting a witness cannot quietly stop the
- * question being asked about the cases we know are interesting.
+ * The two documented intersections, and the one pair near enough to colliding
+ * that the corpus is made to ask about it rather than assume it. All five happen
+ * to be witnesses already; they are named again here so that deleting a witness
+ * cannot quietly stop the question being asked about the cases we know are
+ * interesting.
  */
 const OVERLAP_PROBES = [
   /* GET is the library search; PATCH is the shelf entry for a slug that happens
@@ -1209,6 +1607,65 @@ describe("the authenticated API's route contract", () => {
       expect(parsed.terminal404Line).toBeGreaterThan(Math.max(...lines));
     });
 
+    it("uses no verb outside the five this file asks about", () => {
+      /* `METHOD_UNIVERSE` is the universe every question here is asked over —
+         the negative matrix and the collision check both iterate it — and it is
+         five verbs. HEAD and OPTIONS are deliberately not among them: this
+         dispatcher has no handling for either, and that stays a matter for the
+         refusal policy in § `a method no matcher accepts is the terminal 404`
+         rather than a pair to fire at every witness.
+
+         Pair equality already catches a verb that appears on one side only. What
+         it cannot catch is a verb added to the source *and* the contract
+         together — deliberate, agreed, and then silently skipped by everything
+         that walks the universe (Sol, review § P2-METHOD-UNIVERSE). So closing
+         the universe here makes adding a sixth verb a deliberate edit to this
+         line rather than an omission nobody sees. */
+      const universe = new Set<string>(METHOD_UNIVERSE);
+      const outside = (methods: string[]): string[] =>
+        sorted([...new Set(methods.filter((m) => !universe.has(m)))]);
+      expect(
+        outside(parsed.guards.map((g) => g.method)),
+        "a guard in src/routes.ts uses a verb METHOD_UNIVERSE does not list, so no refusal or collision case asks about it — add it there deliberately",
+      ).toEqual([]);
+      expect(
+        outside(EXPECTED_AUTH_ROUTES.flatMap((r) => r.methods)),
+        "a contract row names a verb METHOD_UNIVERSE does not list — add it there deliberately",
+      ).toEqual([]);
+    });
+
+    it("consults the table after every guard in the chain and before the 404", () => {
+      /* The property that makes moving a domain into `AUTH_ROUTES` a
+         rearrangement rather than a change: billing was the last four guards in
+         the chain, so a table asked *after* the chain and before the terminal 404
+         leaves each of them exactly where it was. A domain lifted out of the
+         middle could not be added without this failing — which is the point. */
+      expect(parsed.tableDispatchLine).toBeGreaterThan(0);
+      const chain = parsed.guards.filter((g) => !g.fromTable).map((g) => g.line);
+      expect(parsed.tableDispatchLine).toBeGreaterThan(Math.max(...chain));
+      expect(parsed.terminal404Line).toBeGreaterThan(parsed.tableDispatchLine);
+    });
+
+    it("answers the billing routes from the table, not from the chain", () => {
+      /* Otherwise everything above could be green because the parser is still
+         reading four `if`s and the move never happened — the two forms are
+         normalised to the same pair, which is the whole idea and also the way
+         this could pass while proving nothing. */
+      expect(sorted(parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match))))
+        .toEqual(
+          sorted([
+            "POST literal /api/billing/checkout",
+            "POST literal /api/billing/portal",
+            "POST literal /api/billing/confirm",
+            "GET literal /api/billing/usage",
+          ]),
+        );
+      expect(
+        parsed.guards.filter((g) => !g.fromTable && describeMatch(g.match).includes("/api/billing")),
+        "a billing route is still a guard in the chain as well as a row in the table",
+      ).toEqual([]);
+    });
+
     it("gives every contract row at least one method and one honest witness", () => {
       /* A witness that does not match its own row would test some other row, or
          nothing, and would look exactly the same from here. */
@@ -1223,11 +1680,66 @@ describe("the authenticated API's route contract", () => {
   });
 
   /**
+   * **Building the table invokes nothing**, which is a claim about a literal and
+   * so is enforced by refusing anything that is not one.
+   *
+   * `AUTH_ROUTES` is evaluated when src/routes.ts is imported, on every cold
+   * start of every function, before a request exists. If a row could call
+   * something, that call would happen there: a store opened, a provider
+   * contacted, a `processSingleton` claimed, at import. Sol asked for this to be
+   * asserted rather than assumed, because `tests/owner-isolation.test.ts` looks
+   * at what the anonymous region *reaches* and not at what a module-scope literal
+   * *does* (review § P2-ISOLATION-SCOPE).
+   *
+   * The reader's whitelist is the assertion: every key of every row is named,
+   * every value must be a string literal, a regex literal or a function written
+   * out in place, and anything else refuses at module scope. These cases are its
+   * control — without them a green suite is equally consistent with the reader
+   * accepting whatever it is handed.
+   */
+  describe("building the table has no effects to have", () => {
+    /** The same reader, pointed at a fragment instead of at src/routes.ts. */
+    const read = (rows: string): ParsedTableEntry[] =>
+      readRouteTable(
+        parseSource(`const ${ROUTE_TABLE}: readonly AuthRoute[] = [${rows}];`).program
+          .body as unknown[],
+        ROUTE_TABLE,
+      );
+
+    const HANDLER = "handler: async () => {}";
+
+    it("reads a row that is only literals", () => {
+      /* The positive half: without it every refusal below is equally consistent
+         with a reader that refuses everything. */
+      expect(read(`{ kind: "exact", method: "GET", path: "/api/x", ${HANDLER} }`)).toEqual([
+        { line: 1, method: "GET", match: { kind: "literal", path: "/api/x" } },
+      ]);
+      expect(read(`{ kind: "pattern", method: "GET", pattern: /^\\/api\\/x$/, ${HANDLER} }`)).toEqual(
+        [{ line: 1, method: "GET", match: { kind: "regex", source: "^\\/api\\/x$", flags: "" } }],
+      );
+    });
+
+    it.each([
+      ["a call builds the path", `{ kind: "exact", method: "GET", path: apiPath("x"), ${HANDLER} }`],
+      ["a call builds the row", `buildRoute("/api/x")`],
+      ["the row is spread in", `...MORE_ROUTES`],
+      ["the handler is named elsewhere", `{ kind: "exact", method: "GET", path: "/api/x", handler: billingUsageHandler }`],
+      ["the pattern is named elsewhere", `{ kind: "pattern", method: "GET", pattern: USAGE, ${HANDLER} }`],
+      ["a key is computed", `{ [KIND]: "exact", method: "GET", path: "/api/x", ${HANDLER} }`],
+      ["a key nobody expects is added", `{ kind: "exact", method: "GET", path: "/api/x", cache: "no-store", ${HANDLER} }`],
+      ["the method is not a literal", `{ kind: "exact", method: verb, path: "/api/x", ${HANDLER} }`],
+    ])("refuses a row where %s", (_why, rows) => {
+      expect(() => read(rows)).toThrow(UnsupportedDispatchSyntax);
+    });
+  });
+
+  /**
    * The property that makes the order of the 81 guards irrelevant — asserted
    * instead of the order itself.
    *
    * The chain is *written* in one order and compared above as a *set*, which
-   * records the order without asserting it. Pinning the order would be wrong:
+   * does not record the order — the contract literal is laid out in declaration
+   * order for a human reader and nothing asserts it. Pinning it would be wrong:
    * no two guards accept the same method-and-path pair, so every reordering is
    * an equivalent mutation, and a test that reddened for one would be
    * defending an implementation detail — the same reason the plan refuses the
@@ -1246,6 +1758,17 @@ describe("the authenticated API's route contract", () => {
    * new guard that shadows an existing one at its own witness is caught; one
    * that shadows it only somewhere else is not. This is a corpus check wearing
    * the word "property", and it should be read that way.
+   *
+   * **So an intentional matcher change needs a fresh intersection review, by
+   * hand.** Today's disjointness is not only this corpus's word for it: Sol read
+   * the pinned patterns independently on 2026-09-07 and found exactly two
+   * intersecting pairs of distinct matchers — library-search/shelf-entry and
+   * chat-thread/live-tool, both separated by method — with job action and job
+   * advance disjoint (review § P2-DISJOINTNESS-CLAIM). That audit is what makes
+   * the current order non-behavioural. It does not carry over to a pattern
+   * somebody widens later: this test asks only where we thought to look, so its
+   * staying green is not evidence that such a change kept the guards disjoint,
+   * and it cannot on its own justify a reordering made afterwards.
    */
   describe("no two guards accept the same method and path", () => {
     it("has nothing to resolve by order", () => {
@@ -1297,18 +1820,15 @@ describe("the authenticated API's route contract", () => {
       expect(patch[0]?.match).toEqual(del[0]?.match);
     });
 
-    it("shows jobAction and jobAdvance disjoint rather than assuming it", () => {
-      /* Same method, same prefix, both `POST`. `(cancel|retry)` and `advance`
-         cannot spell each other — but that is an argument about two regexes,
-         and this is the same argument made by running them. */
-      for (const witness of ["/api/jobs/w1/cancel", "/api/jobs/w1/retry"]) {
-        expect(acceptors("POST", witness), witness).toHaveLength(1);
-      }
-      const action = acceptors("POST", "/api/jobs/w1/cancel");
-      const advance = acceptors("POST", "/api/jobs/w1/advance");
-      expect(advance).toHaveLength(1);
-      expect(action[0]?.match).not.toEqual(advance[0]?.match);
-    });
+    /* There is deliberately no job-family case here. `jobAction` and
+       `jobAdvance` are the pair most likely to collide — same method, same
+       prefix — and their three paths are in `OVERLAP_PROBES`, so `has nothing to
+       resolve by order` above already asks the question about them. A case that
+       ran the same three paths through `acceptors` would have demonstrated three
+       samples, not proved two regex languages disjoint, and would have earned
+       nothing the corpus check does not (Sol, review § P2-DISJOINTNESS-CLAIM).
+       The two cases above are different: they assert intersections are *kept*,
+       which a collision check cannot see, because a narrowing leaves it green. */
   });
 
   describe("a method no matcher accepts is the terminal 404", () => {
@@ -1317,6 +1837,35 @@ describe("the authenticated API's route contract", () => {
        *accepted* pairs are left to the suites that own each route. */
     it("has refusals to make", () => {
       expect(REFUSALS.length).toBeGreaterThan(200);
+    });
+
+    /**
+     * Every path this file asks about has to be one `serveAuthenticatedApi`
+     * sees first — otherwise the model that decides whether sending is safe is
+     * not a model of the code that would run.
+     *
+     * `sourceAccepts()` reads the authenticated dispatcher's guards and nothing
+     * else, but `call()` enters through `handleApi`, which dispatches the public
+     * namespace (src/routes.ts:6347) and the Stripe webhook (:6371) *above* the
+     * authenticated chain. A witness under either would be answered up there
+     * while `sourceAcceptsIt` said `false` — request sent, outer handler run,
+     * and nothing here had modelled it.
+     *
+     * Safe today only because no witness lies in either namespace, which was a
+     * fact nobody had written down (Sol, review § P2-SAFETY-SCOPE). Asserted
+     * rather than relied on, so a contract row mistakenly placed under one of
+     * those paths fails here instead of executing an outer handler. Asked with
+     * the two predicates the dispatcher itself uses, so a namespace that widens
+     * later widens this with it.
+     */
+    it("asks only about paths the authenticated dispatcher is the first to see", () => {
+      const outside = DISJOINTNESS_CORPUS.filter(
+        (witness) => isPublicNamespace(witness) || witness === WEBHOOK_PATH,
+      );
+      expect(
+        outside,
+        "handleApi answers these above serveAuthenticatedApi, so sourceAccepts() does not model what a request would reach",
+      ).toEqual([]);
     });
 
     it.each(REFUSALS.map((r) => [r.method, r.witness, r.sourceAcceptsIt] as const))(
