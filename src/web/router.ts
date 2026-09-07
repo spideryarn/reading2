@@ -694,11 +694,32 @@ export const PRICING_HREF = "/pricing";
  */
 export const CONTACT_HREF = "/contact";
 /**
- * Every release since launch — linked from the footer, where it is labelled
- * "What's new" rather than "Changelog", the internal name for the process
- * that writes it (docs/project/changelog.md).
+ * Every release since launch — linked from the footer and offered by the
+ * command bar, labelled "What's new" at both rather than "Changelog", which is
+ * the internal name for the process that writes it (docs/project/changelog.md).
  */
 export const CHANGELOG_HREF = "/changelog";
+/**
+ * **What that page is called, everywhere it is called anything.**
+ *
+ * Four places said this string independently — the footer row, the command
+ * bar's page row, the page's own `<h1>`, and the browser tab — and three of
+ * them carried a comment promising they matched one of the others. Four
+ * promises kept by hand is what a rename breaks silently, and *What's new* is
+ * exactly the kind of label that gets reworded: it is a phrase, not a noun, and
+ * it deliberately is not the word the code uses for the same thing.
+ *
+ * **The apostrophe is `’` (U+2019), not `'`**, and that is load-bearing rather
+ * than typographic fussiness: the command bar compares what a reader typed
+ * against this string without folding punctuation, so it carries `whats new` as
+ * an explicit alias. CommandBar.tsx § `PAGES`.
+ *
+ * Beside the href rather than in title-text.ts, which is the modes' table — a
+ * page is not a mode, and the 2026-09-07 change that put this one in the
+ * command bar is the change that had to say so in a type
+ * (command-match.ts § `Command`).
+ */
+export const CHANGELOG_LABEL = "What’s new";
 /**
  * The shelf of public articles.
  *
