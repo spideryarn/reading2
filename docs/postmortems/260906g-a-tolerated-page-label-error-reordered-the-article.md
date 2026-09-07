@@ -51,8 +51,9 @@ Rendering must require an adjacent-page or same-page continuation and must track
 of a joined paragraph. The final transformations need their own witnesses: certifying an earlier
 representation does not certify the one the reader receives.
 
-Implementation and red/green evidence are tracked in the plan; this account does not claim the
-fix has landed before that evidence exists.
+Sol implemented and reviewed this separation, with failing regressions before each fix and a
+negative control against the final no-HTML guarantee. The plan records source replays, full-suite
+results and landing status; production reader data remains unchanged.
 
 ## Countermeasures ranked by ease and value
 
@@ -73,3 +74,9 @@ fix has landed before that evidence exists.
 The lesson is to inspect what a relaxed check authorises downstream. A number that was merely
 reported became a sort key. Once the code permitted the former to be wrong, the latter no longer
 had a valid input contract.
+
+The review also caught a smaller example of the same evidence problem: splitting an empty
+string on whitespace yields one array element, so blank reference records counted as words.
+The bibliography share could then suppress a real content warning. That counter entered in
+`c50df276d` on 2026-08-27. It now counts only nonempty words, with a regression where twenty
+blank references must not turn a tiny fragment of body prose into a checked bibliography.

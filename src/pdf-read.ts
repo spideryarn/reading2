@@ -93,6 +93,7 @@ import {
   PDF_DAMAGED,
   PDF_LOCKED,
   pdfChunkTooBig,
+  pdfPagesIncomplete,
   pdfPagesCutOff,
   pdfPagesFiltered,
   pdfTooManyPages,
@@ -117,6 +118,13 @@ import {
   TooManyPages,
 } from "./pdf.js";
 import { type Check, check, report } from "./pdf-score.js";
+import {
+  PdfReadingShapeError,
+  structuralFailureMessages,
+  structuralIssues,
+  validateChunkReading,
+  type ValidatedChunkReading,
+} from "./pdf-integrity.js";
 import type { Meta } from "./types.js";
 import { MAX_PAGES } from "./uploads.js";
 import { ProviderRefused, openRouterJson } from "./ai-call.js";
@@ -670,24 +678,7 @@ export function instructionFor(chunk: Chunk): string {
 
 // ───────────────────────────────────────────────────────── the reader
 
-export interface ChunkReading {
-  records: PdfRecord[];
-  /** Characters of meaningless noise removed from the model's text. See `parseRecords`. */
-  stripped: number;
-  /** OpenRouter's normalised reason. `length` means truncated, and truncated means failed. */
-  finish: string;
-  /**
-   * The provider's own word for it — `RECITATION` arrives here, as
-   * `content_filter` above.
-   *
-   * **Never logged, never shown, never wrapped in an `Error`.** Pass it through
-   * `knownNativeFinish` first, which answers with one of *our* strings. See
-   * that function.
-   */
-  nativeFinish?: string | undefined;
-  usage: { input: number; output: number };
-  ms: number;
-}
+export type ChunkReading = ValidatedChunkReading;
 
 /**
  * **The provider's word for a refusal, replaced by one of ours.**
@@ -854,13 +845,25 @@ export function openRouterReader(
       }
       const json = call.json as OpenRouterResponse;
       const choice = json.choices?.[0];
-      const parsed = parseRecords(choice?.message?.content ?? "");
+      const usage = {
+        input: json.usage?.prompt_tokens ?? 0,
+        output: json.usage?.completion_tokens ?? 0,
+      };
+      let parsed: ReturnType<typeof parseRecords>;
+      try {
+        parsed = parseRecords(choice?.message?.content ?? "");
+      } catch (error) {
+        if (error instanceof PdfReadingShapeError) {
+          throw new PdfReadingShapeError(error.code, error.message, usage);
+        }
+        throw error;
+      }
       return {
         records: parsed.records,
         stripped: parsed.stripped,
         finish: choice?.finish_reason ?? "?",
         nativeFinish: choice?.native_finish_reason,
-        usage: { input: json.usage?.prompt_tokens ?? 0, output: json.usage?.completion_tokens ?? 0 },
+        usage,
         ms: Math.round(performance.now() - started),
       };
     },
@@ -1290,27 +1293,55 @@ export function parseRecords(text: string): { records: PdfRecord[]; stripped: nu
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new Error("The transcription came back as something other than JSON.");
+    throw new PdfReadingShapeError(
+      "reading-shape",
+      "The transcription came back as something other than JSON.",
+    );
   }
-  const records = (parsed as { records?: unknown })?.records;
-  if (!Array.isArray(records)) throw new Error("The transcription has no records in it.");
+  const records =
+    parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as { records?: unknown }).records
+      : undefined;
+  if (!Array.isArray(records)) {
+    throw new PdfReadingShapeError("reading-shape", "The transcription has no records in it.");
+  }
   let stripped = 0;
   const cleaned = records.map((raw, i) => {
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new PdfReadingShapeError("record-shape", `Record ${i} is not an object.`);
+    }
     const r = raw as Partial<PdfRecord>;
     if (typeof r.page !== "number" || !Number.isInteger(r.page)) {
-      throw new Error(`Record ${i} has no page number.`);
+      throw new PdfReadingShapeError("record-shape", `Record ${i} has no page number.`);
     }
-    if (typeof r.text !== "string") throw new Error(`Record ${i} on page ${r.page} has no text.`);
+    if (typeof r.text !== "string") {
+      throw new PdfReadingShapeError("record-shape", `Record ${i} on page ${r.page} has no text.`);
+    }
     if (!RECORD_TYPES.includes(r.type as RecordType)) {
-      throw new Error(`Record ${i} on page ${r.page} has an unknown type: ${String(r.type)}.`);
+      throw new PdfReadingShapeError(
+        "record-shape",
+        `Record ${i} on page ${r.page} has an unknown type: ${String(r.type)}.`,
+      );
+    }
+    if (typeof r.continues !== "boolean") {
+      throw new PdfReadingShapeError(
+        "record-shape",
+        `Record ${i} on page ${r.page} has no continues flag.`,
+      );
+    }
+    if (typeof r.uncertain !== "boolean") {
+      throw new PdfReadingShapeError(
+        "record-shape",
+        `Record ${i} on page ${r.page} has no uncertain flag.`,
+      );
     }
     stripped += r.text.match(NOISE)?.length ?? 0;
     return {
       page: r.page,
       type: r.type as RecordType,
       text: r.text.replace(NOISE, ""),
-      continues: r.continues === true,
-      uncertain: r.uncertain === true,
+      continues: r.continues,
+      uncertain: r.uncertain,
     };
   });
   return { records: cleaned, stripped };
@@ -1546,7 +1577,7 @@ export function mendSeamHyphens(records: PdfRecord[], pass: Pass0): PdfRecord[] 
 export function renderHtml(records: PdfRecord[], title: string, rawSha256: string): string {
   const parts: string[] = [];
   let list: "ul" | null = null;
-  let previous: { type: RecordType; index: number } | null = null;
+  let previous: { type: RecordType; index: number; lastPage: number } | null = null;
   /* Per page, and counted over the figures actually **emitted** — a record
      joined onto the one before it by `continues` is not a new figure, and a
      record skipped for having no text never had one. The ordinal is an input to
@@ -1561,13 +1592,19 @@ export function renderHtml(records: PdfRecord[], title: string, rawSha256: strin
     const text = record.text.trim();
     if (!text) continue;
 
-    if (record.continues && previous && previous.type === record.type) {
+    if (
+      record.continues &&
+      previous &&
+      previous.type === record.type &&
+      (record.page === previous.lastPage || record.page === previous.lastPage + 1)
+    ) {
       /* Join, with a space — the model was told to mend hyphenation itself, so
          what arrives here is two halves of a sentence, not two halves of a word. */
       parts[previous.index] = parts[previous.index]!.replace(
         /(<\/[a-z]+>)$/,
         ` ${escapeHtml(text)}$1`,
       );
+      previous.lastPage = record.page;
       continue;
     }
 
@@ -1585,7 +1622,7 @@ export function renderHtml(records: PdfRecord[], title: string, rawSha256: strin
       record.type === "figure" || record.type === "table"
         ? `<figure${cls}${figureMarker(record, text, rawSha256, ordinals)}><figcaption>${escapeHtml(text)}</figcaption></figure>`
         : `<${tag}${cls}>${escapeHtml(text)}</${tag}>`;
-    previous = { type: record.type, index: parts.length };
+    previous = { type: record.type, index: parts.length, lastPage: record.page };
     parts.push(html);
   }
   if (list) parts.push("</ul>");
@@ -1810,11 +1847,11 @@ export interface PdfExtractOptions {
  * not a reading, and the store deliberately does not check what a value means
  * (src/store/checkpoints.ts § What the store knows about a key).
  *
- * **A miss re-buys a vision-model call**, so this is deliberately the most
- * tolerant test that still means anything: it is an object, and it has the
- * `records` array every reading has. Nothing about the records themselves —
- * they go through `checkChunk` next, which is the real gate and is stricter
- * than anything a shape test here could be.
+ * **A miss re-buys a vision-model call**, but a malformed or unfinished paid
+ * answer is not reusable work. The whole envelope and every record are checked
+ * at this untyped JSON boundary, and only `finish: "stop"` certifies completion.
+ * Source-page semantics still go through `checkChunk` next, because they need
+ * the requested chunk and the independent pass-0 baseline.
  *
  * It says so in the log, because an entry that had to be discarded is the only
  * surviving trace that a run was killed halfway through writing it. This file
@@ -1827,14 +1864,18 @@ function usableChunkReading(
   about: { slug: string; chunk: string; pages: number[] },
 ): ChunkReading | null {
   if (value === undefined) return null;
-  if (!value || typeof value !== "object" || !Array.isArray((value as ChunkReading).records)) {
+  const validated = validateChunkReading(value);
+  /* A checkpoint is written only after a finished answer passed. An interrupted
+     finish in that slot is stale or corrupt even when the rest of its shape is
+     valid, and must be recovered rather than replayed. */
+  if (validated.kind === "structural" || validated.reading.finish !== "stop") {
     log("pipeline").warn(
       about,
       "discarded a pdf chunk checkpoint that is not a reading; re-reading those pages",
     );
     return null;
   }
-  return value as ChunkReading;
+  return validated.reading;
 }
 
 /**
@@ -1972,7 +2013,9 @@ async function keepChunk(
   slug: string,
   key: string,
   reading: ChunkReading,
+  signal?: AbortSignal,
 ): Promise<void> {
+  if (signal?.aborted) return;
   try {
     await checkpoints.write(slug, "pdf-chunk", key, reading);
   } catch (err) {
@@ -1987,10 +2030,9 @@ async function keepChunk(
  * Stage 2 for a PDF, end to end: pass 0, chunks, the model, the check, the HTML.
  *
  * Nothing is written to `outFile` until every chunk has passed. A step that
- * fails here fails with the page numbers in the message — deliberately not a
- * retry, and deliberately not a fallback to a stronger model. Escalation is v2
- * and it will be a visible choice; a fallback that quietly costs four times as
- * much is how a bill becomes a surprise.
+ * fails here fails with the page numbers in the message. Structurally defective
+ * chunks first get bounded single-page recovery with the same reader; this
+ * never falls back to a stronger model.
  */
 export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtractResult> {
   const reader = opts.reader ?? openRouterReader();
@@ -2109,6 +2151,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
    * checkpoint.
    */
   const cached = new Map<number, ChunkReading>();
+  const defectiveCached = new Set<number>();
   const bodies = new Map<number, Uint8Array>();
   for (const [at, chunk] of chunks.entries()) {
     /* `keys` is built from `chunks` by `map`, so the index is the same chunk —
@@ -2119,12 +2162,14 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     if (key === undefined) {
       throw new Error(`No checkpoint key was minted for chunk ${at} of ${chunks.length}.`);
     }
-    const reading = usableChunkReading(stored.get(key), {
+    const storedValue = stored.get(key);
+    const reading = usableChunkReading(storedValue, {
       slug: opts.slug,
       chunk: key,
       pages: chunk.pages,
     });
     if (reading) cached.set(at, reading);
+    else if (storedValue !== undefined) defectiveCached.add(at);
     else bodies.set(at, await cuts.cut(sentPages(chunk)));
   }
 
@@ -2183,6 +2228,151 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   const signal = opts.signal
     ? AbortSignal.any([opts.signal, fatal.signal])
     : fatal.signal;
+
+  /* `PdfCuts.cut` shares one parsed source and may not run concurrently. The
+     primary bodies above are cut before fan-out; recovery is discovered during
+     fan-out, so its one-page cuts take this small serial lane. Model calls still
+     use the ordinary reader and therefore the same WidthGate. */
+  let cutting: Promise<void> = Promise.resolve();
+  const cutOne = (page: number): Promise<Uint8Array> => {
+    const next = cutting.then(() => cuts.cut([page]));
+    cutting = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  };
+
+  const account = (value: unknown): void => {
+    if (!value || typeof value !== "object") return;
+    const candidate = value as { usage?: { input?: unknown; output?: unknown } };
+    if (
+      typeof candidate.usage?.input === "number" &&
+      Number.isFinite(candidate.usage.input) &&
+      candidate.usage.input >= 0
+    ) {
+      usage.input += candidate.usage.input;
+    }
+    if (
+      typeof candidate.usage?.output === "number" &&
+      Number.isFinite(candidate.usage.output) &&
+      candidate.usage.output >= 0
+    ) {
+      usage.output += candidate.usage.output;
+    }
+  };
+
+  const readValidated = async (body: Uint8Array, instruction: string) => {
+    try {
+      const raw: unknown = await reader.read(body, instruction, signal);
+      account(raw);
+      return validateChunkReading(raw);
+    } catch (error) {
+      if (!(error instanceof PdfReadingShapeError)) throw error;
+      account({ usage: error.usage });
+      return { kind: "structural", code: error.code } as const;
+    }
+  };
+
+  const requireFinished = (
+    reading: ChunkReading,
+    pages: readonly number[],
+    key: string,
+  ): boolean => {
+    if (reading.finish === "stop") return true;
+    if (reading.finish === "length") {
+      throw stageFailure(pdfPagesCutOff(pages), {
+        authored: `The transcription of pages ${pages.join(", ")} was cut off at the token limit.`,
+      });
+    }
+    if (reading.finish !== "content_filter") return false;
+    const refusal = knownNativeFinish(reading.nativeFinish);
+    if (refusal) {
+      log("pipeline").warn(
+        { slug: opts.slug, chunk: key, nativeFinish: refusal },
+        "the provider's safety filter refused a pdf chunk",
+      );
+    }
+    throw stageFailure(pdfPagesFiltered(pages), {
+      authored:
+        `The model's safety filter stopped the transcription of pages ${pages.join(", ")}.` +
+        ` Verbatim transcription of long boilerplate is a known trigger; a smaller chunk` +
+        ` sometimes gets through.`,
+    });
+  };
+
+  const incomplete = (pages: readonly number[]): Error =>
+    stageFailure(pdfPagesIncomplete(pages), {
+      authored:
+        `The PDF reader could not establish source-page integrity for pages ${pages.join(", ")} ` +
+        `after ${ATTEMPTS} single-page attempts.`,
+    });
+
+  const pagesWithIssues = (issues: readonly { pages: readonly number[] }[]): number[] =>
+    [...new Set(issues.flatMap((issue) => issue.pages))].sort((a, b) => a - b);
+
+  const recover = async (
+    chunk: Chunk,
+    key: string,
+    asked: string[],
+  ): Promise<{ reading: ChunkReading; result: Check }> => {
+    const records: PdfRecord[] = [];
+    let recoveredStripped = 0;
+    let recoveredInput = 0;
+    let recoveredOutput = 0;
+    let recoveredMs = 0;
+
+    /* Sequential within one chunk: there is no nested page fan-out. Different
+       chunks retain the outer queue's bounded concurrency. */
+    for (const page of chunk.pages) {
+      const body = await cutOne(page);
+      let accepted: ChunkReading | undefined;
+      let acceptedCheck: Check | undefined;
+      for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+        const validated = await readValidated(body, instructionFor({ pages: [page] }));
+        if (validated.kind === "structural") {
+          asked.push(`page ${page}: ${validated.code}`);
+          continue;
+        }
+        const one = validated.reading;
+        if (!requireFinished(one, [page], key)) {
+          asked.push(`page ${page}: unfinished (${one.finish})`);
+          continue;
+        }
+        /* A one-page body is the source of truth. The model's label is neither
+           trimmed nor trusted; every valid-shaped record came from this page. */
+        const assigned: ChunkReading = {
+          ...one,
+          records: one.records.map((record) => ({ ...record, page })),
+        };
+        const checked = checkChunk(assigned, { pages: [page] }, pass, new Set());
+        if (checked.verdict.kind === "structural") {
+          asked.push(`page ${page}: ${checked.failures[0] ?? "failed its structural check"}`);
+          continue;
+        }
+        accepted = assigned;
+        acceptedCheck = checked;
+        break;
+      }
+      if (!accepted || !acceptedCheck) throw incomplete([page]);
+      records.push(...accepted.records);
+      recoveredStripped += accepted.stripped;
+      recoveredInput += accepted.usage.input;
+      recoveredOutput += accepted.usage.output;
+      recoveredMs += accepted.ms;
+    }
+
+    const reading: ChunkReading = {
+      records,
+      stripped: recoveredStripped,
+      finish: "stop",
+      usage: { input: recoveredInput, output: recoveredOutput },
+      ms: recoveredMs,
+    };
+    const result = checkChunk(reading, chunk, pass, new Set());
+    if (result.verdict.kind === "structural") throw incomplete(chunk.pages);
+    return { reading, result };
+  };
   /**
    * **As wide as there are chunks, because the gate is the limiter now.**
    *
@@ -2234,7 +2424,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
            * eight-page paper one run in three, on a fault that is gone when you
            * ask again, is a gate somebody turns off.
            *
-           * **Two runs, and then it is published with a quality note** — not,
+           * **Two runs, and then a content warning is published with a quality note** — not,
            * as this said until 2026-09-04, "then it fails with the page numbers
            * in the message. The failure is still visible and still hard." That
            * stopped being true on 2026-08-30; the reasoning is on
@@ -2246,6 +2436,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
            */
           let reading: ChunkReading;
           let result: Check;
+          let usedRecovery = false;
           /* Empty, and deliberately not `seen` — see the note above this block. */
           const alone = new Set<string>();
           const asked: string[] = [];
@@ -2253,6 +2444,13 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
           if (checkpointed) {
             reading = checkpointed;
             result = checkChunk(reading, chunk, pass, alone);
+            if (result.verdict.kind === "structural") {
+              usedRecovery = true;
+              ({ reading, result } = await recover(chunk, key, asked));
+            }
+          } else if (defectiveCached.has(at)) {
+            usedRecovery = true;
+            ({ reading, result } = await recover(chunk, key, asked));
           } else {
             /* Cut before the fan-out, from the one parsed source, and reused
                across both attempts. A chunk with no checkpoint always has a
@@ -2262,9 +2460,14 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
               throw new Error(`Chunk ${at} of ${chunks.length} was never cut out of the source.`);
             }
             for (let attempt = 1; ; attempt++) {
-              reading = await reader.read(body, instructionFor(chunk), signal);
-              usage.input += reading.usage.input;
-              usage.output += reading.usage.output;
+              const validated = await readValidated(body, instructionFor(chunk));
+              if (validated.kind === "structural") {
+                asked.push(`pages ${chunk.pages.join(", ")}: ${validated.code}`);
+                usedRecovery = true;
+                ({ reading, result } = await recover(chunk, key, asked));
+                break;
+              }
+              reading = validated.reading;
               /* `length` is a truncated answer, and a truncated answer is a lost page —
                  the previous version's own bug, shipped as a shorter article. Say which
                  it was before the scoring says "the model lost content", because that
@@ -2281,58 +2484,37 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
                  `{ authored }` on both, and it is page numbers and fixed prose
                  in each. The provider's own word for the refusal is the one
                  thing that could not travel under that claim — see below. */
-              if (reading.finish === "length") {
-                throw stageFailure(pdfPagesCutOff(chunk.pages), {
-                  authored: `The transcription of pages ${chunk.pages.join(", ")} was cut off at the token limit.`,
-                });
-              }
-              if (reading.finish === "content_filter") {
-                /**
-                 * **`nativeFinish` goes to the log as a field, not into the
-                 * diagnostic**, and that is what makes the diagnostic
-                 * authorable.
-                 *
-                 * It is the provider's own word for the refusal — `RECITATION`
-                 * and its cousins — so it is text from outside, and
-                 * `{ authored }` around a string carrying it would be exactly
-                 * the claim src/job-failure.ts says must never be made. Splitting
-                 * it out costs one log line and leaves the half worth having —
-                 * the pages, and the remedy — able to reach Sentry.
-                 *
-                 * **And the log is not a safe harbour for it either**, which
-                 * this line got wrong for a day: `knownNativeFinish` matches the
-                 * value against our own list and logs the literal it matched, so
-                 * what reaches Pino is a string this file wrote. GPT Sol,
-                 * reviewing the built stage 1, finding 3.
-                 */
-                const refusal = knownNativeFinish(reading.nativeFinish);
-                if (refusal) {
-                  log("pipeline").warn(
-                    { slug: opts.slug, chunk: key, nativeFinish: refusal },
-                    "the provider's safety filter refused a pdf chunk",
-                  );
-                }
-                throw stageFailure(pdfPagesFiltered(chunk.pages), {
-                  authored:
-                    `The model's safety filter stopped the transcription of pages ${chunk.pages.join(", ")}.` +
-                    ` Verbatim transcription of long boilerplate is a known trigger; a smaller chunk` +
-                    ` sometimes gets through.`,
-                });
+              if (!requireFinished(reading, chunk.pages, key)) {
+                asked.push(`pages ${chunk.pages.join(", ")}: unfinished (${reading.finish})`);
+                usedRecovery = true;
+                ({ reading, result } = await recover(chunk, key, asked));
+                break;
               }
               result = checkChunk(reading, chunk, pass, alone);
-              if (result.ok || attempt >= ATTEMPTS) break;
+              if (result.verdict.kind === "structural") {
+                asked.push(
+                  `pages ${chunk.pages.join(", ")}: ${result.failures[0] ?? "failed its structural check"}`,
+                );
+                usedRecovery = true;
+                ({ reading, result } = await recover(chunk, key, asked));
+                break;
+              }
+              if (result.verdict.kind === "pass" || attempt >= ATTEMPTS) break;
               asked.push(
                 `pages ${chunk.pages.join(", ")}: ${result.failures[0] ?? "failed its check"}`,
               );
             }
-            /* **The moment the call comes back**, not at the end of the run —
+            /* **The moment an ordinary call comes back**, not at the end of the run —
                that is the whole point of a checkpoint, and it is why the store's
                `write` is singular while its `read` is plural.
 
                Only a reading that passed is kept. A failed one is not worth
                replaying, and storing it would make the retry above read back the
-               answer it is retrying. */
-            if (result.ok) await keepChunk(opts.checkpoints, opts.slug, key, reading);
+               answer it is retrying. Recovered readings are the exception: they
+               wait for the authoritative cross-chunk fold in phase 2. */
+            if (result.verdict.kind === "pass" && !usedRecovery) {
+              await keepChunk(opts.checkpoints, opts.slug, key, reading, signal);
+            }
           }
 
           /* Counted as chunks land rather than in page order, because this is
@@ -2341,7 +2523,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
              which one it was, so out-of-order progress still reads sensibly. */
           completed += 1;
           opts.onProgress?.(completed, chunks.length, chunk.pages, result);
-          return { chunk, reading, result, asked };
+          return { chunk, key, reading, result, asked, usedRecovery };
         },
         { signal },
       ),
@@ -2396,18 +2578,45 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
    * `recall` and `quality` say about the article, and has to happen here
    * because this is where the records are final. Only local CPU, no second call.
    */
-  for (const { chunk, reading, result, asked } of readings) {
-    retries.push(...asked);
-    const emitted = withoutRepeats(
-      reading.records.filter((r) => !chunk.context || r.page !== chunk.context),
-      seen,
-      chunk.context === undefined ? null : wordsOf(pass, [chunk.context]),
-      wordsOf(pass, chunk.pages),
-    );
+  for (const item of readings) {
+    const { chunk, key, result, asked, usedRecovery } = item;
+    let reading = item.reading;
+    let trialSeen = new Set(seen);
+    const fold = () =>
+      withoutRepeats(
+        reading.records.filter((r) => !chunk.context || r.page !== chunk.context),
+        trialSeen,
+        chunk.context === undefined ? null : wordsOf(pass, [chunk.context]),
+        wordsOf(pass, chunk.pages),
+      );
+    let emitted = fold();
     /* `result` is phase 1's verdict and is deliberately not reused for the
        numbers below — it is kept only for `onProgress`, which has already
        fired. */
-    const published = checkEmitted(emitted, chunk, pass);
+    let published = checkEmitted(emitted, chunk, pass);
+    if (published.verdict.kind === "structural") {
+      /* A model-authored page label is not provenance. If cross-chunk dedup
+         removes a page's only content, re-read the original pages without
+         context, then run the same fold and guard again. One chunk gets only
+         one recovery across both phases; if recovered content still folds
+         away, refusal is safer than restoring the duplicate. */
+      if (usedRecovery) throw incomplete(pagesWithIssues(published.verdict.issues));
+      ({ reading } = await recover(chunk, key, asked));
+      trialSeen = new Set(seen);
+      emitted = fold();
+      published = checkEmitted(emitted, chunk, pass);
+      if (published.verdict.kind === "structural") {
+        throw incomplete(pagesWithIssues(published.verdict.issues));
+      }
+    }
+    /* A recovered chunk is checkpoint-worthy only after the authoritative
+       cross-chunk fold has established that its content survives publication. */
+    if (usedRecovery || reading !== item.reading) {
+      await keepChunk(opts.checkpoints, opts.slug, key, reading, signal);
+    }
+    retries.push(...asked);
+    seen.clear();
+    for (const value of trialSeen) seen.add(value);
     stripped += reading.stripped ?? 0;
     if (!published.ok) failures.push(...published.failures);
     notes.push(...published.notes);
@@ -2420,8 +2629,21 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     void result;
   }
 
+  /* Last structural guard over exactly the records eligible for HTML. Per-
+     chunk checks remain useful for targeted recovery; this whole-document
+     check is the publication boundary and must stay after the final fold. */
+  const finalIssues = structuralIssues(
+    all,
+    pass.pages.map((page) => page.page),
+    pass,
+  );
+  if (finalIssues.length) {
+    const pages = [...new Set(finalIssues.flatMap((issue) => issue.pages))].sort((a, b) => a - b);
+    throw incomplete(pages);
+  }
+
   /**
-   * **A quality failure is recorded on the article, not thrown.**
+   * **A noisy content failure is logged and returned in metadata, not thrown.**
    *
    * This used to `throw`, and the argument for throwing was good: pass 0 exists
    * precisely because a model can drop a paragraph, summarise one, or invent
@@ -2439,17 +2661,14 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
    * asked for a paper got nothing at all.
    *
    * Greg's call, 2026-08-30, against the stated order of capability, then
-   * robustness: publish it and say what looked wrong. A reader can see the note
-   * and judge; a reader with no article cannot.
+   * robustness: publish the article and retain the quality evidence. The
+   * current store and reading view do not persist or render the detailed
+   * warnings; the server log records their count.
    *
    * **What this costs, stated plainly, because it is the defence being stood
-   * down.** A genuinely bad transcription now reaches the shelf. `recall` and
-   * `pagesChecked` were already there to be read; `quality` is what makes a
-   * *specific* complaint visible rather than a number. Nothing automatically
-   * refuses a page any more, so if the reader does not look, nobody looks.
-   * Restoring a gate later means choosing which failures are fatal — the
-   * missing-run check is the one worth that, and figure and maths noise is
-   * exactly what has to be separated from it first.
+   * down.** A genuinely bad transcription now reaches the shelf. Structural
+   * page-integrity failures are recovered or refused earlier; recall, figure,
+   * maths and typography disagreements remain nonfatal quality evidence.
    */
   if (failures.length) {
     log("pipeline").warn(
@@ -2457,8 +2676,6 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
       `extract ${opts.slug}: published with ${failures.length} quality note(s)`,
     );
   }
-
-  all.sort((a, b) => a.page - b.page);
 
   /**
    * **The second look at the front matter** — src/pdf-frontmatter.ts, and the
@@ -2710,7 +2927,21 @@ function checkChunk(reading: ChunkReading, chunk: Chunk, pass: Pass0, seen: Set<
     chunk.context === undefined ? null : wordsOf(pass, [chunk.context]),
     wordsOf(pass, chunk.pages),
   );
-  return checkEmitted(emitted, chunk, pass);
+  const checked = checkEmitted(emitted, chunk, pass);
+  /* The context filter is a presentation operation, never permission for an
+     out-of-chunk label. Check the source response as well as what survived it,
+     so a context-page impostor cannot be trimmed into apparent success. */
+  const rawIssues = structuralIssues(reading.records, chunk.pages, pass);
+  if (!rawIssues.length) return checked;
+  const existing = checked.verdict.kind === "structural" ? checked.verdict.issues : [];
+  const issues = [...rawIssues, ...existing];
+  const structural = structuralFailureMessages(issues, pass);
+  return {
+    ...checked,
+    ok: false,
+    verdict: { kind: "structural", issues },
+    failures: [...new Set([...structural, ...checked.failures])],
+  };
 }
 
 /**
@@ -2786,7 +3017,8 @@ function bibliographyPages(records: PdfRecord[], pages: number[], pass: Pass0): 
     if (page < pass.pages.length - BIBLIOGRAPHY_TAIL + 1) return false;
 
     const mine = records.filter((r) => r.page === page);
-    const words = (rs: PdfRecord[]) => rs.reduce((n, r) => n + r.text.split(/\s+/).length, 0);
+    const words = (rs: PdfRecord[]) =>
+      rs.reduce((n, r) => n + (r.text.match(/\S+/g)?.length ?? 0), 0);
     const total = words(mine);
     if (!total) return false;
     if (words(mine.filter((r) => r.type === "reference")) / total < REFERENCE_SHARE) return false;

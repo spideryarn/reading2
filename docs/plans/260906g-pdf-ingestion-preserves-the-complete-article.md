@@ -1,6 +1,6 @@
 # PDF ingestion preserves the complete article
 
-Status: diagnosis established, implementation not started. The live public API and saved extracted
+Status: implementation reviewed; final small review fixes and trunk integration remain. The live public API and saved extracted
 HTML contain the same out-of-order passages; the source-page mapping is below. Worktree:
 `worktree-kuhn-pdf-integrity`, base `93b3aebe7fc180d8812e7c2e3293487564cea042`.
 
@@ -130,15 +130,15 @@ it keeps. A wider concurrency limit cannot repair dropped pages.
 - [x] Write the [postmortem](../postmortems/260906g-a-tolerated-page-label-error-reordered-the-article.md)
   naming the general failure class and ranked countermeasures.
 - [x] Finalise the implementation contract and get GPT Sol's plan review before code changes.
-- [ ] Commit the diagnosis and reviewed plan.
+- [x] Commit the diagnosis and reviewed plan (`013d05a4`).
 
 ### Make incomplete extraction recover or fail explicitly
 
-- [ ] GPT Sol writes a regression test, observes the relevant failure, then implements the fix.
-- [ ] Cover saved responses, final transformations, bounded recovery and non-prose exceptions.
-- [ ] Run the recovered path against the incident evidence and held-out PDF fixtures, retaining
+- [x] GPT Sol writes a regression test, observes the relevant failure, then implements the fix.
+- [x] Cover saved responses, final transformations, bounded recovery and non-prose exceptions.
+- [x] Run the recovered path against the incident evidence and held-out PDF fixtures, retaining
   the actual outputs and measuring requests, latency and cost if model calls are needed.
-- [ ] Update the owning extraction doc; review the code and evidence independently with GPT Sol.
+- [x] Update the owning extraction doc; review the code and evidence independently with GPT Sol.
 - [ ] Run `npm test`, `npm run typecheck`, touched-file lint and `npm run check`; commit the stage.
 
 ### Verify and land
@@ -148,3 +148,72 @@ it keeps. A wider concurrency limit cannot repair dropped pages.
 - [ ] Fetch and merge current `origin/dev`, validate any integration changes, and push `HEAD:dev`.
 - [ ] Report confirmed cause, measured improvements, limits and the status of the existing article.
 - [ ] Run `worktree:check` before removal; preserve the tree if checks or repair work remain open.
+
+## Validation evidence
+
+The initial implementation ran 125 baseline tests, then reproduced ten failures with the new
+regressions before editing the reader. Its focused suite passed 179 tests. Temporarily disabling
+the structural guard made the unique `STRUCTURAL_GUARD_NO_HTML` assertion fail; restoring the
+guard returned it to green. The [first code review](260906g-pdf-ingestion-code-review-sol.md)
+found five additional ways malformed or near-empty content could be accepted; all were verified
+and sent back to Sol. Final validation below supersedes these intermediate results.
+
+A local historical replay used the identical source PDF (SHA-256
+`0a74e33b25dfbf4556527a68914a161c167e6d3d5ad3623c2735d47b8138bf5c`). It matched
+66 archived good transcripts to the current chunk plan, keeping those transcripts local, and
+read only the three unavailable chunks from the source. This deliberately injects historical
+responses into today's validator; it does not migrate normal cache keys across prompt versions.
+Five fresh model calls completed in 93.93 seconds at $0.03170474, with no unpriced calls.
+The output had recall 0.995 over 140 checked pages. Six distinctive normalised fragments per
+rendered record independently mapped 1,885 of 2,096 records to the PDF text layer: body pages
+1–130 were all represented, with zero page-order jumps or mismatched mapped page labels.
+This is page-order evidence, not proof of exact transcription or a clean-import benchmark.
+The two remaining warnings concern article-info lettering and a number on pages 50–51.
+
+A clean-import attempt had previously stopped after 357.55 seconds on `fetch failed`, with only
+four completed chunks. Its transport retries and unpriced failures make it unsuitable as a cost
+or success benchmark. Successful responses were retained locally.
+
+The local block-rebuild preview preserved 2,011 of 2,030 published IDs, producing 2,024 blocks.
+Nineteen old IDs no longer matched and thirteen new IDs were minted after transcription and
+paragraph-boundary corrections. These counts concern an unpublished preview; no production
+article, note, revision or checkpoint was changed. A live replacement needs an explicit check
+of reader state attached to the unmatched blocks and approval under the repository data rule.
+
+The final code replayed all 69 archived/current captured answers in 9.42 seconds, with zero
+model calls and identical repaired HTML (SHA-256
+`7b7cd1c2080f2f895d532dd8441e104c59d5322f65b156e8c2bf802d466c8349`). Its independent
+page audit has the same zero jumps and no unrepresented body pages.
+
+The presence guard's conservative floor is three lexical words in both the page's cleaned
+independent baseline and the total transcribed records. It catches empty pages and lone folios
+without declaring isolated formulae or furniture to be missing prose. Existing noisy recall
+warnings remain nonfatal; this change does not promise to detect arbitrary partial omissions.
+
+A read-only production anchor-count check confirmed the same published revision: no comments
+or bookmarks, two chat threads, and one thread anchored to an unmatched old block. The live
+article therefore remains untouched; its replacement needs a deliberate anchor migration.
+
+Validation encountered a machine issue: macOS maintenance sleep interrupted the suite and the
+review, leaving OrbStack's clock about 17 minutes behind the host. Clock/expiry and timeout
+failures in that run are not treated as PDF regressions. A graceful OrbStack stop/start restored
+clock alignment; temporary `caffeinate` prevents idle sleep for the subsequent checks, with no
+persistent configuration change. The genuine fixture regressions were fixed by Luna: mocked
+wire answers now include the required booleans, and two mock readers parse only the leading
+requested page range instead of emitting the context page found among all prompt digits.
+Their original assertions were retained.
+
+The uninterrupted complete suite passed 13,722 tests across 755 files, with 58 expected skipped
+tests in one skipped file (175.55 seconds). Typecheck passed across all three projects; scoped
+lint had no errors or warnings, only three existing complexity notices. The separate durable
+checkpoint suite passed all seven original assertions after the fixture parser correction.
+[Sol's final review](260906g-pdf-ingestion-final-review-sol.md) returned **READY**, with all
+P0/P1 findings resolved. Two accepted P2s receive a small final fix before landing.
+
+After Greg explicitly approved the two-page transfer, the final fault-injection eval relabelled
+only the local cached records for pages 50–51 as 2–3. The final code rejected that cache entry,
+reused the other 68 chunks and read the two original source pages individually through the
+existing OpenRouter reader. Each request body was independently asserted to contain exactly
+one PDF page. Two calls finished the extraction in 52.88 seconds at $0.00728020, with no
+unpriced calls. The source audit again represented every body page, with zero order jumps or
+mismatched mapped page labels, and recall 0.995. This test changed no production data.

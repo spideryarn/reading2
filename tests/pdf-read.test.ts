@@ -12,9 +12,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pass0, PdfRecord } from "../src/pdf.js";
 import { pass0 } from "../src/pdf.js";
 import { check } from "../src/pdf-score.js";
+import { PdfReadingShapeError } from "../src/pdf-integrity.js";
 import {
   instructionFor,
   parseRecords,
+  type ChunkReading,
   type PdfReader,
   planChunks,
   renderHtml,
@@ -404,6 +406,15 @@ describe("what comes back from the model", () => {
     expect(() => parseRecords(json)).toThrow(/no page number/);
   });
 
+  it("refuses partial record shapes instead of defaulting missing boolean flags", () => {
+    const partial = { page: 1, type: "paragraph", text: "x", continues: false };
+    expect(() => parseRecords(JSON.stringify({ records: [partial] }))).toThrow(/no uncertain flag/);
+  });
+
+  it.each([[null], [[]], [7], ["record"]])("raises PdfReadingShapeError for malformed record entry %j", (entry) => {
+    expect(() => parseRecords(JSON.stringify({ records: [entry] }))).toThrow(PdfReadingShapeError);
+  });
+
   it("says so when the answer is not JSON at all", () => {
     expect(() => parseRecords("I'm sorry, I can't help with that.")).toThrow(/other than JSON/);
   });
@@ -415,10 +426,16 @@ describe("the whole stage, with the model stubbed out", () => {
     return {
       id: "test/honest",
       async read(_pdf, instruction) {
-        const asked = [...instruction.matchAll(/\d+/g)].map(Number);
-        const sent = instruction.includes("included only so you can see")
-          ? asked.slice(1)
-          : asked;
+        const one = /Transcribe page (\d+)/.exec(instruction)?.[1];
+        const range = /Transcribe pages (\d+)–(\d+)/.exec(instruction);
+        const sent = one
+          ? [Number(one)]
+          : range
+            ? Array.from(
+                { length: Number(range[2]) - Number(range[1]) + 1 },
+                (_, at) => Number(range[1]) + at,
+              )
+            : [];
         const wanted = new Set(sent);
         const records: PdfRecord[] = [];
         for (const page of pass.pages) {
@@ -482,7 +499,7 @@ describe("the whole stage, with the model stubbed out", () => {
     expect(result.extractedHtml).toContain("<article>");
   }, 30_000);
 
-  it("asks a failing chunk exactly once more, and no more", async () => {
+  it("asks a chunk with only content warnings exactly once more, and no more", async () => {
     /* Not the fallback the plan forbids — the same call, judged by the same
        check. It exists because the reader drops a clause about one run in
        three, and a gate that fails a whole paper for that is a gate somebody
@@ -493,29 +510,21 @@ describe("the whole stage, with the model stubbed out", () => {
        labels, and it got turned off. So this no longer rejects — but the retry
        it is actually about is unchanged, and the count below is the assertion
        that was always doing the work. */
-    await run((records) => records.filter((r) => r.page !== 3));
+    const omitOneParagraph = (records: PdfRecord[]) => {
+      const victim = records.findIndex((r) => r.page === 5 && r.text.split(" ").length > 12);
+      return records.filter((_, at) => at !== victim);
+    };
+    await run(omitOneParagraph);
     const chunks = asks;
     await run();
     expect(chunks).toBe(asks + 1);
   }, 60_000);
 
-  /* ============================================== what the checker still sees ==
-     These two used to assert `rejects.toThrow`, and that was the right spec
-     until 2026-08-30. The stage no longer refuses: it publishes and records the
-     complaint on `meta.quality` (Greg's call — the long note at the end of
-     `runPdfExtract` has the production evidence and the cost).
-
-     So what is under test moved rather than went away, and it is worth being
-     exact about which half. **The detection is unchanged and still asserted
-     here**; only the consequence changed. If a later reader restores a gate,
-     these are the two cases to make fatal first — a page transcribed as nothing
-     at all, and a dropped paragraph, are the failures pass 0 was built for, and
-     are nothing like the margin stamp and chart axis labels that forced the
-     change. */
+  /* Missing page identity is structural and cannot publish. A partial recall
+     warning remains the noisy content class Greg chose to publish with notes. */
 
   it("still notices a page that comes back empty, and says which", async () => {
-    const result = await run((records) => records.filter((r) => r.page !== 3));
-    expect(result.meta.quality?.join(" ")).toMatch(/No records at all for page 3/);
+    await expect(run((records) => records.filter((r) => r.page !== 3))).rejects.toThrow(/pages 3/);
   }, 30_000);
 
   it("still notices a silently dropped paragraph", async () => {
@@ -626,13 +635,16 @@ describe("the whole stage, with the model stubbed out", () => {
          remains is an entry that is whole and is not a reading: an older shape
          of this code, or a value written under a key whose meaning has moved.
          It parses, so nothing catches it before the caller looks. */
-      store.entries.set(`pdf-chunk/${keys[0]!}`, JSON.stringify({ pages: [1], note: "not a reading" }));
+      const entry = `pdf-chunk/${keys[0]!}`;
+      const original = JSON.parse(store.entries.get(entry)!) as ChunkReading;
+      const recoveredPages = new Set(original.records.map((record) => record.page)).size;
+      store.entries.set(entry, JSON.stringify({ pages: [1], note: "not a reading" }));
 
       const again = await run(undefined, store);
       expect(again.records).toBe(first.records);
       /* One, not all of them: the unusable entry is re-read and every intact
          entry beside it is still used. */
-      expect(asks).toBe(1);
+      expect(asks).toBe(recoveredPages);
       /* And the good entry is back in the store, so the next run pays nothing. */
       const healed = JSON.parse(store.entries.get(`pdf-chunk/${keys[0]!}`)!) as { records: unknown[] };
       expect(healed.records.length).toBeGreaterThan(0);
