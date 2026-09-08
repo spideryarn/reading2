@@ -1,27 +1,28 @@
 # Agent fleet dashboard
 
-**Status as of 2026-09-08 05:00: running, and done enough to stop here.**
+**Status as of 2026-09-08 08:30: running, and waiting on one restart that is Greg's.**
 
 Serving on `127.0.0.1:8787` and on the tailnet at `100.92.255.119:8787`, under
-`scripts/tmux-job.ts` so it survives memory pressure. ~36 sessions with status, the pending question
-for blocked ones, Box Health, and a master–detail Sessions view with steering. Evidence:
-`tools/fleet/` holds fourteen modules; **580 tests pass across fifteen files**; both typecheck
-projects are clean; a browser check reports zero CSP violations, zero console errors and zero
-horizontal overflow at 390px and 1280px, light and dark.
+`scripts/tmux-job.ts` so it survives memory pressure. ~24 sessions with status, the pending question
+for blocked ones, Box Health, a master–detail Sessions view with steering, rename, and the action
+vocabulary. Evidence: **1006 tests pass** across the fleet, overseer and worktree suites; all four
+typecheck projects are clean; a browser check at 390px reports one expected console error, no
+horizontal overflow, and the dialog card rendering its refusal rather than a button.
 
 **Verified end to end, not at the call site.** A message sent from the client's own body-builder,
 through the real server, arrives in the target pane and nowhere else — nonce generated inside the
 script and written only to a file. Starting a session through `POST /api/sessions/new` produces a
-real Claude that answers.
+real Claude that answers. A rename held through a real `gjd-remote ls` that renamed two *other*
+sessions in the same run.
 
-**Two things are deliberately switched off**, and both are decisions rather than defects:
+**Answering a dialog is back on, narrowed rather than blanket-off** — see
+[Stage v0.2e](#-stage-v02e-what-answering-a-dialog-does-decides-whether-it-may-be-answered-landed-2026-09-08).
+What answering *does* now decides whether it may be answered, and `unknown` is refused with
+`permission`.
 
-- **Answering a dialog** returns 503 with a sentence saying why. Two cross-family reviews found that
-  the captured question did not include *what was being approved*; that is now fixed, but a second
-  finding is not fixable — pane text is not provenance. See **Stage v0.2b** below,
-  and the question for Greg in **Stage v0.4d**.
-- **The action buttons and the queue** are built and tested (`actions.ts`, `queue.ts`) but not wired
-  to a route. That is [Stage v0.5](#stage-v05-the-steering-vocabulary).
+**One thing is still switched off:** enacted actions need `FLEET_ACT_ENABLED=1`. The catalogue, the
+queues and the dry runs are live; removing a worktree and killing a session are not. That default is
+right until Greg has looked at what the buttons say they will do.
 
 **Read Stage v0.4d first.** Fable read all 38 live panes and broke this plan's premise: the sessions actually waiting
 on Greg are hiding under `idle`, and the dialog-answering this write path was built for is a

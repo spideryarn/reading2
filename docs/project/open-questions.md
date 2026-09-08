@@ -314,6 +314,16 @@ in one night, all in the fleet work, none of which looked like the others at the
   thing, trusted separately.
 - **`repo` is not one value** — across a single snapshot it was the repo, `null`, the literal string
   `"unknown"`, and a different repo entirely.
+- **And the one that started it, which predates the fleet work by a week.** `tmux -t` accepts a
+  session *name* where you meant a handle, and resolves it happily; tmux reassigns a name when a
+  session dies. So a keystroke aimed at a row somebody read ten minutes ago lands in whatever now
+  wears that name. It is the hardest-won rule in
+  [orchestrator-direction.md](orchestrator-direction.md), and it is this class in its purest form:
+  the API offered the name and the handle as interchangeable, and they are not.
+
+The last one is worth keeping at the front of the note, because it shows the shape arriving from
+*outside* — not a convention we invented and then trusted, but an interface that presented a name and
+an identity as the same argument. Most instances of this class are somebody else's `-t`.
 
 **The rule it would carry.** When you match on a name, ask three things: *who wrote it, when, and
 what would make it stale.* Prefer a key you can **verify** over one you can only **read** — and when
