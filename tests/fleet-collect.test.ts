@@ -10,10 +10,19 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { panesBySession, toRows, worktreeOf, type FleetRow, type FleetSnapshot } from "../tools/fleet/collect.js";
+import {
+  panesBySession,
+  sessionScript,
+  snapshotFrom,
+  toRows,
+  worktreeOf,
+  type FleetRow,
+  type FleetSnapshot,
+} from "../tools/fleet/collect.js";
+import { parseBinds } from "../tools/fleet/config.js";
 import { ageLine, esc, page } from "../tools/fleet/page.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
-import type { Session } from "../scripts/gjd-remote-tmux.js";
+import { buildSessionScript, type Session } from "../scripts/gjd-remote-tmux.js";
 
 /** No status derived for anyone — the map `toRows` falls back from. */
 const NO_STATUS = new Map<string, FleetStatus>();
@@ -156,6 +165,99 @@ describe("questionBlock, via page", () => {
   });
 });
 
+describe("parseBinds", () => {
+  it("defaults to loopback", () => {
+    expect(parseBinds(undefined)).toEqual({ ok: true, binds: ["127.0.0.1"] });
+  });
+
+  it("refuses an empty list rather than listening nowhere", () => {
+    // The P0. An empty FLEET_BIND gave zero servers, and because the only timer
+    // left was unref'd the process collected once, printed lines that all read
+    // as success, and exited 0. `FLEET_BIND="$(tailscale ip -4)"` on a box that
+    // is not logged in is how it actually happens.
+    for (const raw of ["", "   ", ",", " , "]) {
+      const r = parseBinds(raw);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.why).toMatch(/listens nowhere/);
+    }
+  });
+
+  it("refuses a wildcard, because reachability is the only access control", () => {
+    for (const raw of ["0.0.0.0", "::", "127.0.0.1,0.0.0.0"]) {
+      expect(parseBinds(raw).ok).toBe(false);
+    }
+  });
+
+  it("keeps several real addresses, trimmed", () => {
+    expect(parseBinds(" 127.0.0.1 , 100.92.255.119 ")).toEqual({
+      ok: true,
+      binds: ["127.0.0.1", "100.92.255.119"],
+    });
+  });
+});
+
+describe("the collector's wiring", () => {
+  it("asks for agent states, and would notice if that flag were flipped", () => {
+    // Sol's F5: `agents: true` is load-bearing and was invisible. Flipping it to
+    // false left every test green while the live dashboard degraded every
+    // Claude row to unknown, because the status tests inject an agents map and
+    // never reach this call.
+    expect(sessionScript()).not.toBe(buildSessionScript({ agents: false }));
+    expect(sessionScript()).toBe(buildSessionScript({ agents: true }));
+  });
+
+  it("survives a JSON round trip with every row's status intact", () => {
+    // The Map-stringifies-to-{} trap, pinned. If status is ever carried
+    // alongside the rows again, this goes red rather than the page going quiet.
+    const parsed = {
+      sessions: [session({ id: "$7", proc: { kind: "claude" } as const })],
+      unreadable: [],
+      failure: null,
+      agents: new Map([["11111111-1111-1111-1111-111111111111", "busy"]]),
+      agentsWhy: null,
+    };
+    const snap = snapshotFrom(parsed, new Map([["$7", "%70"]]), 5);
+    const round = JSON.parse(JSON.stringify(snap)) as FleetSnapshot;
+    expect(round.rows[0]?.status.kind).toBe("working");
+    expect(round.rows[0]?.paneId).toBe("%70");
+  });
+
+  it("reports unknown, not idle, when the box could not be asked", () => {
+    const parsed = {
+      sessions: [session({ id: "$7", proc: { kind: "claude" } as const })],
+      unreadable: [],
+      failure: null,
+      agents: null,
+      agentsWhy: "claude: command not found",
+    };
+    const snap = snapshotFrom(parsed, new Map(), 5);
+    expect(snap.rows[0]?.status.kind).toBe("unknown");
+  });
+});
+
+describe("the header tally", () => {
+  it("does not count an unknown row as idle as well", () => {
+    // Sol's F2: `other` includes unknown, so two unknown rows rendered as
+    // "2 idle · 2 unknown" — overcounted and double-counted at once.
+    const html = page(
+      snapshotOf([
+        row({ id: "$1", status: { kind: "unknown", why: "x" } }),
+        row({ id: "$2", status: { kind: "unknown", why: "x" } }),
+      ]),
+      null,
+    );
+    expect(html).toContain("2 unknown");
+    expect(html).not.toContain("2 idle");
+    expect(html).not.toContain("2 other");
+  });
+
+  it("calls a busy shell 'other' rather than 'idle'", () => {
+    const html = page(snapshotOf([row({ status: { kind: "shell", busy: true } })]), null);
+    expect(html).toContain("1 other");
+    expect(html).not.toContain("1 idle");
+  });
+});
+
 describe("esc", () => {
   it("defuses a session title that contains markup", () => {
     expect(esc(`<img src=x onerror="alert(1)">`)).toBe(
@@ -207,7 +309,13 @@ describe("page", () => {
   });
 
   it("escapes the session name and the repo too, not only the title", () => {
+    // EVERY negative assertion here is paired with a positive one, and that is
+    // GPT Sol's F4: `not.toContain` passes just as happily when the field was
+    // never rendered at all. He mutated the repo out of the page entirely and
+    // both original assertions still passed.
     const html = page(snapshotOf([row({ name: `<b>n</b>`, repo: `<i>r</i>` })]), null);
+    expect(html).toContain("&lt;b&gt;n&lt;/b&gt;");
+    expect(html).toContain("&lt;i&gt;r&lt;/i&gt;");
     expect(html).not.toContain("<b>n</b>");
     expect(html).not.toContain("<i>r</i>");
   });
@@ -217,6 +325,7 @@ describe("page", () => {
     // failed — so it is the one status field most likely to contain punctuation
     // that matters. It reaches the page through a different path to the title.
     const html = page(snapshotOf([row({ status: { kind: "unknown", why: `<b>claude</b>: not found` } })]), null);
+    expect(html).toContain("&lt;b&gt;claude&lt;/b&gt;: not found");
     expect(html).not.toContain("<b>claude</b>");
   });
 
@@ -234,7 +343,15 @@ describe("page", () => {
       ]),
       null,
     );
-    expect(html.indexOf("blocked-one")).toBeLessThan(html.indexOf("working-one"));
+    // BOTH NEEDLES MUST BE PRESENT BEFORE COMPARING. `indexOf` returns -1 for a
+    // missing string, and -1 < anything, so dropping the blocked row entirely
+    // used to satisfy this — while the separately-computed tally still said
+    // "1 need you". Sol's F4 again, and the same trap in a different disguise.
+    const blocked = html.indexOf("blocked-one");
+    const working = html.indexOf("working-one");
+    expect(blocked).toBeGreaterThanOrEqual(0);
+    expect(working).toBeGreaterThanOrEqual(0);
+    expect(blocked).toBeLessThan(working);
     expect(html).toContain("1 need you");
   });
 

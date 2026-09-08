@@ -2515,9 +2515,9 @@ export const REAUTH_REQUIRED =
 export const SIGN_IN_AGAIN = "Sign in again";
 
 /**
- * **The artefact was never built.** The first of the three, and the only one
- * with no precedent anywhere: none of the products researched has a pipeline
- * that can simply not have run.
+ * **The artefact was never built.** One of the two `VisitorGap` sentences, and
+ * the only one with no precedent anywhere: none of the products researched has
+ * a pipeline that can simply not have run.
  *
  * Greg's rule, 2026-08-27: *see what has been generated; be told plainly about
  * what hasn't.* This is the second half, and it is as much of the work as the
@@ -2591,18 +2591,31 @@ export function ownersOnly(feature: string): string {
   return `${feature} is for whoever added this article — asking costs a model call, and a shared link spends nobody's money.`;
 }
 
-/**
- * **It is somebody's, and it is not yours.** The comments, the conversations
- * and the searches on a document belong to whoever added it.
- *
- * Greg's fifth decision, 2026-08-27: a public visitor sees *none* of the
- * owner's annotations. "Share this along with my questions" is a separate,
- * later, opt-in switch, so this sentence is about a boundary rather than about
- * a missing feature.
- */
-export function readersOwnWork(plural: string): string {
-  return `${plural} belong to whoever added this article. A shared link carries the piece, never anybody's notes about it.`;
-}
+/* **`readersOwnWork` was here, and it is gone** — deleted 2026-09-08 with the
+   `readers-own` VisitorGap variant that was its only caller (web/visitor.ts).
+
+   It said: *"X belong to whoever added this article. A shared link carries the
+   piece, never anybody's notes about it."* Greg's fifth decision, 2026-08-27,
+   and true for eight days: on 2026-09-04 a shared link started carrying the
+   owner's comments (260904c § Stage 3).
+
+   **Not because the opt-in it anticipated arrived — Greg declined that.** Sol
+   argued for keeping the variant on the grounds that it is the right sentence
+   for a public article whose owner has *not* opted into sharing reader work,
+   and 260904c agrees that is true and conditional on a consent flag, which is
+   in that plan's § Not doing. With no flag there is no such state and no
+   producer. **If a consent flag ever arrives, this sentence and the
+   `readers-own` variant come back with it** — that instruction is 260904c's and
+   this is the second place it is written down.
+
+   Recorded here rather than only in the history because of what happened in
+   between. 260904c decided the member "goes"; nobody deleted it, and the
+   drawer's own comment in Dock.tsx has said it was gone since that day. So for
+   four days there was a dead, false, still-exported sentence that every check
+   agreed was fine, and on 2026-09-07 the Comments button was written from half
+   of it — read out to visitors directly above the comments it told them they
+   would not be given (260907b § The find). A message with no caller is not
+   inert: it is a sentence waiting to be copied. */
 
 /**
  * **The document is not shared** — the 404, for somebody signed in.

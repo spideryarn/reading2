@@ -30,23 +30,27 @@
 import { createServer } from "node:http";
 
 import { collect, type FleetSnapshot } from "./collect.js";
+import { parseBinds } from "./config.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { page } from "./page.js";
 
 const PORT = Number(process.env.FLEET_PORT ?? 8787);
 
 /**
- * Addresses to listen on, comma-separated. Never a wildcard.
+ * Addresses to listen on, comma-separated. Never a wildcard, never empty —
+ * `parseBinds` in config.ts enforces both and says why.
  *
  * TWO ON PURPOSE. The tailnet address is how a phone reaches this, and
  * `127.0.0.1` is how an ssh forward does — and the ssh forward is the fallback
  * that depends on nothing, so it stays even once Tailscale works. Node binds one
- * address per server, so this is a list and we create one server per entry
- * rather than reaching for `0.0.0.0`; the Hetzner firewall would refuse public
- * traffic anyway, but a wildcard bind is the habit that eventually gets it wrong
- * on a box that has no firewall.
+ * address per server, so this is a list and we create one server per entry.
  */
-const BINDS = (process.env.FLEET_BIND ?? "127.0.0.1").split(",").map((s) => s.trim()).filter(Boolean);
+const parsedBinds = parseBinds(process.env.FLEET_BIND);
+if (!parsedBinds.ok) {
+  console.error(`✗ ${parsedBinds.why}`);
+  process.exit(2);
+}
+const BINDS = parsedBinds.binds;
 
 /**
  * 60s, not 30s. One collection costs ~12s of grepping, so at 30s this process
@@ -64,9 +68,9 @@ function statePayload(): string {
   return JSON.stringify({ ...(snapshot ?? { rows: [], collectedAt: null, tookMs: 0 }), error: lastError });
 }
 
-function refresh(): void {
+async function refresh(): Promise<void> {
   try {
-    snapshot = collect();
+    snapshot = await collect();
     lastError = null;
     console.log(
       `collected ${snapshot.rows.length} sessions in ${snapshot.tookMs}ms` +
@@ -78,6 +82,23 @@ function refresh(): void {
     // legible; a blank one is a lie that looks like an empty box.
     lastError = err instanceof Error ? err.message : String(err);
     console.error(`collection failed: ${lastError}`);
+  }
+}
+
+/**
+ * Refresh, then wait, then refresh — rather than a fixed-rate interval.
+ *
+ * A `setInterval` cannot overlap a synchronous call, but once a collection
+ * approaches the interval every tick is immediately due and the box collects
+ * continuously. Chaining from the *end* of each run guarantees a real gap
+ * whatever the box is doing, which matters on a machine that hit load average
+ * 391 today. A failure waits longer, so a broken box is not also hammered.
+ */
+async function refreshLoop(): Promise<void> {
+  for (;;) {
+    await refresh();
+    const wait = lastError === null ? REFRESH_MS : Math.min(REFRESH_MS * 5, 300_000);
+    await new Promise((r) => setTimeout(r, wait).unref?.());
   }
 }
 
@@ -123,8 +144,7 @@ for (const bind of BINDS) {
 }
 
 console.log(`refreshing every ${REFRESH_MS / 1000}s`);
-refresh();
-setInterval(refresh, REFRESH_MS).unref();
+void refreshLoop();
 
 // Keeps an idle SSE connection from being dropped by anything in between. Its
 // own timer is unref'd, so it cannot hold the process open by itself — the
