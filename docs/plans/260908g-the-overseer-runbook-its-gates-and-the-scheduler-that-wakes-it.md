@@ -1014,6 +1014,45 @@ agrees with itself is a fixture** — the same animal as a test that shares an a
 it checks, and a sharper statement of it, because the ancestry join was not weak. It answered a
 different question competently.
 
+#### The first real series, and it does not support the claim I made from one reading
+
+147 samples, 20:56–22:09 on 2026-09-08, 30 seconds apart.
+
+```
+samples where NO agent was reachable:  0 of 147
+reachable fraction of agents:          min 0.12   max 0.86   mean 0.59
+agents 4–8, working 1–7, load ratio1 0.04–0.55, oracle_unknown 0 throughout
+```
+
+**The sharpest thing I said did not reproduce once.** *"At the limit it does not degrade, it
+refuses"* — the `total === 0` branch — is structurally real and was **never reached**, including
+during a stretch at load ratio 0.55 with seven of eight agents working. And the mean reachable
+fraction is **0.59**, so most agents usually *are* reachable, which makes the original *"3 of 15"*
+a bad moment reported as a condition — twice over, since the denominator was wrong as well.
+
+The bad case is real but it is a **tail**: the worst sample was 1 of 8 reachable, at 22:07.
+
+**And the cheap fix lands in the middle, which neither party predicted.** Of the 33 samples with a
+positive oracle reading, the server's `background-work` agreed in **17** and did not in **16** — so
+it catches roughly half. Cheap and *partly* useful. Whether half of a tail case justifies crossing a
+refusal somebody wrote deliberately is the dashboard owner's call, with their cost side; my instinct
+is that it does not obviously.
+
+**One confound, reported rather than tidied:** `joins_disagree` was 1 early and 0 in the later
+samples. If the `readShellState` fix landed inside that window it explains the change exactly, and
+the aggregate above is then pessimistic about the fix. I did not attribute it without knowing when it
+landed, so the number stands uncorrected.
+
+Caveats that belong next to the number rather than under it: 73 minutes is not a night; the box went
+from very quiet to busy inside it, so this is **one transition rather than a representative day**;
+and the sampler reads the snapshot the dashboard publishes, so an interval when the dashboard was
+restarting is *missing* rather than recorded as bad.
+
+**Why this is in the plan rather than only in a message.** The instrument was built to decide
+somebody else's stage, and it has now argued against the finding that motivated it. That is the
+outcome the series was for, and a plan that recorded only the readings supporting the work would be
+the same defect as a check that shares an assumption with its code.
+
 #### The Overseer sees less of the fleet than the fleet sends, and the rules should not fix that by widening the differ
 
 The three fields the rules most want are all outside `ObservedRow`: `permissionMode`, `pause`, and
