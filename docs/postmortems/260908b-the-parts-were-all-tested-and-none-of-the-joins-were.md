@@ -37,7 +37,7 @@ two of my own greps. Each row says what was true at 11:03.
 | 9 | `SteeringQueue.clear()` — empty a session's queue | No route, no button. `revive()`'s shape exactly | **Live** |
 | 10 | `GET /api/agents` — mounted, and named five times in `live.ts` as *"the poll"* | The client only ever calls `/api/state`. A rename left the alias and the prose behind | **Live**, harmless |
 | 11 | The box-action **safety preview** — `steps`, `run`, `candidates`, `killed`, `recipients` | `actions-client.ts` reads `parsed["would"] ?? parsed["result"]`, and **not one of the eleven 200-responses sends either name** | **Live** |
-| 12 | `SteerResponse.verified` — which pane, session and pid a keystroke actually reached | Zero occurrences of `verified` in `steer-client.ts` | **Live** |
+| 12 | `SteerResponse.verified` — which pane, session and pid a send was aimed at, checked immediately BEFORE typing (not a delivery receipt) | Zero occurrences of `verified` in `steer-client.ts` | **Live** |
 | 13 | `answeringEnabled`, `tmuxServerPid` on `FleetState` | Absent from the client's own `types.ts`. The page cannot warn about a flag it is never told | **Live** |
 | 14 | `LaunchRecord.resolution` and `startedDir` — where the box *actually* started a session | Zero occurrences in `new-session-client.ts` | **Live** |
 | 15 | **The entire action vocabulary.** `GET /api/actions` sends `actions: {session, box}` | The client asked `Array.isArray()`, got `false`, and drew *"This server sent no list of actions at all… it is probably older than this page"* | Fixed, uncommitted |

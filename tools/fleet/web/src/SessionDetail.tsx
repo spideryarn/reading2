@@ -104,11 +104,19 @@ import { Explain } from "./Tooltip";
 import { hasDeliverable, queueFor, type ActionOutcome } from "./actions-client";
 import { transcriptAge, type MessagesApi, type MessagesView } from "./messages-client";
 import { NAME_RULE_TEXT, looksLikeAName, type RenameApi, type RenameOutcome } from "./rename-client";
-import type { SteerApi, SteerOutcome, VerifiedReading } from "./steer-client";
+import {
+  checkLanding,
+  listFields,
+  sentTarget,
+  type SentTarget,
+  type SteerApi,
+  type SteerOutcome,
+  type VerifiedReading,
+} from "./steer-client";
 
 /** The refusal arm, so the headline table below is keyed by a real union. */
 type SteerFailure = Extract<SteerOutcome, { ok: false }>;
-import type { FleetGate, FleetRow, FleetStatus } from "./types";
+import type { AnsweringReading, FleetGate, FleetRow, FleetStatus } from "./types";
 import type { ActionsUi } from "./useActions";
 import { Button, Card, Mono, cx } from "./ui";
 import { formatDuration, statusLabel, whereLine } from "./view";
@@ -135,13 +143,17 @@ function Section({ title, children }: { title: string; children: ReactNode }): R
  */
 function Outcome({
   outcome,
-  row,
+  target,
   sessionName,
   onRefresh,
 }: {
   outcome: SteerOutcome;
-  /** The row the person tapped, to check `verified` against. See `Landed`. */
-  row: FleetRow;
+  /**
+   * The row's identity AT THE MOMENT THIS SEND WAS REQUESTED, to check
+   * `verified` against. Not the row on screen now — see `Landed` and
+   * `SentTarget`.
+   */
+  target: SentTarget;
   sessionName: string;
   onRefresh: () => void;
 }): ReactNode {
@@ -151,7 +163,7 @@ function Outcome({
         <p className="tw:font-medium tw:text-work-ink">
           {outcome.op === "answer" ? "Answered." : "Sent."}
         </p>
-        <Landed verified={outcome.verified} row={row} />
+        <Landed verified={outcome.verified} target={target} />
         {outcome.sent.length > 0 ? (
           <p className="tw:mt-1 tw:text-ink-soft">
             {/* The argv, because "what did you actually press" is the first
@@ -212,19 +224,28 @@ function Outcome({
 }
 
 /**
- * **WHERE THE KEYSTROKES LANDED, CHECKED AGAINST THE ROW THAT WAS TAPPED.**
+ * **WHAT WAS CHECKED IMMEDIATELY BEFORE SENDING, AGAINST WHAT WAS ASKED FOR.**
  *
- * `sent` says what was typed; this says where. The server resolves the address
- * against live tmux rather than echoing the request back (`verifyTarget` in
- * steer.ts), so the two can disagree — and **a disagreement is the one failure a
- * green tick hides**: a message that reached a pane other than the one on
- * screen. That is why this compares rather than merely printing, and why the
- * mismatch is drawn in the alarm colour inside an otherwise successful card.
+ * `sent` says what was typed; this says what the target was proved to be a
+ * moment earlier. **It is not a receipt, and every word here is chosen so that
+ * it cannot be read as one.** `verifyTarget` runs BEFORE the screen capture and
+ * before the `send-keys` calls, and nothing re-reads the pane afterwards —
+ * steer.ts's KNOWN GAPS says why (tmux has no compare-and-send). This panel
+ * said *"Landed in %2108"* and *"the keys were typed at"* until 2026-09-08,
+ * which asserted delivery that nothing had measured, on the one surface where
+ * being wrong is expensive. GPT Sol's M1.
  *
- * It should be impossible. `verifyTarget` refuses the send when the claimed
- * pane is not where the claim said it was, so reaching this branch means a
- * guard did not hold — which is exactly the class of thing worth telling a
- * person about rather than trusting silently. Instance 12 in the table in
+ * The comparison is against the row **as it was when the send was requested**
+ * (`SentTarget`), not the row on screen now. The detail pane is keyed by session
+ * id, so an outcome outlives the payload it was made against; comparing with the
+ * live row asks a question nobody asked and can answer it wrongly in both
+ * directions.
+ *
+ * **A disagreement should be unreachable** — `verifyTarget` refuses a claim that
+ * does not match live tmux, including the respawned-pid case — so reaching it
+ * means a guard upstream did not hold, which is exactly the class of thing worth
+ * saying out loud rather than trusting silently. It is drawn in the alarm colour
+ * inside an otherwise successful card. Instance 12 in the table in
  * docs/postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md:
  * the field was on the wire and the page dropped it, so this comparison had
  * never once been made.
@@ -234,29 +255,35 @@ function Outcome({
  * send against one — the arm exists so that silence cannot be rendered as an
  * address, not so that it can be announced.
  */
-function Landed({ verified, row }: { verified: VerifiedReading; row: FleetRow }): ReactNode {
-  if (verified.kind === "not-told") return null;
-  /* Both halves, because either one alone can be right while the pair is
-     wrong: a pane moved between sessions keeps its `%…` and changes its `$…`,
-     which is the case `verifyTarget` was written for. `row.paneId` is null on a
-     row with no pane handle at all — and a send from such a row is refused
-     locally (`unaddressable`), so a null here can only mean the page has
-     changed under the outcome; treat it as a mismatch rather than as agreement. */
-  const matches = verified.paneId === row.paneId && verified.sessionId === row.id;
-  if (matches) {
+function Landed({ verified, target }: { verified: VerifiedReading; target: SentTarget }): ReactNode {
+  const check = checkLanding(verified, target);
+  if (check.kind === "not-told") return null;
+  /* WHICH FIELDS TOOK PART, in the sentence itself. A comparison that named no
+     fields would be indistinguishable from one that compared nothing, and the
+     absent-pid case is real: a row with no pid proves the address, not the
+     process in it. */
+  const gap =
+    check.unchecked.length === 0
+      ? null
+      : ` The ${listFields(check.unchecked)} could not be compared — this row carried none when you tapped.`;
+  if (check.kind === "agrees") {
     return (
       <p className="tw:mt-1 tw:text-ink-soft">
-        Landed in <Mono>{verified.paneId}</Mono>, the pane this row names — checked by the server
-        against live tmux, not copied back from the request.
+        Verified <Mono>{check.verified.paneId}</Mono> in <Mono>{check.verified.sessionId}</Mono>{" "}
+        immediately before the keys went — {listFields(check.compared)} all matched the row you
+        tapped, resolved against live tmux rather than copied back from the request. Nothing looked
+        at the pane afterwards, so this is a check, not a receipt.{gap}
       </p>
     );
   }
   return (
     <p className="tw:mt-1 tw:font-medium tw:break-words tw:text-alarm-ink">
-      IT WENT SOMEWHERE ELSE. The server says the keys were typed at{" "}
-      <Mono>{verified.paneId}</Mono> in <Mono>{verified.sessionId}</Mono>, and this row is{" "}
-      <Mono>{row.paneId ?? "no pane"}</Mono> in <Mono>{row.id}</Mono>. Go and look at both before
-      sending anything else.
+      IT WAS NOT THE SESSION YOU TAPPED. Just before sending, the server resolved the target to{" "}
+      <Mono>{check.verified.paneId}</Mono> in <Mono>{check.verified.sessionId}</Mono> (pid{" "}
+      <Mono>{check.verified.panePid}</Mono>), and what you tapped was{" "}
+      <Mono>{check.target.paneId ?? "no pane"}</Mono> in <Mono>{check.target.sessionId}</Mono> (pid{" "}
+      <Mono>{check.target.panePid ?? "unstated"}</Mono>). The {listFields(check.differing)} differ.
+      Go and look at both before sending anything else.{gap}
     </p>
   );
 }
@@ -323,8 +350,8 @@ const DELIVERY_HEADLINE: Record<SteerFailure["delivery"]["kind"], { head: string
  *  - `why` non-null — the server has already refused a tap, and its own words
  *    are shown verbatim. This is sticky, because a control that refuses every
  *    time you press it is worse than one that says why it is not a control.
- *  - `answering === false` — **the server has said, in the payload, that
- *    `POST /api/steer/answer` will do nothing.** Said BEFORE anybody taps,
+ *  - `answering.kind === "disabled"` — **the server has said, in the payload,
+ *    that `POST /api/steer/answer` will do nothing.** Said BEFORE anybody taps,
  *    which is the entire reason the flag is on the state payload: without it
  *    this page either hedged or let a person discover the hold by tapping and
  *    getting a 503, and *the whole point of the hold is that a person should
@@ -332,18 +359,23 @@ const DELIVERY_HEADLINE: Record<SteerFailure["delivery"]["kind"], { head: string
  *    day while this client dropped it, so the 503 is what a reader actually
  *    got — instance 13 in the table in
  *    docs/postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md.
+ *  - `not-reported` / `unreadable` — **availability could not be established**,
+ *    which is not the same sentence as *a hold was declared* and is drawn as its
+ *    own card. The buttons are withheld all the same, and the reason it now
+ *    fails closed rather than open is in types.ts § `AnsweringReading`: the kill
+ *    switch predates the field, so silence from an older server is consistent
+ *    with answering being off. My earlier argument here — that withholding on
+ *    silence would invent a hold nobody declared — mistook *not saying* for
+ *    *saying no*, and the fix is to say the third thing rather than to pick one
+ *    of the first two.
  *  - `permission` — answering would grant a capability. Not offered.
- *  - `unknown` — we could not tell, **including because the server never said**.
- *    Treated exactly as `permission`, which is the whole discipline: "I could
- *    not tell" must not become the way through.
+ *  - `unknown` — we could not tell about the DIALOG, and it is treated exactly
+ *    as `permission`. Same discipline in both halves now: "I could not tell"
+ *    must not become the way through.
  *
- * **`answering === null` draws nothing and offers the button**, which is the
- * one place this file does not treat "did not say" as "no", and it is
- * deliberate: `null` means a server built before the flag existed, and a page
- * that held answering back on that basis would be inventing a hold nobody
- * declared — the mirror of the mistake above rather than the same one. The gate
- * is a claim about THIS dialog and is read off the pane; this flag is a claim
- * about the server, and only its absence is ambiguous.
+ * The gate is a claim about THIS dialog and is read off the pane; the flag is a
+ * claim about the server. Both can be unreadable, and neither unreadability is
+ * a yes.
  *
  * Sending a MESSAGE is unaffected in every case, and that distinction is drawn
  * here rather than left to be discovered by tapping.
@@ -355,8 +387,8 @@ function HeldBack({
 }: {
   why: string | null;
   gate: FleetGate;
-  /** `false` = the server says answering is off. `null` = it did not say. */
-  answering: boolean | null;
+  /** Four arms; only `enabled` is permission. types.ts § `AnsweringReading`. */
+  answering: AnsweringReading;
 }): ReactNode {
   if (why !== null) {
     return (
@@ -367,13 +399,36 @@ function HeldBack({
       </div>
     );
   }
-  if (answering === false) {
+  if (answering.kind === "disabled") {
     return (
       <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-unknown/40 tw:bg-unknown-wash tw:p-3 tw:text-[13px]">
         <p className="tw:font-medium tw:text-unknown-ink">Answering is switched off on this server.</p>
         <p className="tw:mt-1 tw:text-ink-soft">
           The dashboard says so in the payload rather than leaving you to find out by pressing one:
           a tap would come back 503 and nothing would reach the session. Answer it in the terminal —{" "}
+          <code className="tw:font-mono">gjd-remote resume &lt;name&gt;</code> — or send a message
+          below, which is not affected.
+        </p>
+      </div>
+    );
+  }
+  /* **NOT "SWITCHED OFF", AND THE DIFFERENCE IS THE POINT OF THE ARM.** Nobody
+     declared a hold here; we simply cannot establish that answering works, and
+     the kill switch is older than the field that would have said so. The two
+     causes are kept apart because they are two different things to go and
+     check. */
+  if (answering.kind !== "enabled") {
+    return (
+      <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-unknown/40 tw:bg-unknown-wash tw:p-3 tw:text-[13px]">
+        <p className="tw:font-medium tw:text-unknown-ink">
+          Whether answering works here could not be established.
+        </p>
+        <p className="tw:mt-1 tw:break-words tw:text-ink-soft">
+          {answering.kind === "not-reported"
+            ? "This server did not say whether answering is switched on, and the switch is older than the field that reports it — so silence is not evidence that a tap would reach the session."
+            : `This server's answer could not be read: ${answering.why}.`}{" "}
+          No hold has been declared; the buttons are withheld because nothing here can say a tap would
+          land. Answer it in the terminal —{" "}
           <code className="tw:font-mono">gjd-remote resume &lt;name&gt;</code> — or send a message
           below, which is not affected.
         </p>
@@ -558,14 +613,14 @@ export function SessionDetail({
   row: FleetRow;
   now: number;
   /**
-   * **Whether `POST /api/steer/answer` will do anything**, as the server said
-   * it, or `null` when it did not say.
+   * **Whether `POST /api/steer/answer` will do anything**, as the four-arm
+   * reading of what the server said — types.ts § `AnsweringReading`.
    *
    * A prop rather than a second read of the state: this component is handed
    * everything it draws, and the flag belongs to the payload the row came out
-   * of. `HeldBack` says what each of the three answers looks like.
+   * of. `HeldBack` says what each of the four answers looks like.
    */
-  answeringEnabled: boolean | null;
+  answeringEnabled: AnsweringReading;
   /**
    * **Which tmux server the handles below belong to**, or null when it could
    * not be read. Drawn in "Where it is", beside the handles it qualifies —
@@ -608,7 +663,17 @@ export function SessionDetail({
      NOW", which is what a ref answers. */
   const blocked = useRef(dictate.sendBlocked);
   blocked.current = dictate.sendBlocked;
-  const [outcome, setOutcome] = useState<SteerOutcome | null>(null);
+  /**
+   * **THE LAST SEND, WITH THE TARGET IT WAS MADE AGAINST**, held as one value
+   * because they are one fact.
+   *
+   * The outcome outlives the payload: this component is keyed by session id
+   * alone, so the row underneath is replaced at every refresh while the card
+   * stays on screen. Keeping only the outcome and comparing it with whatever
+   * `row` is by then answers a different question from the one that was asked —
+   * see `SentTarget` for both ways that goes wrong. GPT Sol's M1.
+   */
+  const [outcome, setOutcome] = useState<{ result: SteerOutcome; target: SentTarget } | null>(null);
   /**
    * The server's own sentence, once it has told us answering is switched off.
    *
@@ -647,10 +712,12 @@ export function SessionDetail({
         : null;
 
   const send = useCallback(
-    async (run: () => Promise<SteerOutcome>, clear: boolean): Promise<void> => {
+    async (run: () => Promise<SteerOutcome>, target: SentTarget, clear: boolean): Promise<void> => {
       setBusy(true);
+      /* SNAPSHOTTED BY THE CALLER, BEFORE THE AWAIT. Reading `row` here would
+         read the render that resolved the promise, which is the bug. */
       const result = await run();
-      setOutcome(result);
+      setOutcome({ result, target });
       // Both are sticky, and for the same reason: neither will come right by
       // pressing again. `answering-disabled` is the whole server switched off;
       // `grants-permission` is this dialog, and it can only change when the
@@ -666,7 +733,7 @@ export function SessionDetail({
 
   const onAnswer = useCallback(
     (index: number) => {
-      void send(() => steer.answer(row, index), false);
+      void send(() => steer.answer(row, index), sentTarget(row), false);
     },
     [row, send, steer],
   );
@@ -680,7 +747,7 @@ export function SessionDetail({
      finding 6. */
   const onSend = useCallback(() => {
     if (blocked.current) return;
-    void send(() => steer.message(row, text), true);
+    void send(() => steer.message(row, text), sentTarget(row), true);
   }, [row, send, steer, text]);
 
   /**
@@ -816,15 +883,18 @@ export function SessionDetail({
           <QuestionCard
             question={row.question}
             sessionName={row.name}
-            /* `answeringEnabled === false` withholds the buttons for the same
-               reason `grants-permission` does: the server has already said the
-               request would be refused, and a control that exists only to
-               return 503 teaches a reader to stop believing the ones that
-               work. `null` — a server that never said — still offers them. */
+            /* **A POSITIVE `enabled`, AND NOTHING ELSE, IS PERMISSION.** A
+               declared hold withholds the buttons for the same reason
+               `grants-permission` does — a control that exists only to return
+               503 teaches a reader to stop believing the ones that work — and
+               so, since GPT Sol's M3, does a server that did not say or said
+               something unreadable: the kill switch is older than the field, so
+               silence is consistent with the hold being on. `HeldBack` above
+               draws which of the three it was. */
             onAnswer={
               unaddressable === null &&
               answeringOff === null &&
-              answeringEnabled !== false &&
+              answeringEnabled.kind === "enabled" &&
               row.question.gate.kind === "conversation"
                 ? onAnswer
                 : null
@@ -941,7 +1011,12 @@ export function SessionDetail({
           </Section>
 
           {outcome === null ? null : (
-            <Outcome outcome={outcome} row={row} sessionName={row.name} onRefresh={onRefresh} />
+            <Outcome
+              outcome={outcome.result}
+              target={outcome.target}
+              sessionName={row.name}
+              onRefresh={onRefresh}
+            />
           )}
           {queueOutcome === null ? null : <ActionOutcomeCard outcome={queueOutcome} onRefresh={actions.refresh} />}
 

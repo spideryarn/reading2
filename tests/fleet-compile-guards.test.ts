@@ -33,7 +33,8 @@ import { describe, expect, it } from "vitest";
 
 import { ACTIONS, type EnactedAction } from "../tools/fleet/actions.js";
 import { classifyGate, type PaneGate } from "../tools/fleet/pane.js";
-import type { QueuedItem } from "../tools/fleet/wire.js";
+import { fleetState } from "../tools/fleet/state.js";
+import type { FleetState as FleetStateWire, QueuedItem } from "../tools/fleet/wire.js";
 import { RENAME_STATUS, type RenameErrorCode } from "../tools/fleet/routes-rename.js";
 import { REFUSAL_STATUS } from "../tools/fleet/routes-steer.js";
 import { grantsPermission } from "../tools/fleet/pane.js";
@@ -253,5 +254,69 @@ describe("nothing can be queued at an agent without saying who is speaking", () 
     const attributed: QueuedItem = { ...base, speaker: "greg" };
     const coordinator: QueuedItem = { ...base, speaker: "overseer" };
     expect([attributed.speaker, coordinator.speaker]).toEqual(["greg", "overseer"]);
+  });
+});
+
+describe("the shared wire state cannot acquire an optional field", () => {
+  /**
+   * **THE MECHANISM'S OWN CLAIM, HELD TO ITS OWN CLAIM.**
+   *
+   * `wire.ts` § `FleetState` says a field added there "lands in both twins" and
+   * stops the client's parse compiling. That is true of a REQUIRED, top-level
+   * field and of nothing else — GPT Sol's M2, and it is right. Write
+   * `diagnostic?: string` on the wire type and both ends go on compiling
+   * happily: the server's object literal in `fleetState()` may omit an optional
+   * key, and the client's parse is an object literal for a type whose key is
+   * optional too. So the field ships, nobody reads it, and nothing is red —
+   * which is precisely the lossy join the whole shared-wire stage exists to make
+   * un-writable, arriving through the one door the mechanism does not cover.
+   *
+   * **`Required<T> extends T` is the check written the wrong way round**, and it
+   * is worth naming because it looks right: a `Required<T>` is always assignable
+   * to `T`, optional keys or not, so that reads `true` forever. The question
+   * that discriminates is the other direction — can `T` stand in for a version
+   * of itself with every key demanded? A type with a `?` cannot.
+   *
+   * NOT COVERED, deliberately: a required key typed `x: string | undefined`
+   * (`Required` leaves those alone under `exactOptionalPropertyTypes`), and any
+   * `?` nested inside `Row`, `Health` or `AttentionFeed`. Both are outside what
+   * this guard claims — the drop it is about is a whole field going missing from
+   * the payload, and a required key, however wide its type, is one both object
+   * literals must still write out.
+   */
+  type EveryKeyRequired<T> = [T] extends [Required<T>] ? true : false;
+  /** The two holes filled with the weakest thing that compiles; neither is under test. */
+  type WireState = FleetStateWire<unknown, unknown>;
+
+  it("refuses an optional top-level key on the payload every consumer derives from", () => {
+    /* The positive, and it is the half with the readable failure: the moment a
+       `?` appears on `FleetState`, this reads `false` and the assignment breaks
+       by name rather than by a directive going quiet. */
+    const total: EveryKeyRequired<WireState> = true;
+    expect(total).toBe(true);
+
+    // @ts-expect-error `false` is assignable ONLY when the wire type has an
+    // optional key. If this line starts compiling, the directive goes unused and
+    // `npm run typecheck` fails — which is what makes the guard un-deletable.
+    const optional: EveryKeyRequired<WireState> = false;
+    void optional;
+
+    /* READ OFF THE REAL PRODUCER, not off a literal written here — the lesson
+       the refusal-status block above learned the hard way. An optional key would
+       make `fleetState`'s own return type optional in the same place, and an
+       optional key is not assignable to a `Required<>`, so this is a second and
+       independent way for the mutation to go red. */
+    const payload: Required<WireState> = fleetState(null, null, null, 60_000, true, null, {
+      kind: "not-asked",
+    });
+
+    /* Runtime, and the paired positive: the observable shape of the whole design
+       is that a field with nothing to say is PRESENT and null, never absent.
+       `collectedAt: null` means never collected; `collectedAt` missing would
+       mean this is not the payload at all. */
+    expect(Object.hasOwn(payload, "collectedAt")).toBe(true);
+    expect(payload.collectedAt).toBeNull();
+    expect(Object.hasOwn(payload, "attemptedAt")).toBe(true);
+    expect(payload.schema).toBe(1);
   });
 });
