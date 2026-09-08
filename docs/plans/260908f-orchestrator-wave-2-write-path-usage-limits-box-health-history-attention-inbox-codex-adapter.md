@@ -339,7 +339,17 @@ evidence the type was wrong.
 No complaint — this was the most accurate sentence in the stage.
 
 **2. Four arms would have produced the UI that lies the principle warns about.** The plan says "a
-`Harness` discriminated union"; four kinds are not enough to be honest with:
+`Harness` discriminated union"; four kinds are not enough to be honest with. The reviewer was asked
+outright whether six was over-built and which two it would cut, and answered the other way:
+
+> I would keep all six union arms. `claude-headless` and `codex-batch` are precisely the two arms
+> that prevent "same executable means same capability"; cutting either recreates the lie this stage
+> is intended to remove.
+>
+> — GPT Sol, 2026-09-08
+
+That is a better argument for the extra arms than the one they were added on, which was only "it
+matched zero panes today, keep it anyway". Concretely:
 
 - `claude --print` is a Claude that **cannot** take a keystroke — it read its prompt once at startup
   and never reads the tty again. Folded into `claude-code`, the page draws a "send" on it.
