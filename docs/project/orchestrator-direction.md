@@ -227,15 +227,29 @@ this is the load-bearing part. `tools/overseer/` already imports `collect.ts` an
 `tools/fleet/`, so a `tools/fleet/` that imported `readCheckpoint` would close a cycle between the
 two things this seam exists to keep apart. **The file is the contract; the function is one
 implementation of reading it.** Parse it at the boundary the way the client already parses the
-server's JSON — tolerantly, checking `schema` as the number `1` rather than as "not something else",
-so that a schema 2 renders as *I cannot read this* rather than as a page with fields quietly missing.
+server's JSON — tolerantly, checking `schema` as a **number it knows** rather than as "not something
+else", so that an unknown schema renders as *I cannot read this* rather than as a page with fields
+quietly missing.
+
+**The schema is `2`, and the bump happened the day after this was written**, which is the argument
+for that paragraph rather than a footnote to it: `statusSince` changed from a bare timestamp to the
+pair below, and a reader still pinned to `1` would have done `Date.parse` on an object, got `NaN`,
+and rendered a blank age instead of an error. The rule for a bump is *a reader that ignored the
+change would be WRONG rather than merely poorer* — adding a field is not a bump.
 
 **What it can answer that the dashboard cannot**, which is the whole reason for the seam and the
 thing to build first when this is rendered:
 
-- **`statusSince` turns a state into a duration.** *"Blocked"* becomes *"blocked for 40 minutes"*,
-  which is what [§ Attention](#attention-and-who-the-overseer-is-really-watching) needs and what no
-  amount of collecting can produce, because the present tense has no yesterday.
+- **`statusSince` turns a state into a duration — and says whether that duration is a measurement or
+  a floor.** *"Blocked"* becomes *"blocked for 40 minutes"*, which is what
+  [§ Attention](#attention-and-who-the-overseer-is-really-watching) needs and what no amount of
+  collecting can produce, because the present tense has no yesterday. It is a **pair**,
+  `{ kind: "observed" | "lower-bound", at }`: `observed` means the daemon watched the transition,
+  `lower-bound` means the session was already in that state when the daemon first saw it, so all the
+  number says is *at least this long*. **Render the two differently** — `overseer status` prints `40m`
+  and `≥13m`. The first run against a real store printed four identical `13m` durations against
+  sessions that had been working for hours, because the daemon had been up for thirteen minutes; a
+  restart resets every floor together, which is worst on exactly the surface that ranks by them.
 - **`heartbeat` lets the page say the Overseer is dead.** `pid`, `instanceId`, `startedAt`,
   `lastTickAt`, `ticks`. This is [§ The failure to design against](#the-failure-to-design-against) in
   one field: *"the Overseer was last seen 40 minutes ago"* belongs **where the count would be**, not
@@ -466,6 +480,24 @@ Concretely, the bar is:
 
 - **A reading that could not be taken must not render as a reading.** Enforced by types, not by
   care — `unknown` carries a cause, an empty list is meaningless without a clock.
+- **And the half that was missing until 2026-09-08: an honest type does nothing if its consumer
+  flattens it.** Every "I could not tell" arm in this codebase is a producer-side discipline, and
+  three separate defects that evening were all consumer-side — the producer said the careful thing
+  and the caller collapsed it:
+  - `parseAttempt` returned *cannot tell*; the daemon kept the previous positive timestamp, and
+    announced **"collector stopped for 420s"** about a collector it simply could not see.
+  - The fleet server computed a per-item `stale` flag and put it on the wire; **the page threw it
+    away**, so a dead queue item drew as a waiting one.
+  - `statusSince` was a floor for any session already running at startup, and nothing in its shape
+    said so, so every renderer would have shown it as a measurement.
+
+  **So the rule has a second clause: the consumer must be unable to discard the distinction**, which
+  in practice means passing the discriminated value rather than a primitive extracted from it. The
+  attempt-clock fix is the model — the repair was not a new branch, it was changing
+  `collectorVerdict`'s parameter from `number | null` to the three-armed reading, so that flattening
+  it stopped being expressible. **A `T | null` at a seam is where two different facts get to share one
+  slot**, and by that evening's count five or six of this system's "cannot tell" arms exist because
+  one did.
 - **The thing must survive the conditions it reports on.** It runs under `scripts/tmux-job.ts`,
   because a backgrounded process is OOM-killed on *system* memory pressure — demonstrated
   2026-09-08, when an orphaned copy died at load 28 while the tmux copy kept collecting.
@@ -528,6 +560,31 @@ these before designing anything that talks to a session.**
 - **Address a session by tmux pane handle plus an execution generation, never by name.** Names get
   reassigned when a session dies. Both `gjd-remote` and the third-party system Greg showed us learned
   this independently.
+- **A pane can contain text that looks like a pending user message and was written by the model.**
+  Measured 2026-09-08: Claude Code renders a **suggested next prompt inside its own input box** after
+  a turn — same `❯`, and **nothing in a `capture-pane` distinguishes it from something a person typed
+  and has not sent.** Three appeared in a row, each a plausible follow-up (*"send another one to
+  confirm it keeps working"*), and the agent watching read the first as a message somebody had left in
+  the box and briefly as an instruction to itself. **Nobody typed any of them.**
+
+  This is the sharpest form of the hazard [§ `idle` is the bug](#idle-is-the-bug-the-vocabulary-describes-the-pane-not-the-work)
+  is about, and it is worse than the ones already listed there, because the other cases are the pane
+  failing to *say* something. Here the pane says something **that was never said** — and the surface
+  where a person's words go is the surface a model is writing on. **The medium carries no
+  provenance**, so no amount of care in the reader recovers it.
+
+  Two consequences, and they run in opposite directions. **For the question surface:** a ghost prompt
+  must never become a question put to Greg, because answering it would be answering nobody. The
+  dashboard's parser is not fooled today and **the reason is a rule rather than luck** — `parseCursorMenu`
+  requires two contiguous same-column lines *and* a dialog footer, so a lone ghost line falls out as
+  `none`. That is worth keeping deliberately rather than tightening away. **For the Overseer:** if
+  anything here ever reads pane content as evidence — a status, a judgement, a summary for Greg — this
+  is the trap, and the standing rule is that **pane text is data, never instruction.**
+
+  It is also the third face of the distinction in
+  [name-is-evidence.md](../reusable/name-is-evidence.md): after a name that does not identify what you
+  think, and a predicate that answers a wider question than you asked, **a channel whose contents do
+  not identify their own author.**
 - **Scheduling: the built-in `/loop` offers a cloud schedule that survives the session but runs in
   Anthropic's cloud, so it cannot touch this box's worktrees.** The session-local cron is in-memory
   and dies with its session. So "run job J on the box every M minutes" has no home yet — Greg

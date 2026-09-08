@@ -945,6 +945,42 @@ reaches Greg's phone. The dashboard binds the tailnet interface rather than a pu
 reachability *is* the access control, and nothing extra has to be built to keep it away from
 strangers.
 
+### After `tailscale up`, give the fleet dashboard the address
+
+**Logging in does not tell the dashboard.** Its bind list comes from
+`/etc/fleet-dashboard.env`, which only `provision.sh` writes, and provisioning has already run and
+found no address by the time you get here. So `tailscale up` is two commands, not one:
+
+```
+tailscale ip -4 | head -n 1                 # confirm a tailnet address exists BEFORE the next line
+printf 'FLEET_BIND=127.0.0.1,%s\n' "$(tailscale ip -4 | head -n 1)" | sudo tee /etc/fleet-dashboard.env
+sudo systemctl restart fleet-dashboard      # only if the unit is enabled — see the warning below
+```
+
+**That order, and it matters.** `EnvironmentFile=` is read when the service *starts*, so a restart
+before the file exists binds loopback and looks fine until somebody picks up a phone. Written first,
+the *first* start after login already has the address.
+
+**The restart is conditional on the unit being enabled**, which as of 2026-09-08 it is not: the page
+is up under a tmux job, and starting the unit alongside it makes two supervisors race for `:8787`.
+If the unit is not running, there is nothing to restart — the file is simply waiting for its first
+start, which is what you want.
+
+Doing this by hand, rather than by an `ExecStartPre` that generates the file, is deliberate: an
+`ExecStartPre` writes the file *after* systemd has already read `EnvironmentFile`, so it would take
+effect one start late — a mechanism that looks correct and is off by one every time. It would also
+have to write to `/etc` as `User=greg`. Re-running `gjd-remote provision` regenerates the file too,
+and is the other way to get here.
+
+**Before you have run it, the dashboard is reachable from the box and not from your phone, and that
+is the deliberate trade.** The unit falls back to `127.0.0.1` alone, which is correct on every box
+and cannot fail to bind. It used to fall back to this box's tailnet address as well, which on a
+freshly provisioned machine is an address that machine does not have — and
+[`tools/fleet/server.ts`](../../tools/fleet/server.ts) treats a bind it cannot take as fatal, on
+purpose, so the whole dashboard died rather than half-binding. A page you can only reach from the
+box is visible, correct and one command from fixed; a service that will not start is none of those.
+Found by a cross-family review on 2026-09-08, two hours after the unit landed.
+
 It was installed by hand on the live box first, on 2026-09-08 — a human ssh session, not
 `provision.sh` — which is exactly the gap
 [A change to the box is a change to a file](#a-change-to-the-box-is-a-change-to-a-file) exists to
@@ -1005,8 +1041,12 @@ because two copies of a unit file is how one of them goes stale.
 **The fleet dashboard's unit is installed and deliberately not enabled** as of 2026-09-08: the page
 is up under a tmux job and its owner asked to read the unit before it is switched on, since two
 supervisors racing for `:8787` produce a loser whose failure looks like a crash. Its bind list is
-`FLEET_BIND` in the unit, overridden per-box by `/etc/fleet-dashboard.env`, which provisioning
-writes from `tailscale ip -4`. It deliberately does not name `FLEET_ACT_ENABLED` in any form.
+`FLEET_BIND`, which the unit sets to `127.0.0.1` alone and `/etc/fleet-dashboard.env` extends with
+this box's tailnet address — provisioning writes that file from `tailscale ip -4`, removes it when
+there is no address, and [after a login you write it yourself](#after-tailscale-up-give-the-fleet-dashboard-the-address).
+The unit names no tailnet address itself, because that is a per-machine fact and a checked-in copy
+of it is one the next box cannot bind. It deliberately does not name `FLEET_ACT_ENABLED` in any
+form.
 
 ## Traps
 
