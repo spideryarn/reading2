@@ -17,3 +17,9 @@ and [260908f-overseer-and-fleet-improvement-roadmap.md](260908f-overseer-and-fle
   Kill refused by the auto-mode classifier, so asked Greg to kill it. Four other shells had already ended.
 - 2026-09-08 20:15Z — **Overseer** — Usage reader works: five-hour window 17% (resets 21:49Z),
   seven-day 43%, cache 83 minutes old. Will re-read each tick.
+- 2026-09-08 20:20Z — **Greg** — Deferred the whole Spideryarn product plan; focus is the Overseer and
+  the fleet dashboard. Recorded in [overseer-queue.md](../project/overseer-queue.md).
+- 2026-09-08 20:20Z — **Greg** — Kill the two Astra sessions that wrote the plans, and anything that
+  is dead weight. Astra reserved for really tricky or important calls; Sol for the rest.
+- 2026-09-08 20:22Z — **Overseer** — Killed `wk-install-0116-2281848` (the 20-hour webkit install with
+  no worktree and no log). The two Astra shells were already gone before the kill reached them.
