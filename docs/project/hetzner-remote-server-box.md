@@ -473,6 +473,14 @@ arbitrary path and belongs to no repo, and one started before this metadata exis
 session that carries *half* the metadata is not shown as either — the whole listing is refused,
 naming the session and the variable, because a partial list is one whose absences get reasoned from.
 
+**If you make a session by hand, set `GJD_REPO` to an `owner/name` slug or to the literal `unknown`,
+and run `gjd-remote ls` before you go on.** That refusal is the whole listing, and the listing is the
+only eye every other tool has: on 2026-09-08 one hand-made session with `GJD_REPO=spideryarn2` blinded
+`gjd-remote ls`, the fleet dashboard's collector and `overseer status` together for about twenty
+minutes, and none of the three could say anything about a box with fourteen healthy sessions on it.
+The refusal is still the right choice — a short list read as a complete one is worse — but its cost
+lands on everybody, not on the session that caused it.
+
 **The rows are sorted by who is being waited on**, not alphabetically. `needs you` is a session
 parked on a permission prompt or a question, going nowhere until somebody answers it, and it costs
 you the whole time it sits there — so it goes at the top. Then `idle`, which has finished and nobody

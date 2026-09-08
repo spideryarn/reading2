@@ -312,13 +312,15 @@ describe("reading a claim off a dashboard snapshot", () => {
   });
 });
 
-describe("the wire-side twin", () => {
-  it("spells the role the same as the reader that writes it", () => {
-    // The whole exclusivity rule is string equality against this word, on two
-    // sides of a compilation boundary the compiler cannot bridge. A divergence
-    // would be silent and total: every claim written by gjd-remote would read as
-    // `other` on the dashboard, and the header would say no Overseer while a row
-    // sat there holding it.
+describe("the wire side", () => {
+  it("the reader RE-EXPORTS the role string rather than spelling it again", () => {
+    // **This passes trivially today, and that is the point of it.** The whole
+    // exclusivity rule is string equality against this one word, across a
+    // compilation boundary the compiler cannot bridge, so the tmux reader
+    // re-exports the constant instead of declaring its own. The assertion is
+    // worth nothing while that holds and goes red the day somebody replaces the
+    // re-export with a literal — which is exactly the change that would make
+    // every gjd-remote claim read as `other` on the dashboard, silently.
     expect(WIRE_OVERSEER_ROLE).toBe(OVERSEER_ROLE);
   });
 
@@ -491,6 +493,21 @@ describe.runIf(usable())("against a real tmux server", () => {
     expect(v.kind).toBe("refused");
     if (v.kind !== "refused") return;
     expect(v.why).toContain("alpha");
+  });
+
+  it("A ROLE WITH A NEWLINE IN IT IS UNREADABLE, not a claim", () => {
+    // tmux prints such a value as SEVERAL LINES, indistinguishable from several
+    // variables, so a naive read of the first one accepts
+    // "overseer\nGJD_ROLE=evil" as a perfectly good claim. Nothing here writes a
+    // value like that — `setRoleCommand` validates the token — so it can only
+    // arrive by hand, and the honest answer is that the role could not be read.
+    tmux("set-environment", "-t", "beta", "GJD_ROLE", "overseer\nGJD_ROLE=evil");
+    try {
+      expect(list().find((s) => s.name === "beta")?.role.kind).toBe("cannot-tell");
+      expect(overseerClaim(list()).kind).not.toBe("one");
+    } finally {
+      tmux("set-environment", "-u", "-t", "beta", "GJD_ROLE");
+    }
   });
 
   it("a GLOBAL role marks nothing — show-environment does not fall back to it", () => {

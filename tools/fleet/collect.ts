@@ -70,7 +70,7 @@ export type FleetRow = {
   meta: SessionMeta;
   /**
    * **WHETHER THIS SESSION IS THE OVERSEER**, and the box must have exactly one
-   * (docs/project/overseer.md). See `SessionRole` in scripts/gjd-remote-tmux.ts:
+   * (docs/project/overseer.md). See `SessionRole` in tools/fleet/overseer-claim.ts:
    * it is a union rather than a nullable string because *nobody holds it* and
    * *we could not look* are different facts, and this payload is read by things
    * that decide whether to prod the Overseer.

@@ -12,14 +12,21 @@
  *
  * ## Why this is its own file
  *
- * Three consumers, on two sides of a compilation boundary. `wire.ts` cannot hold
- * it, because a `const` there would be bundled into the browser and that file's
- * whole job is to be free of anything but types. `collect.ts` cannot hold it,
- * because it reaches `node:child_process` and the client project has no node
+ * FOUR consumers on two sides of a compilation boundary: `scripts/gjd-remote.ts`
+ * through the tmux reader, `tools/fleet/collect.ts`, `scripts/overseer.ts`, and
+ * the browser bundle. Nowhere else could hold it. `wire.ts` cannot, because a
+ * `const` there would be bundled into the browser and that file's whole job is to
+ * be free of anything but types. `collect.ts` and `gjd-remote-tmux.ts` cannot,
+ * because both reach `node:child_process` and the client project has no node
  * types. A leaf module with no imports has neither problem — the argument
  * `attempt-clock.ts` makes at length, and the same discipline applies:
  *
  * **No imports, and this file must never acquire one.**
+ *
+ * It costs one import out of `scripts/` into `tools/`, which is a new direction
+ * and was taken knowingly. The alternative was two copies of the truth table
+ * below, and that table had already been written two different ways in a single
+ * afternoon — GPT Sol's P0-2 caught the second one.
  *
  * ## The absent state is the point
  *
@@ -32,24 +39,22 @@
  */
 
 /**
- * The role string itself.
+ * The role string itself, spelled ONCE for the whole repo.
  *
- * **THIS IS THE WIRE-SIDE TWIN of `OVERSEER_ROLE` in
- * scripts/gjd-remote-tmux.ts**, and not an import of it, for the reason above:
- * that module reaches `node:child_process` and the browser cannot compile it.
- * The twin is the same trade this client already makes for `SessionMeta`,
- * `FleetStatus` and `PauseUnknownCause` — and unlike those, a divergence here
- * would be silent and total, so `tests/gjd-remote-overseer-claim.test.ts`
- * asserts the two are equal. A copy nothing compares is a copy that stops
- * matching.
+ * `scripts/gjd-remote-tmux.ts` re-exports this rather than declaring its own,
+ * which is the reason this module exists at all: the entire exclusivity rule is
+ * string equality on this word, across a compilation boundary the compiler
+ * cannot bridge, and a divergence would have been silent and total — every claim
+ * written by `gjd-remote` reading as `other` on the dashboard, and the header
+ * saying *no Overseer* over a row that holds it.
  */
 export const OVERSEER_ROLE = "overseer";
 
 /**
  * Whether a session holds a role, or an admission that we could not tell.
  *
- * The same four arms as `SessionRole` in scripts/gjd-remote-tmux.ts, which is
- * where a role is read off the box. This is the one the payload carries.
+ * Declared here and re-exported by `scripts/gjd-remote-tmux.ts`, which is where
+ * a role is read off the box.
  *
  * **`cannot-tell` IS NOT DECORATION.** Zero holders and *I could not look* are
  * different facts, and collapsing them into a nullable is how a reader reports a

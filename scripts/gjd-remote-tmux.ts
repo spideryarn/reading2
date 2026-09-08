@@ -604,8 +604,20 @@ export function buildSessionScript(opts: { agents: boolean } = { agents: false }
       # environment exits 0 iff the session is still there, so the two come
       # apart: '?' means we could not look, and anything else is an answer.
       if renv=$(tmux show-environment -t "$sid" 2>/dev/null); then
-        rval=$(printf '%s\\n' "$renv" | sed -n 's/^${SESSION_ROLE_ENV}=//p' | head -1)
-        mrole=$(printf '%s' "$rval" | base64 -w0)
+        rlines=$(printf '%s\\n' "$renv" | sed -n 's/^${SESSION_ROLE_ENV}=//p')
+        # MORE THAN ONE MATCH MEANS THE VALUE HAS A NEWLINE IN IT, and tmux has
+        # printed it as several lines that are indistinguishable from several
+        # variables. Verified on a disposable socket: a value of
+        # "overseer\\n${SESSION_ROLE_ENV}=evil" prints as two lines and a naive
+        # \`head -1\` reads the first as a perfectly good claim. Nothing here
+        # WRITES such a value — setRoleCommand validates the token — so this can
+        # only arrive by hand, and the honest answer to it is that we could not
+        # read the role, not a guess at which line was meant.
+        if [ "$(printf '%s' "$rlines" | grep -c '')" -gt 1 ]; then
+          mrole='${ROLE_UNREADABLE}'
+        else
+          mrole=$(printf '%s' "$rlines" | base64 -w0)
+        fi
       else
         mrole='${ROLE_UNREADABLE}'
       fi
