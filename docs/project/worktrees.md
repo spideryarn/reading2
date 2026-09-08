@@ -308,6 +308,22 @@ whole reason it can afford to be blunt is that nothing follows automatically fro
 - A half-finished merge, cherry-pick, rebase or bisect lives in the git dir and can sit under a
   clean-looking tree.
 
+**And one blocker that is not about losing anything.** Since 2026-09-08 the check also asks whether
+a process is **listening on a port from inside this directory** — `ss -ltnpH`, then each listening
+pid's `/proc/<pid>/cwd`. Nothing is lost by deleting a worktree a server runs from, which is exactly
+why every other blocker here stayed silent while `fleet-dashboard-v01` — the tree holding the
+fleet dashboard's entrypoint, its `node_modules` and its served bundle — read SAFE. The process does
+not die with the directory, and **that is worse than if it did**: the fleet server's `serveStatic`
+calls `readFileSync` per request, so it would hold its port and serve 404s, and anything watching the
+port would report it up. Move the server, prove the new one answers, then remove the tree.
+
+Two deliberate limits. It looks only at **listening** processes — a worktree with an agent's shell
+sitting in it is the normal state of this box, and a check that fires always is the `/logs/` mistake
+below told a second time. And when it cannot look at all it says so and **does not block**, the one
+place this check does not fail closed: `ss` is Linux-only, so on the Mac that unknown would be
+permanent and universal, and an alarm nobody can ever clear is what teaches people to delete the
+alarm.
+
 Anything it does not recognise is a blocker rather than a shrug. What it does not check is printed
 when it passes rather than left to be discovered: file modes under `data/`, a commit reachable only
 through this worktree's HEAD reflog (which needs a branch-moving operation

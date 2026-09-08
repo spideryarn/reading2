@@ -41,7 +41,14 @@ import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:
 import type { Readable } from "node:stream";
 
 import { addressableHost } from "./origin.js";
-import { classifyConsequence, fingerprintMaterial, type OptionKey, type PaneMaterial, type PaneOption } from "./pane.js";
+import {
+  classifyConsequence,
+  classifyGate,
+  fingerprintMaterial,
+  type OptionKey,
+  type PaneMaterial,
+  type PaneOption,
+} from "./pane.js";
 import type { FleetStatus } from "./status.js";
 import {
   answerQuestion as realAnswerQuestion,
@@ -161,6 +168,12 @@ export const REFUSAL_STATUS: Record<RefusalCode, number> = {
   "no-claude-in-pane": 409,
   "question-gone": 409,
   "question-changed": 409,
+  // Not 403. A 403 says "you may not do this"; this says "this pane is not the
+  // kind of thing that may be answered from here, as it stands right now" —
+  // which is a fact about the world at this instant, and the same shape as
+  // `question-gone` beside it. The dialog on screen a second later may well be
+  // answerable.
+  "grants-permission": 409,
   "send-failed": 409,
   // The session is not at a text input box — a dialog is up, or something has
   // been shelled out to in the foreground. GPT Sol's F2: a message beginning
@@ -546,7 +559,13 @@ export function parseQuestion(v: unknown): SeenQuestion | null {
     // posture for everything after it.
     options.push({ label, key, consequence: classifyConsequence(label) });
   }
-  return { kind: "question", prompt, material, options };
+  // RECOMPUTED, LIKE `consequence`, AND FOR THE SAME REASON: `gate` is a pure
+  // function of the material and the labels, both of which are checked above,
+  // so a copy off the wire could only ever disagree with itself. Nothing is
+  // decided on this one in any case — `answerQuestion` re-captures the pane and
+  // classifies the fresh parse, which is the only reading a forged body cannot
+  // reach.
+  return { kind: "question", prompt, material, options, gate: classifyGate(material, options) };
 }
 
 /**
@@ -747,7 +766,12 @@ export function realSteerDeps(): SteerDeps {
     // Read per request, not once at construction: flipping it is then a server
     // restart rather than a rebuild, and nothing here caches a decision that
     // Greg may want to change in a hurry.
-    answeringEnabled: () => process.env["FLEET_ANSWER_ENABLED"] === "1",
+    //
+    // ON BY DEFAULT since 2026-09-08, when the permission/conversation gate
+    // replaced it. This is now a kill switch rather than the discrimination —
+    // `FLEET_ANSWER_ENABLED=0` to stop all answering; anything else, including
+    // the variable being unset, leaves the gate to decide dialog by dialog.
+    answeringEnabled: () => process.env["FLEET_ANSWER_ENABLED"] !== "0",
   };
 }
 
@@ -841,21 +865,38 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
     //    source of question identity, or explicitly accept that pane text is
     //    executable UI".
     //
-    // That last one is Greg's call and he is asleep. So the route stays built,
-    // tested and reachable, and refuses with a sentence saying why — which is
-    // better than deleting it (the work survives and the client can render the
-    // reason) and much better than shipping it (the failure mode is a wrong
-    // approval, and there is no way to take one back).
+    // THAT BLANKET REFUSAL IS NOW GONE, AND WHAT REPLACED IT IS NARROWER
+    // RATHER THAN WEAKER. Greg, 2026-09-08, on being told answering was off
+    // because auto mode makes permission dialogs rare: *"Yes auto mode is the
+    // default. But mightn't there be other reasons why it needs to answer with
+    // multiple choice to a session etc?"* He is right, and off-for-everything
+    // was the wrong shape of answer: an agent's own `AskUserQuestion` is not a
+    // permission grant, and refusing it bought nothing.
     //
-    // `FLEET_ANSWER_ENABLED=1` turns it on for anybody who wants to test it.
-    // Sending a MESSAGE is unaffected; stages v0.2b and v0.2c in the plan are
-    // what turn this on for real.
+    // Fable drew the line the code now implements: pane text as executable UI
+    // is acceptable when execution means **a user turn**, and not acceptable
+    // when it means **grant a permission**. A forged menu can make you send a
+    // digit to an agent that was already misbehaving; it cannot mint an
+    // approval. So `classifyGate` in `pane.ts` decides which kind of dialog is
+    // on screen, and `answerQuestion` refuses `permission` — and `unknown` with
+    // it, that arm being conservative rather than neutral.
+    //
+    // **The enforcement is not here.** It is in `steer.ts`, on a capture taken
+    // at send time, because a gate computed from the body the client sent is a
+    // gate the client chooses. This route recomputes `gate` in `parseQuestion`
+    // only so the two computations cannot disagree.
+    //
+    // Astra's finding stands and is fixed separately: `material` now carries
+    // what is being approved, and `sameMaterial` binds the approval to it. The
+    // finding that is NOT fixable — pane text is not provenance — is precisely
+    // what the permission/conversation split accepts on purpose.
+    //
+    // `FLEET_ANSWER_ENABLED=0` still turns the whole thing off, because a kill
+    // switch that has to be added under pressure is one that does not exist.
     if (op === "answer" && !deps.answeringEnabled()) {
       const why =
-        "answering a dialog is disabled: the captured question does not include what is being approved, " +
-        "so tapping an option could approve something other than what you were shown. " +
-        "Use `gjd-remote resume <name>` and answer it in the terminal. " +
-        "See docs/plans/260907e-agent-fleet-dashboard.md stage v0.2b.";
+        "answering a dialog is switched off on this server (FLEET_ANSWER_ENABLED=0). " +
+        "Use `gjd-remote resume <name>` and answer it in the terminal.";
       deps.log(`steer answer: refused code=answering-disabled pane=${target.paneId}`);
       respond(res, 503, { ok: false, code: "answering-disabled", why });
       return;

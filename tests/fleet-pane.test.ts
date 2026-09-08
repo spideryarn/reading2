@@ -9,9 +9,12 @@
  * been worse than saying so). The `dialog-*` permission shapes were provoked in
  * throwaway sessions of my own, on 2026-09-08 — the four earlier ones and, later
  * the same day, `dialog-file-write-hello.txt`, `dialog-file-write-goodbye.txt`
- * and `dialog-edit-diff.txt`. The `none-*` panes and
- * `dialog-ask-user-question.txt` are other agents' live sessions, read only —
- * `capture-pane` and nothing else. NOTHING HERE IS HAND-WRITTEN. Where a case
+ * and `dialog-edit-diff.txt`, and later again `dialog-ask-user-question-colour.txt`
+ * (a throwaway session asked to call `AskUserQuestion` and nothing else). The
+ * `none-*` panes, `dialog-ask-user-question.txt`,
+ * `dialog-bash-permission-git-log.txt` and
+ * `refused-ask-user-question-two-column.txt` are other agents' live sessions,
+ * read only — `capture-pane` and nothing else. NOTHING HERE IS HAND-WRITTEN. Where a case
  * needs a shape we could not provoke, it is DERIVED from a named real capture by
  * one stated change, in the test itself, so the change is visible next to the
  * assertion rather than buried in a file that looks captured.
@@ -29,6 +32,16 @@
  * with one word of contents changed, and before `material` existed they parsed
  * to byte-identical questions with byte-identical options. That pair is the
  * regression test and the reason the rest of it is here.
+ *
+ * THE THIRD ASYMMETRY, added later the same day with `gate`. Answering a dialog
+ * is one gesture on the screen and two different acts underneath: approving a
+ * tool call, or taking a turn in a conversation with an agent that asked. Only
+ * the second is safe to tap from a phone, so `conversation` is the arm that has
+ * to be EARNED and everything else falls to `unknown`, which every caller must
+ * treat exactly as `permission`. Those tests are written the same way round as
+ * the rest of the file: the interesting ones are the permission dialogs that
+ * must not become conversations, including one derived from a real capture in
+ * which the file being written contains a markdown checkbox.
  */
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
@@ -38,12 +51,16 @@ import { describe, expect, it } from "vitest";
 import {
   capturePane,
   classifyConsequence,
+  classifyGate,
   cleanLines,
   fingerprintMaterial,
+  grantsPermission,
   isPaneId,
   parsePane,
   stripAnsi,
+  type PaneGate,
   type PaneMaterial,
+  type PaneOption,
 } from "../tools/fleet/pane.js";
 
 const FIXTURES = path.resolve(import.meta.dirname, "fixtures/fleet-panes");
@@ -80,11 +97,22 @@ describe("the fixture corpus", () => {
   const files = readdirSync(FIXTURES).filter((f) => f.endsWith(".txt")).sort();
 
   it("has enough real panes of both kinds to be worth believing", () => {
-    expect(files.filter((f) => f.startsWith("dialog-")).length).toBeGreaterThanOrEqual(9);
+    expect(files.filter((f) => f.startsWith("dialog-")).length).toBeGreaterThanOrEqual(10);
     expect(files.filter((f) => f.startsWith("none-")).length).toBeGreaterThanOrEqual(8);
-    expect(files.every((f) => f.startsWith("dialog-") || f.startsWith("none-"))).toBe(true);
+    expect(files.every((f) => /^(dialog|none|refused)-/.test(f))).toBe(true);
   });
 
+  /**
+   * `refused-` IS A THIRD PREFIX AND IT IS NOT A SYNONYM FOR `none-`.
+   *
+   * `none-` says "this pane is not asking anything, and saying so is right".
+   * `refused-` says "this pane IS asking something, we return `none` anyway,
+   * and that is a known limitation rather than the answer we want". Both must
+   * parse to `none` today, so the loop below treats them the same; the
+   * difference is what a red test means. A `refused-` file that starts parsing
+   * is good news and the fix is to rename it, which is why it goes red rather
+   * than passing quietly — see the note on the one such fixture further down.
+   */
   for (const f of files) {
     const expected = f.startsWith("dialog-") ? "question" : "none";
     it(`${f} → ${expected}`, () => {
@@ -510,6 +538,261 @@ describe("yes once, versus yes and never ask me again", () => {
     expect(classifyConsequence("Yes, for this session")).toBe("persistent");
     expect(classifyConsequence("Run it at low concurrency (Recommended)")).toBe("unknown");
     expect(classifyConsequence("")).toBe("unknown");
+  });
+});
+
+describe("what answering would DO: a permission, or a turn in a conversation", () => {
+  /**
+   * THE ONE THAT MATTERS. `dialog-ask-user-question-colour.txt` was provoked in
+   * a throwaway session of my own; the other two are other agents' live
+   * sessions, read with `capture-pane` and nothing else. Three captures, three
+   * different renderings of the same widget — a plain one, one whose body is
+   * quoted with `│` bars, and one laid out in two columns with a preview box on
+   * the right — and all three carry `☐ <header>` as the first line of the body.
+   */
+  for (const f of ["dialog-ask-user-question.txt", "dialog-ask-user-question-colour.txt"]) {
+    it(`${f} is a conversation, and its body opens with the agent's own header`, () => {
+      const q = ask(f);
+      expect(q.gate).toEqual({ kind: "conversation" });
+      expect(grantsPermission(q.gate)).toBe(false);
+      // Paired with the above, so "the material was empty" cannot satisfy it.
+      expect(read(f).text.split("\n")[0]).toMatch(/^\s*☐\s+\S/);
+      expect(q.options.length).toBeGreaterThan(2);
+    });
+  }
+
+  /**
+   * And the four permission shapes, which must never reach `conversation`.
+   * `dialog-bash-permission-git-log.txt` is a live capture of another agent
+   * being asked about a `git log`, taken on 2026-09-08 — a second, independent
+   * Bash approval, so the pair is not one screen twice.
+   */
+  for (const f of [
+    "dialog-bash-permission.txt",
+    "dialog-bash-permission-git-log.txt",
+    "dialog-file-write-hello.txt",
+    "dialog-edit-diff.txt",
+    "dialog-folder-trust.txt",
+  ]) {
+    it(`${f} is a permission, named by the option that widens the session`, () => {
+      const q = ask(f);
+      expect(q.gate.kind).toBe("permission");
+      expect(grantsPermission(q.gate)).toBe(true);
+      if (q.gate.kind !== "permission") throw new Error("unreachable");
+      expect(q.gate.why).toContain("widens");
+      // The reason has to name a real option, not a generic sentence.
+      expect(q.options.some((o) => q.gate.kind === "permission" && q.gate.why.includes(o.label))).toBe(true);
+    });
+  }
+
+  /**
+   * WHERE THE HARNESS'S OWN SETTINGS MENUS LAND, and the argument is in
+   * `PaneGate`: answering one changes the harness's configuration rather than
+   * approving a tool call or taking a turn, which is a genuinely third thing —
+   * and we cannot tell it apart from an agent's question with evidence we
+   * trust, so it says so. `/loop` is the sharp case: it is drawn by the SAME
+   * select-menu widget as an agent's question, right down to the `Type
+   * something.` and `Chat about this` rows, and answering it can create a cloud
+   * schedule that outlives the session. It reaches `unknown` because it carries
+   * no body to find a header in, and `unknown` is refused exactly as
+   * `permission` is.
+   */
+  it("refuses the /loop scheduling menu and the model selector, and says which reason", () => {
+    const loop = ask("dialog-loop-cloud-schedule.txt");
+    expect(loop.material.kind).toBe("no-material");
+    expect(loop.gate).toEqual({
+      kind: "unknown",
+      why: "the dialog's body is no-material, so the header that identifies an agent's own question is not there to check",
+    });
+    expect(grantsPermission(loop.gate)).toBe(true);
+
+    const model = ask("dialog-model-selector.txt");
+    expect(read("dialog-model-selector.txt").text).toContain("Select model");
+    expect(model.gate).toEqual({
+      kind: "unknown",
+      why: "the dialog's body does not open with the header an agent's own question carries",
+    });
+    expect(grantsPermission(model.gate)).toBe(true);
+  });
+
+  /**
+   * THE ATTACK THE FIRST-LINE RULE IS FOR, derived from a real capture by ONE
+   * stated change: the file being written now contains a markdown to-do,
+   * `☐ ship it`, which is ordinary prose and puts the ballot box inside the
+   * proposal. A rule that searched the body would read that as an agent's own
+   * question and hand a thumb a file write.
+   *
+   * TWO PASSES, AND NEITHER OF THEM IS THE FIRST-LINE RULE — which is the
+   * point, and it was measured rather than assumed. Mutating the header test to
+   * search the whole body left this test green: the first pass is caught by the
+   * persistent option and the second, with that option removed, by the yes/no
+   * shape. So what this test proves is that a permission dialog carrying a
+   * checkbox has TWO defences in front of the one that would be tricked, which
+   * is worth knowing and is not what its name suggests on its own. The
+   * first-line rule is isolated by the test below, on a real agent question.
+   */
+  it("does not become a conversation because the file being written contains a checkbox", () => {
+    const real = fixture("dialog-file-write-hello.txt");
+    const planted = real.replace("  1 hello", "  1 ☐ ship it");
+    expect(planted).not.toBe(real);
+    expect(read("dialog-file-write-hello.txt").text).toContain("1 hello");
+
+    const q = parsePane(planted);
+    if (q.kind !== "question") throw new Error(`planted capture parsed as ${q.kind}`);
+    // Positive: the checkbox really is in the body we would show the person...
+    if (q.material.kind !== "read") throw new Error("planted capture lost its material");
+    expect(q.material.text).toContain("☐ ship it");
+    // ...and it is still an approval.
+    expect(q.gate.kind).toBe("permission");
+
+    const stripped = planted
+      .replace(/^ {3}2\. Yes, and switch to accept edits.*\n/m, "")
+      .replace("   3. No", "   2. No");
+    expect(stripped).not.toContain("accept edits");
+    const bare = parsePane(stripped);
+    if (bare.kind !== "question") throw new Error(`stripped capture parsed as ${bare.kind}`);
+    expect(bare.options.map((o) => o.label)).toEqual(["Yes", "No"]);
+    expect(bare.gate.kind).toBe("permission");
+    if (bare.gate.kind !== "permission") throw new Error("unreachable");
+    expect(bare.gate.why).toContain("approval followed by a refusal");
+  });
+
+  /**
+   * THE FIRST-LINE RULE, ISOLATED, on a dialog where nothing else can catch it.
+   * Derived from the real `Colour` capture by ONE stated change: a line is put
+   * above the `☐ Colour` header, so the ballot box is still in the body but is
+   * no longer the first thing in it. Every option is the agent's own prose, so
+   * neither permission signal fires and the header rule is the only thing left
+   * standing — and it must refuse.
+   *
+   * This is the shape a permission dialog takes when the file it proposes
+   * contains a checkbox: the tool's name on the first line, `☐ something`
+   * further down. Here it is on a capture with no approval options at all, so
+   * nothing can pass the test for the wrong reason.
+   */
+  it("wants the header on the first line of the body, not merely somewhere in it", () => {
+    const real = fixture("dialog-ask-user-question-colour.txt");
+    const derived = real.replace(" ☐ Colour", " Create file\n ☐ Colour");
+    expect(derived).not.toBe(real);
+    expect(ask("dialog-ask-user-question-colour.txt").gate).toEqual({ kind: "conversation" });
+
+    const q = parsePane(derived);
+    if (q.kind !== "question") throw new Error(`derived capture parsed as ${q.kind}`);
+    // Positive: the ballot box really is still in the body, one line down...
+    if (q.material.kind !== "read") throw new Error("derived capture lost its material");
+    expect(q.material.text).toContain("☐ Colour");
+    expect(q.material.text.split("\n")[0]?.trim()).toBe("Create file");
+    // ...and no permission signal is available to catch this for us.
+    expect(q.options.every((o) => o.consequence === "unknown")).toBe(true);
+
+    expect(q.gate).toEqual({
+      kind: "unknown",
+      why: "the dialog's body does not open with the header an agent's own question carries",
+    });
+  });
+
+  /**
+   * The corpus-wide invariant, so a fixture added tomorrow cannot quietly
+   * become tappable. Only files named `ask-user-question` may be a
+   * conversation, and every one of them must be — a rule that fails in both
+   * directions rather than one, since "nothing is a conversation" would satisfy
+   * half of it.
+   */
+  it("lets nothing but a real agent question through, and lets all of them through", () => {
+    const dialogs = readdirSync(FIXTURES).filter((f) => f.startsWith("dialog-")).sort();
+    const conversations = dialogs.filter((f) => !grantsPermission(ask(f).gate));
+    expect(conversations).toEqual(dialogs.filter((f) => f.includes("ask-user-question")));
+    expect(conversations.length).toBeGreaterThanOrEqual(2);
+  });
+
+  /**
+   * A REAL AGENT QUESTION THE PARSER CANNOT SEE, AND IT IS NOT `gate`'S DOING.
+   * Captured live from another agent's session on 2026-09-08, read-only. In a
+   * wide pane, `AskUserQuestion` lays its options out in two columns with a
+   * preview box on the right, and it indents the wrapped continuation of an
+   * option's label to `digitCol + 2` — one column SHALLOWER than the label
+   * itself. `gapsAreContinuations` requires at least `labelCol`, so the run is
+   * cut and the whole dialog is reported as `none`.
+   *
+   * That is the safe direction — a blocked session shows as not blocked, which
+   * costs a glance at the terminal — but it is the dashboard being blind to
+   * exactly the thing it is for, and the corpus could not have caught it
+   * because every captured dialog until now was drawn in one column. The
+   * fixture is kept, and named `refused-`, so the day somebody loosens that
+   * rule this test goes red and tells them what they have fixed rather than
+   * letting it pass in silence.
+   *
+   * Deliberately NOT fixed here: this file's whole bias is against reporting a
+   * question that is not there, and loosening the continuation rule is a change
+   * to that bias, not to this discrimination.
+   */
+  it("still cannot read a two-column agent question, and this is the reason why", () => {
+    const text = fixture("refused-ask-user-question-two-column.txt");
+    // Positive: it is a real, well-formed dialog — header, cursor, three
+    // numbered options at one digit column, and the select-menu footer.
+    expect(text).toMatch(/^ ☐ Repair$/m);
+    expect(text).toMatch(/^❯ 1\. Re-stamp structureHash/m);
+    expect(text).toMatch(/^ {2}3\. Leave it red, write it up/m);
+    expect(text).toMatch(/^Enter to select · ↑\/↓ to navigate/m);
+
+    // The one line that loses it, and the off-by-one that does it.
+    const lines = cleanLines(text);
+    const option1 = lines.findIndex((l) => l.text.startsWith("❯ 1. Re-stamp"));
+    expect(option1).toBeGreaterThan(0);
+    const labelCol = lines[option1]?.text.indexOf("Re-stamp");
+    const wrapped = lines[option1 + 1]?.text ?? "";
+    expect(wrapped.trimStart()).toMatch(/^\(Recommended\)/);
+    expect(wrapped.length - wrapped.trimStart().length).toBe((labelCol ?? 0) - 1);
+
+    expect(parsePane(text)).toEqual({ kind: "none" });
+  });
+
+  /**
+   * The classifier on its own, where the inputs can be stated rather than
+   * captured. `unknown` is reached by falling through and `conversation` never
+   * is, which is the whole of the bias in four lines.
+   */
+  it("earns conversation and falls through to unknown", () => {
+    const opt = (label: string): PaneOption => ({
+      label,
+      key: { via: "digit", digit: "1" },
+      consequence: classifyConsequence(label),
+    });
+    const body = (text: string): PaneMaterial => ({ kind: "read", text, fingerprint: fingerprintMaterial(text) });
+
+    expect(classifyGate(body("☐ Colour\n\nWhich colour?"), [opt("Red"), opt("Green")])).toEqual({
+      kind: "conversation",
+    });
+    // The header, and one option that widens the session: permission wins.
+    expect(
+      classifyGate(body("☐ Colour"), [opt("Red"), opt("Yes, and don’t ask again for: rm -rf /")]).kind,
+    ).toBe("permission");
+    // The header, one line down instead of first.
+    expect(classifyGate(body("Create file\n☐ Colour"), [opt("Red"), opt("Green")]).kind).toBe("unknown");
+    // Read, headed, but we could not read the body at all.
+    expect(classifyGate({ kind: "unreadable", why: "top border scrolled off" }, [opt("Red"), opt("Green")]).kind).toBe(
+      "unknown",
+    );
+    expect(grantsPermission({ kind: "unknown", why: "x" })).toBe(true);
+    expect(grantsPermission({ kind: "permission", why: "x" })).toBe(true);
+    expect(grantsPermission({ kind: "conversation" })).toBe(false);
+
+    // The predicate narrows, so a caller that refuses has the reason to hand
+    // without re-narrowing. This line does not compile if that stops being true.
+    const gate: PaneGate = classifyGate({ kind: "no-material" }, [opt("Yes"), opt("No")]);
+    expect(grantsPermission(gate) ? gate.why : "").toContain("approval followed by a refusal");
+  });
+
+  /**
+   * `☐` IS U+2610, WHICH SITS IN THE GAP BETWEEN TWO OF `DECORATION`'S RANGES.
+   * Widening that class by a few code points would blank it into a space, every
+   * agent question would quietly become `unknown`, and every test above would
+   * still be green except this one — the feature would be gone and nothing
+   * would say so.
+   */
+  it("keeps the ballot box that the whole safe arm rests on", () => {
+    expect(cleanLines(" ☐ Colour")[0]?.text).toBe(" ☐ Colour");
+    expect(cleanLines(" │ Colour")[0]?.text).toBe("   Colour");
   });
 });
 

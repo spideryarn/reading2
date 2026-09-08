@@ -35,6 +35,7 @@ import {
   corpusStrays,
   gather,
   hiddenFromStatus,
+  listenersUnder,
   logStrays,
   report,
   standingAgainstTrunk,
@@ -67,11 +68,71 @@ const clean: CheckFacts = {
   verified: ["data/ matches the fixtures"],
   disposable: 3,
   trunk: { kind: "landed" },
+  listeners: { kind: "checked", found: [] },
 };
+
+describe("listenersUnder", () => {
+  const line = (addr: string, pid: number) =>
+    `LISTEN 0      511      ${addr}       0.0.0.0:*    users:(("node-MainThread",pid=${pid},fd=33))`;
+
+  it("matches a real pid whose cwd is under the root, and skips one whose is not", () => {
+    // Uses this very process as the positive case: vitest runs with its cwd in
+    // the tree, so the readlink and the prefix comparison are the real ones
+    // rather than a fake standing in for them. pid 1 runs from `/`, which no
+    // worktree is ever under.
+    const root = process.cwd();
+    const out = [line("127.0.0.1:8787", process.pid), line("0.0.0.0:22", 1)].join("\n");
+    const scan = listenersUnder(root, out);
+    expect(scan.kind).toBe("checked");
+    if (scan.kind !== "checked") return;
+    expect(scan.found.map((l) => l.pid)).toEqual([process.pid]);
+    expect(scan.found[0]?.addr).toBe("127.0.0.1:8787");
+    expect(scan.found[0]?.command).not.toBe("(command unreadable)");
+  });
+
+  it("does not treat a sibling worktree as being under this one", () => {
+    // `…/fleet-dashboard-v01` must not match `…/fleet-dashboard-v01-old`, which
+    // a bare startsWith on the root without a separator would.
+    const scan = listenersUnder(`${process.cwd()}-old`, line("127.0.0.1:8787", process.pid));
+    expect(scan).toEqual({ kind: "checked", found: [] });
+  });
+
+  it("reports a pid that has gone as nothing, not as a crash", () => {
+    // `ss` and the readlink are two moments; a process can exit in between.
+    const scan = listenersUnder(process.cwd(), line("127.0.0.1:9999", 4194303));
+    expect(scan).toEqual({ kind: "checked", found: [] });
+  });
+});
 
 describe("blockers", () => {
   it("clears a worktree whose commits are all on the trunk", () => {
     expect(blockers(clean)).toEqual([]);
+  });
+
+  it("refuses a worktree something is still serving out of", () => {
+    // The case this check was added for. Nothing would be LOST by deleting the
+    // directory — which is why every other blocker here stays silent, and why
+    // the answer used to be SAFE while the fleet dashboard was running inside.
+    const found = blockers({
+      ...clean,
+      listeners: {
+        kind: "checked",
+        found: [{ pid: 421345, addr: "127.0.0.1:8787", command: "node tools/fleet/server.ts" }],
+      },
+    });
+    expect(found).toHaveLength(1);
+    expect(found[0]?.why).toContain("server is running out of this directory");
+    expect(found[0]?.detail.join("\n")).toContain("8787");
+  });
+
+  it("does NOT block when it could not look, and says so instead", () => {
+    // The one place this file does not fail closed. `ss` is Linux-only, so on
+    // the Mac this unknown would be permanent and universal, and an alarm that
+    // can never be cleared teaches people to remove the check.
+    const facts: CheckFacts = { ...clean, listeners: { kind: "cannot-tell", why: "ss: not found" } };
+    expect(blockers(facts)).toEqual([]);
+    expect(report(facts).lines.join("\n")).toContain("did not check for running servers: ss: not found");
+    expect(report(facts).safe).toBe(true);
   });
 
   it("refuses the primary checkout, which is never a thing to remove", () => {

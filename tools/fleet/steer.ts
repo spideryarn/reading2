@@ -86,6 +86,7 @@ import { readFileSync } from "node:fs";
 import {
   capturePane,
   cleanLines,
+  grantsPermission,
   isInputPrompt,
   isPaneId,
   parsePane,
@@ -170,6 +171,15 @@ export type RefusalCode =
   | "question-gone"
   /** The pane is asking something else, or asking it differently. */
   | "question-changed"
+  /**
+   * Answering would grant a permission rather than take a turn in a
+   * conversation, so the page will not do it. Fable's line, and the only
+   * discrimination that lets any of this be switched on: pane text as
+   * executable UI is acceptable when execution means *a user turn*, and not
+   * when it means *grant a permission*. A forged menu can make you send a digit
+   * to an agent that was already misbehaving; it cannot mint an approval.
+   */
+  | "grants-permission"
   /** The chosen option is not one of the options. */
   | "no-such-option"
   /** tmux refused the send, and NOTHING reached the pane. */
@@ -1233,6 +1243,26 @@ export function answerQuestion(
   }
   if (!sameQuestion(seen, now)) {
     return no("question-changed", `pane ${target.paneId} is asking something else now`);
+  }
+  // FROM THE FRESH CAPTURE, NEVER FROM THE REQUEST BODY. The client's copy of
+  // `gate` is advisory and `parseQuestion` recomputes it anyway; this one is
+  // computed on the box, on the screen as it is NOW, which is the only reading
+  // a forged body cannot reach.
+  //
+  // AFTER `sameQuestion` rather than before it, and the order is about the
+  // sentence rather than the safety — both arms refuse and nothing is sent
+  // either way. When the dialog on screen has been replaced, "the pane is
+  // asking something else now" is the true and useful thing to say; "this would
+  // grant a permission" would describe a dialog the person never saw. Once
+  // `sameQuestion` has passed, `gate` is a pure function of fields it has just
+  // compared, so this is a statement about the dialog they are looking at.
+  //
+  // `unknown` is refused alongside `permission`: that arm is conservative
+  // rather than neutral, and every dialog we have not positively identified as
+  // an agent's own question lands in it — the harness's own settings menus
+  // included.
+  if (grantsPermission(now.gate)) {
+    return no("grants-permission", `answering this would grant a permission rather than take a turn: ${now.gate.why}`);
   }
 
   const option = now.options[optionIndex];
