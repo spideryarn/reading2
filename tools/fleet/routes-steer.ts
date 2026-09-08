@@ -40,6 +40,7 @@
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import type { Readable } from "node:stream";
 
+import { addressableHost } from "./origin.js";
 import type { OptionKey, PaneOption } from "./pane.js";
 import type { FleetStatus } from "./status.js";
 import {
@@ -206,25 +207,10 @@ export function readBody(req: BodyStream, limit: number = MAX_BODY_BYTES): Promi
 
 export type HeaderVerdict = { ok: true } | { ok: false; status: number; code: RouteErrorCode; why: string };
 
-/**
- * A hostname we are willing to be addressed as.
- *
- * IP literals, `localhost`, and Tailscale's MagicDNS suffix — nothing else, and
- * that is what closes DNS rebinding. Without it, a page at `evil.example` whose
- * DNS re-resolves to this box's tailnet address sends `Host: evil.example` AND
- * `Origin: http://evil.example`, which agree with each other perfectly and would
- * sail through a same-origin comparison. There is no name this dashboard is
- * legitimately reached by that is not in this set — `parseBinds` in config.ts
- * refuses a wildcard and the two real binds are a literal `127.0.0.1` and a
- * tailnet address.
- */
-function addressableHost(hostname: string): boolean {
-  const h = hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
-  if (h === "localhost") return true;
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return true;
-  if (h.includes(":") && /^[0-9a-f:.]+$/.test(h)) return true;
-  return h.endsWith(".ts.net");
-}
+// `addressableHost` used to live here. It is in origin.ts now, shared with
+// routes-new.ts, which did not have it — the route that can TYPE INTO a session
+// was closed to DNS rebinding and the route that can START one was open to it.
+// Two agents, two origin checks, one of them missing the half that mattered.
 
 function header(headers: IncomingHttpHeaders, name: string): string | null {
   const v = headers[name];

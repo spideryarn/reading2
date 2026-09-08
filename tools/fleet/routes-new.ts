@@ -71,6 +71,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { collectHealth, type HealthLevel } from "./health.js";
+import { addressableHost } from "./origin.js";
 
 // ---------------------------------------------------------------------------
 // The limits. Constants rather than magic numbers, each with the reason it has
@@ -204,14 +205,25 @@ export function checkRequest(headers: IncomingHttpHeaders): Parsed<{ origin: str
       why: "this route needs a same-origin Origin header; it has no authentication, so that header is the only thing between it and any page in any tab",
     };
   }
-  let originHost: string;
+  let parsedOrigin: URL;
   try {
-    originHost = new URL(origin).host;
+    parsedOrigin = new URL(origin);
   } catch {
     return { ok: false, status: 403, why: `Origin ${origin} is not a URL` };
   }
-  if (originHost !== host) {
+  if (parsedOrigin.host !== host) {
     return { ok: false, status: 403, why: `Origin ${origin} is not this server (${host})` };
+  }
+
+  // THE HALF THIS ROUTE WAS MISSING, and the route next door had. `Origin`
+  // matching `Host` is not enough on its own: a page at `evil.example` whose DNS
+  // re-resolves to this box sends both headers saying `evil.example`, they agree
+  // perfectly, and the check above passes. `sec-fetch-site` says `same-origin`
+  // too, because by the browser's lights it is. Refusing to answer to a name we
+  // are never legitimately reached by is the only thing that catches it — and
+  // this is the route that STARTS AGENTS, so it had the weaker check of the two.
+  if (!addressableHost(parsedOrigin.hostname)) {
+    return { ok: false, status: 403, why: `this dashboard is not reached by the name '${parsedOrigin.hostname}'` };
   }
 
   const site = headers["sec-fetch-site"];
