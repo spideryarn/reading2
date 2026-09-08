@@ -41,6 +41,12 @@ import type {
   AttentionKind,
   AttentionList,
   FleetState as FleetStateWire,
+  OverseerHeartbeat,
+  OverseerRegister,
+  OverseerScheduler,
+  OverseerSessionHistory,
+  OverseerStatus,
+  OverseerStatusFeed,
   Pause,
   PauseUnknownCause,
 } from "../../wire.js";
@@ -54,6 +60,12 @@ export type {
   AttentionItem,
   AttentionKind,
   AttentionList,
+  OverseerHeartbeat,
+  OverseerRegister,
+  OverseerScheduler,
+  OverseerSessionHistory,
+  OverseerStatus,
+  OverseerStatusFeed,
   Pause,
   PauseUnknownCause,
 };
@@ -321,6 +333,10 @@ export type FleetState = Omit<
   | "answeringEnabled"
   | "refreshMs"
   | "attention"
+  /* Re-typed: widened by one arm for the same reason `attention` is — a field
+     that is PRESENT and unreadable is a fact about the payload, which the server
+     cannot report about itself. See `OverseerView`. */
+  | "overseer"
   /* Re-typed too, and it was DECLINED for a day on reasoning that did not hold.
      The entry here used to say that `readAttemptClock` is a runtime value, so it
      could not live in wire.ts, so both sides could not share one — and therefore
@@ -378,6 +394,16 @@ export type FleetState = Omit<
    * server cannot report it and this page must. See `AttentionView`.
    */
   attention: AttentionView;
+  /**
+   * **IS SUPERVISION STILL WORKING?** — the Overseer's two clocks, its
+   * heartbeat, its scheduler line and the history it holds, or the reason there
+   * is no reading.
+   *
+   * Widened from the wire's `OverseerStatusFeed` by the same one arm
+   * `attention` is: a field that is present and will not parse is a fact about
+   * the payload rather than about the box. See `OverseerView`.
+   */
+  overseer: OverseerView;
   /**
    * **How many rows in the payload could not be read**, which is a fact about
    * the fleet and not a tidiness note.
@@ -1295,6 +1321,298 @@ function parseAnswerability(raw: unknown): AttentionAnswerability | null {
   return null;
 }
 
+/* --------------------------------------------- is supervision working? -- */
+
+/**
+ * **THE SAME FIFTH STATE, for the same reason** — `AttentionView` above argues
+ * it in full. `OverseerStatusFeed`'s arms are all facts about the box; this one
+ * is a fact about the payload, so it cannot live on the shared type.
+ *
+ * It matters more here than it does for the inbox, because this is the card
+ * that says whether anything is watching. *This server did not look* draws
+ * nothing; *we looked and cannot read the answer* is a page and a server that
+ * have come apart, and every session on the box may be waiting with nothing
+ * watching while it is true.
+ */
+export type OverseerView = OverseerStatusFeed | { kind: "feed-unreadable"; why: string };
+
+/**
+ * **IS SUPERVISION STILL WORKING?, off the wire** — derived, never adopted.
+ *
+ * The fourth parser of this file's shapes and the third of this one, and the
+ * same argument holds: between `tools/fleet/overseer-status.ts` and here sit
+ * `JSON.stringify`, HTTP and a browser tab iOS may have kept alive across a
+ * deploy, so a page has to be able to read a payload from a server it is not
+ * the same age as.
+ *
+ * **Every timestamp is shifted onto this browser's clock** (`ClockSkew`), and
+ * the stakes are the card's whole claim: it decides whether to warn that the
+ * Overseer has stopped writing, or that it is writing but no longer hearing
+ * from the dashboard, by asking how old two of these are. A phone a few minutes
+ * fast would otherwise turn a healthy pair into an alarm, or — with the sign
+ * the other way — a dead daemon into a fresh one.
+ *
+ * **Absent is `not-asked`; present-but-wrong is `feed-unreadable`.** The field
+ * was added without a schema bump, so a server that predates it sends nothing —
+ * and unlike the inbox's arm of the same name, this one is drawn: the card is
+ * itself the evidence, so its absence would read as a page with nothing to
+ * report. `OverseerStatusCard`'s prop comment has the distinction.
+ */
+/**
+ * **THE CHECKPOINT SCHEMA THIS BUILD OF THE PAGE READS**, checked here as well
+ * as on the server.
+ *
+ * The server refuses an unknown version and sends `unsupported-schema`, so this
+ * looks redundant — and it is not, for the reason this whole file is a second
+ * parser: **the page can be older than the server it is talking to.** An iOS
+ * tab kept alive across a deploy holds this build; a newer server that had
+ * learned schema 3 would send it inside a `published` arm, and without this
+ * check the card would draw ages off fields whose meaning had moved. That is
+ * precisely the case where a wrong reading is worst — it looks like a healthy
+ * Overseer. GPT Sol's P1, 2026-09-08.
+ *
+ * The number is written twice, once here and once in `tools/fleet/attention.ts`
+ * as `KNOWN_SCHEMA`, because this file may not import a node module. Two
+ * declarations are the cost of two independent compatibility policies, which is
+ * the thing being bought.
+ */
+const KNOWN_CHECKPOINT_SCHEMA = 2;
+
+/**
+ * **THE LONGEST SOURCE DEADLINE THIS PAGE WILL BELIEVE**, in milliseconds.
+ *
+ * The daemon publishes the deadline it uses for *the collector has gone quiet*
+ * and the card prefers it over a constant, because the two ends drifted once
+ * already. But an unbounded number taken on trust is a way to make a dead
+ * source look healthy for ever: a `lastGoodSnapshotAt` from 2020 with a
+ * deadline of `1e300` renders as *supervision is running*. GPT Sol's P1.
+ *
+ * An hour is twelve times the daemon's documented normal (five missed 60-second
+ * collections), so anything past it is a bug or a hostile file rather than a
+ * cadence change. Beyond it the page falls back to its own deadline and says so
+ * — it does not fail the card, because the two clocks are still readable and
+ * still worth showing.
+ */
+const MAX_SOURCE_STALE_MS = 60 * 60_000;
+
+export function parseOverseer(raw: unknown, skew: ClockSkew): OverseerView {
+  /* Absent, and only absent. `null` is something a server chose to send. */
+  if (raw === undefined) return { kind: "not-asked" };
+  const unreadable = (why: string): OverseerView => ({ kind: "feed-unreadable", why });
+  if (!isRecord(raw)) return unreadable("the server sent an Overseer status that is not an object");
+  switch (str(raw["kind"])) {
+    case "not-asked":
+      return { kind: "not-asked" };
+    case "checkpoint-absent":
+      return { kind: "checkpoint-absent" };
+    case "checkpoint-unreadable":
+      return { kind: "checkpoint-unreadable", why: str(raw["why"]) ?? "the server gave no reason" };
+    case "unsupported-schema": {
+      /* BOTH HALVES OR NEITHER. "This build cannot read the checkpoint" without
+         the two version numbers is a shrug; with them it is a thing somebody can
+         act on, which is the entire reason this arm is separate from the one
+         above it. */
+      const saw = nonBlank(raw["saw"]);
+      const known = raw["known"];
+      if (saw === null || typeof known !== "number" || !Number.isFinite(known)) {
+        return unreadable("the server refused the checkpoint's schema but did not say which versions were involved");
+      }
+      return { kind: "unsupported-schema", saw, known };
+    }
+    case "published": {
+      /* **THE VERSION FIRST, BEFORE ANY FIELD OF THE BODY IS READ.** A newer
+         server sending a schema this build has never read is the
+         old-tab-after-a-deploy case, and checking it afterwards meant a schema-3
+         status whose SHAPE had also changed failed the body parse first and came
+         back as a shrug — the diagnostic that names both versions is the one
+         thing a reader can act on. Reading the version out of a payload of an
+         unknown version is safe in the way reading its fields is not: it is the
+         field whose meaning cannot change. GPT Sol's P2 in round two. */
+      const body = raw["status"];
+      const schema = isRecord(body) ? body["schema"] : undefined;
+      if (typeof schema === "number" && schema !== KNOWN_CHECKPOINT_SCHEMA) {
+        return unreadable(
+          `the server read a checkpoint of schema ${schema} and this page reads schema ${KNOWN_CHECKPOINT_SCHEMA}`,
+        );
+      }
+      const status = parseOverseerStatus(body, skew);
+      if (status === null) return unreadable("the server published an Overseer status this page cannot read");
+      return { kind: "published", status };
+    }
+    default:
+      return unreadable(
+        `this page does not know the Overseer status ${JSON.stringify(str(raw["kind"]) ?? raw["kind"] ?? null)}`,
+      );
+  }
+}
+
+/**
+ * The reading itself. `null` fails the arm — see `parseOverseer`.
+ *
+ * **The two clocks are all-or-nothing and the three parts are not**, which is
+ * the same split the server's projection makes and for the same reason: the
+ * card exists to put `writtenAt` and `lastGoodSnapshotAt` in one sentence, so a
+ * reading missing either is not a degraded card. The parts beside them each
+ * carry their own `unreadable` arm and reach it on their own.
+ */
+function parseOverseerStatus(raw: unknown, skew: ClockSkew): OverseerStatus | null {
+  if (!isRecord(raw)) return null;
+  const schema = raw["schema"];
+  if (typeof schema !== "number" || !Number.isFinite(schema)) return null;
+  const written = iso(raw["writtenAt"]);
+  if (written === null) return null;
+  const writtenAt = shiftToBrowserClock(written, skew) ?? written;
+  /* `null` IS A READING — the Overseer has accepted no snapshot at all — and
+     absent is not. `raw["lastGoodSnapshotAt"] === undefined` means a payload
+     this page cannot read, which fails the arm rather than manufacturing the
+     alarming answer. The server's projection makes the same distinction. */
+  const rawSource = raw["lastGoodSnapshotAt"];
+  let lastGoodSnapshotAt: string | null;
+  if (rawSource === null) {
+    lastGoodSnapshotAt = null;
+  } else {
+    const at = iso(rawSource);
+    if (at === null) return null;
+    lastGoodSnapshotAt = shiftToBrowserClock(at, skew) ?? at;
+  }
+  /* **A DURATION, NOT A TIMESTAMP** — nothing to skew-correct — and **an invalid
+     one is not a missing one.** Absent or null is a server that did not say and
+     the card falls back to its own deadline, naming it. A value that is there
+     and cannot be a deadline fails the whole reading, because the deadline is
+     part of the health judgement: without the ceiling AND this distinction, a
+     four-minute-old source with a deadline of `3_600_001` reads as *supervision
+     is running*. `MAX_SOURCE_STALE_MS`; GPT Sol's P1 in round two. */
+  const stale = raw["sourceStaleAfterMs"];
+  let sourceStaleAfterMs: number | null;
+  if (stale === undefined || stale === null) {
+    sourceStaleAfterMs = null;
+  } else if (typeof stale === "number" && Number.isFinite(stale) && stale > 0 && stale <= MAX_SOURCE_STALE_MS) {
+    sourceStaleAfterMs = stale;
+  } else {
+    return null;
+  }
+  return {
+    schema,
+    writtenAt,
+    lastGoodSnapshotAt,
+    sourceStaleAfterMs,
+    heartbeat: parseOverseerHeartbeat(raw["heartbeat"], skew),
+    scheduler: parseOverseerScheduler(raw["scheduler"], skew),
+    register: parseOverseerRegister(raw["register"], skew),
+  };
+}
+
+/** The daemon's own facts. A `lastTickAt` of `null` is a fresh start, not a stopped one. */
+function parseOverseerHeartbeat(raw: unknown, skew: ClockSkew): OverseerHeartbeat {
+  const bad = (why: string): OverseerHeartbeat => ({ kind: "unreadable", why });
+  if (!isRecord(raw)) return bad("the server sent no heartbeat this page can read");
+  if (raw["kind"] === "unreadable") {
+    return bad(nonBlank(raw["why"]) ?? "the server could not read the heartbeat and did not say why");
+  }
+  if (raw["kind"] !== "reading") return bad(`this page does not know the heartbeat ${JSON.stringify(raw["kind"] ?? null)}`);
+  const pid = count(raw["pid"]);
+  const instanceId = nonBlank(raw["instanceId"]);
+  const started = iso(raw["startedAt"]);
+  const ticks = count(raw["ticks"]);
+  if (pid === null || instanceId === null || started === null || ticks === null) {
+    return bad("the heartbeat arrived without a pid, an instance, a start time or a tick count");
+  }
+  const rawTick = raw["lastTickAt"];
+  let lastTickAt: string | null;
+  if (rawTick === null) {
+    lastTickAt = null;
+  } else {
+    const at = iso(rawTick);
+    if (at === null) return bad("the heartbeat's last tick is neither a timestamp nor null");
+    lastTickAt = shiftToBrowserClock(at, skew) ?? at;
+  }
+  return {
+    kind: "reading",
+    pid,
+    instanceId,
+    startedAt: shiftToBrowserClock(started, skew) ?? started,
+    lastTickAt,
+    ticks,
+  };
+}
+
+/**
+ * The scheduler line.
+ *
+ * **The default arm is why this is a function**, on this side too: 260908g may
+ * widen the discriminant, and a state this build has never seen must read as *I
+ * cannot tell* rather than borrow the mildest label on screen. The server
+ * already refuses one it does not know — this is the second door.
+ */
+function parseOverseerScheduler(raw: unknown, skew: ClockSkew): OverseerScheduler {
+  const bad = (why: string): OverseerScheduler => ({ kind: "unreadable", why });
+  if (!isRecord(raw)) return bad("the server sent no scheduler line this page can read");
+  if (raw["kind"] === "unreadable") {
+    return bad(nonBlank(raw["why"]) ?? "the server could not read the scheduler line and did not say why");
+  }
+  const why = nonBlank(raw["why"]);
+  const at = iso(raw["at"]);
+  if (why === null || at === null) return bad("the scheduler line arrived with no reason or no readable time");
+  const shifted = shiftToBrowserClock(at, skew) ?? at;
+  switch (raw["kind"]) {
+    case "armed":
+      return { kind: "armed", why, at: shifted };
+    case "off":
+      return { kind: "off", why, at: shifted };
+    case "not-said":
+      return { kind: "not-said", why, at: shifted };
+    default:
+      return bad(`this page does not know the scheduler state ${JSON.stringify(raw["kind"] ?? null)}`);
+  }
+}
+
+/**
+ * The Overseer's history of what has been running — **and one bad entry
+ * degrades the whole register**, for the reason the server's projection gives:
+ * the list claims *these are the ones that have waited longest*, which is a
+ * negative claim about everything not in it.
+ */
+function parseOverseerRegister(raw: unknown, skew: ClockSkew): OverseerRegister {
+  const bad = (why: string): OverseerRegister => ({ kind: "unreadable", why });
+  if (!isRecord(raw)) return bad("the server sent no register this page can read");
+  if (raw["kind"] === "unreadable") {
+    return bad(nonBlank(raw["why"]) ?? "the server could not read the register and did not say why");
+  }
+  if (raw["kind"] !== "read") return bad(`this page does not know the register ${JSON.stringify(raw["kind"] ?? null)}`);
+  const total = count(raw["total"]);
+  if (total === null) return bad("the register arrived without a count of what it holds");
+  const rawSessions = raw["sessions"];
+  if (!Array.isArray(rawSessions)) return bad("the register's sessions are not a list");
+  const sessions: OverseerSessionHistory[] = [];
+  for (const entry of rawSessions) {
+    const parsed = parseOverseerHistory(entry, skew);
+    if (parsed === null) return bad("an entry in the register is not one this page can read");
+    sessions.push(parsed);
+  }
+  /* MORE SHOWN THAN HELD IS CORRUPTION, not a reading: `sessions` is a capped
+     projection OF `total`, so it cannot be longer than it, and the card
+     subtracts one from the other to say how many are not shown. */
+  if (sessions.length > total) {
+    return bad(`the register shows ${sessions.length} sessions out of a register it says holds ${total}`);
+  }
+  return { kind: "read", total, sessions };
+}
+
+/** One remembered session. `≥` lives in the rendering; the arm lives here. */
+function parseOverseerHistory(raw: unknown, skew: ClockSkew): OverseerSessionHistory | null {
+  if (!isRecord(raw)) return null;
+  const name = nonBlank(raw["name"]);
+  const tmuxId = nonBlank(raw["tmuxId"]);
+  const status = nonBlank(raw["status"]);
+  if (name === null || tmuxId === null || status === null) return null;
+  const since = raw["since"];
+  if (!isRecord(since)) return null;
+  const at = iso(since["at"]);
+  if (at === null) return null;
+  if (since["kind"] !== "observed" && since["kind"] !== "lower-bound") return null;
+  return { name, tmuxId, status, since: { kind: since["kind"], at: shiftToBrowserClock(at, skew) ?? at } };
+}
+
 /**
  * Whether the payload could be read, and what to say if it could not.
  *
@@ -1419,6 +1737,12 @@ export function parseFleetState(raw: unknown, receivedAt: number): FleetStateRea
          went blank on it would have stopped saying what is running on the box,
          which is the more important half. */
       attention: parseAttention(raw["attention"], clockSkew),
+      /* **IS SUPERVISION STILL WORKING?** — the same join, one field along, and
+         it fails the same way: never throws, never fails the payload. A card
+         that cannot read the Overseer's status must leave the sessions below it
+         drawn, because a page that says nothing about what is running is worse
+         than one that says it cannot tell whether anything is watching. */
+      overseer: parseOverseer(raw["overseer"], clockSkew),
       /* `null` rather than a default: "the server did not say" and "the server
          says 60s" are different facts, and only the first should let the observed
          cadence win. */

@@ -206,7 +206,20 @@ export function App({
         ) : null}
         {mode === "overseer" ? (
           <div className="tw:mx-auto tw:max-w-3xl">
-            <OverseerPanel actions={actions} rows={rows} />
+            <OverseerPanel
+              actions={actions}
+              rows={rows}
+              /* **`null` BEFORE THE FIRST PAYLOAD, and the payload's own arm
+                 after it.** Not `?? { kind: "not-asked" }`, which was here for a
+                 review round and collapsed two different silences: *nothing has
+                 arrived yet* draws nothing, and *a payload arrived from a server
+                 that does not report supervision* is worth a line, because
+                 otherwise a rollback puts this tab back to its pre-stage
+                 appearance with nothing saying why. GPT Sol's P1. */
+              overseer={feed.state === null ? null : feed.state.overseer}
+              now={now}
+              receivedAt={feed.receivedAt}
+            />
           </div>
         ) : null}
       </main>

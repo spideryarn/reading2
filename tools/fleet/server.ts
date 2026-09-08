@@ -32,7 +32,6 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { readAttention } from "./attention.js";
 import { collectWithDeadline, type FleetSnapshot } from "./collect.js";
 import { parseBinds } from "./config.js";
 import { collectHealth, type HealthReport } from "./health.js";
@@ -40,6 +39,7 @@ import { type HealthTurn } from "./health-history.js";
 import { makeHealthRetention } from "./health-wiring.js";
 import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
+import { readCheckpointFeeds } from "./overseer-status.js";
 import { drainSharedQueues, handleActionRequest } from "./routes-actions.js";
 import { nextWaitMs, refreshOnce } from "./refresh.js";
 import { newSessionRoutes } from "./routes-new.js";
@@ -157,9 +157,12 @@ function statePayload(): string {
      reason routes-steer.ts reads its flag per request. The answering flag:
      turning it on should be a restart, and the page should learn about it on
      its next refresh rather than on a reload nobody performs. The attention
-     inbox: `~/.overseer/current.json` is ~10KB and replaced by atomic rename,
-     so a read is cheap and always current, while caching it would put a list
-     regenerated every two minutes on this loop's 55–60s clock. */
+     inbox AND the Overseer's own status, which are one read of
+     `~/.overseer/current.json` — ~10KB, replaced by atomic rename, so a read is
+     cheap and always current, while caching it would put a list regenerated
+     every two minutes on this loop's 55–60s clock. One read rather than two
+     because the page prints the inbox's clock and the checkpoint's clock in one
+     sentence, and two reads can straddle a write. */
   return composePayload({
     snapshot,
     error: lastError,
@@ -167,7 +170,7 @@ function statePayload(): string {
     refreshMs: REFRESH_MS,
     answeringEnabled: process.env["FLEET_ANSWER_ENABLED"] !== "0",
     attemptedAt,
-    readAttention,
+    readCheckpoint: readCheckpointFeeds,
   });
 }
 
