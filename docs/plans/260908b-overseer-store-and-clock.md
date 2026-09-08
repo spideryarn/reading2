@@ -102,12 +102,23 @@ whole files and a day's worth can be read without touching the rest.
 restarting.** The rules, all three of which must hold before a snapshot is diffed:
 
 - **`error` must be null.** The dashboard keeps and serves its last good snapshot when a refresh
-  fails, marking it stale — correct for a page, and inadmissible as evidence of change.
-- **`collectedAt` must have advanced** since the last diffed snapshot. The same snapshot served
-  twice is one observation, not two, and SSE plus polling means we will genuinely see it twice.
+  fails, marking it stale — correct for a page, and inadmissible as evidence of change. **Verified in
+  the code, not just its comment** ([`tools/fleet/server.ts`](../../tools/fleet/server.ts)): the
+  catch sets `lastError` and leaves `snapshot` alone, and — the part that matters — it then calls
+  `broadcast(statePayload())` anyway. **So a failed refresh is pushed down the SSE stream too.** A
+  subscriber that treats every `snapshot` event as a fresh observation would record a stale one.
+- **`collectedAt` must be non-null and must have advanced** since the last diffed snapshot. The same
+  snapshot served twice is one observation, not two, and SSE plus polling guarantees we see it twice.
+  **Non-null is not pedantry:** before the first collection completes, `statePayload()` substitutes
+  `{ rows: [], collectedAt: null, tookMs: 0 }`, so a subscriber connecting to a just-started
+  dashboard gets a real payload with a null clock. A naive comparison against a previous string
+  would either throw or silently treat null as "not advanced" for the wrong reason.
 - **`rows` must be non-empty.** An empty fleet is possible in principle and near-impossible here; the
   underlying parse refuses a short listing rather than returning one, so an empty list is far more
-  likely to be a bug than a fact. Treat it as a source failure, and record *that*.
+  likely to be a bug than a fact. It is also exactly what the startup payload above contains, which
+  is the concrete case: **the first thing the Overseer sees on connecting to a restarting dashboard
+  is an empty fleet**, and without this rule that reads as 36 sessions dying at once. Treat it as a
+  source failure, and record *that*.
 
 A snapshot that fails any of these produces a `source-degraded` event, not silence. **A dead
 dashboard is a fact the Overseer records, not a silence it sits in** — the coupling created by
