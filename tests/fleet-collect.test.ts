@@ -12,7 +12,29 @@ import { describe, expect, it } from "vitest";
 
 import { toRows, worktreeOf } from "../tools/fleet/collect.js";
 import { ageLine, esc, page } from "../tools/fleet/page.js";
+import type { FleetStatus } from "../tools/fleet/status.js";
 import type { Session } from "../scripts/gjd-remote-tmux.js";
+
+/** No status derived for anyone — the map `toRows` falls back from. */
+const NO_STATUS = new Map<string, FleetStatus>();
+
+/** A display row, for the tests that render rather than collect. */
+function row(over: Partial<Parameters<typeof page>[0] extends null ? never : NonNullable<Parameters<typeof page>[0]>["rows"][number]> = {}) {
+  return {
+    id: "$1",
+    name: "n",
+    title: "t",
+    repo: null,
+    worktree: null,
+    startedAt: "2026-09-08T00:00:00.000Z",
+    status: { kind: "idle" } as FleetStatus,
+    ...over,
+  };
+}
+
+function snapshotOf(rows: ReturnType<typeof row>[]) {
+  return { rows, collectedAt: new Date().toISOString(), tookMs: 1 };
+}
 
 function session(over: Partial<Session> = {}): Session {
   return {
@@ -49,17 +71,17 @@ describe("worktreeOf", () => {
 
 describe("toRows", () => {
   it("keeps a title, trimmed", () => {
-    expect(toRows([session({ title: "  Fleet dashboard  " })])[0]?.title).toBe("Fleet dashboard");
+    expect(toRows([session({ title: "  Fleet dashboard  " })], NO_STATUS)[0]?.title).toBe("Fleet dashboard");
   });
 
   it("gives an untitled session null rather than a placeholder", () => {
     // The page decides how to render "no title yet"; the collector must not,
     // or two callers will disagree about it.
-    expect(toRows([session({ title: "   " })])[0]?.title).toBeNull();
+    expect(toRows([session({ title: "   " })], NO_STATUS)[0]?.title).toBeNull();
   });
 
   it("admits it cannot know the repo of a legacy session", () => {
-    const row = toRows([session({ meta: { version: "legacy" } })])[0];
+    const row = toRows([session({ meta: { version: "legacy" } })], NO_STATUS)[0];
     expect(row?.repo).toBeNull();
     expect(row?.worktree).toBeNull();
   });
@@ -68,7 +90,7 @@ describe("toRows", () => {
     // The name is what a person reads; the handle is the address, and it
     // survives the rename `gjd-remote ls` performs. Everything later that acts
     // on a session must use this.
-    expect(toRows([session({ id: "$1643", name: "renamed-since" })])[0]?.id).toBe("$1643");
+    expect(toRows([session({ id: "$1643", name: "renamed-since" })], NO_STATUS)[0]?.id).toBe("$1643");
   });
 });
 
@@ -117,18 +139,54 @@ describe("page", () => {
     // and a page that forgets is how a title becomes script in the one browser
     // session that can see the whole fleet.
     const nasty = `</div><script>fetch('//evil')</script>`;
-    const html = page({ rows: [{ id: "$1", name: "n", title: nasty, repo: null, worktree: null, startedAt: "" }], collectedAt: new Date().toISOString(), tookMs: 1 }, null);
+    const html = page(snapshotOf([row({ title: nasty })]), null);
     expect(html).not.toContain("<script>fetch");
     expect(html).toContain("&lt;script&gt;");
   });
 
   it("escapes the session name and the repo too, not only the title", () => {
-    const html = page({ rows: [{ id: "$1", name: `<b>n</b>`, title: "t", repo: `<i>r</i>`, worktree: null, startedAt: "" }], collectedAt: new Date().toISOString(), tookMs: 1 }, null);
+    const html = page(snapshotOf([row({ name: `<b>n</b>`, repo: `<i>r</i>` })]), null);
     expect(html).not.toContain("<b>n</b>");
     expect(html).not.toContain("<i>r</i>");
   });
 
+  it("escapes the reason on an unknown status", () => {
+    // The reason is the box's own words, and the box quotes a command that
+    // failed — so it is the one status field most likely to contain punctuation
+    // that matters. It reaches the page through a different path to the title.
+    const html = page(snapshotOf([row({ status: { kind: "unknown", why: `<b>claude</b>: not found` } })]), null);
+    expect(html).not.toContain("<b>claude</b>");
+  });
+
   it("says so plainly when there is nothing to show", () => {
-    expect(page({ rows: [], collectedAt: new Date().toISOString(), tookMs: 1 }, null)).toContain("Nothing to show");
+    expect(page(snapshotOf([]), null)).toContain("Nothing to show");
+  });
+
+  it("puts a blocked session above a working one, and counts it in the header", () => {
+    // The reason the page exists. A needs-you row starting older than a working
+    // one must still come first, or the sort is doing nothing.
+    const html = page(
+      snapshotOf([
+        row({ id: "$w", name: "working-one", startedAt: "2026-09-08T02:00:00.000Z", status: { kind: "working" } }),
+        row({ id: "$b", name: "blocked-one", startedAt: "2026-09-08T01:00:00.000Z", status: { kind: "needs-you" } }),
+      ]),
+      null,
+    );
+    expect(html.indexOf("blocked-one")).toBeLessThan(html.indexOf("working-one"));
+    expect(html).toContain("1 need you");
+  });
+
+  it("shows the unknown count rather than reporting a calm fleet it could not ask about", () => {
+    // An agents-call failure turns every Claude row unknown at once. A header
+    // reading "0 need you" over rows nobody could ask about is the lie the
+    // status module exists to prevent.
+    const html = page(
+      snapshotOf([
+        row({ id: "$1", status: { kind: "unknown", why: "the box could not say" } }),
+        row({ id: "$2", status: { kind: "unknown", why: "the box could not say" } }),
+      ]),
+      null,
+    );
+    expect(html).toContain("2 unknown");
   });
 });

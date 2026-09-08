@@ -151,12 +151,28 @@ The move stays reviewable as a move.
 
 ## Stage 3 — the checks that already exist, run rather than extended
 
-`EXPECTED_AUTH_ROUTES` in `tests/authenticated-api-route-contract.test.ts:350` is a hand-typed
+> **This section's heading was wrong and the plan review caught it — F1, below.** Three expectations
+> in the contract test must be edited by hand, and the original text said the stage would run them
+> rather than extend them. The corrected account follows.
+
+**`EXPECTED_AUTH_ROUTES` at `:350` does not change**, and that part was right: it is a hand-typed
 literal of all 81 routes and is **source-agnostic** — it does not record whether a route came from
-the chain or the table. So the expectation is that this slice changes **not one row of it**, and a
-row that has to change is a signal that the move was not a move. `assertHandlersAwaited`,
-`assertDispatchableRoutes` and the no-two-guards-accept-the-same-method-and-path check cover the
-twelve new rows automatically.
+the chain or the table. A row of it that has to change is a signal that the move was not a move.
+
+**Three other expectations do change, and all three are hand-edited:**
+
+1. **`answers the moved domains from the table` (`:1888`)** — the sorted set of table pair keys.
+   Add the twelve.
+2. **`keeps the table in the chain's order, newest domain first` (`:1959`)** — the same twelve keys
+   again, but **order-sensitive**, prepended above the search rows in the order the chain has them.
+   This is the one that records that the slice was taken contiguously; nothing else does.
+3. **The `moved` prefix list (`:1931`)** — add **both** `/api/chat` and `/api/live`, once the
+   leftover filter's fix has landed (see the landmine section below), and not before every guard
+   under both prefixes has moved.
+
+`assertHandlersAwaited`, `assertDispatchableRoutes` and the no-two-guards-accept-the-same-method-and-path
+check do cover the twelve new rows automatically, and those are the ones the stage runs rather than
+extends.
 
 Also in this stage: re-run `tests/routes.test.ts`, `tests/owner-isolation.test.ts` and
 `tests/public-dto.test.ts` — the three the security map calls the specification — and say for each
@@ -306,3 +322,62 @@ a scratch path is unreadable tomorrow and gone on the next machine — the same 
 [review-prompt-template.md](../reusable/review-prompt-template.md) refuses one as evidence. Copy it
 out, change the `GUARDS` list, run it against `src/routes.ts`. What it deliberately excludes is
 returns inside nested arrow functions, which belong to those functions and not to the guard.
+
+## The plan review, and the three things it changed
+
+`docs/plans/260908a-plan-review-sol.md`, GPT Sol, high effort, 2026-09-08 01:41–01:53, against
+commit `0a493cf9`. Verdict: **build it with these changes.** Every finding was checked against the
+tree here before being accepted; all three hold.
+
+**F1 — P1, accepted. Stage 3 was described as running checks it must in fact edit.**
+Verified: there are **two** exact lists of table pair keys, not one. `:1888` is a sorted set; `:1959`
+is order-sensitive and is the only record that the slice was taken as a contiguous suffix. The
+original § *Stage 3* is corrected above, with all three hand-edits enumerated. This was the finding
+worth the review on its own: the stage would have been built believing it had no contract edits, and
+then made them under time pressure at the end while calling them incidental.
+
+**F2 — P2, accepted, and the fix is better than the plan's.**
+The rail refuses automatic comparison for `chat` GET, and the plan proposed to substitute a hand
+argument. Sol's objection: **a hand argument written before the move cannot establish anything about
+the body after it.** Worse, deleting the early return is exactly the third mutation asked for in
+question 3 — neither the DELETE oracle nor the automatic comparison would see it, because `chat` GET
+is the one guard excluded from the comparison.
+
+There is already a behavioural catcher, and it is a better answer than either:
+**`tests/the-query-string-does-not-decide-the-route.test.ts:181`** asserts *both* branches of the
+`?summary=1` split — the summary reply must have `turns` and must **not** have `messages`. Verified
+here. Delete the early return and both `send` calls execute; the second overwrites the first in the
+test's fake response, so the summary assertion sees a full transcript and goes red. (In production
+the same deletion throws `ERR_HTTP_HEADERS_SENT`, which is its own bug.)
+
+**So Stage 2 runs that test with the early return deleted, watches it go red, and puts it back** —
+the mutation watched rather than the argument written. The hand inspection stays, as a supplement
+and not as the evidence.
+
+**F3 — P2, accepted; already fixed while the review was running, which is worth being exact about.**
+Sol found the named purity verifier absent from the tree — `scratchpad/e4f7-capture-referee.mjs` was
+a session path, and a session path is not evidence. It was committed as
+[260907e-capture-referee.mjs.txt](260907e-capture-referee.mjs.txt) at 01:50, about three minutes
+before the review landed, for the same reason Sol gives. **That is a coincidence, not a fix in
+response**, and the finding stands on its own: two slices of this migration cited evidence nobody
+else could re-run.
+
+The half of F3 that was *not* already fixed is the part that matters: Sol asks for a verifier **whose
+new return rail can be reviewed**, and the rail currently lives in a separate measurement script.
+Stage 2 therefore lands **one** script that captures, normalises, applies the rail and diffs, kept
+beside this doc, rather than two that have to be run in the right order by someone who knows to.
+
+**Answers to the six questions, all confirming:** ordering correct and no path changes handler;
+`live-tool` separated by method, contiguity immaterial but preserved anyway; Stage 1's decomposition
+and its predicted red/green both correct, with the third mutation identified as F2's; the rail fires
+on exactly `chat` GET; the security account correct, including that guards 6–8 are right to use
+`part` because a session id is an owner-scoped lookup value never joined into a storage path; and
+**keep all twelve together** — a six/six split cuts through the interleaved chat/live sequence,
+doubles the ceremony and removes no distinct risk.
+
+On the file getting longer, asked directly and answered directly:
+
+> The file-size increase is not grounds to stop: this migration reduces dispatcher complexity and
+> converges on one routing mechanism; file extraction is a separate decision.
+>
+> — GPT Sol, 2026-09-08

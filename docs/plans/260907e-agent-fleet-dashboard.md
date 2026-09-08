@@ -167,7 +167,41 @@ The direction these serve is [orchestrator-direction.md](../project/orchestrator
 Each slice must be **visible in a browser** and must **not need the next one to be worth having**.
 The earlier A–G staging is superseded; what it got right survives in the direction doc.
 
-### Stage v0.1: a page listing session titles — READ ONLY, then stop
+### ✅ Stage v0.1: a page listing session titles — READ ONLY (landed 2026-09-08, `ec4110de`)
+
+Shipped and running. 37 sessions on a page, served from `tools/fleet/`, reachable over an ssh
+forward (`ssh -N -L 8787:localhost:8787 greg@188.245.166.213` → `http://localhost:8787`).
+
+- ✅ `tools/fleet/collect.ts` — calls `buildSessionScript`/`parseSessions` through `bash` rather than
+  `ssh`, since we are already on the box they want to ask.
+- ✅ `tools/fleet/page.ts` — pure render. **Separate from the server on purpose**: the first draft put
+  `esc()` next to `server.listen()`, so importing it from a test bound port 8787 as a side effect.
+  Splitting it took the test file from 19s to 4s.
+- ✅ `tools/fleet/server.ts` — `node:http`, binds `127.0.0.1`, background refresh every 30s.
+- ✅ 16 tests, and the escape was mutated to confirm the suite goes red without it.
+- 📔 One collection costs ~12s, so the cache is load-bearing rather than an optimisation. A failed
+  refresh keeps the last good snapshot and says STALE.
+- ✅ `tools/` added to `tsconfig.json` — box utilities that run the way `scripts/` does and must not
+  import from `src/`.
+
+### Stage v0.1b: what it says about itself (in flight, 2026-09-08)
+
+Greg, 2026-09-08: *"ideally i'd like to be able to hit refresh on that webpage (or even better still,
+for it to hot-reload) and see things improving steadily over time."* So the slices below land one at
+a time, each pushed as it goes green, rather than batched.
+
+Running as parallel subagents against **disjoint file sets**, which is the only reason they can share
+this worktree — `tools/fleet/status.ts`, `tools/fleet/pane.ts`, and `infra/hetzner/provision.sh`.
+Wiring each into `server.ts`/`page.ts` is the orchestrator's job, so those two files have exactly one
+writer.
+
+- ✅ Tailscale installed on the box (1.102.3, `tailscaled` active). `tailscale up` is a human step;
+  the login URL goes to Greg. **The ssh forward stays as the fallback that depends on nothing.**
+- ✅ [agent-fleet-dashboard.md](../reusable/agent-fleet-dashboard.md) — the carry-elsewhere version.
+- [ ] Wire status and the pending-question parser into the page.
+- [ ] Hot reload, replacing `<meta http-equiv="refresh">` with SSE.
+
+### Stage v0.1 (original scope, for the record)
 
 The whole of it. No status, no colours, no actions, no CLI, no auth code.
 

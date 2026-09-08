@@ -19,8 +19,9 @@
 import { execFileSync } from "node:child_process";
 
 import { buildSessionScript, parseSessions, type Session } from "../../scripts/gjd-remote-tmux.js";
+import { statusesOf, type FleetStatus } from "./status.js";
 
-/** One line of the page. Deliberately flat: v0.1 renders strings, nothing else. */
+/** One line of the page. Deliberately flat: it is rendered, and it is JSON. */
 export type FleetRow = {
   /** tmux's own session handle (`$1643`) — the address, and stable across renames. */
   id: string;
@@ -32,6 +33,13 @@ export type FleetRow = {
   /** The worktree directory's own name, when the session is in one. */
   worktree: string | null;
   startedAt: string;
+  /**
+   * What the session is doing. A union, never a bare string, and `unknown`
+   * carries the reason — see status.ts, and the source comments in
+   * `sessionState` that explain why "we could not ask" must never collapse into
+   * "nothing is happening".
+   */
+  status: FleetStatus;
 };
 
 /** A snapshot, and enough about it to know whether to believe it. */
@@ -66,7 +74,7 @@ export function worktreeOf(dir: string): string | null {
  * metadata convention entirely — its repo is genuinely unknown, and saying so
  * is the whole reason that union has a second arm.
  */
-export function toRows(sessions: readonly Session[]): FleetRow[] {
+export function toRows(sessions: readonly Session[], status: ReadonlyMap<string, FleetStatus>): FleetRow[] {
   return sessions.map((s) => ({
     id: s.id,
     name: s.name,
@@ -74,6 +82,11 @@ export function toRows(sessions: readonly Session[]): FleetRow[] {
     repo: s.meta.version === 1 ? s.meta.repo : null,
     worktree: s.meta.version === 1 ? worktreeOf(s.meta.dir) : null,
     startedAt: s.created.toISOString(),
+    // A session the status pass did not cover is `unknown` with a reason, not a
+    // default that reads as calm. There is no legitimate way to get here — the
+    // two lists come from one parse — so if it ever shows up on the page, the
+    // page is telling you about a real bug rather than about the box.
+    status: status.get(s.id) ?? { kind: "unknown", why: "no status was derived for this session" },
   }));
 }
 
@@ -85,13 +98,19 @@ export function toRows(sessions: readonly Session[]): FleetRow[] {
  * match the rows, and "no sessions" is the answer least likely to make anyone
  * look. The caller keeps its previous snapshot instead.
  *
- * `agents: false` because v0.1 shows no status, so there is no reason to pay
- * for `claude agents --json` — the flag exists precisely so callers that do not
- * need states cannot hang on it. v0.3 turns it on.
+ * `agents: true` since v0.3, because the agents list is the only thing that can
+ * tell busy from idle from parked-on-a-question. It costs about a second, and
+ * the flag exists so that callers which do not need states cannot hang on it.
+ *
+ * THE STATUS IS ATTACHED TO EACH ROW HERE, not carried alongside as a Map, and
+ * that is not a style choice. `server.ts` serves `/api/agents` by
+ * `JSON.stringify`ing this snapshot, and a `Map` stringifies to `{}` — the
+ * status would vanish from the JSON with nothing erroring anywhere, which is
+ * the exact shape of bug docs/reusable/silent-success.md is about.
  */
 export function collect(): FleetSnapshot {
   const startedAt = Date.now();
-  const out = execFileSync("bash", ["-c", buildSessionScript({ agents: false })], {
+  const out = execFileSync("bash", ["-c", buildSessionScript({ agents: true })], {
     encoding: "utf8",
     // Transcripts run to tens of megabytes and the script prints a base64 of
     // its own output; the default 1 MB would truncate a busy box silently.
@@ -100,8 +119,9 @@ export function collect(): FleetSnapshot {
   });
   const parsed = parseSessions(out);
   if (parsed.failure) throw new Error(`could not read this box's tmux sessions: ${parsed.failure}`);
+  const status = new Map(statusesOf(parsed).map((r) => [r.id, r.status]));
   return {
-    rows: toRows(parsed.sessions),
+    rows: toRows(parsed.sessions, status),
     collectedAt: new Date().toISOString(),
     tookMs: Date.now() - startedAt,
   };
