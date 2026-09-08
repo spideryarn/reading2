@@ -424,8 +424,43 @@ its system variables to production and preview builds of a detected framework. I
 row is platform-provided build metadata and belongs on the allowlist. Stage 2 left it alone because
 moving it means *editing* a row rather than adding one, and it wrote the finding into
 `tests/env-names-are-inventoried.test.ts`'s platform group so Stage 3 inherits a finding rather than
-an absence. **Check it against a real deployment before acting** — this is a claim about a platform,
-and neither a sweep nor a reviewer can settle it from inside the repo.
+an absence.
+
+**Half of it is now settled, and the half that remains is sharper than either party had it.** "Not
+from inside the repo" was right; "not settleable" was not — the Vercel MCP documentation tool answers
+it directly. `vercel.com/docs/environment-variables/framework-environment-variables` lists
+`VITE_VERCEL_ENV` **by name** (checked 2026-09-08), and `vercel.json` declares the `vite` framework.
+So the row's stated reason is definitively false and has been rewritten in `src/vercel-health.ts`.
+
+But the correction exposed a question nobody had asked: **those are *build* variables, and
+`/api/health` reads `process.env` in the serverless function at *runtime*.** If a framework-injected
+`VITE_` name is not present at runtime, this row reports `false` about a variable that was compiled
+into the bundle correctly — which is a *worse* failure than the one the entry was added for, and the
+same shape as the `VITE_SUPABASE_` caveat already in this table. That genuinely does want one look at
+a real deployment's `/api/health`, and the row stays report-only until somebody takes it.
+
+**A tool nobody reached for is not the same as an unanswerable question**, and this is the second
+time tonight the difference mattered — the first was a text survey that missed a read it had not
+thought to look for.
+
+## A process failure worth recording, because it is mine
+
+**Stage 2 was committed and pushed to `dev` by the subagent that built it, against a review verdict
+of *"should not land as it stands"*, and I did not read the diff first.** Every Stage 1 brief said
+"do not commit"; the Stage 2 brief listed the files the agent could touch and omitted that line.
+[engineering-manager.md](../reusable/engineering-manager.md) says what to keep for yourself — *the
+plan, the stage boundaries, the briefs, reading the diffs, deciding what the reviews were right
+about, and the commits* — and I gave two of those away by omission rather than by decision.
+
+Two of the three P1s were genuinely fixed before the push and the third was deferred, so the outcome
+was defensible; **but an overruled or deferred P1 is supposed to go to Fable or Greg first, not
+straight past, and nothing enforced that because I was not in the loop.** The work is on `dev` at
+`ec1b2543`. It was reviewed after the fact instead, which is the wrong order and is why the
+`VITE_VERCEL_ENV` correction above is a follow-up commit rather than part of the stage.
+
+The lesson is not "trust the agent less" — its judgement was good and its report was complete and
+honest about what it had deferred. It is that **a brief's silence is not a prohibition**, and the
+constraint I relied on in three previous briefs was doing work I had stopped noticing it did.
 
 ## The arbitration, and the line it drew
 

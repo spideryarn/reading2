@@ -421,12 +421,30 @@ const EXPECTED: readonly Expected[] = [
    * **What the client's Sentry events are labelled with**, falling back to
    * `import.meta.env.MODE` (src/web/monitoring.ts:79).
    *
-   * **It looks platform-set and is not**, which is the only reason it is worth
-   * a line. Vercel writes `VERCEL_ENV`; Vite exposes only names beginning
-   * `VITE_`, and nothing here bridges the two — so a person has to set this on
-   * the project or every client error from every deployment arrives labelled
-   * with the build mode instead. Nothing else in the repo mentions it: this
-   * entry is the only place it is written down.
+   * **This entry's original reason was false, and the correction is the
+   * interesting part.** It said the variable *looks* platform-set and is not —
+   * that Vercel writes `VERCEL_ENV`, Vite exposes only `VITE_`-prefixed names,
+   * and nothing bridges the two, so a person must set it. GPT Sol refused that
+   * in review on 2026-09-08 and it was right: vercel.json declares
+   * `"framework": "vite"`, and Vercel's **framework environment variables**
+   * add `VITE_`-prefixed copies of its system variables to a detected
+   * framework's build — the documentation lists `VITE_VERCEL_ENV` by name
+   * (vercel.com/docs/environment-variables/framework-environment-variables,
+   * checked 2026-09-08). Nobody has to set it.
+   *
+   * **What is still open, and why the row stays for now.** Those are *build*
+   * variables, and this handler reads `process.env` in the serverless function
+   * at *runtime*. Whether a framework-injected `VITE_` name is present there
+   * too is a question about the platform that no amount of reading this repo
+   * can settle — it wants one look at a real deployment's `/api/health`. If it
+   * is absent at runtime, this line reports `false` about a variable that was
+   * compiled in correctly, which is a *worse* failure than the one the entry
+   * was added for. Moving it to the platform-written allowlist group in
+   * tests/env-names-are-inventoried.test.ts is the likely answer.
+   *
+   * Left as a report-only row rather than guessed at, because a wrong reason is
+   * what the next person checks against instead of the code — which is exactly
+   * how this comment came to be wrong in the first place.
    */
   { name: "VITE_VERCEL_ENV", breaks: null },
   /**
