@@ -404,6 +404,79 @@ export function offerableGists(gistDepths: number[]): number[] {
   return gistDepths.filter((d) => d !== 0);
 }
 
+/**
+ * Everything that can put something in the controls bar. `Reader` holds all
+ * five and nothing else does.
+ */
+export interface BarContents {
+  /**
+   * Is this reader the owner? A **visitor** gets the read-only chip, which is
+   * the one fact in this bar that outranks the controls — PublicChrome.tsx
+   * § `ViewOnlyChip`.
+   */
+  owner: boolean;
+  /**
+   * `mode !== "hierarchy"`, spelled as `Reader` spells it. The granularity
+   * controls belong to the table-of-contents mode and are drawn nowhere else,
+   * so this being true is what empties the bar in the first place.
+   */
+  inMode: boolean;
+  /**
+   * How many gist columns can be offered — `offerableGists(…).length`. A flat
+   * article offers none, and then Hierarchy's own bar is down to the paragraph
+   * pill alone.
+   */
+  offerableGists: number;
+  /**
+   * The reader's `?text=`, which is what draws the paragraph pill **or** the
+   * sentence standing in for it. Either way it is content: `paragraphPill`
+   * returns `"notice"` only for a status `paragraphLabelNotice` has a sentence
+   * for (nav-labels.ts), so there is no combination that renders an empty span.
+   */
+  showText: boolean;
+  /**
+   * **There is deliberately no `commentError` here.** A refused comment write
+   * was the bar's third possible occupant, and it moved to the Dock's Comments
+   * button on the same day this predicate was written — because a bar drawn
+   * only when it has content would otherwise have made a failed delete summon
+   * 44px of chrome and push the article down. Dock.tsx § the Comments button;
+   * docs/plans/260908a-… § Stage 2. If anything transient is ever put back in
+   * this bar, this note is the argument against it.
+   */
+}
+
+/**
+ * **Is there anything to put in the controls bar?** If not, `Reader` does not
+ * render it and § the bar that leaves while you read (shell.css) lets
+ * `--bar-bottom` fall, so the reading view starts at the top of the screen.
+ *
+ * The bar lost the Spine toggle, the mode chip, the `×`, the `Text` pill,
+ * `fit`/`auto`, the `reading`/`outline` chip, the `↑↓` readout and the tree
+ * version on 2026-09-05 (260905d), and its two corners on 2026-09-06 (260905g
+ * stages 1–2). What was left is drawn in **one** mode and for **one** kind of
+ * reader, so on every other reading view it was 44px of nothing, held on screen
+ * in a band mode by the `.mode-band` guard that stops the bar sliding out from
+ * under a reader who needs the way out of a mode. A reader reported the strip
+ * on 2026-09-07 (`SPIDERYARN-READING2-2E`);
+ * docs/plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md.
+ *
+ * **A function here rather than three conditions inlined in the JSX**, for the
+ * reason `paragraphPill` gives one file over: the mistake this can make is a
+ * bar that is drawn empty (the bug) or *not* drawn over a control somebody can
+ * still reach (worse — a visitor with no footing, or a failure nobody is told
+ * about), and neither is visible in a component test of the reading view. Here
+ * it is eleven cases and a table.
+ *
+ * **It must stay the exact complement of what the JSX renders.** Reader.tsx
+ * § the controls bar is the other half, and the two drifting apart is silent in
+ * both directions.
+ */
+export function barHasContent(bar: BarContents): boolean {
+  if (!bar.owner) return true; // the read-only chip
+  // Hierarchy's granularity controls, and only Hierarchy's.
+  return !bar.inMode && (bar.offerableGists > 0 || bar.showText);
+}
+
 export interface FitInput {
   windowWidth: number;
   /** Every gist depth this article has: 0 … leafDepth-1. */

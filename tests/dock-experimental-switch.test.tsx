@@ -101,9 +101,37 @@ function theSwitch(): HTMLButtonElement {
  * whatever `aria-describedby` points at.
  */
 function described(): string {
-  const id = theSwitch().getAttribute("aria-describedby");
-  if (!id) throw new Error("the switch describes itself with nothing");
-  return document.getElementById(id)?.textContent ?? "";
+  const ids = theSwitch().getAttribute("aria-describedby");
+  if (!ids) throw new Error("the switch describes itself with nothing");
+  /* **A list, not a value**, since 2026-09-08. This read a single id, which was
+     right only because the switch's own `aria-describedby` was silently
+     *replacing* the hover card's — `mergeProps` applies a child's props last,
+     so anything written on the trigger overwrote what `useRole` generated, and
+     this button has carried its own since the cards landed. `Tooltip` joins the
+     two now (Tooltip.tsx § a trigger that already describes itself), so while
+     the card is open this attribute names the card **and** the `sr-only` state.
+     `getElementById` on the joined string returns nothing, which is how the
+     change announced itself here. */
+  return ids
+    .split(" ")
+    .filter(Boolean)
+    .map((id) => document.getElementById(id)?.textContent ?? "")
+    .join(" ");
+}
+
+/**
+ * **Only the `sr-only` node inside the switch** — the state, without the card.
+ *
+ * `described()` above reads everything `aria-describedby` names, which since
+ * 2026-09-08 includes the hover card while it is open. That is the right answer
+ * to *what is a screen reader told*, and the wrong one for the single assertion
+ * that the card's own state line and this node say the **same** sentence: read
+ * through `described()` that comparison becomes the card containing its own
+ * paragraph, which is true of any implementation whatever
+ * (docs/reusable/silent-success.md).
+ */
+function stateNote(): string {
+  return theSwitch().querySelector(".sr-only")?.textContent ?? "";
 }
 
 function press(): void {
@@ -438,7 +466,14 @@ describe("the tooltip", () => {
     /* Three, and in this order: where the control is now, what turning it on
        does, and the warning that nothing behind it is finished. */
     expect(paras).toHaveLength(3);
-    expect(paras[0]).toBe(described());
+    /* The card's first paragraph and the `sr-only` node are the same sentence,
+       which is what stops the two carriers drifting. `stateNote()` rather than
+       `described()`, which now also names the open card — see its note. */
+    expect(paras[0]).toBe(stateNote());
+    /* And the card is genuinely part of the description now, rather than having
+       been overwritten by the state note — Tooltip.tsx § a trigger that already
+       describes itself. */
+    expect(described()).toContain("Nothing here is finished");
     expect(paras[1]).toContain("still being built");
     expect(paras[2]).toContain("Nothing here is finished");
   });

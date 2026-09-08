@@ -83,7 +83,55 @@ function poseBar(barBottom: number, safeTop: number): void {
   bar.className = "controls";
   bar.getBoundingClientRect = () =>
     ({ top: barBottom - BAR_H, bottom: barBottom, height: BAR_H }) as DOMRect;
-  document.body.appendChild(bar);
+  /* **Inside a `.reader`, and as its direct child**, because that is what
+     `controlsBar()` in scroll.ts asks for since 2026-09-08 — the real bar is a
+     child of the reading view and an author's forged one never is. Appending it
+     to `<body>`, as this did until then, would make every case below assert
+     against a bar the app itself could not find. */
+  reader().appendChild(bar);
+}
+
+/**
+ * The reading view's own container, made once per test.
+ *
+ * `controlsBar()` takes the **first** `.reader` in document order and then only
+ * its direct children, so a test that wants to be measured has to be inside
+ * this one — and `poseArticleControls` below is the case that wants not to be.
+ */
+function reader(): HTMLElement {
+  const existing = document.querySelector<HTMLElement>(".reader");
+  if (existing) return existing;
+  const el = document.createElement("div");
+  el.className = "reader";
+  document.body.appendChild(el);
+  return el;
+}
+
+/**
+ * **A `.controls` belonging to the *article*, which is a thing that can exist.**
+ *
+ * The exact twin of `poseArticleHead` below, for the class name rather than the
+ * tag, and it is live rather than latent. `src/sanitize-policy.ts` reserves six
+ * class names and `controls` is not among them: running the sanitiser over
+ * `<div id="root"><div class="reader"><p class="controls">a decoy</p></div></div>`
+ * returns it **byte-for-byte**, checked that way rather than by reading the
+ * allowlist. While the bar was always drawn, ours was earlier in document order
+ * and a bare `document.querySelector(".controls")` could not pick this; the bar
+ * became conditional on 2026-09-08 (layout.ts § `barHasContent`), so on every
+ * reading view in a mode there is now no bar of ours to be found first.
+ *
+ * Nested two levels deep inside the reader, which is where prose actually
+ * lives — it is inside a `<td>`. The rect is 300px tall at y=900, nothing like
+ * any number these functions may correctly return, so an implementation that
+ * went back to an unscoped query cannot pass here by coincidence.
+ */
+function poseArticleControls(): void {
+  const cell = document.createElement("td");
+  const decoy = document.createElement("p");
+  decoy.className = "controls";
+  decoy.getBoundingClientRect = () => ({ top: 900, bottom: 1200, height: 300 }) as DOMRect;
+  cell.appendChild(decoy);
+  reader().appendChild(cell);
 }
 
 /**
@@ -296,6 +344,50 @@ describe("stickyOffset with a status bar", () => {
     poseInset(SAFE_TOP);
     poseArticleHead();
     expect(stickyOffset()).toBe(SAFE_TOP);
+  });
+
+  /**
+   * **An article's own `<p class="controls">` is not our chrome either**, and
+   * unlike the `<thead>` above this one is live rather than latent.
+   *
+   * The bar became conditional on 2026-09-08 (layout.ts § `barHasContent`), so
+   * "ours is earlier in document order" — the accident that made the `<thead>`
+   * safe — stopped protecting anything: on a reading view in any mode there is
+   * no bar of ours for a bare `document.querySelector(".controls")` to find
+   * first, and the next candidate is the publisher's paragraph. The number that
+   * comes back is plausible, nothing errors, and every deep link, `?at=`
+   * reading and arrow-key step lands under a piece of prose the reader is not
+   * looking at. That is the whole reason `controlsBar()` exists.
+   *
+   * Both functions, and both with and without a real bar present, because the
+   * two halves fail differently: with our bar drawn, an unscoped query happens
+   * to be right; with it absent — the state this change created — it is not.
+   *
+   * `1200` and `300` are the decoy's `bottom` and `height`, so an
+   * implementation that measured it could not return the expected value by
+   * arithmetic coincidence.
+   */
+  it("ignores a `.controls` that belongs to the article", () => {
+    // Our bar absent — the state the conditional bar created, and where an
+    // unscoped query would answer with the decoy.
+    poseInset(SAFE_TOP);
+    poseArticleControls();
+    expect(stickyOffset()).toBe(SAFE_TOP);
+    expect(stickyDestination()).toBe(SAFE_TOP);
+
+    // Our bar present: the decoy must not be preferred to it either.
+    document.body.innerHTML = "";
+    poseBar(SAFE_TOP + BAR_H, SAFE_TOP);
+    poseArticleControls();
+    expect(stickyOffset()).toBe(SAFE_TOP + BAR_H);
+    expect(stickyDestination()).toBe(SAFE_TOP + BAR_H);
+
+    // Our bar slid off the top, with the decoy still on the page.
+    document.body.innerHTML = "";
+    poseBar(-3, SAFE_TOP);
+    poseArticleControls();
+    expect(stickyOffset()).toBe(SAFE_TOP);
+    expect(stickyDestination()).toBe(SAFE_TOP);
   });
 });
 

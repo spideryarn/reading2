@@ -242,17 +242,38 @@ The whole of it. No status, no colours, no actions, no CLI, no auth code.
 - [ ] Look at it on the phone. **Stop here.** Do not start v0.2 without Greg.
 - [ ] `npm test`, `npm run typecheck`. Commit.
 
-### Stage v0.2: send a steering message to one session
+### ✅ Stage v0.2: send a steering message to one session (server side landed 2026-09-08, `c06438b7`)
 
-- [ ] A text box per row, and `POST /api/agents/:key/steer`.
-- [ ] Delivery by `tmux send-keys` to the pane — the only channel proven to work. Type the text,
-      then Enter as a separate call.
-- [ ] **Refuse to send to anything that is not a Claude session at a prompt.** Codex batch jobs have
-      `fd 0 = 'ignore'` and cannot receive keystrokes at all; a bare shell would execute the text as
-      a command. Both must be visibly read-only, not silently degraded.
-- [ ] Address by pane handle **plus execution generation**, and re-check both immediately before
-      sending — a pane outlives its agent and pids get reused.
-- [ ] CSRF: same-origin check on the POST, JSON only, GETs side-effect-free.
+- [x] `POST /api/steer/message` and `POST /api/steer/answer` — `tools/fleet/routes-steer.ts` over
+      `tools/fleet/steer.ts`, wired into `server.ts` in one line, before `serveStatic` so no file
+      that ever lands under `web/dist/` can shadow the only write path in the tool.
+- [x] Delivery by `tmux send-keys` to the pane — the only channel proven to work. Text with `-l`
+      (literal), then `Enter` as a separate call. **`-l` is load-bearing**: without it the string
+      `"C-c"` is a keystroke name, not three characters.
+- [x] **Refuses anything that is not a Claude session at a prompt.** `steerableStatus` is a
+      `switch` with a `never` default, so an eighth `SessionState` arm stops it compiling rather
+      than inheriting a yes. A shell is refused with "it is a shell, which would EXECUTE the
+      message". Codex rows are read-only for a different reason and were never candidates —
+      `subagent-cli.ts:216` spawns with `fd 0 = 'ignore'`, so they cannot receive keystrokes at all.
+- [x] Addresses by pane handle **plus the conversation uuid plus the pane pid**, re-checked against
+      live tmux immediately before sending, with an ancestry walk proving the Claude that answers to
+      that uuid is running *under that pane*. The three ids are not interchangeable and each catches
+      a different way the world moves — see the header of `steer.ts`, and the commit message.
+- [x] CSRF: `Origin` must be present, non-`null`, and host-equal to `Host`; the hostname must be an
+      IP literal, `localhost` or `*.ts.net` (the DNS-rebinding guard); `content-type` must be
+      `application/json`, which is not a CORS-simple type, so a cross-origin `fetch` needs a
+      preflight this server never answers. GETs stay side-effect-free — a GET to a steer path is 405.
+- [x] Rate limited: a 1500ms floor per pane, and a whole-box ceiling of 6 in 10s, so twenty panes
+      cannot each sit at their own floor. A held key on a phone repeats far faster than either.
+- [ ] **The client half is not built.** No text box, no Send button, no option tap. The routes are
+      reachable and proven; nothing in the UI calls them yet.
+
+**What the CSRF check does not do, stated because it will otherwise be assumed.** It is not
+authentication and cannot be: anything on the tailnet that sets its own headers — `curl`, a script,
+another agent on this box — is indistinguishable from the dashboard. It stops the
+browser-as-confused-deputy case only. The rest is still reachability, and reachability is now
+guarding a write path into ~36 agent sessions rather than a list of titles. That trade should be
+re-decided rather than inherited.
 
 ### Stage v0.3: status
 
@@ -329,6 +350,34 @@ Run on the box, 2026-09-07, before this plan was written.
 - **The Hetzner cloud firewall allows SSH, mosh and ICMP only.** Read from `infra/hetzner/main.tf`.
   Not verified against live Hetzner state — the box has no `hcloud` CLI and no Hetzner token by
   design. **Greg should confirm with `hcloud firewall list` from the Mac.**
+Added 2026-09-08, after the steering route was wired (`c06438b7`).
+
+- **A message posted through the HTTP route arrives as a user turn, and the far-end Claude answers
+  it.** A throwaway session (`gjd-remote new-claude steer-e2e-probe`), a nonce from `/dev/urandom`
+  written only to a file, `POST /api/steer/message` → the nonce appears **once** in the target pane
+  and **zero** times in an unrelated pane, and the probe replied "Probe received: … Steer delivery
+  to this session works". Session killed afterwards.
+  **The controls are the point.** This is the same shape as the retracted socket claim above, and
+  the same two controls settle it: a nonce that was never typed into a command, and a second pane
+  that must show nothing. "The `send-keys` call returned 0" would have proved exactly what the
+  socket write proved, which is nothing.
+- **Every refusal was exercised against the live box, and each named the real world rather than a
+  guess.** `GET` → 405; missing `Origin` and `Origin: http://evil.example` → 403; `text/plain` →
+  415; empty body → 400 *"paneId is missing, and it is the address"*; a stale session handle → 409
+  *"pane %1646 is in session $1643 now, not $1"*; a wrong pane pid → 409 *"it was respawned"*; a
+  two-line message → 400 *"each newline would submit it early"*; a declared `shell` → 409 *"it is a
+  shell, which would EXECUTE the message"*; a second keystroke inside the floor → 429 *"that session
+  had a keystroke 298ms ago"*. Nothing marked `NEVERSENT` reached the pane; grepped.
+- **A malformed status is refused as a bad request, not as an unsteerable session.** `{"kind":
+  "shell"}` without `busy` returned `bad-request`, not `declared-not-steerable` — the two are
+  different failures and the codes say so. Worth recording because the first run of this check read
+  as a false negative until the payload was fixed: the union has required fields per arm, which is
+  the type doing its job.
+- **30 of 37 live rows carry all three ids** (`paneId`, `panePid`, `claudeSessionId`); the other
+  seven are shells and legacy sessions, which are the rows that *should* be unsteerable. Before this
+  commit, **zero** rows carried the last two, so the Send button would have been dead on arrival and
+  the 400 would have looked like a bug in the route.
+
 - **`spideryarn.com` uses Namecheap nameservers** (`dns1.registrar-servers.com`), serving Vercel at
   `76.76.21.21`. Cloudflare's partial/CNAME zone setup is Business-plan-only ($200/mo), per
   [Cloudflare's own docs](https://developers.cloudflare.com/dns/zone-setups/partial-setup/) — hence
