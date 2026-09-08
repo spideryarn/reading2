@@ -441,6 +441,13 @@ export const UNMETERED_SPEND: readonly UnmeteredSpend[] = [
     why: "The same reason as run-codex.ts above — it spawns another vendor's CLI as a subprocess rather than making a request, so there is no HTTP call for declaredFetch to wrap and no response body to meter. It is in this table rather than only in the test's ALLOWED map because a green test is not a register.",
     since: "2026-09-06",
   },
+  {
+    file: "tools/overseer/attention-classify.ts",
+    account: "OPENROUTER_API_KEY — the same key as the app's, and therefore INSIDE the OpenRouter spend cap, but on rows the app's ledger never sees",
+    what: "The Overseer's attention pass: one `openai/gpt-5.6-luna` call per newly-ended agent turn, asking whether that turn handed a person a decision. Measured 2026-09-08 — a cold pass over 25 sessions is 10 calls and $0.0036, an unchanged fleet is free, and a live fleet turns over ~8 of 12 ended tails in four minutes, so the running cost is roughly $0.50–$1.00/day at a two-minute cadence.",
+    why: "It cannot go through `src/ai-call.ts` and it cannot go through `declaredFetch` either, and for one reason: docs/project/orchestrator-direction.md § Principles says the Overseer must not depend on the product database or on anything under `src/`, and both seams live there. That is the whole point of the tool — the thing you reach for when the product is broken cannot be built on the product. So it has its own thin client, one endpoint, a hard `maxCalls` ceiling per pass, and both cost pockets read back from the gateway and printed (`callCost`). It is here as well as in the test's ALLOWED map for the reason the entry above gives: a green test is not a register, and an allow-list says a file MAY spend without saying what it spends. If a second file under tools/overseer/ ever needs a line here, that is a fork of this seam and should be refused rather than listed.",
+    since: "2026-09-08",
+  },
 ];
 
 export function declarationFor(id: string): Declaration {

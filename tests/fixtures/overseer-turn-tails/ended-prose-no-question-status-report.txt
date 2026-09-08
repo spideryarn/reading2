@@ -1,0 +1,24 @@
+
+  P2 — the hit target fell from 38×44 to 16px. I'd have shipped Greg a smaller target than the one he complained about, on
+  a phone. Reused the floor that already exists — min-height: 2.5rem under (pointer: coarse), the dock's number — as
+  tw:pointer-coarse:min-h-10, on all three controls, per narrow-window.css's own argument that a floor given to one
+  control is a bug filed about the one beside it. Verified under mobile emulation where (pointer: coarse) genuinely
+  matches (hasTouch alone doesn't flip it): all three at exactly 40px.
+
+  One non-code correction: my plan doc said the unfindability was the bug. That states an inference about Greg's
+  experience as an observation — he filed from an article, phrased it as placement, and never said he'd looked and failed.
+  Now separated into what was measured and what was read into it.
+
+  It cleared the two things I was least sure of: FEEDBACK_TRIGGER_SELECTOR isn't circular (renaming a hook and its class
+  together is harmless drift, not a false green), and the safe-area line is "justified, not scope creep".
+
+  Still to do: full suite, push to dev, resolve the Sentry issue, worktree:check before removal.
+
+✻ Cooked for 9m 15s · done 1:12 PM · 4 shells still running
+
+─────────────────────────────────────────────────────────────────────────────────────── fb2c-feedback-button-on-homepage ─
+❯ push to dev once the suite is green
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/fb2c-feedback-button-on-homepage (worktree-fb2c-feedback-button-on-homepage) ⑂ fb2c-f…
+  ⏵⏵ auto mode on · gh auth login for PR status · 4 shells · ← for agents
+                                                                                                                     /rc
