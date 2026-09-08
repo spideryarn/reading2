@@ -40,6 +40,23 @@ adjacent to that conclusion rather than that conclusion. It is not a stale comme
 failure, where the comment describes an older behaviour); the comment describes the behaviour we
 *want*, right now, and the code does not implement it.
 
+### A second instance, in a different register
+
+One example is an anecdote, so here is the other one from the same day, reported by
+`claude-agents-dashboard`. It nearly wrote an auto-memory asserting *"the repo's guard does not cover
+`tools/`"* — plausible, consistent with a pattern it had found that morning, and **false**. It was
+caught only because it opened the test in order to cite it.
+
+Different artefact, same shape one level up: **something authored specifically to be trusted later,
+written without a check, in a place nobody re-derives.** A comment is trusted by the next reader of
+the function; a memory is trusted by the next session, which has even less ability to test it. Both
+are load-bearing precisely because they are the thing you consult *instead of* re-reading the code.
+
+That is what separates this class from
+[written-down-is-not-checked.md](../reusable/written-down-is-not-checked.md), which is the general
+case — prose cannot fail, so nobody checks it. Here the prose **was** checked, by whoever read the
+comment to verify the code, and it passed, and it vouched for the defect underneath it.
+
 ## Why the obvious checks could not see it
 
 - **The type system could not.** `AttentionList.sessionsUnreadable` is `number`, and `0` is a
