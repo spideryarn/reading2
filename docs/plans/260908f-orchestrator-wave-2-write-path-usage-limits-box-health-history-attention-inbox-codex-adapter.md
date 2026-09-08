@@ -307,6 +307,17 @@ Each ends with the tree green and committed, and would make sense as a stopping 
 
 ### Stage A — the attention list, the deciding half
 
+> **Measured on the first live pass, 2026-09-08 — the `why` is the payload; the excerpt is not.**
+> The consumer (`claude-agents-dashboard`) reports that the two `why` sentences the classifier
+> produced — *"the agent says the stack is idle and explicitly waits for the person to say whether it
+> should shut down"* and *"presents three approaches and explicitly says it will hold Stage 2 until
+> the person answers"* — are one sentence each, human, and immediately actionable, while the
+> excerpts they qualify are **1,116 and 1,736 characters**, 17 and 21 lines, one of them a table of
+> process states with wrapped columns. So the card shows the `why` and puts the excerpt one tap
+> away. **If effort in `attention-classify.ts` has to be spent somewhere, spend it on the `why`** —
+> that is the field a person reads. A tighter excerpt selection is the obvious follow-up: a wrapped
+> process table is not evidence for a claim about what an agent said.
+
 **The premise triage was about to be built on is wrong**, and it was measured:
 [§ `idle` is the bug](../project/overseer-direction.md#idle-is-the-bug-the-vocabulary-describes-the-pane-not-the-work).
 `needs-you` means *Claude Code says a dialog is open*; ten of fifteen sessions genuinely waiting on

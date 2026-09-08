@@ -1652,6 +1652,44 @@ describe("the usage report the checkpoint holds", () => {
     expect(written.checkpoint.attention.kind).toBe("unknown");
   });
 
+  test("a list with no `sessionsUnreadable` is not read as a scan that failed nowhere", () => {
+    const root = tempRoot();
+    const first = mustOpen(root);
+    first.append([seenEvent(observedRow(), "2026-09-08T10:00:00.000Z")]);
+    first.checkpoint({
+      lastGoodSnapshotAt: "2026-09-08T10:00:00.000Z",
+      tick: true,
+      attention: {
+        kind: "list",
+        items: [],
+        sessionsScanned: 12,
+        sessionsUnreadable: 4,
+        scannedAt: "2026-09-08T10:00:00.000Z",
+      },
+    });
+    first.close();
+
+    // What a producer from before the field existed wrote. Deleting it reproduces
+    // that build exactly.
+    const parsed = JSON.parse(readFileSync(join(root, CHECKPOINT_FILE), "utf8")) as {
+      attention: Record<string, unknown>;
+    };
+    delete parsed.attention["sessionsUnreadable"];
+    writeFileSync(join(root, CHECKPOINT_FILE), JSON.stringify(parsed));
+
+    const read = readCheckpoint(root);
+
+    expect(read.kind).toBe("checkpoint");
+    if (read.kind !== "checkpoint") throw new Error("unreachable");
+    // NOT `{kind:"list", sessionsUnreadable: 0}`. Zero is a positive claim that
+    // every session was judged — the completeness claim this field exists to
+    // WITHHOLD — and it would arrive through the parser rather than from anyone
+    // who looked. An incomplete observation may not be read as a negative one.
+    expect(read.checkpoint.attention.kind).toBe("unknown");
+    if (read.checkpoint.attention.kind !== "unknown") throw new Error("unreachable");
+    expect(read.checkpoint.attention.why).toContain("sessionsUnreadable");
+  });
+
   test("a rebuilt start does not inherit a report it could not read", () => {
     const root = tempRoot();
     const first = mustOpen(root);

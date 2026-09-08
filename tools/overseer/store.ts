@@ -1204,12 +1204,25 @@ function parseAttentionList(u: unknown, writtenAt: string): AttentionList {
   }
   if (u["kind"] !== "list") return bad(`kind ${JSON.stringify(u["kind"])} is neither "list" nor "unknown"`);
   if (!isNonNegativeInteger(u["sessionsScanned"])) return bad("sessionsScanned is not a count");
-  // Absent on a list written before the field existed. Read as 0 rather than
-  // refused: the field says how much we FAILED to judge, and a producer that
-  // never had it made no claim either way — refusing the whole list over it would
-  // pay the expensive remedy for the cheap problem, which is this parser's rule.
+  // ABSENT IS NOT ZERO, and reading it as zero was the bug a cross-family review
+  // of the dashboard's half found here. The first version reasoned correctly that
+  // a producer which never had this field "made no claim either way" — and then
+  // substituted 0, which is a positive claim that every session it scanned was
+  // judged. That is the completeness claim this field exists to WITHHOLD, arriving
+  // through the parser rather than from anything that looked.
+  //
+  // So the list degrades to `unknown` rather than being invented or refused
+  // outright. It keeps this parser's proportionality rule — the whole checkpoint
+  // survives, and the register with it — and it self-clears on the next pass two
+  // minutes later. The items are lost, which is the honest cost: they are real,
+  // but a list that cannot say how much it failed to read is not a list anybody
+  // can act on. See docs/project/overseer-direction.md and the same principle in
+  // `absenceGap` and the dashboard's `unknown` band.
   const unreadable = u["sessionsUnreadable"];
-  if (unreadable !== undefined && !isNonNegativeInteger(unreadable)) return bad("sessionsUnreadable is not a count");
+  if (unreadable === undefined) {
+    return bad("sessionsUnreadable is absent, and a list that does not say how much it failed to judge cannot be read as having judged everything");
+  }
+  if (!isNonNegativeInteger(unreadable)) return bad("sessionsUnreadable is not a count");
   const rawItems = u["items"];
   if (!Array.isArray(rawItems)) return bad("items is not an array");
   const items: AttentionItem[] = [];
@@ -1222,7 +1235,7 @@ function parseAttentionList(u: unknown, writtenAt: string): AttentionList {
     kind: "list",
     items,
     sessionsScanned: u["sessionsScanned"],
-    sessionsUnreadable: typeof unreadable === "number" ? unreadable : 0,
+    sessionsUnreadable: unreadable,
     scannedAt,
   };
 }
