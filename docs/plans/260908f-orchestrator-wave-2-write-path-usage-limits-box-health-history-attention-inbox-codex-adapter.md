@@ -237,6 +237,49 @@ while *which* limit binds is not.** Which generalises to the sentence worth keep
 **This is a `docs/reusable/` candidate rather than a project fact**, and it is deliberately not
 written there yet — those edits go one approved set at a time and no set is open. Greg's call.
 
+### A positive control proves the step it wraps, and nothing above it
+
+**The most expensive thing found today, and it got past two people.** The attention pass published
+`{"kind":"list","items":[],"sessionsScanned":1}` — a confident *nothing needs you* — built from one
+ended turn whose single classification had returned a 429. The internal breakdown was **green
+throughout**, because every row genuinely did enter a bucket.
+
+`sessionsScanned` and the breakdown are a real positive control **on the walk**. They cannot be a
+control on the *judgement*, and the difference is invisible from inside: the accounting proves
+something was looked at and says nothing about whether looking succeeded. When
+[`w2-attention-inbox`](#stage-a--the-attention-list-the-deciding-half) reported that control as
+closing the gap, the Overseer agreed with it in writing — *"stronger than the field I designed"* —
+which it was, about the walk. **Neither of us asked what it could not see.** So the lesson is not
+"they built it too shallow"; it is that a control is named for the thing it guards and reviewed for
+the thing you hoped it guarded.
+
+**And the cache turned a bad pass into a standing condition.** The failed verdict was stored under
+the tail's fingerprint, so every later pass answered from memory, made zero model calls, and repeated
+the same wrong silence for as long as that agent stayed quiet. The dashboard agent's phrasing is the
+one to keep: **a wrong answer that is cheap to repeat outlives the condition that caused it.** Hence
+the rule now in the code beside the cache — *an `unreadable` verdict is never cached; a failure is a
+reason to look again, not a fact to remember.*
+
+**The base rate is why this class matters here more than elsewhere.** The dashboard read **0
+`needs-you` rows out of 24** on the held-out capture while four sessions were genuinely waiting.
+*Nothing needs you* is the cheapest possible thing to be wrong about, because it is what a broken
+probe, an empty fleet and a calm fleet all say.
+
+### The fix for a caveat that is always on is to scope the question, not to raise a threshold
+
+`PauseLine` drew *"waiting? unknown"* on **29 of 32 rows** — found by running a live collection, not
+by reading the code, and fixed in `2bfe48dc` under the title *a caveat on 29 of 32 cards is wallpaper,
+not a caveat*. The repair that held was not a confidence threshold. It was **scoping what the field
+answers**: `Pause` answers *why is this session not doing anything*, and on a row that is visibly
+doing something **the question does not arise**.
+
+That is the rule the new `AttentionList` count is being added under, and it is why its two constraints
+are load-bearing rather than fussy: the count is a fact about the **pass**, not about any row, so it
+belongs on the list header and only when it is true — and deliberate skips must stay out of it,
+because a number that is non-zero on nearly every pass could not be rendered under this rule at all.
+A permanent caveat is A17 wearing different clothes: healthy operation spending most of its time
+alarming, which teaches Greg to read past the one that matters.
+
 ## Stages
 
 Each ends with the tree green and committed, and would make sense as a stopping point.
