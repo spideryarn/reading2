@@ -14,7 +14,10 @@ stage first; a census broke the tie (41 data tables in the corpus, 34 kept, **7 
 reader's evidence) and Astra's ranking was adopted. **C4b is dropped, stage D deferred with all six
 visibility commitments intact, and C3 is next — diagnosed 2026-09-08 and much smaller than it was
 scoped as: the tables are deleted *before* candidate scoring, so there is no reinsertion problem and
-C2's rationale mostly goes with it.** Nothing of C3 is built yet. Scope narrowed after review.** The model repair pass Greg asked for is
+C2's rationale mostly goes with it.** Nothing of C3 is built yet: its plan was written, reviewed by GPT Sol before any code, and
+**narrowed again by three reproduced P0s** — one shared class token would have truncated an
+article, and the broad table rule recovered a Wikipedia navigation sidebar and called it
+evidence. Four tables and one correction notice, not five tables. Scope narrowed after review.** The model repair pass Greg asked for is
 **not** in this plan — GPT Sol's review found its operation layer not yet designable, and it moves to
 its own plan with the preconditions named in
 [What this plan deliberately does not build](#what-this-plan-deliberately-does-not-build-the-model-repair-pass).
@@ -2898,7 +2901,11 @@ substring inside class attributes:**
 | fixture | tables | `<tr>` |
 |---|---|---|
 | `ar5iv` | 7 → **9** | 42 → **60** |
-| `wiki_gdp_table` | 1 → **3** | 1 → **239** |
+| `wiki_gdp_table` | 1 → **3** | 1 → ~~239~~ **238** |
+
+**239 was wrong and is struck above; the number is 238** — 223 rows from the GDP table, 14
+from the regional one whose fifteenth source row is empty, 1 from the map-legend grid. Reconciled
+per table by GPT Sol, 2026-09-08, which is how a document total stops hiding a discrepancy.
 
 **And the navboxes stay out** — wiki goes to 3 tables, not 8. They die on a different branch
 (`UNLIKELY_ROLES`, for `role="navigation"` on their wrapper) and **link density plays no part in it**,
@@ -2967,10 +2974,17 @@ the notice still goes. The deletion just moves up one level.
 #### C3, rewritten 2026-09-08 — **tell Readability it is content, in Readability's own vocabulary**
 
 The diagnosis above removed the reinsertion problem, so what is left is a **pre-Readability stamp**
-and the check that the recovered structure is intact. This section is the stage as it will be built,
-written after the diagnosis and measured before it was written.
+and the check that the recovered structure is intact.
 
-##### The mechanism, and why it is not a hack
+**This section was rewritten twice on the same day**, and the second time is the useful one. The
+first draft proposed a broad rule and one shared class token; GPT Sol reviewed it before anything was
+built and returned **three P0s, all reproduced rather than reasoned to**, one of which showed the
+rule recovering navigation furniture and calling it evidence. The verdict was *"do not build C3 as
+written — build less, not none"*, and it is followed. What the first draft said, and why it was
+wrong, is kept below rather than deleted, because two of the three mistakes are ones this plan has
+made before under other names.
+
+##### The mechanism, and the boundary the review put on it
 
 Both losses are Readability declining to believe an element is content, and Readability has **two of
 its own escape hatches** for exactly that:
@@ -2981,121 +2995,179 @@ its own escape hatches** for exactly that:
 | `_cleanConditionally`'s *"Low weight and a little linky"* (`weight < 25 && linkDensity > 0.2`) | `_getClassWeight` ≥ 25, i.e. a `positive` class token | the PLOS correction |
 
 `okMaybeItsACandidate` is `/and|article|body|column|content|main|shadow/i` and `positive` is
-`/article|body|content|entry|…/i`, and **both contain `content`**. So a single class token added
-before Readability runs — `spya-keep-content` — satisfies both, and the stage is one recogniser
-writing one token rather than two mechanisms.
+`/article|body|content|entry|…/i`. **Both contain `content`, and the first draft used that to do
+both jobs with one token. That was a P0.** A `positive` token does not only defeat a deletion — it
+adds 25 to the element's class weight, and tables are scored as candidate ancestors because their
+`<td>`s are in `elementsToScore` (Readability.js:1230, 2142). Sol constructed a qualifying table with
+prose either side and measured it:
+
+| token on the table | result |
+|---|---|
+| `spya-keep-column` | 1,568 chars — the table is a table, both prose regions survive |
+| `spya-keep-content` | 1,368 chars — **both prose regions gone**, the table promoted to top candidate and rewritten as a `<div>` |
+
+**No fixture in the corpus has that score topology**, which is why the corpus run looked clean. This
+is the exact shape of failure C0 was built to catch and the corpus could not: *a green result reached
+because the case is absent.*
+
+**So: one token per job.** Rule A uses `spya-keep-column` — in `okMaybeItsACandidate`, deliberately
+**not** in `positive`, so it defeats the deletion and changes no score. Rule B uses a `positive`
+token, because weight is the whole of its mechanism. Each is pinned by an end-to-end case that
+asserts its intended effect **and** its candidate-scoring boundary.
 
 **It is not a trick played on the library.** Adding a class token that says *content* is the sentence
-Readability reads the class attribute in order to hear; we are answering the question it asks. The
-token never reaches the reader: Readability's `keepClasses` defaults to `false`, so it is stripped
-from the output along with every other class.
+Readability reads the class attribute in order to hear; we answer the question it asks. The token
+never reaches the reader — `keepClasses` defaults to `false`, so it is stripped from the output with
+every other class. The lockfile pins Readability 0.6.0, so a bump that moved either regex would turn
+the end-to-end cases red rather than degrade quietly. ⟨Sol, agreeing, 2026-09-08.⟩
 
-**It adds no forgery surface**, which is the obvious objection. A hostile page can already write
-`class="content"` on its own junk and get the identical effect — that is Readability's behaviour, not
-something this introduces — so a page pre-placing our token buys it nothing it did not already have.
-Recorded rather than guarded, and the reserved-namespace scrub (`src/reserved.ts`) is deliberately
-**not** extended to it for that reason.
+**It adds no forgery surface.** A hostile page can already write `class="content"` on its own junk
+for the identical effect — that is Readability's behaviour, not something this introduces — so a page
+pre-placing our token buys nothing it did not have. Recorded rather than guarded, and the
+reserved-namespace scrub (`src/reserved.ts`) is deliberately **not** extended to it.
 
-##### Rule A — the data table Readability deletes before asking whether it is a data table
+##### Rule A — and the false positive that shrank it
 
-**Stamp a `<table>` when both hold:**
+**What the first draft proposed:** stamp any `<table>` that (1) trips `unlikelyCandidates` on its own
+`class + " " + id` without matching `okMaybeItsACandidate`, and (2) is a data table by a mirror of
+Readability's `_markDataTables`. The argument was that this is an *ordering* bug — `_markDataTables`
+is called at line 1512, 385 lines after the table is gone — so the fix runs Readability's own
+judgement at the point the other branch needed it.
 
-1. its own `class + " " + id` matches `unlikelyCandidates` and does **not** match
-   `okMaybeItsACandidate` — that is, Readability is about to delete it at line 1127; **and**
-2. it is a data table **by Readability's own `_markDataTables` rules**, mirrored in order:
-   `role="presentation"` → no · `datatable="0"` → no · `summary` → yes · non-empty `<caption>` → yes ·
-   a `col`/`colgroup`/`tfoot`/`thead`/`th` descendant → yes · a nested `<table>` → no · one row or one
-   column → no · ≥ 10 rows or > 4 columns → yes · else `rows × columns > 10`.
+**Both halves were wrong, and the second half is why.**
 
-**The whole stage is an ordering fix, and the second condition says so.** `_markDataTables` lives in
-`_prepArticle` and is called at line 1512 — 385 lines after these tables are gone — so the rule that
-should have protected a 223-row table is never reached. We do not invent a judgement; we run
-Readability's judgement at the point Readability's other branch needed it.
+`wiki_ar_ai` gained a table under that rule and the first draft reported it as a recovery nobody had
+counted. It is `<table class="sidebar sidebar-collapse nomobile nowraplinks hlist">` — 61 links,
+*"Part of a series on Artificial intelligence"*, and a taxonomy of topic links. **It is navigation.**
+It matched because `sidebar` is itself in `unlikelyCandidates`, and it passed the data-table mirror
+because a navigation sidebar has header cells. And `wiki_transformer` — reported in the first draft
+as an honest partial failure, a stamp that fired and bought nothing — is **the same sidebar shape**,
+saved only by the `role="navigation"` its Arabic twin happens to lack. Two of the first draft's three
+"interesting" results were one bug wearing two hats.
 
-**Measured across all 35 fixtures, 2026-09-08** (`data/scratch/C3-spike-corpus.mts`, throwaway;
-the durable version is the eval below):
+**The lesson is one this plan has already written down once**, in C4's second round: *restricting an
+element by where it sits proves nothing about what it is for.* A data-table heuristic is not entitled
+to overrule the publisher's explicit `sidebar` declaration — `_markDataTables` exists to decide
+whether a table wants accessibility treatment, not to adjudicate furniture, and asking it to do the
+second is asking a question it was never written to answer.
 
-| fixture | tables stamped | tables out | `<tr>` out | text characters |
-|---|---|---|---|---|
-| `wiki_gdp_table` | 2 | 1 → **3** | 1 → **238** | 11,557 → 19,288 |
-| `ar5iv` | 2 | 7 → **9** | 42 → **60** | 38,853 → 39,614 |
-| `wiki_ar_ai` | 1 | 1 → **2** | 1 → **11** | 105,819 → 106,541 |
-| `wiki_transformer` | 1 | 0 → 0 | 0 → 0 | unchanged |
-| every other fixture | **0** | — | — | unchanged |
+**The rule as built, per Sol's P0-02 and P1-01:**
 
-Three things in that table are worth more than the totals:
+> Stamp a `<table>` when **`header` is the *sole* reason it matches `unlikelyCandidates`** — neutralise
+> the substring `header` in `class + " " + id` and no other unlikely term remains — **and** it carries
+> a non-empty `<caption>` or a `<th>`.
 
-- **`wiki_ar_ai` was not in the diagnosis.** The Arabic Wikipedia fixture gains a table and ten rows,
-  and nobody had counted it. Found by running the rule over the whole corpus rather than over the
-  three fixtures the stage was scoped around.
-- **`wiki_transformer` stamps one table and changes nothing.** The stamp fires, the table still does
-  not reach the output, so it dies somewhere else as well. This is the honest shape of a partial fix
-  and the stage must print it rather than average it away — *a recogniser that fired and bought
-  nothing is not a recogniser that did not fire.*
-- **The navboxes stay out.** Wiki reaches 3 tables, not 8. They fail condition 1 — their own class
-  carries no unlikely token — and they die on their wrapper's `role="navigation"`, which no stamp on
-  a table can reach. Measured, not argued.
+No mirror, and no numerical tail. All four target tables have a caption or header cells, so the
+`rows >= 10 || columns > 4 || rows × columns > 10` arithmetic is never needed — and Sol showed the
+mirror was not one anyway: Readability adds `rowspan` found on each `<tr>`, counts descendant `<td>`
+only, and parses `colspan` with `parseInt`, three divergences that agree on all 192 corpus tables and
+disagree on two constructed ones. Calling the library's private `_markDataTables` was considered and
+rejected: it swaps a copied heuristic for an underscored runtime API **and still classifies the
+Arabic sidebar as data**, so it buys fidelity to the wrong oracle.
 
-**Corpus residual: 6 tables stamped across 35 fixtures.** The stage recovers 5 of the ~77 tables the
-corpus loses and **does not make "tables survive" true generally**, which § *What the spike also
-found* requires it to say out loud.
+**Measured across all 35 fixtures** (`data/scratch/C3-spike-corpus.mts`, throwaway; the durable
+version is the corpus test):
 
-##### Rule B — the correction notice
+| fixture | tables stamped | tables out | `<tr>` out |
+|---|---|---|---|
+| `wiki_gdp_table` | 2 | 1 → **3** | 1 → **238** |
+| `ar5iv` | 2 | 7 → **9** | 42 → **60** |
+| `wiki_ar_ai`, `wiki_transformer` | **0** — the sidebars, declined | unchanged | unchanged |
+| every other fixture | **0** | unchanged | unchanged |
+
+**Four tables recovered, not five**, and the corpus loses roughly 77. The stage does **not** make
+"tables survive" true generally and must not be quoted as though it did.
+
+**The 238 is right and the diagnosis's 239 was wrong**, reconciled by Sol per table: the GDP table
+contributes **223** rows, the regional table **14** (its fifteenth source row is empty and Readability
+drops it), the map-legend swatch grid **1**. The stage records the per-table counts, not only the
+document total — a total is the number that hid the discrepancy for a day.
+
+**The navboxes stay out**, as measured: wiki reaches 3 tables, not 8. They carry no unlikely token of
+their own and die on their wrapper's `role="navigation"`, which no stamp on a table can reach.
+
+##### Rule B — the correction notice, and only the topology that was measured
 
 `div.amendment-citation` goes on *"Low weight and a little linky"* (`weight=0`, `linkDensity=0.291`,
-bar `0.2`) — the density coming from the citation printing its own DOI as link text — and then the
-emptied parent `div.amendment amendment-correction` goes on *"No useful content"*, taking
+bar `0.2`) — the density coming from the citation printing its own DOI as link text — and the emptied
+parent `div.amendment amendment-correction` then goes on *"No useful content"*, taking
 `<h2>Correction</h2>` with it.
 
-The diagnosis recorded that a class-weight nudge *"does not fix it"*, and that is now known to be
-**half right and the useful half wrong**: the spike stamped only the inner citation, the parent then
-failed the same check at 0.276, and the notice still went. **Stamping both** puts the parent at weight
-25, where the bar is `linkDensity > 0.5`, and 0.276 clears it. Measured: `plos_biology` goes 28,112 →
-28,460 characters and both `"Correction"` and `"10 Apr 2018"` come back.
+The diagnosis said a class-weight nudge *"does not fix it"*. That is **half right**: the spike had
+stamped only the inner citation, the parent then failed the same check at 0.276, and the notice still
+went. **Stamping both** puts the parent at weight 25, where the bar is `linkDensity > 0.5`, and 0.276
+clears it. Confirmed three ways by Sol: parent alone recovers nothing, child alone recovers nothing,
+**both** take `plos_biology` from 28,112 to 28,460 characters with `"Correction"`, `"10 Apr 2018"` and
+the DOI all back.
 
-**What it recognises is the publisher's own label**, exact class tokens rather than substrings:
-`amendment`, `amendment-citation`, `correction`, `erratum`, `retraction`, on a `<div>`. PLOS is the
-only fixture with any of them (2 elements; every other fixture 0). The vocabulary is wider than the
-one fixture on purpose — a correction notice is on this plan's never-fold list whoever published it —
-and the asymmetry is what makes the width safe: a wrong match **keeps** a block that would otherwise
-have gone, and Greg has already priced that:
+**What it recognises is the measured topology and nothing else**: an outer
+`div.amendment.amendment-correction` together with its `div.amendment-citation` child. **No
+registry.** The first draft proposed adding `correction`, `erratum` and `retraction` — three tokens
+attested nowhere in the corpus — and defended the width by asymmetry: a wrong match only *keeps* a
+block, which Greg has already priced at *"a bit of junk in the structure that's getting ignored"*.
 
-> a bit of junk in the structure that's getting ignored seems a low price to pay
+**That argument is false, and Sol falsified it rather than disputing it.** A constructed
+`div.correction` given positive weight became the preferred candidate and dropped neighbouring
+genuine paragraphs. **Candidate selection is global**, so a wrong positive stamp can delete an
+author's prose somewhere else on the page. Greg's licence was about junk *surviving*; it was never a
+licence for a rescue that costs a paragraph. Another publisher's correction notice gets added when
+somebody has a fixture for its actual topology, positive and adversarial.
 
-**This is the open scope call for the review.** The narrow alternative is `amendment` alone, PLOS
-only, with the other four tokens added when a fixture needs them.
+##### What survives of C2 — a table oracle, and what the review made it check
 
-##### What survives of C2 — a table oracle, and it is small now
-
-Sol's precondition five stands: the ruler is text and order, and **cannot see a datum moved into the
+Sol's precondition five stands: the ruler is text and order and **cannot see a datum moved into the
 wrong row**, so a claim about a table-bearing page needs an oracle. Nothing is re-attached any more,
-so the oracle no longer has to verify a rescued subtree against a sanitised one — it has to verify
-that the table Readability now keeps is the table the source had.
+so it no longer verifies a rescued subtree — it verifies that the table Readability now keeps is the
+table the source had.
 
-`evals/extraction/table-oracle.mts`: match source tables to output tables by caption text and
-first-row signature, then compare **row count, cells per row, and normalised cell text at its
-row/column coordinates**, and report unmatched tables on both sides. Used by the C3 tests to make the
-positive claim, and by the corpus report to state the residual. That is the whole of it, and it is
-what is left of a stage that was scoped as *"the largest piece and the largest risk"*.
+The first draft specified matching by caption text and first-row signature, and comparing row count,
+cells per row and normalised cell text at coordinates. **Both halves were too weak**, and both
+corrections come with a case that defeats the original:
+
+- **Match by provenance id, not by caption.** `stampSourceIds`/`sourceRefOf` (src/extract.ts) already
+  carry exact source identity, and caption matching is fuzzy where it is not simply absent — the
+  ar5iv tables have **no `<caption>`**, their labels are sibling `<figcaption>`s.
+- **Compare a semantic cell projection, not coordinate text**: tag name (`th` vs `td`), normalised
+  visible text, `rowSpan` and `colSpan`. Coordinate text alone passes while `<th>`s become `<td>`s,
+  spans vanish, or links disappear with their text intact — and this is concrete, not theoretical:
+  the recovered ar5iv Table 2 carries one `rowspan` and four `colspan`s, and stripping them would
+  pass the first draft's oracle unchanged. Mutation cases that delete a span and that convert a `th`
+  to a `td` must make the oracle fail.
+- **Name the source snapshot point and the allowed normalisation.** Two legitimate differences exist
+  in the GDP fixture alone: the regional table is 15 source rows against 14 output rows because the
+  last source row is empty, and one cell's source `textContent` includes inline stylesheet text that
+  `_prepArticle` removes. So: compare against the post-`prepareDocument` DOM, strip non-visible nodes
+  before reading text, and allow a wholly empty row to disappear — each written down as a permitted
+  difference rather than absorbed by a loose comparison.
 
 ##### How it is proved — the ladder, the counterfactual, and the adversary
 
-Per § *How every recogniser is proved*, each rule carries:
+Per § *How every recogniser is proved*, each rule carries an **exposure ladder** (source candidates →
+elements stamped → survivors after Readability → blocks affected → the assertion that changes), a
+**counterfactual** through a mutation seam so the positive fixture is red without the pass and green
+with it, and an **adversarial negative written by a different agent** (C0's adversary rule).
 
-- **an exposure ladder** — source candidates → tables stamped → survivors after Readability →
-  blocks affected → the assertion that changes;
-- **a counterfactual** — the pass disabled through a mutation seam, so the positive fixture is red
-  without it and green with it, and the two cards are asserted to differ at all;
-- **an adversarial negative written by a different agent** (C0's adversary rule): a table that trips
-  `unlikelyCandidates`, passes `_markDataTables`, and is furniture a reader should not get — a
-  comment thread, a related-articles strip, a footer link grid — and, for rule B, junk wearing a
-  correction token.
+Three things the review adds to that, each closing a hole it found:
 
-Done when: both rules ship in `src/protect.ts`, wired into `prepareDocument` and proved by the real
-pipeline rather than by calling the pass directly; the four fixtures above assert the recovered
-tables through the oracle; the corpus residual is printed including `wiki_transformer`'s null
-result; and `docs/project/content-extraction.md` records the mechanism, the numbers and what the
-stage does **not** fix.
+1. **A candidate-scoring boundary case for every token.** Rule A's must assert that the table stays a
+   `<table>` and that prose on both sides survives — the case that caught P0-01, and the corpus
+   cannot supply it.
+2. **Both Wikipedia sidebars are standing negatives**: `wiki_ar_ai` and `wiki_transformer` assert
+   **zero stamps and byte-identical output**. They are the fixtures that caught the broad rule.
+3. **The corpus residual test runs both arms.** The first draft's spike did not — for a zero-stamp
+   fixture it assigned the treatment result from the control and compared three counts, which is a
+   check that cannot fail, in a stage whose subject is checks that cannot fail. Sol replayed the real
+   `prepareDocument` sequence with the pass inserted and compared whole article objects: **all 30
+   zero-stamp fixtures byte-identical** — 30, not the 31 the first draft claimed, because five
+   fixtures are stamped, not four. The durable test executes both arms, compares `extractedHtml`
+   bytes, and asserts the typed refusal separately for `medium_about` and `pmc_article` rather than
+   letting an exception become a `-1`.
+
+Done when: both rules ship in `src/protect.ts`, wired into `prepareDocument` and proved through the
+real pipeline rather than by calling the pass directly; the recovered tables are asserted through the
+oracle with per-table row counts; the corpus residual is byte-compared on both arms; and
+`docs/project/content-extraction.md` records the mechanism, the four tables, and what the stage does
+**not** fix.
 
 #### The one place the reviewers disagreed — decided, not left open
 
