@@ -1238,8 +1238,26 @@ and nobody scheduled it.
 reported, a session renamed with identity and status unchanged emits no event, so every rebuild
 returns the name Greg deliberately replaced. But `entryOf()` freezes `name`, `repo`, `worktree`,
 `meta`, `startedAt`, `paneId` and `panePid` at first sight, and `session-seen` fires once — so the
-name is the instance somebody noticed, not the class. `EnterWorktree` moves a session between
-worktrees and is common on this box.
+name is the instance somebody noticed, not the class.
+
+**A correction, and the wrong claim was mine.** The brief for this stage justified widening the arm by
+saying *"`EnterWorktree` moves a session between worktrees and is common on this box"*. **That cannot
+happen and this data source could not see it if it did.** `collect.ts:214` derives
+`worktree: worktreeOf(s.meta.dir)`, and `meta.dir` is a tmux session environment variable **fixed at
+creation** — `EnterWorktree` moves the *transcript*, which is a different file and not in this
+payload. `observation.ts:503` already said so, in this repo, before the brief was written.
+
+Caught by GPT Sol reviewing the built stage. By then the claim had travelled from my brief into a
+commit message, into two lines of this document, and into a test fixture value named
+`moved-by-enterworktree` — a test named after a thing that cannot occur. **This is
+[an unchecked brief claim becoming a source comment](../reusable/name-is-evidence.md)**, in the exact
+shape that trap is written down in: an orchestrator asserts a mechanism, a subagent has no reason to
+doubt it, and it is load-bearing prose three commits later. The rule it argues for is unglamorous and
+would have cost thirty seconds: **grep every named example before putting it in a brief.**
+
+**The arm is not affected.** `name` genuinely does change on a rename, which is the case S3-03
+reported, and `repo`/`worktree`/`meta` are still worth covering — a wrong *justification* is not a
+wrong implementation. What is gone is one of the two examples that made the class look urgent.
 
 **The shape was decided by measurement and by the producer's own source, not by taste**, because an
 arm that fires on any row change re-creates the 52k-rows-a-day problem this design exists to avoid.
@@ -1327,8 +1345,11 @@ consecutive snapshots in which `tmuxId` and `claimedConversationId` both held st
 | `question` | **4** |
 
 **What that does and does not prove, said plainly, because it is easy to read the wrong way round.**
-24 minutes is long enough to rule out FLAPPING and far too short to observe the events these arms
-exist to catch — nobody renamed a session or ran `EnterWorktree` inside the window. So the arm's
+24 minutes bounds FLAPPING only weakly and is far too short to observe the events these arms exist to
+catch — nobody renamed a session inside the window. (An earlier draft said *"or ran `EnterWorktree`"*;
+see the correction above — that is not an event this source can see at all.) **And "0 of 516 changes"
+bounds less than it looks:** on a generous independent-binomial reading the 95% upper bound is near
+**0.58% per comparison**, which across a fleet-day is potentially hundreds of events. So the arm's
 safety rests on the **source** argument, with the measurement only closing the volume question:
 `repo`, `worktree` and `meta` derive from tmux session environment variables set at creation, and a
 partial reading fails the whole listing rather than degrading a row, so they cannot move while the
