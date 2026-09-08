@@ -82,22 +82,27 @@
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 
 import {
   capturePane,
-  cleanLines,
   grantsPermission,
-  isInputPrompt,
   isPaneId,
-  parsePane,
+  paneSurface,
   type OptionKey,
+  type PaneDialog,
   type PaneMaterial,
-  type PaneQuestion,
 } from "./pane.js";
 import type { FleetStatus } from "./status.js";
 
-/** The dialog arm of `PaneQuestion`, which is the only one worth answering. */
-export type SeenQuestion = Extract<PaneQuestion, { kind: "question" }>;
+/**
+ * The dialog arm, which is the only one worth answering.
+ *
+ * An alias of `pane.ts`'s own name since 2026-09-08 rather than a second
+ * `Extract` of the same union: two spellings of one type are two things to keep
+ * in step, and `paneSurface` hands this out directly.
+ */
+export type SeenQuestion = PaneDialog;
 
 /**
  * Where to send, and who we believe is there.
@@ -167,6 +172,22 @@ export type RefusalCode =
   | "not-at-input"
   /** The pane is asking a question, and a message typed at one is an answer to it. */
   | "pane-is-asking"
+  /**
+   * The input box already has text in it, so a message would be typed onto the
+   * END of somebody's and the Enter would submit the concatenation. Astra's
+   * A10; proved live on 2026-09-08, when a box holding `DRAFT-ALPHA` took
+   * `OMEGA-SENT-BY-DASHBOARD` onto it and the agent answered a user turn
+   * neither half of which anybody wrote.
+   *
+   * **NOT `not-at-input`**, though it is the same family, because the remedy is
+   * different and it is the remedy a code is for: `not-at-input` means the
+   * screen is the wrong kind of thing and looking again is the move, and this
+   * one means the screen is right and the box is busy — wait, or go to the
+   * terminal. It is also reached by a session that has never been messaged,
+   * whose box holds a greyed hint rather than anybody's text; the two are
+   * indistinguishable in a capture and the sentence says so.
+   */
+  | "input-not-empty"
   /** The pane is no longer asking anything. */
   | "question-gone"
   /** The pane is asking something else, or asking it differently. */
@@ -431,6 +452,16 @@ export type SteerIo = {
    * table we cannot read is not a process table that says no.
    */
   cmdline(pid: number): string | null;
+  /**
+   * Claude Code's own note about itself: `~/.claude/sessions/<pid>.json`, or
+   * `null` when there is not one.
+   *
+   * **NOT A tmux OR KERNEL READ, AND THAT IS WHY IT IS HERE.** It is the only
+   * thing on this box that can say a Claude session has SHELLED OUT — see
+   * `shelledOut` for what is done with it and, more importantly, for what is
+   * not.
+   */
+  claudeSessionState(pid: number): string | null;
   /** Runs `tmux <args…>`. Throws when tmux refuses. */
   sendKeys(args: readonly string[]): void;
 };
@@ -485,6 +516,18 @@ export function realIo(): SteerIo {
         const code = (e as { code?: unknown }).code;
         if (code === "ENOENT" || code === "ESRCH") return null;
         throw e;
+      }
+    },
+    claudeSessionState: (pid) => {
+      if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error(`not a pid: ${pid}`);
+      try {
+        return readFileSync(`${homedir()}/.claude/sessions/${pid}.json`, "utf8");
+      } catch {
+        // ABSENT IS NOT A REFUSAL, and that is a deliberate asymmetry — see
+        // `shelledOut`. Every failure to read is swallowed here rather than
+        // only ENOENT, because this file is another application's private
+        // state and the ways it can be unavailable are not ours to enumerate.
+        return null;
       }
     },
     sendKeys: (args) => {
@@ -921,151 +964,55 @@ function fire(io: SteerIo, calls: readonly (readonly string[])[]): Fired {
 }
 
 /**
- * How far below the prompt line the input box's lower border may be.
+ * **HAS THIS CLAUDE SHELLED OUT?** — the one signal on this box that can say so.
  *
- * The box grows with what has been typed into it: every idle and working
- * capture on this box puts the border on the very next line, and the one
- * fixture with a three-line message drafted but unsent puts it two below. Four
- * is past all of them and no further, and the tightness is doing work — with
- * the window at twenty, `dialog-ask-user-question.txt` finds a border twelve
- * lines under its cursor and reads as an input box on this test alone; at four
- * it does not, so the dialog check and the border check fail it independently.
+ * `send-keys` delivers to the pane's tty and whichever process group is in
+ * front reads it. `verifyTarget` proves a live Claude for this conversation is
+ * a descendant of the pane; it cannot prove that Claude is the thing reading.
+ * Neither can the two obvious sources: `#{pane_current_command}` is `bash` for
+ * every Claude session on this box, and `tpgid` is no better, because — measured
+ * 2026-09-08 on `%1999`, `%2085` and `%2166` — Claude, the pane's bash and any
+ * child all sit in ONE process group, so `pgrp` = `sid` = `tpgid` = `pane_pid`
+ * for all of them.
  *
- * What a taller box costs us is a refusal for somebody who has a long draft
- * half-typed, and that is the right answer anyway: text sent into a box with a
- * draft in it is appended to the draft and submitted with it.
+ * Claude Code keeps its own note: `~/.claude/sessions/<pid>.json`, whose
+ * `status` reads `shell` while a session has shelled out. Found by GPT Sol,
+ * 2026-09-08, which pointed out that the process-group result disproves
+ * `tpgid` rather than every foreground guard. It is real and it fires: while
+ * this was being written, pid 1471795 under pane `%2085` was `"status":"shell"`.
+ *
+ * **FAIL-OPEN, AND THE ASYMMETRY IS THE WHOLE DESIGN.** A `shell` status is a
+ * refusal. Anything else — a different status, a missing file, unparseable
+ * JSON, a Claude Code release that stops writing it — is NOT. That is the
+ * opposite of this file's usual bias, and it is deliberate: this is another
+ * application's private state, undocumented and unsupported, and a guard that
+ * refused on its absence would stop every message on this box the day the
+ * format changed. So it can only ever ADD refusals, never permit a send that
+ * the checks around it would have stopped.
+ *
+ * **WHICH MEANS IT IS A SUPPLEMENT AND NOT A CLOSURE.** The foreground gap is
+ * still open: a shelled-out child that Claude Code has not recorded, a status
+ * written a moment ago, a program the harness knows nothing about. Nothing here
+ * may be read as "we know who is reading the tty".
  */
-const INPUT_BOX_LINES = 4;
-
-/**
- * How many blank columns before a title makes a line the input box's TOP border.
- *
- * Claude Code writes the session's name into the right-hand end of that border,
- * so after `cleanLines` turns the rule characters into spaces what is left is a
- * long run of blanks and one word — `none-working-empty-prompt.txt` line 37 is
- * 110 spaces and `adversarial-fixtures-four-postmortems`. An untitled border is
- * a plain rule and needs none of this; this is only for the titled form.
- *
- * A heuristic about a rendering, and it is allowed to be one because it is the
- * THIRD of three conditions rather than the only one, and because being wrong
- * here refuses a send rather than misdirecting one.
- */
-const BORDER_TITLE_INDENT = 20;
-
-/** What we could tell about the screen we are about to type at. */
-export type InputSurface = { ok: true; promptLine: number } | { ok: false; why: string };
-
-type CleanLine = ReturnType<typeof cleanLines>[number];
-
-/**
- * Is this the input box's top border?
- *
- * Two shapes, both measured on this box on 2026-09-08: a bare rule
- * (`none-idle-with-prose-numbered-list.txt`), and a rule with the session's name
- * written into its right-hand end (`none-working-empty-prompt.txt`, and every
- * other `working` capture we have). The second is why this is not simply
- * `rule !== "none"` — `cleanLines` only calls a line a rule when there is
- * nothing on it but decoration, and a title is not decoration.
- *
- * The title must be one word. A deeply indented line of prose or code would
- * otherwise pass, and the whole value of a border test is that transcript does
- * not look like one.
- */
-function isBoxBorder(line: CleanLine | undefined): boolean {
-  if (!line) return false;
-  if (line.rule !== "none") return true;
-  const title = line.text.slice(BORDER_TITLE_INDENT);
-  if (line.text.slice(0, BORDER_TITLE_INDENT).trim() !== "") return false;
-  return title.trim() !== "" && !/\s/.test(title.trim());
-}
-
-/**
- * Is Claude Code's input box on this screen?
- *
- * **THIS EXISTS BECAUSE "NOT A QUESTION" IS AN ABSENCE.** `sendMessage` used to
- * check the pane and the process and then type; it never checked what was on
- * the screen. Sol's F2 is the sequence: the page honestly shows `working`,
- * Claude opens a numbered permission dialog in the meantime, a steering message
- * beginning with "1" arrives, the dialog eats the `1` as an approval, the Enter
- * lands in whatever screen that opened, and the route returns 200. The message
- * was never delivered and something was approved in its place.
- *
- * Asking `parsePane` and accepting `none` would not fix it. `none` is what that
- * parser says about a dialog shape it has not been taught, a pane mid-redraw,
- * and a pane holding nothing at all — it is deliberately biased towards `none`,
- * which is right for its own job and exactly wrong for this one. So this asks
- * for the box POSITIVELY:
- *
- *  1. `parsePane` must say `none`. Necessary, not sufficient; it is here to
- *     catch every dialog we DO recognise, and it is the weak half.
- *  2. The last input-prompt line on the screen must sit BETWEEN THE BOX'S TWO
- *     BORDERS — one immediately above it, one within `INPUT_BOX_LINES` below.
- *     That is the strong half: a `❯` echoed into the transcript — Greg's own
- *     message, rendered with the same character — has prose above it, and
- *     eleven of the twelve dialog fixtures have no border under their cursor
- *     within the window at all.
- *  3. It must be the LAST prompt line, so a box further up the scrollback
- *     cannot vouch for a screen that has since become something else. The
- *     working captures all contain an earlier `❯`: it is the echo of the
- *     message Greg sent, and taking the first match would accept a screen that
- *     is now anything at all.
- *
- * The predicate comes from `pane.ts` rather than being written again here.
- * Two regexes for one thing drift, and the direction this one would drift in is
- * "types a message into a permission dialog".
- *
- * **HOW THIS CAN STILL BE WRONG.** It is worth being exact, because the check
- * reads stronger than it is:
- *
- *  - **The screen is not provenance.** Everything above is a reading of text
- *    printed by the process we are about to type at. A program printing a rule,
- *    a `❯`, and another rule passes — deliberately, or because it was echoing
- *    hostile input. Sol's F6, and no amount of parsing fixes it.
- *  - **A shelled-out program is invisible.** `send-keys` goes to the pane's
- *    tty, and if a verified Claude has a child in the foreground, that child
- *    reads the keys. If it has not repainted over the box, the box is still on
- *    screen and this returns ok. The check narrows the file-header gap; it does
- *    not close it.
- *  - **A pane mid-redraw is a torn screen.** Claude Code repaints on every
- *    frame, and `capture-pane` can land between the dialog being drawn and the
- *    box being erased, or vice versa. Both halves of the tear are real text.
- *  - **A resized terminal moves the borders.** A narrow pane wraps the status
- *    line and a short one scrolls the box's own top border off, which reads as
- *    "no input box" — a refusal, so the wrong answer here is the safe one.
- *  - **The border test is a reading of one Claude Code build.** `isBoxBorder`
- *    knows two shapes because two shapes were measured. A third one stops every
- *    message going out until somebody teaches it — loudly, and in the safe
- *    direction, which is the trade this whole file is written to make.
- *  - **A box with a draft in it is still a box.** This says the surface takes
- *    text; it does not say the surface is empty. Text sent to a box someone has
- *    half-typed into is appended to their draft and submitted with it. That is
- *    a real defect and it is not this function's — it wants a product decision
- *    about what to do, not a tighter predicate.
- */
-export function inputSurface(capture: string): InputSurface {
-  const asking = parsePane(capture);
-  if (asking.kind === "question") {
-    return { ok: false, why: "the pane is showing a dialog, not an input box" };
+function shelledOut(claudePid: number, io: SteerIo): Refusal | null {
+  let raw: string | null;
+  try {
+    raw = io.claudeSessionState(claudePid);
+  } catch {
+    return null;
   }
-
-  const lines = cleanLines(capture);
-  let at = -1;
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (isInputPrompt(lines[i]?.text ?? "")) {
-      at = i;
-      break;
-    }
+  if (raw === null) return null;
+  let status: unknown;
+  try {
+    status = (JSON.parse(raw) as { status?: unknown }).status;
+  } catch {
+    return null;
   }
-  if (at === -1) return { ok: false, why: "there is no input prompt anywhere on the screen" };
-  if (at === 0 || !isBoxBorder(lines[at - 1])) {
-    return { ok: false, why: "the prompt line has no box border above it, so it is transcript rather than the input box" };
-  }
-  for (let i = at + 1; i < lines.length && i <= at + INPUT_BOX_LINES; i++) {
-    if ((lines[i]?.rule ?? "none") !== "none") return { ok: true, promptLine: at };
-  }
+  if (status !== "shell") return null;
   return {
-    ok: false,
-    why: `the prompt line has no box border within ${INPUT_BOX_LINES} lines below it, so this is not the input box`,
+    code: "not-at-input",
+    why: `claude ${claudePid} says it has shelled out, so a program of its own is in front of the terminal and would read the keys`,
   };
 }
 
@@ -1112,16 +1059,52 @@ export function sendMessage(
   } catch (e) {
     return no("pane-gone", `pane ${target.paneId} could not be read: ${(e as Error).message}`);
   }
-  // A recognised dialog gets its own code, because it is the one refusal a
-  // person can act on: the session is asking them something, and the answer is
-  // to answer it rather than to type at it.
-  if (parsePane(capture).kind === "question") {
-    return no("pane-is-asking", `pane ${target.paneId} is asking a question, and a message typed at one would answer it`);
+  // ONE READING OF THE SCREEN, AND A SWITCH THAT MUST BE EXHAUSTIVE. This used
+  // to be two questions asked of one capture — `parsePane` for the dialog and
+  // `inputSurface` for the box — which is two chances to reach different
+  // conclusions about the same pixels.
+  //
+  // `empty-input` IS THE ONLY ARM THAT PROCEEDS, and that is the narrowing
+  // Astra asked for: prose used to be established by an ABSENCE ("we did not
+  // recognise a dialog, and there is a box-shaped thing"), and is now
+  // established positively, by strictly more evidence than answering a dialog
+  // needs. The `never` is what keeps it that way — a fifth arm added to
+  // `PaneSurface` stops this compiling, so somebody decides whether prose may
+  // be typed at it rather than inheriting a yes.
+  const surface = paneSurface(capture);
+  switch (surface.kind) {
+    case "empty-input":
+      break;
+    // Its own code, because it is the one refusal a person can act on: the
+    // session is asking them something, and the answer is to answer it rather
+    // than to type at it.
+    case "dialog":
+      return no(
+        "pane-is-asking",
+        `pane ${target.paneId} is asking a question, and a message typed at one would answer it`,
+      );
+    // A10, and it is not a delivery failure but an authorship one: the text
+    // would be typed onto the END of what is already there and the Enter would
+    // submit the concatenation, as one user turn that nobody wrote.
+    case "occupied-input":
+      return no(
+        "input-not-empty",
+        `pane ${target.paneId} has ${surface.lines} line${surface.lines === 1 ? "" : "s"} of text already in ` +
+          `its input box; a message sent now would be added to the end of it and submitted as one`,
+      );
+    case "unrecognised":
+      return no("not-at-input", `pane ${target.paneId} is not showing an input box: ${surface.why}`);
+    default: {
+      const never: never = surface;
+      return never;
+    }
   }
-  const surface = inputSurface(capture);
-  if (!surface.ok) {
-    return no("not-at-input", `pane ${target.paneId} is not showing an input box: ${surface.why}`);
-  }
+
+  // LAST, AND AFTER THE SCREEN. It reads a file rather than the pane, so it
+  // cannot be part of the capture, and it is the weakest of the checks — see
+  // `shelledOut`, which can only ever add a refusal.
+  const shell = shelledOut(check.verified.claudePid, io);
+  if (shell) return refuse(shell);
 
   const calls = [
     ["send-keys", "-t", target.paneId, "-l", "--", text],
@@ -1237,10 +1220,14 @@ export function answerQuestion(
   } catch (e) {
     return no("pane-gone", `pane ${target.paneId} could not be read: ${(e as Error).message}`);
   }
-  const now = parsePane(capture);
-  if (now.kind !== "question") {
+  // THE SAME READING `sendMessage` USES, so the two entry points cannot come to
+  // different conclusions about one capture. `answerQuestion` requires the
+  // `dialog` arm exactly as `sendMessage` requires `empty-input`.
+  const surface = paneSurface(capture);
+  if (surface.kind !== "dialog") {
     return no("question-gone", `pane ${target.paneId} is not asking anything now`);
   }
+  const now = surface.question;
   if (!sameQuestion(seen, now)) {
     return no("question-changed", `pane ${target.paneId} is asking something else now`);
   }

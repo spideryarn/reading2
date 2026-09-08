@@ -555,6 +555,54 @@ describe("drainOnce fails honestly", () => {
     expect(sent).toHaveLength(2);
   });
 
+  /**
+   * **THE SAME PROPERTY FOR A10'S NEW REFUSAL, ASSERTED RATHER THAN INHERITED.**
+   *
+   * `input-not-empty` is returned when somebody's own text is already in that
+   * agent's input box. It reaches the generic put-back path above for free,
+   * because `no()` builds every refusal with `delivery: "none"` and `sent: []`
+   * — but "reaches it for free" is a claim about code somebody may change, and
+   * the plan for this stage originally proposed testing it by asserting those
+   * two fields on the `SteerResult`. GPT Sol pointed out that proves
+   * ELIGIBILITY for `nothingWasSent`, not that the drain called `release`, kept
+   * the item, cleared its lease or left it at the head. A mutation that settled
+   * every refusal would have left that test green.
+   *
+   * So it is tested where the behaviour is. The instruction must survive: a
+   * queued message that arrives while its agent has a half-typed sentence in
+   * the box is not a message to destroy, it is a message to deliver a minute
+   * later. Note what "survive" means precisely — **the item is retried, the
+   * keystrokes are not.** Nothing was sent, so there is nothing to send twice,
+   * which is the distinction `queue.release` and its `UnsentFailure` brand
+   * exist to hold.
+   */
+  it("puts a message back when the target's input box already has text in it", () => {
+    const occupied: SteerResult = {
+      ok: false,
+      reason: {
+        code: "input-not-empty",
+        why: "pane %99001 has 1 line of text already in its input box; a message sent now would be added to the end of it",
+      },
+      delivery: "none",
+      sent: [],
+    };
+    const { deps, queue, sent } = harness({ result: occupied });
+    queue.enqueueMessage({ sessionId: SESSION_A, claudeSessionId: CONVO_A }, "hello", "greg");
+
+    const result = drainOnce(snap([row()]), deps);
+
+    expect(sent).toHaveLength(1);
+    const back = result.outcomes[0];
+    expect(back?.kind).toBe("put-back");
+    expect(back?.kind === "put-back" && back.code).toBe("input-not-empty");
+    expect(queue.size(SESSION_A)).toBe(1);
+    expect(queue.snapshot(SESSION_A).items[0]?.leasedAt).toBe(null);
+
+    // and the next pass tries it again, once that agent has sent its own text
+    drainOnce(snap([row()]), deps);
+    expect(sent).toHaveLength(2);
+  });
+
   it("settles a refusal that may have reached the pane, and never sends it again", () => {
     // `partial` and `unknown` are the ambiguous arms: something may be sitting
     // in that agent's input box unsent, so firing the same keys again is how a

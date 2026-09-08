@@ -362,7 +362,7 @@ function Option({
  * `fleet-approval-binding`, not `$1996` — and a command that looks right and
  * cannot run is worse than none, because it is tried first.
  */
-function Handoff({ sessionName }: { sessionName: string }): ReactNode {
+export function Handoff({ sessionName }: { sessionName: string }): ReactNode {
   return (
     <p className="tw:mt-1.5">
       <code className="tw:select-all tw:rounded tw:border tw:border-rule tw:bg-panel tw:px-1.5 tw:py-1 tw:font-mono tw:text-[12px] tw:break-all tw:text-ink">
