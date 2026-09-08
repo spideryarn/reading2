@@ -24,21 +24,37 @@ import { HealthPanel } from "./HealthPanel";
 import { OrchestratorPanel } from "./OrchestratorPanel";
 import { SessionsPanel } from "./SessionsPanel";
 import { useDockFit } from "./fit";
-import { useMode } from "./mode";
+import { useHashState } from "./mode";
+import { httpNewSessionApi, type NewSessionApi } from "./new-session-client";
+import { httpSteerApi, type SteerApi } from "./steer-client";
 import type { Transport } from "./transport";
 import { cx } from "./ui";
 import { useFleetState } from "./useFleetState";
 import { useNow } from "./useNow";
-import { tally } from "./view";
+import { parseOrdering, tally } from "./view";
 
-export function App({ transport }: { transport?: Transport }): ReactNode {
+export function App({
+  transport,
+  steer = httpSteerApi,
+  newSession = httpNewSessionApi,
+}: {
+  transport?: Transport;
+  /** The two write paths, injected for the same reason `transport` is. */
+  steer?: SteerApi;
+  newSession?: NewSessionApi;
+}): ReactNode {
   const feed = useFleetState(transport);
   /* One clock for the whole page, ticking once a second, so that every age on
      screen agrees — and so that "12s ago" keeps counting when the poll has
      died. An age that only moves when data arrives is an age that freezes at
      the exact moment it matters. */
   const now = useNow();
-  const [mode, chooseMode] = useMode();
+  const { mode, params, chooseMode, setParam } = useHashState();
+  /* Both of these live in the URL for the reason the mode does: this page is
+     reloaded by the browser whenever iOS reclaims the tab, and a sort order
+     that resets every time is one nobody bothers to set. mode.ts § the hash. */
+  const order = parseOrdering(params["order"]);
+  const selectedId = params["sel"] ?? null;
 
   const fresh = freshness({
     state: feed.state,
@@ -72,7 +88,19 @@ export function App({ transport }: { transport?: Transport }): ReactNode {
              finished; before that the server answers `rows: []` with
              `collectedAt: null`, and drawing "No sessions." over it would tell
              Greg the box is idle while thirty-six agents run on it. */
-          <SessionsPanel rows={rows} now={now} collected={feed.state?.collectedAt != null} />
+          <SessionsPanel
+            rows={rows}
+            now={now}
+            collected={feed.state?.collectedAt != null}
+            unreadableRows={feed.state?.unreadableRows ?? 0}
+            order={order}
+            onOrder={(next) => setParam("order", next === "status" ? null : next)}
+            selectedId={selectedId}
+            onSelect={(id) => setParam("sel", id)}
+            steer={steer}
+            newSession={newSession}
+            onRefresh={feed.refresh}
+          />
         ) : null}
         {mode === "health" ? (
           <div className="tw:mx-auto tw:max-w-3xl">

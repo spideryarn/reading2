@@ -39,21 +39,52 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../tools/fleet/web/src/App";
 import { freshness } from "../tools/fleet/web/src/Header";
-import { STATUS_TIPS } from "../tools/fleet/web/src/SessionsPanel";
-import { COLUMN_MIN_PX, chooseColumns, chooseDockFit, spreadIntoColumns } from "../tools/fleet/web/src/fit";
+import { STATUS_TIPS } from "../tools/fleet/web/src/SessionParts";
+import {
+  COLUMN_MIN_PX,
+  DETAIL_MIN_PX,
+  PANE_GAP_PX,
+  chooseColumns,
+  chooseDockFit,
+  choosePanes,
+  spreadIntoColumns,
+} from "../tools/fleet/web/src/fit";
+import { makeNewSessionApi, parseLaunch, type NewSessionApi } from "../tools/fleet/web/src/new-session-client";
+import { steerMessageBody, type SteerApi, type SteerOutcome } from "../tools/fleet/web/src/steer-client";
 import { readHealthStats } from "../tools/fleet/web/src/health-view";
 import { fetchFleetState } from "../tools/fleet/web/src/transport";
 import type { Transport, TransportSink } from "../tools/fleet/web/src/transport";
-import { parseFleetState, parseStatus, type FleetState, type FleetStatus } from "../tools/fleet/web/src/types";
-import { triageSort } from "../tools/fleet/web/src/view";
+import {
+  parseFleetState,
+  parseStatus,
+  type FleetState,
+  type FleetStatus,
+} from "../tools/fleet/web/src/types";
+import {
+  CONSEQUENCE_RANK,
+  CONSEQUENCE_TONE,
+  ORDERINGS,
+  TONE_ALARM,
+  sortRows,
+  triageSort,
+} from "../tools/fleet/web/src/view";
 
 /* React wants this set before anything is rendered inside `act`, and vitest's
    jsdom environment does not set it. Written as a cast rather than a `declare
    global`, which is how the rest of tests/ spells it. */
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-/** A row, with only the interesting field named at each call site. */
+/**
+ * A row, with only the interesting field named at each call site.
+ *
+ * `rawStatus` and `rawQuestion` are DERIVED from the parsed fields rather than
+ * defaulted, so a test that names a status gets a row whose wire object agrees
+ * with it — which is what the page sends. A caller that wants them to disagree,
+ * or wants a field this build has never heard of in there, passes them
+ * explicitly: they are spread last on purpose.
+ */
 function row(over: Partial<FleetState["rows"][number]> & { id: string }): FleetState["rows"][number] {
+  const question = over.question ?? null;
   return {
     paneId: null,
     name: over.id,
@@ -64,8 +95,29 @@ function row(over: Partial<FleetState["rows"][number]> & { id: string }): FleetS
     status: { kind: "idle" },
     question: null,
     meta: { version: "legacy" },
+    panePid: null,
+    claudeSessionId: null,
+    rawStatus: over.status ?? { kind: "idle" },
+    rawQuestion:
+      question === null ? null : { kind: "question", prompt: question.prompt, options: question.options },
     ...over,
   };
+}
+
+/**
+ * A row that can actually be steered, with the three identifiers filled in.
+ *
+ * Separate from `row` rather than folded into it, so that the tests which do
+ * NOT name these still get nulls — a page that quietly worked because every
+ * fixture happened to be addressable would say nothing about the real one.
+ */
+function steerable(over: Partial<FleetState["rows"][number]> & { id: string }): FleetState["rows"][number] {
+  return row({
+    paneId: "%2108",
+    panePid: 4242,
+    claudeSessionId: "117e181a-155b-435a-b95b-e74220678d1a",
+    ...over,
+  });
 }
 
 function state(over: Partial<FleetState> = {}): FleetState {
@@ -74,6 +126,7 @@ function state(over: Partial<FleetState> = {}): FleetState {
     tookMs: 12_000,
     error: null,
     rows: [],
+    unreadableRows: 0,
     health: null,
     /* The server does not send this yet. `null` is what the parser produces
        when it is absent, and the staleness threshold then falls back to the
@@ -119,6 +172,24 @@ function manualTransport(): {
     refreshes: () => refreshes,
     stops: () => stops,
   };
+}
+
+/**
+ * A payload off the wire, parsed.
+ *
+ * `schema: 1` is supplied because every real payload has it and a fixture
+ * without one is now refused outright — which is the point of `parseFleetState`
+ * since GPT Sol's F15, and would otherwise turn every parser test into a test
+ * of the schema check.
+ *
+ * It throws rather than returning `undefined`, so a fixture this build cannot
+ * read fails as itself instead of as a chain of optional accesses that quietly
+ * assert nothing.
+ */
+function wire(over: Record<string, unknown>): FleetState {
+  const read = parseFleetState({ schema: 1, rows: [], ...over });
+  if (!read.ok) throw new Error(`the fixture did not parse: ${read.why}`);
+  return read.state;
 }
 
 let container: HTMLDivElement;
@@ -192,10 +263,11 @@ describe("the list", () => {
               status: { kind: "needs-you" },
               question: {
                 prompt: "Do you want to make this edit to server.ts?",
+                material: { kind: "read", text: "- const a = 1;\n+ const a = 2;", fingerprint: "sha256:abc" },
                 options: [
-                  { label: "Yes", key: { via: "digit", digit: "1" } },
-                  { label: "Yes, and don't ask again", key: { via: "digit", digit: "2" } },
-                  { label: "No, tell Claude what to do differently", key: { via: "selected" } },
+                  { label: "Yes", key: { via: "digit", digit: "1" }, consequence: "once" },
+                  { label: "Yes, and don't ask again", key: { via: "digit", digit: "2" }, consequence: "persistent" },
+                  { label: "No, tell Claude what to do differently", key: { via: "selected" }, consequence: "decline" },
                 ],
               },
             }),
@@ -314,13 +386,12 @@ describe("the list", () => {
   });
 
   it("parses a meta it does not recognise as legacy rather than half-reading it", () => {
-    expect(parseFleetState({ rows: [{ id: "$a", meta: { version: 2, path: "/somewhere" } }] })?.rows[0]?.meta).toEqual({
+    expect(wire({ rows: [{ id: "$a", meta: { version: 2, path: "/somewhere" } }] }).rows[0]?.meta).toEqual({
       version: "legacy",
     });
-    expect(parseFleetState({ rows: [{ id: "$a" }] })?.rows[0]?.meta).toEqual({ version: "legacy" });
+    expect(wire({ rows: [{ id: "$a" }] }).rows[0]?.meta).toEqual({ version: "legacy" });
     expect(
-      parseFleetState({ rows: [{ id: "$a", meta: { version: 1, kind: "worktree", repo: "r", dir: "/d" } }] })?.rows[0]
-        ?.meta,
+      wire({ rows: [{ id: "$a", meta: { version: 1, kind: "worktree", repo: "r", dir: "/d" } }] }).rows[0]?.meta,
     ).toEqual({ version: 1, kind: "worktree", repo: "r", dir: "/d" });
   });
 });
@@ -471,18 +542,54 @@ describe("what comes off the wire", () => {
   });
 
   it("refuses a body that is not this API, rather than rendering zero sessions over it", () => {
-    expect(parseFleetState("<html>502 Bad Gateway</html>")).toBeNull();
-    expect(parseFleetState(null)).toBeNull();
+    expect(parseFleetState("<html>502 Bad Gateway</html>").ok).toBe(false);
+    expect(parseFleetState(null).ok).toBe(false);
   });
 
-  it("drops a row with no id but keeps its neighbours", () => {
-    const parsed = parseFleetState({ rows: [{ name: "nameless" }, { id: "$b" }] });
-    expect(parsed?.rows.map((r) => r.id)).toEqual(["$b"]);
+  it("refuses a schema it does not read, rather than showing a fleet it half-understands", () => {
+    /* GPT Sol's F15. `parseFleetState({})` used to SUCCEED: a missing `rows`
+       became an empty list, the schema was ignored, and a 200 carrying anything
+       at all rendered as a quiet box. Each refusal names itself, so the banner
+       can say which of the three it was. */
+    const two = parseFleetState({ schema: 2, rows: [] });
+    expect(two.ok).toBe(false);
+    expect(two.ok === false ? two.why : "").toContain("schema 2");
+
+    const none = parseFleetState({ rows: [] });
+    expect(none.ok).toBe(false);
+    expect(none.ok === false ? none.why : "").toContain("no schema");
+
+    expect(parseFleetState({}).ok).toBe(false);
+  });
+
+  it("refuses a payload with no list of sessions, which is not a payload with none", () => {
+    const missing = parseFleetState({ schema: 1 });
+    expect(missing.ok).toBe(false);
+    expect(missing.ok === false ? missing.why : "").toContain("not the same as having none");
+    // And the honest empty fleet still parses, because those are opposite claims.
+    expect(wire({ rows: [] }).rows).toEqual([]);
+  });
+
+  it("counts the rows it could not read rather than quietly shortening the fleet", () => {
+    /* A dropped row shortens authoritative state. The row most likely to be
+       malformed is a blocked one carrying a question scraped off a terminal,
+       which is exactly the row the page is opened to see. */
+    const read = wire({ rows: [{ name: "nameless" }, { id: "$b" }] });
+    expect(read.rows.map((r) => r.id)).toEqual(["$b"]);
+    expect(read.unreadableRows).toBe(1);
+  });
+
+  it("says on the page how many sessions it could not read", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() => feed.push(state({ rows: [row({ id: "$b", title: "the one that parsed" })], unreadableRows: 3 })));
+    const text = container.textContent ?? "";
+    expect(text).toContain("3 of 4 sessions could not be read");
+    expect(text).toContain("the one that parsed");
   });
 
   it("treats pane.ts's own `{ kind: none }` as no question at all", () => {
-    const parsed = parseFleetState({ rows: [{ id: "$a", question: { kind: "none" } }] });
-    expect(parsed?.rows[0]?.question).toBeNull();
+    expect(wire({ rows: [{ id: "$a", question: { kind: "none" } }] }).rows[0]?.question).toBeNull();
   });
 
   it("says which of the three ways a fetch failed", async () => {
@@ -528,7 +635,7 @@ describe("the escaping this rewrite exists for", () => {
               title: "<img src=x onerror=alert(1)>",
               repo: "<script>alert(2)</script>",
               status: { kind: "needs-you" },
-              question: { prompt: "<b>bold?</b>", options: [] },
+              question: { prompt: "<b>bold?</b>", options: [], material: { kind: "no-material" } },
             }),
           ],
         }),
@@ -810,11 +917,11 @@ describe("staleness, against the collector's own cadence", () => {
   });
 
   it("takes refreshMs off the wire when it is there, and null when it is not", () => {
-    expect(parseFleetState({ rows: [], refreshMs: 60_000 })?.refreshMs).toBe(60_000);
-    expect(parseFleetState({ rows: [] })?.refreshMs).toBeNull();
+    expect(wire({ refreshMs: 60_000 }).refreshMs).toBe(60_000);
+    expect(wire({}).refreshMs).toBeNull();
     // Not a number, or nonsense: the server did not say, so the page measures.
-    expect(parseFleetState({ rows: [], refreshMs: "soon" })?.refreshMs).toBeNull();
-    expect(parseFleetState({ rows: [], refreshMs: -1 })?.refreshMs).toBeNull();
+    expect(wire({ refreshMs: "soon" }).refreshMs).toBeNull();
+    expect(wire({ refreshMs: -1 }).refreshMs).toBeNull();
   });
 });
 
@@ -832,8 +939,9 @@ describe("the explanations, which are never hover-only", () => {
     const text = container.textContent ?? "";
     expect(text).toContain("waiting for a person");
     // And the second paragraph, which is the one that admits what the first
-    // cannot promise — docs/project/tooltips.md.
-    expect(text).toContain("this page cannot answer for you");
+    // cannot promise — docs/project/tooltips.md. Here: that "needs you" is a
+    // guess read off a terminal, not a fact the box reported.
+    expect(text).toContain("a good guess rather than a fact");
   });
 
   it("says what stale means, and when it last heard anything", () => {
@@ -1025,5 +1133,1040 @@ describe("box health, made readable", () => {
     );
     const pill = [...container.querySelectorAll('[data-slot="pill"]')].find((p) => p.textContent === "critical");
     expect(pill?.className).toContain("bg-alarm");
+  });
+});
+
+/* ==========================================================================
+   Stage v0.4b — the master–detail view, and the two write paths.
+   ========================================================================== */
+
+/** Every session card's own open button, in the order they are drawn. */
+function openButtons(): HTMLButtonElement[] {
+  return [...container.querySelectorAll<HTMLButtonElement>("button.session-open")];
+}
+
+/** Click the card whose title is `title`. Throws rather than silently doing nothing. */
+function openSession(title: string): void {
+  const button = openButtons().find((b) => b.textContent === title);
+  if (!button) throw new Error(`no session card titled ${JSON.stringify(title)} on the page`);
+  act(() => button.click());
+}
+
+/**
+ * Type into a controlled textarea, the way a person does.
+ *
+ * **`el.value = "…"` is not typing, and it fails in a way that looks like a
+ * dead button.** React tracks the last value it wrote on the node; assigning
+ * over it leaves that tracker in step, so the `input` event is dropped as a
+ * no-op, `useState` never updates, and the Send button stays disabled because
+ * the component still believes the box is empty. Going through the prototype's
+ * own setter is what desyncs the tracker, which is what makes React believe the
+ * event.
+ */
+function typeInto(el: HTMLTextAreaElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+  if (!setter) throw new Error("this DOM has no HTMLTextAreaElement value setter");
+  act(() => {
+    setter.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+/** A button anywhere on the page, by its exact visible text. */
+function buttonSaying(text: string): HTMLButtonElement | undefined {
+  return [...container.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === text);
+}
+
+/** Pin every element's width, the way the columns test does. Returns the undo. */
+function pinWidth(px: number): () => void {
+  const original = Object.getOwnPropertyDescriptor(Element.prototype, "clientWidth");
+  Object.defineProperty(Element.prototype, "clientWidth", { configurable: true, get: () => px });
+  return () => {
+    if (original) Object.defineProperty(Element.prototype, "clientWidth", original);
+  };
+}
+
+type Row = FleetState["rows"][number];
+
+/** A steer api that records what it was asked to do and answers happily. */
+function recordingSteer(): {
+  api: SteerApi;
+  calls: { op: "message" | "answer"; row: Row; arg: string | number }[];
+} {
+  const calls: { op: "message" | "answer"; row: Row; arg: string | number }[] = [];
+  const api: SteerApi = {
+    message: async (row, text) => {
+      calls.push({ op: "message", row, arg: text });
+      return { ok: true, op: "message", sent: [["tmux", "send-keys", "-t", row.paneId ?? "?", "-l", "--", text]] };
+    },
+    answer: async (row, index) => {
+      calls.push({ op: "answer", row, arg: index });
+      return { ok: true, op: "answer", sent: [["tmux", "send-keys", "-t", row.paneId ?? "?", "1"]] };
+    },
+  };
+  return { api, calls };
+}
+
+/** A steer api that refuses the way the server does, with the server's sentence. */
+function refusingSteer(outcome: SteerOutcome): SteerApi {
+  return { message: async () => outcome, answer: async () => outcome };
+}
+
+/** A new-session api that accepts everything and never starts anything. */
+function fakeNewSession(over: Partial<NewSessionApi> = {}): NewSessionApi {
+  return {
+    start: async () => ({ accepted: true, launch: null }),
+    poll: async () => ({ ok: true, feed: { busy: false, retryAfterMs: 0, launches: [] } }),
+    ...over,
+  };
+}
+
+function mountFull(args: { transport: Transport; steer?: SteerApi; newSession?: NewSessionApi }): void {
+  act(() =>
+    root.render(
+      <App
+        transport={args.transport}
+        steer={args.steer ?? recordingSteer().api}
+        newSession={args.newSession ?? fakeNewSession()}
+      />,
+    ),
+  );
+}
+
+/** A dialog with a body to approve, as the server sends one. */
+function question(over: Partial<FleetState["rows"][number]["question"] & object> = {}): NonNullable<
+  FleetState["rows"][number]["question"]
+> {
+  return {
+    prompt: "Do you want to make this edit to server.ts?",
+    material: { kind: "read", text: "- const port = 8787;\n+ const port = 9999;", fingerprint: "sha256:1f3a" },
+    options: [
+      { label: "Yes", key: { via: "digit", digit: "1" }, consequence: "once" },
+      { label: "Yes, and don't ask again", key: { via: "digit", digit: "2" }, consequence: "persistent" },
+      { label: "No", key: { via: "selected" }, consequence: "decline" },
+    ],
+    ...over,
+  };
+}
+
+describe("master and detail", () => {
+  it("opens a session on click, and shows what the list has no room for", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$1643",
+              title: "the one I tapped",
+              meta: { version: 1, kind: "claude", repo: "spideryarn/reading2", dir: "/home/greg/code/spideryarn2" },
+            }),
+          ],
+        }),
+      ),
+    );
+
+    // Before: the list, and no detail.
+    expect(container.textContent).toContain("the one I tapped");
+    expect(container.textContent).not.toContain("Recent messages");
+
+    openSession("the one I tapped");
+
+    const text = container.textContent ?? "";
+    // The things the list cannot hold, each asserted positively.
+    expect(text).toContain("What it needs from you");
+    expect(text).toContain("Say something to it");
+    expect(text).toContain("Where it is");
+    expect(text).toContain("/home/greg/code/spideryarn2");
+    expect(text).toContain("117e181a-155b-435a-b95b-e74220678d1a");
+    expect(container.querySelector("#steer-text")).not.toBeNull();
+  });
+
+  it("puts the selected session in the hash, so the pane survives a reload", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1643", title: "keep me" })] })));
+    openSession("keep me");
+    expect(window.location.hash).toBe("#sessions?sel=%241643");
+  });
+
+  it("opens straight into the session the hash names", () => {
+    window.location.hash = "#sessions?sel=%241643";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1643", title: "linked to" })] })));
+    expect(container.textContent).toContain("Say something to it");
+  });
+
+  it("says so when the selected session is not in the latest snapshot", () => {
+    window.location.hash = "#sessions?sel=%24gone";
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1643", title: "still here" })] })));
+    const text = container.textContent ?? "";
+    /* The id stays in the URL, so the honest page says the row went away rather
+       than quietly falling back to "nothing selected" — which would erase the
+       fact that something was there a minute ago. */
+    expect(text).toContain("not in the latest snapshot");
+    expect(text).toContain("$gone");
+    expect(text).not.toContain("Say something to it");
+  });
+
+  it("is a push at 390px: the detail replaces the list, and a button brings it back", () => {
+    const undo = pinWidth(390);
+    try {
+      const feed = manualTransport();
+      mountFull({ transport: feed.transport });
+      act(() =>
+        feed.push(
+          state({
+            rows: [
+              steerable({ id: "$a", title: "the one I opened" }),
+              steerable({ id: "$b", title: "the other one" }),
+            ],
+          }),
+        ),
+      );
+      expect(openButtons()).toHaveLength(2);
+
+      openSession("the one I opened");
+
+      /* THE PUSH. Not a squeeze: at 390px there is no room for both, so the
+         list is gone entirely rather than compressed into a column of two-word
+         lines — docs/project/narrow-windows.md. The negative below is paired
+         with a positive, because "the list went away" and "the whole page went
+         away" look identical to `not.toContain`. */
+      expect(openButtons()).toHaveLength(0);
+      expect(container.textContent).toContain("Say something to it");
+
+      const back = buttonSaying("← All sessions");
+      expect(back).toBeDefined();
+      act(() => back?.click());
+      expect(openButtons()).toHaveLength(2);
+      expect(container.textContent).not.toContain("Say something to it");
+    } finally {
+      undo();
+    }
+  });
+
+  it("is two panes at 1280px: the list stays beside the detail, and there is no back button", () => {
+    const undo = pinWidth(1280);
+    try {
+      const feed = manualTransport();
+      mountFull({ transport: feed.transport });
+      act(() =>
+        feed.push(
+          state({
+            rows: [steerable({ id: "$a", title: "opened" }), steerable({ id: "$b", title: "beside it" })],
+          }),
+        ),
+      );
+      openSession("opened");
+
+      expect(openButtons().map((b) => b.textContent)).toEqual(["opened", "beside it"]);
+      expect(container.textContent).toContain("Say something to it");
+      // The list is right there, so a button back to it would be a button to
+      // where you already are.
+      expect(buttonSaying("← All sessions")).toBeUndefined();
+    } finally {
+      undo();
+    }
+  });
+});
+
+describe("the orderings", () => {
+  const rows = [
+    steerable({
+      id: "$new",
+      title: "started five minutes ago",
+      status: { kind: "idle" },
+      startedAt: new Date("2026-09-08T11:55:00Z").toISOString(),
+    }),
+    steerable({
+      id: "$old",
+      title: "running all night",
+      status: { kind: "idle" },
+      startedAt: new Date("2026-09-07T20:00:00Z").toISOString(),
+    }),
+    steerable({
+      id: "$blocked",
+      title: "asking you something",
+      status: { kind: "needs-you" },
+      startedAt: new Date("2026-09-08T11:00:00Z").toISOString(),
+    }),
+  ];
+
+  function orderSelect(): HTMLSelectElement {
+    const select = container.querySelector<HTMLSelectElement>("select");
+    if (!select) throw new Error("there is no ordering control on the page");
+    return select;
+  }
+
+  function choose(value: string): void {
+    const select = orderSelect();
+    act(() => {
+      select.value = value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+
+  it("offers every ordering the view module knows about", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows })));
+    expect([...orderSelect().options].map((o) => o.value)).toEqual([...ORDERINGS]);
+  });
+
+  it("is status by default, which puts the blocked one first", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows })));
+    expect(titlesOnScreen()[0]).toBe("asking you something");
+    // And the bands are drawn, which is the half a sort test cannot see.
+    expect(container.textContent).toContain("Needs you · 1");
+  });
+
+  it("orders by how long they have been running, and drops the bands when it does", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows })));
+    choose("longest");
+
+    expect(titlesOnScreen()).toEqual([
+      "running all night",
+      "asking you something",
+      "started five minutes ago",
+    ]);
+    /* The headings go, because grouping by status while sorting by uptime would
+       put the longest-running session third under a heading naming the thing
+       the reader just asked not to sort by. Paired with the positive above, so
+       a page that rendered nothing could not pass this. */
+    expect(container.textContent).not.toContain("Needs you · 1");
+  });
+
+  it("writes the ordering into the hash, and reads it back on the next load", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows })));
+    choose("name");
+    expect(window.location.hash).toBe("#sessions?order=name");
+
+    // A reload: a fresh mount against the hash that is now in the address bar.
+    act(() => root.unmount());
+    root = createRoot(container);
+    const second = manualTransport();
+    mountFull({ transport: second.transport });
+    act(() => second.push(state({ rows })));
+    expect(titlesOnScreen()).toEqual([
+      "asking you something",
+      "running all night",
+      "started five minutes ago",
+    ]);
+  });
+
+  it("leaves no trace in the hash for the default, rather than writing it down", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows })));
+    choose("newest");
+    expect(window.location.hash).toBe("#sessions?order=newest");
+    choose("status");
+    expect(window.location.hash).toBe("#sessions");
+    expect(titlesOnScreen()[0]).toBe("asking you something");
+  });
+
+  it("sorts a row with an unreadable start time last, rather than anywhere", () => {
+    /* `Date.parse` answers NaN instead of throwing, every comparison with NaN
+       is false, and a comparator that subtracts two of them returns NaN — which
+       sorts as "equal to everything", so the row lands wherever the sort walked
+       and the page looks fine. */
+    const broken = [
+      steerable({ id: "$b", title: "broken clock", startedAt: "not a date" }),
+      steerable({ id: "$a", title: "real clock", startedAt: new Date("2026-09-08T09:00:00Z").toISOString() }),
+    ];
+    expect(sortRows(broken, "longest").map((r) => r.title)).toEqual(["real clock", "broken clock"]);
+    expect(sortRows(broken, "newest").map((r) => r.title)).toEqual(["real clock", "broken clock"]);
+  });
+});
+
+describe("what an option would actually do", () => {
+  it("never draws `unknown` more quietly than `persistent`", () => {
+    /* THE INVERSION THIS TEST EXISTS TO PREVENT. `classifyConsequence` is a
+       reading of English off a terminal, written to be wrong in one direction
+       only: nothing falls through to `once`, and anything unrecognised is
+       `unknown`. If the page then drew `persistent` in red and `unknown` in
+       neutral grey, the conservative default would be the LEAST alarming badge
+       on screen — a new Claude Code label ("Yes, and remember this") would
+       classify as `unknown` and render as the safest-looking option there.
+       An inequality rather than a comment, because a comment cannot fail. */
+    expect(CONSEQUENCE_RANK.unknown).toBeGreaterThanOrEqual(CONSEQUENCE_RANK.persistent);
+    expect(TONE_ALARM[CONSEQUENCE_TONE.unknown]).toBeGreaterThanOrEqual(TONE_ALARM[CONSEQUENCE_TONE.persistent]);
+    // And both are louder than the two that only reach this one action.
+    expect(TONE_ALARM[CONSEQUENCE_TONE.persistent]).toBeGreaterThan(TONE_ALARM[CONSEQUENCE_TONE.once]);
+    expect(TONE_ALARM[CONSEQUENCE_TONE.persistent]).toBeGreaterThan(TONE_ALARM[CONSEQUENCE_TONE.decline]);
+  });
+
+  it("reads an unrecognised or missing consequence as unknown, never as `once`", () => {
+    /* Defaulting a missing field to "this time only" would be the whole failure
+       in one line: an old server, or a renamed field, and every option on the
+       page silently becomes the mild one. */
+    const read = wire({
+      rows: [
+        {
+          id: "$a",
+          status: { kind: "needs-you" },
+          question: {
+            kind: "question",
+            prompt: "?",
+            material: { kind: "no-material" },
+            options: [
+              { label: "a", key: { via: "digit", digit: "1" } },
+              { label: "b", key: { via: "digit", digit: "2" }, consequence: "remembers-forever" },
+              { label: "c", key: { via: "digit", digit: "3" }, consequence: "once" },
+            ],
+          },
+        },
+      ],
+    });
+    expect(read.rows[0]?.question?.options.map((o) => o.consequence)).toEqual(["unknown", "unknown", "once"]);
+  });
+
+  it("shows the badge on the page, so it is not only in a data structure", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(state({ rows: [steerable({ id: "$a", title: "asking", status: { kind: "needs-you" }, question: question() })] })),
+    );
+    openSession("asking");
+    const text = container.textContent ?? "";
+    expect(text).toContain("and from now on");
+    expect(text).toContain("this time only");
+    expect(text).toContain("declines");
+  });
+});
+
+describe("what is actually being approved", () => {
+  it("shows the material and its fingerprint in the detail", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(state({ rows: [steerable({ id: "$a", title: "asking", status: { kind: "needs-you" }, question: question() })] })),
+    );
+    openSession("asking");
+    const text = container.textContent ?? "";
+    /* The prompt is the headline and this is the evidence. Offering a way to
+       say yes without showing this is asking somebody to approve something they
+       cannot see — which is what two reviews independently found. */
+    expect(text).toContain("What you would be approving");
+    expect(text).toContain("+ const port = 9999;");
+    expect(text).toContain("sha256:1f3a");
+  });
+
+  it("renders the material as text, not as markup", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$a",
+              title: "asking",
+              status: { kind: "needs-you" },
+              question: question({
+                material: { kind: "read", text: "<img src=x onerror=alert(1)>", fingerprint: "sha256:0" },
+              }),
+            }),
+          ],
+        }),
+      ),
+    );
+    openSession("asking");
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.textContent).toContain("<img src=x onerror=alert(1)>");
+  });
+
+  it("refuses to offer an answer when the material could not be read", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$a",
+              title: "asking",
+              status: { kind: "needs-you" },
+              question: question({
+                material: { kind: "unreadable", why: "the capture starts mid-dialog, so what we can see is a fragment" },
+              }),
+            }),
+          ],
+        }),
+      ),
+    );
+    openSession("asking");
+    const text = container.textContent ?? "";
+    expect(text).toContain("could not be read");
+    expect(text).toContain("the capture starts mid-dialog");
+    // The options are still LISTED — you can read the menu — and none of them
+    // is a button, which is the difference between informing and inviting.
+    expect(text).toContain("Yes, and don't ask again");
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+  });
+
+  it("treats an absent material as unreadable, never as 'this dialog proposes nothing'", () => {
+    /* One line apart and opposite claims. An old server that sends no material
+       must not produce an empty box that reads as a menu with nothing attached. */
+    const read = wire({
+      rows: [{ id: "$a", status: { kind: "needs-you" }, question: { kind: "question", prompt: "?", options: [] } }],
+    });
+    expect(read.rows[0]?.question?.material).toEqual({
+      kind: "unreadable",
+      why: "the server sent nothing about what this dialog is asking you to approve",
+    });
+  });
+
+  it("lets a menu with nothing attached say so, and still be answerable", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$a",
+              title: "a loop menu",
+              status: { kind: "needs-you" },
+              question: question({ material: { kind: "no-material" } }),
+            }),
+          ],
+        }),
+      ),
+    );
+    openSession("a loop menu");
+    expect(container.textContent).toContain("the menu is the whole question");
+    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
+  });
+});
+
+describe("answering, which is held back at the server", () => {
+  it("says so before anybody taps, and says a message is different", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(state({ rows: [steerable({ id: "$a", title: "asking", status: { kind: "needs-you" }, question: question() })] })),
+    );
+    openSession("asking");
+    const text = container.textContent ?? "";
+    /* Not discovered by tapping. Screen text is not provenance — an agent given
+       hostile input can print a plausible menu — and whether to ship answering
+       anyway is Greg's call. */
+    expect(text).toContain("Answering is held back");
+    expect(text).toContain("screen text is not proof");
+    expect(text).toContain("Sending a message, further down, is not affected");
+  });
+
+  it("shows the server's 503 in the server's own words, and stops offering buttons after it", async () => {
+    const why =
+      "answering a dialog is disabled: the captured question does not include what is being approved, " +
+      "so tapping an option could approve something other than what you were shown. " +
+      "Use `gjd-remote resume <name>` and answer it in the terminal.";
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      steer: refusingSteer({ ok: false, code: "answering-disabled", why, status: 503, from: "server" }),
+    });
+    act(() =>
+      feed.push(state({ rows: [steerable({ id: "$a", title: "asking", status: { kind: "needs-you" }, question: question() })] })),
+    );
+    openSession("asking");
+    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>("button.answer")?.click();
+    });
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("gjd-remote resume");
+    expect(text).toContain("Answering is switched off on this server");
+    /* A control that refuses every time you press it is worse than one that
+       explains itself, so the options go back to being a list — and the list is
+       still there, which is the positive half of this pair. */
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+    expect(text).toContain("Yes, and don't ask again");
+  });
+
+  it("leaves the message box working while answering is off", async () => {
+    const recorder = recordingSteer();
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, steer: recorder.api });
+    act(() =>
+      feed.push(state({ rows: [steerable({ id: "$a", title: "asking", status: { kind: "needs-you" }, question: question() })] })),
+    );
+    openSession("asking");
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box");
+    expect(box.disabled).toBe(false);
+    typeInto(box, "answer it yourself, you have my go-ahead");
+    await act(async () => {
+      buttonSaying("Send")?.click();
+    });
+    expect(recorder.calls[0]?.op).toBe("message");
+  });
+});
+
+describe("the rule about sending the server its own claims back", () => {
+  /**
+   * The dialog as it arrives on the wire, INCLUDING a field this build has
+   * never heard of.
+   *
+   * `capturedAt` stands in for whatever the server adds next. A client that
+   * rebuilt `question` from its own parse would drop it silently — which is
+   * exactly how the material fix would have landed and done nothing.
+   */
+  const wireQuestion = {
+    kind: "question",
+    prompt: "Do you want to make this edit to server.ts?",
+    material: {
+      kind: "read",
+      text: "- const port = 8787;\n+ const port = 9999;",
+      fingerprint: "sha256:1f3a",
+    },
+    options: [
+      { label: "Yes", key: { via: "digit", digit: "1" }, consequence: "once" },
+      { label: "No, tell Claude what to do differently", key: { via: "selected" }, consequence: "decline" },
+    ],
+    capturedAt: "2026-09-08T12:00:04.113Z",
+  };
+
+  const wireRow = {
+    id: "$1643",
+    name: "some-session",
+    title: "asking about an edit",
+    repo: "spideryarn/reading2",
+    worktree: null,
+    meta: { version: 1, kind: "claude", repo: "spideryarn/reading2", dir: "/home/greg/code/spideryarn2" },
+    startedAt: new Date("2026-09-08T10:00:00Z").toISOString(),
+    paneId: "%1646",
+    panePid: 645023,
+    claudeSessionId: "117e181a-155b-435a-b95b-e74220678d1a",
+    question: wireQuestion,
+    status: { kind: "needs-you" },
+  };
+
+  /** A `fetch` that records every call and answers as the steer route does. */
+  function recordingFetch(answer: { status: number; body: unknown }): {
+    impl: typeof fetch;
+    calls: { url: string; init: RequestInit | undefined }[];
+  } {
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
+    const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init });
+      return {
+        ok: answer.status >= 200 && answer.status < 300,
+        status: answer.status,
+        statusText: "",
+        json: async () => answer.body,
+      } as Response;
+    }) as unknown as typeof fetch;
+    return { impl, calls };
+  }
+
+  it("hands `question` back byte-identical, extra fields and all", async () => {
+    const parsed = wire({ rows: [wireRow], collectedAt: state().collectedAt });
+    expect(parsed.rows).toHaveLength(1);
+
+    const recorded = recordingFetch({ status: 200, body: { ok: true, op: "answer", sent: [["tmux", "send-keys"]] } });
+    vi.stubGlobal("fetch", recorded.impl);
+
+    const feed = manualTransport();
+    // The REAL steer api, so this test exercises the bytes on the wire rather
+    // than a seam that could be right while the wire is wrong.
+    act(() => root.render(<App transport={feed.transport} newSession={fakeNewSession()} />));
+    act(() => feed.push(parsed));
+    openSession("asking about an edit");
+
+    const yes = container.querySelector<HTMLButtonElement>("button.answer");
+    expect(yes?.textContent).toContain("Yes");
+    await act(async () => {
+      yes?.click();
+    });
+
+    expect(recorded.calls).toHaveLength(1);
+    const call = recorded.calls[0];
+    expect(call?.url).toBe("api/steer/answer");
+    const body = JSON.parse(String(call?.init?.body)) as Record<string, unknown>;
+
+    // THE ASSERTION THIS WHOLE DESCRIBE EXISTS FOR.
+    expect(body["question"]).toEqual(wireQuestion);
+    const sent = body["question"] as Record<string, unknown>;
+    expect(sent["capturedAt"]).toBe(wireQuestion.capturedAt);
+    expect(sent["material"]).toEqual(wireQuestion.material);
+
+    // And every identifier, verbatim off the row that was tapped.
+    expect(body["paneId"]).toBe("%1646");
+    expect(body["sessionId"]).toBe("$1643");
+    expect(body["claudeSessionId"]).toBe("117e181a-155b-435a-b95b-e74220678d1a");
+    expect(body["panePid"]).toBe(645023);
+    expect(body["status"]).toEqual({ kind: "needs-you" });
+    expect(body["optionIndex"]).toBe(0);
+  });
+
+  it("does not ask the server for fresh state before sending", async () => {
+    /* If the client refreshed first, every guard in steer.ts would be comparing
+       the box against itself and would pass unconditionally — routes-steer.ts
+       says so at length. So the only request an answer may make is the answer. */
+    const parsed = wire({ rows: [wireRow], collectedAt: state().collectedAt });
+    const recorded = recordingFetch({ status: 200, body: { ok: true, op: "answer", sent: [] } });
+    vi.stubGlobal("fetch", recorded.impl);
+
+    const feed = manualTransport();
+    act(() => root.render(<App transport={feed.transport} newSession={fakeNewSession()} />));
+    act(() => feed.push(parsed));
+    openSession("asking about an edit");
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>("button.answer")?.click();
+    });
+
+    expect(recorded.calls.map((c) => c.url)).toEqual(["api/steer/answer"]);
+  });
+
+  it("sends the status object the server sent, not the one this build parsed it into", () => {
+    /* A status arm this build has never heard of renders as `unknown` — which
+       is right on the page and wrong on the wire. Declaring `unknown` about a
+       row the server called something else is a claim the person never made,
+       and a newer server should get its own word back and decide. */
+    const strange = { kind: "compacting", detail: "rolling up the context" };
+    const one = wire({ rows: [{ ...wireRow, status: strange, question: null }] }).rows[0];
+    if (one === undefined) throw new Error("the fixture had no rows");
+    expect(one.status).toEqual({ kind: "unknown", why: 'this page does not know the status "compacting"' });
+    expect(steerMessageBody(one, "carry on").status).toEqual(strange);
+  });
+
+  it("shows the server's refusal in the server's own words", async () => {
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      steer: refusingSteer({
+        ok: false,
+        code: "wrong-pane",
+        why: "pane %1646 is in session $1643 now, not $1",
+        status: 409,
+        from: "server",
+      }),
+    });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1", title: "moved under me" })] })));
+    openSession("moved under me");
+
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box");
+    typeInto(box, "carry on");
+    await act(async () => {
+      buttonSaying("Send")?.click();
+    });
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("pane %1646 is in session $1643 now, not $1");
+    expect(text).toContain("wrong-pane");
+    expect(text).toContain("Nothing was sent.");
+    // 409 means the world moved, which is the one case where refreshing helps.
+    expect(buttonSaying("Refresh and look again")).toBeDefined();
+  });
+
+  it("refuses locally only for a row that has no address at all, and says which", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: [row({ id: "$legacy", title: "a session from before", paneId: null })] })));
+    openSession("a session from before");
+    const text = container.textContent ?? "";
+    expect(text).toContain("no tmux pane handle");
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    expect(box?.disabled).toBe(true);
+  });
+
+  it("hands the message and the row that was tapped to the typed action", async () => {
+    const recorder = recordingSteer();
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, steer: recorder.api });
+    act(() =>
+      feed.push(
+        state({ rows: [steerable({ id: "$a", title: "first" }), steerable({ id: "$b", title: "second" })] }),
+      ),
+    );
+    openSession("second");
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box");
+    typeInto(box, "pull the latest dev and carry on");
+    await act(async () => {
+      buttonSaying("Send")?.click();
+    });
+
+    expect(recorder.calls).toHaveLength(1);
+    expect(recorder.calls[0]?.op).toBe("message");
+    expect(recorder.calls[0]?.row.id).toBe("$b");
+    expect(recorder.calls[0]?.arg).toBe("pull the latest dev and carry on");
+    expect(container.textContent).toContain("Sent.");
+  });
+});
+
+describe("the recent-messages slot, which is empty on purpose", () => {
+  it("says the messages are not wired up, and shows what they will be found from", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$a",
+              title: "a session",
+              meta: { version: 1, kind: "claude", repo: "spideryarn/reading2", dir: "/home/greg/code/spideryarn2" },
+            }),
+          ],
+        }),
+      ),
+    );
+    openSession("a session");
+    const text = container.textContent ?? "";
+    /* An empty panel that says so is correct; a panel that shows nothing and
+       looks finished is not, and a mocked conversation would be worse than
+       either. */
+    expect(text).toContain("Recent messages are not wired up yet");
+    expect(text).toContain("/home/greg/code/spideryarn2");
+    expect(text).toContain("117e181a-155b-435a-b95b-e74220678d1a");
+  });
+});
+
+describe("starting a session", () => {
+  function openNewSession(): void {
+    const button = buttonSaying("New session");
+    if (!button) throw new Error("there is no New session button");
+    act(() => button.click());
+  }
+
+  function type(id: string, value: string): void {
+    const box = container.querySelector<HTMLTextAreaElement>(`#${id}`);
+    if (!box) throw new Error(`no textarea #${id}`);
+    typeInto(box, value);
+  }
+
+  it("sends the prompt and nothing else — in particular no name, so Claude titles it", async () => {
+    const starting = {
+      id: "L1",
+      state: "starting",
+      name: null,
+      dir: "/home/greg/code/spideryarn2",
+      promptBytes: 12,
+      requestedAt: "",
+      finishedAt: null,
+      error: null,
+      maybeStarted: false,
+      note: null,
+    };
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      (async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(input), init });
+        /* The POST answers 202 with the record; the GET answers the register.
+           They are different shapes and a stub that returned one for both would
+           be testing something the server never does — the poll would read no
+           `launches` at all and the panel would rightly forget the launch. */
+        const body =
+          init?.method === "POST"
+            ? { ok: true, launch: starting, retryAfterMs: 0 }
+            : { ok: true, busy: true, retryAfterMs: 0, launches: [starting] };
+        return { ok: true, status: init?.method === "POST" ? 202 : 200, json: async () => body } as Response;
+      }) as unknown as typeof fetch,
+    );
+
+    const feed = manualTransport();
+    act(() => root.render(<App transport={feed.transport} steer={recordingSteer().api} />));
+    act(() => feed.push(state({ rows: [] })));
+    openNewSession();
+    type("new-session-prompt", "do the thing");
+    await act(async () => {
+      buttonSaying("Start it")?.click();
+    });
+
+    const post = calls.find((c) => c.init?.method === "POST");
+    expect(post?.url).toBe("api/sessions/new");
+    const body = JSON.parse(String(post?.init?.body)) as Record<string, unknown>;
+    // The positive half: the prompt really is what was typed.
+    expect(body["prompt"]).toBe("do the thing");
+    /* And the negative half it is paired with: no `name` key at all, so
+       gjd-remote starts Claude without `--name` and the list adopts the title
+       Claude gives the conversation. A name chosen here would freeze a
+       placeholder over the top of it forever. */
+    expect(Object.keys(body)).toEqual(["prompt"]);
+    expect(container.textContent).toContain("Starting…");
+  });
+
+  it("treats 200 as a failure, because a launch has three states and 200 claims one early", async () => {
+    vi.stubGlobal(
+      "fetch",
+      (async () =>
+        ({ ok: true, status: 200, json: async () => ({ ok: true, launch: null }) }) as Response) as unknown as typeof fetch,
+    );
+    const api = makeNewSessionApi(fetch);
+    const result = await api.start("anything");
+    expect(result.accepted).toBe(false);
+    expect(result.accepted === false ? result.why : "").toContain("only accepts 202");
+  });
+
+  it("shows the server's refusal rather than a sentence of its own", async () => {
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      newSession: fakeNewSession({
+        start: async () => ({
+          accepted: false,
+          why: "the box is critical (load, memory or swap) — starting another Claude now is how the OOM killer gets to choose which agent dies.",
+          status: 503,
+          from: "server",
+        }),
+      }),
+    });
+    act(() => feed.push(state({ rows: [] })));
+    openNewSession();
+    type("new-session-prompt", "start something");
+    await act(async () => {
+      buttonSaying("Start it")?.click();
+    });
+    expect(container.textContent).toContain("how the OOM killer gets to choose which agent dies");
+  });
+
+  it("says 'check the list and kill it' for a failure that may have started something", async () => {
+    const record = parseLaunch({
+      id: "L2",
+      state: "failed",
+      name: null,
+      dir: "/home/greg/code/spideryarn2",
+      promptBytes: 9,
+      requestedAt: "",
+      finishedAt: "",
+      error: "the launcher timed out after 180s",
+      maybeStarted: true,
+      note: null,
+    });
+    if (record === null) throw new Error("the fixture did not parse");
+
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      newSession: fakeNewSession({
+        start: async () => ({ accepted: true, launch: record }),
+        poll: async () => ({ ok: true, feed: { busy: false, retryAfterMs: 0, launches: [record] } }),
+      }),
+    });
+    act(() => feed.push(state({ rows: [] })));
+    openNewSession();
+    type("new-session-prompt", "start me");
+    await act(async () => {
+      buttonSaying("Start it")?.click();
+    });
+
+    const text = container.textContent ?? "";
+    /* The state a two-state design would have to lie about. "Nothing happened"
+       is wrong about exactly the case that costs something: an agent nobody
+       knows they started, on a box that runs out of memory. */
+    expect(text).toContain("it may have started anyway");
+    expect(text).toContain("Check the list, and kill it if it is there");
+    expect(text).toContain("the launcher timed out after 180s");
+    expect(text).not.toContain("Nothing was started");
+  });
+
+  it("refuses a launch state it has never heard of rather than rounding it to started", () => {
+    expect(parseLaunch({ id: "L3", state: "reticulating" })).toBeNull();
+    expect(parseLaunch({ id: "L3", state: "started" })?.state).toBe("started");
+  });
+
+  it("reads maybeStarted as false only when the server actually said so", () => {
+    expect(parseLaunch({ id: "L4", state: "failed" })?.maybeStarted).toBe(false);
+    expect(parseLaunch({ id: "L4", state: "failed", maybeStarted: true })?.maybeStarted).toBe(true);
+  });
+});
+
+describe("the identifiers a steer needs, off the wire", () => {
+  it("carries the pane pid and the conversation id through the parser", () => {
+    const one = wire({
+      rows: [
+        {
+          id: "$1643",
+          paneId: "%1646",
+          panePid: 645023,
+          claudeSessionId: "117e181a-155b-435a-b95b-e74220678d1a",
+          status: { kind: "idle" },
+        },
+      ],
+    }).rows[0];
+    expect(one?.panePid).toBe(645023);
+    expect(one?.claudeSessionId).toBe("117e181a-155b-435a-b95b-e74220678d1a");
+  });
+
+  it("refuses a pid that is not one, rather than sending a number the server would reject", () => {
+    const parsed = wire({ rows: [{ id: "$1", panePid: -3, status: { kind: "idle" } }] });
+    expect(parsed.rows[0]?.panePid).toBeNull();
+    expect(parsed.rows[0]?.id).toBe("$1");
+  });
+
+  it("puts the panes crossover where the two minimum widths put it, and nowhere else", () => {
+    expect(choosePanes(COLUMN_MIN_PX + DETAIL_MIN_PX + PANE_GAP_PX)).toBe(2);
+    expect(choosePanes(COLUMN_MIN_PX + DETAIL_MIN_PX + PANE_GAP_PX - 1)).toBe(1);
+    expect(choosePanes(390)).toBe(1);
+    expect(choosePanes(1280)).toBe(2);
+    // Not laid out at all: change nothing, the same answer `chooseColumns` gives.
+    expect(choosePanes(0)).toBe(1);
+    expect(choosePanes(Number.NaN)).toBe(1);
+  });
+});
+
+describe("the list card, in the narrow column beside an open detail", () => {
+  /** The text inside session cards only, so an assertion cannot read the detail. */
+  function listText(): string {
+    return [...container.querySelectorAll(".session-card")].map((c) => c.textContent ?? "").join(" ");
+  }
+
+  const blocked = steerable({
+    id: "$a",
+    title: "asking",
+    status: { kind: "needs-you" },
+    question: question(),
+  });
+
+  it("draws the whole dialog while it is the only column", () => {
+    /* Seeing what a blocked session is asking WITHOUT tapping anything is why
+       this page is opened on a phone, so the full-width list keeps it. */
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ rows: [blocked] })));
+    const text = listText();
+    expect(text).toContain("Yes, and don't ask again");
+    expect(text).toContain("press 1");
+  });
+
+  it("drops to the prompt once the same dialog is open beside it", () => {
+    const undo = pinWidth(1280);
+    try {
+      const feed = manualTransport();
+      mountFull({ transport: feed.transport });
+      act(() => feed.push(state({ rows: [blocked] })));
+      openSession("asking");
+
+      const text = listText();
+      /* The positive half: the card still says what is being asked and how many
+         ways there are to answer, so the list is still scannable. */
+      expect(text).toContain("Do you want to make this edit to server.ts?");
+      expect(text).toContain("3 options — open it to read them.");
+      /* And the negative half: the options themselves are not repeated in a
+         340px column two inches from the copy that has buttons on it. */
+      expect(text).not.toContain("press 1");
+      // Which is not "the page lost them" — the detail has them.
+      expect(container.textContent).toContain("Yes, and don't ask again");
+    } finally {
+      undo();
+    }
   });
 });

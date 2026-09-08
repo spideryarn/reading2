@@ -538,6 +538,67 @@
     }
   }
 
+  /* ------------------------------------------------------ the session list --
+     A card you can open, without a button inside a button.
+
+     The heading holds the only real control; `::after` stretches that control's
+     hit area across the whole card, which is the "stretched link" pattern and
+     the only way to get a thumb-sized target without wrapping the card in a
+     `<button>` — which would nest the status pill's explanation inside another
+     button. Invalid HTML, and a screen reader reads the pair as one control
+     whose name is every word on the card.
+
+     `.explain` is lifted above the overlay so its own tap still opens its card.
+     That is the one place on a card where a tap does something other than open
+     the session, and it is the place a reader taps when they want to know what
+     the word means. */
+  .session-card {
+    position: relative;
+  }
+  .session-open {
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+  }
+  .session-open::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius);
+  }
+  /* Drawn on the CARD rather than round the two words of the title: the target
+     is the card, so the ring that says "this is focused" has to be too. */
+  .session-open:focus-visible {
+    outline: none;
+  }
+  .session-open:focus-visible::after {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  .session-card .explain {
+    position: relative;
+    z-index: 1;
+  }
+  /* The row you are looking at. A ring rather than a fill, so a `needs-you`
+     card keeps its orange wash and does not change meaning when it is picked. */
+  .session-card.on {
+    box-shadow: 0 0 0 2px var(--ink-faint);
+  }
+  .session-card:hover {
+    border-color: var(--rule-strong);
+  }
+
+  /* An option of a dialog, as a button. Not `.dock-btn` and not `Button`: those
+     are one line tall and this is a sentence off somebody's terminal, which on
+     a phone wraps to three. */
+  .answer {
+    font: inherit;
+    color: inherit;
+  }
+
   /* ------------------------------------------------------------- tooltip --
      PORTED FROM src/web/styles/tooltip.css. Tooltip.tsx, over Floating UI,
      which positions and ships no styles of its own — everything visual is here.

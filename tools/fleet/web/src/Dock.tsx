@@ -51,7 +51,7 @@ const MODE_TIPS: Record<Mode, Tip> = {
   sessions: {
     head: "Sessions",
     what: "Every tmux session on the box, worst first: who needs an answer, then what is moving, then everything quiet.",
-    how: "Read off the box about once a minute. A session that is asking you something shows the question and the keys that would answer it — this page sends nothing.",
+    how: "Read off the box about once a minute. Open one to see what it is asking, answer it, or say something to it — the dashboard types at the pane, and checks first that the pane is still the one you were shown.",
   },
   health: {
     head: "Box health",
