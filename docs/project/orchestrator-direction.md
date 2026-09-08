@@ -471,6 +471,119 @@ issuer, this application's `aud`, algorithm, expiry, clock skew, fail closed whe
 unavailable — and never trust `Cf-Access-Authenticated-User-Email` on its own. Add CSRF protection
 on mutations too: an Access cookie proves who the browser belongs to, not that a human pressed Send.
 
+## The backlog, after the wide review
+
+**GPT 6 Astra reviewed the whole approach on 2026-09-08** at Greg's request — Overseer and dashboard
+together, wide brief. Its verdict: *"The direction is worth pursuing, but the live write path has
+outgrown the original security argument."* It endorsed the daemon, the fleet layer and one collector,
+and asked us to change the assumptions around authorisation, approval context, delivery receipts and
+recovery **before** adding autonomous coordination. Full text:
+[260908b-whole-approach-review-astra-v2.md](../plans/260908b-whole-approach-review-astra-v2.md).
+
+Two caveats on reading it. It reviewed revision `35e4d368`, so **`bad6eee5` and the new-session route
+postdate it** — its A15 complaint that `FleetRow` loses the directory and metadata was fixed while it
+was running. And where it says *"I am identifying an architectural exposure, not claiming an exploit
+exists"*, that distinction is its own and should survive being quoted.
+
+Ordered by value against effort, with the owner named because two agents are building here.
+
+### First — because the write path is live and was designed when it was not
+
+| | what | owner |
+|---|---|---|
+| **A9** | **Approval must bind to the material, not the sentence.** Astra changed a proposed file's contents from `hello` to `goodbye` and the pane parser returned an identical question and options — it keeps *"Do you want to create notes.md?"* and discards the diff. So an approval can be accepted after the thing being approved has changed, and the phone can ask for approval without showing what it is. Bind to command, diff, destination and permission scope; hand off to a terminal when the capture is incomplete; and make *"yes once"* and *"auto-approve this session"* visibly different. | dashboard |
+| **A10** | A live Claude descendant does not prove an **empty input box owns the keystrokes** — the text may append to a draft, hit a modal, or reach a foreground program. Make arbitrary prose a narrower capability than answering a recognised dialog. | dashboard |
+| **A11** | Delivery needs an **uncertain** state. A nonce proves the transport *can* work; it says nothing about later requests. Action IDs, and five states — accepted, keys submitted, reception observed, refused, outcome unknown — with a repeat retrieving the receipt. **Never auto-retry keystrokes.** | dashboard |
+| **A5** | **Reachability, but narrower.** The reference system we copied checked callers against `owner-logins.txt` before POSTs — *its write boundary was never reachability alone*, and we took the half we liked. The cheap fix is a device-scoped tailnet grant, not a login page. Tailscale's default policy is permissive, so verify rather than assume. | both |
+| **A6** | Treat the dashboard as a **privileged renderer of hostile content**: CSP and anti-framing before answer buttons. Origin checks do not stop a malicious page framing the real one. | dashboard |
+| **A12** | **An Overseer message must not acquire Greg's authority** by arriving as a user turn. A worker can meet malicious instructions, report them, and get them back as authoritative steering. Display *Greg requested* / *Overseer proposed* / *policy authorised* distinctly. A model's recommendation must not mint its own approval. | overseer |
+
+### Then — so the box does not collapse again
+
+| | what | owner |
+|---|---|---|
+| **A13** | **Resource admission before richer triage.** After a load-391 incident the most useful automation is *declining to start expensive work*: caps on concurrent heavy tests, browser jobs and reviews, and no-overlap defaults. Attribute consumption to jobs including children — counting sessions misses most of it. Note: **`SIGSTOP` does not release resident memory**, so pausing is not relief. | overseer |
+| **A17** | **Alarm semantics must match normal operation.** The client calls data stale at 30s while collection waits 60s after a ~12s run, so *healthy operation spends most of its time alarming* — which teaches Greg to ignore it. Also, health refresh sits after successful fleet collection, so the failure that most needs explaining can prevent a fresh health reading. | both |
+| **A27** | **Something off-box must notice the box disappearing.** Two local heartbeats cannot report total host failure. A minimal external dead-man check, deliberately tested. Nobody had thought of this. | overseer |
+
+### Then — O1, corrected
+
+A14, A15 and A16 are already folded into
+[260908b](../plans/260908b-overseer-store-and-clock.md) — they overlap Sol's findings and mostly
+agree with them. Astra adds two things Sol did not: **a drained or freshly rebooted box legitimately
+has zero sessions**, so rejecting every empty snapshot could preserve a fleet of ghosts forever; and
+**"timestamp advanced" is not a complete freshness contract** across clock corrections and restarts,
+so prefer a source generation and sequence.
+
+**A26 changes the goal of recovery**, and is the sharpest thing said about O4:
+
+> "Restore 36 sessions" may recreate the incident. The useful target is restoring valuable work with
+> understood state.
+>
+> — Astra, 2026-09-08
+
+So reboot recovery produces a **queue** — what was interrupted, where its files and transcripts are,
+what evidence survives, what it proposes next — resumed gradually under resource admission, with
+shells given a manual path rather than pretended to be resumable agents.
+
+### Then — the inbox, which both reviewers reached independently
+
+Astra's A19–A20 and Fable's answer agree, having been asked different questions: **the phone is a
+decision inbox, not a ranked list of sessions.** Astra adds the interaction rule Fable did not —
+*do not reorder or replace a card's options while his finger is approaching them*, and preserve
+drafts across phone suspension. Its notification default matches Fable's near-zero position: wake for
+suspected destructive activity or imminent data loss; notify in waking hours for a decision blocking
+valuable work or a persistent loss of visibility; digest everything else. **Group correlated events —
+thirty agents hitting one quota limit is one incident, not thirty notifications.** Keep transcript
+excerpts off the lock screen.
+
+**A18 independently confirms Fable on confidence**: ranking by self-reported confidence promotes
+exactly the confident mistakes you most want caught. Rank by consequence and reversibility; treat
+confidence as an annotation until it has been measured.
+
+### Later, and deliberately not now
+
+**A21 — narrow operational actions before conversational authority.** The earliest unattended actions
+should be: defer new jobs, reduce monitoring frequency, deduplicate alerts, restart a failed
+dashboard or Overseer. **Explicitly not** generic *keep going*, *pull latest*, *remove the worktree*
+or *approve the prompt* buttons — "their consequences depend too heavily on context", which is a
+direct contradiction of [§ The four capabilities](#the-four-capabilities-and-what-each-really-needs)
+and is the better argument.
+
+**A22 — a small event protocol before agent-to-agent routing.** Start with `progress`, `blocked`,
+`decision`, `completed`, carrying event and job ids and artifact references, and **distinguish
+self-reported claims from independently observed facts**. Defer the READY/LAND/GATE state machine
+until those words have precise meanings — *"READY must not silently mean reviewed, tested, merged and
+safe to deploy."*
+
+**A23 — coordinate shared resources, not just conversations.** Worktrees do not isolate the shared
+database, the dev server, test capacity or version control. Lightweight declarations — *using the
+shared test database*, *ready to land revision X* — may save more than more messaging. **Display
+honestly that a claim file is a coordination aid, not a lock.**
+
+**A25 — a scheduler needs occurrence identity.** A `dispatched` flag cannot close the crash window
+between recording a launch and performing it. Reserve the identifiers now, build when scheduling
+arrives. **Pin the job definition revision that was authorised, so editing a doc cannot silently
+enlarge unattended authority** — which matters here, where the jobs *are* documents.
+
+**A30 — put a budget and a success measure on the Overseer itself.** Interruptions per day, time
+valuable work spends blocked, tasks needing rework, resource time spent on supervision. And bound the
+judgement calls: **thirty-six sessions must not trigger thirty-six model reviews a minute.**
+
+### What Astra says to defer outright
+
+Exhaustive transcript mining, a general multi-agent chat network, a custom terminal, predictive quota
+optimisation, and multi-box scheduling. *"Keep polling if it is adequate. None of those is necessary
+to find out whether this system actually saves Greg attention."*
+
+**And A7 is the one that is not a feature at all.** Every agent shares one Unix user with passwordless
+sudo, so one compromised agent already reaches its peers, their files and the control machinery — and
+a dashboard token stored under that same user would not be an isolation boundary. Network controls
+reduce entry points; they do not contain a compromised agent. The first real containment work is
+reviewing which production credentials and privileged operations routine agents actually need, and
+keeping control-service configuration out of writable worktrees. **This needs Greg**, and it does not
+require user accounts or RBAC in the product.
+
 ## Principles
 
 - **Read-only until a channel is proven.** The retraction above is why. A write path that silently

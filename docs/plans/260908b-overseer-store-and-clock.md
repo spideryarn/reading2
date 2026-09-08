@@ -237,6 +237,18 @@ changes on every collection**, so a structural comparison emits a `session-statu
 for every waiting session, all of them saying nothing. `HealthReport` is worse: it carries
 `collectedAt` and `tookMs`, so *every* tick is a health change.
 
+**Measured, not reasoned.** 24 polls of the live dashboard over 12 minutes on 2026-09-08 gave 11
+distinct collections and, summed over every session present in both halves of each transition:
+
+| comparison | count |
+|---|---|
+| **any field differed** | **72** |
+| **kind, `shell.busy` or the unknown cause differed** | **2** |
+
+**A 36:1 ratio of noise to signal**, almost all of it `waiting.secondsLeft` counting down and
+`health`'s own `collectedAt` / `tookMs` / load numbers. So a naive comparison would have written
+seventy-two events, seventy of which say nothing, and buried the two that matter.
+
 So each status has a **canonical transition key** — `kind`, plus `shell.busy`, plus `unknown.cause`
 — and countdowns and prose are deliberately excluded. Volatile detail belongs in `current.json`,
 which is overwritten, not in an append-only log.
@@ -319,6 +331,26 @@ null}`. The admissibility rules cover both, so nothing changes; but do not rely 
 me a payload". They have also extracted `statePayload` into `tools/fleet/state.ts` with a test
 pinning that a null `collectedAt` is never replaced by a fresh timestamp for a caller's convenience —
 which would be, in their phrase, a lie with a clock on it.
+
+### What 12 minutes of the real fleet actually looks like
+
+Captured 2026-09-08, and several of these contradict what a hand-written fixture would have assumed:
+
+- **Churn is constant.** Every one of the 10 transitions had a session appear or disappear. There was
+  **no fully steady pair in 12 minutes.** So `tmux-session-gone` is an ordinary event, not an alarm,
+  and anything that reacts to one had better expect several an hour.
+- **Collection is ~70s, not 60s** — chained from the end of a 5.7–11.0s run.
+- **`repo` is not one value.** In a single 39-row snapshot: 35 `spideryarn/reading2`, one `null`, two
+  the literal string `"unknown"`, and one `spideryarn/hellozenno`. Any logic assuming a single repo is
+  wrong.
+- **`title` is null for most sessions** (14 of ~37 had one), so null is the common case, not the edge.
+- **`question` was null in every row of every snapshot**, and `shell.busy` was always `true`. Both
+  branches are therefore **unexercised by real data** — worth knowing before trusting a test that
+  only uses this capture.
+- **`health.verdict.level` never moved off `strained`** for 12 minutes, while its `reasons` array
+  changed almost every collection. A test for a verdict *transition* needs data from elsewhere.
+- **Two different `tookMs` fields exist** — the snapshot's (whole collection) and `health.tookMs`
+  (the health probe alone, 1.2–1.8s). Easy to confuse.
 
 ## Stages
 
