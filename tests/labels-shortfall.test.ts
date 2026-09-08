@@ -33,6 +33,13 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import type { Block, NodeId, Tree, TreeNode } from "../src/types.js";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
+import { splitIntoBlocks } from "../src/blocks.js";
+import { checkTree } from "../src/tree-invariants.js";
+import {
+  STRIPPED_MEDIA_LEAD_INS,
+  block as advBlock,
+  flatTree,
+} from "./fixtures/adversarial-shapes.js";
 
 /**
  * The scripted transport.
@@ -544,5 +551,116 @@ describe("when the re-ask comes back short too", () => {
 
     expect(run.dropped).toEqual([blocks[3]!.id]);
     expect(run.labels[blocks[8]!.id]).toContain("repaired");
+  });
+});
+
+/* --------------------------------------------------------------------------
+ * The same three behaviours, driven from a hostile **article**.
+ * ----------------------------------------------------------------------- */
+
+/**
+ * **Every test above scripts a hostile model response over an article where
+ * every block is labellable.** That is the gap
+ * docs/postmortems/260830e-nav-labels-asked-58-got-57.md asked to close in as
+ * many words — *"a test with a hostile article, not a hostile response"* — and
+ * it is the same gap 260830a found from the other end: a batching fixture whose
+ * every block is nine words "cannot see a block that is not".
+ *
+ * So these two run the identical machinery over a batch that really contains a
+ * block no model can label, produced by the **real splitter** from the markup
+ * shape that produced it in production (tests/fixtures/adversarial-shapes.ts).
+ * The response is still scripted, because determinism requires it — but it is
+ * now a plausible response *to this input* rather than an arbitrary omission.
+ *
+ * Why paragraph 4 of 58: that is the production shape exactly, and the ordinal
+ * the two identical failures both named.
+ */
+describe("a hostile article, rather than a hostile response", () => {
+  /** The one block in the fixture that no model can write a claim about. */
+  const strandedLeadIn = (): Block => {
+    const { blocks } = splitIntoBlocks(STRIPPED_MEDIA_LEAD_INS);
+    const stranded = blocks.find((b) => b.text.trim() === "or");
+    /* Not `!` — if the fixture ever stops carrying the shape, this must say so
+       here rather than fail as a confusing assertion sixty lines down. */
+    if (stranded === undefined) {
+      throw new Error("the stripped-media fixture no longer carries a stranded one-word lead-in");
+    }
+    return stranded;
+  };
+
+  /**
+   * Fifty-eight blocks with the real stranded lead-in standing at paragraph 4,
+   * and a tree `checkTree` accepts.
+   *
+   * **Built rather than borrowed from `oneSection`, and that is the point.**
+   * `oneSection`'s tree does not pass `checkTree` — no root gist, a section
+   * restating the root, ids outside the id alphabet — and `generateLabels` does
+   * not validate any of that, so it works fine and a test's claim to be running
+   * "the real pipeline over an article" quietly becomes false. Asserted sound
+   * below rather than assumed. GPT Sol's stage review, 2026-09-08.
+   */
+  function hostileSection(): { tree: Tree; blocks: Block[] } {
+    const stranded = strandedLeadIn();
+    const blocks = Array.from({ length: 58 }, (_, i) =>
+      i === 3 ? stranded : advBlock(i, `Paragraph ${i} says something about the matter at hand.`),
+    );
+    const tree = flatTree(blocks, "hostile");
+    expect(
+      checkTree(blocks, tree).problems,
+      "the article this batch is planned over must itself be sound",
+    ).toEqual([]);
+    return { tree, blocks };
+  }
+
+  it("re-asks for the unlabellable paragraph, naming it", async () => {
+    const { tree, blocks } = hostileSection();
+    expect(blocks[3]!.text).toBe("or");
+
+    wire.answers.push(allBut(58, [4]));
+    /* Literally the paragraph's own word, which is what the re-ask asks for:
+       "if a paragraph is a fragment with little in it, a short label made of its
+       own words is fine — better than none". `answering()` would have produced
+       "A short label made of its own words 4, said at a workable length", which
+       is a normal label wearing the sentence rather than the contract being
+       exercised. GPT Sol's stage review. */
+    wire.answers.push(JSON.stringify({ labels: [[4, "or"]] }));
+
+    const run = await generateLabels({
+      tree,
+      blocks,
+      slug: "test",
+      checkpoints: nullCheckpointStore(),
+    });
+
+    expect(wire.calls.length).toBe(2);
+    expect(wire.calls[1]!.parts.join("\n")).toMatch(/paragraph 4\b/);
+    expect(Object.keys(run.labels).length).toBe(58);
+    expect(run.dropped).toEqual([]);
+  });
+
+  it("accepts the batch and names the drop when the paragraph is refused twice", async () => {
+    /* **The behaviour that would have prevented the outage.** In production this
+       article died: `parseLabels` demanded all 58, got 57, and threw away a call
+       that had done its job 57 times — twice, byte-identically, because the
+       failure is a property of one line of the input and no retry can move it.
+       Now the gap is accepted within `droppedBudget` and *reported*, which is
+       what makes accepting it safe: an unlabelled leaf renders as nothing at
+       all, so without the number this would be a silent success. */
+    const { tree, blocks } = hostileSection();
+
+    wire.answers.push(allBut(58, [4]));
+    wire.answers.push(allBut(58, [4]));
+
+    const run = await generateLabels({
+      tree,
+      blocks,
+      slug: "test",
+      checkpoints: nullCheckpointStore(),
+    });
+
+    expect(run.dropped, "the drop is named by block id, not merely counted").toEqual([
+      blocks[3]!.id,
+    ]);
+    expect(Object.keys(run.labels).length).toBe(57);
   });
 });

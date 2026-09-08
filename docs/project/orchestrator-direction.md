@@ -1,15 +1,20 @@
-# Orchestrating the agent fleet
+# The Overseer, and orchestrating the agent fleet
 
 Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md).
 
 **This is the direction, not a plan.** It exists so that every plan doc and every worktree working on
-the fleet dashboard is aiming at the same thing, and so that nobody rediscovers the constraints at
-the bottom of this page the expensive way. The plans that implement it live in `docs/plans/`,
-starting with
+the fleet is aiming at the same thing, and so that nobody rediscovers the constraints at the bottom
+of this page the expensive way. The plans that implement it live in `docs/plans/`, starting with
 [260907e-agent-fleet-dashboard.md](../plans/260907e-agent-fleet-dashboard.md).
 
-Status as of 2026-09-08: **nothing built.** No server, no page, no Tailscale on the box — evidence:
-`which tailscale` is empty and there is no `tools/fleet/`.
+**The Overseer is Greg's name, from 2026-09-08, for the agent whose job is to oversee all the other
+sessions.** Until then this page called it "the orchestrator"; the two mean the same thing, and the
+new name is the one to use. It is the *actor*. The **fleet dashboard** is its face, and the two are
+built by different agents against the seam in [§ Two tenses](#two-tenses-the-seam-between-the-overseer-and-the-dashboard).
+
+Status as of 2026-09-08: **the dashboard is running, the Overseer is not.** `tools/fleet/` serves a
+live page on the box and the tailnet, with per-session status and the pending question for blocked
+sessions. There is no `tools/overseer/`, no store, and nothing that survives a reboot.
 
 ## What we are going towards
 
@@ -41,7 +46,207 @@ finer-grained than a normal plan's:
 - **later** — the decision log; creating and killing agents; the coordinator itself.
 
 The rule that generates that ordering: **each slice must be visible in a browser and must not
-require the next one to be worth having.**
+require the next one to be worth having.** Those four are the **dashboard's** slices; the Overseer's
+are in [§ The order of work](#the-order-of-work).
+
+## The horizon
+
+Greg, 2026-09-08, on what the Overseer and its web interface eventually have to do. The tags are
+his, and they are the priorities — this list is the thing to check a proposed slice against:
+
+> - **NOW** across multiple sessions & agents
+> - **NOW/SOON** accessible via the web on desktop (NOW) and phone (SOONISH), via SSH tunnel and/or
+>   VPN
+> - **PERHAPS NEVER** no authentication needed for the foreseeable future
+> - **SOMEDAY MAYBE** multiple boxes
+> - **SOON** multiple Claude Max subscriptions (perhaps rotating or round-robin or something),
+>   paying attention to when one is about to hit usage limits and reapportioning to others, or
+>   pausing it, or taking action some other way
+> - **NOW/SOON** multiple model-families/harnesses, starting with Claude Code and Claude agents
+>   (NOW) and then OpenAI Codex/GPT (SOON)
+>
+> Goals:
+> - **NOW** Staying up-to-date on progress automatically
+> - **SOON** Staying up-to-date on usage limits
+> - **SOON** Running periodic jobs, e.g. `get-ready-to-deploy.md` every couple hours,
+>   `feedback-reports.md` a couple of times per day, `improve-the-codebase.md` every few days, etc
+> - **SOON** Responding to agents that need help/guidance, taking action (e.g. requesting input from
+>   Fable/GPT) and/or surfacing questions to the user on the web
+> — **SOON** paying attention to resource usage on the box (CPU, RAM, swap, hard disk, what else?,
+>   etc etc) and taking action as needed (pausing, killing tests, and various other options, etc etc)
+
+Note what "PERHAPS NEVER no authentication" does and does not license. It is a statement that a login
+page is not coming, **not** that the surface is safe to expose: anything that can reach the Overseer
+can run code on the box. The access control is reachability, and it stays that way —
+see [§ Access](#access).
+
+## What the Overseer is
+
+Asked on 2026-09-08 whether the Overseer is a daemon, a long-running Claude session, or a daemon
+supervising a session, Greg declined all three:
+
+> I'm not certain what the right answer is. It may be that there's both a daemon and a long-running
+> session, plus the web interface, and maybe some kind of store (probably gitignored, could be json
+> or sqlite or something else, but start simple for now) so that we can resume easily if the session
+> got killed (and ideally the overseer should be able to resume itself and all the running sessions
+> if the box got rebooted).
+>
+> — Greg, 2026-09-08
+
+**So the store is the centrepiece, and the daemon and the session are both clients of it.** That is
+the load-bearing consequence, and it settles the question the three options were really asking:
+*where does the state live?* Not in a transcript. A transcript compacts, drifts, and cannot be read
+by a program; a store can be read by the daemon, by a session, by the dashboard, and by Greg with
+`less`.
+
+The division that follows:
+
+- **The daemon owns the clock, the store and the restart.** A tick loop under systemd with
+  `Restart=always`. It costs nothing when idle, which matters more than it looks: **the Overseer must
+  keep working when the subscriptions are exhausted, because that is exactly when it is needed.** A
+  thinking loop that burns the quota it is supposed to be rationing has a bad failure mode.
+- **A session is an action, not a residence.** When judgement is needed — is this one stuck, what is
+  the one sentence to send — the daemon spawns a short-lived Claude that reads the store, answers,
+  and exits. A persistent brain can come later and the daemon can supervise one; it should not be
+  first, because a persistent session's context is precisely the thing that does not survive the
+  reboot Greg wants survived.
+- **The dashboard is the face**, and belongs to whoever is building it — [§ Two tenses](#two-tenses-the-seam-between-the-overseer-and-the-dashboard).
+
+**Autonomy, as of 2026-09-08: it may dispatch scheduled jobs unattended, and nothing more.** Greg's
+choice from four options, the other three being observe-and-notify-only, steering live sessions, and
+pausing/killing. So starting a `get-ready-to-deploy` session on its cadence needs no permission;
+sending a live agent a steering message, or killing anything, still does.
+
+## The store
+
+**Nothing on this box durably records what is running.** Session identity — `claudeId`, `GJD_KIND`,
+`GJD_REPO`, `GJD_REMOTE_DIR` — is pinned into the **tmux environment** at launch (`META` in
+[`scripts/gjd-remote-tmux.ts`](../../scripts/gjd-remote-tmux.ts)), and a reboot takes the tmux server
+and all of it. Transcripts survive under `~/.claude/projects/`, so `--resume` has material and the
+working directory is recoverable from the transcript's own path — but **which** sessions were alive,
+and what each was for, is recorded nowhere. Verified 2026-09-08: `gjd-remote` writes only a log, and
+there are 208 transcripts for the primary checkout alone with nothing to say which of them matter.
+
+That absence is why the store is stage one rather than scaffolding. What it must hold, minimally:
+
+- **the session register** — per session, the four `META` fields plus `claudeId`, name and tmux
+  handle, and when it was last seen alive. This is the reboot-resume material.
+- **the clock** — status transitions, tick over tick. This is what turns "blocked" into "blocked for
+  40 minutes", and ranked attention needs the duration, not the state.
+- **the heartbeat** — last tick, tick count, pid. So the dashboard can say *the Overseer is dead*,
+  which is the failure this whole area keeps having ([silent-success.md](../reusable/silent-success.md)).
+- **what has been dispatched and escalated** — so a restart does not re-dispatch, and so a question
+  put to Greg is not asked twice.
+
+**JSONL first, SQLite when a query needs an index** — Greg's "start simple", and naming the
+trade-off at the point of choosing, per [vision.md § Simpler first](vision.md#simpler-first).
+Append-only is crash-safe by construction, adds nothing to `package.json`, and a human can grep it.
+The thing that would force the change is a read that has to scan history to answer a page load. And
+**record events, not samples**: a row when something changes plus a heartbeat per tick, rather than a
+full snapshot every tick — 36 sessions sampled every minute is ~52k rows a day of mostly nothing.
+
+Gitignored, per Greg. Which means [worktrees.md](worktrees.md)'s warning applies to it: a clean
+`git status` will say "safe to delete" over the top of it.
+
+## Two tenses: the seam between the Overseer and the dashboard
+
+Two agents are building here at once, so the boundary is a rule rather than an intention:
+
+- **The dashboard owns the present tense** — what is true right now. Collection, status, the pending
+  question, rendering, SSE, delivering a steering message. Its unit of work is a request.
+- **The Overseer owns the past and future tense** — what has been true over time, and what should
+  happen next. The store, the vitals history, ranked attention, the job schedule. Its unit of work is
+  a tick.
+
+In practice: the Overseer writes a current-state file, the dashboard reads and renders it and never
+writes it; the Overseer lives in `tools/overseer/` and never edits `tools/fleet/server.ts`,
+`page.ts` or the client; and it **imports** `collect.ts` and `status.ts` rather than reimplementing
+them, which is the same discipline `tools/fleet/` applied to `gjd-remote-tmux.ts`.
+
+**There is one collector, and it is the dashboard's.** Settled between the two agents on
+2026-09-08. A collection costs ~12 seconds of transcript grepping, so a second one is a real cost
+rather than untidiness — this box hit load 391 with the OOM killer firing that morning. Two options
+were on the table (coexist on staggered ticks; the Overseer collects and the dashboard reads it) and
+the dashboard agent supplied a third that beats both: **the Overseer is a consumer.** It subscribes
+to the dashboard's `/api/live` SSE stream and appends on each `snapshot` event, polls `/api/state` if
+the stream drops, and falls back to its own `collect()` only when the server is unreachable — slowly,
+because a fallback that grazes every 12 seconds on a swapping box is worse than a gap in the history.
+The dashboard collects on a chain (60s from the *end* of each run, 5× backoff after a failure), not
+on a fixed interval, for the same reason.
+
+**The coupling this creates runs the opposite way, and is accepted knowingly:** the Overseer now
+depends on the dashboard being up. Hence two clocks in the state file rather than one — `writtenAt`
+(the Overseer last wrote) and `lastGoodSnapshotAt` (it last heard from the dashboard). They come
+apart exactly when something is wrong, and a single number would hide the case where the Overseer is
+alive but deaf. **A dead dashboard is a fact the Overseer records, not a silence it sits in.**
+
+**Box vitals belong to the dashboard, and are built.** [`tools/fleet/health.ts`](../../tools/fleet/health.ts)
+implements [diagnose-box-resources.md](../reusable/diagnose-box-resources.md) — load against cores,
+available rather than free memory, swap as a cliff, `vmstat` si/so, and memory attributed by process
+kind — with every field a discriminated union that can say *I could not tell* instead of returning a
+zero that reads as healthy. The Overseer stores that object verbatim per event and does not interpret
+it a second time, so a change at the source changes the history's shape rather than drifting from it.
+What the Overseer adds is only the tense the dashboard does not have: **nobody records health over
+time**, so "what was running when the box hit 391" is unanswerable today.
+
+## The order of work
+
+Greg, 2026-09-08, asked which capability to build first, and reordered the options:
+
+> attention triage, then perhaps box vitals and throttling, then account usage limits, then scheduler
+> (ideally we'd build a bunch of these in parallel with engineering-manager.md)
+
+Two notes on reading that. **Attention triage arrives first but cannot be built first**, because
+ranking by "who has needed me longest" requires a duration and a duration requires the store — so the
+store is not a detour before triage, it is triage's first half. And **the scheduler is last by Greg's
+choice despite having no home today** ([cron-scheduler.md](cron-scheduler.md)); that is a deliberate
+ordering, not an oversight, and it should not be quietly promoted.
+
+**Multiple Max subscriptions is medium-term.** Greg, 2026-09-08:
+
+> Right now, I have a couple of Claude Max subscriptions, and I run /login every couple of days to
+> switch when I hit limits. In future I expect to have more. But let's say that multiple Claude Max
+> subscriptions is MEDIUM-TERM, i.e. out of scope for the next day or two.
+
+So the near-term usage-limit work is **visibility** — how close is the current account, and what
+should stop when it is near — and not rotation.
+
+### What is actually observable about usage limits
+
+Researched and then re-verified by hand on 2026-09-08, because the headline finding is the kind that
+is easy to believe and wrong in a specific way.
+
+- **`~/.claude.json` → `.cachedUsageUtilization`** is the polling target. Per-window `utilization`
+  percentages with an ISO `resets_at` — `five_hour`, `seven_day`, and a set of per-model windows —
+  plus `fetchedAtMs` and the `accountUuid`. Verified present and populated.
+- **It is a CACHE, and a stale entry reads exactly like a current one.** Checked live: the file was
+  48 minutes old and its `five_hour` window had reset 27 minutes earlier, so the `utilization: 70`
+  in it described a window that no longer existed. The file always parses and always yields a
+  plausible number; nothing in it announces that the number is void.
+  **So `resets_at` is not decoration, it is the validity check** — a reading whose `resets_at` is in
+  the past must be reported as *unknown*, never as a percentage. Same shape as everything else in
+  [silent-success.md](../reusable/silent-success.md), and the same rule `health.ts` already follows:
+  a field that can say *I could not tell* beats a zero that reads as healthy.
+- **A real 429 is written into the session's own transcript**, with `"error":"rate_limit"`,
+  `"isApiErrorMessage":true`, `apiErrorStatus: 429`, and a `quotaLimits` object carrying
+  `rateLimitType` (`five_hour` / `seven_day`) and a `resetsAt` unix timestamp. Found in real
+  transcripts on this box, both variants. This is exact, greppable, and carries a machine-readable
+  reset — **the cheapest reliable signal available**, and unlike the cache it cannot be stale.
+- **`claude auth status`** returns JSON non-interactively with `email`, `orgId` and
+  `subscriptionType`; `.oauthAccount` in the same file adds `organizationRateLimitTier`. That is how
+  the Overseer knows *which* account a reading belongs to — which matters the moment there is more
+  than one.
+- **There is no `claude usage` subcommand** (verified: it falls through to top-level help), and no
+  pre-warning text was found in any transcript — only post-hoc 429s. So *"approaching the limit"* has
+  to be derived from the cache, and the cache is the untrustworthy source. **Treat the transcript 429
+  as the ground truth and the cache as a hint**, not the other way round.
+
+**Multiple accounts on one box is mechanically possible.** `CLAUDE_CONFIG_DIR` isolates config,
+credentials and the projects directory — verified empirically by pointing it at a scratch directory
+(`loggedIn:false`, isolated `projectsDirectory`, real credentials confirmed untouched). Running two
+accounts *concurrently*, each logged in under its own config dir, follows from that but has **not**
+been tested. Recorded because it is what a medium-term rotation would be built on; it is not a reason
+to build one now.
 
 ## The four capabilities, and what each really needs
 
@@ -97,6 +302,13 @@ these before designing anything that talks to a session.**
 - **Codex batch jobs cannot receive keystrokes at all.** `scripts/subagent-cli.ts` spawns with
   `fd 0 = 'ignore'`, called there "the load-bearing anti-hang guarantee". Any harness adapter must
   say honestly that these are read-only rather than pretending at a degraded channel.
+- **Nothing survives a reboot.** Session identity lives in the tmux environment and dies with the
+  tmux server; there is no registry on disk. Measured 2026-09-08 — see [§ The store](#the-store).
+  Any claim that the fleet "comes back" has to name the file it comes back from.
+- **The box is genuinely short of resources, and a background loop is a participant.** Load average
+  35, 23 of 30 GB of RAM and 18 of 31 GB of swap in use, on an ordinary afternoon (2026-09-08); it
+  reached 391 with the OOM killer firing earlier the same day. A tick that costs 12 seconds of
+  grepping every 60 is 20% of a core, forever. Measure before adding a second one.
 - **Address a session by tmux pane handle plus an execution generation, never by name.** Names get
   reassigned when a session dies. Both `gjd-remote` and the third-party system Greg showed us learned
   this independently.

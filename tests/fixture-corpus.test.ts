@@ -29,6 +29,10 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+/* The policy, not the Boolean. `Block.gistable` is documented in src/types.ts
+   as explicitly no longer the answer to any of the five questions five
+   consumers were each reading it for, and body-versus-total is one of them. */
+import { articleWordCounts } from "../src/block-policy.js";
 import { isSpideryarnId } from "../src/ids.js";
 /* The quiz stage's OWN fingerprint function, not `articleWithIdsFingerprint`
    underneath it. They are the same call today and the point of importing this
@@ -211,6 +215,114 @@ describe("the committed fixture corpus", () => {
       const meta = read<{ fetchedAt?: string }>(slug, "meta.json");
       expect(meta.fetchedAt, `${slug}/meta.json has no fetchedAt`).toBeTruthy();
     }
+  });
+
+  it("carries no tree checkTree rejects", () => {
+    /* **The corpus is swept by the invariants that judge it**, which is
+       docs/postmortems/260905d-a-new-tree-invariant-met-a-nine-day-old-local-artefact-and-reddened-a-gate.md's
+       own cheapest ranked recommendation and was unbuilt for four of five slugs
+       until now: `checkTree` ran here on `constitution` alone, because that is
+       the article that was sliced.
+
+       That is the wrong axis. Slicing is one way a tree stops matching its
+       blocks; **an invariant tightening underneath a tree that was already
+       stored is the other**, and it is the one that has actually cost
+       something — locally 408 tests behind one `beforeAll`, and in production
+       about one article in twenty off the air for eleven hours. The incident is
+       written up in the two postmortems above; the rule it produced is
+       **tightening an invariant over stored data is a migration**
+       (docs/project/database.md).
+
+       This is what says so about the corpus, on the day the invariant changes
+       rather than on the day somebody publishes. `checkTree` is the same
+       function `reasonsNotToPublish` runs, and it is pure and costs about a
+       tenth of a millisecond per tree.
+
+       **Scope, stated exactly.** This is the five-article publication corpus,
+       not "every tree in the repo". 260905d's recommendation names `data/` *and*
+       `evals/`, and the evals trees are not swept here — `evals/illustrated/
+       hostile/tree.json` has four `checkTree` problems today, which is very
+       likely deliberate for a fixture with "hostile" in its path, and deciding
+       that belongs to whoever owns the eval rather than to this file. Named so
+       the gap is visible rather than implied.
+
+       If this goes red after somebody tightens a rule, the tracked fixture is
+       what needs migrating — that is the finding, not a reason to loosen the
+       rule or to except the slug. */
+    const refused: string[] = [];
+    for (const slug of SLUGS) {
+      const tree = readIfThere<Tree>(slug, "tree.json");
+      if (tree === null) continue;
+      for (const problem of checkTree(blocksOf(slug), tree).problems) {
+        refused.push(`${slug}: ${problem}`);
+      }
+    }
+    expect(refused).toEqual([]);
+  });
+
+  /**
+   * The slug `tests/store-shelf-reads.test.ts` seeds its scalars audit from,
+   * named here so the guard below is about that article rather than about any
+   * article. If the audit is ever re-pointed, this moves with it.
+   */
+  const SUPPLEMENT_SLUG = "openai-huggingface";
+
+  it(`keeps ${SUPPLEMENT_SLUG}'s supplement block, so body words differ from total`, () => {
+    /* **The supplement fixture, and the thing it is kept for.**
+
+       `wordCount` became *body* words on 2026-08-28 —
+       `countsTowardReadingTime` is `treatment !== "supplement"`. For three days
+       afterwards the scalars audit in tests/store-shelf-reads.test.ts
+       recomputed the **total** instead, because its projection selected `words`
+       alone and `Treated`'s field is optional, so every row arrived
+       `undefined` and every block read as body. No typecheck could redden that:
+       a weak target tests for having nothing in common, not for having the
+       field.
+
+       What kept it invisible was not the projection, though — it was the
+       corpus. The only article in the database had **zero** supplement blocks,
+       so stored and actual "agreed by having nothing to disagree about". The
+       assertion ran on every suite run, passed every time, and never once
+       exercised the axis it is about
+       (docs/postmortems/260831b-the-audit-that-recomputed-the-old-definition.md).
+
+       `openai-huggingface` is now that article, and `store-shelf-reads.test.ts`
+       seeds `test-shelf-corpus-supplement` from it. **Nothing asserted the
+       corpus keeps the property**, which is the README's own "named slugs are
+       not coverage" hole one rung down: regenerate that slug without a
+       supplement block and the audit quietly goes vacuous again, with every
+       suite still green. This is what notices.
+
+       **Named rather than existential, and that distinction is the whole
+       guard.** `store-shelf-reads.test.ts` seeds specifically `from:
+       "openai-huggingface"`, so "some corpus article has a supplement" can stay
+       green while *that* slug loses its one and the audit it feeds goes vacuous
+       again — a guard passing for a reason unrelated to the thing it protects.
+       GPT Sol's review of the plan, 2026-09-08.
+
+       Both halves are asserted because either alone is satisfiable without the
+       property: a supplement block of **zero** words would satisfy a count and
+       still leave the two definitions agreeing, and `body < total` could in
+       principle arrive from some later treatment that is not a supplement. */
+    const blocks = blocksOf(SUPPLEMENT_SLUG);
+    const supplements = blocks.filter((b) => b.treatment === "supplement");
+    expect(
+      supplements.length,
+      `${SUPPLEMENT_SLUG} has no supplement block; store-shelf-reads seeds its ` +
+        "scalars audit from this slug, and without one that audit compares a " +
+        "number with itself — which it silently did for three days",
+    ).toBeGreaterThan(0);
+    expect(
+      supplements.some((b) => b.words > 0),
+      "a zero-word supplement satisfies the count and moves no total, so at " +
+        "least one must carry words — `some` rather than `every`, since a " +
+        "legitimate empty supplement arriving later is not a reason to fail",
+    ).toBe(true);
+
+    const counts = articleWordCounts(blocks);
+    expect(counts.body, `${SUPPLEMENT_SLUG}: body words must differ from total`).toBeLessThan(
+      counts.total,
+    );
   });
 
   describe("writes — the load-bearing article", () => {

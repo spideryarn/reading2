@@ -229,7 +229,13 @@ import { useLogoAnimation } from "./logo-animation.js";
    signed-in `App` level, where a `Dock` unmounting cannot destroy a draft.
    FeedbackButton.tsx § One dialog, two triggers. */
 import { FeedbackTrigger } from "./FeedbackButton.js";
-import { type ArticleView, carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
+import {
+  type ArticleView,
+  carriedSearch,
+  CHANGELOG_LABEL,
+  LIBRARY_HREF,
+  readHref,
+} from "./router.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSlow } from "./useSlow.js";
 import { InstallHint } from "./InstallHint.js";
@@ -928,6 +934,25 @@ const PRESS = {
   ready: "toggle",
 } as const satisfies Record<ExperimentalVariant, "toggle" | "retry" | "nothing">;
 
+/**
+ * **Do we know this reader has no library?** — which is not `!e.signedIn`.
+ *
+ * The store opens on `{loaded: false, signedIn: false}` and writes
+ * `loaded: true` only when its auth callback lands (experimental-store.ts §
+ * `base`), so the bare negation calls a signed-in reader signed out for a
+ * frame — the same frame tests/dock-corner-controls.test.tsx documents from the
+ * other side, where `useSession` knows the reader before this store does.
+ *
+ * One caller, `DockHome`, whose card would otherwise tell an owner they have no
+ * library to go back to. A function rather than a `const` in `Dock` because the
+ * `&&` counts against Biome's cognitive-complexity score wherever it sits in
+ * that function, and `Dock` is already over the ceiling — same reason
+ * `toggleVariant` below is one. GPT Sol, 2026-09-08.
+ */
+function knownSignedOut(e: DockExperimental): boolean {
+  return e.loaded && !e.signedIn;
+}
+
 export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
   /* Nobody to save it for. Not a disabled button either: a signed-out reader is
      forcibly off by decision, and a control they cannot use is an advertisement
@@ -1294,6 +1319,10 @@ export function Dock({
      the next change to only half-land. */
   const feedback = experimental.signedIn;
 
+  /* Whether we *know* this reader has no library, which is not `!feedback` —
+     § `knownSignedOut` above says why, and why it is a function. */
+  const noLibrary = knownSignedOut(experimental);
+
   /**
    * **Which picture a Diagram press would land on**, read once here rather than
    * at each surface that can make that press.
@@ -1562,7 +1591,10 @@ export function Dock({
             header for why it is back here after 2026-08-26 took it away, and
             why the reason is the bar having changed rather than a wordmark
             being a different kind of thing from a `Home` button. */}
-        <DockHome />
+        {/* Not `feedback`, which is the same field and not the same question:
+            that one is *is there a Feedback button in this row*, which the fit
+            measurement needs because it is a button's width. See above. */}
+        <DockHome knownSignedOut={noLibrary} />
 
         {/* **The modes, as one control, and first among the modes.** Chat and
             Glossary used to be two independent toggles beside each other, with
@@ -1592,21 +1624,20 @@ export function Dock({
           <DockModeLinks slug={slug} search={search} modes={visible} marked={marked} />
         )}
 
-        {/* **The other door into the same modes**, immediately after them
-            because that is what it is about — and only where there is a band to
-            change, which is the same condition the segment itself is under.
-
-            Greg asked for the button as well as the chord (260906h, answer 2)
-            for one reason: **⌘-K does not exist on a phone**, and the bar is
-            the only surface a phone has. */}
-        <DockCommands mode={mode} onMode={onMode} isVisitor={isVisitor} onOpen={commandBar.show} />
-
-        {/* **The three that are not modes, in one group**, so that running
-            along the end of the bar is instant after the first card rather than
-            three separate 300ms waits — the same grouping `DockModes` and
-            `DockModeLinks` give the fourteen. `TooltipGroup` is
+        {/* **The four that are not modes, in one group**, so that running along
+            the end of the bar is instant after the first card rather than four
+            separate 300ms waits — the same grouping `DockModes` and
+            `DockModeLinks` give the modes. `TooltipGroup` is
             `FloatingDelayGroup`, a context provider that renders no element, so
-            it cannot disturb the flex row it wraps (Tooltip.tsx § grouping).
+            it cannot disturb the flex row it wraps (Tooltip.tsx § grouping) —
+            which is also why `DockCommands` joining it on 2026-09-08 moved
+            nothing on the page.
+
+            **Commands is in the group and not with the modes**, though it is
+            about them. It is a sibling of the segment rather than a child, for
+            the three reasons its own docblock gives, and the `DockModes`
+            radiogroup carries its own group inside itself — so the choice here
+            is this group or none, and it is adjacent to this one in the row.
 
             **The experimental switch is outside it on purpose.** It is the
             adjacent account-level control — a setting, not a view of this
@@ -1615,6 +1646,21 @@ export function Dock({
             article*, which was the first wording and is too absolute: `DockHome`
             and `DockFeedback` are not about it either. GPT Sol. */}
         <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+          {/* **The other door into the same modes**, immediately after them
+              because that is what it is about — and only where there is a band
+              to change, which is the same condition the segment itself is
+              under.
+
+              Greg asked for the button as well as the chord (260906h, answer 2)
+              for one reason: **⌘-K does not exist on a phone**, and the bar is
+              the only surface a phone has. */}
+          <DockCommands
+            mode={mode}
+            onMode={onMode}
+            isVisitor={isVisitor}
+            onOpen={commandBar.show}
+          />
+
           {/* Two shapes of the same button. On the reading view it opens the
               drawer in place. Everywhere else it goes back to the reading view
               with the drawer already open — which is where a question is useful
@@ -1850,8 +1896,8 @@ const TITLES: Record<Panel, { own: string; visitor: string }> = {
  * **The three buttons in this bar that are not modes**, and the two sentences
  * each of them says on hover.
  *
- * The fourteen modes keep theirs in `MODE_CATALOG` because a `Record<Mode, …>`
- * makes a fifteenth mode a compile error until somebody writes them
+ * The modes keep theirs in `MODE_CATALOG` because a `Record<Mode, …>`
+ * makes the next mode a compile error until somebody writes them
  * (src/mode-catalog.ts § `how`). These three are not modes and never will be,
  * so a record keyed by `Mode` is the wrong home; here, beside the bar they
  * belong to, is the right one. They took a `title` attribute until 2026-09-07,
@@ -1886,15 +1932,19 @@ const TITLES: Record<Panel, { own: string; visitor: string }> = {
 const NOT_A_MODE = {
   comments: {
     what: "Passages marked on this article, with any notes written on them",
-    /* **Not `readersOwnWork("Comments")`, and that is deliberate.**
-       `COMMENTS_GAP` still exists in visitor.ts and its sentence ends *"A
-       shared link carries the piece, never anybody's notes about it"* — which
-       stopped being true on 2026-09-04, when a shared link started carrying
-       them (docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3). The
-       drawer dropped that notice the same day; this button went on saying half
-       of it for three days. Nothing live reads `COMMENTS_GAP` any more —
-       tests/visitor-gaps.test.ts is its only consumer — and retiring the
-       `readers-own` variant is a separate change, noted in the plan. */
+    /* **Not `readersOwnWork("Comments")`**, which is what this button said half
+       of until 2026-09-07. That sentence ended *"A shared link carries the
+       piece, never anybody's notes about it"* — true until 2026-09-04, when a
+       shared link started carrying them
+       (docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3). The drawer
+       dropped the notice that day; this button went on saying half of it for
+       three more, above a list of the comments it was denying.
+
+       The function and the `readers-own` variant behind it are gone as of
+       2026-09-08, so there is nothing left here to be *not*. Kept as a note
+       because the shape recurs: the drawer's own comment a few hundred lines up
+       has said *both the gap and the union member behind it are gone* since
+       2026-09-04, and was wrong about that for four days. */
     visitor: "These belong to whoever added this article. You can read them; only they can add one.",
     /* **Two drafts of the second sentence were wrong, in opposite directions,
        and both were caught by GPT Sol on 2026-09-07.**
@@ -2375,13 +2425,12 @@ function DockModeLinks({
  * added there that reaches for `.logo-text` works in the corner and silently
  * does nothing here.
  */
-function DockHome() {
+function DockHome({ knownSignedOut }: { knownSignedOut: boolean }) {
   const anim = useLogoAnimation();
-  return (
+  const link = (
     <Link
       href={LIBRARY_HREF}
       className={cn("logo", "dock-home", anim.className)}
-      title="Spideryarn — back to the library"
       {...anim.handlers}
       /* Explicit, for the reason `DockLink` gives: the ladder hides the visible
          word, and an accessible name computed from the text would go with it —
@@ -2403,6 +2452,82 @@ function DockHome() {
         ))}
       </span>
     </Link>
+  );
+  /* **Its own `Tooltip`, in no group**, unlike the four at the other end of the
+     bar. There is a whole radiogroup of modes between this and the nearest
+     other card, so there is no scrub from one to the next to make instant —
+     grouping it would buy a reader nothing and would say these two ends of the
+     row were one run of controls.
+
+     The copy is here rather than in `NOT_A_MODE` above, and the difference is
+     the number of call sites rather than the kind of button: each of those
+     three is read by *two* arms of the bar, which is the only reason they are a
+     table. This one is read here. */
+  return (
+    <Tooltip
+      placement="top"
+      className="tip-soon"
+      content={
+        <ControlTip
+          head="Spideryarn"
+          /* **A stranger has no shelf**, and telling them to go back to one is
+             the exact shape of the bug this week's other change fixed: a
+             sentence true for the owner, read out to a visitor, on a button the
+             visitor can see. Signed out, `/` is the landing page (App.tsx § the
+             signed-out routes), so that is what this says.
+
+             **`loaded && !signedIn`, never the bare `signedIn`.** The store's
+             opening snapshot is `{loaded: false, signedIn: false}`
+             (experimental-store.ts § `base`), so until its auth callback lands
+             a signed-in reader reads as signed out — the frame
+             tests/dock-corner-controls.test.tsx already documents, where
+             `useSession` knows the reader before this store does. A bare
+             boolean here would tell an owner they have no library, which is the
+             same false sentence as the one this exists to prevent, aimed the
+             other way. So the prop is named for the question it answers, and
+             *unknown* falls to the owner's sentence: a stranger's window is one
+             callback long, and the store then says `{loaded: true, signedIn:
+             false}` outright. GPT Sol, 2026-09-08.
+
+             **It varies `what` rather than adding a `state`**, which was the
+             first draft and was the wrong slot twice over. `state` is for a
+             reader asking why the control looks the way it does (Tooltip.tsx §
+             `ControlTip`), and this one looks identical to both readers — what
+             differs is where it goes, which is the description. And a `state`
+             sits *above* the description, so *"…rather than to a library of
+             your own"* landed over *"Back to your library"*: a denial, then
+             the thing denied.
+
+             **No quantifier**, either. *Every article you have added* was also
+             in that draft and is false: the shelf keeps archived pieces behind
+             a *Show archived* toggle (Library.tsx § archived). */
+          what={
+            knownSignedOut
+              ? "Back to Spideryarn's front page — signed out, there is no library to return to"
+              : "Back to your library — the articles you have added"
+          }
+          /* Two things a reader cannot get from the wordmark. It is *only* a
+             link, which is worth saying in a bar where six buttons start a
+             model call on the way in. And leaving is cheap to undo, because
+             `?mode=` is `history: "push"` (params.ts, and activation.ts § Back
+             or Forward walks through mode entries) — so Back is not merely the
+             article again, it is the mode you were in.
+
+             Deliberately not *nothing is lost*, which was the first draft. A
+             comment half-typed into the drawer is lost, and a sentence that
+             sweeps that up to make a tidier promise is how the last six of
+             these went wrong. */
+          /* **Not *it is a link and nothing else***, which was the draft and is
+             false: holding this button down plays a logo animation and
+             suppresses the navigation (logo-animation.ts § the long press).
+             The load-bearing claim was only ever about cost, so that is all it
+             claims now. GPT Sol, 2026-09-08. */
+          how="Following it makes no model call and spends nothing. The mode you are in is part of this article's address, so Back returns you to the mode you left rather than to the article at large."
+        />
+      }
+    >
+      {link}
+    </Tooltip>
   );
 }
 
@@ -2514,22 +2639,82 @@ function DockCommands({
 }) {
   if (mode === undefined || onMode === undefined || isVisitor) return null;
   return (
-    <button
-      type="button"
-      className="dock-btn dock-commands"
-      /* Not `aria-expanded` — see the docblock. The dialog makes the rest of
-         the page inert; it does not rise out of this control. */
-      aria-haspopup="dialog"
-      title="Type the name of a mode and press Enter (⌘K / Ctrl-K)"
-      /* Explicit, for the reason every other button in this bar gives: the
-         visible word is dropped by § the bar's fit ladder on a narrow window,
-         and a name computed from the text would go with it. */
-      aria-label="Commands"
-      onClick={onOpen}
+    <Tooltip
+      placement="top"
+      className="tip-soon"
+      content={
+        <ControlTip
+          head="Commands"
+          /* The chord belongs here and nowhere else: § The glyph is `Command`
+             above argues the label should be what the button opens rather than
+             how else to open it, which leaves the card as the only surface that
+             can carry ⌘K.
+
+             **And it reaches nobody on a phone**, which the first draft of this
+             comment claimed as a gain over the `title` it replaced. It is not.
+             An uncontrolled card opens on hover, and the tap that would open it
+             is the tap that opens the dialog — reading one on a touch device
+             needs the controlled variant and a *tap again* hint, which the
+             spine has and this does not (Tooltip.tsx § Take the open state
+             over). So the chord is taught only where a keyboard is, which is
+             also the only place it works. GPT Sol, 2026-09-08. */
+          what="Type a mode's name and press Enter to be in it — or ⌘K / Ctrl-K, which opens the same box"
+          /* The unguessable half is that this is not a shortcut in the sense of
+             a cheaper route. `CommandBar` § the four product calls, answer 1:
+             a mode row's Enter opens it *exactly as pressing its Dock button
+             does — same activation, same generate-on-open, same cost*. The
+             honest thing to say about a second door is that it is a door and
+             not a discount.
+
+             **The `generates` marker is the command bar's alone**, and the
+             first draft of this sentence said the bar's own buttons carried it
+             too. They do not: `GENERATES_MARKER` is drawn in one place
+             (CommandBar.tsx), and no button in this row shows on its face
+             whether pressing it spends — only its card says so.
+
+             ***May* start, not starts.** `modeGenerates` is the static
+             `MODE_TARGET[mode].kind !== "none"`, and its own docblock says it
+             **over-warns** on purpose: open Glossary on an article whose
+             glossary was built last week and nothing is spent while the row
+             still says `generates`. Describing the marker as more certain than
+             the marker is would be this card contradicting the thing it is
+             describing. GPT Sol, 2026-09-08.
+
+             *Modes and the Changelog* rather than *modes*: Greg widened it on
+             2026-09-07 and `PAGES` in CommandBar.tsx is the whole of the
+             widening. Saying "modes" here would be the copy going stale in the
+             same afternoon as the feature, which is this plan's own recurring
+             failure. */
+          /* `CHANGELOG_LABEL` and not the word "Changelog", which is the
+             internal name for the process that writes the page and which
+             `PAGES` in CommandBar.tsx deliberately does not show a reader
+             (router.ts, and § 1 of the four product calls). The first draft of
+             this sentence used it anyway — reader-facing copy reaching for the
+             codebase's own word for a thing, one file away from the comment
+             saying not to. */
+          how={`A row opens its mode exactly as pressing that button here does: the same run, at the same cost. Beside the modes it offers ${CHANGELOG_LABEL}, and it marks the rows that *may* start a model call with the word “generates” — which no button here shows on its face.`}
+        />
+      }
     >
-      <Command size={15} />
-      <span className="dock-btn-label">Commands</span>
-    </button>
+      <button
+        type="button"
+        className="dock-btn dock-commands"
+        /* Not `aria-expanded` — see the docblock. The dialog makes the rest of
+           the page inert; it does not rise out of this control. */
+        aria-haspopup="dialog"
+        /* **No `title`**, for the reason `DockLink` gives at length: beside a
+           card it is not a fallback but a race, the OS box arriving a second
+           later with a shorter version of the same sentence. */
+        /* Explicit, for the reason every other button in this bar gives: the
+           visible word is dropped by § the bar's fit ladder on a narrow window,
+           and a name computed from the text would go with it. */
+        aria-label="Commands"
+        onClick={onOpen}
+      >
+        <Command size={15} />
+        <span className="dock-btn-label">Commands</span>
+      </button>
+    </Tooltip>
   );
 }
 
@@ -2608,12 +2793,19 @@ function DockLink({
    * decides nothing.
    *
    * A card is what this app means by a tooltip — styled, instant in a group,
-   * and reachable by a finger and by focus. A `title` is the OS's box: about a
-   * second's wait, unstyleable, truncated at the OS's idea of a line, and
-   * absent entirely on a touch device (docs/project/tooltips.md § A `title`
-   * attribute is not a small version of this). Two of the bar's buttons still
-   * carry one — `DockHome` and `DockCommands`, neither of which comes through
-   * here.
+   * and reachable by focus. A `title` is the OS's box: about a second's wait,
+   * unstyleable, truncated at the OS's idea of a line, and absent entirely on a
+   * touch device (docs/project/tooltips.md § A `title` attribute is not a small
+   * version of this).
+   *
+   * **Not *and by a finger***, which this said until 2026-09-08 and which is
+   * true only of the controlled variant. These cards are uncontrolled: the tap
+   * that would reveal one is the tap that presses the button, so on a phone a
+   * card is no more readable than the `title` was. The gain over a `title` is
+   * real everywhere else, and it is not that. GPT Sol.
+   *
+   * No button in this row carries a `title` now. `DockHome` and `DockCommands`
+   * were the last two and took cards on 2026-09-08; neither comes through here.
    */
   hover: ReactNode;
   /** Extra classes — `MARKED` for a mode a visitor cannot have, and
