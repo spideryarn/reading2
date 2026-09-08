@@ -43,10 +43,22 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { type ParseResult, parse as babelParse } from "@babel/parser";
+import type { File, Node } from "@babel/types";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FLEET = path.join(ROOT, "tools", "fleet");
+/**
+ * **All of `tools/`, not just `tools/fleet/`.**
+ *
+ * The principle is about the box utilities as a family — orchestrator-direction.md
+ * says *"it runs on the box, spans repos, and must not depend on the product
+ * database or on anything under `src/`"* — and `tools/overseer/` arrived on
+ * 2026-09-08 under exactly that sentence. A rule scoped to one directory is one
+ * that a sibling directory silently escapes, which is the shape of the gap that
+ * left 15,000 lines of `tools/` linted by nothing until somebody looked.
+ */
+const TOOLS = path.join(ROOT, "tools");
 
 /**
  * **Every file under `src/` the fleet dashboard reaches, and why it is allowed.**
@@ -83,16 +95,149 @@ const ALLOWED: Record<string, string> = {
 };
 
 /**
- * Every module specifier in a file — including multi-line braced imports, which
- * is the case the first version of this got wrong.
+ * **Every module specifier in a file, read from the syntax tree.**
+ *
+ * This was a regex twice, and it was bypassable twice. The first version missed
+ * multi-line braced imports, which lost `mic-devices.ts` out of a closure that
+ * imports it. The second banned the shapes it could not follow — and GPT Sol
+ * showed the ban was itself a regex with holes: `import ("x")` with a space,
+ * `import("../../src/" + "x")`, and `import /* c *\/ ("x")` were all neither
+ * followed nor refused.
+ *
+ * **Two rounds of that is where "one more pattern" stops being the cheaper
+ * option.** The rule this file enforces is architectural, and a rule that can be
+ * got round by adding a space was conventional rather than real. So it parses.
+ *
+ * `@babel/parser` rather than `typescript`: TypeScript 7 exposes no AST from its
+ * package root — `import ts from "typescript"` resolves to a version stub, and
+ * the tree is behind `typescript/unstable/*`, which is unstable by its own name.
+ * Babel's parser is already a direct dependency of this repo and its AST is
+ * stable. `oxc-parser`, `acorn` and `es-module-lexer` are all present too and
+ * all transitive, which makes them a dependency nobody declared.
  */
-function specifiers(src: string): string[] {
+function parse(src: string, file: string): ParseResult<File> {
+  return babelParse(src, {
+    sourceType: "module",
+    sourceFilename: file,
+    /* `decorators-legacy` because a file in this graph has one and Babel refuses
+       to guess which proposal it means. `errorRecovery` so a syntax Babel does
+       not know yields a tree with errors attached rather than throwing — and
+       {@link parseOrFail} then makes the failure loud, because a walker that
+       silently skips a file it cannot read reports the same clean result as one
+       with nothing to report. */
+    plugins: ["typescript", "jsx", "decorators-legacy"],
+    errorRecovery: true,
+  });
+}
+
+/** Every literal specifier: static imports and exports, bare imports, `import()`, `require()`. */
+/** Files this walker could not read at all. Empty, and a test says so. */
+const unreadable: string[] = [];
+
+/**
+ * Extensions this walker can read. Anything else reached by an import is a real
+ * edge and not a parseable one — `main.tsx` imports `./tailwind.css`, and Babel
+ * read its `@layer` as a decorator on nothing.
+ *
+ * A stylesheet cannot import a TypeScript module, so skipping it costs the rule
+ * nothing. It is skipped **by extension rather than by swallowing the error**,
+ * so a `.ts` file that genuinely will not parse still lands in `unreadable`.
+ */
+const CODE = /\.(?:[cm]?[jt]sx?)$/;
+
+function parseOrFail(src: string, file: string): ParseResult<File> | null {
+  if (!CODE.test(file)) return null;
+  try {
+    return parse(src, file);
+  } catch (err) {
+    unreadable.push(`${file}: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`);
+    return null;
+  }
+}
+
+function specifiers(src: string, file = "unknown.ts"): string[] {
   const out: string[] = [];
-  for (const m of src.matchAll(/(?:^|[\n;])\s*(?:import|export)\b[\s\S]*?\bfrom\s+["']([^"']+)["']/g))
-    out.push(m[1] as string);
-  for (const m of src.matchAll(/(?:^|[\n;])\s*import\s+["']([^"']+)["']/g)) out.push(m[1] as string);
-  for (const m of src.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/g)) out.push(m[1] as string);
+  const tree = parseOrFail(src, file);
+  if (tree === null) return out;
+  walk(tree.program as unknown as Node, (node) => {
+    if (
+      node.type === "ImportDeclaration" ||
+      node.type === "ExportNamedDeclaration" ||
+      node.type === "ExportAllDeclaration"
+    ) {
+      const source = (node as { source?: { type: string; value?: string } }).source;
+      if (source?.type === "StringLiteral" && typeof source.value === "string") out.push(source.value);
+    }
+    if (node.type === "CallExpression" || node.type === "ImportExpression") {
+      const spec = callSpecifier(node);
+      if (spec !== null) out.push(spec);
+    }
+  });
   return out;
+}
+
+/**
+ * **Specifiers a static walk cannot follow, refused rather than missed.**
+ *
+ * A dynamic import built from a variable or a concatenation has nothing for a
+ * static walk to follow, and its absence from {@link specifiers} looks exactly
+ * like a file that has no such import — which is the failure this whole file
+ * exists to stop. So they are found here and refused by their own test.
+ *
+ * They have no legitimate use in this tree: it is ESM throughout and every
+ * import is static. If one ever arrives, this is the line to revisit
+ * deliberately, not the pattern to widen.
+ */
+function unfollowableImports(src: string, file: string): string[] {
+  const bad: string[] = [];
+  const tree = parseOrFail(src, file);
+  if (tree === null) return bad;
+  walk(tree.program as unknown as Node, (node) => {
+    if (node.type !== "CallExpression" && node.type !== "ImportExpression") return;
+    const kind = dynamicKind(node);
+    if (kind === null) return;
+    if (callSpecifier(node) !== null) return;
+    const line = (node as { loc?: { start: { line: number } } }).loc?.start.line ?? 0;
+    bad.push(`${file}:${line}: ${kind} whose specifier is not a string literal`);
+  });
+  return bad;
+}
+
+/** `"a dynamic import"`, `"require"`, or null if this call is neither. */
+function dynamicKind(node: Node): string | null {
+  if (node.type === "ImportExpression") return "a dynamic import";
+  const callee = (node as { callee?: { type: string; name?: string } }).callee;
+  if (callee?.type === "Import") return "a dynamic import";
+  if (callee?.type === "Identifier" && callee.name === "require") return "require";
+  return null;
+}
+
+/** The literal specifier of an `import()`/`require()`, or null if it is not one. */
+function callSpecifier(node: Node): string | null {
+  if (dynamicKind(node) === null) return null;
+  const args = (node as { arguments?: { type: string; value?: unknown }[]; source?: { type: string; value?: unknown } })
+    .arguments;
+  /* Babel models `import(x)` as an `ImportExpression` with `source`, and
+     `require(x)` as a `CallExpression` with `arguments`. Both shapes handled,
+     because which one appears depends on the plugin set. */
+  const first = args?.[0] ?? (node as { source?: { type: string; value?: unknown } }).source;
+  if (first?.type === "StringLiteral" && typeof first.value === "string") return first.value;
+  return null;
+}
+
+/** Depth-first over every node with a `type`, which is enough for what is asked here. */
+function walk(node: unknown, visit: (n: Node) => void): void {
+  if (node === null || typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    for (const child of node) walk(child, visit);
+    return;
+  }
+  const record = node as Record<string, unknown>;
+  if (typeof record.type === "string") visit(node as Node);
+  for (const key of Object.keys(record)) {
+    if (key === "loc" || key === "leadingComments" || key === "trailingComments") continue;
+    walk(record[key], visit);
+  }
 }
 
 function resolve(from: string, spec: string): string | null {
@@ -115,15 +260,15 @@ function filesUnder(dir: string): string[] {
   return out;
 }
 
-/** Every file the fleet reaches, transitively, as repo-relative paths. */
+/** Every file the box utilities reach, transitively, as repo-relative paths. */
 function fleetClosure(): Set<string> {
   const seen = new Set<string>();
-  const queue = filesUnder(FLEET);
+  const queue = filesUnder(TOOLS);
   while (queue.length > 0) {
     const f = queue.pop() as string;
     if (seen.has(f)) continue;
     seen.add(f);
-    for (const spec of specifiers(readFileSync(f, "utf8"))) {
+    for (const spec of specifiers(readFileSync(f, "utf8"), path.relative(ROOT, f))) {
       const r = resolve(f, spec);
       if (r !== null) queue.push(r);
     }
@@ -141,6 +286,68 @@ describe("what the fleet dashboard imports from src/", () => {
     const found = specifiers(readFileSync(path.join(ROOT, "src/web/useDictation.ts"), "utf8"));
     expect(found).toContain("./mic-devices.js");
     expect(found).toContain("react");
+  });
+
+  it("sees through the whitespace and comments a regex could not", () => {
+    /* **GPT Sol's four bypasses, verbatim**, from round 2 of its review. Each of
+       these is a real import of a real product module, and each was invisible to
+       the regex that replaced the regex before it — neither followed, so not in
+       the closure, nor refused, so not reported. That is the exact shape of a
+       check that passes because it is broken.
+
+       The first two are FOLLOWED (the specifier is a literal, whatever the
+       spacing or comments). The second two cannot be followed by anything
+       static, so they are REFUSED below. */
+    expect(specifiers(`import ("../../src/routes.js")`)).toEqual(["../../src/routes.js"]);
+    expect(specifiers(`import /* c */ ("../../src/routes.js")`)).toEqual(["../../src/routes.js"]);
+    expect(specifiers(`require /* c */ ("../../src/routes.js")`)).toEqual(["../../src/routes.js"]);
+    /* And the ordinary shapes still work, so the parser has not been swapped in
+       for one that sees nothing — which is what a green suite would look like. */
+    expect(specifiers(`import {\n  a,\n  b,\n} from "./x.js";`)).toEqual(["./x.js"]);
+    expect(specifiers(`export type { T } from "./y.js";`)).toEqual(["./y.js"]);
+    expect(specifiers(`import "./side-effect.js";`)).toEqual(["./side-effect.js"]);
+  });
+
+  it("refuses a specifier no static walk could resolve", () => {
+    /* Concatenation and a variable: there is nothing to follow, and silence
+       about them is indistinguishable from a file that has no such import. */
+    expect(unfollowableImports(`import("../../src/" + "routes.js")`, "x.ts")).toHaveLength(1);
+    expect(unfollowableImports(`const p = "./a.js"; void import(p);`, "x.ts")).toHaveLength(1);
+    expect(unfollowableImports(`require(name)`, "x.ts")).toHaveLength(1);
+    /* A literal one is fine — it is followed, not refused. */
+    expect(unfollowableImports(`import("./a.js")`, "x.ts")).toEqual([]);
+  });
+
+  it("refuses the import shapes it cannot follow, rather than missing them", () => {
+    /* A walker that silently skips a shape reports the same clean result as one
+       that found nothing to report. So the shapes it cannot read are banned. */
+    const offenders: string[] = [];
+    for (const f of filesUnder(TOOLS)) {
+      offenders.push(...unfollowableImports(readFileSync(f, "utf8"), path.relative(ROOT, f)));
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("reports a file it could not read, rather than treating it as importing nothing", () => {
+    /* **The failure mode this whole file is built against.** A walker that
+       cannot parse a file and says nothing produces the same clean result as one
+       with nothing to report — and this walker has now been replaced twice for
+       exactly that reason. So a parse failure is recorded, and the closure walk
+       below asserts the record is empty.
+
+       Exercised rather than assumed: something unparseable goes in, and the
+       walker must both return nothing and SAY it returned nothing because it
+       could not read the file. */
+    unreadable.length = 0;
+    expect(specifiers("this ( is not ) === typescript {{{", "broken.ts")).toEqual([]);
+    expect(unreadable).toHaveLength(1);
+    expect(unreadable[0]).toContain("broken.ts");
+  });
+
+  it("reads every file under tools/, with nothing skipped", () => {
+    unreadable.length = 0;
+    fleetClosure();
+    expect(unreadable).toEqual([]);
   });
 
   it("reaches exactly the leaf modules the rule allows, and no others", () => {
@@ -179,7 +386,7 @@ describe("what the fleet dashboard imports from src/", () => {
     const heavy = ["pg", "drizzle-orm", "stripe", "jsdom", "@supabase/supabase-js", "@sentry/core", "pino"];
     const externals = new Set<string>();
     for (const f of fleetClosure()) {
-      for (const spec of specifiers(readFileSync(path.join(ROOT, f), "utf8"))) {
+      for (const spec of specifiers(readFileSync(path.join(ROOT, f), "utf8"), f)) {
         if (!spec.startsWith(".") && !spec.startsWith("node:")) externals.add(spec.split("/")[0] as string);
       }
     }

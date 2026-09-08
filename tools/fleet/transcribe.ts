@@ -10,18 +10,21 @@
  *
  * That file does the same job and is better tested, and importing it was the
  * first candidate. It was ruled out by measurement rather than principle: its
- * import closure is **161 files and 118,082 lines**, pulling `pg`,
+ * import closure is **162 files and 118,171 lines** (GPT Sol's AST walk;
+ * a regex walk here first said 161 and 118,082), pulling `pg`,
  * `drizzle-orm`, `stripe`, `jsdom`, `@mozilla/readability`, `pino` and the
  * Anthropic SDK into a tool whose entire claim is that it runs on the box with
  * the product's server absent — overseer-direction.md § Principles. A
  * dashboard that needs a Postgres driver installed in order to hear a sentence
  * is not that tool. Even the smallest useful piece of it, `transcribeWith`,
- * still reaches `ai-call.ts` at 20 files and 20,344 lines.
+ * still reaches `ai-call.ts` at 21 files and 20,505 lines.
  *
- * `transcribeWith` *is* free of the database at runtime — `ai-spend.ts` writes
- * through a sink that is `null` unless the product's server installs one — and
- * the honest consequence of that is worth saying out loud: **going through it
- * would not have metered this spend either.** No `ai_calls` row, nothing for
+ * `transcribeWith` used standalone writes no database row, and the honest
+ * consequence is worth saying out loud: **going through it would not have
+ * metered this spend either.** (The mechanism is not a process-global sink
+ * waiting to be installed, which is what this comment said until GPT Sol
+ * corrected it: a sink belongs to `collectSpend`'s async scope, and a call
+ * outside one increments an unscoped counter, warns, and drops the record.) No `ai_calls` row, nothing for
  * `npm run cost` to count. The fleet's OpenRouter spend is invisible to the
  * product's ledger whichever shape is chosen, so that is a property of being a
  * separate tool rather than a cost of this decision. A dictation is about
@@ -86,7 +89,7 @@ const TIMEOUT_MS = 45_000;
  * product's `MIN_AUDIO_BASE64` exists for the same reason. ~2 seconds at the
  * recorder's measured ~14 KB/s, base64'd.
  */
-const MIN_AUDIO_BASE64 = 37_000;
+export const MIN_AUDIO_BASE64 = 37_000;
 
 /**
  * A transcript far longer than anything that could have been said.
@@ -216,7 +219,14 @@ export async function transcribeForFleet(args: {
       ok: false,
       status: 503,
       message:
-        "Dictation is not set up on this box — there is no OPENROUTER_API_KEY. [mic-not-set-up]",
+        /* **The product's exact sentence, for the product's exact branch.**
+           `tests/dictation-codes.test.ts` scans both trees since 2026-09-08, and
+           the reason is the reader rather than the code: Greg quotes four
+           characters off a phone and does not know which of the two servers
+           produced them. Mine said "on this box — there is no
+           OPENROUTER_API_KEY", which is more useful to me and less useful to
+           him, and made one code name two sentences. */
+        "Dictation is not configured on this server. [mic-not-set-up]",
     };
   }
   if (args.audio.length > MAX_AUDIO_BASE64) {
@@ -259,7 +269,12 @@ export async function transcribeForFleet(args: {
       }),
       signal: abort,
     });
-  } catch (err) {
+    /* **No binding, because nothing may be read off it.** `catch {}` rather than
+       `catch (err)` says that out loud: on this wire a thrown message can carry
+       a prefix of the request body, and the request body is somebody talking.
+       An unused binding would be a warning; an unused binding somebody later
+       "fixed" by logging it would be a voice in a log file. */
+  } catch {
     /* The caller's abort is somebody navigating away and needs no sentence; our
        own deadline is a person watching a spinner and does. */
     if (args.signal?.aborted === true) {
@@ -270,7 +285,7 @@ export async function transcribeForFleet(args: {
     return {
       ok: false,
       status: 502,
-      message: "Could not reach the transcriber. Check the box's network. [mic-no-upstream]",
+      message: "The transcription service could not be reached. [mic-no-upstream]",
     };
   }
 
@@ -293,14 +308,14 @@ export async function transcribeForFleet(args: {
     return {
       ok: false,
       status: 502,
-      message: "The transcriber answered with nothing we could read. [mic-unreadable]",
+      message: "The transcription service sent back something we could not read. [mic-unreadable]",
     };
   }
   if (text.length > MAX_TRANSCRIPT_CHARS) {
     return {
       ok: false,
       status: 502,
-      message: "The transcriber sent back far more than could have been said. [mic-upstream]",
+      message: "The transcription service could not transcribe that. [mic-upstream]",
     };
   }
   return { ok: true, text: stripFillers(text.trim()) };

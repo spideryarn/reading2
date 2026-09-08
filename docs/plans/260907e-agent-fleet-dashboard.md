@@ -1859,6 +1859,60 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
   findings, and a fresh backlog that size is how the check that would catch the next one gets
   ignored.
 
+### 🔵 Stage v0.4j: the page reads the box's clock with the phone's
+
+**Found by `fleet-health-history` on 2026-09-08, in their own chart, and flagged to
+everyone else.** Their version: `Math.max(serverEdgeMs, Date.now())` on the right-hand edge of the
+axis, so a phone an hour fast turned a current sample into a one-hour outage — *an outage
+manufactured by a clock*. They fixed theirs by letting the server's edge stand.
+
+**It is live here and it is broader.** Every age on this page is
+`browserNow − Date.parse(aServerTimestamp)`:
+
+| What | Where | What a fast phone does |
+|---|---|---|
+| `collectedAge` | `view.ts:71`, via `freshness` | **STALE banner permanently on.** Threshold is 2.5 × cadence ≈ 2m 30s, so a phone three minutes fast is enough. |
+| `transcriptAge` | `messages-client.ts` | *"This may not be this session's conversation"* on every working row. Threshold 30 min. |
+| `uptime` | `view.ts:79` | Every session reads older than it is. Cosmetic. |
+| `LastWrote` | `SessionDetail.tsx` | The header age, and its alarm colour, both wrong. |
+| `PauseLine` | overdue duration | The *decision* is safe — `pause.overdue` is computed server-side and this page never recomputes it — but the printed duration is wrong. |
+
+The first two are the expensive ones, because they are **alarms**, and an alarm a clock can
+manufacture is the same failure as a caveat drawn on 29 of 32 rows: it is on when nothing is wrong,
+so it stops being read.
+
+#### Why the obvious fix is wrong
+
+Subtracting a skew from `useNow()` breaks the comparisons that are **already correct**. `freshness`
+computes `heardAge = now − receivedAt`, and both of those are browser-clock values — an
+honest measurement of *how long since this page last heard anything*, which needs no correction.
+Correcting `now` globally would corrupt it by exactly the skew.
+
+**So the correction belongs at the boundary, not at the clock:** a server timestamp is converted
+into browser-clock terms once, where it is parsed, and everything downstream compares in one clock.
+That is this module's own rule — normalise at the seam — and it is why this is a stage rather than a
+line.
+
+#### What it needs
+
+- [ ] **A `servedAt` on the state payload**: the server's clock at the moment it answers. Neither
+      `collectedAt` nor `attemptedAt` can stand in — the gap between either of those and receipt is
+      *genuine snapshot age*, up to a full cadence, and cannot be told apart from skew. `servedAt`
+      minus `receivedAt` is skew plus network latency, and latency here is milliseconds against a
+      threshold of minutes.
+- [ ] **One conversion at the parse boundary**, applied to every server timestamp the client reads —
+      `collectedAt`, `startedAt`, `lastModified`, `pause.at`, `pause.resetsAt`. Not to `receivedAt`,
+      which is already the browser's.
+- [ ] **Say it out loud when the skew is large.** A phone minutes off is worth one line on the page,
+      because it is a fact about the reader's device that nothing else will ever tell them, and
+      because it explains any residual oddness. Silence here would make a corrected page and a
+      broken clock look identical.
+- [ ] A test that fixes the browser clock some minutes ahead of the server's and asserts the STALE
+      banner does **not** appear. Watched failing first: without the correction it appears.
+
+**Not started.** Written up rather than bolted on, because the correction touches every timestamp the
+client parses and the naive version silently breaks a measurement that is currently right.
+
 ### Later: the coordinator agent
 
 The orchestrator is eventually a program, not Greg (his call, 2026-09-08). Nothing here builds it,

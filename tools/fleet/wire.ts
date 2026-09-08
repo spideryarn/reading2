@@ -203,6 +203,301 @@ export type QueueView = {
 };
 
 /* ------------------------------------------------------------------ *
+ * Claude usage limits, as tools/overseer/usage.ts measures them.
+ *
+ * Produced by `collectUsage` there; rendered by the fleet dashboard. Declared
+ * here rather than in usage.ts because usage.ts reaches `node:child_process`
+ * and `node:fs` — the exact transitive closure this file's header says must
+ * never become reachable from the client project.
+ *
+ * The measurements behind these shapes are in
+ * docs/project/orchestrator-direction.md § "What is actually observable about
+ * usage limits". Two facts drive every design choice below, and neither is
+ * obvious from the field names alone:
+ *
+ *  - `~/.claude.json`'s cached utilisation IS A CACHE, and a stale entry reads
+ *    exactly like a current one. Measured: a file 48 minutes old whose
+ *    `five_hour` window had reset 27 minutes earlier still read
+ *    `utilization: 70`.
+ *  - A 429 written into a session's own transcript cannot be stale, so it is
+ *    the ground truth and the cache is only a hint.
+ * ------------------------------------------------------------------ */
+
+/**
+ * A usage window's name, VERBATIM from the source — `five_hour`, `seven_day`,
+ * and, in the cache, a rotating set of per-model codenames (`nimbus_quill`,
+ * `iguana_necktie`, `seven_day_opus`, …) that Anthropic adds and removes
+ * without notice.
+ *
+ * Deliberately open, and not a closed union. A closed union would be a lie the
+ * first time a codename appears, and — worse — the kind of lie that lets an
+ * exhaustive `switch` compile while silently dropping a real window. The two
+ * stable names are `KnownUsageWindow`; render anything else by its raw name.
+ */
+export type UsageWindowName = string;
+
+/**
+ * The two windows stable enough to branch on.
+ *
+ * A literal union rather than a `const` array, because this file may hold no
+ * runtime values — a `const` here would be bundled into the browser. The array
+ * lives in tools/overseer/usage.ts and is typed against this.
+ */
+export type KnownUsageWindow = "five_hour" | "seven_day";
+
+/**
+ * One window's cached utilisation.
+ *
+ * `expired` CARRIES NO PERCENTAGE, and not by omission — not even under a name
+ * like `stalePercent`. The measured failure is that a void number reads exactly
+ * like a live one, and a renderer handed a numeric field will eventually render
+ * it, which is how the void number gets back on screen with a different label.
+ * The stale number survives as prose inside `why`, where it cannot be mistaken
+ * for a reading. Same repair as this file's own reason for existing: the
+ * consumer is not given the option.
+ */
+export type UsageWindowReading =
+  | {
+      kind: "value";
+      window: UsageWindowName;
+      /** 0-100, as the file gives it. */
+      utilizationPercent: number;
+      /** ISO 8601, verbatim from `resets_at`. */
+      resetsAt: string;
+      resetsAtMs: number;
+      /** How long until this window resets, from the `now` the producer was given. Always > 0 here. */
+      msUntilReset: number;
+    }
+  | {
+      kind: "expired";
+      window: UsageWindowName;
+      resetsAt: string;
+      resetsAtMs: number;
+      /** How long ago it reset. */
+      msSinceReset: number;
+      /** Including the stale percentage, in words. */
+      why: string;
+    }
+  | { kind: "unknown"; window: UsageWindowName; why: string };
+
+/**
+ * The whole `.cachedUsageUtilization` blob.
+ *
+ * `accountUuid` is not decoration: after a `/login` swap the cache can still
+ * hold the PREVIOUS account's numbers, so a reading has to say whose it is.
+ * The verdict refuses to let a cache from another account influence its level.
+ */
+export type UsageCacheReading =
+  | {
+      kind: "value";
+      accountUuid: string | null;
+      fetchedAtMs: number;
+      /** now - fetchedAtMs. Age alone does NOT invalidate a window; `resets_at` does. */
+      ageMs: number;
+      /** One entry per window present in the file. Windows the file says are null are absent, not zero. */
+      windows: UsageWindowReading[];
+    }
+  | { kind: "unknown"; why: string };
+
+/**
+ * Which account a reading belongs to.
+ *
+ * Recorded, never rotated: multiple Max subscriptions is medium-term by Greg's
+ * explicit call, so this stage records which account and builds no rotation.
+ */
+export type UsageAccount =
+  | {
+      kind: "value";
+      email: string | null;
+      orgId: string | null;
+      orgName: string | null;
+      /** `max`, `pro`, … from `claude auth status`. */
+      subscriptionType: string | null;
+      /** From `.oauthAccount`; the key the cache's own `accountUuid` is compared against. */
+      accountUuid: string | null;
+      /** e.g. `default_claude_max_20x`. */
+      rateLimitTier: string | null;
+    }
+  /** `claude auth status` answered, and the answer was "nobody is logged in". Not a failure. */
+  | { kind: "logged-out"; projectsDirectory: string | null }
+  | { kind: "unknown"; why: string };
+
+/** One real 429, as written into a session's transcript. Ground truth; cannot be stale. */
+export type RateLimitHit = {
+  /**
+   * STABLE ACROSS SCANS, and that is the whole point of the field.
+   *
+   * Derived from the transcript path, the rejection's own timestamp and its
+   * window — never random, never minted per pass. A store carrying a rejection
+   * forward between scans has to recognise the same rejection when it sees it
+   * again, and an id that changed every pass would make every rejection look
+   * new: nothing would ever be matched, nothing would throw, and the count would
+   * quietly drift. `tests/overseer-usage.test.ts` scans one transcript twice and
+   * asserts the ids are identical, because "stable" is a property an
+   * innocent-looking change can break with nothing failing.
+   *
+   * It exists because the alternative was the consumer composing a key by hand,
+   * and the parts that make such a key correct are facts only the producer can
+   * see: `claudeSessionId` is NOT unique (a subagent's rejection carries the
+   * parent conversation's id) and neither is `resetsAtMs` (27 rejections on this
+   * box share one). A derivation rule in the consumer is a second hand-written
+   * declaration of one contract, and this one would fail silently — two
+   * rejections collapsing into one does not throw, it under-reports.
+   *
+   * Stable for a given projects directory. Moving that directory changes every
+   * id, which is right in the case that matters (a different `CLAUDE_CONFIG_DIR`
+   * holds a different account's transcripts) and merely wasteful otherwise.
+   */
+  id: string;
+  /** `quotaLimits.rateLimitType` verbatim — `five_hour` or `seven_day` in every record seen. */
+  window: UsageWindowName;
+  /** `quotaLimits.resetsAt`, normalised to ms. */
+  resetsAtMs: number;
+  /** The transcript record's own `timestamp`, normalised to ms, or null if it had none. */
+  hitAtMs: number | null;
+  /** ISO, verbatim from the record. */
+  hitAt: string | null;
+  /** `quotaLimits.status`, e.g. `rejected`. */
+  status: string | null;
+  /**
+   * THE CONVERSATION UUID — the same id `QueuedItem.claudeSessionId` carries,
+   * and NOT tmux's session handle (`$1643`) or a pane id (`%2108`).
+   *
+   * Named in full because all three are in play on the dashboard's rows and
+   * they are not interchangeable: joining a rate limit against the wrong one
+   * puts a red badge on an agent that is working fine. It comes from the
+   * transcript record's own `sessionId` field, which is also the transcript's
+   * filename, so it is the id of the conversation that was rejected.
+   */
+  claudeSessionId: string | null;
+  /** Absolute path of the transcript the record was found in. */
+  transcriptPath: string;
+  /** The synthetic assistant message, e.g. "You've hit your session limit · resets 7:50am (Europe/London)". */
+  message: string | null;
+};
+
+/**
+ * THE POSITIVE CONTROL. A probe that finds nothing must prove it looked.
+ *
+ * Every number here is counted by the scan itself, so "no 429s" reads as
+ * "opened 235 transcripts, scanned 232,961 lines, found none" rather than as an
+ * unfalsifiable zero. The producer will not return `none` unless
+ * `transcriptsOpened` and `linesScanned` are both above zero and nothing
+ * rate-limit-shaped went unread. A renderer showing "no limits hit" should show
+ * these alongside it — and must respect `truncatedByLimit`, which means the
+ * absence covers less ground than it looks like.
+ */
+export type ScanCoverage = {
+  /** Transcripts the directory walk listed. */
+  transcriptsFound: number;
+  /** Those inside the mtime window and the transcript bound — the ones the scan meant to read. */
+  transcriptsSelected: number;
+  /** Transcripts actually opened and read to the end. THE number that makes a zero believable. */
+  transcriptsOpened: number;
+  /**
+   * Transcripts that vanished or errored between listing and reading. Real: on
+   * a box with live sessions a transcript can disappear between `readdir` and
+   * `open`, which killed a first pass of this scan outright.
+   */
+  transcriptsUnreadable: number;
+  /** Up to five of the unreadable ones, in the tool's own words. */
+  unreadableWhy: string[];
+  linesScanned: number;
+  /** Lines carrying the rate-limit marker, and so parsed as JSON. */
+  candidateLines: number;
+  /** Candidates that parsed. `candidateLines - linesParsed` did not, which a live file makes normal. */
+  linesParsed: number;
+  /**
+   * Candidates carrying a quota object the parser could not read — a rename or a
+   * shape change, not an absence. Non-zero with no hits forces `unknown`.
+   */
+  malformedCandidates: number;
+  /** Candidates carrying a readable quota object but no rejection signal. Drift made visible; not fatal. */
+  quotaLimitsWithoutErrorSignal: number;
+  /** The transcript bound cut the selection short: an absence covers less than the window claims. */
+  truncatedByLimit: boolean;
+  /** The mtime window applied, in ms, or null for "everything". */
+  sinceMs: number | null;
+  /** Wall-clock cost, so a caller can see what a poll is buying. */
+  tookMs: number;
+};
+
+export type RateLimitScan =
+  | { kind: "hits"; hits: RateLimitHit[]; coverage: ScanCoverage }
+  | { kind: "none"; coverage: ScanCoverage }
+  | { kind: "unknown"; why: string; coverage: ScanCoverage };
+
+/**
+ * One conversation's answer, for a dashboard row.
+ *
+ * `cannot-tell` exists for the same reason `UsageWindowReading` has no
+ * percentage on its expired arm, one level up: a bare `null` would collapse
+ * "this conversation has no limit in force" with "the scan could not tell",
+ * and the second has to reach the page as a sentence rather than as silence.
+ */
+export type ConversationRateLimit =
+  | { kind: "hit"; hit: RateLimitHit }
+  | { kind: "none" }
+  | { kind: "cannot-tell"; why: string };
+
+export type UsageLevel = "ok" | "approaching" | "limited" | "unknown";
+
+/**
+ * The verdict.
+ *
+ * `limited` means a 429 whose window has not yet reset — ground truth, and the
+ * arm a "Hit usage limits" status should read. `approaching` is derived from
+ * the cache and is therefore a hint; it is never reported from an expired
+ * window, nor from a cache belonging to a different account. `unknown` is a
+ * fourth arm rather than a fallback to `ok`, for the reason health.ts has one:
+ * a level computed while every source failed would say "fine" and mean nothing.
+ */
+export type UsageVerdict = {
+  level: UsageLevel;
+  reasons: string[];
+  /**
+   * The unexpired hit driving `limited`, or null.
+   *
+   * When several are in force this is the one that frees up LAST, because "due
+   * back at" has to be the moment work can actually resume — not the moment the
+   * first window clears.
+   */
+  activeLimit: RateLimitHit | null;
+};
+
+export type UsageReport = {
+  account: UsageAccount;
+  cache: UsageCacheReading;
+  rateLimits: RateLimitScan;
+  verdict: UsageVerdict;
+  collectedAt: string;
+  tookMs: number;
+};
+
+/**
+ * What the Overseer's checkpoint knows about usage limits — **and why it might
+ * know nothing**, which is three different facts rather than one absence.
+ *
+ * A bare `UsageReport | null` would put *no pass has ever run*, *the stored
+ * report was unreadable* and *this checkpoint predates the field* in one slot.
+ * The first is ordinary, the second means something is wrong with the store, and
+ * the third means the reader is newer than the writer. They call for different
+ * words on a page and only `why` can carry the difference.
+ *
+ * **There is deliberately no empty-report arm.** A scan that found nothing is a
+ * `UsageReport` whose `rateLimits` say so, with its own `collectedAt`; inventing
+ * a report to mean *we have not looked* would be the most reassuring possible
+ * lie, which is the same trap `attentionNotYetRun` exists to avoid.
+ *
+ * `at` is when the checkpoint was written, NOT when anything was scanned —
+ * nothing was. A report's own `collectedAt` is the only instant that can tell a
+ * quiet account from a pass that stopped running.
+ */
+export type StoredUsage =
+  | { kind: "report"; report: UsageReport }
+  | { kind: "none"; why: string; at: string };
+
+/* ------------------------------------------------------------------ *
  * Which harness is in a pane, and what may honestly be done to it.
  * ------------------------------------------------------------------ */
 
@@ -385,6 +680,30 @@ export type AttentionList =
       items: readonly AttentionItem[];
       /** THE POSITIVE CONTROL. Zero items out of zero scanned is a broken probe. */
       sessionsScanned: number;
+      /**
+       * Sessions we TRIED to judge and could not — a pane that would not parse, a
+       * gateway that returned 429, a tail the budget did not reach.
+       *
+       * **NEVER a session we correctly declined to judge.** A mid-turn agent is
+       * not waiting on anybody and skipping it is right rather than incomplete;
+       * so is a Codex pane, a shell, and a permission dialog. If deliberate skips
+       * landed here the number would be non-zero on almost every pass, the page
+       * would carry a permanent caveat, and Greg would learn to read past it —
+       * which is A17 again, healthy operation spending most of its time alarming.
+       * **Render a line only when it is non-zero.**
+       *
+       * It exists because suppressing the claim of ABSENCE leaves the claim of
+       * COMPLETENESS standing. A list of two says *these two need you*, which is
+       * true, and a reader takes *and only these two*, which may not be — and
+       * that inference is a negative claim about the other thirty. An incomplete
+       * observation may not be read as a negative one.
+       *
+       * Added 2026-09-08 after GPT Sol found a 429 publishing an empty list with
+       * every count green: `breakdownBalances()` proved the WALK happened and
+       * could not prove the JUDGEMENT did. A positive control proves the step it
+       * wraps and nothing above it.
+       */
+      sessionsUnreadable: number;
       scannedAt: string;
     }
   | { kind: "unknown"; why: string; scannedAt: string };
@@ -481,4 +800,67 @@ export type PauseUnknownCause =
   | "transcript-unreadable"
   | "no-conversation-id"
   | "session-store-unreadable"
-  | "rate-limits-not-collected";
+  | "rate-limits-not-collected"
+  /**
+   * A rate-limit scan RAN and could not answer for this session.
+   *
+   * The eighth arm, and it is a different fact from `rate-limits-not-collected`:
+   * that one means nobody looked, this one means somebody looked and the
+   * evidence did not settle it. On this box in the week of 2026-09-08 that is
+   * the ordinary case — 27 rejections belong to a Max account Greg is no longer
+   * signed into, they carry no account id, and the only artefact that could
+   * attribute them is a cache whose window disagrees. So the collector reports
+   * `unknown` rather than naming a limit it cannot attribute, and this is the
+   * cause that carries that sentence to the page.
+   *
+   * Distinct from the other one because the remedies differ: "nobody looked" is
+   * fixed by publishing a reading, and "looked and could not tell" is fixed by
+   * signing in, or by waiting for the rejections to expire.
+   */
+  | "rate-limits-unreadable"
+  /**
+   * A wake-up WAS found and its time could not be worked out — a recurring
+   * expression, a step, a range.
+   *
+   * The seventh arm, and it is a different shape from the other six: those are
+   * all about failing to REACH a source. This one is about reaching it and
+   * finding something we know is pending and cannot put a clock on. It is not
+   * `none`, because something is genuinely waiting; it is not
+   * `transcript-unreadable`, because the transcript read perfectly well.
+   *
+   * Added 2026-09-08 after the reader was built: the module had been mapping
+   * this case onto `transcript-unreadable` through a single named constant,
+   * with the specifics in `why`, and said so rather than editing this type
+   * unilaterally. That was the right way round — the sentence stayed true while
+   * the name was wrong, and one constant meant the repair is one line.
+   */
+  | "schedule-not-parseable";
+
+
+/* ------------------------------------------------------------------ *
+ * What happened to the keystrokes.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **A steering attempt has three outcomes, not two.**
+ *
+ * Astra's A11b. `none` means nothing left this box. `partial` means **the text
+ * landed and the Enter did not**, so it is sitting in that agent's input box
+ * waiting for the next keystroke to submit it — the one case where *"try
+ * again"* is the worst available advice, because a retry appends to the
+ * half-sent text rather than replacing it. `unknown` means the call timed out
+ * or died on a signal and we genuinely cannot say.
+ *
+ * It lives here because it was declared carefully on the server, sent on the
+ * wire, and **thrown away by the browser**, which then rendered every refusal
+ * as *"Nothing was sent."* — false in the most expensive direction, and false
+ * precisely when it matters. That is instance 5 of
+ * docs/postmortems/260908b: the producer said the careful thing and the
+ * consumer had a slot for one fact where there were three.
+ *
+ * The server's own comment beside the field had already named the consumer it
+ * needed: *"it is here rather than only in the log because the person who
+ * pressed the button is the one who needs it, and they are on a phone."*
+ * Nothing related the two declarations, so nothing noticed.
+ */
+export type Delivery = "none" | "partial" | "unknown";

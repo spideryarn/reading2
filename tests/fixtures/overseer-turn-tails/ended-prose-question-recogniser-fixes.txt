@@ -1,0 +1,24 @@
+  the source rather than off the output.
+
+  And the tripwire fired — REGION_CHARS["plos-biology"] is pinned with a comment saying a widened region must go red
+  rather than pass quietly. It went red. That's the pin doing its job, so it moved with the reason beside it.
+
+  Two smaller things it surfaced. The plan's PLOS figures were stale in a second place, which I've corrected — 28,004 →
+  28,352 is what reproduces, and the older spike's 28,112 → 28,460 has the same delta of 348 against a drifted baseline.
+  And except: ["ul.reflinks"] now matches zero elements in the prepared source, because C4a's furniture pass removes them
+  before the region is resolved; the clause is harmless but its why describes work it no longer does, so that's recorded
+  rather than tidied away.
+
+  Waiting on the recogniser fixes — the prose-retention fallback is the piece that decides whether this ships.
+
+✻ Waiting for 1 background agent to finish
+                                                                                  ✔ Update installed · Restart to update
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ keep going
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5 (1M context)] worktrees/extraction-stage-c (worktree-extraction-stage-c*) ⑂ extraction-stage-c · ██░░░░░░░░ 2…
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents · 1 feedback draft
+                                                                                                              /rc failed
+
+  ● main
+  ◯ general-purpose  Documenting kept field in readArticle                                      33m 8s · ↓ 207.1k tokens

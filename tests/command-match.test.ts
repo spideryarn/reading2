@@ -197,19 +197,27 @@ describe("the ranking normalises what the reader typed", () => {
  * claim of the 2026-09-07 widening: the bar did not grow a second matcher for
  * a second kind of row, it grew a wider input to the one it had.
  *
- * A **hand-made** page rather than the real `PAGES` entry, deliberately. This
+ * A **hand-made** page rather than the real `besideTheModes` entry, deliberately. This
  * file is about the ranking and runs without a DOM; importing the real list
  * means importing CommandBar.tsx, and therefore React and router.ts, to assert
  * something that is not about either. What the real entry says — that
  * `changelog` and `whats new` reach it — is asserted in
  * tests/command-bar.test.tsx against the bar a reader actually sees.
  */
-const A_PAGE: Command = {
+const A_PAGE: Extract<Command, { kind: "page" }> = {
   kind: "page",
   href: "/somewhere",
   label: "Zebra crossing",
   description: "A sentence about the zebra.",
   aliases: ["stripes"],
+  /* **Required, not omitted**, and so is every other row's — GPT Sol refused an
+     optional flag on 2026-09-08, because a row that spends could then be
+     written without one and ship unmarked. command-match.ts § `CommandWords`.
+
+     **Typed to the arm rather than to `Command`**, for the same reason
+     `AN_ACTION` below is: spreading a value declared as the union gives back
+     the union, and `{ ...A_PAGE, href: "search" }` then matches no arm. */
+  generates: false,
 };
 
 /**
@@ -217,12 +225,13 @@ const A_PAGE: Command = {
  * with `s`, as *Search* does, so the query `"s"` puts both on `label-prefix`
  * and nothing but the input order can separate them.
  */
-const S_PAGE: Command = {
+const S_PAGE: Extract<Command, { kind: "page" }> = {
   kind: "page",
   href: "/ships-log",
   label: "Ship's log",
   description: "Where the ship has been.",
   aliases: [],
+  generates: false,
 };
 
 describe("the ranking handles a page exactly as it handles a mode", () => {
@@ -244,7 +253,7 @@ describe("the ranking handles a page exactly as it handles a mode", () => {
     /* Both are `label-prefix` for `"s"` — *Search* and *Ship's log* — so
        nothing about the query separates them and the answer is the input
        order. That is the whole mechanism keeping pages beneath modes in the
-       bar: `CommandBar` spreads the Dock's modes first and `PAGES` after, and
+       bar: `CommandBar` spreads the Dock's modes first and `besideTheModes` after, and
        there is no rule anywhere that says "pages last".
 
        **Asserted in both directions**, because a ranker that special-cased
@@ -311,6 +320,151 @@ describe("a command says which one it is", () => {
     expect(text.label).toBe("Zebra crossing");
     expect(text.aliases).toEqual(["stripes"]);
     expect(text.description).toBe("A sentence about the zebra.");
+  });
+
+  /**
+   * **The `action` arm reads like a page rather than like a mode**, and this is
+   * the test that would have gone red on the mistake `commandText`'s docblock
+   * names: it asked *is this a page* until 2026-09-08, so a third kind would
+   * have fallen down the mode branch and been given `MODE_CATALOG[undefined]`.
+   */
+  it("reads an action's words out of the action itself", () => {
+    const text = commandText(AN_ACTION);
+    expect(text.label).toBe("Feedback");
+    expect(text.aliases).toEqual(["bug"]);
+    expect(text.description).toBe("Tell us what went wrong.");
+  });
+
+  /**
+   * **An action's id is its own, and cannot meet a page's or a mode's** — the
+   * same guard the page/mode pair above holds, extended to the arm that has no
+   * href to be named by. Spelled to collide on purpose in all three directions.
+   */
+  it("keeps an action's id apart from a page's and a mode's spelled alike", () => {
+    const action: Command = { ...AN_ACTION, id: "search" };
+    const page: Command = { ...A_PAGE, href: "search" };
+    const ids = [commandId(action), commandId(page), commandId(modeCommand("search"))];
+    expect(new Set(ids).size).toBe(3);
+  });
+});
+
+/**
+ * **The third kind of row, 2026-09-08** — Greg asked for a Feedback command,
+ * and Feedback is a dialog rather than a place (260908e § Feedback is the one
+ * new verb). Hand-made here for the reason `A_PAGE` is: this file is the
+ * ranking, and the real row closes over a React context.
+ *
+ * `run` is a `noop` because nothing in this file presses anything. What
+ * pressing does is tests/command-bar.test.tsx.
+ *
+ * **Typed to the arm rather than to `Command`**, which `A_PAGE` above is not
+ * and does not need to be: spreading a value whose declared type is the union
+ * gives back the union, and `{ ...AN_ACTION, id: "search" }` then matches no
+ * arm at all, because `id` is not a field the `mode` arm has. `Extract` is the
+ * same narrowing `besideTheModes` in CommandBar.tsx uses for its own list.
+ */
+const AN_ACTION: Extract<Command, { kind: "action" }> = {
+  kind: "action",
+  id: "feedback",
+  label: "Feedback",
+  description: "Tell us what went wrong.",
+  aliases: ["bug"],
+  generates: false,
+  run: () => {},
+};
+
+describe("the ranking handles an action exactly as it handles a page", () => {
+  it("finds an action by its label, its alias and its description", () => {
+    expect(rankCommands("feedback", [AN_ACTION])).toEqual([AN_ACTION]);
+    expect(rankCommands("bug", [AN_ACTION])).toEqual([AN_ACTION]);
+    expect(rankCommands("wrong", [AN_ACTION])).toEqual([AN_ACTION]);
+  });
+
+  it("filters an action out when nothing matches", () => {
+    expect(rankCommands("zzzq", [AN_ACTION])).toEqual([]);
+  });
+
+  /**
+   * **Ties still fall to input order**, with three kinds in the list rather
+   * than two — so "modes first, then everything else" goes on being the
+   * caller's arrangement and not a rule inside the ranker. All three are
+   * `label-prefix` for `"s"`.
+   */
+  it("keeps a mode, a page and an action in the order they were handed", () => {
+    const action: Command = { ...AN_ACTION, label: "Send a report" };
+    const handed = [modeCommand("search"), S_PAGE, action];
+    expect(rankCommands("s", handed)).toEqual(handed);
+    expect(rankCommands("s", [...handed].reverse())).toEqual([...handed].reverse());
+  });
+});
+
+/**
+ * **`generates` is a field now, not a `kind`** — CommandBar.tsx § the marker
+ * and `CommandWords` § `generates` carry the argument. This file only pins that
+ * the field survives the ranking untouched, because the row that needs it
+ * (Tweets) reaches the renderer through `rankCommands` and nothing else.
+ */
+describe("a row that starts work carries it as a property", () => {
+  it("keeps `generates` on the command the ranking hands back", () => {
+    const spender: Command = { ...A_PAGE, generates: true };
+    const [ranked] = rankCommands("zebra", [spender]);
+    expect(ranked).toBeDefined();
+    expect(ranked?.kind === "page" && ranked.generates).toBe(true);
+  });
+
+  it("says `false` on a row that only navigates, rather than saying nothing", () => {
+    /* The **vacuity guard** for the line above: a ranker that marked everything
+       would pass it, and `A_PAGE` is the ordinary case. What this does *not*
+       prove is that the field is required — see the type-level check below,
+       which is the honest version of a claim this comment used to make. */
+    expect(A_PAGE.generates).toBe(false);
+  });
+
+  /**
+   * **`generates` is required, checked at the type level** — the assertion the
+   * runtime one above cannot make, and GPT Sol said so on 2026-09-08:
+   *
+   * > Change `generates: boolean` to `generates?: boolean` → this fixture still
+   * > explicitly contains `false` → the test and typecheck remain green. A later
+   * > spending row can then omit it, and `commandGenerates()` returns false.
+   *
+   * Exactly right. Every fixture in this file *volunteers* the field, so making
+   * it optional again would break nothing — the requirement would quietly stop
+   * being one, which is the whole failure the requirement exists to prevent.
+   *
+   * `@ts-expect-error` is what states it: the literals below are missing
+   * `generates`, and the comment **fails to compile if they ever become
+   * legal**. One per arm, because the two carry it through the same
+   * `CommandWords` and a check on one would go on passing if only the other
+   * were loosened.
+   *
+   * **It goes red at `npm run typecheck`, not at `npm test`** — vitest strips
+   * types and never checks them, so this file passing proves nothing about this
+   * block. That is a property of the tool, not a weakness here: the gate that
+   * catches it is one of the two that run on every change.
+   */
+  it("cannot be omitted from a page or an action (a type-level check)", () => {
+    // @ts-expect-error — a page without `generates` must not be a Command
+    const pageWithout: Command = {
+      kind: "page",
+      href: "/nowhere",
+      label: "No marker",
+      description: "A page that never said whether it spends.",
+      aliases: [],
+    };
+    // @ts-expect-error — nor an action without one
+    const actionWithout: Command = {
+      kind: "action",
+      id: "no-marker",
+      label: "No marker",
+      description: "An action that never said whether it spends.",
+      aliases: [],
+      run: () => {},
+    };
+    /* Read them, so `noUnusedLocals` does not delete the point of the test.
+       The runtime values are beside the point — what is asserted is above. */
+    expect(commandText(pageWithout).label).toBe("No marker");
+    expect(commandText(actionWithout).label).toBe("No marker");
   });
 });
 

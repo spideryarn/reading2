@@ -724,7 +724,7 @@ export const CHANGELOG_HREF = "/changelog";
  * **The apostrophe is `’` (U+2019), not `'`**, and that is load-bearing rather
  * than typographic fussiness: the command bar compares what a reader typed
  * against this string without folding punctuation, so it carries `whats new` as
- * an explicit alias. CommandBar.tsx § `PAGES`.
+ * an explicit alias. CommandBar.tsx § `besideTheModes`.
  *
  * Beside the href rather than in title-text.ts, which is the modes' table — a
  * page is not a mode, and the 2026-09-07 change that put this one in the

@@ -277,7 +277,7 @@ signed-out visitor and a reader on the shelf meet; the **command bar** (⌘/Ctrl
 the reading view, where there is no footer at all, and it answers to `changelog` as well as to the
 label — [reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar), added
 2026-09-07. That the two lists are separate is deliberate and the reasoning is at
-`src/web/CommandBar.tsx` § `PAGES`. Nothing about either changes the file: the file is the product of this
+`src/web/CommandBar.tsx` § `besideTheModes`. Nothing about either changes the file: the file is the product of this
 process, and the page is a reader of it — through
 [`src/changelog.ts`](../../src/changelog.ts), which is also what the writer and
 `tests/changelog-file.test.ts` read it with, so the format has one definition rather than three.

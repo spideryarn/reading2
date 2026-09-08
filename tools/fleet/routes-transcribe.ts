@@ -39,8 +39,8 @@ import {
   isAudioFormat,
   tooLongMessage,
 } from "../../src/dictation-limits.js";
-import { type BodyStream, checkOrigin, readBody } from "./routes-steer.js";
-import { transcribeForFleet } from "./transcribe.js";
+import { type BodyStream, type RateLimiter, checkOrigin, createRateLimiter, readBody } from "./routes-steer.js";
+import { MIN_AUDIO_BASE64, type FleetTranscription, transcribeForFleet } from "./transcribe.js";
 import { type FleetVocabularySession, fleetVocabulary } from "./vocabulary.js";
 import type { TranscribeRequest, TranscribeResponse } from "./wire.js";
 
@@ -56,8 +56,16 @@ export const PATH = "/api/transcribe";
  * in the first draft, which is exactly the failure
  * `tests/dictation-codes.test.ts` was written for after a bug report quoted four
  * characters that named two different problems.
+ *
+ * **And the code is `[mic-bad-request]`, not `[mic-format]`, since that test
+ * widened to scan `tools/` as well as `src/`.** `[mic-format]` already names a
+ * real and different branch — the browser encoded a container we cannot
+ * transcribe, decided in the browser, before anything is sent. This one is the
+ * server unable to read the request at all, which given our own client is a bug
+ * on our side rather than a fact about somebody's audio. Same fix (none), two
+ * causes, so two codes.
  */
-const UNREADABLE_REQUEST = "That recording could not be sent from this browser. [mic-format]";
+const UNREADABLE_REQUEST = "That recording could not be sent from this browser. [mic-bad-request]";
 
 /**
  * The body limit, which is the audio cap plus room for the JSON around it.
@@ -73,6 +81,46 @@ const UNREADABLE_REQUEST = "That recording could not be sent from this browser. 
  * not ours.
  */
 export const MAX_TRANSCRIBE_BODY = MAX_AUDIO_BASE64 + 64 * 1024;
+
+/**
+ * **Admission control, because this is the route that spends money.**
+ *
+ * Every other route here costs the box some tmux commands. This one opens a
+ * socket to a third party and is billed for it, and the page has no
+ * authentication at all — reachability over the tailnet is the whole boundary,
+ * so anything that gets inside it can spend without limit. That is a different
+ * exposure from the steering route, which can type into a live agent but cannot
+ * run up an invoice. GPT Sol's review of the built code, finding 2.
+ *
+ * Numbers chosen from what a person can actually do: a dictation takes seconds
+ * to speak and ~2 to transcribe, so **one every 3 seconds** is well clear of
+ * anybody talking and nowhere near a loop. The burst ceiling of **10 in 60
+ * seconds** is the one that matters — it bounds the bill rather than the pace.
+ *
+ * Keyed by the context, so the New session box and each session's composer have
+ * their own floor. Two boxes on screen are two people's worth of dictating in
+ * the worst case, and one of them should not lock the other out.
+ *
+ * `check` reads and `record` spends, and they are separate for the reason
+ * routes-steer.ts gives at length: a slot recorded at the moment of asking means
+ * ten malformed requests spend the whole allowance without a single paid call
+ * having been made.
+ */
+export function fleetTranscribeLimiter(): RateLimiter {
+  return createRateLimiter({ minIntervalMs: 3_000, burstMax: 10, burstWindowMs: 60_000 });
+}
+
+/**
+ * **The one the server uses.** Module scope, because a limiter is STATE and a
+ * second instance is a second allowance — the same argument `server.ts` makes
+ * about mounting the action queue through one function rather than making its
+ * own.
+ *
+ * Tests pass their own through `deps`, because a shared one makes them
+ * order-dependent: a flood test that spends the whole burst leaves every test
+ * after it looking rate-limited. Found by writing the flood test.
+ */
+const sharedLimiter = fleetTranscribeLimiter();
 
 function json(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
@@ -92,19 +140,110 @@ function json(res: ServerResponse, status: number, body: unknown): void {
  */
 type ParsedRequest = Omit<TranscribeRequest, "format"> & { format: AudioFormat };
 
+/**
+ * Base64, and nothing that merely looks like a string.
+ *
+ * Length as well as alphabet: base64 encodes three bytes as four characters, so
+ * a length that is not a multiple of four cannot be a whole encoding of
+ * anything.
+ *
+ * **This alone does not stop nonsense opening a paid call, and the comment here
+ * used to claim it did.** `"A".repeat(60_000)` is perfectly valid base64 — it is
+ * the fake audio in this feature's own tests — so an alphabet check refuses
+ * punctuation and admits any well-formed encoding of any bytes at all. GPT Sol
+ * said so in round 2 and was right; {@link looksLikeAudio} is what makes the
+ * claim true.
+ */
+function isBase64(s: string): boolean {
+  return s.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(s);
+}
+
+/**
+ * **Does the front of this recording look like the container it says it is?**
+ *
+ * The check that actually stops a paid call being opened on nonsense. Only the
+ * first few bytes are decoded — a magic number, not a parse — because the
+ * question is *"is this plausibly audio"* rather than *"is this decodable"*, and
+ * answering the second would mean decoding megabytes on the request path in
+ * front of somebody waiting.
+ *
+ * **A mismatch is refused rather than corrected**, for the reason
+ * `formatOf` gives in `src/dictation-limits.ts`: a wrong container is not a
+ * rejection downstream, it is a transcript of noise. If the browser says `webm`
+ * and the bytes say something else, the honest answer is that we cannot send it.
+ *
+ * The prefixes are the standard ones: EBML for webm, `OggS` for ogg, `ftyp` at
+ * offset 4 for MP4 and M4A, `RIFF` for wav, and an ADTS sync word or an ID3 tag
+ * for raw AAC and MP3.
+ */
+function looksLikeAudio(audio: string, format: AudioFormat): boolean {
+  /* 32 base64 characters is 24 bytes, which is more than any prefix below
+     needs. Decoding the whole thing to look at twelve bytes would be the
+     expensive way to ask a cheap question. */
+  let head: Buffer;
+  try {
+    head = Buffer.from(audio.slice(0, 32), "base64");
+  } catch {
+    return false;
+  }
+  if (head.length < 12) return false;
+  const at = (offset: number, ascii: string): boolean => head.toString("latin1", offset, offset + ascii.length) === ascii;
+  switch (format) {
+    case "webm":
+      /* EBML, which is also Matroska's. */
+      return head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3;
+    case "ogg":
+      return at(0, "OggS");
+    case "mp4":
+    case "m4a":
+      return at(4, "ftyp");
+    case "wav":
+      return at(0, "RIFF") && at(8, "WAVE");
+    case "mp3":
+      /* An ID3 tag, or a frame sync. */
+      return at(0, "ID3") || (head[0] === 0xff && (head[1] ?? 0) >= 0xe0);
+    case "aac":
+      /* ADTS sync word. */
+      return head[0] === 0xff && ((head[1] ?? 0) & 0xf6) === 0xf0;
+  }
+}
+
+/**
+ * The keys a request may carry. Anything else is refused rather than dropped.
+ *
+ * **This is the "sent, then quietly dropped" class**, and it is the one this
+ * whole feature has a scar from: OpenRouter accepted a `prompt` field for eleven
+ * days, answered 200, and ignored it. A parser that reconstructs the fields it
+ * knows about does the same thing to its own callers — a future optional field
+ * would arrive, be silently discarded, and the only symptom would be the feature
+ * it was added for not working. The product's endpoint refuses unknown keys and
+ * so does this. GPT Sol's finding 5.
+ */
+const ALLOWED_KEYS = new Set(["audio", "format", "context"]);
+
 /** The shape a `TranscribeRequest` has to have, checked rather than cast. */
 function parse(raw: unknown): { ok: true; value: ParsedRequest } | { ok: false; why: string } {
   if (typeof raw !== "object" || raw === null) return { ok: false, why: "the body is not an object" };
   const o = raw as Record<string, unknown>;
+  const surplus = Object.keys(o).filter((k) => !ALLOWED_KEYS.has(k));
+  if (surplus.length > 0) return { ok: false, why: `unknown field(s): ${surplus.join(", ")}` };
   if (typeof o.audio !== "string" || o.audio === "")
     return { ok: false, why: "audio must be a non-empty base64 string" };
+  if (!isBase64(o.audio)) return { ok: false, why: "audio is not base64" };
   /* A closed list rather than a pass-through: this string is handed to
      OpenRouter, and an unvalidated one is a field a caller controls in somebody
      else's request. */
   if (!isAudioFormat(o.format)) return { ok: false, why: "format is not a container we can transcribe" };
+  if (!looksLikeAudio(o.audio, o.format))
+    return { ok: false, why: "the recording does not begin like the container it claims to be" };
   const c = o.context;
   if (typeof c !== "object" || c === null) return { ok: false, why: "context is missing" };
   const ctx = c as Record<string, unknown>;
+  const ctxSurplus = Object.keys(ctx).filter((k) => k !== "kind" && k !== "sessionId");
+  if (ctxSurplus.length > 0) return { ok: false, why: `unknown context field(s): ${ctxSurplus.join(", ")}` };
+  if (ctx.kind === "new-session" && Object.keys(ctx).length !== 1) {
+    return { ok: false, why: "a new-session context carries nothing else" };
+  }
   if (ctx.kind === "new-session") {
     return { ok: true, value: { audio: o.audio, format: o.format, context: { kind: "new-session" } } };
   }
@@ -139,17 +278,42 @@ export function orderForContext(
 }
 
 /**
+ * Turning a recording into words — the one thing this route does that costs
+ * money, behind a parameter so a test can drive the route without spending any.
+ *
+ * **The seam exists because a test found it missing.** A flood test aimed at the
+ * rate limiter reached the real gateway, and `tests/setup/provider-guard.ts`
+ * refused the call and said so — a guard this repo has because a suite that
+ * quietly spends is one nobody notices until the invoice. Without the seam, the
+ * route's own handling of a provider failure and of a caller hanging up could
+ * not be tested at all: both are paths through code that only runs after the
+ * money would have been spent.
+ */
+export type TranscribeDeps = {
+  transcribe(args: {
+    audio: string;
+    format: AudioFormat;
+    vocabulary: readonly string[];
+    signal?: AbortSignal;
+  }): Promise<FleetTranscription>;
+  /** The allowance. Omitted by the server, which uses the one shared instance. */
+  limiter?: RateLimiter;
+};
+
+/**
  * Mount the route. Returns false if this request is not for it, exactly like
  * the other routes on this server, so `server.ts`'s dispatch stays one line.
  *
  * @param sessions read at request time rather than closed over, because the
  *   snapshot is replaced by the refresh loop and a closure would freeze
  *   whichever one existed when the server started.
+ * @param deps injected only by tests. `server.ts` passes nothing.
  */
 export function handleTranscribeRequest(
   req: IncomingMessage,
   res: ServerResponse,
   sessions: () => readonly FleetVocabularySession[],
+  deps: TranscribeDeps = { transcribe: transcribeForFleet },
 ): boolean {
   const url = (req.url ?? "/").split("?")[0];
   if (url !== PATH) return false;
@@ -163,6 +327,11 @@ export function handleTranscribeRequest(
     json(res, origin.status, { error: origin.why, code: origin.code });
     return true;
   }
+
+  /* Declared out here so the outer `catch` can ask. It is set as soon as the
+     controller exists and answers `false` before that, which is right: nothing
+     has been listened for yet, so nothing has been aborted. */
+  let aborted = (): boolean => false;
 
   void (async () => {
     const body = await readBody(req as BodyStream, MAX_TRANSCRIBE_BODY);
@@ -197,12 +366,59 @@ export function handleTranscribeRequest(
       return;
     }
 
+    /* **After the parse, before the money.** A request refused for its shape
+       cost us nothing and must not spend a slot; this is the last line before
+       one does. */
+    const key = parsed.value.context.kind === "session" ? parsed.value.context.sessionId : "new-session";
+    const now = Date.now();
+    const limiter = deps.limiter ?? sharedLimiter;
+    const verdict = limiter.check(key, now);
+    if (!verdict.ok) {
+      res.setHeader("retry-after", String(Math.ceil(verdict.retryAfterMs / 1000)));
+      /* 429, which the client reads as retryable — it is: the fix is to wait.
+         `why` is the limiter's own sentence about pace, and carries no part of
+         the request. */
+      json(res, 429, { error: `Too many dictations at once — ${verdict.why}. [ai-busy]` });
+      return;
+    }
+    /* **A slot is spent only by a request that will actually cost something.**
+       `transcribeForFleet` answers a recording below the floor with an empty
+       transcript and never reaches the gateway — somebody pressing the button
+       and releasing it straight away. Recording a slot for that meant the next
+       real dictation, three seconds later, was refused for a request that had
+       spent nothing. GPT Sol's round 2, finding 3, reproduced: upstream calls 0,
+       first 200, second 429.
+
+       routes-steer.ts makes the same distinction at length and for the same
+       reason: `check` reads, `record` spends, and a request that cost us nothing
+       is free. */
+    const willSpend = parsed.value.audio.length >= MIN_AUDIO_BASE64;
+    if (willSpend) limiter.record(key, now);
+
     const vocabulary = fleetVocabulary(orderForContext(parsed.value.context, sessions()));
-    const result = await transcribeForFleet({
+    /* **Hanging up cancels the paid call.** Without this the browser aborts its
+       fetch — on a navigation, an unmount, or a second press — and the
+       transcription carries on being billed for an answer nobody will read.
+       The product's route has had this since it was written; mine did not, and
+       GPT Sol found it as finding 3.
+
+       Installed AFTER the body is read, deliberately: `readBody` destroys the
+       socket on an over-size request, and a `close` fired by our own refusal is
+       not a caller hanging up. */
+    const hangup = new AbortController();
+    const onClose = (): void => hangup.abort();
+    res.on("close", onClose);
+    aborted = () => hangup.signal.aborted;
+    const result = await deps.transcribe({
       audio: parsed.value.audio,
       format: parsed.value.format,
       vocabulary,
+      signal: hangup.signal,
     });
+    /* Nothing to answer to. `499` is what `transcribeForFleet` returns for the
+       caller's own abort, and writing to a closed socket throws. */
+    if (hangup.signal.aborted) return;
+    res.off("close", onClose);
     if (result.ok) {
       /* No log line at all on success. Not the length, not the duration, not a
          count — see the header. */
@@ -214,12 +430,29 @@ export function handleTranscribeRequest(
     console.error(`transcribe: ${result.message}`);
     json(res, result.status, { error: result.message });
   })().catch((err: unknown) => {
+    /* **The abort is checked HERE too, and that is not belt and braces.** The
+       ordinary abort path returns above; this is the one where the transcriber
+       *rejects* after the caller has gone, and `headersSent` is false on a
+       response nothing has answered — so the boundary would have written a 500
+       into a closed socket. GPT Sol's round 2, finding 2, reproduced through the
+       seam: `writeHead(500)` and `end()`, both after `closed=true`. */
+    if (aborted()) return;
     /* Everything above is built not to reject, and this is here because "built
        not to" is not a guarantee. Without it the request hangs until the phone
        gives up, which is indistinguishable from the box being down. */
-    console.error(`transcribe: threw — ${err instanceof Error ? err.message : String(err)}`);
+    /* **A fixed reason, not `err.message`.** Everything above is built to turn
+       its own failures into sentences, so reaching here means an exception
+       nobody classified — and an unclassified exception on this route can carry
+       body-derived material, which is somebody talking. The invariant this file
+       states is that no part of the audio is ever logged; interpolating an
+       arbitrary message is that invariant holding only for the errors we
+       happened to think of. GPT Sol's finding 4. The stack is not lost: it is
+       one `NODE_OPTIONS` away for anybody debugging this deliberately. */
+    void err;
+    console.error("transcribe: an unclassified exception reached the route boundary");
     if (!res.headersSent) {
-      json(res, 500, { error: "Something went wrong transcribing that. [mic-unexpected]" });
+      /* The product's wording, verbatim. See the note on UNREADABLE_REQUEST. */
+      json(res, 500, { error: "Something went wrong while transcribing that. [mic-unexpected]" });
     }
   });
   return true;

@@ -127,7 +127,7 @@ function SessionCard({
             and this is the added fact — the one that says whether the calm is
             "finished" or "blocked and nobody has noticed". It renders nothing
             when there is nothing to say. PauseLine.tsx has the reasoning. */}
-        <PauseLine pause={row.pause} now={now} />
+        <PauseLine pause={row.pause} status={row.status} now={now} />
         <Uptime row={row} now={now} className="tw:ml-auto" />
       </div>
 

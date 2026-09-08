@@ -163,7 +163,49 @@ export function NewSessionPanel({ api }: { api: NewSessionApi }): ReactNode {
     context: { kind: "new-session" },
   });
 
+  /**
+   * **CLOSING THE PANEL MUST STOP THE MICROPHONE, because closing it unmounts
+   * nothing.**
+   *
+   * `open` only decides whether the box and its controls are *rendered*; this
+   * component stays mounted either way, so `useDictation`'s cleanup never runs
+   * and a dictation started before Close carries on recording behind a panel
+   * with no Stop button on it. There is no way back to it: the toggle is inside
+   * the branch that just disappeared.
+   *
+   * The product hit this exact shape in its Feedback dialog, and
+   * docs/project/dictation.md names it — *"if the box lives in a component that
+   * stays mounted when it disappears… closing it unmounts nothing"*. GPT Sol
+   * found it here as a P1 on 2026-09-08, in code written by somebody who had
+   * read that sentence and not applied it.
+   *
+   * `dictation.toggle`, not the field wrapper's `toggle`, which would put the
+   * focus back into a box that is no longer on screen.
+   */
+  /* **Read at the moment of sending, not captured when `start` was built.**
+     `start`'s dependency list is `[prompt]`, so a `dictate.sendBlocked` read
+     inside it is whatever it was when the prompt last changed — and the case
+     that matters is somebody pressing Dictate and then Start without typing,
+     where the closure still holds `false`. The DOM `disabled` was protective and
+     the action-boundary guard, which is the one that survives a programmatic
+     call, was not. GPT Sol's round 2, finding 1; `SessionDetail` had the ref
+     pattern already and this file did not copy it. */
+  const blocked = useRef(dictate.sendBlocked);
+  blocked.current = dictate.sendBlocked;
+
+  const armed = dictate.dictation.armed;
+  const stopMic = dictate.dictation.toggle;
+  useEffect(() => {
+    if (!open && armed) stopMic();
+  }, [open, armed, stopMic]);
+
   const start = useCallback(async () => {
+    /* **The guard lives here as well as on the button**, because `disabled` is a
+       property of a rendered element and this is the action. A programmatic
+       call, or a keyboard path somebody adds later, would otherwise start an
+       agent on the rough live guesses — or, on Safari and Firefox, on nothing
+       that was said at all. GPT Sol's review of the built code, finding 6. */
+    if (blocked.current) return;
     setBusy(true);
     setRefusal(null);
     setGaveUp(false);

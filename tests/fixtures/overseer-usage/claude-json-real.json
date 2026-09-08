@@ -1,0 +1,134 @@
+{
+  "cachedUsageUtilization": {
+    "fetchedAtMs": 1788868334947,
+    "accountUuid": "0f5e9c11-1111-4111-8111-000000000001",
+    "utilization": {
+      "five_hour": {
+        "utilization": 1,
+        "resets_at": "2026-09-08T16:49:59.790529+00:00",
+        "limit_dollars": null,
+        "used_dollars": null,
+        "remaining_dollars": null,
+        "locked_reason": null
+      },
+      "seven_day": {
+        "utilization": 22,
+        "resets_at": "2026-09-15T04:59:59.790550+00:00",
+        "limit_dollars": null,
+        "used_dollars": null,
+        "remaining_dollars": null,
+        "locked_reason": null
+      },
+      "seven_day_oauth_apps": null,
+      "seven_day_opus": null,
+      "seven_day_sonnet": null,
+      "seven_day_cowork": null,
+      "seven_day_omelette": null,
+      "tangelo": null,
+      "iguana_necktie": null,
+      "omelette_promotional": null,
+      "nimbus_quill": {
+        "utilization": 0,
+        "resets_at": null,
+        "limit_dollars": null,
+        "used_dollars": null,
+        "remaining_dollars": null,
+        "locked_reason": null
+      },
+      "cinder_cove": null,
+      "copper_kite": null,
+      "amber_ladder": null,
+      "juniper_tide": null,
+      "extra_usage": {
+        "is_enabled": false,
+        "monthly_limit": null,
+        "used_credits": null,
+        "utilization": null,
+        "currency": null,
+        "decimal_places": null,
+        "disabled_reason": null,
+        "user_disabled": false,
+        "spend_limit_reached": false,
+        "credits_ever_enabled": false,
+        "daily": null,
+        "weekly": null
+      },
+      "limits": [
+        {
+          "kind": "session",
+          "group": "session",
+          "percent": 1,
+          "severity": "normal",
+          "resets_at": "2026-09-08T16:49:59.790529+00:00",
+          "scope": null,
+          "is_active": false
+        },
+        {
+          "kind": "weekly_all",
+          "group": "weekly",
+          "percent": 22,
+          "severity": "normal",
+          "resets_at": "2026-09-15T04:59:59.790550+00:00",
+          "scope": null,
+          "is_active": true
+        },
+        {
+          "kind": "weekly_scoped",
+          "group": "weekly",
+          "percent": 2,
+          "severity": "normal",
+          "resets_at": "2026-09-15T04:59:59.790721+00:00",
+          "scope": {
+            "model": {
+              "id": null,
+              "display_name": "Fable"
+            },
+            "surface": null
+          },
+          "is_active": false
+        }
+      ],
+      "spend": {
+        "used": {
+          "amount_minor": 0,
+          "currency": "USD",
+          "exponent": 2
+        },
+        "limit": null,
+        "percent": 0,
+        "severity": "normal",
+        "enabled": false,
+        "disabled_reason": null,
+        "cap": null,
+        "balance": null,
+        "auto_reload": null,
+        "disclaimer": "Usage credits cover you when you hit your plan limits. [Learn more](https://support.claude.com/articles/12429409)",
+        "can_purchase_credits": false,
+        "can_toggle": false
+      },
+      "member_dashboard_available": false
+    }
+  },
+  "oauthAccount": {
+    "accountUuid": "0f5e9c11-1111-4111-8111-000000000001",
+    "emailAddress": "greg@rehearsable.ai",
+    "organizationUuid": "0f5e9c11-2222-4222-8222-000000000002",
+    "hasExtraUsageEnabled": false,
+    "billingType": "stripe_subscription",
+    "accountCreatedAt": "2024-11-26T09:54:47.247069Z",
+    "subscriptionCreatedAt": "2026-08-27T14:16:52.423500Z",
+    "ccOnboardingFlags": {},
+    "claudeCodeTrialEndsAt": null,
+    "claudeCodeTrialDurationDays": null,
+    "seatTier": null,
+    "displayName": "Greg",
+    "fullName": "Greg Detre",
+    "profileFetchedAt": 1788845815487,
+    "organizationRole": "admin",
+    "workspaceRole": null,
+    "organizationName": "greg@rehearsable.ai's Organization",
+    "organizationType": "claude_max",
+    "organizationRateLimitTier": "default_claude_max_20x",
+    "userRateLimitTier": null
+  }
+}

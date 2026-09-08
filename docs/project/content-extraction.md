@@ -337,6 +337,91 @@ worth knowing from here:
   ([database.md](database.md)), so the audit line stage D will show is a migration that waits for the
   reader who needs it.
 
+## The one thing this pipeline protects
+
+Since 2026-09-08, stage 2 also runs a pass in the other direction:
+[`src/protect.ts`](../../src/protect.ts) adds **class tokens** to a handful of elements before
+Readability sees the page, and Readability reads the class attribute in order to answer exactly the
+question the tokens answer. It deletes nothing, moves nothing and rewrites no text. It runs **last**
+in `prepareDocument`, after the note and callout passes, so a token we invent cannot reach a
+recogniser that reads the publisher's own class names.
+
+It exists because two real losses turned out to be Readability declining to believe an element is
+content, and Readability has two of its own escape hatches for that: `okMaybeItsACandidate` defeats
+the `unlikelyCandidates` deletion at `Readability.js:1127`, and a `positive` class token takes an
+element's weight to 25, above `_cleanConditionally`'s *"low weight and a little linky"* bar. The
+diagnosis is
+[260904e § C3](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md); the rules, the
+narrowings and what each is answerable for are on `protectAuthoredStructure`.
+
+**Two tokens, one job each, and that is a P0 rather than a style.** `spya-keep-column` is in
+`okMaybeItsACandidate` and deliberately in neither `positive` nor `negative`, so it defeats a
+deletion and moves no score; `spya-keep-content` is in `positive`, because weight is the whole of the
+second rule's mechanism. Using the second on a table promotes it to top candidate and **deletes the
+prose either side of it** — reproduced by GPT Sol on a constructed page and pinned as a synthetic
+case in [`tests/extract-protect.test.ts`](../../tests/extract-protect.test.ts), because no fixture in
+the corpus has that score topology. Neither token reaches a reader: `keepClasses` is false, so both
+are stripped with every other class.
+
+**Read that as "one token per job", not as "the weightless one is safe on a table".** It really does
+move no score, and at the size the pair was measured at the table survives and so does the prose
+either side of it — but take the same synthetic from twelve body rows to twenty-four and
+`spya-keep-column` loses the prose as well. **A rescued table is a table that gets scored**, and on a
+page whose prose is thin beside it, `<td>`s alone win candidacy. The identical page written
+`class="wikitable sortable"` — a string Readability never disliked, so nothing is stamped — loses the
+same four paragraphs at the same row count, so the arithmetic is the library's rather than ours.
+
+**That was once the end of the paragraph, and it was the wrong place to stop.** *"It is not ours"*
+explains the mechanism and does not absolve the pass: **this pass is the action** that turns a real
+header-named page from *prose, missing table* into *flattened table, missing prose*. GPT Sol refused
+the absolution and it was right to. So the pass carries a **fallback**: whenever a rule stamps
+anything, stage 2 runs a second time with those rules off, and the **control arm ships** if the
+treatment lost the author's prose — `kept` then names the rule that was withdrawn, so a rollback is
+visible rather than silent.
+
+The criterion is `proseRetention`, and two things about it are worth carrying:
+
+- **It is not a length comparison**, and could not be. In the case that caused it the bad arm was the
+  *longer* one — 3,726 characters of flattened rows against 801 characters and four paragraphs.
+  Length scores the disaster as an improvement. Every paragraph-level run in the control must appear
+  somewhere in the treatment instead, so the invariant is **"the words are retained somewhere"**
+  rather than "the prose occurrence is retained" — stated that way because a paragraph duplicated in
+  a table or a footnote can lose its main occurrence while the identical string elsewhere keeps the
+  check happy.
+- **The chrome it must ignore is excluded by what the publisher wrote, not by a length.** A first
+  version set a 100-character floor, because at Readability's own 25 the check fired on
+  `wiki_gdp_table` over *"From Wikipedia, the free encyclopedia"* — 37 characters of
+  `<div id="siteSub" class="noprint">`. That floor was tuned to one fixture and it let a page of
+  eight 99-character paragraphs vanish with the check reporting success. The floor is 25 and
+  `.noprint` text is excluded instead, read off the pre-Readability document because Readability
+  strips the class that says so.
+
+Both readings of the two-token table, and both directions of the fallback, are pinned in that test
+file's adversarial set.
+
+**What it recovers, measured through the real pipeline on both arms** — the second arm being
+`withProtectionDisabled`, a seam that exists only so a counterfactual can be run, because *"the
+fixture passes"* and *"the fixture passes because of this pass"* are otherwise the same green
+([silent-success.md](../reusable/silent-success.md)):
+
+| fixture | stamped | out |
+|---|---|---|
+| `wiki_gdp_table` | 2 tables | 1 → **3** tables, 1 → **238** rows — **223** in the GDP table, **14** in the regional one (its fifteenth source row is `<tr class="mw-empty-elt">`, and **our own furniture pass above deletes it** before Readability sees the page — the row never reaches the library, and at the post-`prepareDocument` snapshot the source table has fourteen rows too), 1 in the map-legend swatch grid. Its one "surviving" table was that grid: **zero** content tables survived the page unaided |
+| `ar5iv` | 2 tables | 7 → **9** tables, 42 → **60** rows; Table 1 (6 rows) and Table 2 (12) land back inside their own `<figure>`, after their `<figcaption>` |
+| `plos_biology` | the correction notice, 2 elements | *"Correction"*, *"10 Apr 2018"* and the correction's own DOI reach the reader for the first time; 28,004 → **28,352** characters |
+| the other 32 | **nothing** | byte-identical with the pass on and off, `medium_about` and `pmc_article` raising the same typed refusal in both arms |
+
+**What it does not fix, and this must not be quoted as though it did.** The corpus loses roughly
+**77** tables. Only **six** of them die on this code path at all, and only **four** qualify under the
+rule as narrowed — so *"tables survive"* is not true generally and is not becoming true here.
+Wikipedia's navboxes stay out: they carry no unlikely token of their own and die on their wrapper's
+`role="navigation"`, which no stamp on a table can reach. And there is **no registry** of correction
+markers — `correction`, `erratum` and `retraction` were proposed and rejected, because candidate
+selection is global and a wrong positive stamp can delete an author's prose elsewhere on the page.
+
+What was stamped rides on `ExtractResult.kept`, per rule, exactly as `removed` does and for the same
+reason — a rule that stamped nothing is absent rather than zero.
+
 ## The publisher's furniture, and the title it stole
 
 **Reported 2026-09-05: a 142-page Elsevier paper was ingested and given the journal's name.** The
