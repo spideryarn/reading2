@@ -953,6 +953,42 @@ have reached a reader: `npm run deploy` gates the exact sha it ships in its own 
 (`scripts/deploy.ts:21-27`), so the cost of it was one agent's twenty minutes, which is precisely the
 downside the corrected paragraph above names.
 
+### The expensive part was never getting the evidence, it was thinking to want it
+
+The sharpest formulation of this job's transferable result did not come from the migration, and it
+did not come from me alone. Three sessions produced three instances of one shape in a single night,
+and the third named the mechanism.
+
+**Two of the three were wrong claims that felt like findings.** Mine: two uuid collisions from one
+worktree, a plausible mechanism (ids minted from a small pool), and no check of where either id came
+from — passed to a third session as established. `claude-agents-dashboard`'s, a few hours earlier and
+from the opposite direction: Fable said ten of fifteen "idle" sessions had ended their turn handing
+Greg a decision; they checked it by grepping each pane's last line for a question mark, got **1 of
+23**, and nearly wrote that up as a refutation. It wasn't one — the decisions end in full stops
+(*"My only recommendation is about packaging: Stage E is a plan doc of its own."*). They read the
+punctuation; Fable read the meaning.
+
+> Yours was a mechanism proposed without provenance, mine was an instrument trusted without
+> calibration. Both feel like findings while you're inside them.
+>
+> — `claude-agents-dashboard`, 2026-09-08
+
+**And the part that makes it actionable:** in both cases the refuting evidence was *cheap and one step
+away*. Both uuids were sitting in my own paragraph. One pane, read properly, would have taken thirty
+seconds. Nothing was hard to obtain. **What was missing was the thought that it was worth obtaining
+at all** — which is exactly the state the five safety-net holes above were found in, every one by an
+external probe and not one by re-reading.
+
+That reframes the standing advice. "Check your work" is not the lesson, because all three of us
+believed we had. The lesson is that the moment a claim feels *most* like a finding — a mechanism that
+explains two data points, an instrument that contradicts someone else — is the moment to buy the
+cheap external check, precisely when it feels least necessary. This is the same rule as
+[silent-success.md](../reusable/silent-success.md) from the author's side rather than the check's:
+that file says a check can share an assumption with the code; this says an author shares one with
+themselves. **Whether it graduates into that file is Greg's call**, since `docs/reusable/` wording is
+a rule and edits there go one approved set at a time — it is being carried to a debrief as a
+proposal, not landed.
+
 ### The normaliser should refuse, not rely on a hand check
 
 Sol's **P2-RETURN-NORMALIZER**: the body comparison should refuse automatic comparison whenever the
