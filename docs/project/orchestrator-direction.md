@@ -241,6 +241,41 @@ is easy to believe and wrong in a specific way.
   to be derived from the cache, and the cache is the untrustworthy source. **Treat the transcript 429
   as the ground truth and the cache as a hint**, not the other way round.
 
+### Can we call an API instead? Mostly no, and not with an admin key
+
+Greg offered, 2026-09-08: *"If absolutely necessary I can provide an Anthropic admin key in the
+.env.local that gets pushed by gjd-remote to this box."* **The answer is that it would not help, so
+do not ask him for one.** Researched the same day, sources in the answer below.
+
+- **The Admin API is the wrong billing system.** Every usage and cost endpoint under
+  `/v1/organizations/*` — including the Claude-Code-specific `usage_report/claude_code` — reports
+  **Console API-key spend**, in daily aggregates, an hour behind. Anthropic's own FAQ says it flatly:
+  *"This API only tracks Claude Code usage on the Claude API."* It has no 5-hour or 7-day window, no
+  `resets_at`, and nothing shaped like the subscription quota that actually throttles Claude Code
+  here. Independently, **admin keys are minted for a Console organization and are documented as
+  unavailable for individual accounts**, so a personal Max subscription may have nothing to attach
+  one to.
+- **The documented `anthropic-ratelimit-*` headers are also API-key-shaped** — organisation RPM and
+  TPM, described entirely in terms of workspaces and usage tiers. They do not describe subscription
+  traffic.
+- **What does carry the real numbers is undocumented**: an `anthropic-ratelimit-unified-*` header
+  family (5h and 7d utilisation, reset, and which window is currently binding) returned on ordinary
+  OAuth-authenticated requests, and a `GET /api/oauth/usage` endpoint using the session's own token.
+  Multiply corroborated, including in Anthropic's own `claude-code` issue tracker. Almost certainly
+  where `cachedUsageUtilization` comes from — which explains why that cache goes stale: it is a
+  snapshot of headers from the *last* call, not a polled value.
+  **Treat as unsupported.** It is unversioned and unannounced, the endpoint is currently reported
+  returning persistent 429s for Max users, and there is evidence of fingerprinting against callers
+  that are not Claude Code. Nobody found a successful response body to confirm the shape.
+- **OpenTelemetry is documented and supported but carries no quota metric** — sessions, tokens and
+  cost, which is spend rather than headroom.
+
+**So the design stands where [the section above](#what-is-actually-observable-about-usage-limits)
+left it**, and the research is what makes that a decision rather than a shrug: the transcript 429 is
+ground truth, the local cache is a hint that must be checked against its own `resets_at`, and there
+is no supported API that would do better. Revisit if Anthropic ships the feature request asking for
+these headers to be exposed to hooks and statuslines.
+
 **Multiple accounts on one box is mechanically possible.** `CLAUDE_CONFIG_DIR` isolates config,
 credentials and the projects directory — verified empirically by pointing it at a scratch directory
 (`loggedIn:false`, isolated `projectsDirectory`, real credentials confirmed untouched). Running two
