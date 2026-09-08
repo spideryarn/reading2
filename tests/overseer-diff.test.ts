@@ -70,6 +70,32 @@ function kinds(events: readonly OverseerEvent[]): string[] {
 }
 
 /**
+ * Several collections in a row, through the daemon's own loop: each diff's own
+ * baseline is what the next one stands on.
+ *
+ * **NOT `diffed(b, c)` WITH THE MIDDLE SNAPSHOT RE-BLESSED**, and the
+ * difference is the whole subject of the flap case below. What makes
+ * `42 → null → 42` a false replacement is that the baseline ADVANCES through the
+ * miss, so a test that reached back through `baselineOf` would be asserting
+ * about a chain the daemon never runs. Two snapshots can only ever show the
+ * differ its own inputs; three show it the state it does not have.
+ *
+ * The first batch is a cold start — one `session-seen` per row — and every
+ * caller here ignores it.
+ */
+function chained(snapshots: readonly AdmissibleSnapshot[]): OverseerEvent[][] {
+  let baseline: Baseline | null = null;
+  const batches: OverseerEvent[][] = [];
+  for (const snapshot of snapshots) {
+    const outcome = diff(baseline, snapshot);
+    if (outcome.kind !== "diffed") throw new Error(`expected a diff, got ${outcome.kind}: ${outcome.reason}`);
+    batches.push(outcome.events);
+    baseline = outcome.baseline;
+  }
+  return batches;
+}
+
+/**
  * Everything the `status-change` pair's own real transition did not produce.
  *
  * `$1991` is the session that really changes state between those two files, so a
@@ -762,7 +788,15 @@ describe("CONSTRUCTED: the row material changing under a stable identity", () =>
     const after = edited("status-change-after", (p) => {
       const row = rowsOf(p)[1];
       if (!row) throw new Error("expected a second row");
-      row["worktree"] = "moved-by-enterworktree";
+      // NAMED FOR WHAT IT IS — a `worktree` string that differs between two
+      // snapshots — and not for a story about how it got that way. It used to
+      // say `moved-by-enterworktree`, which is a claim this data source cannot
+      // make: `worktree` and `meta.dir` come off tmux session environment
+      // variables fixed at session creation, and `EnterWorktree` moves the
+      // TRANSCRIPT, a different file that is not in this payload at all
+      // (observation.ts, `meta.dir`). The mistake came in from the brief and
+      // reached the plan doc as well; corrected 2026-09-08.
+      row["worktree"] = "a-worktree-that-differs";
       row["meta"] = { version: 1, kind: "claude", repo: "spideryarn/other", dir: "/somewhere/else" };
       row["repo"] = "spideryarn/other";
     });
@@ -772,6 +806,67 @@ describe("CONSTRUCTED: the row material changing under a stable identity", () =>
     // In the order `REGISTER_ROW_FIELDS` declares them, so the log reads the
     // same way twice and a test can compare it without sorting.
     expect(event.fields).toEqual(["repo", "worktree", "meta"]);
+  });
+
+  /**
+   * ONE MEMBER OF `meta` AT A TIME, BECAUSE THE MUTATION EVIDENCE WAS WRONG.
+   *
+   * The stage claimed "19 mutations, 19 caught". For `sameMeta` that was an
+   * overstatement, and it is the shape worth remembering rather than the
+   * incident: the only constructed metadata transition moved `meta.repo` and
+   * `meta.dir` TOGETHER and left `kind` alone, so deleting any one of the three
+   * comparisons still passed — whichever other member had also changed reported
+   * `meta` as moved regardless. **A test that changes several members at once
+   * cannot distinguish an AND of three comparisons from an AND of two**, so the
+   * suite was covering `sameMeta` as a unit and not as three.
+   *
+   * **REPRODUCED RATHER THAN ASSERTED**, because the point of the finding is
+   * that the evidence was wrong and replacing it with more unchecked evidence
+   * would be worse. Each of the three comparisons deleted in turn, with only the
+   * combined test above selected: `1 passed | 47 skipped` all three times — all
+   * three survived. With these, each deletion is caught by exactly the test that
+   * names the member it removed, which is the property the old run only appeared
+   * to have.
+   *
+   * Each of these therefore moves exactly one member and asserts the whole
+   * `fields` list, so it fails both ways: silence if the comparison is deleted,
+   * and a wider list if something else starts firing.
+   */
+  describe("CONSTRUCTED: the launcher metadata, one member at a time", () => {
+    /** Row 1's `meta`, with one member replaced and the rest as captured. */
+    function metaMoved(member: "kind" | "repo" | "dir", value: string): AdmissibleSnapshot {
+      return edited("status-change-after", (p) => {
+        const row = rowsOf(p)[1];
+        if (!row) throw new Error("expected a second row");
+        const meta = row["meta"] as Record<string, JsonValue>;
+        if (meta["version"] !== 1) throw new Error("expected a version-1 meta in the fixture");
+        row["meta"] = { ...meta, [member]: value };
+      });
+    }
+
+    function fieldsFor(after: AdmissibleSnapshot): readonly string[] {
+      const [event] = elsewhere(diffed(freshFixture("status-change-before"), after));
+      if (event?.kind !== "session-row-changed") throw new Error(`expected a row change, got ${event?.kind}`);
+      return event.fields;
+    }
+
+    test("kind alone", () => {
+      // `shell` rather than `claude`: the launcher says what it started, and a
+      // register that thought a shell was an agent would offer to resume it.
+      expect(fieldsFor(metaMoved("kind", "shell"))).toEqual(["meta"]);
+    });
+
+    test("repo alone", () => {
+      // `meta.repo`, NOT the row's own `repo` field — they are two different
+      // members of the register and only one of them is inside `sameMeta`.
+      expect(fieldsFor(metaMoved("repo", "spideryarn/hellozenno"))).toEqual(["meta"]);
+    });
+
+    test("dir alone", () => {
+      // Absolute, because `parseMeta` refuses anything else; a relative one
+      // would be refused as a payload rather than reported as a change.
+      expect(fieldsFor(metaMoved("dir", "/home/greg/code/somewhere-else"))).toEqual(["meta"]);
+    });
   });
 
   test("startedAt is watched even though it should never move", () => {
@@ -860,11 +955,20 @@ describe("CONSTRUCTED: the row material changing under a stable identity", () =>
  * drift in a name, and folding it into the rename arm would put a `name` field
  * on an event that is really about a pane.
  *
- * A NULL IS NOT A CHANGE, in either direction, and that is the whole hazard
+ * A NULL IS NOT A CHANGE, IN EITHER DIRECTION, and that is the whole hazard
  * here: `paneId` and `panePid` come from a SEPARATE pane listing joined to the
  * session by handle (`tools/fleet/collect.ts`), so a join miss yields null on a
- * session that is perfectly alive. An arm that read that as a respawn would fire
- * twice per miss, forever, on a box where the listing is under load.
+ * session that is perfectly alive. The arm therefore fires only on
+ * non-null → non-null → differing.
+ *
+ * **THE SECOND HALF OF THAT RULE WAS BOUGHT WITH A FALSE EVENT AND A WRONG
+ * TEST.** An earlier version emitted on `null → pid`, justified here as *"the
+ * register needs it"* — which is true when the register has never had the pane
+ * and false in exactly the case it mattered, because in a flap the register
+ * already holds that pid. Two snapshots cannot tell "learned" from "recovered",
+ * so the test that encoded the justification also encoded the bug, and it took
+ * a three-collection test to show it. The cost is a real uncovered case and it
+ * has a test of its own below rather than a sentence.
  */
 describe("CONSTRUCTED: a pane respawned under a live session", () => {
   test("a new pid under the same handle is its own event", () => {
@@ -896,11 +1000,51 @@ describe("CONSTRUCTED: a pane respawned under a live session", () => {
     expect(elsewhere(diffed(before, after))).toEqual([]);
   });
 
-  test("but learning a pane we did not have IS an event, because the register needs it", () => {
-    // The other direction of the same miss. Silence here would leave a register
-    // that can never name the pane it is meant to steer, and a sustained miss
-    // followed by a recovery is one event rather than a flap — the flapping
-    // direction is the one above, and it is the one held silent.
+  test("A PANE THAT WENT MISSING AND CAME BACK IS NOT A REPLACEMENT — the same pid, three collections", () => {
+    // THE CASE TWO SNAPSHOTS CANNOT SHOW, which is why this one runs three.
+    // Found independently by two cross-family reviews, 2026-09-08; the second
+    // printed `original panePid: 645023 / miss: no events / recovery:
+    // session-pane-replaced, null → 645023`.
+    //
+    // Nothing was replaced. $1643 sat on pane pid 645023 throughout and the
+    // middle collection simply failed to join a pane onto it. The event is not
+    // noise, it is FALSE, and it goes into a permanent history — once every two
+    // collections, per session, for as long as the listing is under load.
+    const first = freshFixture("status-change-before");
+    const missed = edited("status-change-after", (p) => {
+      const row = rowsOf(p)[1];
+      if (!row) throw new Error("expected a second row");
+      row["paneId"] = null;
+      row["panePid"] = null;
+    });
+    const recovered = freshFixture("status-change-after");
+
+    const [, duringMiss, afterRecovery] = chained([first, missed, recovered]);
+    // The miss itself was already silent; that direction was never the bug.
+    expect(kinds(elsewhere(duringMiss ?? []))).toEqual([]);
+    // And the recovery: nothing at all, on ANY row — `missed` and `recovered`
+    // are the same collection but for that one pane, so an unfiltered assertion
+    // is available here and is the stronger one.
+    expect(kinds(afterRecovery ?? [])).toEqual([]);
+  });
+
+  test("KNOWN UNCOVERED: a pane first seen as a miss is never learned afterwards", () => {
+    // THE COST OF THE RULE ABOVE, asserted rather than described, so that the
+    // day somebody decides to buy the learn case back this test goes red and
+    // tells them where the decision was made.
+    //
+    // `null → 645023` is silence, so a session whose FIRST observation had a
+    // join miss keeps `panePid: null` in the register until the daemon restarts
+    // (a cold start rebuilds every entry from the row) or tmux does. Nothing in
+    // between can fill it in.
+    //
+    // Why that is the side to be wrong on: a null pane pid is honest — *we do
+    // not know* — where a wrong one is an address `tools/fleet/steer.ts` types
+    // keystrokes into, and the thing wearing that pid may be whatever now
+    // occupies the slot. And the measured join-miss rate is 0 of 551 row
+    // observations over 24 minutes of the live fleet, so the gap is real but
+    // rare. `session-pane-replaced` in diff.ts carries the argument and names
+    // the upstream repair that removes the trade-off entirely.
     const before = edited("status-change-before", (p) => {
       const row = rowsOf(p)[1];
       if (!row) throw new Error("expected a second row");
@@ -909,12 +1053,7 @@ describe("CONSTRUCTED: a pane respawned under a live session", () => {
     });
     const after = freshFixture("status-change-after");
 
-    const events = elsewhere(diffed(before, after));
-    expect(kinds(events)).toEqual(["session-pane-replaced"]);
-    const [event] = events;
-    if (event?.kind !== "session-pane-replaced") throw new Error("expected a pane event");
-    expect(event.previousPanePid).toBeNull();
-    expect(event.panePid).not.toBeNull();
+    expect(elsewhere(diffed(before, after))).toEqual([]);
   });
 
   test("a rename and a respawn in one collection are two events", () => {
