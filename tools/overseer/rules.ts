@@ -19,7 +19,7 @@
  * written for.
  *
  * So a rule's whole configuration is `RuleSpec`, `RuleSpec` is inside
- * `JobDefinition`, and `definitionHash()` covers it (`canonicalRuleSpec` below
+ * `JobBehaviour`, and `behaviourHash()` covers it (`canonicalRuleSpec` below
  * is what it hashes). Move the threshold from 4 hours to 4 minutes and the job
  * refuses to dispatch until a person re-pins it. **And the implementation is
  * pinned too**, as `documents` entries: this file, `rule-work.ts` and
@@ -198,7 +198,7 @@ function encodeSpec<S extends object>(spec: S, encoders: SpecEncoders<S>): strin
 }
 
 /**
- * The canonical form `definitionHash` hashes.
+ * The canonical form `behaviourHash` hashes.
  *
  * Length-prefixed like `jobs.ts`'s, and for the same reason: without it a spec
  * with `policy: "safe"` and `disposition: "to-killpropose"` could hash the same

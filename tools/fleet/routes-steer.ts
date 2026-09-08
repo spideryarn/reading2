@@ -42,6 +42,11 @@ import type { Readable } from "node:stream";
 
 import { renderMessage, type Speaker } from "./actions.js";
 import { addressableHost } from "./origin.js";
+/* `nothingWasSent` ONLY — the one audited reading of a `SteerFailure`. This is
+   not a dependency on the queue: `queue.ts` imports `steer.ts`, never this
+   file, so the direction is safe, and a second copy of that two-field check
+   here would be the drift its own header warns about. */
+import { nothingWasSent } from "./queue.js";
 import {
   classifyConsequence,
   classifyGate,
@@ -50,6 +55,7 @@ import {
   type PaneMaterial,
   type PaneOption,
 } from "./pane.js";
+import { sharedQuarantineBook, type QuarantineBook, type UncertainSendReading } from "./quarantine.js";
 import type { FleetStatus } from "./status.js";
 import {
   answerQuestion as realAnswerQuestion,
@@ -846,6 +852,21 @@ export type SteerDeps = {
    * and the failure looks like a flake rather than a bug.
    */
   answeringEnabled: () => boolean;
+  /**
+   * The one book of per-session holds — `quarantine.ts`.
+   *
+   * **THIS ROUTE IS A PRODUCER OF UNCERTAINTY AND USED NOT TO SAY SO.** A
+   * `partial` here leaves exactly the same half-typed input box a queued
+   * delivery does, and until Stage 4 the only path that recorded it was the
+   * drain — so a message typed from the phone could leave text sitting in an
+   * agent's box and the queue would go on draining into it a minute later.
+   * There is one book per server and every producer writes to the same one.
+   *
+   * A DEP RATHER THAN AN IMPORT OF THE QUEUE'S, because `routes-actions.ts`
+   * already imports this file for the rate limiter and the reverse import would
+   * be a cycle. `quarantine.ts` is the leaf both sides can reach.
+   */
+  quarantine: QuarantineBook;
 };
 
 export function realSteerDeps(): SteerDeps {
@@ -864,6 +885,7 @@ export function realSteerDeps(): SteerDeps {
     // `FLEET_ANSWER_ENABLED=0` to stop all answering; anything else, including
     // the variable being unset, leaves the gate to decide dialog by dialog.
     answeringEnabled: () => process.env["FLEET_ANSWER_ENABLED"] !== "0",
+    quarantine: sharedQuarantineBook(),
   };
 }
 
@@ -1036,6 +1058,39 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
     // charging for it let six bogus requests lock out a real one. Sol's F18.
     deps.limiter.record(target.paneId, deps.now());
 
+    /**
+     * The payload, described without a word of it — the same promise the log
+     * line above keeps, kept again because this sentence is stored on the hold
+     * and rendered on a page.
+     */
+    const what =
+      "text" in request
+        ? `message (${request.text.length} characters)`
+        : `an answer to a dialog (option ${request.optionIndex + 1} of ${request.seen.options.length})`;
+    /**
+     * Hold this session, because this send may have left text in its input box.
+     *
+     * **THE SAME HOLD THE DRAIN OPENS, IN THE SAME BOOK.** Whichever of the
+     * three producers left the uncertainty, the consequence has to be one thing
+     * — otherwise the queue goes on delivering into a box the page has already
+     * been told not to trust, which is the missing-join failure this whole
+     * neighbourhood keeps writing postmortems about.
+     */
+    const holdSession = (reading: UncertainSendReading): void => {
+      const hold = deps.quarantine.hold({
+        sessionId: target.sessionId,
+        paneId: target.paneId,
+        claudeSessionId: target.claudeSessionId,
+        reading,
+        origin: "direct-steer",
+        what,
+      });
+      deps.log(
+        `steer ${op}: HELD session=${target.sessionId} hold=${hold.id} v${hold.version} reading=${reading} — ` +
+          "nothing else will be delivered to it until somebody says what is in that input box",
+      );
+    };
+
     let result: SteerResult;
     try {
       // ATTRIBUTED AT THE MOMENT OF THE SEND. `request.text` must never reach
@@ -1055,6 +1110,17 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
       // code so the client can tell a broken server from a stale view.
       const why = `the delivery module threw: ${(e as Error).message}`;
       deps.log(`steer ${op}: FAILED pane=${target.paneId} ${why}`);
+      // **A THROW IS THE CASE WITH THE LEAST EVIDENCE BEHIND IT**, and this
+      // `try` surrounds the whole call, so it cannot say WHEN: `fire()` may
+      // throw before the first keystroke or out of the middle of the sequence.
+      // That is not a reason to assume the first — it is the reason to hold.
+      //
+      // The DRAIN deliberately does not do this on its own throw, and the two
+      // are not inconsistent: there the lease is left open, which stops that
+      // session's queue harder than a hold would and puts the decision in front
+      // of a person. Here there is no lease to leave open, so the hold is the
+      // only thing there is.
+      holdSession("threw");
       respond(res, 500, { ok: false, code: "internal", why });
       return;
     }
@@ -1076,6 +1142,15 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
         `steer ${op}: refused pane=${target.paneId} code=${result.reason.code} ` +
           `delivery=${result.delivery} landed=${describeSend(result.sent)} why=${oneLine(result.reason.why)}`,
       );
+      // **ASKED OF `nothingWasSent`, NOT OF `result.delivery`.** That function
+      // is the one audited place that reads BOTH halves — the summary and the
+      // `sent` list of tmux calls that completed — and a `delivery: "none"`
+      // with a non-empty list is a self-contradicting report whose honest
+      // reading is that something went out. Comparing the summary here would be
+      // a second opinion, and the more confident of the two.
+      if (nothingWasSent(result) === null) {
+        holdSession(result.delivery === "partial" ? "partial" : result.delivery === "unknown" ? "unknown" : "none-contradicted");
+      }
       respond(res, REFUSAL_STATUS[result.reason.code], {
         ok: false,
         code: result.reason.code,

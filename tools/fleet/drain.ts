@@ -63,6 +63,15 @@
  * and without it the commonest refusal on this box destroys the person's
  * message rather than delaying it.
  *
+ * AND SETTLING IT WAS NEVER THE WHOLE ANSWER. A refusal that MAY have reached
+ * the pane leaves text in that agent's input box with no Enter behind it, and
+ * for a stage of this file's life the next item drained straight in behind it
+ * a minute later and concatenated itself onto half a sentence. So such a
+ * refusal now settles `uncertain` — not `refused`, which reads as *nothing
+ * reached them* — and holds the SESSION until a person says what is in that
+ * box. `quarantine.ts` owns the hold; this file is one of its three producers,
+ * and the other two are the direct steer route and the broadcast.
+ *
  * THE GENERATION IS CHECKED FIRST. `FleetSnapshot.tmuxServerPid` is the tmux
  * server every `$…` and `%…` in the rows belongs to; a restart re-issues those
  * handles to different sessions. So the whole snapshot is passed in, not just
@@ -79,6 +88,7 @@ import { renderMessage, renderSpoken, type SpokenAction } from "./actions.js";
 import type { FleetRow, FleetSnapshot } from "./collect.js";
 import { nothingWasSent, type QueuedItem, type SteeringQueue } from "./queue.js";
 import type { RefusalCode, SteerTarget, sendMessage as realSendMessage } from "./steer.js";
+import type { UncertainSendReading } from "./wire.js";
 
 /**
  * THE TWO BOUNDS, AND THE ARITHMETIC THEY ARE CHOSEN BY.
@@ -191,6 +201,12 @@ export type DrainHoldReason =
   | "stale"
   /** The session is working — `drainGate`'s `later` arm, and the reason the queue exists. */
   | "held"
+  /**
+   * An earlier send left text that may be sitting unsent in that agent's input
+   * box, and nothing goes in behind it until a person says what is there.
+   * quarantine.ts; only a person's gesture or a tmux restart clears it.
+   */
+  | "quarantined"
   /** This session cannot be typed into at all, in steer.ts's words. */
   | "blocked"
   /** The row has no pane handle, so there is no address to send to. */
@@ -216,7 +232,12 @@ export type DrainHoldReason =
  */
 export type DrainOutcome =
   | { kind: "delivered"; sessionId: string; itemId: string; what: string }
-  /** The transport refused AFTER something may have reached the pane. Gone; never retried. */
+  /**
+   * The transport refused AFTER something may have reached the pane. Gone;
+   * never retried — **and the session is held behind it**, because whatever
+   * reached that input box is still sitting in it. Settled `uncertain`, which
+   * is the honest word for an item that may well have been delivered.
+   */
   | { kind: "refused"; sessionId: string; itemId: string; code: RefusalCode; why: string }
   /**
    * The transport refused having provably sent NOTHING, so the item is back at
@@ -243,6 +264,16 @@ export type DrainResult = {
   generation: number | null;
   /** How many waiting items `noteGeneration` invalidated on this pass. Nearly always 0. */
   invalidated: number;
+  /**
+   * How many sessions this pass put a hold on. Nearly always 0.
+   *
+   * A COUNT RATHER THAN A FLAG ON THE OUTCOME, because it is a reading with a
+   * real range: zero on every ordinary pass, one when a send came back with no
+   * account of itself, up to `MAX_SENDS_PER_PASS`. A boolean on each `refused`
+   * outcome could never be false — every refusal that reaches that arm holds —
+   * and a field that cannot be false is a claim rather than a reading.
+   */
+  quarantined: number;
   outcomes: DrainOutcome[];
 };
 
@@ -372,12 +403,42 @@ function deliverOne(row: FleetRow, address: { paneId: string; claudeSessionId: s
   // `partial` and `unknown` are the ambiguous arms: something may be sitting in
   // that agent's input box unsent. Those settle and are gone, which is the
   // never-retry rule doing its job.
+  //
+  // **WHAT CHANGED IN STAGE 4 IS THE WORD AND THE CONSEQUENCE, NOT THE
+  // BEHAVIOUR.** It settled `refused`, and *refused* reads as *nothing reached
+  // them* — the opposite fact — while nothing at all stopped the NEXT item
+  // draining into the same half-filled input box a minute later. So it settles
+  // `uncertain` and the session is held, in one call, because a settle without
+  // a hold is the old bug and looks like working code.
   const unsent = nothingWasSent(result);
   if (unsent) {
     deps.queue.release(row.id, item.id, unsent);
     return { kind: "put-back", sessionId: row.id, itemId: item.id, code: result.reason.code, why: result.reason.why };
   }
-  deps.queue.settle(row.id, item.id, "refused");
+  // WHICH OF THE THREE THIS IS, read off the transport rather than assumed.
+  // `delivery: "none"` reaching this line means `nothingWasSent` refused to
+  // certify it — the summary said nothing was sent and the `sent` list named
+  // calls that completed — and the honest reading of that disagreement is the
+  // one that assumes something went out.
+  const reading: UncertainSendReading =
+    result.delivery === "partial" ? "partial" : result.delivery === "unknown" ? "unknown" : "none-contradicted";
+  const held = deps.queue.quarantineLeased(row.id, item.id, {
+    paneId: address.paneId,
+    claudeSessionId: address.claudeSessionId,
+    reading,
+    origin: "queued-delivery",
+    what: words.what,
+  });
+  if (!held.ok) {
+    // **NOT REACHABLE, AND IT THROWS RATHER THAN CARRIES ON.** `next()` leased
+    // this item and nothing between there and here can yield, so the settle
+    // cannot fail. If it ever does, answering `refused` would report a session
+    // as held when it is not — the silent gap this stage exists to close. The
+    // row's own `catch` turns this into a `threw` outcome, which leaves the
+    // lease open, and a stuck lease blocks the session harder than a hold does.
+    // This is `killReport`'s shortfall throw, one file along.
+    throw new Error(`${item.id} was leased and could not be quarantined: ${held.why}`);
+  }
   return { kind: "refused", sessionId: row.id, itemId: item.id, code: result.reason.code, why: result.reason.why };
 }
 
@@ -414,7 +475,7 @@ export function drainOnce(snapshot: FleetSnapshot, deps: DrainDeps): DrainResult
       considered += 1;
       outcomes.push(held(row.id, "no-generation", null, "this collection could not say which tmux server it read, so no session handle in it can be trusted to mean what it meant"));
     }
-    return { rows: rows.length, considered, generation: null, invalidated: 0, outcomes };
+    return { rows: rows.length, considered, generation: null, invalidated: 0, quarantined: 0, outcomes };
   }
   // Before anything is leased. A restart makes every waiting item undeliverable
   // at once, and they are marked rather than dropped so the page can say so.
@@ -492,6 +553,12 @@ export function drainOnce(snapshot: FleetSnapshot, deps: DrainDeps): DrainResult
         case "held":
           outcomes.push(held(row.id, "held", next.head, next.why));
           break;
+        case "quarantined":
+          // NOT A SLOT SPENT. Nothing was attempted and nothing will be until
+          // a person decides, so this row costs the pass nothing and must not
+          // stop another row's item going out.
+          outcomes.push(held(row.id, "quarantined", next.head, next.why));
+          break;
         case "blocked":
           outcomes.push(held(row.id, "blocked", next.head, next.reason.why));
           break;
@@ -516,7 +583,13 @@ export function drainOnce(snapshot: FleetSnapshot, deps: DrainDeps): DrainResult
     }
   }
 
-  return { rows: rows.length, considered, generation, invalidated, outcomes };
+  // ONE SET, COUNTED ONCE. Every `refused` outcome came out of the branch that
+  // quarantines and that branch throws rather than answering when the hold does
+  // not go in, so the two are the same set by construction — which is why this
+  // is a count taken here rather than a `quarantined: true` on each outcome. A
+  // flag that could never be false is a claim rather than a reading.
+  const quarantined = outcomes.filter((o) => o.kind === "refused").length;
+  return { rows: rows.length, considered, generation, invalidated, quarantined, outcomes };
 }
 
 /**
@@ -537,7 +610,10 @@ export function summariseDrain(r: DrainResult): string {
         notes.push(`${o.sessionId}:${o.itemId} delivered ${o.what}`);
         break;
       case "refused":
-        notes.push(`${o.sessionId}:${o.itemId} refused ${o.code}`);
+        // `may have landed` rather than a bare code, because the code is the
+        // TRANSPORT's word for why it stopped and says nothing about how far it
+        // got. This is the line somebody reads a week later.
+        notes.push(`${o.sessionId}:${o.itemId} ${o.code} after something may have landed — session held`);
         break;
       case "put-back":
         notes.push(`${o.sessionId}:${o.itemId} put back after ${o.code} (nothing was sent)`);
@@ -563,6 +639,7 @@ export function summariseDrain(r: DrainResult): string {
     `drain: rows=${r.rows} queued=${r.considered} tmux=${r.generation ?? "unknown"} delivered=${counts.delivered} ` +
     `refused=${counts.refused} putBack=${counts["put-back"]} undeliverable=${counts.undeliverable} ` +
     `held=${counts.held} threw=${counts.threw}` +
+    (r.quarantined > 0 ? ` heldSessions=${r.quarantined}` : "") +
     (r.invalidated > 0 ? ` invalidated=${r.invalidated}` : "") +
     (notes.length > 0 ? ` — ${notes.join("; ")}` : "")
   );

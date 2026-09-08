@@ -123,8 +123,17 @@ and a list has to be maintained:
 - **Rebooting, shutting down, or arbitrary service control.**
 - **Closing a session before its debrief, or while a steering delivery to it is `partial` or
   `unknown`** — you do not know what it received.
-- **Acting on a job definition that changed after it was authorised.** The jobs here *are* documents,
-  so editing a doc could otherwise enlarge what you may do unattended.
+- **Acting on a job's instruction or its documents when either changed after it was authorised.** The
+  jobs here *are* documents, so editing a doc could otherwise enlarge what you may do unattended.
+
+  **This bullet used to say "a job definition", and that became half-true on 2026-09-09** — the
+  definition split into `JobBehaviour` (the instruction, the work kind, the documents: hashed and
+  hand-pinned) and `ScheduleConfig` (cadence, phase, lease, first eligibility: **deliberately outside
+  the fingerprint**, so that a person can retune a clock without a re-pin ceremony). The narrower
+  wording is the honest one: what this gate protects is **what a job does**, and a schedule change is
+  now guarded by validation and by the floors in `schedules.ts` rather than by an authorisation.
+  Saying "definition" would claim a protection that no longer exists, which is the failure gate 4's
+  own **NOT BUILT** block exists to avoid.
 
 ### 4. Never spend what you are rationing, and the budget is global
 
