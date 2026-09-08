@@ -597,9 +597,12 @@ describe("Comments, read by somebody who did not add the article", () => {
  * the two the stage before this one deliberately left alone, because neither
  * goes through `DockLink` and neither was one of the three Greg named.
  *
- * They are the ends of the row rather than a pair: `DockHome` is the first
- * thing in the bar and `DockCommands` the button after the modes. What they
- * share is only what put them last — a `title` attribute, and no card.
+ * They are the first two things in the bar, and neighbours since 2026-09-08 —
+ * Greg asked for the command button *"to the left of the Dock, just after the
+ * logo"* (SPIDERYARN-READING2-2D, 260908e), where it had been the head of the
+ * four-that-are-not-modes group at the far end. What they share is not the
+ * adjacency, which is a day old: it is what put them last in that stage — a
+ * `title` attribute, and no card.
  *
  * `barControl` cannot find the wordmark: it is a `.logo.dock-home`, not a
  * `.dock-btn`, because § the bar's fit ladder and the logo animations both key

@@ -1,7 +1,8 @@
 # Agent fleet dashboard
 
-**Status as of 2026-09-08 12:00: important work left — the page finally does what it claimed, and
-the reason it did not is a class with sixteen instances, seven of them still open.**
+**Status as of 2026-09-08 13:15: important work left — the page does what it claimed, the durable
+repair for why it did not has landed for one endpoint of four, and the work is now spread across six
+sessions instead of one.**
 
 **The buttons work.** All seventeen session actions and the three box actions render on the real page,
 checked in a browser at phone width and not merely in a suite. Recent messages are wired. A queued
@@ -30,16 +31,47 @@ found **sixteen** instances, not four.
 **a real browser at 390px**, because a suite of 196 tests passed for weeks over a wire shape that did
 not exist.
 
+**`wire.ts` landed at 13:07 (`3df3e833`), and it works.** One leaf module with no imports, holding
+the seven types the queue endpoint puts on the wire. Adding a field to it turns **both** ends red —
+server and client — which is the property the postmortem asked for and did not know it could get.
+The no-imports rule turned out to **enforce itself**: the client project compiles the module's whole
+transitive closure under DOM-only libs, so one `import type` makes the typecheck fail on sight. One
+endpoint of four is migrated; see Stage v0.8a for what is left and for the two corrections the plan
+doc needed.
+
 **What is left, in order:**
 
-1. **Stage v0.8a — the shared `wire.ts`.** The durable repair. Seven of the sixteen are still open,
-   including a session-scope destructive action that cannot run at all. Everything shipped today is
-   the half that stops the page lying; this is the half that stops it happening again.
-2. **The systemd cutover**, which is Greg's to run — `sudo systemctl enable` is refused for agents on
-   this box. Script prepared 2026-09-08 12:00.
-3. **v0.4g** — eight specific declutter edits, each with the reason its band exists, plus four
-   product questions that are Greg's.
-4. **v0.4h** — researched, Fable has ruled on the product shape, nothing built.
+1. **v0.4g — declutter the session detail view.** A needs-you detail view is **3,398px tall at
+   390px wide: four screens of scrolling, 31 buttons, two text inputs**, measured in a real browser
+   rather than estimated. Fable is ruling on it now, from the screenshots.
+2. **v0.4h — "working" is hiding at least three states.** Blocked on the usage-limit collector's
+   field names, which `w2-usage-limits` is sending. Fable's product ruling already exists.
+3. **The rest of v0.8a** — three endpoints, ~30 twin declarations, and one (`FleetRow`) that cannot
+   migrate the same way at all.
+4. **The systemd cutover**, which is Greg's to run — `sudo systemctl enable` is refused for agents on
+   this box. Script prepared 2026-09-08 12:00, unrun.
+
+**Who is doing what, agreed 2026-09-08 13:00 across six sessions.** Greg asked for the remaining work
+to be fanned out; this is the split, and the seam in every case is a **type**, not a schedule.
+
+| Workstream | Session | Boundary |
+|---|---|---|
+| `wire.ts`, v0.4g, v0.4h, delivery receipts (A11) | this one | owns `queue.ts`, `drain.ts`, `status.ts`, `SessionDetail.tsx`, `wire.ts` |
+| Approval binds to the material (A9) + prose into an unestablished pane (A10's open half) | `fleet-approval-binding` | owns `pane.ts`; has `steer.ts` for the afternoon |
+| Box Health: 24h retention and charts | `fleet-health-history` | owns `health.ts`, `HealthPanel.tsx`; appends inside `refreshOnce` |
+| Usage limits: the collector and the 429 ground truth | `w2-usage-limits` | publishes types; this session renders the arm |
+| Codex/GPT harness adapter | `w2-harness-adapter` | owns `tools/overseer/harness.ts`; the *capability* half goes in `wire.ts` |
+| Voice dictation on every message box | `w2-fleet-dictation` | has `OrchestratorPanel.tsx` and `NewSessionPanel.tsx` now; `SessionDetail.tsx` after v0.4g |
+| The attention inbox | `orchestrator-setup` | decides the ranking; this session renders it |
+
+**Two findings from those sessions that are not stages and should not get lost.** `w2-harness-adapter`
+found **two paid `gpt-5.6-sol --effort high` reviews running under `ppid 1`** — orphaned when the
+Bash-tool shell that launched them was reaped, attributable to no pane, invisible to this dashboard
+and unstoppable through it. That is a cost question. And `fleet-approval-binding` captured **three
+live drafts sitting in other agents' input boxes**, one of them the words *"yes, shut it all down"* in
+a session running in auto mode: a Send from this dashboard would concatenate with that text and our
+Enter would submit it. That is the approval-binding bug arriving through the prose door, and it is
+live right now.
 
 Everything else below is real but optional.
 
@@ -1031,7 +1063,7 @@ queue now say ~73 seconds instead of *"within a minute or so"*. Four tests in
 `tests/fleet-web.test.tsx` § *queueing a message*; five mutants, each killed by the test that names
 its rule.
 
-### 🔵 Stage v0.4g: the session detail view is cluttered
+### ✅ Stage v0.4g: the session detail view is cluttered (landed 2026-09-08, `a07b9528`)
 
 **Greg, 2026-09-08:** *"Use Playwright or similar to take screenshots and make the Session detail view
 less confusing and cluttered and more user-friendly (with product input from Fable)."*
@@ -1041,14 +1073,95 @@ brief names both halves of how to get one: **screenshots of the real page**, bec
 green is not evidence a reader can see it, and **Fable**, because the question is what a person needs
 first and that is not a technical fork.
 
-- [ ] Playwright against system Chrome on the box — `docs/project/browser-control.md` decides which
-      automation, not preference. Phone width as well as desktop: the page is read on a phone.
-- [ ] Every band of the detail view has a reason it is there, written in `SessionDetail.tsx`'s
-      header. **A cut needs a reason back**, not just less ink — several of those bands exist because
-      a collapsed distinction cost something.
-- [ ] Ask Fable for the ordering, not for a redesign: *what does a person need to see first on a
-      phone at 3am*. The answer is a product call, so anything user-visible beyond ordering and
-      density goes to Greg.
+- [x] Playwright against system Chrome on the box. Six full-page captures at 390px and 1280px,
+      before and after.
+- [x] **Measured rather than described.** A needs-you detail view was **3,398px tall at 390px wide —
+      four screens of scrolling — with 31 buttons and two text inputs**. An idle session with nothing
+      to report still ran to two and a half screens.
+- [x] Fable ruled on ordering and density, and on Greg's four open questions.
+
+#### The rule, which is the part that outlives this stage
+
+The prose on this page is *deliberate* and it is *good*: several paragraphs exist because somebody was
+previously misled by a bare number, and this tool's non-negotiable rule is that a number without its
+caveat is a lie. So the question was never "less prose or more". Fable's answer, 2026-09-08:
+
+> **A caveat stays on screen only if it would change what you do on this screen in the next ten
+> seconds. If it only changes what you would *believe*, it lives one tap away, attached to the fact it
+> qualifies. If it qualifies something that is not on screen — an empty section, a state this session
+> is not in — it goes.**
+
+Two corollaries did most of the work. **An honest label replaces a paragraph**: `Queue (~73s)` says
+what a sentence was saying, `Ask it to…` says these are requests an agent may decline, `(dry run)`
+says the server will not act. And **the tap is on the number, never on a separate help link** — which
+is what keeps the non-negotiable rule intact, because the page still renders no bare numbers. It
+renders numbers wearing their caveats, and `Explain` is how they wear them.
+
+#### What changed
+
+- [x] Composer above the button strip. The commonest thing a needs-you session wants is an answer in
+      prose, and it was third, behind fifteen buttons.
+- [x] Fifteen spoken buttons became **four visible** — Continue, Where are you?, Pull latest, Wrap up
+      — with the rest under a `More` disclosure grouped into **Work / Pause / Hand off**.
+- [x] The rename field is behind a `Rename` disclosure, and the page shows **one name** rather than an
+      italic *no title yet* above a box holding the real one.
+- [x] *Where it is* is collapsed, with the repo in its summary.
+- [x] **`wrote 21m ago` in the header**, beside the badge — the one number that tells a working
+      session from a stuck one, previously buried a screen and a half down as the first line of
+      *Recent messages*. It asks `transcriptAge` for the alarm threshold rather than recomputing it,
+      so the header and the section cannot disagree, and `useRecentMessages` is exported so one
+      transcript read serves both.
+- [x] **A shell gets one sentence and none of the controls**, which reverses a rule in
+      `SessionDetail.tsx`'s own header. The old rule — do not reimplement `steerableStatus` here —
+      was written to stop the page second-guessing a *refusal*, and it was right about that. But the
+      page already branches on `status.kind` to draw the SHELL badge, so hiding the composer on the
+      same branch adds no second source of truth, and fifteen buttons and a text box that cannot work
+      under a badge saying they cannot is the more expensive lie. The header now separates the two
+      questions: this file does not decide **refusals**, and it does decide **what to offer**.
+- [x] Two deletions. A section headed *What it needs from you* whose entire content was *"Nothing. It
+      is not asking you anything."* — a heading whose only content was the news that it had none. And
+      a *Say something to it* heading nested inside a section of the same name and repeated 300px
+      lower over the composer, so the page said the same four words about two different things.
+      Fable: the single most confusing thing in the screenshots.
+
+#### The one part that could lose a feature, and it has a watched test
+
+`groupSpoken` sorts by **id, from a list written in the client** — and the *server* owns this
+catalogue and can add to it. A grouping that silently dropped what it did not recognise would be a
+fresh instance of [260908b](../postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md)'s
+class. So anything unrecognised lands in an **Other** group and is still pressable, and
+`still draws an action this build has never heard of` goes red when that one line is removed —
+measured, hatch out, test fails, file restored byte-identical.
+
+Related, and caught by the tests rather than by review: *What each of these actually says* was first
+placed inside the `More` disclosure, per the ruling — which is right when More holds ten buttons and
+makes it **unreachable when the catalogue is small enough to have no More at all**. It renders
+unconditionally.
+
+#### Fable's answers to the four questions that are Greg's
+
+- **(a) Rename from the phone?** Almost never, and when he does it is because a card says *no title
+  yet*. So: no field, a disclosure — and show one name, not two.
+- **(b) Last prose turn, or the raw pane tail?** The prose turn, **with its age**. The pane tail is
+  forty lines of tool output a phone cannot fit, and the prose turn is what *Where are you?* would
+  return anyway. A prose line without an age is the misleading number, so the age is part of the
+  ruling. **Built.**
+- **(c) Should a working session's composer default to Queue?** **No.** Send stays primary in every
+  state; typing at a working agent means *steer it now*, and a 73-second default is wrong for a tool
+  used in a hurry. The exception is already built: when the queue is non-empty, ordering is the
+  point.
+- **(d) Same order on the desktop?** Yes, one column, as the 1280px capture already had it. Desktop
+  gets the width for the transcript, not a second map — and the coordinator agent will read both.
+
+#### Two of Fable's rulings NOT taken, named rather than quietly dropped
+
+- **Cut `Sleep 5h`.** Deleting an action touches the catalogue, the `SpokenActionId` union in
+  `wire.ts`, and anything already queued under that id — for a cosmetic gain the `More` disclosure
+  already delivers. Kept, in the **Pause** group.
+- **Put the `Force` group below the queue.** Separating the loud red block from the strip it is the
+  exception to makes it easier to lose than to find. Kept adjacent.
+
+Both are Greg's to overrule in a word.
 
 ### The pane shows text nobody typed, and it reads as an instruction
 
@@ -1569,7 +1682,7 @@ Agents self-report through a small CLI plus a rule in [AGENTS.md](../../AGENTS.m
 scrape later as the backstop. Ranked by importance then confidence, product-facing counting as more
 important. The dashboard makes decisions *visible*; it does not enforce the thresholds.
 
-### 🔴 Stage v0.8a: the joins, which nothing here has ever checked
+### 🟡 Stage v0.8a: the joins, which nothing here has ever checked (the module landed 2026-09-08, `3df3e833`; the migration is one endpoint of four)
 
 **Sixteen times in one day, a part was built, tested, reviewed and ticked while the line joining it
 to anything was missing** — including, for several days, **the dashboard's entire action vocabulary**,
@@ -1615,19 +1728,64 @@ stage.** Confusing them gets you a linter for a problem the compiler should have
 
 #### The type half, and it is the item worth doing first
 
-- [ ] **`tools/fleet/wire.ts`, a leaf module with no imports at all**, holding `QueuedItemView`,
+- [x] **`tools/fleet/wire.ts`, a leaf module with no imports at all**, holding `QueuedItemView`,
       `QueueView` and the other types that cross the HTTP boundary. **The no-imports rule is forced,
       not stylistic**: `tools/fleet/web/tsconfig.json` is a separate project with no node types, and
       every existing home for these types reaches `node:child_process` transitively (`queue.ts` →
       `steer.ts`; `status.ts` → `scripts/gjd-remote-tmux.js`), so a client `import type` against any
       of them fails on sight. That is *why* the twins exist — the duplication is structurally
       forced, which is why four rounds of "keep them in step" have not worked.
-- [ ] **The client imports it and stops declaring its own twin.** `parseQueue` returns the imported
-      type. Then adding a field on the server is a **compile error on the client** until somebody
-      parses it or writes an explicit `Omit<>`, which is a named decision instead of a silence.
-- [ ] **Prove it against the original shape, not a tidied one.** Add `stuck` to the wire type with
-      the client as it stands today and watch `npm run typecheck` go red. A guard proved against the
-      abstraction can pass on the exact shape it was written to block.
+- [x] **The client DERIVES from it. It does not adopt it, and this line used to say the wrong
+      thing.** It said `parseQueue` returns the imported type; building that would have shipped a
+      bug. The client's `QueueView` is *deliberately weaker* than the wire's — `deliverable: number
+      | null` where the wire says `number`, and `stale`, `stuck` and `speaker` all nullable —
+      because **a server too old to send a field has made no claim**, and returning the wire type
+      verbatim would force `parseQueue` to invent `false` or `0` for it. That is instance 16, the
+      one this whole stage is about, reintroduced by the fix for it. The form that works is
+      `Omit<QueueViewWire, …the fields it re-types or declines…> & { … }`: a new wire field is not in
+      the `Omit`, so it lands in the client type and the object literal stops compiling, and the
+      escape hatch is **adding a name to a list** — a named, reviewable decision rather than a
+      silence. The twin is derived, not deleted, and that turned out to be the correct end state
+      rather than an interim one.
+- [x] **Prove it against the original shape, not a tidied one.** Done twice, and the second time by
+      hand. Adding one field to `QueueView` in `wire.ts` turns **both** ends red —
+      `routes-actions.ts:1019` and `actions-client.ts:471` — with the mutant asserted present
+      exactly once before the run and zero times after, and the file restored byte-identical. Also
+      proved against the exact shape of instance #4: a field added to `QueuedItem` crosses on
+      `{...i, stale, stuck}` with **no line written at the boundary**, so the server does not error
+      and the *client* does. That is the case a reviewer cannot see and a spread cannot be blamed
+      for.
+      **The probe itself nearly lied**, which is worth more than the result: its first version read
+      `subprocess.run(...).stdout`, and `npm run typecheck` writes passing projects to stdout and
+      **failing ones to stderr** — so it printed two ✓ lines, reported "TYPECHECK WENT RED: False",
+      and would have disproved a mechanism that works. Judge that command by its exit code.
+- [x] **The no-imports rule enforces itself, which was not expected.** The client project compiles
+      wire.ts's entire transitive closure under DOM-only libs, so appending a single `import type` to
+      `wire.ts` turns `npm run typecheck` red immediately. Measured. Two residual holes, both small
+      and both written into the file's header: the errors name the *leaf that was reached* rather
+      than `wire.ts`, so a reader is sent to the wrong file; and an import of a genuinely import-free
+      leaf (`config.ts`, `origin.ts`) would compile and could put a runtime `const` in the browser
+      bundle. A ~30-line test modelled on `tests/client-imports.test.ts` would buy the *error
+      message*, not the enforcement.
+- [ ] **The remaining three endpoints.** The module landed with one: queues (`Speaker`,
+      `SpokenActionId`, `SpokenAction`, `QueuedPayload`, `QueuedItem`, `QueuedItemView`,
+      `QueueView`). Left: the actions catalogue, fleet state, and steer/new/messages/rename. About
+      30 twin declarations remain, across 6 client files and ~12 server ones. Split by endpoint, one
+      stage each, each typechecked and its own suite run.
+- [ ] **`FleetRow` will NOT migrate the way the others do, and whoever starts it should know
+      first.** `FleetRow.meta` resolves to `scripts/gjd-remote-tmux.ts`'s `SessionMeta` (`kind:
+      SessionKind; repo: string; dir: string`) while the client's says all three nullable — and
+      `Session.created` is a `Date`, which does not survive `JSON.stringify`. So the wire type for
+      that surface is **not the server type; it is a JSON projection of it**, and sharing it verbatim
+      would be wrong rather than merely impossible. It also reaches out of `tools/fleet/` into
+      `scripts/`, which is a wider blast radius than the postmortem implies.
+- [ ] **The other four modules publish through it too.** Agreed 2026-09-08 with `orchestrator-setup`
+      (Overseer store types), `w2-usage-limits` (`RateLimitHit`, `UsageWindowReading` and the rest of
+      the usage contract), `w2-harness-adapter` (the *capability* half of the harness types; the
+      `Harness` union and `classifyPaneHarness` stay in `tools/overseer/harness.ts`) and
+      `w2-fleet-dictation` (the transcribe request/response). `~/.overseer/current.json` is the same
+      kind of boundary with none of the protection, and it is the **worse direction**: a wrong read
+      draws a wrong page, a wrong write runs — or fails to run — a destructive command.
 - [ ] **Fix the live lossy joins while you are in there** — `would`/`result` (#11, the safety
       preview), `verified`, `answeringEnabled`, `tmuxServerPid`, `resolution`, `startedDir`. The
       queue cluster (`stale`, `stuck`, `deliverable`, `invalidated`) was already repaired by hand on

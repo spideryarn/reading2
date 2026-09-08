@@ -64,7 +64,7 @@
  * answer this module could give"*. Rounding a speaker this build cannot name to
  * "agent" would misattribute a message, so it is labelled as unknown instead.
  */
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
   transcriptAge,
@@ -73,6 +73,7 @@ import {
   type MessagesApi,
   type MessagesView,
 } from "./messages-client";
+import { Explain } from "./Tooltip";
 import type { FleetRow } from "./types";
 import { Button, Mono, cx } from "./ui";
 import { formatDuration } from "./view";
@@ -245,15 +246,38 @@ function Found({ view, row, now }: { view: MessagesView & { kind: "found" }; row
         ? view.lastModified
         : `${formatDuration(Math.max(0, now - Date.parse(view.lastModified)))} ago`;
 
+  /* THE PROVENANCE IS A TAP, THE AGE IS NOT. How much of the file we read and
+     whether we found it by scanning are things that change what you BELIEVE
+     about the turns below; the age is the thing that changes what you DO, and
+     it has been promoted to the header where a thumb finds it without
+     scrolling. Neither fact is deleted — a number here without its caveat
+     would be the failure this whole page is written against. */
+  const provenance = [
+    view.bytesRead === null || view.fileBytes === null
+      ? null
+      : `Read ${bytes(view.bytesRead)} of a ${bytes(view.fileBytes)} file.`,
+    view.via === "scan"
+      ? "Found by scanning — the directory on the row is stale, which is ordinary for a worktree."
+      : null,
+  ]
+    .filter((s): s is string => s !== null)
+    .join(" ");
+
+  const headline = written === null ? "The server did not say when this was last written." : `Last written ${written}.`;
+
   return (
     <div>
-      <p className="tw:text-[12px] tw:text-ink-faint">
-        {written === null ? "The server did not say when this was last written." : `Last written ${written}.`}
-        {view.bytesRead === null || view.fileBytes === null
-          ? null
-          : ` Read ${bytes(view.bytesRead)} of a ${bytes(view.fileBytes)} file.`}
-        {view.via === "scan" ? " Found by scanning — the directory on the row is stale, which is ordinary for a worktree." : null}
-      </p>
+      {provenance === "" ? (
+        <p className="tw:text-[12px] tw:text-ink-faint">{headline}</p>
+      ) : (
+        <Explain
+          tip={{ head: "Where these turns came from", what: headline, how: provenance }}
+          placement="bottom"
+          className="tw:block tw:text-[12px] tw:text-ink-faint"
+        >
+          {headline}
+        </Explain>
+      )}
 
       {age.kind === "suspect" ? <StaleNote ms={age.ms} /> : null}
 
@@ -318,17 +342,49 @@ function Found({ view, row, now }: { view: MessagesView & { kind: "found" }; row
  * different thing from *read, and there was nothing* — the same distinction
  * `useActions` keeps, and the reason the panel below never draws a calm blank.
  */
-function useRecentMessages(api: MessagesApi, row: FleetRow): {
-  view: MessagesView | null;
-  busy: boolean;
-  read: () => void;
-} {
+/**
+ * The reading, held by whoever needs it in more than one place.
+ *
+ * **Exported and lifted out of `RecentMessages` deliberately.** The header of
+ * the detail view shows *when this session last wrote*, which is the one number
+ * that tells a working session from a stuck one — and it came out of this
+ * reading, a screen and a half further down the page. Two reads of a
+ * multi-megabyte transcript to draw one number would be worse than the clutter
+ * it fixes, so the caller holds one reading and passes it to both.
+ */
+export type MessagesReading = { view: MessagesView | null; busy: boolean; read: () => void };
+
+export function useRecentMessages(api: MessagesApi, row: FleetRow): MessagesReading {
   const [view, setView] = useState<MessagesView | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /**
+   * WHICH SESSION THE ANSWER IN FLIGHT IS ABOUT.
+   *
+   * **A read that lands after the reader has moved on must not be drawn.**
+   * `Read again` on session A, then a tap on session B, and A's answer arrives
+   * to find B's panel on screen — so the turns of one agent render under the
+   * name and status of another. On a page whose entire job is telling you which
+   * session needs you, that is the worst thing it can get wrong, and it renders
+   * perfectly: real turns, well formed, correctly parsed, attached to the wrong
+   * row.
+   *
+   * The effect below has always been safe — it holds a per-run `alive` flag
+   * closed over by its own cleanup. This is the manual path, which had none.
+   * `fleet-health-history` flagged the general shape on 2026-09-08 (two
+   * overlapping polls of one endpoint resolving out of order); here it is not
+   * two polls of one thing but one poll of two different things, which is
+   * worse, because the stale answer is not merely old — it is about somebody
+   * else.
+   */
+  const wantedFor = useRef(row.id);
+  wantedFor.current = row.id;
+
   const read = useCallback(async (): Promise<void> => {
+    const askedFor = row.id;
     setBusy(true);
     const answer = await api.recent(row);
+    if (wantedFor.current !== askedFor) return;
     setView(answer);
     setBusy(false);
   }, [api, row]);
@@ -359,8 +415,17 @@ function useRecentMessages(api: MessagesApi, row: FleetRow): {
   return { view, busy, read: () => void read() };
 }
 
-export function RecentMessages({ row, now, api }: { row: FleetRow; now: number; api: MessagesApi }): ReactNode {
-  const { view, busy, read } = useRecentMessages(api, row);
+export function RecentMessages({
+  row,
+  now,
+  reading,
+}: {
+  row: FleetRow;
+  now: number;
+  /** Held by the caller, because the header draws a number out of it too. */
+  reading: MessagesReading;
+}): ReactNode {
+  const { view, busy, read } = reading;
 
   return (
     <div>

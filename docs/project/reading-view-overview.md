@@ -145,25 +145,41 @@ That is every band mode; `plain` and `hierarchy` are the two that open no band.
 
 ### The command bar
 
-**⌘/Ctrl-K, or the ⌘ button in the bottom bar, and you type the name of what you want.** Almost
-everything it offers is a mode, and Enter opens one **exactly as pressing its Dock button does** —
-same activation, same generate-on-open, same cost. It
+**⌘/Ctrl-K, or the ⌘ button at the left-hand end of the bottom bar, and you type the name of what you
+want.** Most of what it offers is a mode, and Enter opens one **exactly as pressing its Dock button
+does** — same activation, same generate-on-open, same cost. It
 is an *additional door*, never a replacement: the Dock keeps every button it has, and the bar's
 **mode rows** are exactly what the Dock lists, because the Dock hands it the list it just drew rather
-than computing a second one.
+than computing a second one. The button sits **just after the wordmark** since 2026-09-08, on Greg's
+ask; the chord is bound to the window rather than to it, so it did not move with it.
 
-It has no doc of its own because there is very little to say that is not the four decisions Greg made
+It has no doc of its own because there is very little to say that is not the decisions Greg made
 before it was written ([260906h](../plans/260906h-mode-catalog-and-a-command-bar.md) § The four
-product calls). **It was modes only until 2026-09-07**, when Greg asked for `/changelog` to be
-reachable from it as well as from the footer — so there is now one row that is not a mode, drawn
-below all of them, and Enter on it goes to the page.
+product calls) and the two widenings he has made since. **It was modes only until 2026-09-07**, when
+he asked for `/changelog` to be reachable from it as well as from the footer; on 2026-09-08 he named
+six more — Library, Feedback, Metadata, Tweets, Homepage, Profile — and left *"a few more
+likely/useful"* to us ([260908e](../plans/260908e-more-commands-in-the-command-bar-and-the-button-beside-the-logo.md)).
+So there are now eight rows that are not modes — seven of them new that day — drawn below all of
+them, and they come in two shapes:
+**pages**, where Enter goes there, and **actions**, where Enter does the thing — today Feedback,
+which opens the dialog, and Comments, which opens the drawer.
 
-**Everything else that call refused is still refused**, and the reason is the reason it gave: a
-passage jump, a generation row, a chat, a model call each need **a verb this bar does not have**. A
-page needs none — *go there* is the verb every link in the app already has — which is why this was
-the one extension that cost no new concept. The plan names the others as deferred rather than
-forgotten. A query that matches nothing says `No command matches.` and nothing else: no search
-fallback, no "did you mean", an honest empty state preferred to a helpful guess.
+**Two of the rows are about the article you are standing on** — its Metadata and its Tweets — and
+they exist only because the bar does: it is mounted on the reading view alone, for the owner, so
+there is always an article to name. The day it is offered anywhere else is the day those rows have to
+answer for themselves, and the answer written down for that day is *no row at all* rather than a row
+with nothing to point at.
+
+**What the original call refused is mostly still refused**, and where it is not, that is Greg's doing
+rather than a boundary quietly moving. It said a passage jump, a generation row, a chat and a model
+call each need **a verb this bar does not have**. Two of those have since arrived: a *generation row*
+is what Tweets is — pressing it arms the thread run exactly as the Dock's own button does, and it
+wears the `generates` marker for it — and Feedback is a genuinely new verb, admitted because it is
+what he asked for. A passage jump and an "ask this article" are still out, and the line is now
+sharper than "a verb we don't have": each would need the bar to grow an **argument** — *which*
+passage, *which* question — and it has one text box and it is the filter. A query that matches
+nothing says `No command matches.` and nothing else: no search fallback, no "did you mean", an honest
+empty state preferred to a helpful guess.
 
 Three pieces of it are worth knowing about:
 
@@ -173,19 +189,24 @@ Three pieces of it are worth knowing about:
   Aliases are deliberately sparse: the cost of a loose one is not a missed match, it is the *wrong*
   mode ranked first for somebody who typed the right thing. The ranking is five named tiers in
   [`src/web/command-match.ts`](../../src/web/command-match.ts), and ties break in Dock order.
-- **The page row is ranked by the same five tiers**, over words it carries itself rather than out of
-  the catalog — `src/web/CommandBar.tsx` § `PAGES` is the whole list, and a second page is one entry
-  in it. It is deliberately *not* the footer's list (`src/web/SiteFooter.tsx` § `LINKS`): the footer is the
-  site's navigation, and Home, Pricing and Privacy are not things a reader mid-article reaches for a
-  keyboard to get to. Pages sit below modes on a tie because the caller hands the modes over first,
-  not because anything says "pages last".
+- **The other rows are ranked by the same five tiers**, over words they carry themselves rather than
+  out of the catalog — `src/web/CommandBar.tsx` § `besideTheModes` is the whole list, and another one
+  is one entry in it. It is deliberately *not* the footer's list (`src/web/SiteFooter.tsx` §
+  `LINKS`): the footer is the site's navigation, and Features, Pricing and Privacy are not things a
+  reader mid-article reaches for a keyboard to get to. They sit below the modes on a tie because the
+  caller hands the modes over first, not because anything says "pages last". *Homepage* is an alias
+  on the Library row rather than a row of its own, because `/` **is** the shelf for a signed-in
+  reader and two rows at one address would be two rows the keyboard cannot tell apart.
 - **A row that would start work says so**, in one muted trailing word: `generates`. No figure and no
   readiness check — readers hold slots rather than paying per call, and a bar with a price on it
   would be *more* disclosed than the button beside it, which reverses a decision Greg made on
-  2026-09-06. It is derived from `MODE_TARGET`
+  2026-09-06. For a mode it is derived from `MODE_TARGET`
   ([`src/web/activation.ts`](../../src/web/activation.ts) § `modeGenerates`), which is already total,
-  so a fifteenth mode cannot arrive unmarked. It over-warns when the artefact is already there; the
-  Dock under-warns in exactly the same case.
+  so a fifteenth mode cannot arrive unmarked; every other row carries a **required** boolean, so one
+  cannot arrive unmarked either. Required rather than optional deliberately: an optional flag moves
+  the failure from a check nobody would think to change to a field somebody could forget, which is
+  quieter and not safer. It over-warns when the artefact is already there; the Dock under-warns in
+  exactly the same case.
 
 The key itself, and the four things the chord refuses to do, are
 [keyboard.md § the one chord that is not an arrow](keyboard.md#the-one-chord-that-is-not-an-arrow).

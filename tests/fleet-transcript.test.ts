@@ -894,10 +894,19 @@ describe("the module has no import side effects", () => {
 
   it("resolves the projects directory inside the call, not at module scope", () => {
     const src = readFileSync(path.resolve(import.meta.dirname, "../tools/fleet/transcript.ts"), "utf8");
-    // Positive: the one place it is read is the option default inside the entry point.
+    // Positive: it is read as an option default inside an entry point.
     expect(src).toContain('opts.projectsDir ?? path.join(homedir(), ".claude", "projects")');
-    // And that is the only call to it anywhere in the file.
-    expect(src.match(/homedir\(\)/g)).toHaveLength(1);
+    // And EVERY call to it is that same default. This used to assert a count of
+    // exactly one, which was the same claim while the file had one entry point
+    // and became a false alarm the moment `readRawTail` was added beside
+    // `readRecentMessages` — the second call is equally inside a function, which
+    // is the property the test is actually for. Counting occurrences would fail
+    // again on the third entry point; this does not, and it still fails on a
+    // `const projectsDir = path.join(homedir(), …)` at module scope.
+    const calls = src.match(/homedir\(\)/g) ?? [];
+    const asOptionDefault = src.match(/opts\.projectsDir \?\? path\.join\(homedir\(\), "\.claude", "projects"\)/g) ?? [];
+    expect(calls.length).toBeGreaterThan(0);
+    expect(asOptionDefault).toHaveLength(calls.length);
   });
 });
 

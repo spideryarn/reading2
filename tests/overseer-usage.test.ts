@@ -1118,7 +1118,13 @@ describe("computeUsageVerdict — a rolled-over window is this account's, not so
       resetsAtMs: Date.parse("2026-09-08T06:30:00.000Z"), // already reset by NOW
       hitAt: "2026-09-08T06:02:47.112Z",
       hitAtMs: Date.parse("2026-09-08T06:02:47.112Z"),
-      claudeSessionId: "cb936df3-428d-436f-a731-3397cf339abd",
+      // A placeholder from this file's own family rather than the real
+      // conversation uuid this case was captured from: that real one is also
+      // used by `overseer-harness.test.ts`, and `tests/fixture-ids.test.ts`
+      // refuses one id claimed by two files. Nothing here inserts a row, so the
+      // collision was harmless — but a shared id says two fixtures are the same
+      // thing, and the value is not what this test is about.
+      claudeSessionId: "0f5e9c11-3333-4333-8333-000000000003",
     });
   const cacheAfterRollover = (): UsageCacheReading => ({
     kind: "value",

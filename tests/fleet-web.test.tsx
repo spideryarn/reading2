@@ -72,12 +72,19 @@ import {
 } from "../tools/fleet/web/src/messages-client";
 import { makeNewSessionApi, parseLaunch, type NewSessionApi } from "../tools/fleet/web/src/new-session-client";
 import { looksLikeAName, makeRenameApi, renameBody, type RenameApi } from "../tools/fleet/web/src/rename-client";
-import { steerMessageBody, type SteerApi, type SteerOutcome } from "../tools/fleet/web/src/steer-client";
+import {
+  makeSteerApi,
+  parseDelivery,
+  steerMessageBody,
+  type SteerApi,
+  type SteerOutcome,
+} from "../tools/fleet/web/src/steer-client";
 import { readHealthStats } from "../tools/fleet/web/src/health-view";
 import { fetchFleetState } from "../tools/fleet/web/src/transport";
 import type { Transport, TransportSink } from "../tools/fleet/web/src/transport";
 import {
   parseFleetState,
+  parsePause,
   parseStatus,
   type FleetState,
   type FleetStatus,
@@ -121,6 +128,17 @@ function row(over: Partial<FleetState["rows"][number]> & { id: string }): FleetS
        the page would build off a payload that omitted the field. Naming `auto`
        here would make every fixture assert a healthy launch by accident. */
     permissionMode: { kind: "cannot-tell", why: "the fixture did not say" },
+    /* Same argument as `permissionMode` above, and it matters more here.
+       `parsePause` returns this arm for a server that sent no `pause` field, so
+       a fixture that does not care gets the row the page would really build.
+       Defaulting to `{ kind: "none" }` would make every fixture quietly assert
+       "we looked everywhere and this session is waiting for nothing", which is
+       a positive claim no fixture is in a position to make. */
+    pause: {
+      kind: "cannot-tell",
+      why: "the fixture did not say",
+      cause: "rate-limits-not-collected",
+    },
     meta: { version: "legacy" },
     panePid: null,
     claudeSessionId: null,
@@ -1398,7 +1416,16 @@ function messagesWire(over: Record<string, unknown> = {}): Record<string, unknow
     reachedStartOfFile: true,
     bytesRead: 4_096,
     fileBytes: 4_096,
-    lastModified: new Date("2026-09-08T11:59:30Z").toISOString(),
+    /* NOW, NOT A DATE — the second instance of this today, in this file.
+       This was `new Date("2026-09-08T11:59:30Z")`, which meant "thirty seconds
+       ago" on the morning it was written and became "46 minutes ago" by the
+       afternoon, crossing `STALE_TRANSCRIPT_MS` (30 min) and turning the test
+       that asserts NO stale warning into one asserting a warning the page was
+       correctly showing. A fixture that means "fresh" has to be computed from
+       the clock the component reads: freshness is a relation between two times
+       and an absolute constant can only ever be one of them. See the same
+       repair on `collectedAt` in `state()`. */
+    lastModified: new Date().toISOString(),
     copies: 1,
     recordsParsed: 12,
     recordsUnparseable: 0,
@@ -1512,7 +1539,12 @@ describe("master and detail", () => {
 
     const text = container.textContent ?? "";
     // The things the list cannot hold, each asserted positively.
-    expect(text).toContain("What it needs from you");
+    /* NOT "What it needs from you" — this row is idle, and that section is
+       drawn only when there is something to say. It used to appear on every
+       page carrying the sentence "Nothing. It is not asking you anything.",
+       which is a heading whose only content was the news that it had none.
+       The badge in the header already says idle. */
+    expect(text).not.toContain("Nothing. It is not asking you anything.");
     expect(text).toContain("Say something to it");
     expect(text).toContain("Where it is");
     expect(text).toContain("/home/greg/code/spideryarn2");
@@ -2211,7 +2243,7 @@ describe("answering, and the dialogs it is not offered for", () => {
     const feed = manualTransport();
     mountFull({
       transport: feed.transport,
-      steer: refusingSteer({ ok: false, code: "answering-disabled", why, status: 503, from: "server" }),
+      steer: refusingSteer({ ok: false, code: "answering-disabled", why, status: 503, from: "server", delivery: { kind: "none" } }),
     });
     // `conversation`, so the buttons are there to be taken away. The whole
     // server being switched off is a fact the page cannot know until it asks.
@@ -2259,7 +2291,7 @@ describe("answering, and the dialogs it is not offered for", () => {
     expect(box.disabled).toBe(false);
     typeInto(box, "answer it yourself, you have my go-ahead");
     await act(async () => {
-      buttonSaying("Send")?.click();
+      buttonSaying("Send now")?.click();
     });
     expect(recorder.calls[0]?.op).toBe("message");
   });
@@ -2444,6 +2476,10 @@ describe("the rule about sending the server its own claims back", () => {
         why: "pane %1646 is in session $1643 now, not $1",
         status: 409,
         from: "server",
+        /* A refusal made BEFORE the delivery module had an opinion, which is
+           what most refusals are: the wrong-pane check runs before a keystroke
+           is typed, so `none` is a claim the server is entitled to make. */
+        delivery: { kind: "none" } as const,
       }),
     });
     act(() => feed.push(state({ rows: [steerable({ id: "$1", title: "moved under me" })] })));
@@ -2453,7 +2489,7 @@ describe("the rule about sending the server its own claims back", () => {
     if (!box) throw new Error("no message box");
     typeInto(box, "carry on");
     await act(async () => {
-      buttonSaying("Send")?.click();
+      buttonSaying("Send now")?.click();
     });
 
     const text = container.textContent ?? "";
@@ -2489,7 +2525,7 @@ describe("the rule about sending the server its own claims back", () => {
     if (!box) throw new Error("no message box");
     typeInto(box, "pull the latest dev and carry on");
     await act(async () => {
-      buttonSaying("Send")?.click();
+      buttonSaying("Send now")?.click();
     });
 
     expect(recorder.calls).toHaveLength(1);
@@ -2760,7 +2796,12 @@ describe("recent messages, on the page", () => {
     openWith(
       messagesWire({
         turns: [turnWire()],
-        lastModified: new Date(Date.parse("2026-09-08T12:00:00Z") - 5 * 60 * 60 * 1000).toISOString(),
+        /* Five hours before NOW, for the same reason as the helper's default:
+           this test wants "hours ago" and must go on meaning it whenever it
+           runs. Anchored to a fixed instant it happens to keep passing — it
+           only ever gets older — but it would be true by accident rather than
+           by construction, and the pair of them should say the same thing. */
+        lastModified: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
       }),
       { status: { kind: "working" }, rawStatus: { kind: "working" } },
     );
@@ -3236,6 +3277,27 @@ describe("the action buttons, which are the server's vocabulary", () => {
     expect(buttonLabels()).not.toContain("Kill test suites");
   });
 
+  it("still draws an action this build has never heard of, rather than grouping it away", async () => {
+    /* THE ESCAPE HATCH ON THE DECLUTTER, AND THE ONLY PART OF IT THAT COULD
+       LOSE A FEATURE. `groupSpoken` puts four known ids in the visible row and
+       sorts the rest into Work / Pause / Hand off — by id, from a list written
+       here rather than sent by the server. The server owns this catalogue and
+       can add to it, so a grouping that silently dropped what it did not
+       recognise would be a new instance of the exact class the postmortem of
+       2026-09-08 is about: a consumer quietly not rendering what a producer
+       sent. Anything unrecognised lands in "Other" and is still pressable. */
+    const invented = {
+      ...CONTINUE_WIRE,
+      id: "take-a-photo-of-the-moon",
+      label: "Take a photo of the moon",
+      text: "Please take a photo of the moon.",
+    };
+    openWith([CONTINUE_WIRE, invented]);
+    await act(async () => {});
+    expect(buttonLabels()).toContain("Take a photo of the moon");
+    expect(container.textContent).toContain("Other");
+  });
+
   it("has no hand-written list: a server offering nothing offers no buttons", async () => {
     openWith([]);
     await act(async () => {});
@@ -3278,10 +3340,24 @@ describe("the action buttons, which are the server's vocabulary", () => {
     openWith([CONTINUE_WIRE, REMOVE_WORKTREE_WIRE]);
     await act(async () => {});
     const text = container.textContent ?? "";
+    /* THE WORDS MOVED IN THE DECLUTTER PASS AND THE PROPERTY DID NOT. The two
+       groups used to be told apart by two permanent paragraphs above the
+       buttons; they are now told apart by their headings and by the buttons'
+       own labels, which is the same distinction carried in fewer words. What
+       must not happen is the distinction surviving only as a colour. */
+    expect(text).toContain("Ask it to…");
+    expect(text).toContain("Force");
     expect(text).toContain("Each of these types a sentence into its input box.");
-    expect(text).toContain("This tool runs a command — a directory deleted, a process signalled");
     // The colour is carried too, but it is never the only carrier.
     expect(buttonSaying("Remove worktree")?.className).toContain("alarm");
+
+    /* And the sentence that moved has to be somewhere. It is on the confirm
+       step now — the moment it changes what somebody is about to do, rather
+       than a standing warning about a button nobody has pressed. A test that
+       only checked it had left the strip would pass over its deletion. */
+    expect(text).not.toContain("This tool runs a command — a directory deleted, a process signalled");
+    await clickSaying("Remove worktree");
+    expect(container.textContent).toContain("This tool runs a command — a directory deleted, a process signalled");
   });
 
   // THIS TEST WENT RED ON PURPOSE ON 2026-09-08 AND THAT IS THE POINT OF IT.
@@ -3606,7 +3682,7 @@ describe("queueing a message, in one line with the buttons", () => {
     const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
     if (!box) throw new Error("no message box");
     typeInto(box, "actually do the other thing");
-    await clickSaying("Queue it");
+    await clickSaying("Queue (~73s)");
 
     expect(rec.calls.filter((c) => c.op === "queueMessage")).toEqual([
       { op: "queueMessage", arg: "actually do the other thing", second: "$1643" },
@@ -3625,7 +3701,7 @@ describe("queueing a message, in one line with the buttons", () => {
     const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
     if (!box) throw new Error("no message box");
     typeInto(box, "say this now");
-    await clickSaying("Send");
+    await clickSaying("Send now");
 
     // Send still types at the pane, and did NOT quietly become a queue.
     expect(steer.calls).toHaveLength(1);
@@ -3654,14 +3730,14 @@ describe("queueing a message, in one line with the buttons", () => {
     await act(async () => {});
     // The paired positive: Send is still there, so this is one button gone
     // rather than the whole section failing to render.
-    expect(buttonLabels()).toContain("Send");
-    expect(buttonLabels()).not.toContain("Queue it");
+    expect(buttonLabels()).toContain("Send now");
+    expect(buttonLabels()).not.toContain("Queue (~73s)");
   });
 
   it("offers Queue on a working session, which is the state the queue exists for", async () => {
     openAt({ kind: "working" });
     await act(async () => {});
-    expect(buttonLabels()).toContain("Queue it");
+    expect(buttonLabels()).toContain("Queue (~73s)");
   });
 
   it("offers Queue on an idle session that already has something waiting, because order is the point", async () => {
@@ -3670,7 +3746,7 @@ describe("queueing a message, in one line with the buttons", () => {
     /* Two buttons that both send NOW would let this message overtake the item
        already in the line — queue.ts: "a message must land after the one that
        says do X and before the one that says push". */
-    expect(buttonLabels()).toContain("Queue it");
+    expect(buttonLabels()).toContain("Queue (~73s)");
   });
 
   it("offers no Queue on an idle session whose only queued item can never be delivered", async () => {
@@ -3691,8 +3767,8 @@ describe("queueing a message, in one line with the buttons", () => {
       }),
     ]);
     await act(async () => {});
-    expect(buttonLabels()).toContain("Send");
-    expect(buttonLabels()).not.toContain("Queue it");
+    expect(buttonLabels()).toContain("Send now");
+    expect(buttonLabels()).not.toContain("Queue (~73s)");
   });
 
   it("offers no Queue on an idle session whose only queued item is too old to send", async () => {
@@ -3700,7 +3776,7 @@ describe("queueing a message, in one line with the buttons", () => {
       queueWire({ items: [itemWire({ id: "q1", payload: { kind: "action", actionId: "push" }, stale: true })] }),
     ]);
     await act(async () => {});
-    expect(buttonLabels()).not.toContain("Queue it");
+    expect(buttonLabels()).not.toContain("Queue (~73s)");
   });
 
   it("offers Queue against a server too old to say what is deliverable", async () => {
@@ -3714,7 +3790,7 @@ describe("queueing a message, in one line with the buttons", () => {
       }),
     ]);
     await act(async () => {});
-    expect(buttonLabels()).toContain("Queue it");
+    expect(buttonLabels()).toContain("Queue (~73s)");
   });
 
   it("says how long a queued message waits, in seconds rather than 'shortly'", async () => {
@@ -3722,12 +3798,14 @@ describe("queueing a message, in one line with the buttons", () => {
     await act(async () => {});
     /* Both places that offer the queue, because the vague version was in two
        and fixing one would leave the page disagreeing with itself. */
-    expect(container.textContent).toContain(
-      "to go when the session is next at a prompt — which is checked about every 73 seconds",
-    );
+    /* The number moved behind a tap on the Queue button in the declutter pass,
+       and the button's own label now carries it too. Both still say seconds. */
+    expect(buttonLabels()).toContain("Queue (~73s)");
+    expect(container.textContent).toContain("The line is checked about every 73 seconds");
     expect(container.textContent).toContain("goes out once it is back at a prompt — checked about every 73 seconds");
     // The words that promised a speed and named no number.
     expect(container.textContent).not.toContain("within a minute or so");
+    expect(container.textContent).not.toContain("shortly");
   });
 });
 
@@ -4128,6 +4206,396 @@ describe("what comes off the actions wire", () => {
       text: CONTINUE_WIRE.text,
     });
     expect(flat?.items[0]?.payload).toEqual({ kind: "action", actionId: "continue", label: "continue", text: null });
+  });
+});
+
+describe("what became of the keystrokes, which is three answers and not two", () => {
+  /* THE SERVER HAD THIS RIGHT AND THE BROWSER THREW IT AWAY. `steer.ts`
+     distinguishes `none` / `partial` / `unknown` and the route sends it under a
+     comment saying "the person who pressed the button is the one who needs it,
+     and they are on a phone". `steer-client.ts` did not read the field, so
+     every refusal rendered as "Nothing was sent." — false in the most expensive
+     direction, because `partial` means the text is SITTING in that agent's
+     input box and a retry appends to it rather than replacing it. Instance 5 of
+     docs/postmortems/260908b. */
+
+  function refusalSaying(delivery: unknown): void {
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      steer: {
+        message: async () => parseSteerRefusal(delivery),
+        answer: async () => parseSteerRefusal(delivery),
+      },
+    });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1", title: "the one being told things" })] })));
+    openSession("the one being told things");
+  }
+
+  /** Build the outcome the way the real client would, from a server body. */
+  function parseSteerRefusal(delivery: unknown): SteerOutcome {
+    return {
+      ok: false,
+      code: "enter-not-sent",
+      why: "the text was typed and the Enter could not be sent",
+      status: 502,
+      from: "server",
+      delivery: parseDelivery(delivery),
+    };
+  }
+
+  async function send(): Promise<void> {
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (box === null) throw new Error("there is no message box");
+    /* `typeInto`, not `box.value = …`. React's controlled input reads through
+       the native value setter, so assigning the property directly leaves its
+       state at "" and the Send button disabled — the send silently does not
+       happen, and the assertion below then fails for the wrong reason. */
+    typeInto(box, "carry on");
+    await act(async () => {
+      buttonSaying("Send now")?.click();
+    });
+  }
+
+  it("does NOT say nothing was sent when the text landed and the Enter did not", async () => {
+    refusalSaying("partial");
+    await send();
+    const text = container.textContent ?? "";
+    /* The sentence that was there before, and the one that matters most: a
+       person who reads "Nothing was sent" retries, and the retry is appended to
+       the half-sent text. There is no way to take the first one back. */
+    expect(text).not.toContain("Nothing was sent.");
+    expect(text).toContain("PART of it was sent.");
+    expect(text).toContain("Do NOT send it again");
+  });
+
+  it("does not claim nothing was sent when the server did not say", async () => {
+    /* A refusal that carries no `delivery` at all. Absence is not `none`:
+       `none` is a claim that nothing left this box, and it is exactly the claim
+       the page has least basis for when it has been told nothing. */
+    refusalSaying(undefined);
+    await send();
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing was sent.");
+    expect(text).toContain("It is not known whether anything was sent.");
+  });
+
+  it("does not claim nothing was sent for a value it does not recognise", async () => {
+    refusalSaying("half-ish");
+    await send();
+    expect(container.textContent ?? "").not.toContain("Nothing was sent.");
+  });
+
+  it("still says nothing was sent when the server says exactly that", async () => {
+    /* The negative half. A guard that never lets the plain case through would
+       be one that had simply stopped saying the true thing. */
+    refusalSaying("none");
+    await send();
+    const text = container.textContent ?? "";
+    expect(text).toContain("Nothing was sent.");
+    expect(text).not.toContain("PART of it was sent.");
+  });
+
+  /* AND THE JOIN, WHICH THE FIRST VERSION OF THIS BLOCK DID NOT TEST.
+     Everything above builds its `SteerOutcome` by hand and hands it to the
+     page, so it exercises the RENDERER. `parseDelivery` below exercises the
+     PARSER. Neither touches the line that reads `parsed["delivery"]` out of the
+     response — the one line that was missing, and the reason the field never
+     reached the browser. Measured: deleting that line again left every test in
+     this describe block green.
+
+     `makeSteerApi` had no test caller anywhere in the repo, which is the same
+     shape as `renderSpoken` having six test callers and no product ones. This
+     drives the real `post` over a fake `fetch`, so the wire, the parse and the
+     outcome are one assertion. */
+  it("carries the server's `delivery` from the HTTP body into the outcome", async () => {
+    const bodies: unknown[] = [];
+    const fakeFetch = (async (_url: string, init?: RequestInit) => {
+      bodies.push(init?.body);
+      return {
+        status: 502,
+        json: async () => ({
+          ok: false,
+          code: "enter-not-sent",
+          why: "the text was typed and the Enter could not be sent",
+          delivery: "partial",
+        }),
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    const api = makeSteerApi(fakeFetch);
+    const outcome = await api.message(row({ id: "$a", paneId: "%1", claudeSessionId: "abc" }), "carry on");
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.ok === false && outcome.delivery).toEqual({ kind: "partial" });
+    // The sentence is still the server's, verbatim.
+    expect(outcome.ok === false && outcome.why).toContain("the Enter could not be sent");
+    // And a request was actually made, so a stubbed-out fetch cannot pass this.
+    expect(bodies).toHaveLength(1);
+  });
+
+  it("says `not-told` when the body carries no delivery at all", async () => {
+    const fakeFetch = (async () =>
+      ({ status: 409, json: async () => ({ ok: false, code: "wrong-pane", why: "the pane moved" }) }) as unknown as Response) as unknown as typeof fetch;
+    const outcome = await makeSteerApi(fakeFetch).message(row({ id: "$a" }), "carry on");
+    expect(outcome.ok === false && outcome.delivery).toEqual({ kind: "not-told" });
+  });
+
+  it("reads the server's own word off the wire rather than inventing one", () => {
+    expect(parseDelivery("none")).toEqual({ kind: "none" });
+    expect(parseDelivery("partial")).toEqual({ kind: "partial" });
+    expect(parseDelivery("unknown")).toEqual({ kind: "unknown" });
+    // Everything else, including absence, is the arm that admits it.
+    for (const odd of [undefined, null, "", "NONE", 0, {}, ["partial"]]) {
+      expect(parseDelivery(odd)).toEqual({ kind: "not-told" });
+    }
+  });
+});
+
+describe("absent is not empty, on the two payloads that say what is waiting", () => {
+  /* A HAND-WRITTEN PARSE OF AN `unknown` IS WHERE wire.ts CANNOT REACH. The
+     compiler holds the shape on both sides of the boundary; it has no opinion
+     about what a parser does with a key that is not there. So the rule has to
+     be kept by hand at exactly this point, and the direction is always the
+     same: a payload this page cannot read must not become a confident claim
+     about the box.
+
+     Flagged by `fleet-health-history` on 2026-09-08, who hit it in their own
+     parser — a renamed `samples` key produced a perfectly valid EMPTY DAY. This
+     file had the identical defect one field along from a long comment about the
+     identical defect. */
+
+  it("does not say 'Nothing is waiting' about a queue whose items it could not read", () => {
+    const parsed = parseQueue({ sessionId: "$a", warning: "volatile", deliverable: 0 });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.itemsUnreadable).toBe(true);
+    /* The list is empty because there was nothing readable to put in it — which
+       is exactly why `items.length === 0` must not be what the page reasons
+       from. */
+    expect(parsed?.items).toEqual([]);
+  });
+
+  it("reads a real queue as readable, so the flag is not simply always on", () => {
+    const parsed = parseQueue({ sessionId: "$a", items: [], warning: "volatile", deliverable: 0 });
+    expect(parsed?.itemsUnreadable).toBe(false);
+    // And a genuinely empty queue is still genuinely empty.
+    expect(parsed?.items).toEqual([]);
+  });
+
+  it("tells the reader it cannot say, rather than that nothing is waiting", async () => {
+    const feed = manualTransport();
+    const rec = recordingActions(() => ({
+      actions: { session: [], box: [] },
+      // A queue with no `items` key at all — the shape a rename produces.
+      queues: [{ sessionId: "$1", warning: "volatile", deliverable: 0 }],
+    }));
+    mountFull({ transport: feed.transport, actionsApi: rec.api });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1", title: "the one with an unreadable queue" })] })));
+    openSession("the one with an unreadable queue");
+    await act(async () => {});
+
+    const text = container.textContent ?? "";
+    expect(text).toContain("no list of items this page can read");
+    expect(text).not.toContain("Nothing is waiting.");
+  });
+});
+
+describe("the fixtures' own clock", () => {
+  /* THIS EXISTS BECAUSE THE SAME BUG SHIPPED TWICE IN ONE DAY, IN THIS FILE,
+     AND THREE SEPARATE SESSIONS TRIPPED OVER THE SECOND ONE.
+
+     `state()` pinned `collectedAt` to the literal 2026-09-08T12:00:00Z and
+     `messagesWire()` pinned `lastModified` to 11:59:30Z. Both meant "just now"
+     on the morning they were written. At 12:02:30Z the first crossed the
+     snapshot staleness threshold and three rendering tests began asserting that
+     the page would not say STALE about a page correctly saying STALE; a few
+     hours later the second crossed STALE_TRANSCRIPT_MS and did the same to the
+     transcript warning. Neither is a flake — they are timers, and they only
+     ever get worse.
+
+     A fixture that means "fresh" has to be computed from the clock the
+     component reads, because freshness is a relation between two times and an
+     absolute constant can only ever be one of them. This test pins that
+     property directly, so the next person who types a readable date into a
+     default gets a red suite in seconds rather than a puzzling failure hours
+     later in somebody else's branch.
+
+     It deliberately does NOT police every date in the file. `startedAt` and a
+     turn's `at` are compared against each other or rendered verbatim; they have
+     no threshold to cross and pinning them is fine. Only the two that feed a
+     staleness comparison are the hazard. */
+  it("means NOW where a fixture means 'fresh', so the suite does not rot", () => {
+    const minute = 60_000;
+
+    const collectedAt = Date.parse(state().collectedAt ?? "");
+    expect(Number.isFinite(collectedAt)).toBe(true);
+    expect(Math.abs(Date.now() - collectedAt)).toBeLessThan(minute);
+
+    const lastModified = Date.parse(String(messagesWire()["lastModified"]));
+    expect(Number.isFinite(lastModified)).toBe(true);
+    expect(Math.abs(Date.now() - lastModified)).toBeLessThan(minute);
+  });
+});
+
+describe("why a session is paused, off the wire and on the page", () => {
+  /* THE ONE THAT MATTERS. `none` is a positive claim — we looked everywhere we
+     can look and this session is waiting for nothing — and a server that never
+     sent the field has made no such claim. Reading silence as calm is instance
+     16 of docs/postmortems/260908b, and on this page it would be the most
+     reassuring possible lie: a rate-limited session does not resume by itself,
+     so a row that looks calm and is actually blocked costs an hour of nothing.
+     Measured: 111 minutes, on the morning of 2026-09-08. */
+  it("reads an absent pause as 'could not tell', never as 'nothing is waiting'", () => {
+    for (const absent of [undefined, null]) {
+      const pause = parsePause(absent);
+      expect(pause.kind).toBe("cannot-tell");
+      expect(pause.kind === "cannot-tell" && pause.why).toContain("did not say");
+    }
+  });
+
+  it("refuses a rate limit with no reset time rather than drawing a badge over a gap", () => {
+    /* An arm missing the field that makes it actionable is not that arm. The
+       page can say "we could not tell"; it cannot say "back at undefined". */
+    const pause = parsePause({ kind: "rate-limited", window: "five_hour" });
+    expect(pause.kind).toBe("cannot-tell");
+    const wakeup = parsePause({ kind: "scheduled-wakeup", overdue: true });
+    expect(wakeup.kind).toBe("cannot-tell");
+  });
+
+  it("never computes `overdue` itself — it is the server's or it is false", () => {
+    /* `overdue` may be set only when the reset time was actually READ, and this
+       page cannot check that. A truthy-looking value that is not `true` is not
+       the server saying so. */
+    const yes = parsePause({ kind: "rate-limited", window: "five_hour", resetsAt: "2026-09-08T06:30:00Z", overdue: true });
+    expect(yes.kind === "rate-limited" && yes.overdue).toBe(true);
+    for (const fuzzy of ["true", 1, {}, undefined]) {
+      const no = parsePause({ kind: "rate-limited", window: "five_hour", resetsAt: "2026-09-08T06:30:00Z", overdue: fuzzy });
+      expect(no.kind === "rate-limited" && no.overdue).toBe(false);
+    }
+  });
+
+  it("keeps an unfamiliar window name rather than dropping the state", () => {
+    /* The usage cache carries rotating per-model codenames that appear and
+       vanish without notice. A closed union here would compile an exhaustive
+       switch that silently drops a real window. */
+    const pause = parsePause({ kind: "rate-limited", window: "iguana_necktie", resetsAt: "2026-09-08T06:30:00Z" });
+    expect(pause.kind === "rate-limited" && pause.window).toBe("iguana_necktie");
+  });
+
+  it("falls back rather than throwing on a pause kind this build has never heard of", () => {
+    const pause = parsePause({ kind: "hibernating" });
+    expect(pause.kind).toBe("cannot-tell");
+    expect(pause.kind === "cannot-tell" && pause.why).toContain("hibernating");
+  });
+
+  it("draws nothing for `none`, and something for `cannot-tell`", () => {
+    /* Backwards for about a second, and it is the whole design: `none` needs no
+       line because the status pill already says what the session is doing;
+       `cannot-tell` needs one because the calm on that row is not evidence. */
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            row({ id: "$quiet", title: "nothing waiting", pause: { kind: "none" } }),
+            row({
+              id: "$dunno",
+              title: "could not look",
+              pause: { kind: "cannot-tell", why: "the transcript tail ran out of window", cause: "tail-window-exhausted" },
+            }),
+          ],
+        }),
+      ),
+    );
+    const text = container.textContent ?? "";
+    expect(text).toContain("waiting? unknown");
+    expect(text).toContain("the transcript tail ran out of window");
+  });
+
+  it("does not say 'waiting? unknown' on a row that is visibly busy", () => {
+    /* MEASURED ON THE LIVE BOX, 2026-09-08: 29 of 32 rows came back
+       `cannot-tell`, most of them working sessions whose transcript tail ran out
+       of window. A phrase on 29 of 32 cards is not a caveat, it is wallpaper —
+       and the rate-limit collector reports `unknown` until 2026-09-12 while some
+       unattributable rejections expire, so this is the common case this week
+       rather than a rare one.
+
+       The rule is the question itself: `Pause` answers "why is this session not
+       doing anything", and on a row that IS doing something the question does
+       not arise. But the POSITIVE states must still draw on a busy row — a
+       session blocked in a shell call while the board says Working is the whole
+       reason this stage exists. */
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    const dunno = {
+      kind: "cannot-tell",
+      why: "the transcript tail ran out of window",
+      cause: "tail-window-exhausted",
+    } as const;
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            row({ id: "$busy", title: "busy and unexamined", status: { kind: "working" }, pause: dunno }),
+            row({ id: "$sh", title: "a shell", status: { kind: "shell", busy: true }, pause: dunno }),
+            row({ id: "$quiet", title: "quiet and unexamined", status: { kind: "idle" }, pause: dunno }),
+            row({
+              id: "$blocked",
+              title: "working, and actually stuck",
+              status: { kind: "working" },
+              pause: { kind: "in-a-shell-call", sinceMs: 21 * 60_000 },
+            }),
+          ],
+        }),
+      ),
+    );
+    const text = container.textContent ?? "";
+    // Once, for the quiet row — not three times.
+    expect(text.split("waiting? unknown").length - 1).toBe(1);
+    // And the positive state is drawn on a WORKING row, which is the point.
+    expect(text).toContain("in a shell call 21m");
+  });
+
+  it("puts an overdue session in the loud colour and says how long it has been waiting", () => {
+    /* Fable, 2026-09-08: a rate-limited session never resumes by itself, so
+       overdue is deterministic rather than a guess — and it is the single most
+       actionable thing this board can say. It is the only pause drawn loud. */
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            row({
+              id: "$stuck",
+              title: "blocked and nobody noticed",
+              pause: {
+                kind: "rate-limited",
+                window: "five_hour",
+                resetsAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+                overdue: true,
+              },
+            }),
+            row({
+              id: "$soon",
+              title: "waiting, as intended",
+              pause: { kind: "scheduled-wakeup", at: new Date(Date.now() + 40 * 60 * 1000).toISOString(), overdue: false, source: "cron" },
+            }),
+          ],
+        }),
+      ),
+    );
+    const text = container.textContent ?? "";
+    expect(text).toContain("rate limited — overdue 1h 30m");
+    expect(text).toContain("waking");
+
+    /* The colour carries it too, and only for the overdue one — a session
+       waiting until its wake-up time is working as intended and must not
+       compete with the one that needs a person. */
+    const loud = [...container.querySelectorAll(".tw\\:text-alarm-ink")].map((e) => e.textContent ?? "");
+    expect(loud.some((t) => t.includes("overdue"))).toBe(true);
+    expect(loud.some((t) => t.includes("waking"))).toBe(false);
   });
 });
 

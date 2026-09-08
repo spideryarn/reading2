@@ -200,7 +200,7 @@ import { armActivationForMode, armActivationForTweets } from "./activation.js";
    file — the visible list and the one activation callback go down as props —
    because an import back the other way would close a cycle. GPT Sol, F3 on
    docs/plans/260906h-mode-catalog-and-a-command-bar.md. */
-import { CommandBar } from "./CommandBar.js";
+import { CommandBar, type CommandBarArticle } from "./CommandBar.js";
 import { useDockFit } from "./dock-fit.js";
 /* Type only: the bar is *handed* the switch, it does not subscribe to the store
    — see the `experimental` prop. A type import cannot become a subscription. */
@@ -232,7 +232,6 @@ import { FeedbackTrigger } from "./FeedbackButton.js";
 import {
   type ArticleView,
   carriedSearch,
-  CHANGELOG_LABEL,
   LIBRARY_HREF,
   readHref,
 } from "./router.js";
@@ -1583,6 +1582,16 @@ export function Dock({
            `visibleModes` any other way. */
         modes={visible}
         activateMode={activateMode}
+        /* The same two values the Metadata and Tweets links below are built
+           from, so the bar's rows and the buttons cannot go to different
+           places. `search` is already through `carriedSearch`. */
+        article={{ slug, search }}
+        /* **The drawer's own callback, bound to its panel**, and `undefined`
+           where there is no drawer. `Comments` is the one row in the bar that
+           is neither a mode nor a page — it opens the thing that is already
+           three inches to the right of the button — and it is here rather than
+           in `CommandBar` because the drawer is the Dock's. */
+        openComments={drawer ? () => drawer.onPanel("questions") : undefined}
         bar={commandBar}
       />
 
@@ -1595,6 +1604,49 @@ export function Dock({
             that one is *is there a Feedback button in this row*, which the fit
             measurement needs because it is a button's width. See above. */}
         <DockHome knownSignedOut={noLibrary} />
+
+        {/* **Second in the bar, just after the wordmark**, on Greg's ask of
+            2026-09-07 (SPIDERYARN-READING2-2D):
+
+            > And move Command bar to the left of the Dock, just after the logo.
+
+            It sat at the head of the four-that-are-not-modes group until then,
+            *"immediately after them because that is what it is about"* — which
+            was true while every row in it was a mode and stopped being true in
+            the same report, which is also where Library, Profile, Feedback and
+            the rest came from (260908e). A door onto the whole app belongs at
+            the end you start from rather than the end you drag to on a phone
+            (docs/project/narrow-windows.md § the bar scrolls).
+
+            **It left the `TooltipGroup` to get here, and that costs something
+            small and real.** Inside it, the card opened instantly once any
+            neighbouring card had (`TooltipGroup` is `FloatingDelayGroup`);
+            alone, it waits its own 300 ms every time. Taken deliberately — it
+            is one button and it is no longer about that group's subject — and
+            written down rather than left to be rediscovered as a bug.
+
+            **The fit ladder does not care where it sits.** `useDockFit`
+            measures the row's scroll width against its client width and steps
+            down by class (dock-fit.ts), so DOM order is not an input. What does
+            change is which label is second on a narrow bar: rungs 1 and 2 drop
+            `.dock-home` and `.dock-feedback`, and only rung 3 sweeps every
+            `.dock-btn-label` — so `Commands` keeps its word **two rungs longer
+            than the wordmark beside it**, and on a middling window the row
+            begins with a wordless mark and the word *Commands*. Read off
+            styles/dock-fit.css rather than assumed; the first draft of this
+            comment said one rung.
+
+            Greg asked for the button as well as the chord (260906h, answer 2)
+            for one reason: **⌘-K does not exist on a phone**, and the bar is
+            the only surface a phone has. The chord did not move with it and
+            could not — `useCommandBarChord` binds the window, not this
+            button. */}
+        <DockCommands
+          mode={mode}
+          onMode={onMode}
+          isVisitor={isVisitor}
+          onOpen={commandBar.show}
+        />
 
         {/* **The modes, as one control, and first among the modes.** Chat and
             Glossary used to be two independent toggles beside each other, with
@@ -1624,20 +1676,19 @@ export function Dock({
           <DockModeLinks slug={slug} search={search} modes={visible} marked={marked} />
         )}
 
-        {/* **The four that are not modes, in one group**, so that running along
-            the end of the bar is instant after the first card rather than four
-            separate 300ms waits — the same grouping `DockModes` and
+        {/* **The three that are not modes, in one group**, so that running
+            along the end of the bar is instant after the first card rather than
+            three separate 300ms waits — the same grouping `DockModes` and
             `DockModeLinks` give the modes. `TooltipGroup` is
             `FloatingDelayGroup`, a context provider that renders no element, so
             it cannot disturb the flex row it wraps (Tooltip.tsx § grouping) —
-            which is also why `DockCommands` joining it on 2026-09-08 moved
-            nothing on the page.
+            which is why `DockCommands` could join it on 2026-09-08 without
+            moving anything on the page, and why it could leave again the same
+            day when Greg asked for it beside the logo (see there).
 
-            **Commands is in the group and not with the modes**, though it is
-            about them. It is a sibling of the segment rather than a child, for
-            the three reasons its own docblock gives, and the `DockModes`
-            radiogroup carries its own group inside itself — so the choice here
-            is this group or none, and it is adjacent to this one in the row.
+            **What the group is now**, having lost that fourth member: the three
+            other views of *this article* — its comments, its thread, its
+            machinery — which is a tighter subject than it had.
 
             **The experimental switch is outside it on purpose.** It is the
             adjacent account-level control — a setting, not a view of this
@@ -1646,21 +1697,6 @@ export function Dock({
             article*, which was the first wording and is too absolute: `DockHome`
             and `DockFeedback` are not about it either. GPT Sol. */}
         <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-          {/* **The other door into the same modes**, immediately after them
-              because that is what it is about — and only where there is a band
-              to change, which is the same condition the segment itself is
-              under.
-
-              Greg asked for the button as well as the chord (260906h, answer 2)
-              for one reason: **⌘-K does not exist on a phone**, and the bar is
-              the only surface a phone has. */}
-          <DockCommands
-            mode={mode}
-            onMode={onMode}
-            isVisitor={isVisitor}
-            onOpen={commandBar.show}
-          />
-
           {/* Two shapes of the same button. On the reading view it opens the
               drawer in place. Everywhere else it goes back to the reading view
               with the drawer already open — which is where a question is useful
@@ -2658,7 +2694,13 @@ function DockCommands({
              spine has and this does not (Tooltip.tsx § Take the open state
              over). So the chord is taught only where a keyboard is, which is
              also the only place it works. GPT Sol, 2026-09-08. */
-          what="Type a mode's name and press Enter to be in it — or ⌘K / Ctrl-K, which opens the same box"
+          /* *A mode, a page or a name* rather than *a mode's name*, since
+             2026-09-08: Greg asked for Library, Profile, Feedback, Metadata,
+             Tweets and the rest, so a sentence that offers only modes now
+             hides two thirds of what the box does (260908e). The three words
+             are the three kinds of row `Command` has and no more — this card
+             names what you can type, not a list to keep in step. */
+          what="Type the name of a mode, a page or a thing to do, and press Enter — or ⌘K / Ctrl-K, which opens the same box"
           /* The unguessable half is that this is not a shortcut in the sense of
              a cheaper route. `CommandBar` § the four product calls, answer 1:
              a mode row's Enter opens it *exactly as pressing its Dock button
@@ -2680,19 +2722,17 @@ function DockCommands({
              the marker is would be this card contradicting the thing it is
              describing. GPT Sol, 2026-09-08.
 
-             *Modes and the Changelog* rather than *modes*: Greg widened it on
-             2026-09-07 and `PAGES` in CommandBar.tsx is the whole of the
-             widening. Saying "modes" here would be the copy going stale in the
-             same afternoon as the feature, which is this plan's own recurring
-             failure. */
-          /* `CHANGELOG_LABEL` and not the word "Changelog", which is the
-             internal name for the process that writes the page and which
-             `PAGES` in CommandBar.tsx deliberately does not show a reader
-             (router.ts, and § 1 of the four product calls). The first draft of
-             this sentence used it anyway — reader-facing copy reaching for the
-             codebase's own word for a thing, one file away from the comment
-             saying not to. */
-          how={`A row opens its mode exactly as pressing that button here does: the same run, at the same cost. Beside the modes it offers ${CHANGELOG_LABEL}, and it marks the rows that *may* start a model call with the word “generates” — which no button here shows on its face.`}
+             **It no longer names what else is in there, and that is the
+             change of 2026-09-08.** *Modes and the Changelog* was accurate for
+             a day and named one extra row; Greg then added six more by name and
+             left "a few more" to us (260908e), and a card that lists them is a
+             card that goes stale the next time the list moves — which is this
+             feature's own recurring failure, twice in two days. So the sentence
+             says the **shape** of what is there (this article's other pages,
+             and the app's) and lets the box itself be the list. That also
+             retires `CHANGELOG_LABEL`'s appearance here, which existed to keep
+             one row's wording in step with `router.ts`. */
+          how="A row opens its mode exactly as pressing that button here does: the same run, at the same cost. Beside the modes it offers this article's other pages and the app's own, and it marks the rows that *may* start a model call with the word “generates” — which no button here shows on its face."
         />
       }
     >
@@ -2738,6 +2778,8 @@ function DockCommandBar({
   isVisitor,
   modes,
   activateMode,
+  article,
+  openComments,
   bar,
 }: {
   mode: Mode | undefined;
@@ -2746,6 +2788,21 @@ function DockCommandBar({
   isVisitor: boolean;
   modes: readonly ModeUi[];
   activateMode(next: Mode): void;
+  /**
+   * **Which article the bar's Metadata and Tweets rows are about**, since
+   * 2026-09-08 — the same `slug` and carried `search` the Dock's own links to
+   * those two pages are built from, handed over rather than recomputed.
+   */
+  article: CommandBarArticle;
+  /**
+   * **Opening the Comments drawer**, bound to its panel here so that
+   * `CommandBar` never learns a drawer has more than one side. Absent where
+   * there is no drawer — which today is nowhere the bar is mounted, since the
+   * reading view always passes one (Reader.tsx), and is written as an option
+   * anyway because the gate above is what makes that true rather than anything
+   * about this component.
+   */
+  openComments: (() => void) | undefined;
   bar: { open: boolean; show(): void; hide(): void };
 }) {
   if (mode === undefined || onMode === undefined || isVisitor) return null;
@@ -2753,6 +2810,8 @@ function DockCommandBar({
     <CommandBar
       modes={modes.map((m) => m.mode)}
       activateMode={activateMode}
+      article={article}
+      openComments={openComments}
       open={bar.open}
       onClose={bar.hide}
     />

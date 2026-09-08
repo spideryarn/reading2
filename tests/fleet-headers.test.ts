@@ -92,10 +92,22 @@ describe("applySecurityHeaders", () => {
     expect(SECURITY_HEADERS["x-content-type-options"]).toBe("nosniff");
   });
 
-  it("has no microphone permission yet, and that is deliberate", () => {
-    // Voice dictation is a planned stage (Greg, 2026-09-08). When it lands,
-    // `microphone=(self)` goes in on purpose rather than being discovered by
-    // the feature silently not working.
-    expect(SECURITY_HEADERS["permissions-policy"]).toContain("microphone=()");
+  it("lets this page's own script open a microphone, and nothing else", () => {
+    // Voice dictation landed on 2026-09-08, so this flipped from `microphone=()`
+    // — and the test it replaces said the change would be made "on purpose
+    // rather than being discovered by the feature silently not working". It was
+    // discovered the second way: a browser pass found one console line,
+    // `Permissions policy violation: microphone is not allowed in this
+    // document`, under a button whose failure was indistinguishable from this
+    // box having no audio hardware.
+    expect(SECURITY_HEADERS["permissions-policy"]).toContain("microphone=(self)");
+    // `(self)`, not `*`. An iframe of somebody else's may not open one — and
+    // `frame-ancestors 'none'` means there should be no frames here at all.
+    expect(SECURITY_HEADERS["permissions-policy"]).not.toContain("microphone=*");
+    // The other three stay shut. A policy that names what it allows is one
+    // somebody can check.
+    expect(SECURITY_HEADERS["permissions-policy"]).toContain("camera=()");
+    expect(SECURITY_HEADERS["permissions-policy"]).toContain("geolocation=()");
+    expect(SECURITY_HEADERS["permissions-policy"]).toContain("payment=()");
   });
 });

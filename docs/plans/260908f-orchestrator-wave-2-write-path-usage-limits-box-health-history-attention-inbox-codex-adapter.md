@@ -114,6 +114,172 @@ put the write path in as *"a stage, but it doesn't have to be the top-priority."
 that. So on the Overseer's side the order is **attention first**, and the write path stays where he
 put it.
 
+## Where this stands, 2026-09-08T13:42Z
+
+**Important work left**, and it is now the last mile of four stages rather than all of six. What is
+finished is the part that had to be finished first: **every seam is agreed and every contract is a
+type**, so no session is waiting on another to decide anything.
+
+| | landed | what remains |
+|---|---|---|
+| **A** attention | the five types (`4d5cc454`); classifier built, evaluated and Sol-reviewed | **the push** — `Checkpoint.attention` is not on dev yet |
+| **B** usage | the dashboard's `Pause` contract (`f1c34e96`) and `pause.ts` | **the push**, then `Checkpoint.usage` on my side, behind A |
+| **C** harness | **DONE** (`5c2e31cb`), worktree torn down | nothing; the `steer.ts` argv parser is unowned |
+| **D** health | seam agreed (`refreshOnce`, not `server.ts`); `lock.ts` extracted for it | retention and the drawing |
+| **E** dictation | the server half — `transcribe.ts`, `routes-transcribe.ts`, `vocabulary.ts` | the client half, and Greg's own mic test |
+| **F** realtime dialog | designed, gated on E | not started, deliberately |
+| **#1** write path | A6 (`0a5a3008`), A9/A10 work landing (`91e1f3a0`, `2bfe48dc`) | the dashboard's own stage list |
+| **A5** | **closed**, no code | nothing |
+
+**The queue on `Checkpoint` is the only ordering constraint left in the wave**: `attention` lands,
+then `usage` on top, one editor of that type at a time. Everything else can finish in any order.
+
+**Three things landed that were not in the plan**, all of them because the work turned them up:
+
+1. **`tools/overseer/lock.ts`** (`93cf4628`) — the one-writer discipline extracted to a leaf, because
+   the health retention needed it and *the third copy would have been the simplified one*.
+2. **A test for `EPERM`-is-alive**, found by mutation and not by reading: replacing that branch with a
+   flat `return false` left all 102 tests green. The branch deciding whether **a live process
+   belonging to somebody else** reads as running had no test at all, which is exactly what lets a
+   second writer take a live lock.
+3. **A live A10 measurement** from `fleet-approval-binding`: **three panes right now hold non-empty
+   unsent drafts, one of them the words *"yes, shut it all down"* in a session running in auto mode.**
+   Free text typed at a pane concatenates with what is already in the box. That is why the evidence
+   union in Stage A is load-bearing rather than fastidious, and why a `prose` item gets **no answer
+   control at all** in v1.
+
+**And one cost finding, which is not engineering — stated with its timestamp, because that turned out
+to matter.** **Every time below is UTC**, which is not pedantry — the box runs BST, and a mislabelled
+hour is the fourth instance of the error this section is about. At **~12:30 UTC** `w2-harness-adapter`
+found **two orphaned paid `gpt-5.6-sol --effort high` reviews running under `ppid 1`**: the Bash-tool
+shell had been reaped, leaving 45-minute jobs reparented to init, attributable to no session and
+invisible to `work.ts`, which only walks *down* from a pane. **At 13:05 UTC there were none** — every
+`ppid 1` process on the box was a system daemon.
+So the finding is **real but transient**: not a leak that accumulates, but a window during which a
+paid job cannot be attributed or stopped. Related to a trap already recorded — a killed codex run
+still writes its `--output` file, so a stale review is indistinguishable from a fresh one and both the
+exit code and file-exists pass. An orphan whose output path is later reused is that trap with a long
+fuse.
+
+The one genuinely long-lived orphan is `bash /tmp/fake-codex-qAz9Um/codex`, reparented **6 days 20
+hours** ago at 1.7 MB. That is the **fake** codex from a test harness — the same one whose existence
+shaped the decision not to peel shells in `work.ts` — leaked from a test run last week. Harmless, and
+a live specimen of what the recogniser is built to refuse.
+
+### "There are none" is a reading, not a property
+
+The sharpest thing Stage C produced, and it generalises past Codex. At **11:58** the honest answer was
+zero Codex panes, exactly as the brief predicted — a Codex here is always a Claude session's child.
+By **12:15** there were three, two of them a bare interactive `codex` TUI under a `bash -l`. The
+module nearly shipped a comment asserting that an interactive Codex had never existed on this box,
+**minutes before two did**.
+
+Nothing was wrong with the first reading. What was wrong was the tense it was about to be written in.
+The same fragility applies to *"35 `auto`, 1 `default`"* earlier the same day, and to every count in
+this doc: **the honest form of a fleet measurement is the timestamp**, and a sentence that drops it
+has converted an observation into a claim about the world.
+
+**And knowing the lesson did not prevent it, one paragraph later.** The orphan finding above was
+written as *"two orphaned reviews are running"*, which was false by the time anybody read it — by the
+same author, minutes after writing the rule down. Then the correction repeated the shape a third time:
+two agents walked the process table, both reported zero orphans, and called that corroboration —
+except the walks were at **13:03 and 13:05 UTC**, **two minutes apart**. They looked an hour apart
+because one was quoted in BST and the other in UTC. Two readings two minutes apart are one observation
+with a wide error bar, and the sequence was backwards in the draft as well.
+
+**And a fourth, found by auditing rather than by noticing.** The three-column measurement table
+labelled its last column `13:30 UTC`; the reading was taken between a launch at 13:28 **local** and a
+clock check at 13:32 **local**, so it was **~12:30 UTC** — local time wearing a UTC label. The
+committed files were clean, because those timestamps came from `date -u` beside the capture. **The
+wrong numbers were all in prose**, which is the tell: the machine-produced ones survived and the
+hand-written ones did not.
+
+**So the lesson does not transfer by being remembered, and the reason is that it keeps changing
+clothes**: counting a population, then corroborating a claim, then mistaking co-located readings for
+independent ones, then mislabelling a timezone. Four instances in one stage, two of them *after* the
+rule had been written down by the person who then broke it. The version that catches all four is
+mechanical rather than remembered — **the instant a fleet number was taken travels with the number, in
+one timezone, as a field**, the way `collectedAt`, `scannedAt` and `waitingSince` are fields in every
+type built today rather than habits. The audit is the evidence for that: **every timestamp produced by
+`date -u` beside its capture was right, and every one typed into prose was wrong.** So if the attention
+work ever surfaces fleet counts to Greg, the count and its instant must be one value, not a sentence a
+person assembles. What actually
+settled the orphan question was not a second reading at all but a **mechanism**: an orphan appears
+when a Bash-tool shell is reaped mid-run and leaves when the job ends, so the population is bounded by
+concurrent reviews rather than growing. That argument would hold with zero readings, which is what
+makes it the evidence.
+
+### An incomplete observation may not be read as a negative one
+
+**Three modules, three authors, arrived at separately, and stated here once so it is not restated
+three times locally.** Each found it in its own material and none of them was looking for a general
+rule:
+
+- **The health history** (`fleet-health-history`): *a gap must render as a gap, never a line drawn
+  across it.* An interpolated line through the ninety minutes the box was thrashing answers Greg's
+  actual question — *"were there disruptions I should know about?"* — with a confident **no**.
+- **The dashboard's improvement on it**: a gap has **two** causes and they must not draw identically.
+  *Absence means nothing was running. An `unknown` band means we were alive and could not tell.* If
+  the retention appends only on success, the case Greg most needs — *the box was up and health
+  collection has been broken for six hours* — becomes invisible.
+- **The usage collector** (`w2-usage-limits`): `absenceGap`, and the rule that **when it is non-null
+  this scan is not entitled to contradict what is already known.** A scan that fell over has not
+  discovered that a rate limit lifted.
+
+The same shape turns up in the types rather than the data three more times the same day: `≥` on a
+duration that is a lower bound, an unpriced call keeping a money total from printing as a figure, and
+`verdict.activeLimit` staying `null` while `level === "limited"` — **being limited can be established
+while *which* limit binds is not.** Which generalises to the sentence worth keeping:
+
+> **A composite verdict must be able to be certain about one part and uncertain about another, and a
+> type that forces them to agree will make one of them lie.**
+
+**This is a `docs/reusable/` candidate rather than a project fact**, and it is deliberately not
+written there yet — those edits go one approved set at a time and no set is open. Greg's call.
+
+### A positive control proves the step it wraps, and nothing above it
+
+**The most expensive thing found today, and it got past two people.** The attention pass published
+`{"kind":"list","items":[],"sessionsScanned":1}` — a confident *nothing needs you* — built from one
+ended turn whose single classification had returned a 429. The internal breakdown was **green
+throughout**, because every row genuinely did enter a bucket.
+
+`sessionsScanned` and the breakdown are a real positive control **on the walk**. They cannot be a
+control on the *judgement*, and the difference is invisible from inside: the accounting proves
+something was looked at and says nothing about whether looking succeeded. When
+[`w2-attention-inbox`](#stage-a-the-attention-list-the-deciding-half) reported that control as
+closing the gap, the Overseer agreed with it in writing — *"stronger than the field I designed"* —
+which it was, about the walk. **Neither of us asked what it could not see.** So the lesson is not
+"they built it too shallow"; it is that a control is named for the thing it guards and reviewed for
+the thing you hoped it guarded.
+
+**And the cache turned a bad pass into a standing condition.** The failed verdict was stored under
+the tail's fingerprint, so every later pass answered from memory, made zero model calls, and repeated
+the same wrong silence for as long as that agent stayed quiet. The dashboard agent's phrasing is the
+one to keep: **a wrong answer that is cheap to repeat outlives the condition that caused it.** Hence
+the rule now in the code beside the cache — *an `unreadable` verdict is never cached; a failure is a
+reason to look again, not a fact to remember.*
+
+**The base rate is why this class matters here more than elsewhere.** The dashboard read **0
+`needs-you` rows out of 24** on the held-out capture while four sessions were genuinely waiting.
+*Nothing needs you* is the cheapest possible thing to be wrong about, because it is what a broken
+probe, an empty fleet and a calm fleet all say.
+
+### The fix for a caveat that is always on is to scope the question, not to raise a threshold
+
+`PauseLine` drew *"waiting? unknown"* on **29 of 32 rows** — found by running a live collection, not
+by reading the code, and fixed in `2bfe48dc` under the title *a caveat on 29 of 32 cards is wallpaper,
+not a caveat*. The repair that held was not a confidence threshold. It was **scoping what the field
+answers**: `Pause` answers *why is this session not doing anything*, and on a row that is visibly
+doing something **the question does not arise**.
+
+That is the rule the new `AttentionList` count is being added under, and it is why its two constraints
+are load-bearing rather than fussy: the count is a fact about the **pass**, not about any row, so it
+belongs on the list header and only when it is true — and deliberate skips must stay out of it,
+because a number that is non-zero on nearly every pass could not be rendered under this rule at all.
+A permanent caveat is A17 wearing different clothes: healthy operation spending most of its time
+alarming, which teaches Greg to read past the one that matters.
+
 ## Stages
 
 Each ends with the tree green and committed, and would make sense as a stopping point.
@@ -142,6 +308,98 @@ showed as needing him. So the first thing this stage owes is a way to see those.
 be wrong, and — the honest check — **it finds prose-ending questions that `needs-you` misses**, with
 the count measured against the live fleet and written into this doc. A list that only reproduces
 `needs-you` is a failure of this stage, not a pass.
+
+#### The shape, and the four decisions inside it
+
+Published into `tools/fleet/wire.ts` (which landed as `3df3e833`), so the dashboard imports it rather
+than re-declaring it. Types only, no imports, no runtime values — a `const` there is bundled into the
+browser.
+
+```ts
+/** Why we believe this needs Greg. The two arms are answered by DIFFERENT MECHANISMS. */
+export type AttentionEvidence =
+  | {
+      /** The harness says a dialog is open. Mechanical, observed, and it has options. */
+      kind: "dialog";
+      question: string;
+      /** In the order the harness drew them. Answering picks one of these. */
+      options: readonly string[];
+    }
+  | {
+      /** The turn ended handing Greg a decision in prose. INFERRED, and it may be wrong. */
+      kind: "prose";
+      /** The tail of the turn, so a person can check the inference rather than trust it. */
+      excerpt: string;
+      /** What made us think so, in words. Never a score. */
+      why: string;
+    };
+
+/** Consequence and reversibility. NOT confidence, and NOT urgency. */
+export type AttentionKind = "irreversible" | "product" | "technical" | "other";
+
+/** Whether answering this from a phone is a real option. */
+export type AttentionAnswerability =
+  | { kind: "phone" }
+  | { kind: "needs-a-screen"; why: string }
+  | { kind: "unknown"; why: string };
+
+export type AttentionItem = {
+  /** Stable across snapshots, so a card cannot move under a finger. */
+  id: string;
+  /** tmux's own handle — the address, and stable across renames. */
+  sessionId: string;
+  sessionName: string;
+  /** When we FIRST saw this question. Not when we last saw it. */
+  waitingSince: string;
+  kind: AttentionKind;
+  evidence: AttentionEvidence;
+  answerability: AttentionAnswerability;
+  /** Other sessions asking the same thing. Answer once, apply to all. */
+  duplicates: readonly { sessionId: string; sessionName: string; waitingSince: string }[];
+};
+
+export type AttentionList =
+  | {
+      kind: "list";
+      /** Already sorted: by `kind` first, then by `waitingSince`. The renderer must not re-sort. */
+      items: readonly AttentionItem[];
+      /** THE POSITIVE CONTROL. Zero items out of zero scanned is a broken probe. */
+      sessionsScanned: number;
+      scannedAt: string;
+    }
+  | { kind: "unknown"; why: string; scannedAt: string };
+```
+
+**One — the evidence union is the load-bearing part, and flattening it is the bug this stage is most
+likely to ship.** A dialog is *observed*: the harness drew it, the options are enumerated, and
+answering means picking one. A prose question is *inferred*: we read the tail of a turn and decided it
+was a question, and answering means free text. Those are different risks, not different confidences —
+A10 says a live Claude descendant does not prove an empty input box owns the keystrokes, so **arbitrary
+prose must stay a narrower capability than answering a recognised dialog**. A single `question: string`
+field with a boolean beside it would let a renderer draw the same card for both, which is how the
+dangerous one gets the easy affordance.
+
+**Two — there is no confidence field anywhere, and that is deliberate.** Fable and Astra's A18 reached
+it independently: *ranking by self-reported confidence promotes exactly the confident mistakes you most
+want caught*. `AttentionKind` ranks by consequence and reversibility. If a score turns up in a later
+draft, it is a regression.
+
+**Three — `waitingSince` is first-seen, not last-seen, and it is why the store had to come first.**
+The pane says a dialog is open; it cannot say for how long. Duration is a fact only something with a
+memory can produce, which is the whole reason
+[§ The order of work](../project/orchestrator-direction.md#the-order-of-work) says attention triage
+*arrives* first but cannot be *built* first.
+
+**Four — the producer sorts, and the renderer must not.** *"Do not reorder or replace a card's options
+while his finger is approaching them"* (Astra). Stable `id`s make that possible; a renderer that
+re-sorts on every payload throws it away. And `sessionsScanned` is the positive control — an empty
+list is only good news if something looked.
+
+**What is deliberately NOT in the type**: a routing field. *Who should answer this* (the Overseer for
+what it can verify, Sol for evidence in the tree, Fable for wording and defaults, Greg for anything
+irreversible) is a real part of the design, but it is a **decision the Overseer acts on**, not
+something the phone renders — and shipping it as a field invites a UI that shows Greg a queue of
+things it has decided not to ask him. It lands when something answers, not when something lists.
 
 ### Stage B — usage limits, and the reading that refuses to lie
 
@@ -315,6 +573,68 @@ construction sites in `store.ts`, and a cadence decision in `daemon.ts` about wh
 CLI prints it today; wiring it into the checkpoint belongs with whoever owns the store, and the shape
 to add is `usage: UsageReport` from `tools/fleet/wire.ts`.
 
+#### The store half is a separate owner, and the two `Checkpoint` fields must land one at a time
+
+The collector is `w2-usage-limits`'s; **writing it into `~/.overseer/current.json` is the Overseer's**,
+because it needs a `Checkpoint` field, a `parseCheckpoint` arm, both construction sites and a cadence
+decision in `daemon.ts`. That session declined to land a schema change in a module somebody else might
+be editing, which was the right call — **`Checkpoint.attention` and `Checkpoint.usage` are in flight at
+the same time**, so the order is: attention lands, then usage on top, one editor of `Checkpoint` at a
+time.
+
+#### The 45-second scan should be paid once, not every pass — PROPOSED AND WITHDRAWN
+
+**Withdrawn on 2026-09-08 by its own author, after the two doubts below were measured**, and kept
+here because the reasoning is worth having when it is proposed again. What died is the SPEED
+argument: mtime is a fine trigger and a bad watermark (a transcript is appended to constantly, so
+*"files whose mtime moved"* is nearly every active file every pass and the saving evaporates), and
+nobody had measured the cost the optimisation was meant to avoid. What survives is the MEMORY
+argument — a rejection found at 13:00 and resetting on Friday is still in force at 13:05 even if the
+13:05 scan fell over — which is the store's job and needs no watermarks in the collector. See
+*What landed* above for the precondition any future incremental path would need.
+
+The full transcript scan is **45s over 1,770 transcripts, 2.9 GB, 870,799 lines**, and the wide window
+is deliberate: a narrower one can miss a `seven_day` rejection that is still in force. But that is an
+argument for reading the whole history **once**, not for re-reading it. **A `seven_day` rejection found
+at T with a `resetsAt` of T+7d stays in force until that instant whether or not you look again** — it
+is a fact with an expiry, not one that needs re-confirming. So: cold start pays the full scan and
+records the watermark it reached; every pass after it scans only what moved; a known unexpired
+rejection is carried forward from the store, and one whose `resetsAt` has passed is dropped as a
+**positive act with a reason** rather than a silent absence. The cache is read every tick regardless,
+because it is one file and free.
+
+**That is the store earning its keep** — it is what turns an expensive repeated scan into a cheap
+incremental one, which is the Overseer's tense doing the job it exists for. It also supplies a real
+positive control on the incremental path: the watermark plus the count of files whose mtime moved, so
+*"found nothing new"* is distinguishable from *"looked at nothing"*.
+
+**Two ways it could be wrong, named rather than discovered**: a transcript can be *rewritten* rather
+than appended (a compaction), which moves content behind the watermark; and a 429 can land in a file
+whose mtime is then missed if the clock moves. If either is real, the answer is the plain 45 seconds
+on a slow timer — which is a perfectly good design and much better than a clever one that misses a
+live rejection.
+
+**And it must not run inside the tick.** `heartbeat.lastTickAt` is how a reader decides the Overseer is
+dead rather than showing a stale register as current, so a 45-second blocking scan makes every tick
+look 45 seconds late — **A17 exactly, healthy operation spending most of its time alarming**, which
+teaches Greg to ignore the alarm. It goes in as an injected runner with its own interval, one pass at a
+time, a thrown pass becoming an explicit `unknown` rather than silence: the same shape `attention` uses,
+and consistency between the two is worth more than either being individually optimal.
+
+#### A relative time is a rendering, and a rendering must not be quotable as a measurement
+
+The sharpest instance of the timestamp rule, and it was found in the place the rule does not obviously
+reach. `w2-usage-limits`'s *report* was already right — `collectedAt`, `fetchedAtMs`, `resetsAt`,
+`resetsAtMs`, instants as fields all the way from the source, never re-typed. **The CLI renderer was
+the leak**: it printed `cache fetched 73 min ago`, which is true when printed and false when pasted —
+and CLI output on this box gets pasted into messages and plan docs hours later *as evidence*. Now it
+prints the ISO instant with the age in parentheses.
+
+**And one wave-level fact that should govern every timeout anybody sets here**: the same scan over the
+same files took **1.8s and 9.7s two hours apart, purely from ambient load** (measured
+2026-09-08T13:16Z). A 5× variance is the argument against any design whose correctness depends on
+something finishing promptly.
+
 ### Stage C — the Codex/GPT harness adapter, v1
 
 Half of this exists and was measured: `tools/overseer/work.ts` already recognises `codex exec` in the
@@ -332,6 +652,194 @@ process tree, because **4 sessions were running it and 0 showed as anything but 
 
 **Done looks like**: the fleet can say *this is a Codex job and you cannot type at it* as a typed
 fact rather than a special case buried in `steer.ts`.
+
+#### What landed, 2026-09-08 (`w2-harness-adapter`)
+
+- **`HarnessKind`, `Capability`, `HarnessCapabilities` in [`tools/fleet/wire.ts`](../../tools/fleet/wire.ts)** —
+  types only, because that file is compiled a second time under the browser's DOM-only project and
+  may hold no runtime value and no import. Placement decided by `claude-agents-dashboard`, which owns
+  the row type; it landed `wire.ts` itself twenty minutes before this stage needed it.
+- **`Harness`, `HarnessUnknownCause`, `classifyPaneHarness`, `describeHarness` and the
+  `HARNESS_CAPABILITIES` table in [`tools/overseer/harness.ts`](../../tools/overseer/harness.ts)** —
+  the table is the `const`, so it lives here rather than on the wire. `Record<HarnessKind, …>` makes
+  a new arm that declares nothing a build failure; `describeHarness` is an exhaustive switch with a
+  `never`.
+- **Six arms, not four**: `claude-code`, `claude-headless`, `codex-batch`, `codex-interactive`,
+  `shell`, `unknown`. Two more than the plan asked for, and both earned their place — see below.
+- **31 tests in `tests/overseer-harness.test.ts`**, all written red first, plus two new real fixtures.
+  Five mutations of the finished code were each caught by the test that names them.
+- **`steer.ts` got a header pointer only**, deliberately: see *What the plan got wrong*, item 4.
+
+**Nothing renders it yet, and that is the stage boundary rather than an omission.** `classifyPaneHarness`
+and `capabilitiesOf` are called by their tests and by nothing else on `dev`. Putting a harness on a
+row means editing `collect.ts` / `status.ts` / `web/`, which are `claude-agents-dashboard`'s files;
+the wire types are in `wire.ts` precisely so it can do that without a second declaration. The
+Overseer's own consumer (a harness on a stored observation) is a later stage and is not smuggled in
+here. If this sits unrendered for a week, that is a coordination failure worth noticing — not
+evidence the type was wrong.
+
+#### What the plan got wrong
+
+**1. "Half of this exists" understated it, and "what does not exist is the type" was exactly right.**
+No complaint — this was the most accurate sentence in the stage.
+
+**2. Four arms would have produced the UI that lies the principle warns about.** The plan says "a
+`Harness` discriminated union"; four kinds are not enough to be honest with. The reviewer was asked
+outright whether six was over-built and which two it would cut, and answered the other way:
+
+> I would keep all six union arms. `claude-headless` and `codex-batch` are precisely the two arms
+> that prevent "same executable means same capability"; cutting either recreates the lie this stage
+> is intended to remove.
+>
+> — GPT Sol, 2026-09-08
+
+That is a better argument for the extra arms than the one they were added on, which was only "it
+matched zero panes today, keep it anyway". Concretely:
+
+- `claude --print` is a Claude that **cannot** take a keystroke — it read its prompt once at startup
+  and never reads the tty again. Folded into `claude-code`, the page draws a "send" on it.
+- A Codex **batch** job is refused because there is no stdin at all (`scripts/subagent-cli.ts` spawns
+  with `fd 0 = 'ignore'`, "the load-bearing anti-hang guarantee"). An **interactive** Codex is
+  refused because *nobody here has ever tried it* — unproven, not impossible. One `why` string
+  cannot say both, and the difference is what decides whether a later stage should attempt it.
+
+**3. The measurement changed under the stage, twice, and that is the finding.**
+
+| | 11:58 UTC | 12:15 UTC |
+|---|---|---|
+| panes | 22 | 26 |
+| `claude-code` | 15 | 17 |
+| `shell` | 7 | 6 |
+| `codex-batch` | **0** | **1** |
+| `codex-interactive` | **0** | **2** |
+| `unknown` | 0 | 0 |
+
+At 11:58 the honest answer was the one the brief predicted: *no Codex session has ever been a fleet
+row on this box; a `codex exec` is always a Claude session's child or an orphan.* Seventeen minutes
+later that was false — one pane was `tmux-job.ts` running `run-codex.ts` directly, and **two were a
+bare interactive `codex` TUI under a `bash -l`**, verified against their raw command lines and
+captured as `codex-batch-pane.txt` and `codex-interactive-pane.txt`. Neither reading was wrong.
+**"There are none" is a reading, not a property**, and a design that had hard-coded the 11:58 answer
+would have shipped an arm marked dead code that was live before the commit landed.
+
+**4. "Move steer.ts's Codex refusal so it reads the capability" describes something that was never
+in `steer.ts` as code.** What is there is (i) a header bullet asserting the fact in prose and (ii)
+`verifyTarget`'s `no-claude-in-pane`, which refuses Codex, bare shells and dead panes *incidentally*,
+by requiring a live `claude --session-id <uuid>` descendant. Making `verifyTarget` genuinely consult
+a harness capability would need a full command table it does not read — a new `io` call on the send
+path — which buys nothing in a stage where every non-Claude kind refuses anyway. So: the header
+bullet now names `HARNESS_CAPABILITIES` as the owner of the fact and forbids restating it, and the
+inline refusal sentence is **left for a follow-up**, by agreement with `fleet-approval-binding`
+(restructuring that file the same afternoon) and `claude-agents-dashboard`. Nothing behavioural
+waits on it.
+
+#### The cross-family review, and what it changed
+
+GPT Sol, one round, high effort — prompt in
+[260908f-stage-c-code-review-prompt.md](260908f-stage-c-code-review-prompt.md), answer in
+[260908f-stage-c-code-review-sol-r1b.md](260908f-stage-c-code-review-sol-r1b.md). It found **no P0**
+and confirmed the stage adds no delivery path. It found four real defects, all fixed, and each fix
+was then mutated back to check the new test catches it:
+
+1. **P1, a false capability grant.** `claude --session-id abc --print do the thing` classified as
+   `claude-code`, and the table then granted prose steering on a headless run — the exact lie the
+   stage exists to prevent, sitting in the recogniser, because it anchored on the *first* argument
+   only. The parser now walks the whole leading option region; `--print` wins; and it stops at the
+   first bare word so a *prompt* containing `--print` cannot flip a live session to headless.
+2. **P1, Codex mode read from the wrong end of the line.** `codex --help` gives
+   `codex [OPTIONS] <COMMAND>`, so global options come *before* the subcommand and
+   `codex --model x review the diff` is a non-interactive review — which the anchored test called
+   interactive, and which `work.ts` missed entirely. **A test in this repo pinned that wrong answer**;
+   it is replaced. `parseCodexInvocation` now skips the option region, and refuses to eat a known
+   subcommand as a flag's value. It also stops calling `codex mcp-server` / `codex login` an
+   interactive Codex: utility subcommands are not a harness at all.
+3. **P2, a malformed tree could return a *steerable* Claude.** Selection returned at the first level
+   with a hit, so a cycle elsewhere was never reached. Structure is now validated over the whole
+   reachable subtree *before* anything is selected — including before the depth-0 check, which used
+   to answer for a self-parented pane without walking anything.
+4. **P2, `why` could be empty.** A probe that failed without a sentence produced
+   `{cause: "process-table-unreadable", why: ""}` — a greyed-out button with no reason beside it.
+   Every `unknown` now goes through one constructor that refuses a blank.
+
+Plus two contract corrections: `shell.command` is now actually truncated (the type promised it and
+the code did not), and two comments that claimed more than the data supports were narrowed — the
+`/tmp` guard checks the *spelling* of argv[0], not where the binary is, and `shell` is a claim about
+argv[0]'s basename, not about the executable's identity.
+
+**Deferred rather than fixed, with reasons:**
+
+- **Sol's P3, a seventeenth hand-written join: `recogniseClaude` here and `isClaudeForSession` in
+  `steer.ts` both read Claude's argv, and disagreed.** Sol is right, and the narrower half is fixed
+  (this parser now reads `--session-id=abc`, which steer.ts accepted and it did not). Extracting one
+  shared parser waits for `fleet-approval-binding`'s restructure, which Sol itself recommended.
+- **Reading `/proc/<pid>/cmdline` for NUL-separated argv.** The right fix for the quoting problem,
+  and refused for v1: it is a syscall per candidate against a process that may exit mid-read, which
+  is a different design for the probe rather than a better parser. The cost is bounded and now has a
+  test naming it — `codex 'review this diff'`, an interactive session with one prompt argument,
+  arrives flattened and identical to a batch `codex review this diff` and is reported as batch. In
+  v1 both answers refuse steering, so the cost is a wrong label rather than a wrong action.
+
+**Sol's warning about the stage after this one, kept because it is the trap:** if
+`codex-interactive` is ever flipped to `can: true`, this sequence sends prose to a *shell* —
+classify `bash -l → codex`; the Codex exits; the shell takes the tty back; a stale capability
+authorises `tmux send-keys`. **Do not implement that stage by changing one boolean.** It needs a
+send-time identity check, or better, a session-addressed Codex control channel instead of tty
+injection.
+
+#### Two findings that are not this stage's to fix
+
+**A paid Codex review can end up belonging to no session at all.** At 11:58, two of the three running
+`codex exec` processes had an `npm exec` with `ppid 1`: the Bash-tool shell that launched them had
+been reaped, leaving a 45-minute `gpt-5.6-sol --effort high` run reparented to init. They were in
+`fb2c-feedback-button-on-homepage` and `command-bar-commands-and-place`. At 12:15 one orphan was
+still running. **`work.ts` only ever walks DOWN from a pane, so it cannot see these** — the dashboard
+cannot show them, attribute them, or stop them, and nothing bills them to anybody. That is a cost
+question as much as an engineering one, and `claude-agents-dashboard` has it to surface.
+
+**It is a WINDOW, not a leak, and the difference decides what to do about it.** The claim rests on the
+**process lifecycle**, not on a count: an orphan is created when a Bash-tool shell is reaped while its
+`run-codex.ts` child is still running, and it ends when that review ends. So the population is bounded
+by the number of concurrent reviews and cannot grow on its own. **That argument would hold with zero
+readings taken**, which is what makes it the load-bearing part. What is worth fixing is the window
+during which a paid job cannot be attributed or stopped — not a growing population of abandoned ones.
+
+Two walks are consistent with it and neither establishes it. At **13:03 UTC** the two live `codex exec`
+runs (`fleet-dictation`'s and `fleet-approval-binding`'s) both traced up to an
+`sh -c ( npx tsx run-codex.ts … )` whose parent is the **tmux server**, so both were ordinary
+`codex-batch` *panes* — the shape `codex-batch-pane.txt` captures — attributable and stoppable;
+`orchestrator-setup` walked every `ppid 1` process at **13:05 UTC** and found none.
+
+**Those two readings are two minutes apart, not an hour**, and an earlier draft of this paragraph
+presented them as independent corroboration because one was written in BST (14:05) and one in UTC
+(13:03) with no note that the box runs UTC+1. Two observations two minutes apart are one observation
+with a wide error bar. **This is the sample-window error for the third time in one stage** — first as
+the Codex count, then as "two orphans are running right now" (which would have been false by the time
+anybody read it), now as a timezone making two near-simultaneous readings look like a trend.
+
+**And the third one is why "I have learned this" is not a defence.** The lesson as written above is
+about *counting a population*; it recurred in the shape of *corroborating a claim*, which is the same
+error wearing different clothes and did not trip the memory of the first one. The version that catches
+both is mechanical rather than remembered, and it is the discipline everything else built today
+already follows: **a fleet number carries the instant it was taken, in one timezone, in the sentence
+itself** — the way `collectedAt` and `scannedAt` are fields rather than habits.
+
+**One `ppid 1` process really is long-lived, and it is the fake.**
+`bash /tmp/fake-codex-qAz9Um/codex -o /tmp/run-codex-gc.txt`, reparented to init **6 days 20 hours**
+ago by a test run last week, 1.7 MB, costing nothing. It is a live specimen of exactly what the
+recogniser is built not to be fooled by — still on the box, still carrying `codex` as a basename,
+still correctly not recognised, because shells are never peeled and nothing under `/tmp` is an
+installed tool.
+
+**The process table cannot say which process is reading the tty, and that is now closed rather than
+open.** Measured across all 22 panes: `tpgid` equalled the pane's own `pgid` on 21 of them, and **0
+of 15 `claude` processes had a process group of their own** — the job shell, the `claude`, and
+everything Claude shells out to share one group, because a non-interactive `bash script.sh` does no
+job control. The 22nd pane is the positive control: the one interactive `bash -l`, where a
+foreground child *does* get its own group, which is how we know the reading works.
+`fleet-approval-binding` measured the same thing independently on three panes the same morning. So
+**`HARNESS_CAPABILITIES` is a declaration about how a session was launched, not a verified fact about
+who holds the terminal**, and it cannot be made into one at this seam. Named in `harness.ts`'s module
+comment rather than left to be discovered.
 
 ### Stage D — box-health history (`fleet-health-history`)
 
@@ -372,6 +880,270 @@ every message Greg dictates.**
 this box and Chrome's fake-mic flags do not work headless. The real `getUserMedia` path is Greg's to
 test from his own device, and the report must say which half was checked. *"A valid session ticket is
 not proof that a microphone opened, a response event is not proof that sound played."*
+
+#### What was built, and what it cost — `w2-fleet-dictation`, 2026-09-08
+
+Written into this doc rather than a private one, per the brief. The rule above became:
+
+> **Only LEAF, BROWSER-ONLY, PRODUCT-AGNOSTIC modules may be imported from `src/`.** Nothing that
+> reaches the database, an auth session, a slug, an article, or a route under `src/routes.ts`. If a
+> module is nearly leaf but for one product coupling, extract the coupling behind a parameter rather
+> than importing the coupling.
+
+**And it is a test, not a paragraph.** [`tests/fleet-imports.test.ts`](../../tests/fleet-imports.test.ts)
+walks the fleet's whole transitive import graph and asserts the set of `src/` files it reaches is
+**exactly** the twelve named below, each with a line saying what it is for. Adding a thirteenth is a
+diff somebody reviews. It was watched failing — an `import { loadEnvLocal } from "../../src/env.js"`
+in one fleet file took two of its five tests red — and its first assertion is a self-check on the
+walker itself, because a closure walker that sees nothing looks exactly like one that found a leaf.
+
+##### What the fleet now depends on, from `src/` — the cost of the move
+
+**Direct**, what fleet files actually name: `src/web/useDictation.ts` (the microphone),
+`src/web/useDictationField.ts` (the caret, the span, the closed box), `src/web/useAudioLevel.ts`,
+`src/dictation-limits.ts` (the size caps, shared by both ends — what that file was built for),
+`src/dictation-fillers.ts` (the ums), `src/vocabulary.ts` (`packTerms`, `MAX_TERM`, the fence).
+
+**Transitive**, all leaves: `mic-lock.ts`, `mic-recording.ts`, `mic-devices.ts`,
+`dictation-errors.ts`, `audio-level.ts`, and the new `src/web/transcriber.ts`.
+
+**Twelve files, ~4,200 lines, and no external package beyond `react`.** That is what a move to its
+own repo would carry, and it is small enough that a person would carry it by hand.
+
+**The closure figures below are GPT Sol's, from an AST walk, not mine.** Mine came from a regex
+walker that had already been wrong once in the flattering direction, so when a second measurement
+disagreed the AST one won on method rather than on being second. The differences are small and none
+of the conclusions moves — but the published numbers were stale and a stale number quoted as
+evidence is the thing this plan keeps arguing against.
+
+| | files | lines |
+|---|---:|---:|
+| `src/web/dictation-upload.ts`, the edge that was cut | 22 | 16,215 |
+| `src/web/useDictation.ts` after the cut | 8 | 2,931 |
+| `src/transcribe.ts`, the server-half candidate | 162 | 118,171 |
+| `src/ai-call.ts`, its smallest useful piece | 21 | 20,505 |
+
+##### The one edge that had to be cut, and what it was worth
+
+`useDictation.ts` imported `sendForTranscription` from `dictation-upload.ts`, which calls `apiFetch`
+— and that one edge reached **22 files and 16,215 lines**, through `lib/api.ts` to
+`@supabase/supabase-js`, `@sentry/core`, the offline store and the billing plan. So `transcribe` is
+a parameter now (`Transcriber<C>` in the new leaf `src/web/transcriber.ts`) and `context` is opaque:
+the hook snapshots it per session, travels it on a kept recording, and never looks inside.
+`useDictation.ts`'s closure is now **8 files, 2,931 lines, `react` only**.
+
+The six product boxes gained one line each (`transcribe: sendForTranscription`) and nothing else
+changed. The two tests that drive the hook directly pass the real product transcriber in, so they
+still exercise the whole upload path.
+
+##### Not imported, and both would have been green all the way to the page
+
+`DictationStrip.tsx` and `MicLevel.tsx` render against hand-written class names —
+`prof-mic-note`, `prof-listening`, `mic-level` — from a stylesheet this page does not load. They
+would typecheck, build, and render an unstyled button. `MicLevel` sat on the import list for an hour
+on the strength of a grep for `className="` that could not see a template literal. So: **reuse the
+machinery, write the chrome** — `tools/fleet/web/src/DictationControl.tsx`, which is also right on
+the merits, since this page follows the device between light and dark and the product is dark
+unconditionally.
+
+##### The server half: measured out of contention, not ruled out on principle
+
+`src/transcribe.ts` was the first candidate. Its closure is **162 files and 118,171 lines**, pulling
+`pg`, `drizzle-orm`, `stripe`, `jsdom`, `@mozilla/readability`, `pino` and the Anthropic SDK into a
+tool whose whole claim is that it runs with the product's server absent. Even the smallest useful
+piece, `ai-call.ts`, is 21 files and 20,505 lines. So `tools/fleet/transcribe.ts` makes its own call
+to `POST https://openrouter.ai/api/v1/audio/transcriptions` — still through the gateway, no second
+one — borrowing the three files under `src/` that import nothing at all.
+
+**The honest half of that ruling:** `transcribeWith` used standalone writes no database row, so
+going through it **would not have metered this spend either** — nothing for `npm run cost` to count.
+
+**And it is declared rather than merely admitted.** `tests/no-undeclared-spend.test.ts` caught this —
+`tools/fleet/transcribe.ts` names `openrouter.ai` and a credential and was in no register — which is
+the repo asking the exact question this section had answered in prose and not in code. There is now a
+`fleet-dictation` entry in [`src/spend-declarations.ts`](../../src/spend-declarations.ts) with
+`metered: false`, so **`npm run cost` prints it by name on every run**:
+
+```
+Not counted here — 8 known way(s) of spending that write no row:
+  tools/fleet/transcribe.ts
+      fleet-dictation — skips the gateway, open today
+```
+
+That is the difference between a gap somebody wrote a paragraph about and a gap the tooling says out
+loud. It stops being `false` when the fleet has somewhere to write a row.
+
+*And the mechanism is not what this doc first said.* It claimed a process-global sink that is `null`
+until the product's server installs one. There is no such thing: a sink belongs to `collectSpend`'s
+**async scope**, and a call made outside one increments an in-memory unscoped counter, logs a
+warning, and drops the record. GPT Sol's correction. The conclusion is unchanged and the reasoning
+was wrong, which is worth more than the conclusion being right. The fleet's OpenRouter spend is invisible to the product's ledger whichever shape is
+chosen. That is a property of being a separate tool, not a cost of this decision, and it is named
+here rather than discovered later. A dictation is about $0.0005.
+
+##### The vocabulary works, and a 200 would not have told us
+
+`tools/fleet/vocabulary.ts`: `FLEET_TERMS` first (the box's own words — `worktree`, `tmux`,
+`gjd-remote`, `Overseer`, `vitest`, the model names), then the live snapshot's session handles,
+titles and directory leaves, most recently active first, with the named session promoted. Packed by
+`packTerms`, which strips angle brackets and caps each term — a session title is a sentence a model
+wrote about work that was often *"look at this hostile input"*, so it needs the same fence an
+article title does.
+
+Verified against the real gateway, because the evidence has to be the transcript changing rather
+than the status code — OpenRouter's chat route accepted a `prompt` field for eleven days, answered
+`200`, and changed nothing. [`tools/fleet/probe-transcribe.ts`](../../tools/fleet/probe-transcribe.ts)
+sends one clip twice:
+
+```
+with the fleet vocabulary (2663 ms):
+  Add this to Spideryarn please, the granularity zoom is fine …
+with NO vocabulary (1226 ms):
+  Add this to Spiderrion, please. The granularity zoom is fine, …
+```
+
+##### Which boxes, and the two that are deliberately left alone
+
+| box | dictation? |
+|---|---|
+| **Say something to it** — the steering message, `SessionDetail.tsx` | yes, the main one |
+| **New session** — the whole prompt an agent wakes up with | yes |
+| **Rename** — a session's name, `SessionDetail.tsx` | **no** |
+| Overseer message, `OrchestratorPanel.tsx` | **there is no box** |
+
+**The rename field gets no microphone.** A misheard message reaches an agent that can ask what you
+meant; a misheard *name* is silently wrong and sticks, and the Save button already warns that saving
+the same name again is not a no-op. `claude-agents-dashboard` reached the same call independently.
+
+**`OrchestratorPanel.tsx` has no message box and this work does not add one.** Its own header says
+why: there is no Overseer process, so a box there *"would swallow what you typed and look like it
+had worked, which is the one thing this page is built not to do"*. A microphone on a box that does
+not exist is not a smaller version of that lie.
+
+##### The finding that decides whether this works at all: the tailnet is not a secure context
+
+**`getUserMedia` requires a secure context, and the address Greg's phone uses is not one.** Measured
+on the box, 2026-09-08 — one Chrome, one fleet server bound to both addresses:
+
+```
+http://127.0.0.1:8802/       isSecureContext true,  navigator.mediaDevices present
+http://100.92.255.119:8802/  isSecureContext FALSE, navigator.mediaDevices ABSENT
+```
+
+`127.0.0.1` and `localhost` are trustworthy by exception, so dictation works over the ssh forward
+Greg uses from his laptop. The tailnet address is CGNAT (100.64.0.0/10) and is on nobody's
+trustworthy list. So on the **phone** — the surface this page exists for — `supported` is false, and
+the first draft of `DictationControl` returned `null`: no button, no error, nothing to search for.
+That would have been the fifth silently-dead feature in this tool in a day. It now says which of the
+two reasons it is, because only one has a fix and **the fix is not code**.
+
+**This changes an argument that is already open.** Whether enabling the systemd unit should widen the
+bind to the tailnet was being weighed as a *security* question. This makes HTTPS on the tailnet —
+`tailscale serve` — a **feature prerequisite**: without it a whole class of browser capability is
+absent on the only surface Greg reads this page on. Passed to `claude-agents-dashboard` and
+`orchestrator-setup`, who own that decision.
+
+A second, smaller one from the same browser pass: `tools/fleet/headers.ts` sent
+`Permissions-Policy: microphone=()` on every response, which blocks the microphone at document level
+independently of any of the above. Its own comment had predicted the change and predicted the wrong
+route to it — *"when it lands, `microphone=(self)` goes here deliberately rather than by discovering
+that the feature does not work"* — and it was discovered the second way, by one console line under a
+button whose failure was indistinguishable from this box having no audio hardware.
+
+##### What is verified, and what only Greg can verify
+
+| | |
+|---|---|
+| The server half, end to end against the live gateway | **verified** — see the A/B above |
+| The `keywords` array reaching the model and changing the transcript | **verified** |
+| The bundle carrying dictation and not Supabase | **verified** — `grep -c supabase` on the built JS is 0; `mic-no-tape`, `mic-unplugged` and `api/transcribe` are all present |
+| The import rule holding | **verified** — the test, watched failing |
+| The route's Origin check, size cap and format refusal | **verified** |
+| The tailnet address not being a secure context | **verified** — measured in Chrome at both addresses |
+| **A microphone opening** | **NOT verified, and cannot be from this box** |
+| **A real transcript landing in a real box from real speech** | **NOT verified** |
+| **That any of it works on the phone** | **NOT verified, and today it will not** — see the secure-context finding above |
+
+There is no audio input device on this box and Chrome's fake-microphone flags do not work headless
+here. Everything past *"Opening the microphone…"* is Greg's to check from his own phone or laptop.
+
+##### The cross-family review, and what came out of it
+
+[260908f-fleet-dictation-code-review-sol-r1-1356.md](260908f-fleet-dictation-code-review-sol-r1-1356.md).
+Its verdict on the first round was **"Stage 1 is not solid yet"**, and it was right — one P1 and six
+P2s, all real. Worth listing because the pattern in them is the useful part: **five of the seven
+were rules this repo already writes down, applied to the product and not to the copy.**
+
+**Its round 2 then found that four of the seven were not actually closed**, and said so with
+reproductions — see § The second round below. "All fixed" was written here after round 1 and was
+wrong, which is the reason a second round exists.
+
+| | | |
+|---|---|---|
+| **P1** | Closing the New session panel left the microphone recording behind it — `open` renders the box, it does not unmount the hook | `dictation.md` names this exact shape, about the Feedback dialog. Written by somebody who had read that sentence. `tests/fleet-new-session-mic.test.tsx`, watched failing |
+| P2 | The paid route had no rate or concurrency limit | 1 every 3s per box, 10 a minute across the fleet, `createRateLimiter` reused rather than rewritten |
+| P2 | A caller hanging up did not cancel the paid call | `res.on("close")`, the pattern the product's route has always had |
+| P2 | The outer error boundary interpolated `err.message` | A thrown message on this wire can carry a prefix of the request body, and the request body is somebody talking. A fixed reason now |
+| P2 | The parser rebuilt known fields and silently dropped surplus ones | The "sent, then quietly dropped" class — the one this feature has an eleven-day scar from. Unknown keys refused; and audio must actually be base64, or 60 KB of any string opened a paid call |
+| P2 | The submit rule was on the buttons and not in the handlers | `disabled` stops a pointer, not a programmatic call |
+| P2 | The import walker could be bypassed by `require` or a template-literal dynamic import | Those shapes are now **refused outright** rather than silently unfollowed. An AST walker is the other answer and is the one to reach for if a legitimate dynamic import ever arrives |
+
+Two corrections to this document came out of it too, and both are recorded above rather than quietly
+fixed: the closure figures were stale, and the explanation of why `transcribeWith` writes no row was
+wrong about the mechanism while right about the conclusion.
+
+**Nothing was overruled.** Everything Sol raised was either a defect or a claim of mine that needed
+correcting, and the one thing it flagged as unresolved — the `[mic-…]` codes being one namespace
+across two programs — had been settled concurrently in the direction it recommended.
+
+**A finding it made that this plan had not:** the route now has an injected transcriber, because a
+flood test aimed at the rate limiter reached the real gateway and `tests/setup/provider-guard.ts`
+refused the call. Without that seam the route's handling of a provider failure, and of a caller
+hanging up, could not be tested at all — both are paths that only run after the money would have
+been spent.
+
+##### The second round, and what "fixed" turned out to mean
+
+[260908f-fleet-dictation-code-review-sol-r2-1435.md](260908f-fleet-dictation-code-review-sol-r2-1435.md).
+**Verdict: "Stage 1 is still not solid. The original P1 is fixed, including permission-pending, but
+four P2 issues remain."** Every one was reproduced by Sol rather than asserted, and every one was a
+fix from round 1 that did not do what its own comment said.
+
+| | what round 1 shipped | what it actually did |
+|---|---|---|
+| The action guard on New session | `if (dictate.sendBlocked) return;` | Read a **stale closure** — `start`'s deps are `[prompt]`, so pressing Dictate then Start without typing left it `false`. `SessionDetail` had the ref pattern; this file had not copied it |
+| The hang-up abort | `res.on("close")` and a return | Covered the ordinary abort and not a **rejection after the abort**: the outer boundary then wrote a 500 into a closed socket, since `headersSent` is false on a response nothing answered |
+| The rate limiter | `check` then `record` | **Recorded a slot for a request that spent nothing** — a recording below the floor never reaches the gateway, so the next real dictation three seconds later was refused for free |
+| The import ban | refuse what the walker cannot follow | The ban was **itself a regex with holes**: `import ("x")`, `import("a" + "b")` and `import /* c */ ("x")` were neither followed nor refused |
+
+**The import walker is an AST now**, and that is Sol's recommendation taken rather than argued with:
+two rounds of regex bypasses is where "one more pattern" stops being the cheaper option, for a rule
+that is architectural. `@babel/parser`, because TypeScript 7 exposes no AST from its package root —
+`import ts from "typescript"` resolves to a version stub and the tree is behind `unstable/*` — and
+because Babel's parser is already a direct dependency where `oxc-parser`, `acorn` and
+`es-module-lexer` are all present and all transitive. Sol's four bypass shapes are pinned as tests,
+and a file the walker cannot parse now lands in `unreadable` and fails rather than reading as a file
+that imports nothing.
+
+**Three things Sol said about my own tests, all correct:**
+
+- **The flood test did not prove the burst ceiling.** Twelve requests under one key at one instant
+  are refused by the three-second per-key *floor*; the fleet-wide ceiling was never reached. Twelve
+  distinct keys now, asserting ten accepted and the eleventh refused.
+- **The fakes could conceal real failures.** `fakeRes.hangUp()` did not make the response closed, so
+  a write after close was invisible — it counts them now and a test asserts zero. `fakeTranscribe`
+  kept two of its arguments, so wrong audio or a wrong container would have passed; it keeps all of
+  them, typed as `TranscribeDeps["transcribe"]`.
+- **The base64 check did not do what its comment claimed.** `"A".repeat(60_000)` is valid base64 and
+  was this feature's own test fixture. A magic-number check on the container makes the claim true;
+  the fixture is now a real EBML header with padding behind it.
+
+Writing the flood test also found something neither round named: the rate limiter was module state,
+so one test spending the burst left every test after it looking rate-limited. It is injectable now,
+with the shared instance still the one the server uses.
+
+**Nothing is overruled across either round.** Every finding was a defect or a claim of mine that
+needed correcting.
 
 ### Stage F — realtime dialog, gated on Stage E
 
