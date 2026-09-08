@@ -530,6 +530,17 @@ export type OverseerStore = {
   readonly opening: StoreOpening;
   /** Live: `append` folds into it, so the caller cannot desynchronise it from the log. */
   readonly register: SessionRegister;
+  /**
+   * What the store currently holds, so a pass can decide whether its fresh
+   * reading should replace it.
+   *
+   * Exposed because the decision is `chooseUsage`'s and it needs both sides, and
+   * the store is the only thing that knows what survived the last restart. Read
+   * rather than remembered by the caller: a daemon keeping its own copy would be
+   * a second declaration of the same fact, and the two would part company the
+   * first time a write was refused.
+   */
+  readonly usage: StoredUsage;
   append(events: readonly OverseerEvent[]): AppendResult;
   checkpoint(update: CheckpointUpdate): CheckpointResult;
   readEvents(fromByte?: number): ReadEvents;
@@ -1654,7 +1665,7 @@ class Store implements OverseerStore {
    * or belongs to a different login is visible as such rather than remembered as
    * a fact — the judgement is the pass's, which has both halves.
    */
-  private usage: StoredUsage;
+  private usageHeld: StoredUsage;
   private closed = false;
 
   constructor(input: {
@@ -1679,11 +1690,16 @@ class Store implements OverseerStore {
     this.bytes = input.bytes;
     this.events = input.events;
     this.attention = attentionNotYetRun(input.now().toISOString());
-    this.usage = input.usage ?? usageNotYetRun(input.now().toISOString());
+    this.usageHeld = input.usage ?? usageNotYetRun(input.now().toISOString());
   }
 
   get register(): SessionRegister {
     return this.registerMap;
+  }
+
+  /** What a usage pass has to compare its fresh reading against. See `OverseerStore.usage`. */
+  get usage(): StoredUsage {
+    return this.usageHeld;
   }
 
   /**
@@ -1765,10 +1781,10 @@ class Store implements OverseerStore {
       // is 30-45 seconds rather than a few model calls: most writes carry no new
       // report, and holding the last one is right because an account has not
       // stopped being rate-limited just because nobody looked.
-      usage: update.usage ?? this.usage,
+      usage: update.usage ?? this.usageHeld,
     };
     if (update.attention !== undefined) this.attention = update.attention;
-    if (update.usage !== undefined) this.usage = update.usage;
+    if (update.usage !== undefined) this.usageHeld = update.usage;
     writeAtomically(join(this.root, CHECKPOINT_FILE), this.root, `${JSON.stringify(checkpoint, null, 2)}\n`);
     return { ok: true, checkpoint };
   }
