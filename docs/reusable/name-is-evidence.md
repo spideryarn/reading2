@@ -33,6 +33,33 @@ Most instances of this class are somebody else's `-t`.
   independent claims off a single record and nothing downstream put them back together: one check ran
   in the directory, another swept by branch.
 
+## The one that is not about identity at all
+
+**A predicate's name is evidence about which question it answers**, and a caller who needs a narrower
+question will read the name and get a wider one. Found 2026-09-08 by a cross-family review, before it
+shipped:
+
+- `steerableStatus` answers *"may this session be steered at all"*.
+- `sendMessage` refuses a pane with a dialog open, because a keystroke there is an approval rather
+  than a message.
+- A queue drain asked the first when it needed the second — *"can a message be delivered right
+  now"*, which is strictly narrower.
+
+So the drain would have leased a queued instruction, been refused by the sending path, marked it
+settled, and **destroyed the person's message** — once a minute until the queue emptied, while the
+agent sat on one dialog. The author's own account of the root error is the useful sentence:
+
+> I set out to fix a button that says *queued* and means *never*, and designed one that says *queued*
+> and means *deleted*. Reusing the first predicate because it was there is how the two got welded
+> together.
+
+**Nothing here is an identity, and the class still fits.** The name was assigned by one mechanism —
+somebody naming a predicate for its original caller — and consumed by another, and the code did
+exactly what it said, to the wrong question. Which widens the rule below: **the thing that has
+provenance is not only a name that points at an object, but any name that stands in for a claim.**
+Reusing a predicate because its name sounds like your question is the same move as matching a process
+by the string in its command line.
+
 ## And the compile-time pair, which is the strongest form
 
 - **A brand is a claim that survives the operations which destroy what it claimed.** An intersection
@@ -67,8 +94,11 @@ still in between, and the use site is the only place where it matters that it di
 When you match on a name, ask three things: **who wrote it, when, and what would make it stale.**
 Prefer a key you can **verify** over one you can only **read**.
 
+**And when you reuse a predicate, read its definition rather than its name** — then ask whether the
+question you need is the one it answers, or a narrower one that happens to share a word.
+
 ## Why this is not [silent-success.md](silent-success.md)
 
 That doc is about a check reporting success while doing nothing. This is about code that does exactly
-what it says, **to the wrong object** — every step really did succeed, and the answer is about
-something else. They meet only in that both produce a confident, wrong, quiet result.
+what it says, **to the wrong object — or to the wrong question** — every step really did succeed, and
+the answer is about something else. They meet only in that both produce a confident, wrong, quiet result.
