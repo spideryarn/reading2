@@ -526,6 +526,17 @@ label **every opposite pair plus a matched control sample of same-signed rows**,
 sample is what stops the frame from measuring only its own bias. Nothing is coerced, ordered or
 coloured by the pair — F35's ruling is untouched — it decides only *what a person looks at*.
 
+**Two sources, two completenesses — corrected 2026-09-08 after both were measured.** The
+distinction matters and I had it flat:
+
+- **The three spike rows come from the database only, and have no haystack.** F59 is right about
+  them: they are regression fixtures, not frozen packets.
+- **The 26 journalled rows come with theirs.** All **66** `url_citation` extracts are present and
+  non-empty — counted independently twice, by the instrument and by the reviewer. So those packets
+  rebuild **complete, haystack included**, which is what lets a repair be replayed against *the same
+  extract production verified against* rather than a fresh search. That is a better position than
+  either § "The bug's own rows were on disk all along" or F59 described.
+
 **And a Layer 2 packet rebuilds from the database alone.** A stored row carries `id`, `url`,
 `title`, `blockId`, `claimQuote`, `sourceQuote`, `relation`, `valence` and `applies` — every field
 § Layer 2 asks a packet to fix except the evidence haystack, and the haystack is not what a reading
