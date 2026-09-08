@@ -108,7 +108,25 @@ export type FleetMaterial =
  * the material beside it, or it is asking a person to approve something they
  * cannot see.
  */
-export type FleetQuestion = { prompt: string; options: FleetOption[]; material: FleetMaterial };
+/**
+ * **What answering this dialog would DO**, which is what decides whether the
+ * page offers it as a button at all.
+ *
+ * Fable's line, and the server enforces it independently on a fresh capture:
+ * pane text as executable UI is acceptable when execution means *a user turn*,
+ * and not acceptable when it means *grant a permission*. So an agent's own
+ * `AskUserQuestion` is tappable and a tool-permission prompt is not.
+ *
+ * `unknown` covers three different situations and treats them identically,
+ * which is the point: the server said "I could not tell", the server is older
+ * than this field and said nothing at all, or this build does not recognise the
+ * arm it sent. All three mean **do not offer the buttons** — a client that read
+ * an absent `gate` as permissive would offer taps that the server refuses, on
+ * exactly the dialogs where being refused matters.
+ */
+export type FleetGate = { kind: "permission" | "unknown"; why: string } | { kind: "conversation" };
+
+export type FleetQuestion = { prompt: string; options: FleetOption[]; material: FleetMaterial; gate: FleetGate };
 
 /**
  * What the session recorded about itself when it was created — `SessionMeta`
@@ -368,7 +386,31 @@ export function parseQuestion(v: unknown): FleetQuestion | null {
     if (label === null) continue;
     options.push({ label, key: parseOptionKey(raw["key"]), consequence: parseConsequence(raw["consequence"]) });
   }
-  return { prompt, options, material: parseMaterial(v["material"]) };
+  return { prompt, options, material: parseMaterial(v["material"]), gate: parseGate(v["gate"]) };
+}
+
+/**
+ * The gate, off the wire, failing towards "do not offer it".
+ *
+ * `conversation` is the ONLY input that produces `conversation`, and everything
+ * else — absent, unrecognised, malformed — becomes `unknown`, which the page
+ * treats exactly as `permission`. That asymmetry is deliberate and mirrors the
+ * server's: `classifyGate` reaches `conversation` only by positive evidence.
+ *
+ * An old server that has never heard of `gate` therefore renders as "I could
+ * not tell", and the page explains rather than offering a button. That is also
+ * the truthful answer for such a server, since answering is switched off on it.
+ */
+export function parseGate(v: unknown): FleetGate {
+  if (!isRecord(v)) {
+    return { kind: "unknown", why: "this server did not say what answering this dialog would do" };
+  }
+  const kind = v["kind"];
+  if (kind === "conversation") return { kind: "conversation" };
+  const why = str(v["why"]) ?? "no reason was given";
+  if (kind === "permission") return { kind: "permission", why };
+  if (kind === "unknown") return { kind: "unknown", why };
+  return { kind: "unknown", why: `this page does not know the gate kind ${JSON.stringify(kind)}` };
 }
 
 /**

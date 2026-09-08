@@ -31,6 +31,25 @@ Two claims in earlier versions of this plan were **retracted** — the inbox soc
 anywhere" in the launch path. Both are in
 [Evidence](#evidence-what-was-actually-tested), which records what failed as well as what worked.
 
+## The running server is older than this code, and only Greg can restart it
+
+The process on 8787 has been up since 04:34 and predates `routes-actions.ts` and `PaneGate`. The
+client is built and live; the server is not. Two visible consequences, both correct behaviour rather
+than breakage:
+
+- `GET /api/actions` **404s**, once per ten-second poll. `useActions` keeps the last good feed and
+  shows the error beside it, so the page does not break — but the action buttons, the queues and Box
+  Health's controls have nothing to render from.
+- Every dialog reads **"Not offered: I could not tell what this is — this server did not say what
+  answering this dialog would do."** That is `parseGate` failing towards `unknown`, which is the
+  designed answer for a server too old to send the field, and it means answering is currently
+  offered for nothing at all.
+
+**The fix is one restart, and it is Greg's to make** — the standing instruction here is not to
+restart or kill the live server. The job runs under `scripts/tmux-job.ts`; restart it the same way it
+was started, with `FLEET_BIND=127.0.0.1,100.92.255.119`. Once it is up, `curl -s localhost:8787/api/actions | head -c 200`
+answering with JSON rather than a 404 is the whole check.
+
 ## Do not remove this worktree while the dashboard is running
 
 **`npm run worktree:check` will say `fleet-dashboard-v01` is safe to delete, and it is wrong.** That

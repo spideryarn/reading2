@@ -332,16 +332,38 @@ const TREE = "/home/greg/code/spideryarn2/.claude/worktrees/fleet-dashboard-v01"
 describe("planRemoveWorktree", () => {
   const action = enactedNamed("remove-worktree");
 
+  it("pairs the directory with the branch before it does anything else", () => {
+    // `dir` and `branch` arrive from the page as TWO INDEPENDENT CLAIMS, and
+    // nothing downstream puts them back together: step 2 sweeps by branch and
+    // step 1 checks by directory, so a stale or mis-rendered row could have the
+    // check clear one tree and the sweep remove another. `worktree:sweep`
+    // re-runs its own guards, but the dir↔branch pairing is verified nowhere
+    // else. Found by the agent that built routes-actions.ts, reading its own
+    // work for what could still fire an action nobody intended.
+    const out = planRemoveWorktree(action, { dir: TREE, branch: "worktree-fleet-dashboard-v01", primaryDir: PRIMARY });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const [pair] = out.plan.steps;
+    expect(pair?.argv).toEqual(["git", "-C", TREE, "rev-parse", "--abbrev-ref", "HEAD"]);
+    // Run FROM the primary, ASKING ABOUT the tree — so a directory that has
+    // already gone is a failed step rather than a spawn error in a cwd that
+    // does not exist.
+    expect(pair?.cwd).toBe(PRIMARY);
+    expect(pair?.pass).toEqual({ kind: "stdout-has-line", line: "worktree-fleet-dashboard-v01" });
+  });
+
   it("runs the check that git status cannot do, before the removal", () => {
     const out = planRemoveWorktree(action, { dir: TREE, branch: "worktree-fleet-dashboard-v01", primaryDir: PRIMARY });
     expect(out.ok).toBe(true);
     if (!out.ok) return;
-    expect(out.plan.steps).toHaveLength(2);
-    const [check, remove] = out.plan.steps;
+    expect(out.plan.steps).toHaveLength(3);
+    const [, check, remove] = out.plan.steps;
     expect(check?.argv).toEqual(["npm", "run", "worktree:check"]);
     expect(check?.cwd).toBe(TREE);
     // The step that makes this safe: a non-zero exit stops the plan, and
     // worktree:check exits non-zero for "blocked" AND for "could not look".
+    // Since 2026-09-08 that includes a server still listening from inside the
+    // tree, which is the case no other guard here can see.
     expect(check?.pass).toEqual({ kind: "exit-zero" });
     expect(remove?.argv).toEqual(["npm", "run", "worktree:sweep", "--", "remove", "--branch", "worktree-fleet-dashboard-v01"]);
     expect(remove?.cwd).toBe(PRIMARY);
