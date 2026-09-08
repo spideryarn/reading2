@@ -144,10 +144,12 @@ six sessions can now build in parallel without a negotiation between them.
    control at all** in v1.
 
 **And one cost finding, which is not engineering — stated with its timestamp, because that turned out
-to matter.** At **13:30** `w2-harness-adapter` found **two orphaned paid `gpt-5.6-sol --effort high`
-reviews running under `ppid 1`**: the Bash-tool shell had been reaped, leaving 45-minute jobs
-reparented to init, attributable to no session and invisible to `work.ts`, which only walks *down*
-from a pane. **At 14:05 there were none** — every `ppid 1` process on the box was a system daemon.
+to matter.** **Every time below is UTC**, which is not pedantry — the box runs BST, and a mislabelled
+hour is the fourth instance of the error this section is about. At **~12:30 UTC** `w2-harness-adapter`
+found **two orphaned paid `gpt-5.6-sol --effort high` reviews running under `ppid 1`**: the Bash-tool
+shell had been reaped, leaving 45-minute jobs reparented to init, attributable to no session and
+invisible to `work.ts`, which only walks *down* from a pane. **At 13:05 UTC there were none** — every
+`ppid 1` process on the box was a system daemon.
 So the finding is **real but transient**: not a leak that accumulates, but a window during which a
 paid job cannot be attributed or stopped. Related to a trap already recorded — a killed codex run
 still writes its `--output` file, so a stale review is indistinguishable from a fresh one and both the
@@ -175,15 +177,28 @@ has converted an observation into a claim about the world.
 **And knowing the lesson did not prevent it, one paragraph later.** The orphan finding above was
 written as *"two orphaned reviews are running"*, which was false by the time anybody read it — by the
 same author, minutes after writing the rule down. Then the correction repeated the shape a third time:
-two agents walked the process table and reported zero orphans **two minutes apart** (13:03 and 13:05
-UTC — the box runs BST, so 14:05 and 13:03 are two minutes, not an hour), and called that
-corroboration. It is one observation with a wide error bar.
+two agents walked the process table, both reported zero orphans, and called that corroboration —
+except the walks were at **13:03 and 13:05 UTC**, **two minutes apart**. They looked an hour apart
+because one was quoted in BST and the other in UTC. Two readings two minutes apart are one observation
+with a wide error bar, and the sequence was backwards in the draft as well.
+
+**And a fourth, found by auditing rather than by noticing.** The three-column measurement table
+labelled its last column `13:30 UTC`; the reading was taken between a launch at 13:28 **local** and a
+clock check at 13:32 **local**, so it was **~12:30 UTC** — local time wearing a UTC label. The
+committed files were clean, because those timestamps came from `date -u` beside the capture. **The
+wrong numbers were all in prose**, which is the tell: the machine-produced ones survived and the
+hand-written ones did not.
 
 **So the lesson does not transfer by being remembered, and the reason is that it keeps changing
-clothes**: first counting a population, then corroborating a claim, then mistaking co-located readings
-for independent ones. The version that catches all three is mechanical rather than remembered — **the
-instant a fleet number was taken travels with the number, as a field**, the way `collectedAt`,
-`scannedAt` and `waitingSince` are fields in every type built today rather than habits. What actually
+clothes**: counting a population, then corroborating a claim, then mistaking co-located readings for
+independent ones, then mislabelling a timezone. Four instances in one stage, two of them *after* the
+rule had been written down by the person who then broke it. The version that catches all four is
+mechanical rather than remembered — **the instant a fleet number was taken travels with the number, in
+one timezone, as a field**, the way `collectedAt`, `scannedAt` and `waitingSince` are fields in every
+type built today rather than habits. The audit is the evidence for that: **every timestamp produced by
+`date -u` beside its capture was right, and every one typed into prose was wrong.** So if the attention
+work ever surfaces fleet counts to Greg, the count and its instant must be one value, not a sentence a
+person assembles. What actually
 settled the orphan question was not a second reading at all but a **mechanism**: an orphan appears
 when a Bash-tool shell is reaped mid-run and leaves when the job ends, so the population is bounded by
 concurrent reviews rather than growing. That argument would hold with zero readings, which is what
