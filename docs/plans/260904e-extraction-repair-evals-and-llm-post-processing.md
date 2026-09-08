@@ -14,10 +14,16 @@ stage first; a census broke the tie (41 data tables in the corpus, 34 kept, **7 
 reader's evidence) and Astra's ranking was adopted. **C4b is dropped, stage D deferred with all six
 visibility commitments intact, and C3 is next — diagnosed 2026-09-08 and much smaller than it was
 scoped as: the tables are deleted *before* candidate scoring, so there is no reinsertion problem and
-C2's rationale mostly goes with it.** Nothing of C3 is built yet: its plan was written, reviewed by GPT Sol before any code, and
-**narrowed again by three reproduced P0s** — one shared class token would have truncated an
-article, and the broad table rule recovered a Wikipedia navigation sidebar and called it
-evidence. Four tables and one correction notice, not five tables. Scope narrowed after review.** The model repair pass Greg asked for is
+C2's rationale mostly goes with it.** **C3 is built and not yet landed**, at `f61df365` on the worktree branch: `src/protect.ts`, the
+table oracle that is what remains of C2, the PLOS gold corrected, and four data tables plus a
+correction notice recovered. Three Sol reviews so far — the plan, the code, and a narrow re-check of
+the P0 fixes — and **each one found a reader-reachable defect the one before had not**: a shared
+class token that truncated an article, a broad table rule that recovered a Wikipedia navigation
+sidebar and reported it as evidence, an ancestor guard that declined to rescue tables Readability
+then deleted, and now a prose-retention floor tuned to one fixture that lets a page of short
+paragraphs vanish, plus rule B deleting prose on a path the fallback never reaches. Those last three
+are in hand. **The pattern is the finding**: every defect here has been the *guard*, not the
+feature. Scope narrowed after review.** The model repair pass Greg asked for is
 **not** in this plan — GPT Sol's review found its operation layer not yet designable, and it moves to
 its own plan with the preconditions named in
 [What this plan deliberately does not build](#what-this-plan-deliberately-does-not-build-the-model-repair-pass).
@@ -3278,6 +3284,59 @@ run: **5 failed, 30 passed**, and the five were exactly the new and changed case
 rung, the four-level mirror, the row sweep (`expected +0 to be 4`, so the prose really was gone), the
 nested-notice count, and the buried-citation flip. The measurement probes were written before the
 source changes, so the pre-fix numbers here are measurements rather than reconstructions.
+
+##### The narrow re-check — the fallback's own guard had the bug in it, twice
+
+Under [engineering-manager.md](../reusable/engineering-manager.md), discovery closes after two rounds
+but *"an established P0 whose final fix was not in the round-two snapshot still gets a narrowly
+scoped check of that fix."* P0-01's fix was written after round two, so it got one. **The verdict was
+not ready to land**, and both findings were reproduced rather than argued.
+
+**The floor was tuned to a fixture, and that is the honest description of it.** `PROSE_RUN_FLOOR = 100`
+was chosen because 25 fired on `wiki_gdp_table`'s *"From Wikipedia, the free encyclopedia"*. Sol built
+a header-named 24-row table beside **eight distinct authored paragraphs of 99 characters each**: the
+control returns all eight, the treatment returns none of them and 1,781 characters of table, and
+`proseRetention` reports `{ runs: 0, lost: 0, retained: true }` — **so nothing rolls back and the
+reader loses the page.** Short news paragraphs, Q&A answers, list prose, poetry and concise technical
+documentation all live below 100. The floor was a statement about nothing; the exclusion has to be a
+statement about what the markup says, and the publisher already made it — `#siteSub` carries
+`class="noprint"`. Back to 25, with the chrome excluded semantically.
+
+**And rule B deletes prose on a path the fallback cannot reach.** The second arm runs only when rule
+A stamped, so `rescued === 0` returns immediately. Sol reproduced it on the exact accepted topology —
+`div.amendment.amendment-correction` with a direct `div.amendment-citation`, **no qualifying table
+anywhere**, four authored paragraphs beside it: the stamped notice won candidacy and every paragraph
+went, 675 characters against 1,031 with protection off, and `kept` said the notice was recovered.
+**This is the plan-stage positive-token failure, still reader-reachable after the selector was
+narrowed** — the same defect, at its third address.
+
+**The declared divergence was not dead after all.** `readArticleWithProvenance` skips the fallback,
+and this was recorded as harmless because no corpus page rolls back. Sol ran it against the
+fallback's **own committed construction**: `readArticle` returned four prose markers and
+`a-table-called-header-rolled-back`, the provenance arm returned zero markers and
+`a-table-called-header`, 1,323 characters against 3,805. So the eval harness's *"shipped"* arm
+already inspects an extraction we discard. It closes in this stage.
+
+**What Sol confirmed as sound**, and it matters that the list is not empty: the four-level ancestor
+mirror, including the off-by-one (depths 0–3 are parent levels 1–4, and it returns false before
+level 5); the exposure oracle's independence, deriving its alternatives from the live library while
+the shipped rule uses the pinned copy; `:scope > div.amendment-citation` against the measured PLOS
+topology; and the gold widening — with a correction to the argument for it. **The two-arm measurement
+alone does not disprove gerrymandering**, because a region drawn around treatment-only output would
+score the same favourable direction. What makes it sufficient is the *combination*: the two arms, the
+pre-existing annotation that counted *Correction* among the article's twelve `<h2>` before this stage
+existed, the single-root selector, and the region-size tripwire that went red. Recorded because the
+weaker version of that argument is the one this stage nearly shipped.
+
+###### The pattern across three reviews, which is the thing worth carrying out of C3
+
+Every defect found in this stage has been in a **guard**, not in the feature: the shared token, the
+substitution that destroyed overlapping terms, the ancestor mirror that was not one, the ladder's
+oracle that disagreed with the rule it measured, the floor tuned to one fixture, and the fallback
+that covered one of the two rules. **The recogniser itself has been right since the first
+measurement.** What keeps being wrong is the machinery built to prove it safe — which is
+[silent-success.md](../reusable/silent-success.md)'s thesis arriving from a direction it does not name:
+not a check that passes while doing nothing, but a check that does something and is wrong about what.
 
 ##### The gold was wrong, and the test that says so is the one that could have gone the other way
 
