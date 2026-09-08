@@ -568,8 +568,31 @@ this", which is the one thing a fleet of forty agents makes hard.
 - [ ] Say plainly when the answer is *not* attributable — a red with no file paths, or files last
       touched by a merge. Guessing an owner is worse than saying nobody knows, because the guess
       sends somebody to read code that is not theirs.
+- [ ] **Name the signal that produced the name**, so a reader can discount it without having to
+      know it was a guess. `cheap-postmortem-preventions`, who reached the right commit by this
+      exact heuristic and said so: it got lucky, and *"the same heuristic on a merge commit would
+      have named me for your files, since my merge shows all four fleet tests as changed."*
 - [ ] The same field belongs on a session row: **what has this agent touched**, so the reverse
       lookup works too.
+- [ ] **Say how old the run is, next to its result.** A fourth session hit the same red and
+      reported it *after* merging the fix, because its gate had started 24 minutes earlier:
+
+      > A 24-minute gate is long enough that its output is a report about a tree that no longer
+      > exists.
+
+      That is a different failure from attribution and it is not fixed by naming an owner. A test
+      result is a claim about a *sha*, so show the sha and its age — and if the current tip is
+      ahead of it, say so before showing the failure. This is the same rule the page already
+      applies to the fleet snapshot, aimed at CI instead.
+
+**One thing this stage should not do**, learned from the guard that caught the incident. Three
+sessions read `fixture-ids.test.ts`'s failure message, and all three reached for the remedy it
+suggests first — *give each file its own id* — which would have been wrong here: those files insert
+nothing, and four ids would have asserted that four fixtures differ where the point is that they are
+one conversation. **The remedy a guard suggests is the part people act on**, more than the
+diagnosis, so a remedy that is right for the common case and silently wrong for a class is worse
+than no remedy at all. If this surfaces a suggested fix, it should be the *question* to answer, not
+the answer.
 
 Two costs to keep honest about. `git log` on a path is a per-file subprocess, so this must be
 computed for the handful of paths in one failure and never for the fleet. And the last commit to

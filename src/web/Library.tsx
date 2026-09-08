@@ -310,7 +310,7 @@ export function Library({
   const capped = capRows(sorted, SHELF_ROW_CAP[view], expanded);
 
   return (
-    <main className="tw:mx-auto tw:max-w-4xl tw:px-6 tw:py-10 tw:font-sans">
+    <main className="tw:mx-auto tw:max-w-4xl tw:px-6 tw:pt-10 tw:font-sans">
       <header className="tw:mb-8">
         {/* The masthead links are deliberately the quietest thing on the page —
             same faint-until-hovered treatment as the back-link in Masthead.tsx,
