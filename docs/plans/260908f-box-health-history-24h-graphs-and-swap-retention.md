@@ -407,10 +407,60 @@ separate, and then dropped by my renderer. That is the defect class this whole p
 my own code. A series may now carry one boolean second fact, drawn as a bar along the bottom and
 totalled in words: *"swapping 1.5 h"*.
 
+## The second code review — GPT Sol again, and it said "do not ship" again
+
+[260908f-box-health-history-code-review-2-sol.md](260908f-box-health-history-code-review-2-sol.md).
+Every finding was **verified by execution**, not by reading, and the three it repeated were the three
+I had answered too cheaply. The headline lesson is one sentence: **clamping one side of an overlap is
+not the same as removing it.**
+
+- **One coverage timeline, at last.** Sol had asked for *"one normalized sequence of mutually
+  exclusive coverage spans"* and I clamped the spans instead. It ran the four-hour failure case and
+  found a gap `[t0, t0+4h]` sitting under an unknown span `[t0, t0+182.5s]` — the hatch hiding a
+  known collector failure, the prose overstating the silence by three minutes. Now every layer
+  derives from one timeline: samples cover, holes subtract, gaps are the complement. There is a test
+  asserting **non-overlap directly**, because a count cannot see an overlap and both earlier attempts
+  passed tests that counted.
+- **A schedule is not an observation.** `nextDueMs` is what the writer *intended* to wait, and after
+  a fleet-collection failure that is five times the cadence even though health succeeded. Coverage is
+  capped at twice the nominal cadence, so a backoff draws a small break — true, nobody was watching —
+  instead of hiding a real outage inside it. **This is the half of the "keep health on the fleet
+  loop" decision that was actually wrong**, and it is fixed rather than deferred; the decoupled loop
+  remains the real fix and remains a follow-up.
+- **The phone's clock no longer decides what is missing**, after `Math.max(view.toMs, nowMs)` turned
+  a fast phone into a one-hour outage.
+- **An omission goes on disk.** An oversized sample set an in-memory failure the next success cleared
+  — healthy, oversized *critical*, healthy, and the chart joins the two healthy ones. `sample-omitted`
+  is a fourth arm.
+- **The lock leaked on repair failure**, leaving a lock file naming a process that then did nothing.
+- Plus `latestIsCurrent` blind to a trailing corrupt record; seven more client fields defaulted rather
+  than required; an `unreadable` envelope read above the version check; a rotation dropping a file
+  under a read-only reader for one poll; and a tooltip reading *"red past Infinity"*.
+
+**Two more found by running [260908b](../postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md)'s
+own checks over this feature before pushing.** Its recommendation is a question to ask on Tuesday —
+*who reads this?* of every field a route computes, *who calls this?* of every symbol it exports — and
+it works on its author: `windowHours` and `lastAttemptAt` crossed the wire and were read by nothing
+(the second is half of a diagnosis, since a writer still trying and one that has stopped being asked
+are different faults), and `UNREADABLE_LINE_POLICY` was an exported constant containing only prose.
+
+**Rounds stop at two**, per the working agreements. What Sol would still change is recorded as
+follow-ups below rather than pretended away.
+
 ## Follow-ups, named rather than silently dropped
 
-- **Health collection on its own cadence**, decoupled from the 13-second fleet collection (Sol's
-  finding 1). Belongs to whoever owns the loop.
+- **Health collection on its own cadence**, decoupled from the 13-second fleet collection — Sol's
+  finding 1 in both rounds, and the only one it raised twice without being satisfied. The chart no
+  longer *claims* a fleet backoff as observation, so the dishonesty is gone; what remains is that
+  health's resolution varies with an unrelated failure, and a backoff now shows as a small break that
+  is true but uninformative. Belongs to whoever owns the loop.
+- **The remaining span-algebra edges Sol would still tighten**, and would not block on: reading the
+  two files through held descriptors rather than detect-and-retry, and a fully declarative layer
+  stack rather than one built inside `plotHistory`.
+- **Trim the prose.** Sol's closing note both rounds: *"the code is over-written rather than
+  structurally over-built — roughly 4,000 lines repeat the same rationale many times"*, and that
+  repetition has already drifted once. A pass that keeps one statement of each argument and cites it
+  from the rest is worth doing when the correctness churn has stopped, which it now has.
 - **A shared, node-free classifier** for the health thresholds, used by the collector, the tiles and
   the chart, so the operators and combination rules stop being duplicated (Sol's finding 10).
 - **A window selector** (6h / 24h / 7d). The route already takes `?hours=`.
