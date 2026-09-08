@@ -29,12 +29,11 @@ import {
   STALE_MULTIPLE,
   collectorVerdict,
   freshness,
-  readAttempt,
   runOverseer,
   staleAfterMs,
 } from "../tools/overseer/daemon.js";
 import { NOTES_FILE, openConditions, readNotes, type DaemonNote } from "../tools/overseer/notes.js";
-import type { JsonValue } from "../tools/overseer/observation.js";
+import { parseAttempt, parseObservation, type JsonValue } from "../tools/overseer/observation.js";
 import { EVENTS_FILE, readCheckpoint } from "../tools/overseer/store.js";
 import type { SourceMessage } from "../tools/overseer/source.js";
 import { editableFixture, rawFixture, rowsOf, type FixtureName } from "./overseer-fixtures.js";
@@ -208,31 +207,58 @@ describe("the collector, which is a third thing from the source and the payload"
     expect(verdict.why).toContain("nothing has arrived");
   });
 
-  test("reading the clock: the inference comes from the producer's own helper, not from here", () => {
-    expect(readAttempt({ attemptedAt: "2026-09-08T07:00:00.000Z" })).toEqual({
-      known: true,
-      attemptedAt: "2026-09-08T07:00:00.000Z",
-      atMs: Date.parse("2026-09-08T07:00:00.000Z"),
+  /**
+   * The reading itself belongs to `parseAttempt` and is pinned in
+   * tests/overseer-observation.test.ts — three arms, malformed values, and the
+   * old server that omits the field. What is this daemon's own is WHICH
+   * payloads it takes the reading from, which is all of them.
+   */
+  test("a payload that does not even PARSE still moves the attempt clock", () => {
+    // The pair that separates a failing source from a stopped one is only
+    // visible on payloads the gate threw away: a collector that keeps starting
+    // collections while this version refuses their contents is failing, not
+    // stopped, and calling it stopped is an alarm about a fault it does not
+    // have. There is no parsed snapshot on that path, so the daemon reads the
+    // raw JSON with the same function `parseObservation` uses.
+    const refused = fixtureWith("session-new-before", {
+      // Finite, and impossible: a fractional generation fails the whole parse.
+      tmuxServerPid: 132280.5,
+      attemptedAt: "2026-09-08T02:47:20.000Z",
     });
-    // Present and null with nothing collected: a dashboard that has just
-    // started, which is merged upstream with "an old server that has never
-    // collected" — no data either way, and the same action.
-    expect(readAttempt({ attemptedAt: null })).toEqual({ known: true, attemptedAt: null });
-    expect(readAttempt({})).toEqual({ known: true, attemptedAt: null });
+    expect(parseObservation(refused).ok).toBe(false);
+    expect(parseAttempt(refused)).toEqual({
+      reported: true,
+      attempted: true,
+      at: "2026-09-08T02:47:20.000Z",
+      atMs: 1_788_835_640_000,
+    });
+  });
 
-    // THE LIVE SPECIMEN. `:8787` was serving exactly this while S4 was built:
-    // rows and a collection time, and no attempt clock. `attemptedAt` is
-    // written BEFORE each attempt, so a collection cannot have succeeded
-    // without one — which makes this provably a producer that does not REPORT
-    // trying rather than one that never tried. Never call it wedged.
-    const old = readAttempt({ collectedAt: "2026-09-08T07:00:00.000Z", rows: [] });
-    expect(old.known).toBe(false);
-    if (old.known) throw new Error("an old server cannot report an attempt");
-    expect(old.why).toContain("before that field");
-
-    expect(readAttempt({ attemptedAt: 17 })).toEqual({ known: true, attemptedAt: null });
-    expect(readAttempt({ attemptedAt: "yesterday", collectedAt: "2026-09-08T07:00:00.000Z" }).known).toBe(false);
-    expect(readAttempt("not an object").known).toBe(false);
+  test("end to end: a source whose payloads are all refused is not called a stopped collector", async () => {
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T02:47:25.000Z");
+    const { notes } = await run(
+      root,
+      async function* () {
+        yield payload(fixtureWith("session-new-before", { attemptedAt: new Date(clock.ms() - 5_000).toISOString() }));
+        // Six minutes on, and the dashboard is collecting perfectly well — it
+        // is this version of the Overseer that cannot read what it sends. No
+        // sleep before the second yield, so the watchdog does not get a tick
+        // in the gap: the question is what it makes of the payload, not of the
+        // pause before it.
+        clock.advance(6 * 60_000);
+        yield payload(
+          fixtureWith("session-new-before", { tmuxServerPid: 132280.5, attemptedAt: new Date(clock.ms() - 5_000).toISOString() }),
+        );
+        await new Promise((r) => setTimeout(r, 40));
+      },
+      { clock },
+    );
+    const of = (condition: string) => notes.filter((n) => "condition" in n && n.condition === condition).map((n) => n.kind);
+    // The refusal really happened — without this the silence below would also
+    // be what a test that never exercised the reject path looks like.
+    expect(of("snapshots")).toContain("condition-degraded");
+    expect(of("collector")).toEqual([]);
   });
 
   test("end to end: a frozen collector degrades, and its next attempt restores", async () => {

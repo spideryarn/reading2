@@ -1,11 +1,27 @@
 # The Overseer's store, and the clock it gives everything else
 
-**Status 2026-09-08, 09:10: the Overseer runs.** S1, S2, S3, S4 and S6 are landed, reviewed and
-green; S5 (the systemd units) is being built now; S3-03 is the one deferred finding. Evidence:
-`npm run typecheck` reports **0** failures across all four projects, **245 tests pass** across the
-eight Overseer files, `tools/overseer/` plus `scripts/overseer.ts` is 5,830 lines, and the daemon has
-been run against the live dashboard — its `events.jsonl` contains a `tmux-session-gone` for its own
-previous incarnation.
+**Status 2026-09-08, 09:35: the Overseer runs, and has never yet run where it will live.** S1, S2,
+S3, S4 and S6 are landed, reviewed and green; S5 (the systemd units) is being built now; S3-03 and
+two smaller findings are stage S7, in flight. Evidence: `npm run typecheck` reports **0** failures
+across all four projects, **245 tests pass** across the eight Overseer files, and `tools/overseer/`
+plus `scripts/overseer.ts` is 5,830 lines.
+
+**The live run, quoted here because its store was a scratch directory that will be deleted with the
+session.** Against the real dashboard on `:8787`, 2026-09-08 07:30–07:52 UTC, store root
+`scratchpad/overseer-live`: **43 events in 22 minutes — 30 `session-seen`, 8 `session-status`, 5
+`tmux-session-gone`** — and three of those five name the daemon's own earlier incarnations
+(`overseer-live-…`, `overseer-degrade-…`, `overseer-restart-…`), each with `why:
+"absent-from-snapshot"`. Its `daemon.jsonl` holds 3 `daemon-started` and 2 `daemon-stopped`, so one
+run ended without writing a stopping note, which is the `kill -9` the recovery test used.
+
+**And the thing that number does not say, found by checking rather than by remembering:
+`~/.overseer` does not exist.** `overseer status` against the default root reports *"NEVER RUN — no
+checkpoint and no notes"*. Every run so far has been against a scratch root, which was right for a
+test and means the production store is empty and unproven. **Naming the root is part of the claim** —
+"the daemon has been run" and "the daemon has been run where it will live" are different sentences,
+and only the first was ever true. Closing that is S5's acceptance, not a separate task: the unit sets
+`OVERSEER_STORE_DIR=/home/greg/.overseer` explicitly, and the evidence it must produce is events in
+*that* file.
 
 **Both P0s are closed**, one in the differ and one in the store's lock, each after a review round that
 found the first fix insufficient. Every Sol finding is either fixed or refused with reasons in this
@@ -990,8 +1006,16 @@ Three consequences, none of them theoretical:
   verify path in `provision.sh` is this stage's.
 
 **And one honest consequence of the fix**, flagged rather than buried: an `ExecStart` in the primary
-checkout means both processes run whatever is on `dev` at that moment, **including a red `dev`** —
-which is [open-questions.md § Q12](../project/open-questions.md#q12) arriving from a third direction.
+checkout means both processes run whatever is on `dev` at that moment, **including a red `dev`**.
+
+**Greg settled that question the same evening**, and the answer supports this choice while narrowing
+it. *"Briefly broken is fine for dev, have a slightly higher standard for the orchestrator and its
+web interface, and a higher standard still for keeping things working in prod"* — so `dev` keeps the
+licence, and a service tracking it inherits that licence rather than being entitled to refuse it. The
+counterweight is the middle tier: **these two processes are held to a higher bar than the code they
+happen to be running from**, which is why the unit's job is to come back up rather than to validate
+what it is starting. Recorded in
+[orchestrator-direction.md § A higher bar](../project/orchestrator-direction.md#a-higher-bar-for-robustness-here-than-elsewhere-and-its-ceiling).
 
 **The reboot criterion cannot be met by an agent, and will not be claimed.** *"An actual reboot with
 no intervening login"* means rebooting a box carrying ~27 live sessions and ~15 worktrees of other
@@ -1028,6 +1052,71 @@ crash-loops visibly in the journal instead of hammering a box that has already r
 
 **Reboot-resume of the sessions themselves is O4, a later stage.** This one only makes it possible.
 
+#### S5 as built, 2026-09-08
+
+Two units, checked in at [`infra/hetzner/systemd/`](../../infra/hetzner/systemd/) and spliced
+verbatim into [`provision.sh`](../../infra/hetzner/provision.sh) — verbatim because
+`gjd-remote provision` copies that one file to the box and nothing else travels with it, so the
+units have to live inside it and there are unavoidably two copies.
+`tests/systemd-units.test.ts` compares them byte for byte; nine mutants, all killed.
+
+Four decisions the brief did not settle:
+
+- **`ExecStartPre` builds the fleet client only when `dist/index.html` is missing**, not on every
+  start. An unconditional rebuild was proposed first and is wrong here: with `Restart=always` and
+  `RestartSec=10` it is a vite build every ten seconds for the length of a crash loop, on a box that
+  reached load 391 this morning. The price is named in the unit itself rather than left to be
+  rediscovered — **deploying a client change means running `npm run build:fleet` in the primary
+  checkout**, because a missing build fails loudly and a stale one does not.
+- **`FLEET_BIND` is written out in full in the unit** (`127.0.0.1,100.92.255.119`), with
+  `EnvironmentFile=-/etc/fleet-dashboard.env` over the top of it. Loopback alone is the quiet
+  failure — perfect from the box, simply unreachable from the phone the tailnet address exists for —
+  so it is not left to a file that could be missing; and the env file, written by provisioning from
+  `tailscale ip -4`, is how the *next* box corrects an address that belongs to this one.
+- **The rate limits differ between the two on purpose.** The Overseer gets ten tries five seconds
+  apart; the dashboard gets thirty ten seconds apart, because at boot the tailnet address may not
+  exist yet and every attempt before it does is a legitimate failure to bind.
+- **`FLEET_ACT_ENABLED` appears in the dashboard's unit only as prose saying why it is absent**, and
+  a `check` line in `provision.sh` asserts it is not a key. A unit is exactly the sort of file
+  somebody skims and completes helpfully.
+
+**Two things S5 did not achieve, and neither is a design question.**
+
+- **The units are installed but the Overseer's is not enabled.** `sudo systemctl enable` is refused
+  in this session — the worktree-isolation guard reads `enable` as a git subcommand, and the auto-mode
+  classifier denies the privileged form. Writing the unit files was permitted; changing service state
+  was not. So `is-enabled` says `disabled` and the `multi-user.target.wants` symlink is absent: the
+  triplet that was to be the evidence is Greg's one command away and has not been produced.
+- **The primary checkout is not a deployable artefact, and nothing keeps it current.** On 2026-09-08
+  it sat at `0d93edbf` (06:52) while `origin/dev` was at `1af97e9b` — no `scripts/overseer.ts`, no
+  `tools/fleet/web/dist`. So both units would have failed to start even if enabled. This is not a
+  path problem that a different `ExecStart` fixes; it is that **updating the primary checkout is a
+  deploy step nobody owns**. Written up in
+  [hetzner-remote-server-box.md § The box's own services](../project/hetzner-remote-server-box.md#the-boxs-own-services);
+  worth a stage of its own if the units are to mean anything after a reboot.
+
+What *was* proved, by hand rather than by systemd, is the half that had never been exercised: the
+production store. Every earlier run used a scratch root, so `/home/greg/.overseer` did not exist.
+Running the daemon at the default root filled it — `events.jsonl`, `current.json`, `daemon.jsonl`,
+`overseer.lock` — and `status` read a live heartbeat from it. A `kill -9` left `EXIT=137` and
+`status` reporting `KILLED — … it never wrote a stopping note`; the next start reclaimed the lock
+and **resumed from the checkpoint with 0 events replayed**, rather than re-announcing the fleet.
+Idle cost, measured on the live box at load 38–52: **155 MB RSS, flat, and 2 seconds of CPU in 231
+seconds of wall clock** — about one of those two is tsx starting up, so steady state is well under
+1% of a core. That is the direction doc's "costs nothing when idle" turned into a number, and the
+reason it holds is that the daemon consumes the dashboard's stream rather than collecting, so it
+never pays the ~12s grep.
+
+**One thing to do before the unit is first started**, because the store refuses a second writer
+rather than writing beside it: stop the hand-run daemon that produced the evidence above —
+`tmux kill-session -t '=s5-overseer2-0935-2399531'`, or `kill` its pid. It was left running because
+a recording Overseer is worth more overnight than a tidy one; if it is still holding
+`~/.overseer/overseer.lock` when `systemctl start overseer` runs, the unit refuses, crash-loops to
+`failed`, and says exactly which file to remove.
+
+**The reboot criterion remains outstanding and untested**, as this plan said it would: the box
+carries ~27 live sessions and ~15 worktrees of uncommitted work, and rebooting it is Greg's to do.
+
 ### S6 — work, not panes: the Codex subprocess arm
 
 Independent of S3–S5, and running in parallel with them.
@@ -1048,6 +1137,56 @@ mechanical check found one of twenty-three. That one is the Overseer's short-liv
 *the harness wants a permission* are different work items — and on this box the second is nearly
 always a **launch defect**, because auto mode should have handled it. So it is not a queue item for
 Greg at all; the action is to fix how that session was started.
+
+### S7 — the three findings that were reported rather than fixed
+
+**Added 2026-09-08 evening, after the debrief said "done enough to stop here".** Greg's answer was
+*"proceed autonomously with anything left to do"*, and this is what was left: three findings that
+earlier stages **named honestly and did not fix**, each for the same good reason — the file was
+landed and under review, and reopening it would have invalidated a review in flight. That reason
+expired when the reviews closed, and a finding whose only remaining justification is *we were busy*
+is a finding that has become a decision by default.
+
+Also worth saying plainly, since it is the pattern: **all three were found by the agent building the
+*next* stage**, reading the previous one to use it. That is the cheapest review in this whole plan
+and nobody scheduled it.
+
+**S7-01 — the register goes stale for any session that stays alive.** This is S3-03, widened. As
+reported, a session renamed with identity and status unchanged emits no event, so every rebuild
+returns the name Greg deliberately replaced. But `entryOf()` freezes `name`, `repo`, `worktree`,
+`meta`, `startedAt`, `paneId` and `panePid` at first sight, and `session-seen` fires once — so the
+name is the instance somebody noticed, not the class. `EnterWorktree` moves a session between
+worktrees and is common on this box.
+
+**The shape was decided by measurement and by the producer's own source, not by taste**, because an
+arm that fires on any row change re-creates the 52k-rows-a-day problem this design exists to avoid.
+The fleet dashboard agent read the collector and settled most of it: `repo`, `dir` and `kind` are
+tmux environment variables fixed at session creation, and a partial reading **fails the whole
+listing** rather than producing a degraded row (GPT Sol's finding 8 on that file), so `repo`,
+`worktree` and `meta` are safe to freeze and safe to cover. Two are not — `paneId` can be transiently
+null because it is joined from a separate pane listing, so **a null is not a change**; and `panePid`
+*changes legitimately when a pane is respawned*, which is a real fact about the world rather than
+drift in a label, and deserves its own arm rather than being flattened into a rename.
+
+**S7-02 — two parses of one payload, and the weaker one carries the freshness logic.** `tools/fleet/`
+emits `attemptedAt` — when the collector last *started*, as against `collectedAt` when one last
+*succeeded* — and the pair is what distinguishes *wedged mid-attempt* from *gone*. It exists because
+a collector wedged for thirty minutes reported `error: null`. `observation.ts` does not parse it, so
+`daemon.ts` reaches back into the raw record with its own helpers. That breaks the rule
+[typechecking.md](../project/typechecking.md) states: **the guard must read the thing it is guarding,
+not a copy of it.**
+
+**S7-03 — one append-only-log discipline, implemented twice.** `notes.ts` carries a comment admitting
+it: *"`store.ts` keeps its `repairEventLog` private, so this is a duplicate of a subtle rule rather
+than a reuse of one."* Truncate-to-last-newline on open, the single `O_APPEND` write, the atomic
+replace. **A duplicated subtle rule is the kind that drifts dangerously**, because the copy that goes
+wrong is the one nobody was looking at — and the rule here is the one that stops a torn line welding
+a good record onto a corrupt one.
+
+**What this stage is deliberately not.** It is not new capability. Nothing here makes the Overseer do
+anything it could not do this morning; it closes three gaps between what the code does and what the
+plan says it does. That is the right shape for the last stage of a plan and the wrong shape for a
+first stage of the next one.
 
 ## What this stage is not
 
