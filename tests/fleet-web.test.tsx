@@ -72,7 +72,13 @@ import {
 } from "../tools/fleet/web/src/messages-client";
 import { makeNewSessionApi, parseLaunch, type NewSessionApi } from "../tools/fleet/web/src/new-session-client";
 import { looksLikeAName, makeRenameApi, renameBody, type RenameApi } from "../tools/fleet/web/src/rename-client";
-import { steerMessageBody, type SteerApi, type SteerOutcome } from "../tools/fleet/web/src/steer-client";
+import {
+  makeSteerApi,
+  parseDelivery,
+  steerMessageBody,
+  type SteerApi,
+  type SteerOutcome,
+} from "../tools/fleet/web/src/steer-client";
 import { readHealthStats } from "../tools/fleet/web/src/health-view";
 import { fetchFleetState } from "../tools/fleet/web/src/transport";
 import type { Transport, TransportSink } from "../tools/fleet/web/src/transport";
@@ -2237,7 +2243,7 @@ describe("answering, and the dialogs it is not offered for", () => {
     const feed = manualTransport();
     mountFull({
       transport: feed.transport,
-      steer: refusingSteer({ ok: false, code: "answering-disabled", why, status: 503, from: "server" }),
+      steer: refusingSteer({ ok: false, code: "answering-disabled", why, status: 503, from: "server", delivery: { kind: "none" } }),
     });
     // `conversation`, so the buttons are there to be taken away. The whole
     // server being switched off is a fact the page cannot know until it asks.
@@ -2470,6 +2476,10 @@ describe("the rule about sending the server its own claims back", () => {
         why: "pane %1646 is in session $1643 now, not $1",
         status: 409,
         from: "server",
+        /* A refusal made BEFORE the delivery module had an opinion, which is
+           what most refusals are: the wrong-pane check runs before a keystroke
+           is typed, so `none` is a claim the server is entitled to make. */
+        delivery: { kind: "none" } as const,
       }),
     });
     act(() => feed.push(state({ rows: [steerable({ id: "$1", title: "moved under me" })] })));
@@ -4196,6 +4206,149 @@ describe("what comes off the actions wire", () => {
       text: CONTINUE_WIRE.text,
     });
     expect(flat?.items[0]?.payload).toEqual({ kind: "action", actionId: "continue", label: "continue", text: null });
+  });
+});
+
+describe("what became of the keystrokes, which is three answers and not two", () => {
+  /* THE SERVER HAD THIS RIGHT AND THE BROWSER THREW IT AWAY. `steer.ts`
+     distinguishes `none` / `partial` / `unknown` and the route sends it under a
+     comment saying "the person who pressed the button is the one who needs it,
+     and they are on a phone". `steer-client.ts` did not read the field, so
+     every refusal rendered as "Nothing was sent." — false in the most expensive
+     direction, because `partial` means the text is SITTING in that agent's
+     input box and a retry appends to it rather than replacing it. Instance 5 of
+     docs/postmortems/260908b. */
+
+  function refusalSaying(delivery: unknown): void {
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      steer: {
+        message: async () => parseSteerRefusal(delivery),
+        answer: async () => parseSteerRefusal(delivery),
+      },
+    });
+    act(() => feed.push(state({ rows: [steerable({ id: "$1", title: "the one being told things" })] })));
+    openSession("the one being told things");
+  }
+
+  /** Build the outcome the way the real client would, from a server body. */
+  function parseSteerRefusal(delivery: unknown): SteerOutcome {
+    return {
+      ok: false,
+      code: "enter-not-sent",
+      why: "the text was typed and the Enter could not be sent",
+      status: 502,
+      from: "server",
+      delivery: parseDelivery(delivery),
+    };
+  }
+
+  async function send(): Promise<void> {
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (box === null) throw new Error("there is no message box");
+    /* `typeInto`, not `box.value = …`. React's controlled input reads through
+       the native value setter, so assigning the property directly leaves its
+       state at "" and the Send button disabled — the send silently does not
+       happen, and the assertion below then fails for the wrong reason. */
+    typeInto(box, "carry on");
+    await act(async () => {
+      buttonSaying("Send now")?.click();
+    });
+  }
+
+  it("does NOT say nothing was sent when the text landed and the Enter did not", async () => {
+    refusalSaying("partial");
+    await send();
+    const text = container.textContent ?? "";
+    /* The sentence that was there before, and the one that matters most: a
+       person who reads "Nothing was sent" retries, and the retry is appended to
+       the half-sent text. There is no way to take the first one back. */
+    expect(text).not.toContain("Nothing was sent.");
+    expect(text).toContain("PART of it was sent.");
+    expect(text).toContain("Do NOT send it again");
+  });
+
+  it("does not claim nothing was sent when the server did not say", async () => {
+    /* A refusal that carries no `delivery` at all. Absence is not `none`:
+       `none` is a claim that nothing left this box, and it is exactly the claim
+       the page has least basis for when it has been told nothing. */
+    refusalSaying(undefined);
+    await send();
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("Nothing was sent.");
+    expect(text).toContain("It is not known whether anything was sent.");
+  });
+
+  it("does not claim nothing was sent for a value it does not recognise", async () => {
+    refusalSaying("half-ish");
+    await send();
+    expect(container.textContent ?? "").not.toContain("Nothing was sent.");
+  });
+
+  it("still says nothing was sent when the server says exactly that", async () => {
+    /* The negative half. A guard that never lets the plain case through would
+       be one that had simply stopped saying the true thing. */
+    refusalSaying("none");
+    await send();
+    const text = container.textContent ?? "";
+    expect(text).toContain("Nothing was sent.");
+    expect(text).not.toContain("PART of it was sent.");
+  });
+
+  /* AND THE JOIN, WHICH THE FIRST VERSION OF THIS BLOCK DID NOT TEST.
+     Everything above builds its `SteerOutcome` by hand and hands it to the
+     page, so it exercises the RENDERER. `parseDelivery` below exercises the
+     PARSER. Neither touches the line that reads `parsed["delivery"]` out of the
+     response — the one line that was missing, and the reason the field never
+     reached the browser. Measured: deleting that line again left every test in
+     this describe block green.
+
+     `makeSteerApi` had no test caller anywhere in the repo, which is the same
+     shape as `renderSpoken` having six test callers and no product ones. This
+     drives the real `post` over a fake `fetch`, so the wire, the parse and the
+     outcome are one assertion. */
+  it("carries the server's `delivery` from the HTTP body into the outcome", async () => {
+    const bodies: unknown[] = [];
+    const fakeFetch = (async (_url: string, init?: RequestInit) => {
+      bodies.push(init?.body);
+      return {
+        status: 502,
+        json: async () => ({
+          ok: false,
+          code: "enter-not-sent",
+          why: "the text was typed and the Enter could not be sent",
+          delivery: "partial",
+        }),
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    const api = makeSteerApi(fakeFetch);
+    const outcome = await api.message(row({ id: "$a", paneId: "%1", claudeSessionId: "abc" }), "carry on");
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.ok === false && outcome.delivery).toEqual({ kind: "partial" });
+    // The sentence is still the server's, verbatim.
+    expect(outcome.ok === false && outcome.why).toContain("the Enter could not be sent");
+    // And a request was actually made, so a stubbed-out fetch cannot pass this.
+    expect(bodies).toHaveLength(1);
+  });
+
+  it("says `not-told` when the body carries no delivery at all", async () => {
+    const fakeFetch = (async () =>
+      ({ status: 409, json: async () => ({ ok: false, code: "wrong-pane", why: "the pane moved" }) }) as unknown as Response) as unknown as typeof fetch;
+    const outcome = await makeSteerApi(fakeFetch).message(row({ id: "$a" }), "carry on");
+    expect(outcome.ok === false && outcome.delivery).toEqual({ kind: "not-told" });
+  });
+
+  it("reads the server's own word off the wire rather than inventing one", () => {
+    expect(parseDelivery("none")).toEqual({ kind: "none" });
+    expect(parseDelivery("partial")).toEqual({ kind: "partial" });
+    expect(parseDelivery("unknown")).toEqual({ kind: "unknown" });
+    // Everything else, including absence, is the arm that admits it.
+    for (const odd of [undefined, null, "", "NONE", 0, {}, ["partial"]]) {
+      expect(parseDelivery(odd)).toEqual({ kind: "not-told" });
+    }
   });
 });
 

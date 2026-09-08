@@ -105,6 +105,9 @@ import { hasDeliverable, queueFor, type ActionOutcome } from "./actions-client";
 import { transcriptAge, type MessagesApi, type MessagesView } from "./messages-client";
 import { NAME_RULE_TEXT, looksLikeAName, type RenameApi, type RenameOutcome } from "./rename-client";
 import type { SteerApi, SteerOutcome } from "./steer-client";
+
+/** The refusal arm, so the headline table below is keyed by a real union. */
+type SteerFailure = Extract<SteerOutcome, { ok: false }>;
 import type { FleetGate, FleetRow, FleetStatus } from "./types";
 import type { ActionsUi } from "./useActions";
 import { Button, Card, Mono, cx } from "./ui";
@@ -152,9 +155,11 @@ function Outcome({ outcome, onRefresh }: { outcome: SteerOutcome; onRefresh: () 
       </div>
     );
   }
+  const said = DELIVERY_HEADLINE[outcome.delivery.kind];
   return (
     <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-3 tw:text-[13px]">
-      <p className="tw:font-medium tw:text-alarm-ink">Nothing was sent.</p>
+      <p className="tw:font-medium tw:text-alarm-ink">{said.head}</p>
+      {said.body === null ? null : <p className="tw:mt-1 tw:font-medium tw:text-alarm-ink">{said.body}</p>}
       {/* Verbatim. Every word of this is the server's. */}
       <p className="tw:mt-1 tw:break-words tw:text-ink">{outcome.why}</p>
       <p className="tw:mt-1 tw:text-[12px] tw:text-ink-faint">
@@ -176,6 +181,44 @@ function Outcome({ outcome, onRefresh }: { outcome: SteerOutcome; onRefresh: () 
     </div>
   );
 }
+
+/**
+ * THE HEADLINE ON A REFUSAL, WHICH IS NOT ALWAYS "NOTHING WAS SENT".
+ *
+ * It was, for every refusal, until 2026-09-08 — and that sentence is false in
+ * the most expensive direction available. `steer.ts` distinguishes three
+ * outcomes and the route sends them; the browser was dropping the field, so a
+ * **partial** delivery — the text landed in that agent's input box and the
+ * Enter did not — rendered as *"Nothing was sent."*, which invites exactly the
+ * retry that appends to the half-sent text instead of replacing it. There is no
+ * way to take the first one back. Instance 5 of
+ * docs/postmortems/260908b, and the server's own comment beside the field had
+ * already named the consumer it needed.
+ *
+ * A `Record` over the closed union rather than a chain of ifs, so a fifth arm
+ * in `DeliveryReading` fails the build here instead of quietly taking the last
+ * branch. `not-told` is deliberately the same words as `unknown` minus the
+ * cause: both mean *we cannot say what reached the pane*, and the difference —
+ * whether the server had an opinion — changes nothing a person would do.
+ */
+const DELIVERY_HEADLINE: Record<SteerFailure["delivery"]["kind"], { head: string; body: string | null }> = {
+  none: { head: "Nothing was sent.", body: null },
+  partial: {
+    head: "PART of it was sent.",
+    body:
+      "The text reached that session's input box and the Enter did not, so it is sitting there unsent. Do NOT send it again — a second message would be added to the end of the first. Go and look: the terminal is the only place this can be fixed.",
+  },
+  unknown: {
+    head: "It is not known whether anything was sent.",
+    body:
+      "The attempt failed in a way that cannot say what reached the pane. Look at the session before trying again — if the text is sitting in its input box, sending again would add to it rather than replace it.",
+  },
+  "not-told": {
+    head: "It is not known whether anything was sent.",
+    body:
+      "The server refused without saying what became of the keystrokes. Treat that as unknown rather than as nothing: look at the session before sending again.",
+  },
+};
 
 /**
  * **Why this dialog is not tappable**, said before you tap rather than after.
