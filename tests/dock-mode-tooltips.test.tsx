@@ -86,8 +86,8 @@ afterEach(() => {
 
 /**
  * The bar on the reading view — the `role="radio"` segment. The switch is on in
- * every render here, because the point of this file is *every* mode and four of
- * them are behind it. Which four is not this file's business:
+ * every render here, because the point of this file is *every* mode and several
+ * are behind it. Which ones is not this file's business:
  * tests/dock-experimental-modes.test.tsx owns that.
  */
 function reading(props: Record<string, unknown> = {}): void {
@@ -106,7 +106,7 @@ function reading(props: Record<string, unknown> = {}): void {
   });
 }
 
-/** The bar off the reading view: fourteen loose links rather than a segment. */
+/** The bar off the reading view: loose links rather than a segment. */
 function loose(props: Record<string, unknown> = {}): void {
   history.replaceState(null, "", "/read/a-piece/metadata");
   act(() => {

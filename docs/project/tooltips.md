@@ -73,7 +73,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | the wrapper: `<Tooltip content={…}>{trigger}</Tooltip>`, plus `TooltipGroup` and `TipNote` — the latter being the panel's text where the panel is only a sentence, which is most of them outside the reading view |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | `BandCard` — what a spine band actually says |
 | [`src/web/ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) | the other one — see below |
-| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar — the fourteen mode buttons, twice over, and the experimental switch. See [§ The bar](#the-bar-and-the-two-shapes-of-the-same-fourteen) |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar — the mode buttons, twice over, and the experimental switch. See [§ The bar](#the-bar-and-the-two-shapes-of-the-same-modes) |
 | [`src/mode-catalog.ts`](../../src/mode-catalog.ts) | the words in those fourteen cards, both paragraphs of each — the bar holds none of its own copy |
 | [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage masthead's links — Profile, plus Admin for the administrator — and the one place a tooltip's trigger is not a host element |
 | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | the two things said at the top of an article — where it came from, and who can read it. Both were `title` attributes or a bare sentence until 2026-09-06 and are `ControlTip`s now; the origin one is also the app's only tooltip on a line of *text* rather than on a glyph. Its trigger is the address's own anchor when there is an address, and a plain `<span>` with `cursor: help` and an `sr-only` pair of sentences when there is not — the second of those is the app's one tooltip a keyboard cannot open, which is why its content is duplicated rather than only shown |
@@ -172,7 +172,7 @@ set — the second paragraph is where the unguessable fact goes, which is exactl
 invention goes too. The four are listed in
 [260905h](../plans/260905h-rich-tooltips-on-the-shelf-action-buttons.md#four-of-these-were-wrong-in-the-first-draft).
 
-### The bar, and the two shapes of the same fourteen
+### The bar, and the two shapes of the same modes
 
 **The bottom bar joined on 2026-09-07**, on the same ask again — Greg: *"Make sure all the modes in
 the bottom-bar have rich tooltips."* It is the largest customer by count after Referee and the one

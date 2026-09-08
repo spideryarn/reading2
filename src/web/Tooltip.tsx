@@ -289,9 +289,10 @@ export function Tooltip({
  * button would not move should not have to read two paragraphs first.
  *
  * Four callers, and the second generalised it. The fourth is the live
- * conversation's **microphone setup** card (LiveButton.tsx), which says which
- * noise reduction is in use — the original mid-flight sense, and it was already
- * here when this said three. The bar's **experimental
+ * conversation's **microphone setup** card (LiveButton.tsx), which reports the
+ * placement actually resolved while the selector beside it may still read
+ * `Auto` — not the mid-flight sense, and it was already here when this said
+ * three. The bar's **experimental
  * switch** (Dock.tsx § the switch itself), where it is never the only carrier —
  * the button draws a warning marker, and the same sentence is in an `sr-only`
  * span it points `aria-describedby` at. From 2026-09-07, the bar's **mode
@@ -308,11 +309,18 @@ export function Tooltip({
  * **Two ways to get `state` wrong**, both found writing the wordmark's card on
  * 2026-09-08 and both fixed by not using it there at all.
  *
- * It is not the slot for *this reader gets somewhere else*. Every caller above
- * uses it for a control that **looks different** — dimmed, mid-flight, marked —
- * and answers the question that look provokes. The wordmark looks identical to
- * the owner and to a stranger; what differs is where it leads, and where a
- * control leads is the description. So `DockHome` varies `what` instead.
+ * It is not the slot for *this reader gets somewhere else*. The wordmark looks
+ * identical to the owner and to a stranger; what differs is where it leads, and
+ * where a control leads is the description. So `DockHome` varies `what` instead.
+ *
+ * **The tempting generalisation is false, and it was written here first.** *Every
+ * caller uses it for a control that looks different* covers the first three and
+ * not the microphone, whose selector can read `Auto` while `state` reports the
+ * headset or laptop placement actually resolved — neither mid-flight nor visible
+ * on the control. What the four share is thinner and truer: `state` is what is
+ * true **of this control right now**, as against `what`, which is true of it
+ * always. Where the control looks off, that is usually why; it is not the test.
+ * GPT Sol, 2026-09-08.
  *
  * And a `state` must not contradict the `what` beneath it, because it is read
  * first and the reader goes on to read the other one anyway. That draft put

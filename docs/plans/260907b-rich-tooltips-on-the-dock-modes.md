@@ -367,7 +367,9 @@ what the note said.
 
 Both took a `ControlTip` and dropped their `title`. **No button in the bar row carries a `title`
 now**, which was the point of the whole plan and took three stages to reach because the row is
-nineteen buttons of five different kinds.
+a row of five different kinds of button, and it is not the same length twice —
+what is in it varies with the experimental switch, with ownership and with being
+signed in.
 
 One `title` is left in `Dock.tsx` and it is staying: the drawer's Close, `.dock-close`, which is
 inside `.dock-drawer-head` rather than in the row. A `ControlTip` there would be a card whose first
@@ -391,7 +393,7 @@ is in **no** group: there is nothing to scrub to.
 is true for the owner and false for a signed-out stranger, who has no library — signed out, `/` is
 the landing page (`App.tsx` § the signed-out routes). That is the same shape as the Comments bug
 stage 2 found the day before: a sentence true for whoever added the article, read out to the visitor,
-on a button the visitor can see. **Twice in two days, in a bar of nineteen buttons.** The pattern is
+on a button the visitor can see. **Twice in two days, in one bar.** The pattern is
 not tooltips; it is that this app has two readers and only one of them is the person writing the
 copy.
 
@@ -482,6 +484,14 @@ established pattern of this plan; the other three are the interesting ones.
   `PublicChrome.tsx` still naming gaps an account cannot fix. The counts are gone rather than
   decremented — the number has changed four times and a count in prose goes stale silently. And
   `ControlTip` said *three callers* when there were four, which predates this change.
+- **A stale count I made, and a family I joined.** `shared-inventory.ts` said its three buckets
+  existed *because `VisitorGap` already distinguishes three* — my deletion made that two, and the
+  buckets are right for a different reason, so the reason is now written down instead of the
+  coincidence. Sol then found the wider family: `structure` shipped as a fifteenth mode on
+  2026-09-07 and every *fourteen* in this plan's own prose went stale inside a day. The
+  present-tense ones are gone rather than incremented, here and in `visitor.ts`, because a count
+  that cannot go stale is one that is not written down. The historical ones — this file describing
+  what stage 1 did — stay.
 - **The ⌘ test proved less than its name.** It asserted the character, which passes on a card saying
   *press ⌘* with the `K` missing and says nothing about the reader who has no Mac. It asserts both
   complete forms now.
@@ -489,6 +499,25 @@ established pattern of this plan; the other three are the interesting ones.
   whose quote has been re-extracted away still has somewhere to show*, true only while its block
   keeps its id — which the paragraph I added immediately goes on to qualify. I had corrected the
   claim and left its setup standing.
+
+And a second pass on the corrections themselves found six more, which is the part of this worth
+recording. Three were places the first pass had not reached: the `generates` marker described as
+more certain than `modeGenerates` claims to be (its own docblock says it **over-warns** on purpose),
+the same block-id myth still live in a reader-facing tooltip on the metadata page, and *every number
+on it is read off the artefacts* — overbroad in the same breath as a correction, since read time
+divides by a flat `WPM` this repo chose.
+
+**Two were repairs that went wrong.** The `comments.md` fix replaced a false mechanism with a
+different false mechanism: *what keeps the comment is not the id at all* denies the id a role it
+does have — the anchor is `comments_identity_fk` into `block_identities`, which are never deleted,
+so the id is exactly what does it and the point is that identities outlive revisions. And the rule I
+wrote into `ControlTip`'s docblock, that `state` is for a control that *looks different*, is true of
+three callers and false of the fourth: the microphone selector can read `Auto` while `state` reports
+the placement actually resolved. The conclusion it was written to support — that `DockHome` should
+vary `what` — survives; the rule did not.
+
+That is the shape to watch for. A correction arrives with the authority of the thing it corrects,
+and nobody re-checks it, because it has just been checked.
 
 **The thing worth taking from this stage is where the errors were.** Stage 1's were in the copy.
 Stage 2's were inherited from stale docs. Stage 3's were mostly neither: they were in the

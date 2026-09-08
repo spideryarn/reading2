@@ -1554,7 +1554,7 @@ export function Dock({
         {/* **The four that are not modes, in one group**, so that running along
             the end of the bar is instant after the first card rather than four
             separate 300ms waits — the same grouping `DockModes` and
-            `DockModeLinks` give the fourteen. `TooltipGroup` is
+            `DockModeLinks` give the modes. `TooltipGroup` is
             `FloatingDelayGroup`, a context provider that renders no element, so
             it cannot disturb the flex row it wraps (Tooltip.tsx § grouping) —
             which is also why `DockCommands` joining it on 2026-09-08 moved
@@ -1803,8 +1803,8 @@ const TITLES: Record<Panel, { own: string; visitor: string }> = {
  * **The three buttons in this bar that are not modes**, and the two sentences
  * each of them says on hover.
  *
- * The fourteen modes keep theirs in `MODE_CATALOG` because a `Record<Mode, …>`
- * makes a fifteenth mode a compile error until somebody writes them
+ * The modes keep theirs in `MODE_CATALOG` because a `Record<Mode, …>`
+ * makes the next mode a compile error until somebody writes them
  * (src/mode-catalog.ts § `how`). These three are not modes and never will be,
  * so a record keyed by `Mode` is the wrong home; here, beside the bar they
  * belong to, is the right one. They took a `title` attribute until 2026-09-07,
@@ -2577,10 +2577,15 @@ function DockCommands({
              first draft of this sentence said the bar's own buttons carried it
              too. They do not: `GENERATES_MARKER` is drawn in one place
              (CommandBar.tsx), and no button in this row shows on its face
-             whether pressing it spends — only its card says so. Which turns the
-             error into the better fact, and it was caught by reading the four
-             new sentences as a set rather than by any check in the diff, the
-             same way four of five were the day before.
+             whether pressing it spends — only its card says so.
+
+             ***May* start, not starts.** `modeGenerates` is the static
+             `MODE_TARGET[mode].kind !== "none"`, and its own docblock says it
+             **over-warns** on purpose: open Glossary on an article whose
+             glossary was built last week and nothing is spent while the row
+             still says `generates`. Describing the marker as more certain than
+             the marker is would be this card contradicting the thing it is
+             describing. GPT Sol, 2026-09-08.
 
              *Modes and the Changelog* rather than *modes*: Greg widened it on
              2026-09-07 and `PAGES` in CommandBar.tsx is the whole of the
@@ -2594,7 +2599,7 @@ function DockCommands({
              this sentence used it anyway — reader-facing copy reaching for the
              codebase's own word for a thing, one file away from the comment
              saying not to. */
-          how={`A row opens its mode exactly as pressing that button here does: the same run, at the same cost. Beside the modes it offers ${CHANGELOG_LABEL}, and it marks whichever rows start a model call with the word “generates” — which no button here shows on its face.`}
+          how={`A row opens its mode exactly as pressing that button here does: the same run, at the same cost. Beside the modes it offers ${CHANGELOG_LABEL}, and it marks the rows that *may* start a model call with the word “generates” — which no button here shows on its face.`}
         />
       }
     >
