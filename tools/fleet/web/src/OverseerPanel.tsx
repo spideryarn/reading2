@@ -51,6 +51,7 @@
 import type { ReactNode } from "react";
 
 import { BoxActionsCard, FleetQueues } from "./ActionButtons";
+import { MessageOverseerCard } from "./MessageOverseerCard";
 import { Explain } from "./Tooltip";
 import type { FleetRow, OverseerScheduler, OverseerSessionHistory, OverseerStatus, OverseerView } from "./types";
 import type { ActionsUi } from "./useActions";
@@ -516,19 +517,14 @@ export function OverseerPanel({
         onChanged={actions.refresh}
       />
 
-      {/* **A DAEMON IS NOT A RECIPIENT.** The Overseer writes a checkpoint;
-          nothing in it reads an inbox, and there is no route that would accept a
-          message addressed to it. One sentence, because a caveat earns its place
-          only if it changes what you do on this screen — and this one does: it
-          sends you to the Sessions tab. */}
-      <Card className="tw:mt-3 tw:p-4">
-        <h2 className="tw:font-medium">There is still nothing here to send a message to.</h2>
-        <p className="tw:mt-2 tw:text-[13px] tw:text-ink-soft">
-          The Overseer publishes what it sees; nothing on this box reads a message addressed to it. To say something to
-          one agent, use its session on the Sessions tab; to say something to all of them, the broadcast above is the
-          real thing.
-        </p>
-      </Card>
+      {/* **A DAEMON IS NOT A RECIPIENT — AND THE OVERSEER IS NOT ONLY A
+          DAEMON.** This slot used to hold a card saying there was nothing here
+          to send a message to. It was right about `tools/overseer/`, which
+          publishes a checkpoint and reads no inbox, and wrong about the session:
+          the Overseer is a Claude agent in a pane, reachable by the same steer
+          path as everything else. The card below keeps both halves — see its
+          header, and docs/plans/260909b-…. */}
+      <MessageOverseerCard rows={rows} />
     </div>
   );
 }
