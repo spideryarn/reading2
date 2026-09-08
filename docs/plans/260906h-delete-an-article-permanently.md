@@ -1,8 +1,22 @@
 # Delete an article permanently
 
-**Status as of 2026-09-06: decided, not built** — evidence: no `DELETE /api/library/` in
-`src/routes.ts`, and no `db.delete(articles)` anywhere under `src/` or `scripts/` (only
-`tests/helpers/scratch-article.ts:335`).
+**Status as of 2026-09-08: stages A–D built and reviewed; Stage E not started.** A reader can destroy
+one of their own articles for good, from that article's metadata page. Evidence:
+`DELETE /api/library/:slug` in [`src/routes.ts`](../../src/routes.ts), `pgShelfStore.destroy` in
+[`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts), `DeletePermanently` in
+[`src/web/Metadata.tsx`](../../src/web/Metadata.tsx), and
+[`tests/article-delete-pg.test.ts`](../../tests/article-delete-pg.test.ts) (16 cases) beside
+[`tests/metadata-delete-permanently.test.tsx`](../../tests/metadata-delete-permanently.test.tsx)
+(32).
+
+**Stage E — deleting the stored bytes — is deliberately not built**, and the raw file therefore still
+survives a delete. `/privacy` says so, and says it accurately. Stage E wants a plan doc of its own:
+it is a new catalogue table plus a backfill, a locking protocol, and a durable cleanup queue, because
+the objects are content-addressed and shared *across owners*. See the stage below, and decision 4.
+
+**It took four review rounds and three refusals to get here**, and the ledger of every finding is in
+the stage sections. That is the useful record: the plan-stage review could not have found most of
+them, because they were about what the built thing does after a press or under a concurrent delete.
 
 ## Goal
 
