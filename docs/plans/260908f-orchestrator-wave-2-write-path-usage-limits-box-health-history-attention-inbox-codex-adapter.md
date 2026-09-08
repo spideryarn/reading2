@@ -764,11 +764,11 @@ evidence is the thing this plan keeps arguing against.
 ##### The one edge that had to be cut, and what it was worth
 
 `useDictation.ts` imported `sendForTranscription` from `dictation-upload.ts`, which calls `apiFetch`
-— and that one edge reached **21 files and 16,054 lines**, through `lib/api.ts` to
+— and that one edge reached **22 files and 16,215 lines**, through `lib/api.ts` to
 `@supabase/supabase-js`, `@sentry/core`, the offline store and the billing plan. So `transcribe` is
 a parameter now (`Transcriber<C>` in the new leaf `src/web/transcriber.ts`) and `context` is opaque:
 the hook snapshots it per session, travels it on a kept recording, and never looks inside.
-`useDictation.ts`'s closure is now **8 files, 2,938 lines, `react` only**.
+`useDictation.ts`'s closure is now **8 files, 2,931 lines, `react` only**.
 
 The six product boxes gained one line each (`transcribe: sendForTranscription`) and nothing else
 changed. The two tests that drive the hook directly pass the real product transcriber in, so they
@@ -786,15 +786,30 @@ unconditionally.
 
 ##### The server half: measured out of contention, not ruled out on principle
 
-`src/transcribe.ts` was the first candidate. Its closure is **161 files and 118,082 lines**, pulling
+`src/transcribe.ts` was the first candidate. Its closure is **162 files and 118,171 lines**, pulling
 `pg`, `drizzle-orm`, `stripe`, `jsdom`, `@mozilla/readability`, `pino` and the Anthropic SDK into a
 tool whose whole claim is that it runs with the product's server absent. Even the smallest useful
-piece, `ai-call.ts`, is 20 files and 20,344 lines. So `tools/fleet/transcribe.ts` makes its own call
+piece, `ai-call.ts`, is 21 files and 20,505 lines. So `tools/fleet/transcribe.ts` makes its own call
 to `POST https://openrouter.ai/api/v1/audio/transcriptions` — still through the gateway, no second
 one — borrowing the three files under `src/` that import nothing at all.
 
 **The honest half of that ruling:** `transcribeWith` used standalone writes no database row, so
 going through it **would not have metered this spend either** — nothing for `npm run cost` to count.
+
+**And it is declared rather than merely admitted.** `tests/no-undeclared-spend.test.ts` caught this —
+`tools/fleet/transcribe.ts` names `openrouter.ai` and a credential and was in no register — which is
+the repo asking the exact question this section had answered in prose and not in code. There is now a
+`fleet-dictation` entry in [`src/spend-declarations.ts`](../../src/spend-declarations.ts) with
+`metered: false`, so **`npm run cost` prints it by name on every run**:
+
+```
+Not counted here — 8 known way(s) of spending that write no row:
+  tools/fleet/transcribe.ts
+      fleet-dictation — skips the gateway, open today
+```
+
+That is the difference between a gap somebody wrote a paragraph about and a gap the tooling says out
+loud. It stops being `false` when the fleet has somewhere to write a row.
 
 *And the mechanism is not what this doc first said.* It claimed a process-global sink that is `null`
 until the product's server installs one. There is no such thing: a sink belongs to `collectSpend`'s
@@ -894,8 +909,12 @@ here. Everything past *"Opening the microphone…"* is Greg's to check from his 
 
 [260908f-fleet-dictation-code-review-sol-r1-1356.md](260908f-fleet-dictation-code-review-sol-r1-1356.md).
 Its verdict on the first round was **"Stage 1 is not solid yet"**, and it was right — one P1 and six
-P2s, all real, all fixed. Worth listing because the pattern in them is the useful part: **five of the
-seven were rules this repo already writes down, applied to the product and not to the copy.**
+P2s, all real. Worth listing because the pattern in them is the useful part: **five of the seven
+were rules this repo already writes down, applied to the product and not to the copy.**
+
+**Its round 2 then found that four of the seven were not actually closed**, and said so with
+reproductions — see § The second round below. "All fixed" was written here after round 1 and was
+wrong, which is the reason a second round exists.
 
 | | | |
 |---|---|---|
@@ -920,6 +939,49 @@ flood test aimed at the rate limiter reached the real gateway and `tests/setup/p
 refused the call. Without that seam the route's handling of a provider failure, and of a caller
 hanging up, could not be tested at all — both are paths that only run after the money would have
 been spent.
+
+##### The second round, and what "fixed" turned out to mean
+
+[260908f-fleet-dictation-code-review-sol-r2-1435.md](260908f-fleet-dictation-code-review-sol-r2-1435.md).
+**Verdict: "Stage 1 is still not solid. The original P1 is fixed, including permission-pending, but
+four P2 issues remain."** Every one was reproduced by Sol rather than asserted, and every one was a
+fix from round 1 that did not do what its own comment said.
+
+| | what round 1 shipped | what it actually did |
+|---|---|---|
+| The action guard on New session | `if (dictate.sendBlocked) return;` | Read a **stale closure** — `start`'s deps are `[prompt]`, so pressing Dictate then Start without typing left it `false`. `SessionDetail` had the ref pattern; this file had not copied it |
+| The hang-up abort | `res.on("close")` and a return | Covered the ordinary abort and not a **rejection after the abort**: the outer boundary then wrote a 500 into a closed socket, since `headersSent` is false on a response nothing answered |
+| The rate limiter | `check` then `record` | **Recorded a slot for a request that spent nothing** — a recording below the floor never reaches the gateway, so the next real dictation three seconds later was refused for free |
+| The import ban | refuse what the walker cannot follow | The ban was **itself a regex with holes**: `import ("x")`, `import("a" + "b")` and `import /* c */ ("x")` were neither followed nor refused |
+
+**The import walker is an AST now**, and that is Sol's recommendation taken rather than argued with:
+two rounds of regex bypasses is where "one more pattern" stops being the cheaper option, for a rule
+that is architectural. `@babel/parser`, because TypeScript 7 exposes no AST from its package root —
+`import ts from "typescript"` resolves to a version stub and the tree is behind `unstable/*` — and
+because Babel's parser is already a direct dependency where `oxc-parser`, `acorn` and
+`es-module-lexer` are all present and all transitive. Sol's four bypass shapes are pinned as tests,
+and a file the walker cannot parse now lands in `unreadable` and fails rather than reading as a file
+that imports nothing.
+
+**Three things Sol said about my own tests, all correct:**
+
+- **The flood test did not prove the burst ceiling.** Twelve requests under one key at one instant
+  are refused by the three-second per-key *floor*; the fleet-wide ceiling was never reached. Twelve
+  distinct keys now, asserting ten accepted and the eleventh refused.
+- **The fakes could conceal real failures.** `fakeRes.hangUp()` did not make the response closed, so
+  a write after close was invisible — it counts them now and a test asserts zero. `fakeTranscribe`
+  kept two of its arguments, so wrong audio or a wrong container would have passed; it keeps all of
+  them, typed as `TranscribeDeps["transcribe"]`.
+- **The base64 check did not do what its comment claimed.** `"A".repeat(60_000)` is valid base64 and
+  was this feature's own test fixture. A magic-number check on the container makes the claim true;
+  the fixture is now a real EBML header with padding behind it.
+
+Writing the flood test also found something neither round named: the rate limiter was module state,
+so one test spending the burst left every test after it looking rate-limited. It is injectable now,
+with the shared instance still the one the server uses.
+
+**Nothing is overruled across either round.** Every finding was a defect or a claim of mine that
+needed correcting.
 
 ### Stage F — realtime dialog, gated on Stage E
 

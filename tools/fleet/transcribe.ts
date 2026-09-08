@@ -10,18 +10,21 @@
  *
  * That file does the same job and is better tested, and importing it was the
  * first candidate. It was ruled out by measurement rather than principle: its
- * import closure is **161 files and 118,082 lines**, pulling `pg`,
+ * import closure is **162 files and 118,171 lines** (GPT Sol's AST walk;
+ * a regex walk here first said 161 and 118,082), pulling `pg`,
  * `drizzle-orm`, `stripe`, `jsdom`, `@mozilla/readability`, `pino` and the
  * Anthropic SDK into a tool whose entire claim is that it runs on the box with
  * the product's server absent — orchestrator-direction.md § Principles. A
  * dashboard that needs a Postgres driver installed in order to hear a sentence
  * is not that tool. Even the smallest useful piece of it, `transcribeWith`,
- * still reaches `ai-call.ts` at 20 files and 20,344 lines.
+ * still reaches `ai-call.ts` at 21 files and 20,505 lines.
  *
- * `transcribeWith` *is* free of the database at runtime — `ai-spend.ts` writes
- * through a sink that is `null` unless the product's server installs one — and
- * the honest consequence of that is worth saying out loud: **going through it
- * would not have metered this spend either.** No `ai_calls` row, nothing for
+ * `transcribeWith` used standalone writes no database row, and the honest
+ * consequence is worth saying out loud: **going through it would not have
+ * metered this spend either.** (The mechanism is not a process-global sink
+ * waiting to be installed, which is what this comment said until GPT Sol
+ * corrected it: a sink belongs to `collectSpend`'s async scope, and a call
+ * outside one increments an unscoped counter, warns, and drops the record.) No `ai_calls` row, nothing for
  * `npm run cost` to count. The fleet's OpenRouter spend is invisible to the
  * product's ledger whichever shape is chosen, so that is a property of being a
  * separate tool rather than a cost of this decision. A dictation is about
@@ -86,7 +89,7 @@ const TIMEOUT_MS = 45_000;
  * product's `MIN_AUDIO_BASE64` exists for the same reason. ~2 seconds at the
  * recorder's measured ~14 KB/s, base64'd.
  */
-const MIN_AUDIO_BASE64 = 37_000;
+export const MIN_AUDIO_BASE64 = 37_000;
 
 /**
  * A transcript far longer than anything that could have been said.
