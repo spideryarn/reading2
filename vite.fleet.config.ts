@@ -15,7 +15,7 @@
  * `src/web`. Every one of those is a dependency on the product being installed
  * and configured — and the fleet dashboard's whole point is that it runs on the
  * box, spans repos, and must work with the product's server absent
- * (docs/project/orchestrator-direction.md § Principles: *this is not
+ * (docs/project/overseer-direction.md § Principles: *this is not
  * Spideryarn*). Two small configs that share nothing are simpler than one that
  * has to be told which half of itself to be.
  *

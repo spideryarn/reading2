@@ -1081,7 +1081,7 @@ describe("a half-written current.json", () => {
   });
 
   test("the shape change came with a schema bump, so a reader pinned to 1 stops rather than misreads", () => {
-    // The seam is a FILE, and orchestrator-direction.md tells the dashboard to
+    // The seam is a FILE, and overseer-direction.md tells the dashboard to
     // check `schema` as a number and render "I cannot read this" for anything
     // else. That advice is worth nothing unless a change to a field's shape
     // moves the number: a consumer that checked `schema === 1` and then read

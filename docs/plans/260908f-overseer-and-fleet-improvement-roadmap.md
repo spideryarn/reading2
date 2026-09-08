@@ -9,7 +9,7 @@ Review results and limitations are recorded at the end. An unchecked box below d
 its entire subsystem is absent: many stages deliberately connect machinery that already exists.
 
 Up: [plans.md](../project/plans.md). Governing direction:
-[orchestrator-direction.md](../project/orchestrator-direction.md).
+[overseer-direction.md](../project/overseer-direction.md).
 
 ## Goal and scope
 
@@ -30,7 +30,7 @@ Preserve Greg's explicit ordering:
 > attention triage, then perhaps box vitals and throttling, then account usage limits, then scheduler
 > (ideally we'd build a bunch of these in parallel with engineering-manager.md)
 >
-> — Greg, 2026-09-08, [direction](../project/orchestrator-direction.md#the-order-of-work)
+> — Greg, 2026-09-08, [direction](../project/overseer-direction.md#the-order-of-work)
 
 The first repairs make existing buttons and monitoring trustworthy; they are not a new security
 programme ahead of attention. Put a useful attention view in Greg's hands before building durable
@@ -114,7 +114,7 @@ messages' handle-only effect remain. This later integration was not in Fable's r
 
 | Reference | Why the implementing agent needs it |
 |---|---|
-| [Direction and constraints](../project/orchestrator-direction.md) | Ownership seam, Greg's priorities, autonomy, observed failure modes, and existing wide-review backlog. Read especially Two tenses, Attention, Order of work, and Backlog. |
+| [Direction and constraints](../project/overseer-direction.md) | Ownership seam, Greg's priorities, autonomy, observed failure modes, and existing wide-review backlog. Read especially Two tenses, Attention, Order of work, and Backlog. |
 | [Original dashboard plan](260907e-agent-fleet-dashboard.md) | What the dashboard slices intended, what was actually delivered, and earlier review findings. |
 | [Overseer store/clock plan](260908b-overseer-store-and-clock.md) | Recovery contracts and evidence for the existing daemon. Do not implement O1 from scratch. |
 | [Whole-approach Astra review](260908b-whole-approach-review-astra-v2.md) | Original A9–A30 findings. Recheck against current code; several are already closed. |

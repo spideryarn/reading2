@@ -3,7 +3,7 @@
  *
  * ## The finding this exists for
  *
- * `docs/project/orchestrator-direction.md` § "`idle` is the bug: the vocabulary
+ * `docs/project/overseer-direction.md` § "`idle` is the bug: the vocabulary
  * describes the pane, not the work". Measured on the live fleet 2026-09-08:
  * **4 sessions were running `codex exec` and 0 of them showed as anything but
  * `idle`**, because a GPT review runs inside a Claude session's Bash tool and

@@ -14,14 +14,14 @@ Greg, 2026-09-08, in one message:
 > Push and pull periodically
 
 The direction, the constraints and every earlier quote live in
-[orchestrator-direction.md](../project/orchestrator-direction.md). This plan does not restate them; it
+[overseer-direction.md](../project/overseer-direction.md). This plan does not restate them; it
 says what gets built, by whom, in what order, and what done looks like.
 
 ## Two things are already answered, and the answer changes the work
 
 **Usage limits: there is no API, and the admin key would not help.** Greg offered one; the research
 was done and hand-verified earlier the same day, and is written up in
-[§ Can we call an API instead? Mostly no, and not with an admin key](../project/orchestrator-direction.md#can-we-call-an-api-instead-mostly-no-and-not-with-an-admin-key).
+[§ Can we call an API instead? Mostly no, and not with an admin key](../project/overseer-direction.md#can-we-call-an-api-instead-mostly-no-and-not-with-an-admin-key).
 The short version: every `/v1/organizations/*` usage endpoint reports **Console API-key spend**, not
 subscription quota — Anthropic's own FAQ says *"This API only tracks Claude Code usage on the Claude
 API"* — and admin keys are minted for a Console organisation, which a personal Max subscription may
@@ -50,7 +50,7 @@ named.
 
 | item | session | why |
 |---|---|---|
-| **1. securing the write path** | `claude-agents-dashboard` | A9, A10, A11, A6 are all `owner: dashboard` in [§ The backlog](../project/orchestrator-direction.md#securing-the-live-write-path-a-stage-but-not-the-top-one). The write path is `routes-*.ts` and `steer.ts`. **A6 already landed** (`0a5a3008`, CSP + anti-framing). |
+| **1. securing the write path** | `claude-agents-dashboard` | A9, A10, A11, A6 are all `owner: dashboard` in [§ The backlog](../project/overseer-direction.md#securing-the-live-write-path-a-stage-but-not-the-top-one). The write path is `routes-*.ts` and `steer.ts`. **A6 already landed** (`0a5a3008`, CSP + anti-framing). |
 | **2. usage limits** | `w2-usage-limits` | Account-level, not pane-level. Collector and 429 ground truth here; the `FleetStatus` arm is the dashboard's. |
 | **3. box-health 24h history + swap** | `fleet-health-history` | Retained in the dashboard process, against the direction doc's assignment — see below. |
 | **4. attention inbox** | **split** | The Overseer decides what needs Greg and why; the dashboard renders and collects the tap. |
@@ -85,7 +85,7 @@ a test that fails when the two drift**, which is second best and much better tha
 
 ### Where the health history lives, and the one thing owed in return
 
-[§ Two tenses](../project/orchestrator-direction.md#two-tenses-the-seam-between-the-overseer-and-the-dashboard)
+[§ Two tenses](../project/overseer-direction.md#two-tenses-the-seam-between-the-overseer-and-the-dashboard)
 assigns the vitals history to the Overseer's past tense, and `daemon.ts` says outright *"No health
 history and no local collection"*. **It is being built in the dashboard process instead**, and the
 argument for that beat the doc: the reading already exists in-process there, **there is one collector
@@ -108,7 +108,7 @@ not be flattened to numbers on the way to disk** — a stored `null` cannot tell
 ## Ordering, and why it is not Greg's list order
 
 Greg's list is a list, not a ranking — he ranked this work explicitly earlier the same day
-([§ The order of work](../project/orchestrator-direction.md#the-order-of-work)): *"attention triage,
+([§ The order of work](../project/overseer-direction.md#the-order-of-work)): *"attention triage,
 then perhaps box vitals and throttling, then account usage limits, then scheduler"*, and separately
 put the write path in as *"a stage, but it doesn't have to be the top-priority."* Nothing has changed
 that. So on the Overseer's side the order is **attention first**, and the write path stays where he
@@ -290,7 +290,7 @@ Each ends with the tree green and committed, and would make sense as a stopping 
 ### Stage A — the attention list, the deciding half
 
 **The premise triage was about to be built on is wrong**, and it was measured:
-[§ `idle` is the bug](../project/orchestrator-direction.md#idle-is-the-bug-the-vocabulary-describes-the-pane-not-the-work).
+[§ `idle` is the bug](../project/overseer-direction.md#idle-is-the-bug-the-vocabulary-describes-the-pane-not-the-work).
 `needs-you` means *Claude Code says a dialog is open*; ten of fifteen sessions genuinely waiting on
 Greg had ended their turn handing him a decision **in prose, ending in a full stop**, and not one
 showed as needing him. So the first thing this stage owes is a way to see those.
@@ -390,7 +390,7 @@ draft, it is a regression.
 **Three — `waitingSince` is first-seen, not last-seen, and it is why the store had to come first.**
 The pane says a dialog is open; it cannot say for how long. Duration is a fact only something with a
 memory can produce, which is the whole reason
-[§ The order of work](../project/orchestrator-direction.md#the-order-of-work) says attention triage
+[§ The order of work](../project/overseer-direction.md#the-order-of-work) says attention triage
 *arrives* first but cannot be *built* first.
 
 **Four — the producer sorts, and the renderer must not.** *"Do not reorder or replace a card's options
@@ -670,8 +670,22 @@ that finds no 429s anywhere must be distinguishable from a probe that is broken
   back — the seam owner (`claude-agents-dashboard`) asked for the field names before it built its
   FleetStatus arm, and got them. `usage.ts` keeps only the runtime values (`KNOWN_USAGE_WINDOWS`,
   `isKnownUsageWindow`), because wire.ts may hold none.
-- **`tests/overseer-usage.test.ts`**, 90 tests, against real 429 records lifted out of real
-  transcripts on this box. Plus **three mutation passes**: the finished code was broken 22 ways, one
+- **`RateLimitHit.id`** — deterministic, derived from transcript path + `hitAt` + `window`, hashed so
+  no filesystem path rides into a store or a page, and **stable across scans** so a carry-forward can
+  recognise a rejection it already knows. Minted here rather than composed by the consumer because
+  the facts that make such a key correct are the producer's: `claudeSessionId` is not unique (a
+  subagent's rejection carries the parent conversation's id) and neither is `resetsAtMs` (27
+  rejections on this box share one).
+- **`parseUsageReport(u: unknown): UsageReport | null`** — exhaustive, null on the first mismatch,
+  pure, so the Overseer store can read its own `current.json` back. Same argument as the id: a parser
+  written by the consumer is a second hand-written declaration of the type, failing in the quiet
+  direction where an absent field reads as a report that merely says less. It re-checks three
+  invariants on the way back in rather than trusting bytes we wrote — an `expired` window that has
+  grown a percentage, a `hits` scan with an empty array, and a `collectedAt` that will not parse as a
+  date (`Date.parse` returns `NaN`, which fails every comparison, so an age bound would keep such a
+  report for ever).
+- **`tests/overseer-usage.test.ts`**, 107 tests, against real 429 records lifted out of real
+  transcripts on this box. Plus **five mutation passes**: the finished code was broken 32 ways, one
   at a time, and every one now turns the suite red. The first pass is the one worth remembering —
   **seven of round 1's ten fixes had no test at all**, so the code was right and nothing would have
   noticed it going wrong again. (The tests were written after the implementation, not red-first; the
@@ -1184,7 +1198,7 @@ Greg's call when asked what a realtime dialog would be talking *to*:
 > Borrow (or better still reuse) from Spideryarn.
 
 **"Better still reuse" is a decision about a principle, and it is his to make.**
-[§ Principles](../project/orchestrator-direction.md#principles) says the fleet tool must not depend on
+[§ Principles](../project/overseer-direction.md#principles) says the fleet tool must not depend on
 anything under `src/`, *"If it ever earns its own repo, that should be a move, not a rewrite."* There
 are ~3000 lines of hard-won client machinery there (`useDictation.ts` 1612, `mic-recording.ts` 461,
 `DictationStrip.tsx` 502, `useAudioLevel.ts` 204, `mic-lock.ts` 110). **Copying that is worse than
@@ -1501,7 +1515,7 @@ cheaper place for it to live.
 
 **Fable arbitrated and returned a fourth option: close it, and attach the rule to the widening.** The
 full reasoning is now in
-[orchestrator-direction.md § A5 is CLOSED too](../project/orchestrator-direction.md#the-backlog-after-the-wide-review)
+[overseer-direction.md § A5 is CLOSED too](../project/overseer-direction.md#the-backlog-after-the-wide-review)
 — the short version is that A5 hardens a boundary against parties who do not exist while A7 leaves
 open the one that does (all 27 agents share a Unix user and already reach `127.0.0.1:8787`), that
 **Tailscale ACLs have no deny rule** so the "cheap" grant is really a whole-policy rewrite with

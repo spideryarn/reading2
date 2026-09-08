@@ -357,7 +357,7 @@ only the knowledge of *where the words go* has left.
 
 That is not tidiness. Greg asked for the fleet dashboard's message boxes to get this feature, and to
 **reuse** it rather than copy it — *"Borrow (or better still reuse) from Spideryarn"*. The fleet tool
-([orchestrator-direction.md](orchestrator-direction.md)) must run with this product's server absent,
+([overseer-direction.md](overseer-direction.md)) must run with this product's server absent,
 and one import stood in the way of all ~3,000 lines: `useDictation` called `sendForTranscription`,
 which calls `apiFetch`, which reaches Supabase, Sentry, the offline store and the billing plan. That
 one edge measured **21 files and 16,054 lines** behind a hook that needs six. Cutting it took

@@ -1,6 +1,6 @@
 # The Overseer: it subscribes to the fleet dashboard's stream, folds what it
 # sees into ~/.overseer, and is the only thing on this box that remembers what
-# the fleet did yesterday. docs/project/orchestrator-direction.md.
+# the fleet did yesterday. docs/project/overseer-direction.md.
 #
 # A SYSTEM unit with User=@USER@, not a systemd USER unit, and that is the whole
 # reason this file exists. A user unit does not start at boot unless lingering
@@ -15,7 +15,7 @@
 # stale.
 [Unit]
 Description=Overseer -- records what the agent fleet did, so there is a yesterday
-Documentation=file:///home/@USER@/code/spideryarn2/docs/project/orchestrator-direction.md
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/overseer-direction.md
 After=network-online.target
 Wants=network-online.target
 

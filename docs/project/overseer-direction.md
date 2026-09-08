@@ -1084,7 +1084,7 @@ deferred, and written up in
 ## Appendix: security and hardening, deferred
 
 **Greg, 2026-09-08, on the item below: "let's add this to an appendix on future security/hardening
-in orchestrator-direction, but ignore it for now."** So this is a record, not a backlog — nothing
+in overseer-direction, but ignore it for now."** So this is a record, not a backlog — nothing
 here is scheduled, and it is written down because the reasoning is expensive to rediscover and
 because the day one of these matters is not the day to work it out.
 
