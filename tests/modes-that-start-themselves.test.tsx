@@ -216,7 +216,7 @@ function TimelineBand({ slug }: { slug: string }): ReactElement {
 }
 
 function QuotesBand({ slug }: { slug: string }): ReactElement {
-  const view = useQuotes(slug);
+  const view = useQuotes(slug, SETTLED_EMPTY_QUOTES_READ);
   return createElement(
     "div",
     { "data-band": "quotes" },
@@ -309,6 +309,34 @@ const SETTLED_EMPTY_READ = {
   refresh: async () => {},
   clear: () => {},
   patchEntry: () => {},
+};
+
+/**
+ * The same for the quotes, and posing it is not a convenience here — it is the
+ * composition under test.
+ *
+ * Since 2026-09-08 the opening GET is `useQuotesRead` in `OwnedReader`, which
+ * **outlives the band**, while `useAutoRun` stays inside `QuotesBand` and dies
+ * with it. That split is the whole reason the fetch was not hoisted wholesale:
+ * an activation owner mounted one level up could claim a Quotes press, watch the
+ * reader leave the band, and spend it when the GET finally settled — against
+ * `activation.ts`'s rule that a press belongs to the band on screen. GPT Sol,
+ * reviewing docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
+ *
+ * So the band below mounts the band half **only**, over a read that is already
+ * settled and empty — which is what the real one sees, and which puts the press
+ * and the answer in the same mount, where they belong.
+ */
+const SETTLED_EMPTY_QUOTES_READ = {
+  status: "none" as const,
+  quotes: null,
+  stale: false,
+  outdated: false,
+  profiled: false,
+  profileChanged: false,
+  error: null,
+  reload: async () => {},
+  refresh: async () => {},
 };
 
 /**

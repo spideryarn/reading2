@@ -49,6 +49,10 @@ const lifecycle = await readFile(path.join(ROOT, "src/web/passage-lifecycle.ts")
 /* And which slot the page is drawing from, which left `Reader` as a pair of
    ternary chains and arrived here as one total function on the same day. */
 const passages = await readFile(path.join(ROOT, "src/web/reader/passages.ts"), "utf8");
+/* **Where the quote marks went on 2026-09-08.** They are no longer published by
+   the band at all — they are marked in every mode, so `Reader` computes them
+   from state it already holds. docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md. */
+const quoteMarks = await readFile(path.join(ROOT, "src/web/reader/useQuoteMarks.ts"), "utf8");
 const glossaryPanel = await readFile(path.join(ROOT, "src/web/GlossaryPanel.tsx"), "utf8");
 const quotesPanel = await readFile(path.join(ROOT, "src/web/QuotesPanel.tsx"), "utf8");
 const searchPanel = await readFile(path.join(ROOT, "src/web/SearchPanel.tsx"), "utf8");
@@ -176,7 +180,12 @@ describe("the threshold wiring", () => {
        mounts the band and asserts that ordering for real; this is the cheap
        companion that also covers the quotes band. */
     expect(glossaryMode).toMatch(/hiddenSelection[\s\S]{0,400}setTermId\(null\)/);
-    expect(quotesMode).toMatch(/hiddenSelection[\s\S]{0,400}setQuoteId\(null\)/);
+    /* **The quotes' half moved out of the band on 2026-09-08 and its scope
+       changed with it.** While the marks died with the mode, a dormant `?bar=`
+       in a URL had no business clearing a selection in a list nobody was looking
+       at, so the rule was deliberately confined to the band. The bar now hides a
+       mark in Plain too, so the rule follows the marks. */
+    expect(quoteMarks).toMatch(/hiddenSelection[\s\S]{0,400}setQuoteId\(null\)/);
     /* Glossary hands its selection up itself: `termSelections` is a different
        currency from `Found[]`, with no push-up to `Reader` and no cleanup, so it
        is deliberately not one of the six producers on the shared hook. */
@@ -184,13 +193,10 @@ describe("the threshold wiring", () => {
       hookBody(glossaryMode, "GlossaryMode.tsx", "useGlossaryMode"),
       "useGlossaryMode must hand its selection up in a layout effect",
     ).toMatch(/useLayoutEffect\(\(\) => \{\s*onSelected\(/);
-    /* Quotes hands its up through `usePassageLifecycle`, which is where the
-       layout effect went on 2026-09-06 — so the assertion is in two halves: the
-       band delegates, and the hook it delegates to publishes before the paint. */
-    expect(
-      hookBody(quotesMode, "QuotesMode.tsx", "useQuotesMode"),
-      "useQuotesMode must hand its selection up through the shared lifecycle",
-    ).toMatch(/usePassageLifecycle\(\{/);
+    /* **Quotes has nothing to hand up any more**, which is why there is no
+       second half to this one. `Reader` reads `?quote=` itself, so the ring and
+       the marks come out of one render rather than out of one effect — see the
+       block below. The remaining producers still publish before the paint. */
     expect(
       lifecycle,
       "passage-lifecycle.ts must publish in a layout effect, not a passive one",
@@ -251,59 +257,96 @@ describe("the threshold wiring", () => {
 });
 
 /**
- * **That the quotes band marks the whole list and not one row.**
+ * **That the quotes are marked everywhere, from the whole list, and only in the
+ * prose.**
  *
- * The same kind of source-level assertion as the two blocks above, and it is
- * here for the same reason: the *behaviour* is covered by
- * tests/quote-marks.test.ts, which knows nothing about `App.tsx` and so cannot
- * tell whether the reading view calls it. This is the cheap companion that
- * catches the regression the feature was built out of — a memo that returned
- * `[]` unless a row was selected, so the mode drew nothing at all on the page
- * until you pressed one.
+ * The same kind of source-level assertion as the two blocks above, and here for
+ * the same reason: the *behaviour* is covered by tests/quote-marks.test.ts,
+ * which knows nothing about the reading view and so cannot tell whether the
+ * reading view calls it. This is the cheap companion that catches two
+ * regressions the feature was built out of — a memo that returned `[]` unless a
+ * row was selected (2026-09-05), and marks that lived exactly as long as the
+ * band did (2026-09-08).
  *
- * docs/plans/260905g-mark-every-visible-quote-and-make-the-quiz-start-easier.md.
+ * docs/plans/260905g-mark-every-visible-quote-and-make-the-quiz-start-easier.md,
+ * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
  */
-describe("the quotes band's marks", () => {
+describe("the quotes' marks", () => {
   it("resolves the list the panel is showing, not the selected row", () => {
-    const body = hookBody(quotesMode, "QuotesMode.tsx", "useQuotesMode");
-    /* One function answers "what is the panel showing", and the hook and the
+    /* One function answers "what is the panel showing", and the prose and the
        panel both call it. Two expressions computing it is how a row comes to be
-       hidden with its wash still on the paragraph. */
-    expect(body).toMatch(/markedQuotes\(/);
-    expect(body).toMatch(/resolveQuotes\(blocks, /);
+       hidden with its stroke still on the paragraph. */
+    expect(quoteMarks).toMatch(/markedQuotes\(/);
+    expect(quoteMarks).toMatch(/resolveQuotes\(blocks, /);
     /* The bug itself, named: a guard that made the marks a function of the
        selection. */
-    expect(body).not.toMatch(/if \(!selected\) return \[\];/);
+    expect(quoteMarks).not.toMatch(/if \(!selected\) return \[\];/);
   });
 
-  it("hands the pressed quote's key up beside the marks, in one layout effect", () => {
+  it("computes the marks in the reader, so they outlive the band", () => {
+    /* **The whole of Greg's 2026-09-08 report.** Marks that a band publishes
+       live exactly as long as the band; the fix was to stop publishing them. So
+       the band must not be a passage producer, and `Reader` must be the caller. */
+    /* **The call shapes, not the words.** An earlier draft of this matched the
+       bare names and failed against the file's own header, which explains why
+       they are gone — a source-text assertion that cannot tell code from the
+       comment about the code is worth nothing. */
+    for (const call of [/usePassageLifecycle\(/, /onFound[=:(]/, /resolveQuotes\(/]) {
+      expect(
+        quotesMode,
+        `QuotesMode.tsx must not publish passages — the marks are Reader's (${call})`,
+      ).not.toMatch(call);
+    }
+    expect(reader, "Reader must compute the quote marks itself").toMatch(/useQuoteMarks\(/);
+    /* And the `derived` shape went with them: it existed for this one caller,
+       to put the marks and the ring into a single layout effect. A memo has
+       that by construction. */
+    expect(
+      lifecycle,
+      "the derived lifecycle shape had one caller and should have gone with it",
+    ).not.toMatch(/kind: "derived";/);
+  });
+
+  it("marks the prose in every mode, and the bar and the rail in none", () => {
+    /* **The half a careless implementation gets wrong**, and the reason
+       `proseFound` exists rather than a merge at the call site. A quote's
+       `confidence` is `null`, so `blockStrength` would paint its paragraph's bar
+       at full over a hedged search's; and every quote has `slot: 0`, which is
+       the *first saved search's* colour, so `blockHues` would draw a segment in
+       a hue no search earned. Only the phrase marks may see them. */
+    expect(reader).toMatch(/buildHitMarks\(proseMarked, /);
+    for (const projection of ["blockStrength", "blockHues", "blockMatches"]) {
+      expect(
+        reader,
+        `${projection} must read the open mode's slot, never the merged prose list`,
+      ).toMatch(new RegExp(`${projection}\\(passages\\)`));
+    }
+    /* And the merge itself must not de-duplicate. `Found.key` is unique within
+       one result set and nothing promises it across two, so a de-dupe would turn
+       an unlikely collision into a silently dropped passage. GPT Sol, 2026-09-08. */
+    expect(passages).toMatch(/export function proseFound\(/);
+    expect(
+      passages,
+      "proseFound must return one side unchanged rather than allocating",
+    ).toMatch(/if \(active === quotes\) return active;/);
+  });
+
+  it("hands the pressed quote's ring and its marks out of one render", () => {
     /* With every quote marked, `mark.hit[data-hit-open]` is the only thing
-       saying which one the reader pressed. Pushed in the SAME effect as the
-       marks, so a paint can never show the ring on one quote and the wash set
-       of another — the ordering argument the ideas and referee bands both make.
-       And `Reader` must be holding it, or there is nothing for `hitMarks` to
-       compare a key against. */
-    /* Two halves since 2026-09-06, because the effect itself moved into
-       `usePassageLifecycle`: the band must ask for the `derived` shape, and that
-       shape is the one that writes both fields in a single layout effect. A
-       band that asked for `keyed` instead would compile, would publish its
-       marks, and would never ring anything. */
-    expect(hookBody(quotesMode, "QuotesMode.tsx", "useQuotesMode")).toMatch(
-      /usePassageLifecycle\(\{ kind: "derived", found, openKey,/,
-    );
-    expect(lifecycle).toMatch(
-      /useLayoutEffect\(\(\) => \{\s*onFound\(found\);\s*if \(kind === "derived"\) onOpenKey\(/,
-    );
-    /* **`Reader` holds the key, and the marks it goes with come from the same
-       slot.** Since 2026-09-06 that is two files: `Reader` puts the pair into
-       one `quotes` slot, and `selectPassages` hands that whole slot back for
-       quotes mode. It was a pair of ternary chains until then —
-       `mode === "quotes" ? quoteOpenKey : …` beside `… ? quoteFound : …` — which
-       is the shape this used to match and the shape that let the ring and the
-       washes come from different bands. Both halves are asserted, because
-       either one alone is satisfied by a `Reader` that builds the slot and a
-       selection that never reads it. */
-    expect(reader).toMatch(/quotes:\s*\{ found: quoteFound, openKey: quoteOpenKey \}/);
+       saying which one the reader pressed — and it must never be able to appear
+       over a *different* set of marks than the one it came from.
+
+       Until 2026-09-08 that was bought with `usePassageLifecycle`'s `derived`
+       shape, which wrote both fields in one layout effect. It is now bought by
+       there being no effect at all: both values come out of one render, and a
+       React commit carries both or neither. So the assertion is that the slot is
+       returned whole. */
+    expect(quoteMarks).toMatch(/return useMemo\(\(\) => \(\{ found, openKey \}\), \[found, openKey\]\);/);
+    /* **And `Reader` must hand that whole slot to `selectPassages`**, so the
+       ring and the marks cannot come from different places. It was a pair of
+       ternary chains until 2026-09-06 — `mode === "quotes" ? quoteOpenKey : …`
+       beside `… ? quoteFound : …` — which is the shape that let them. */
+    expect(reader).toMatch(/quotes,\n/);
     expect(passages, "selectPassages must answer quotes mode with the quotes slot").toMatch(
       /case "quotes":\s*return slots\.quotes;/,
     );

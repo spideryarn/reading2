@@ -149,3 +149,69 @@ export function selectPassages(mode: Mode, slots: PassageSlots): PassageSlot {
     }
   }
 }
+
+/**
+ * **What the PROSE is marked with: the open mode's passages, plus the quotes,
+ * which are marked in every mode.**
+ *
+ * Greg, 2026-09-08 (SPIDERYARN-READING2-2P): *"Always show them in the text
+ * view, even if we're not in quotes mode."*
+ *
+ * A second, narrower question beside `selectPassages` rather than a loosening of
+ * it. `selectPassages` stays a **pick**, and it keeps owning everything that can
+ * only be about one band — the ring, and the three block-level projections
+ * below.
+ *
+ * ## The three consumers this must NOT reach, and why
+ *
+ * `Reader` feeds its chosen slot to four things, and only the first may see the
+ * quotes:
+ *
+ * | consumer | draws | gets the quotes? |
+ * |---|---|---|
+ * | `buildHitMarks` | the marks under the phrases | **yes** — this function |
+ * | `blockStrength` | the paragraph's left bar | no |
+ * | `blockHues` | that bar's colour segments | no |
+ * | `blockMatches` | the spine rail's lanes | no |
+ *
+ * Neither exclusion is fastidiousness; each is a channel a quote would destroy.
+ *
+ * - **`blockStrength` reads `confidence === null ? 1`, and a quote's confidence
+ *   *is* `null`.** So a quote lying in a paragraph a hedged search also matched
+ *   would repaint that paragraph's bar at full strength — overwriting the one
+ *   channel that says how sure the model was. That is exactly the wash bug
+ *   docs/plans/260907c-…md removed from `baseMarks`, arriving by the other door.
+ * - **`blockHues` de-duplicates by slot, and every quote has `slot: 0`** —
+ *   which is the *first saved search's* colour, because `resolveQuotes` gives
+ *   them all one slot so the rail packs one lane. A quote would paint a segment
+ *   in a search's hue, and where that search was the first, the two would
+ *   collapse into a single segment.
+ *
+ * In quotes mode none of this arises: the picked slot *is* the quotes, so they
+ * keep their one rail lane and their bar exactly as they were designed to.
+ *
+ * ## Identity, which is a correctness-adjacent performance fact
+ *
+ * `hitMarks` caches its work on the `Found[]` **by identity** in a `WeakMap`
+ * (search-hits.ts § `unpressed`), and `NO_FOUND` is shared by every non-producer
+ * and asserted to be shared *by identity* in
+ * tests/every-mode-says-which-passages-it-marks.test.ts. So this returns one
+ * side unchanged whenever it can, and only a genuine two-sided merge allocates —
+ * which `Reader` then memoises.
+ *
+ * **No de-duplication**, and that was in the first draft of the plan as a belt.
+ * `Found.key` is unique only *within one result set* (search-hits.ts § `Found`)
+ * and nothing in the type promises it across two independently generated ones,
+ * so a collision would become a silently dropped passage or a ring on the wrong
+ * kind of mark — in exchange for guarding a case the identity check already
+ * covers. A belt that can drop a passage is not a belt. GPT Sol, 2026-09-08.
+ */
+export function proseFound(active: Found[], quotes: Found[]): Found[] {
+  /* Quotes mode, where the picked slot is the quotes themselves. Checked first
+     because it is the case the length tests below would answer wrongly — by
+     concatenating the list with itself. */
+  if (active === quotes) return active;
+  if (quotes.length === 0) return active;
+  if (active.length === 0) return quotes;
+  return [...active, ...quotes];
+}
