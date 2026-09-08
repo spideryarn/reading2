@@ -83,7 +83,6 @@ the other entries here — measured, not assumed, by walking the import closure.
 | `src/web/useDictation.ts` | 1,633 | the microphone: four phases, one owned track, the recorder, the two-pass transcript |
 | `src/web/useDictationField.ts` | 252 | wiring it to a text box: the caret, the span, the closed box |
 | `src/web/useAudioLevel.ts` | 204 | the meter, reading *the track being recorded* |
-| `src/web/MicLevel.tsx` | — | drawing it; inline styles only, no product stylesheet |
 | `src/dictation-limits.ts` | 122 | the size caps and the container list, shared by both ends — what this file was built for |
 | `src/dictation-fillers.ts` | 312 | the ums, deleted (server half) |
 | `src/vocabulary.ts` | 456 | `packTerms`, `MAX_TERM`, the angle-bracket strip (server half) |
@@ -100,9 +99,12 @@ self-check now that fails loudly on exactly that file. The numbers below are fro
 
 #### What is deliberately NOT imported, and why
 
-- **`src/web/DictationStrip.tsx`** (502 lines). It is the *chrome*, and its class names —
-  `prof-mic-note`, `prof-listening`, `prof-interim`, `spin` — are the product's hand-written
-  stylesheet, which the fleet does not load. Importing it would typecheck, build, and render an
+- **`src/web/DictationStrip.tsx`** (502 lines) **and `MicLevel.tsx`.** They are the *chrome*, and
+  their class names — `prof-mic-note`, `prof-listening`, `prof-interim`, `mic-level` — are the
+  product's hand-written stylesheet, which the fleet does not load. `MicLevel` was on the import list
+  for an hour, because a grep for `className="` did not match a template literal and reported it as
+  using inline styles only. It draws five bars off a CSS variable; the fleet's version of that is
+  thirty lines. Importing it would typecheck, build, and render an
   unstyled button: [silent-success](../reusable/silent-success.md) with a green bundle on it. The
   fleet writes its own control against the same hook state. The split is **reuse the machinery,
   write the chrome**, which is also right on the merits: the fleet page follows the device between
