@@ -250,10 +250,29 @@ No model calls. Each is a scheduled job from Stage 2 over primitives that alread
 - **Launch-mode drift.** A session whose last `permission-mode` checkpoint is `default` will stall at
   its next unapprovable call. Measured cost: 34.9 agent-hours since one Sunday. Read
   `permission-mode`, not `auto_mode` — the direction doc says why.
-- **Wedged work.** A `shell` pane whose own command line has not changed in hours. The finding that
-  motivates it — `npx playwright install webkit`, running 5h43m, in all 40 samples, noticed by
-  nobody — needs no new recogniser, because for a shell pane the command line already says what it
-  is doing.
+- **Wedged work.** A `shell` pane whose own command line has not changed in hours. It needs no new
+  recogniser, because for a shell pane the command line already says what it is doing.
+
+  **There is a live specimen, and it is the same one**, which is the finding: the direction doc
+  recorded `npx playwright@1.62.1 install webkit` at 5h43m on 2026-09-08. Measured again at 16:19
+  the same day it was at **14h58m** (`etimes` 53,910, pid 2282035, pane `%2091`, session
+  `wk-install-0116-2281848`). Two things make it the right specimen rather than merely a good story.
+  Its `/proc/<pid>/cwd` reads
+  `/home/greg/code/spideryarn2/.claude/worktrees/glossary-order-touch (deleted)` — **the worktree was
+  removed out from under it and it kept running**, which is the orphan test
+  [diagnose-box-resources.md](../reusable/diagnose-box-resources.md) names. And it has no
+  descendants, 0.0% CPU and 2.9 MB resident, so **it costs nothing**, which is exactly why nine hours
+  of extra wedging passed with the fleet's own direction doc naming it and nobody acting.
+
+  That last point sharpens the rule: **the trigger is age and a dead cwd, not resource consumption.**
+  A rule that fired on cost would never have fired on this one, and this one is the case we have.
+
+  **It is deliberately still alive.** Greg, 2026-09-08: *"Yes, let's leave it as a test case for
+  later."* So pid 2282035 / session `wk-install-0116-2281848` is a **fixture, not litter** — anybody
+  running [diagnose-box-resources.md](../reusable/diagnose-box-resources.md) over this box will find
+  it and it will look exactly like the thing that doc says to clean up. Leave it until Stage 3 has
+  fired against it, then kill it and record that it was the first thing the rule caught. Its cost for
+  as long as it stands is 2.9 MB and one tmux session.
 - **Box pressure and usage proximity.** Vitals already exist in `health.ts`; usage already exists in
   `usage.ts`. The action is the existing staggered `resource-broadcast`, **and then the half that is
   always forgotten: check later that they woke up.** Greg asked for this explicitly. A pause that
@@ -298,6 +317,123 @@ the wave-2 worktrees had calmed down.
   and pausing, which is Stage 3.
 - **Configuring the schedule from the web interface.** Greg called it a nice-to-have future stage.
 - **Renaming `docs/plans/260908f-orchestrator-wave-2-….md`.** A dated plan record, mid-flight.
+
+## The review, and what it changed
+
+**GPT Sol reviewed this plan at `004a12eb` and blocked it: no P0, eleven P1s.**
+[The full text](260908g-plan-review-sol.md). Its headline is architectural — *"prose gates cannot
+constrain an Overseer that retains unrestricted Bash, `tmux send-keys`, and passwordless sudo"* — and
+that one is escalated to Greg rather than settled here (§ S1, below). The rest are taken, and four of
+them killed a claim this plan made.
+
+### Claims of mine that were wrong
+
+- **S5 — the store's three-write ordering does not give occurrence identity, and I asserted that it
+  did.** Those three writes (append fleet events, save the snapshot baseline, checkpoint the cursor)
+  protect *snapshot differencing*. There is no job-occurrence schema, no executor claim, and no
+  atomic relationship with process creation. **I took that from writing the plan rather than from
+  reading `store.ts`**, which is the exact trap
+  [improve-the-codebase.md](../reusable/improve-the-codebase.md) names: every finding is a claim,
+  including your own. Stage 2 now has to build occurrence identity rather than inherit it —
+  `(job id, scheduled instant, authorised-definition hash)`, with states `reserved`,
+  `started`, `finished`, `refused`, `unknown`, claimed durably **before** any side effect. And
+  **`unknown` is never auto-retried**, because the crash window between "spawn may have succeeded"
+  and "acknowledgement is durable" cannot be closed by ordering — only named honestly.
+- **S6 — reusing the `attentionRunning` overlap idiom permits permanent silent suppression.** A
+  scheduled job whose promise never settles (a hung model subprocess) leaves the in-memory field
+  non-null for ever. Every later tick then *correctly* declines to overlap, the heartbeat stays
+  healthy, and **that job never runs again** — a dead job wearing a green light, which is this whole
+  area's failure mode. So the guard is a **lease with a deadline**, and an overdue lease is a `stuck`
+  state that alarms, not a quiet skip.
+- **S11 — an on-box systemd timer is not A27.** I let the dead-man check and A27 collapse into one
+  line. They are different: the timer is a local watchdog for a daemon that died, and A27 is about
+  the **host** disappearing, which takes the watcher with it. The timer is worth having and **A27
+  stays open**, needing an off-box check that is deliberately tested by stopping the thing it
+  watches.
+- **S7 — Stage 4's acceptance test passes while being wrong.** Thirty deferred jobs each observe one
+  low-load sample, each independently passes "vitals allow it", and the drain launches all thirty
+  before the next sample sees their cost — the load-391 incident with an extra step. I had written
+  this into the direction doc and then failed to write it into the stage it governs. The drain is
+  **one heavy job per settled observation window**, against a durable reservation, failing closed on
+  a stale or unknown reading.
+
+### S2 — the product gate asks a question that has no answer yet
+
+The sharpest of the design findings, and it is right. *"Outlives the branch"* is not decidable at
+dispatch: a task that looks branch-local becomes a schema field or a changed prompt **during**
+implementation, by which time gate 2 has already admitted it. Taken literally the gate either permits
+the lasting decision silently or escalates every coding task.
+
+**The fix fits machinery this repo already has.** Split it in two: the Overseer may authorise
+**investigation and a plan**, which is cheap and reversible; the durable decisions become visible in
+the plan doc and the diff, and *that* is where the gate applies and where Greg's veto lands. It is
+[engineering-manager.md](../reusable/engineering-manager.md)'s existing shape — a plan reviewed
+before it is built — rather than a new mechanism.
+
+### S3 — gate 1 was prose about a log that does not exist
+
+Stage 1 could be declared done — and was — while nothing durable records a single decision, because
+the store only understands fleet and session events. So gate 1 needs a **typed durable event
+appended before delivery, fail-closed**: decision id, speaker, source authorisation, whether it is an
+assumption or a fact or a decline, what it affects, and its status. **A failed append must prevent
+the delivery**, and that wants a test.
+
+Sol also caught the runbook overstating itself: `renderSpoken` deliberately emits `/compact` without
+the Overseer prefix, so *"every message is stamped as yours"* is not literally true. The exception is
+real and documented; the sentence claiming otherwise was mine.
+
+### S12 — gate 4 is not an executable budget
+
+Fair, and P2. Several components each making a "bounded" number of model calls is unbounded in
+total. It wants one global budget — concurrency, cost and wall-time — shared across scheduling,
+routing and recovery, with an explicit exhausted state.
+
+### Three findings that are live defects, and none of them is mine
+
+Verified in the code rather than taken on the review's word. **All three live in `tools/fleet/`,
+which belongs to the dashboard agent**, so they are reported rather than fixed here — reaching into
+another stage's code is the thing
+[architecture.md § Stage ownership](../project/architecture.md#stage-ownership) forbids.
+
+- **S8 — the resource broadcast skips the agents causing the load.** `drainGate` classifies a
+  *working* session as `later`, and `broadcastRoute` only delivers to `now`; the `later` ones get a
+  `skippedOutcome` and are **not** durably queued. So under pressure the broadcast reaches the idle
+  agents and misses the ones running the test suites, which are by definition working. The code says
+  so in its own comment — *"a session that is working [is] left out here"* — and it is honest about
+  it in the response, so this is a gap in the action rather than a lie about it. It is still the
+  wrong half of the fleet.
+
+  **And the refinement that matters for whoever fixes it: the capability is not missing, the
+  broadcast declined to use it.** `steerableStatus` returns `null` for `working` — a working session
+  *may* be typed at, and the ordinary `/api/steer/message` route does exactly that; measured tonight,
+  a message to a session the page called `working` returned `ok:true` and sent. `drainGate` layers a
+  separate *not now* policy on top for the queue, which is a defensible thing for a queue to do. The
+  defect is only that the broadcast turns that "not now" into a **skipped outcome rather than a
+  durable intent**, so "later" means "never". Fixing it is enqueue-and-confirm, not new plumbing.
+- **S9 — a kill plan can report `completed: true` with every kill having failed.** `runPlan` treats
+  `best-effort` steps as non-stopping; they are recorded per-step as `failed-ignored`, which is
+  honest, but the plan-level `completed` does not reflect them. Whether the route's summary then
+  reads as "killed" is the dashboard's call.
+- **S4 — the four gates on enacted actions are human-interface checks, not autonomous-caller
+  checks.** `confirm: true` proves a caller sent a boolean. `planKillSession` checks tmux identity,
+  not dirty state, unpushed commits, debrief status, or an outstanding `partial` delivery. This is
+  the one I suspected before the review and it is worse than I guessed.
+
+### S10 — a rebuilt box would come up with a deaf Overseer, and this one is confirmed
+
+`infra/hetzner/provision.sh:1501` runs `systemctl enable overseer.service`. Nothing enables
+`fleet-dashboard.service`; line 1337 is a **comment** telling a human to run
+`sudo systemctl enable --now fleet-dashboard` once the tmux job is stopped. Both units are installed
+and `systemctl is-enabled` reports `disabled` for both today.
+
+So on a box built from this file, after a reboot: **the Overseer starts and the only source it has
+for fleet snapshots does not.** It would heartbeat healthily and see nothing, which is precisely
+the alive-and-deaf case `lastGoodSnapshotAt` was invented to expose — the field exists, and nothing
+would have been watching it at 4am.
+
+**The fix is not simply to enable the dashboard**, and the reason is in that comment: its owner asked
+to be consulted first, because two supervisors on one port is a fight in which the loser's failure
+looks like a crash. So this goes to the dashboard's owner as a question, with the asymmetry named.
 
 ## Risks
 

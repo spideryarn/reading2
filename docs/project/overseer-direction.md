@@ -273,9 +273,19 @@ crontab additionally strips the environment so `node` and `tsx` are not on its `
 "three-hourly" job is measured from its last actual run, not from a wall-clock boundary — and cannot
 express "9am on weekdays". Nothing in the job list needs either.
 
-**What this does to [cron-scheduler.md](cron-scheduler.md)** is close the gap it describes, for jobs
-the Overseer runs. It does not close it for anything else, and that doc stays the home of the general
-question.
+**What this does to [cron-scheduler.md](cron-scheduler.md) is narrower than it looks, and the
+distinction is that doc's own.** It ends with *"the always-on box, which is not the app and should
+not become its scheduler"*, and this scheduler does not change that: it runs agent-fleet jobs on the
+box, and the app's periodic work — staging litter, orphaned blobs, a library-wide re-run after a
+prompt change — is still unreached and still wants the Vercel cron that doc weighs.
+
+**What it does close is one specific thing that doc names as broken.** Its last section says the
+answer is *not* a cron in an agent's session, because a session cron dies with its session and the
+only evidence is a gap in a log nobody reads — and then observes that
+[feedback-reports.md](feedback-reports.md)'s loop runs exactly that way today and is watched by a
+person for that reason. **That loop is one of the Overseer's standing jobs**, so it moves off a
+session cron and onto the daemon's clock, under `Restart=always`, with its dispatches recorded. The
+failure that doc describes is the failure this scheduler exists to end.
 
 ## The store
 

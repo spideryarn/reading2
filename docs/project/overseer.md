@@ -23,13 +23,26 @@ than a list of permitted actions, because a list is a thing somebody has to keep
 
 Every message you send is stamped as yours and never arrives in Greg's voice. That is enforced by
 `QueuedItem.speaker` being required rather than by your care, and you should not work around it.
+
 Every answer you give on his behalf is attributed on delivery, so the agent receiving it weights it
 as a peer's suggestion and pushes back if it is wrong for what it is doing.
+
+**One documented exception, and knowing it is part of obeying the rule:** `renderSpoken` sends
+`/compact` without the prefix, because its text is fixed and reviewed. That is the *only* unprefixed
+form, and a general "slash commands are exempt" rule would turn one reviewed hole into a way to speak
+in Greg's voice. Free-text slash commands are refused for anyone but him.
 
 And every decision, assumption and decline goes in the log. **Attribution and logging are one
 principle pointed at two audiences** — the agent now, and Greg in the morning.
 
 ### 2. Answer facts, route judgement, default the product call
+
+**Read the last bullet of this gate before the rest of it.** Whether something *outlives the branch*
+is often not knowable when the work is dispatched — a task that looks branch-local becomes a schema
+field halfway through. So the gate applies in two places, not one: you may authorise **investigation
+and a plan** freely, because that is cheap and reversible, and the gate bites again when the plan and
+the diff exist and the durable decisions have become visible. That is where Greg's veto lands, and it
+is the cadence [engineering-manager.md](../reusable/engineering-manager.md) already runs.
 
 - **Facts you can verify, you answer.** *"Should I pull latest?"* is always yes. *"Are the tests red
   because of me?"* is answered by looking at the other trees. *"Is the box overloaded?"* comes from
@@ -70,13 +83,40 @@ This one is a list on purpose, because the test is uncomputable at 3am and the l
   queue are queued. A job of your own devising is a proposal in the log. *"My job is basically new
   ideas"* is a boundary on origination, and its test is simply: **is it in the queue?**
 
-### 4. Never spend what you are rationing
+**And the categories that were missing from that list until GPT Sol went looking on 2026-09-08.** Its
+objection was that a prohibited list is only as good as its completeness, which is exactly why the
+direction doc originally preferred a test — so these are here because the list is the thing we chose,
+and a list has to be maintained:
+
+- **Telling another agent to do what you may not.** This is the one that matters most, because it is
+  the shape a gate cannot see: *"finish this work"* sent to an unrestricted coding agent is an
+  innocuous sentence and an arbitrary capability. **The gates bind what you cause, not what you
+  type.** If you would not run it, do not ask for it.
+- **Git that rewrites or discards** — force-pushes, branch or tag deletion, and everything already
+  forbidden in [AGENTS.md](../../AGENTS.md).
+- **Writes outside a branch** — the primary checkout, `.env.local`, credentials, systemd units,
+  `infra/`, or the fleet's own configuration.
+- **Anything that speaks to the outside world** — email, an issue, a PR, a comment, a publish, a
+  credential rotation.
+- **Modifying your own constraints** — these gates, the queue that authorises you, the decision log,
+  the watchdog, or `FLEET_ACT_ENABLED`. You may *propose* a change to any of them.
+- **Rebooting, shutting down, or arbitrary service control.**
+- **Closing a session before its debrief, or while a steering delivery to it is `partial` or
+  `unknown`** — you do not know what it received.
+- **Acting on a job definition that changed after it was authorised.** The jobs here *are* documents,
+  so editing a doc could otherwise enlarge what you may do unattended.
+
+### 4. Never spend what you are rationing, and the budget is global
 
 You watch the usage limits. A supervisor that burns the quota it exists to protect has failed in the
 worst possible hour, because the hour the quota runs out is the hour you are most needed. The cheap
 deterministic tick must keep working when the subscriptions are exhausted; the model tick is the
 expensive one and is bounded. **Thirty-six sessions must not produce thirty-six model reviews a
 minute.**
+
+**One budget, not one per component.** Scheduling, question-routing and reboot recovery each keeping
+to a locally sensible number of model calls is unbounded in total; the limit is a shared reservation
+across all three, with an explicit *exhausted* state that says so out loud rather than degrading.
 
 ### On editing docs whose wording is a rule
 

@@ -122,24 +122,221 @@ Three consequences taken directly into the design:
 Fixing it means teaching the awk the `argv[0]`-and-exact-token rule, or moving that decision off the
 box into TypeScript over the `ps` blob it already ships back.
 
+## The design: the two rules turn out to be one rule
+
+The two readers end the option region differently — one at the first bare word, one at `--` — and
+that looked like a conflict to arbitrate. It is not. **On faithful argv both rules are correct, and
+each existing reader is the same rule with one half missing.**
+
+    stop at `--`, or at the first bare word, whichever comes first
+
+On real `/proc` argv the prompt is **one element**, so if there is no `--` the prompt is the first
+bare word and the two rules coincide; if there is a `--`, it comes first and is exactly what the CLI
+itself does. Neither reader is wrong about its half. They are each incomplete.
+
+Spiked before designing anything: the unified rule against nine constructed cases with the intended
+answer written down first, and against every live `claude` on the box, in **both** fidelities.
+
+```
+9 constructed cases, 0 wrong.
+6 live claude processes; 0 where the unified rule got it wrong (argv or flattened).
+```
+
+It fixes all three TypeScript-side divergences as a consequence rather than as special cases:
+
+- **D1** — `--` is honoured, so `-- --session-id B` no longer reads as a second id.
+- **D2** — the flattened reader stops at the prompt's first word, so a prompt *mentioning*
+  `--session-id` no longer produces a second value, and the pane stops being unaddressable.
+- **D6** — `--model opus -p` is caught, because the flag table says `--model` takes a value, so `-p`
+  is still inside the option region. That closes `work.ts`'s self-declared KNOWN GAP.
+
+**And it makes the lossy input dramatically safer, which was the unexpected part.** The launcher at
+`scripts/gjd-remote.ts` emits `-- "$(cat …)"` before every prompt. A reader that honours `--` never
+scans a prompt at all on those command lines — so the `ps` flattening, which is what makes prose
+dangerous, stops mattering for exactly the shapes that carry prose. Two of the live processes are
+that shape.
+
+### The seam: share the parse, not the verdict
+
+The reader returns a **reading**, and each caller keeps its own policy. This is deliberate, and it
+is the answer to "one shared reading that is wrong is worse than two":
+
+```ts
+type ClaudeReading = {
+  headless: boolean;
+  sessionIds: readonly string[];   // every one found in the option region
+  endedBy: "double-dash" | "first-bare-word" | "end-of-argv";
+};
+```
+
+- `harness.ts` keeps *ambiguous when two ids **differ***.
+- `steer.ts` keeps *refuse unless exactly one*.
+
+Both are still true statements about the same parse, and neither has to be talked out of its rule.
+The grammar is shared because it is a fact about `claude`; the policy stays local because it is a
+fact about what the caller is about to do.
+
+### The rule above is NOT enough — Sol's P1-3, checked and upheld
+
+**Round 1 verdict: revise and split.** The unified rule is right about where the option region ends
+and wrong about what is inside it, because it assumes **every flag takes at most one value** and that
+**the first bare word is the prompt**. `claude --help` on 2.1.263, read today, says otherwise:
+
+- **Variadic flags.** `--add-dir <directories...>`, `--allowedTools, --allowed-tools <tools...>`,
+  `--betas <betas...>`. One value is a guess.
+- **Optional-value flags.** `--cloud [description|session_id|url]` — the brackets mean it may take
+  none.
+- **Subcommands.** `Usage: claude [options] [command] [prompt]`, and the list is long: `agents`,
+  `attach`, `auth`, `auto-mode`, `doctor`, `gateway`, `import`, `install`, `logs`, `mcp`, `plugin`,
+  `project`, `respawn`, `rm`. **`claude agents` is a command, not a prompt.**
+
+Measured, because Sol has been wrong before and this changes the design:
+
+```
+VARIADIC --add-dir before --print
+  claude --session-id A --add-dir one two --print -- prompt
+  truth:            headless; steering must be refused
+  unified rule:     headless=false ids=[A]        <-- consumes `one`, stops at `two`, never sees --print
+  harness.ts today: {"found":"claude-code","claudeSessionId":"A"}
+
+SUBCOMMAND `claude agents`
+  truth:            not a steerable session at all
+  harness.ts today: {"found":"claude-code","claudeSessionId":null}
+```
+
+Two things follow. **These are existing defects, not ones the unification would introduce** —
+`harness.ts` gets them wrong today in exactly the same way. And **the plan's own headline claim was
+false**: a reader that guesses an arity is not one that "fails loudly when the grammar moves". It
+fails quietly, in the granting direction.
+
+### So: recognise a narrow shape, and refuse everything else
+
+Sol's alternative, adopted. Do not model Claude's grammar; **model the shapes this repo owns**, and
+return `unreadable` for anything else.
+
+```ts
+type ClaudeReading =
+  | { kind: "not-claude"; why: string }
+  | { kind: "subcommand"; name: string }                    // `claude agents` — not a session
+  | { kind: "session"; headless: boolean; sessionIds: readonly string[] }
+  | { kind: "unreadable"; why: string };                    // an unknown flag: arity unknown, so refuse
+```
+
+An **unknown flag makes the whole reading `unreadable`**, named in `why`. That is the loud failure,
+and it is the opposite of the `yargs-parser` fallback the research recommended — right for a general
+parser, wrong here, because the consequence of a wrong guess is prose typed into a live terminal.
+
+It costs nothing today: every one of the live command lines uses only `--session-id`,
+`--permission-mode`, `--name` and `--`, so the real population still parses confidently. The day
+Anthropic ships a flag we do not know, the dashboard says *I cannot read this command line, it has a
+`--foo` I do not know* instead of confidently mislabelling the pane. `unreadable` grants nothing and
+delivers nothing, so it is fail-closed **and** fail-loud.
+
+**And the wrappers must propagate it** (Sol P1-2). `isClaudeForSession` returning `boolean` collapses
+*unreadable* into `false`, and `verifyTarget` then says "no live Claude for this session" — which is
+a claim about the fleet when the truth is a claim about our parser. The refusal reason has to be able
+to say which.
+
+### Fidelity is a type, not a comment
+
+Naming a boundary function "lossy" does not stop anyone calling it. So the input is tagged:
+
+```ts
+type ClaudeCommandLine =
+  | { fidelity: "argv"; argv: readonly string[] }          // /proc/<pid>/cmdline, NUL-split
+  | { fidelity: "ps-flattened"; argv: readonly string[] };  // `ps args`, quoting already destroyed
+```
+
+`isClaudeForSession` — the one verdict that presses Enter in a live pane — accepts only the `argv`
+arm, and the compiler refuses to hand it a flattened one. The unknown-flag fallback is
+`yargs-parser`'s policy, which `recogniseClaude` already implements by hand: skip the flag, and skip
+the next word too unless it looks like a flag.
+
 ## Stages
 
-- **Stage A — the shared reader.** One module, one grammar, an explicit table of which `claude`
-  flags take a value, `readonly string[]` in, a discriminated union out that can say *headless*,
-  *this conversation*, and *I cannot tell* separately. Fixtures from the live corpus. Tests that
-  assert on the **consequence** (what the capability table grants, what `verifyTarget` does) and not
-  only on the parser's return value.
-- **Stage B — both TypeScript call sites onto it.** `isClaudeForSession` keeps its name, signature
-  and exact semantics; its body becomes a call. `recogniseClaude` likewise. Any behaviour change —
-  D1, D2, D5 — is a deliberate, separately-argued line in this doc, not a side effect.
-- **Stage C — the awk probe.** The only live defect. Decide between teaching the awk and moving the
-  decision into TypeScript, and say why in this doc.
+**Reordered after Sol's round 1: Stage C goes first and alone.** It is the only defect that exists
+today, it stands on its own, and it does not depend on the reader design that round 1 sent back for
+revision.
 
-Library choice for the parsing itself: **pending** — research running against
-[third-party-library-selection.md](../reusable/third-party-library-selection.md). The requirement
-that will decide it is whether a candidate can be told to **stop at the first non-option argument**
-and be given an **explicit table of which flags take values**; a parser that guesses either is the
-bug class we are removing.
+- **Stage C — the awk probe** (`scripts/gjd-remote-tmux.ts:520`). Check the basename of word one,
+  scan exact tokens only until a bare `--`, accept both `--session-id ID` and `--session-id=ID`, and
+  apply the D2 rule below. **Teach the awk; do not ship the process table back** — Sol's P2-1, and
+  the reason is better than the one I had: the raw `ps` blob is not currently sent home at all, only
+  a reduced per-session `proc`, so moving the decision into TypeScript would widen the wire to carry
+  **every process's flattened argv, prompts and possibly secrets included**, over ssh, to fix a
+  labelling bug. Document in the awk that it recognises a launcher-owned shape rather than
+  reconstructing argv.
+- **Stage A — the shared reader**, in the `not-claude`/`subcommand`/`session`/`unreadable` shape
+  above, with the fidelity tag, a table of the flags this repo owns, and `unreadable` for everything
+  else.
+- **Stage B — all three TypeScript consumers onto it**, not two: `recogniseClaude`,
+  `isClaudeForSession`, **and `RECOGNISERS["claude-headless"]` in `work.ts`** (Sol P1-2 — Stage B as
+  first written left D6 alive while claiming to have removed the class). The refusal reasons carry
+  *unreadable* distinctly from *no claude here*.
+
+### The behaviour choices, settled
+
+| | rule that wins | why |
+|---|---|---|
+| **D1** bare `--` | `steer.ts` | Stop scanning; everything after is positional. Fixes a shape the launcher generates on every prompted run, and no legitimate flag is lost. |
+| **D2** duplicate ids | `harness.ts`, **corrected** | Accept when *every* occurrence is the same non-empty id; refuse if any differ or any is missing its value. Availability without risk: first-and-last semantics converge on one value. **`recogniseClaude` compares only the first two today** (Sol P2-2), so `A A B` is accepted as `A` — the fix is a set over all occurrences before the boundary, with a three-or-more test. |
+| **D5** `--print` | `harness.ts` | Headless beats session identity, and steering is refused. Low urgency, right invariant. Sol: *"not overstated as a correctness rule; it would be overstated only as justification for urgency."* |
+
+### What the tests must be
+
+Sol's P2-3, taken: **the seven live captures are a seed corpus, not a drift detector.** They contain
+none of the discriminating D2 or D5 shapes — a suite made only of them would be green on every bug in
+this document. So: real captures as positive fixtures, **plus** constructed adversarial cases,
+**plus** consequence-level assertions — what the capability table grants, what `verifyTarget` does —
+rather than assertions on the parser's return value alone.
+
+## The library question, and why the answer is "none"
+
+Researched against [third-party-library-selection.md](../reusable/third-party-library-selection.md)
+on 2026-09-08. Two requirements decide it: can the parser be told to **stop at the first non-option
+argument**, and can it be given an **explicit table of which flags take values**. Weekly downloads
+and last-publish dates were checked, because "lots of pretraining data" is the first criterion.
+
+| candidate | stops at first positional | flag table | verdict |
+|---|---|---|---|
+| `node:util.parseArgs` | **no** | yes | disqualified — see below |
+| `arg` | `stopAtPositional` | yes | disqualified — see below |
+| `yargs-parser` | `halt-at-non-option` | yes | passes technically; buys nothing |
+| `minimist` / `mri` | `stopEarly` / absent | yes | unmaintained (2023-02, 2021-09) |
+| `commander` / `citty` | no bare primitive | wrong shape | frameworks for authoring a CLI, not reading one |
+
+**Node's built-in is disqualified by measurement, not by argument.** Run live on this box's Node
+v26.8.1 with `strict:false, allowPositionals:true`, `parseArgs` on
+`['--session-id','abc','Please','add','a','--print','flag']` returns **`values.print === true`** —
+`--print` read as a real flag from inside the prose. That is the exact false grant `recogniseClaude`
+was fixed to prevent. `tokens:true` does carry enough to stop at the first positional yourself, but
+using it means writing `recogniseClaude`'s walking loop again against a different data shape.
+
+**The finding that actually decides it**, and it is in no README:
+
+> "Unknown flag consumes the next bare word" is the load-bearing default. It is what lets an
+> unrecognised *future* Anthropic flag not derail a stop-at-first-positional scan — and it is a
+> genuine dividing line: `yargs-parser` has it, `arg` does not, though both advertise an
+> equivalent-sounding feature. It only shows up by reading the parsing loop.
+
+So `arg`'s `stopAtPositional`, the one purpose-built primitive for this exact class, **fails**: in
+permissive mode it pushes an unknown flag to positionals without eating its value, so a future
+value-taking flag makes the scan halt on that value and never reach the session id. `yargs-parser`
+survives all four criteria — and adopting it means writing out `boolean:['print'],
+string:['session-id'], alias:{p:'print'}`, which *is* Claude's grammar restated in yargs-parser's
+vocabulary. It also ships no types of its own, and `@types/yargs-parser` is pinned a major version
+behind the current API, which is poor company for a `strict` codebase.
+
+**Decision: hand-written, in this repo, with an explicit flag table.** The existing
+`recogniseClaude` heuristic — skip an unknown flag, and skip the next word too unless it looks like
+a flag — turns out to be the same policy `yargs-parser` implements for the same reason. That is
+worth knowing: the code was right, it just was not shared, named, or tested as a grammar.
+
+A third requirement falls out of the same research and belongs in the module's header: **the
+`stop-at-first-positional` rule and the `which-flags-take-values` table are not independent
+features when the flag set is only partly known.** They interact, and that interaction is what
+disqualified `arg`. Anyone re-running a feature checklist against a parser for a foreign CLI needs
+to test the pair, not the two boxes.
 
 ## The simpler option, named
 
