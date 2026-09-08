@@ -60,7 +60,7 @@
  */
 import type { SessionMeta, SessionState } from "../../scripts/gjd-remote-tmux.js";
 import type { AdmissibleSnapshot } from "./admissible.js";
-import type { DefinitionHash, JobOutcome, OccurrenceId } from "./jobs.js";
+import type { BehaviourHash, JobOutcome, OccurrenceId } from "./jobs.js";
 import type { FreshSnapshot, ObservedRow, ObservedStatus } from "./observation.js";
 import type { RuleFinding, RuleId, RuleOutcome } from "./rules.js";
 
@@ -568,7 +568,16 @@ export type JobEvent =
       /** The whole key, spread rather than nested, so `grep` finds a job id in the log without a JSON parser. */
       jobId: string;
       scheduledAt: string;
-      definitionHash: DefinitionHash;
+      /**
+       * The BEHAVIOUR the run was authorised under, for audit.
+       *
+       * It was `definitionHash` until 2026-09-09, when cadence and lease left
+       * the fingerprint (GPT Sol's S8-1) and the old name stopped being true.
+       * `store.ts`'s parser still reads the old key out of lines written before
+       * that, because a ledger whose whole value is that it can be read must not
+       * be made unreadable by a rename.
+       */
+      behaviourHash: BehaviourHash;
       occurrenceId: OccurrenceId;
       /** WHICH DAEMON claimed it. Without this a reservation left by a dead instance is indistinguishable from one in flight. */
       instanceId: string;

@@ -962,4 +962,135 @@ describe.skipIf(!CAN_RUN)("the remote script, actually run", () => {
     stubClaude("[]");
     expect(parseSessions(run()).sessions[0]?.name).toBe("weird|name");
   });
+
+  /**
+   * WHERE THE TITLE COMES FROM, WHICH NOTHING HAS EVER CHECKED.
+   *
+   * Claude Code writes **two** kinds of title record into a transcript, and
+   * until 2026-09-09 this script read only one of them. `"aiTitle"` is the
+   * title the harness generated for itself; `"customTitle"` is one the session
+   * was given. Reading only `aiTitle` meant every session launched by
+   * `gjd-remote` with a name — which is most of the fleet — displayed as
+   * untitled for its whole life.
+   *
+   * Measured on the live box on 2026-09-09 before the fix: of 8 live Claude
+   * sessions, **3** had an `aiTitle` and **8** had one or the other. The word
+   * `customTitle` appeared in no source file in the repo; the harness writes it.
+   *
+   * **A chosen title wins outright, and "most recent" would be wrong** — which
+   * is the opposite of what the first version of this block said, and the
+   * correction is the whole point of the pair test below. The harness emits the
+   * two **as a pair**, `customTitle` first and `aiTitle` immediately after, and
+   * re-emits the pair every time it re-titles. So the last record of either
+   * kind is *always* the generated one, and a newest-wins rule discards the
+   * chosen name every time.
+   *
+   * Census over every transcript under `~/.claude/projects/` on 2026-09-09:
+   * **70** files carry a `customTitle`, **3** of those also carry an `aiTitle`,
+   * and in all 3 the last title record is the `aiTitle`. One of the 3 was the
+   * Overseer's own session, where Greg had set "Overseer" and the page kept
+   * showing "Overseer and fleet improvement roadmap".
+   *
+   * (An earlier census here said the two keys never co-occur. It ended in
+   * `head -30` over 70 files, and the truncated list was written up as an
+   * exhaustive one — [docs/reusable/silent-success.md](../docs/reusable/silent-success.md)
+   * is about exactly this shape of mistake.)
+   *
+   * **Renaming a tmux session writes nothing here**, so it is deliberately not
+   * covered and this fix does not address it: that is a separate fact, carried
+   * on `Session.name`, and how the page shows it is the page's decision.
+   */
+  describe("the title, which comes from either of two records", () => {
+    /** A transcript where `HOME` is the temp dir the script is run with. */
+    function stubTranscript(uuid: string, lines: readonly string[]): void {
+      const project = path.join(dir, ".claude", "projects", "-home-greg-code-spideryarn2");
+      mkdirSync(project, { recursive: true });
+      writeFileSync(path.join(project, `${uuid}.jsonl`), lines.map((l) => `${l}\n`).join(""));
+    }
+
+    /** One title record, as the harness writes it — a fragment, not the whole line. */
+    const record = (key: "aiTitle" | "customTitle", value: string) =>
+      JSON.stringify({ type: "summary", [key]: value });
+
+    function titleOf(): string | undefined {
+      stubPsIdle();
+      stubClaude("[]");
+      return parseSessions(run()).sessions[0]?.title;
+    }
+
+    it("reads an aiTitle, which is what it always did", () => {
+      stubTmux(1, METADATA);
+      stubTranscript(UUIDS[0] as string, [record("aiTitle", "the generated one")]);
+      expect(titleOf()).toBe("the generated one");
+    });
+
+    /** RED before the fix: this is the whole reported bug. */
+    it("reads a customTitle when that is the only title the session has", () => {
+      stubTmux(1, METADATA);
+      stubTranscript(UUIDS[0] as string, [record("customTitle", "260908f-roadmap-exec-identity")]);
+      expect(titleOf()).toBe("260908f-roadmap-exec-identity");
+    });
+
+    /** RED before the fix: Greg renames a session and the older aiTitle wins. */
+    it("prefers a rename that came after the generated title", () => {
+      stubTmux(1, METADATA);
+      stubTranscript(UUIDS[0] as string, [
+        record("aiTitle", "some earlier guess"),
+        record("customTitle", "Overseer"),
+      ]);
+      expect(titleOf()).toBe("Overseer");
+    });
+
+    /**
+     * THE PAIR, AND THE CASE THAT CORRECTED THIS WHOLE STAGE.
+     *
+     * Taken from lines 1708-1709 of the Overseer's own transcript
+     * (`606cb12a-…jsonl`), where the two records are exactly this shape and this
+     * order. A newest-of-both rule reads the `aiTitle` here and throws away the
+     * name Greg chose — which is what the page was doing, and why one row did
+     * not change when the first version of this fix went in.
+     */
+    it("keeps the chosen title when the harness emits a generated one right after it", () => {
+      stubTmux(1, METADATA);
+      stubTranscript(UUIDS[0] as string, [
+        record("customTitle", "Overseer"),
+        record("aiTitle", "Overseer and fleet improvement roadmap"),
+      ]);
+      expect(titleOf()).toBe("Overseer");
+    });
+
+    /** And it keeps holding after the harness has re-titled several times. */
+    it("keeps the chosen title through repeated re-titling", () => {
+      stubTmux(1, METADATA);
+      stubTranscript(UUIDS[0] as string, [
+        record("customTitle", "Overseer"),
+        record("aiTitle", "an early guess"),
+        record("customTitle", "Overseer"),
+        record("aiTitle", "Overseer and fleet improvement roadmap"),
+      ]);
+      expect(titleOf()).toBe("Overseer");
+    });
+
+    /** The last CHOSEN one wins, when a session has been renamed more than once. */
+    it("takes the most recent of several chosen titles", () => {
+      stubTmux(1, METADATA);
+      stubTranscript(UUIDS[0] as string, [
+        record("customTitle", "what it was called first"),
+        record("aiTitle", "a generated one in between"),
+        record("customTitle", "what it is called now"),
+      ]);
+      expect(titleOf()).toBe("what it is called now");
+    });
+
+    it("leaves the title empty when the transcript has neither, rather than inventing one", () => {
+      stubTmux(1, METADATA);
+      stubTranscript(UUIDS[0] as string, [JSON.stringify({ type: "user", text: "no title here" })]);
+      expect(titleOf()).toBe("");
+    });
+
+    it("leaves the title empty when there is no transcript at all", () => {
+      stubTmux(1, METADATA);
+      expect(titleOf()).toBe("");
+    });
+  });
 });

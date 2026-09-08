@@ -33,7 +33,7 @@
  * guarantee, far fewer false trips; `rule-protocol.ts`'s header has the
  * argument and `tests/overseer-rules.test.ts` asserts both directions.
  *
- * ## Three gates, and only one of them is about the clock
+ * ## Four gates, and only two of them are about the clock
  *
  * A tick asks, in this order:
  *
@@ -41,14 +41,22 @@
  *     one, which reads as *nothing has ever run* — a licence to run everything
  *     again. So a lost history holds every job (`history-lost`). GPT Sol's C3:
  *     *a cold start is not permission*.
- *  2. **Is this definition the one that was authorised?** The pin lives beside
- *     the definition and is compared before anything else about the job is
- *     asked (`unauthorised`). It used to be that an edited definition merely
+ *  2. **Is this job's BEHAVIOUR the one that was authorised?** The pin lives
+ *     beside the definition and is compared before anything else about the job
+ *     is asked (`unauthorised`). It used to be that an edited definition merely
  *     lost its history — and `due()` reads no history as *due now*, so an edit
  *     dispatched the edited version immediately, which is the opposite of what
- *     the runbook says. GPT Sol's C2.
+ *     the runbook says. GPT Sol's C2. The pin says nothing about the SCHEDULE,
+ *     which is S8-1: a cadence edit is not a re-authorisation and must not need
+ *     one.
  *  3. **Has enough time passed?** Only now, and only for a job that got past
- *     the first two.
+ *     the first two. A job that has never run is measured from the durable
+ *     `armedAt` rather than being due at once (S8-6).
+ *  4. **Was another Claude session launched too recently?** A durable minimum
+ *     separation between session launches, checked against the ledger so it
+ *     survives downtime and restarts — GPT Sol's S8-5, which is what a per-job
+ *     phase offset could not do. The job that loses is `spacing-held`, a state
+ *     a reader can see, never a silent skip.
  *
  * ## Fail closed, and what that actually means here
  *
@@ -101,12 +109,14 @@
 import type { OverseerEvent } from "./diff.js";
 import {
   authorisationOf,
-  definitionHash,
+  behaviourHash,
   due,
   lastRunOf,
+  lastSessionLaunchOf,
   leaseExpired,
   occurrenceId,
   standingOf,
+  type Arming,
   type AuthorisedJob,
   type JobDefinition,
   type JobSpawn,
@@ -118,7 +128,7 @@ import {
   type SpawnJob,
 } from "./jobs.js";
 import { record, startRule, type ActingRuleWork, type ProposingRuleWork } from "./rule-protocol.js";
-import type { AppendResult } from "./store.js";
+import type { AppendResult, StoredScheduler } from "./store.js";
 
 /**
  * What the scheduler needs from the store, and no more.
@@ -170,6 +180,23 @@ export type SchedulerReport =
   /** A run is genuinely in flight and inside its lease. The ordinary overlap case. */
   | { readonly kind: "held"; readonly jobId: string; readonly why: string }
   | { readonly kind: "waiting"; readonly jobId: string; readonly remainingMs: number }
+  /**
+   * **NEVER RUN, AND NOT YET ELIGIBLE.** Its own arm rather than a `waiting`,
+   * because the sentence a reader needs is different — *never run; first
+   * eligible at …* — and because it is the state both standing jobs are in for
+   * the first half-hour after arming, which is the moment somebody is watching.
+   */
+  | { readonly kind: "not-yet-eligible"; readonly jobId: string; readonly firstEligibleAt: string; readonly remainingMs: number }
+  /**
+   * **DUE, AND DELIBERATELY LEFT WAITING SO TWO SESSIONS DO NOT START AT ONCE.**
+   *
+   * GPT Sol's S8-5: when two jobs come due in the same tick — which downtime,
+   * a restart or a stuck occurrence all produce — one is dispatched and the
+   * other gets this. **Visible rather than silent** is the whole point of it
+   * being a report arm: a skip nobody can see is how a scheduler stops running a
+   * job without anybody noticing.
+   */
+  | { readonly kind: "spacing-held"; readonly jobId: string; readonly remainingMs: number; readonly why: string }
   /** THE GATE. The definition in front of us is not the one that was authorised, so no key is minted and nothing is spawned. */
   | { readonly kind: "unauthorised"; readonly jobId: string; readonly why: string }
   /** Opening the store could not reconstruct the occurrence ledger, so every job is held: a cold start is not permission. */
@@ -191,6 +218,22 @@ export type TickInput = {
   /** Each with the fingerprint it was authorised under — see `AuthorisedJob`, and C2 for what a bare definition let through. */
   readonly definitions: readonly AuthorisedJob[];
   readonly store: OccurrenceLog;
+  /**
+   * **WHEN THIS SCHEDULER WAS ARMED**, which is what a never-run job's first
+   * eligibility is measured from. `unknown` holds every never-run job, loudly.
+   *
+   * Required rather than optional: a default would be a guess about the one
+   * question this field exists to stop anybody guessing about, and every caller
+   * already has the answer (`arming.ts`'s `reconcileArming`).
+   */
+  readonly arming: Arming;
+  /**
+   * **THE MINIMUM GAP BETWEEN TWO SESSION LAUNCHES.** `schedules.ts`
+   * § `LAUNCH_SEPARATION_MS`, and GPT Sol's S8-5 for why a phase offset is not
+   * this. Zero disables it, which is what a test that is not about spacing
+   * passes.
+   */
+  readonly launchSeparationMs: number;
   /**
    * **OPTIONAL, AND THAT IS THE DETERMINISTIC-ONLY ARMING PATH.**
    *
@@ -260,6 +303,85 @@ export type RuleRun = {
   readonly settled: Promise<void>;
 };
 
+/**
+ * **WHETHER A LOADED JOB COULD ACTUALLY RUN — the fact the `ARMED` headline is
+ * now made of.**
+ *
+ * GPT Sol's S8-7: `overseer status` derived that word from an environment
+ * variable alone, so systemd could be active, the daemon healthy and the
+ * headline green while both standing jobs were unauthorised or had failed to
+ * build. The one line a person trusts was saying the opposite of the truth.
+ *
+ * Two questions, and a job has to pass both. **Is its behaviour still the one
+ * that was pinned**, which is the gate `schedulerTick` applies every tick; and
+ * **does this process hold the capability its work needs**, which is what makes
+ * a rules-only daemon honest about its session jobs rather than merely quiet
+ * about them.
+ *
+ * It says nothing about the clock. A job that is eligible but not due is
+ * eligible; whether it is due changes every second and is not what a headline
+ * is claiming.
+ */
+export type JobEligibility =
+  | { readonly kind: "eligible"; readonly jobId: string }
+  | { readonly kind: "ineligible"; readonly jobId: string; readonly why: string };
+
+/** The capabilities a process holds — the same two `TickInput` carries, as booleans, because this asks a yes/no question of them. */
+export type HeldCapabilities = { readonly session: boolean; readonly rules: boolean };
+
+export function eligibilityOf(jobs: readonly AuthorisedJob[], held: HeldCapabilities): readonly JobEligibility[] {
+  return jobs.map((job) => {
+    const jobId = job.definition.behaviour.id;
+    const authorisation = authorisationOf(job);
+    if (authorisation.kind === "unauthorised") return { kind: "ineligible", jobId, why: authorisation.why };
+    const work = job.definition.behaviour.work;
+    if (work.kind === "session" && !held.session) {
+      return { kind: "ineligible", jobId, why: "this daemon holds no session dispatcher, so it cannot start a Claude session for this job" };
+    }
+    if (work.kind === "rule" && !held.rules) {
+      return { kind: "ineligible", jobId, why: "this daemon holds no rule capability, so it cannot run this rule" };
+    }
+    return { kind: "eligible", jobId };
+  });
+}
+
+/**
+ * **THE WORD THE STATUS PAGE PRINTS, derived from the definitions and not from
+ * a switch.**
+ *
+ * A function rather than four lines inside `runOverseer` for the reason
+ * `schedulerWiring` is a function: GPT Sol's S8-7 was a decision taken inline
+ * inside something that starts a daemon, and a decision taken there is one no
+ * test can ask about. This one can be, and `tests/overseer-schedules.test.ts`
+ * asks it.
+ *
+ * `off` is the absence of jobs — nobody switched it on. `blocked` is the switch
+ * on and not one loaded job able to run, which used to print as `ARMED`.
+ */
+export function schedulerStandingOf(input: {
+  readonly jobs: { readonly definitions: readonly AuthorisedJob[]; readonly held: HeldCapabilities } | undefined;
+  readonly detail: string | undefined;
+  readonly at: string;
+}): StoredScheduler {
+  if (input.jobs === undefined) {
+    return { kind: "off", why: input.detail ?? "this daemon was started with no scheduled jobs at all, so nothing will be dispatched", at: input.at };
+  }
+  const eligibility = eligibilityOf(input.jobs.definitions, input.jobs.held);
+  const eligible = eligibility.filter((one) => one.kind === "eligible");
+  const detail = input.detail ?? `${input.jobs.definitions.length} scheduled job(s)`;
+  if (eligible.length > 0) return { kind: "armed", why: `${eligible.length} of ${eligibility.length} job(s) can run: ${detail}`, at: input.at };
+  return {
+    kind: "blocked",
+    why:
+      "the scheduler is switched on and NOT ONE loaded job can run, so nothing will be dispatched however due it is: " +
+      (eligibility.length === 0
+        ? "no job definitions were built at all"
+        : eligibility.map((one) => (one.kind === "ineligible" ? `${one.jobId} — ${one.why}` : one.jobId)).join("; ")) +
+      `. ${detail}`,
+    at: input.at,
+  };
+}
+
 /** One pass of the scheduler: sweep what nobody can account for, then dispatch what is due. */
 export function schedulerTick(input: TickInput): readonly SchedulerReport[] {
   const at = input.now();
@@ -272,11 +394,21 @@ export function schedulerTick(input: TickInput): readonly SchedulerReport[] {
   const history = input.store.occurrenceHistory;
   if (history.kind === "lost") {
     for (const job of input.definitions) {
-      reports.push({ kind: "history-lost", jobId: job.definition.id, why: history.why });
+      reports.push({ kind: "history-lost", jobId: job.definition.behaviour.id, why: history.why });
     }
     return reports;
   }
   const seen = new Set<string>();
+  // THE SPACING GATE'S STATE, SEEDED FROM THE DISK AND UPDATED WITHIN THE TICK.
+  //
+  // Seeded from the ledger so it survives a restart and a day's downtime — the
+  // half of S8-5 an in-memory counter would get wrong. Updated in the loop
+  // because a reservation appended two lines above must count against the next
+  // job in the same pass, and reading the store's index back for that would make
+  // this depend on when the index is refreshed.
+  const sessionJobIds = new Set(input.definitions.filter((job) => job.definition.behaviour.work.kind === "session").map((job) => job.definition.behaviour.id));
+  const lastLaunch = lastSessionLaunchOf(input.store.occurrences, sessionJobIds);
+  let lastLaunchMs = lastLaunch.kind === "at" ? Date.parse(lastLaunch.at) : Number.NEGATIVE_INFINITY;
   for (const job of input.definitions) {
     const definition = job.definition;
     // TWO DEFINITIONS WITH ONE ID IS A CONFIGURATION MISTAKE THAT WOULD BE
@@ -285,21 +417,27 @@ export function schedulerTick(input: TickInput): readonly SchedulerReport[] {
     // acknowledgement — one occurrence in the log, two children on the box.
     // Refusing the duplicate is a line in the log; permitting it is the class of
     // failure this whole module is arranged against.
-    if (seen.has(definition.id)) {
-      reports.push({ kind: "not-dispatched", jobId: definition.id, why: "two definitions share this id, so neither can be addressed unambiguously" });
+    const jobId = definition.behaviour.id;
+    if (seen.has(jobId)) {
+      reports.push({ kind: "not-dispatched", jobId, why: "two definitions share this id, so neither can be addressed unambiguously" });
       continue;
     }
-    seen.add(definition.id);
+    seen.add(jobId);
     // THE AUTHORISATION GATE, AND IT COMES BEFORE `due`. An edited definition
     // has no history, `due` reads no history as "run it now", and that pair is
     // what turned an edit into an immediate unauthorised dispatch (C2). Asking
     // here means the edited job never reaches the arithmetic at all.
     const authorisation = authorisationOf(job);
     if (authorisation.kind === "unauthorised") {
-      reports.push({ kind: "unauthorised", jobId: definition.id, why: authorisation.why });
+      reports.push({ kind: "unauthorised", jobId, why: authorisation.why });
       continue;
     }
-    reports.push(...dispatch(input, definition, at.toISOString(), nowMs));
+    const outcome = dispatch(input, definition, at.toISOString(), nowMs, lastLaunchMs);
+    // ONLY A LAUNCH MOVES THE GATE. A held, waiting or refused job started
+    // nothing, so counting it would ration the next job against an event that
+    // did not happen.
+    if (outcome.launched) lastLaunchMs = nowMs;
+    reports.push(...outcome.reports);
   }
   return reports;
 }
@@ -360,14 +498,32 @@ function leaseWhy(occurrence: Occurrence, nowMs: number): string {
   );
 }
 
-/** One job, one decision. Returns the reports for it, which is one in every case but the dispatch that fails to acknowledge. */
-function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs: number): readonly SchedulerReport[] {
-  const verdict = due(definition, lastRunOf(input.store.occurrences, definition, nowMs), nowMs);
+/**
+ * One job, one decision.
+ *
+ * Returns the reports for it — one in every case but the dispatch that fails to
+ * acknowledge — **and whether a session was launched**, which is what the
+ * spacing gate in `schedulerTick` counts. The flag rather than an inspection of
+ * the reports: "did this start a process" is a fact this function knows and a
+ * caller matching on report kinds would be re-deriving.
+ */
+function dispatch(
+  input: TickInput,
+  definition: JobDefinition,
+  at: string,
+  nowMs: number,
+  lastLaunchMs: number,
+): { readonly launched: boolean; readonly reports: readonly SchedulerReport[] } {
+  const jobId = definition.behaviour.id;
+  const held = (reports: readonly SchedulerReport[]): { launched: boolean; reports: readonly SchedulerReport[] } => ({ launched: false, reports });
+  const verdict = due(definition.schedule, lastRunOf(input.store.occurrences, jobId, nowMs), nowMs, input.arming);
   switch (verdict.kind) {
     case "held":
-      return [{ kind: "held", jobId: definition.id, why: verdict.why }];
+      return held([{ kind: "held", jobId, why: verdict.why }]);
     case "not-due":
-      return [{ kind: "waiting", jobId: definition.id, remainingMs: verdict.remainingMs }];
+      return held([{ kind: "waiting", jobId, remainingMs: verdict.remainingMs }]);
+    case "not-yet-eligible":
+      return held([{ kind: "not-yet-eligible", jobId, firstEligibleAt: verdict.firstEligibleAt, remainingMs: verdict.remainingMs }]);
     case "due":
       break;
     default: {
@@ -376,9 +532,36 @@ function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs
     }
   }
 
-  const key: OccurrenceKey = { jobId: definition.id, scheduledAt: at, definitionHash: definitionHash(definition) };
+  // THE LAUNCH-SPACING GATE, AFTER `due` AND BEFORE THE RESERVATION.
+  //
+  // After `due`, so a job that is not due is reported as not due rather than as
+  // spaced — the two are different facts and only one of them is temporary.
+  // Before the reservation, because a reservation is the launch as far as the
+  // ledger is concerned, and one written here would ration the NEXT job against
+  // a session that never started.
+  //
+  // Sessions only. A rule runs in this process, spends nothing and finishes in
+  // milliseconds; rationing it would be rationing the wrong thing.
+  if (definition.behaviour.work.kind === "session" && input.launchSeparationMs > 0) {
+    const sinceMs = nowMs - lastLaunchMs;
+    if (sinceMs < input.launchSeparationMs) {
+      const remainingMs = input.launchSeparationMs - sinceMs;
+      return held([
+        {
+          kind: "spacing-held",
+          jobId,
+          remainingMs,
+          why:
+            `it is due, and a Claude session was launched ${Math.round(sinceMs / 1000)}s ago — ` +
+            `this box starts at most one every ${Math.round(input.launchSeparationMs / 1000)}s, so this one waits ${Math.round(remainingMs / 1000)}s`,
+        },
+      ]);
+    }
+  }
+
+  const key: OccurrenceKey = { jobId, scheduledAt: at, behaviourHash: behaviourHash(definition.behaviour) };
   const id = occurrenceId(key);
-  const leaseUntil = new Date(nowMs + definition.leaseMs).toISOString();
+  const leaseUntil = new Date(nowMs + definition.schedule.leaseMs).toISOString();
 
   // (1) THE RESERVATION, AND NOTHING HAPPENS UNTIL IT IS ON THE DISK.
   // `store.append` fsyncs before it returns, so a `true` here means the bytes
@@ -389,15 +572,15 @@ function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs
       at,
       jobId: key.jobId,
       scheduledAt: key.scheduledAt,
-      definitionHash: key.definitionHash,
+      behaviourHash: key.behaviourHash,
       occurrenceId: id,
       instanceId: input.store.instanceId,
       leaseUntil,
-      what: definition.what,
+      what: definition.behaviour.what,
     },
   ]);
   if (!reserved.ok) {
-    return [{ kind: "not-dispatched", jobId: definition.id, why: `the reservation could not be recorded, so nothing was started: ${reserved.why}` }];
+    return held([{ kind: "not-dispatched", jobId, why: `the reservation could not be recorded, so nothing was started: ${reserved.why}` }]);
   }
 
   // (2) THE SPAWN — or, for a rule, the two-phase protocol below.
@@ -414,10 +597,13 @@ function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs
     // AND IF THAT APPEND FAILED, SAY SO. It used to be dropped, which left the
     // occurrence durably `reserved` while this report claimed it was accounted
     // for — a report disagreeing with the history is the shape of C5.
-    return [
-      { kind: "unaccounted", jobId: definition.id, occurrenceId: id, why },
-      ...lostReports(wrote, definition.id, id, "unknown"),
-    ];
+    // THE RESERVATION LANDED AND WE CANNOT SAY WHETHER A PROCESS EXISTS, so it
+    // counts against the spacing gate: an uncertain launch rations, for the same
+    // reason `lastSessionLaunchOf` counts an `unknown` occurrence.
+    return {
+      launched: definition.behaviour.work.kind === "session",
+      reports: [{ kind: "unaccounted", jobId, occurrenceId: id, why }, ...lostReports(wrote, jobId, id, "unknown")],
+    };
   }
   if (outcome.kind === "refused") {
     const wrote = record(input.store, [{ kind: "job-occurrence-refused", at, occurrenceId: id, why: outcome.why }]);
@@ -425,10 +611,7 @@ function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs
     // and that is true whether or not we managed to write it down. What changes
     // is that the failure to write it down is no longer silent: the occurrence
     // stays `reserved` on disk and a later instance will read it as `unknown`.
-    return [
-      { kind: "refused", jobId: definition.id, occurrenceId: id, why: outcome.why },
-      ...lostReports(wrote, definition.id, id, "refused"),
-    ];
+    return held([{ kind: "refused", jobId, occurrenceId: id, why: outcome.why }, ...lostReports(wrote, jobId, id, "refused")]);
   }
 
   // (3) THE ACKNOWLEDGEMENT. If this does not land, the occurrence stays
@@ -437,11 +620,11 @@ function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs
   const started = record(input.store, [
     { kind: "job-occurrence-started", at: input.now().toISOString(), occurrenceId: id, pid: outcome.pid, leaseUntil },
   ]);
-  const reports: SchedulerReport[] = [{ kind: "dispatched", jobId: definition.id, occurrenceId: id, pid: outcome.pid }];
+  const reports: SchedulerReport[] = [{ kind: "dispatched", jobId, occurrenceId: id, pid: outcome.pid }];
   if (!started.ok) {
     reports.push({
       kind: "not-dispatched",
-      jobId: definition.id,
+      jobId,
       why: `pid ${outcome.pid} was started and the acknowledgement could not be recorded (${started.why}), so this run is unaccountable`,
     });
   }
@@ -455,7 +638,7 @@ function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs
   // alternative to a note here is a rejected promise nobody awaits, which is an
   // unhandled rejection and the child's outcome gone as well.
   const lost = (fact: LostRecord["fact"], why: string): void => {
-    input.onLostRecord?.({ jobId: definition.id, occurrenceId: id, fact, why });
+    input.onLostRecord?.({ jobId, occurrenceId: id, fact, why });
   };
   const settled = outcome.done.then(
     (result) => {
@@ -494,9 +677,9 @@ function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs
   // for it — `schedulerTick` is synchronous, and it must stay so, because the
   // lease rather than a held promise is what guards overlap — so waiting is the
   // daemon's, at the one moment it matters.
-  if (definition.work.kind === "rule") input.onRuleRun?.({ jobId: definition.id, occurrenceId: id, settled });
+  if (definition.behaviour.work.kind === "rule") input.onRuleRun?.({ jobId, occurrenceId: id, settled });
   else void settled;
-  return reports;
+  return { launched: definition.behaviour.work.kind === "session", reports };
 }
 
 /**
@@ -514,7 +697,7 @@ function dispatch(input: TickInput, definition: JobDefinition, at: string, nowMs
  * process that could have started it. See `TickInput.spawn`.
  */
 function start(input: TickInput, definition: JobDefinition, key: OccurrenceKey, id: OccurrenceId): JobSpawn {
-  const work = definition.work;
+  const work = definition.behaviour.work;
   switch (work.kind) {
     case "session": {
       const spawn = input.spawn;
@@ -581,6 +764,10 @@ export function describeReport(report: SchedulerReport): string {
       return `job ${report.jobId}: held — ${report.why}`;
     case "waiting":
       return `job ${report.jobId}: not due for another ${Math.round(report.remainingMs / 1000)}s`;
+    case "not-yet-eligible":
+      return `job ${report.jobId}: never run; first eligible at ${report.firstEligibleAt} (${Math.round(report.remainingMs / 1000)}s away)`;
+    case "spacing-held":
+      return `job ${report.jobId}: WAITING FOR SPACING — ${report.why}`;
     case "unauthorised":
       return `job ${report.jobId}: NOT AUTHORISED — ${report.why}`;
     case "history-lost":

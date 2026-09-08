@@ -1250,6 +1250,13 @@ export type OverseerHeartbeat =
  */
 export type OverseerScheduler =
   | { kind: "armed"; why: string; at: string }
+  /**
+   * **SWITCHED ON, AND NOT ONE LOADED JOB CAN RUN.** GPT Sol's S8-7: this state
+   * used to render as `armed`, because the word came from an environment
+   * variable rather than from the definitions. It is neither `off` nor working,
+   * so it gets its own word here as it does in the store.
+   */
+  | { kind: "blocked"; why: string; at: string }
   | { kind: "off"; why: string; at: string }
   | { kind: "not-said"; why: string; at: string }
   | { kind: "unreadable"; why: string };
