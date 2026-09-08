@@ -868,12 +868,21 @@ describe("buildSessionScript", () => {
 
   /**
    * Matched on THIS session's uuid, so a neighbouring session's Claude cannot
-   * answer for this one, and `-F` so an id somebody hand-set cannot be a regex.
+   * answer for this one, and by string equality so an id somebody hand-set
+   * cannot be a regex.
+   *
+   * It used to be `index(A[q], "--session-id " id)` — a substring search over
+   * the flattened `ps` line, with no `argv[0]` check, no stop at a bare `--`,
+   * and no way to match `--session-id=<id>`. What the probe actually does with
+   * a command line now lives in `claudeForSession`, and the behaviour is held
+   * by running the script in tests/gjd-remote-tmux-script.test.ts rather than
+   * by matching its text here.
    */
   it("looks for this session's own Claude, by uuid and as a fixed string", () => {
-    // awk's index() is a fixed-string search, so an id somebody hand-set into
-    // the tmux environment cannot be a pattern.
-    expect(script).toContain('index(A[q], "--session-id " id)');
+    expect(script).toContain("claudeForSession(A[q], id)");
+    // String equality, not a match, so an id somebody hand-set into the tmux
+    // environment cannot be a pattern.
+    expect(script).toContain("return (seen == want)");
   });
 
   /** A snapshot it could not take, or a session tmux named no pane for, must
