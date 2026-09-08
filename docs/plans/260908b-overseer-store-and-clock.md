@@ -43,8 +43,47 @@ All measured on 2026-09-08 unless stated. The first is the finding that makes th
   fields `GJD_METADATA_VERSION` / `GJD_KIND` / `GJD_REPO` / `GJD_REMOTE_DIR` — is pinned into the
   **tmux environment** at launch ([`scripts/gjd-remote-tmux.ts`](../../scripts/gjd-remote-tmux.ts)),
   and a reboot takes the tmux server and all of it. `gjd-remote` writes only a log. Transcripts
-  survive under `~/.claude/projects/` and the working directory is recoverable from the transcript's
-  path, but **which** sessions were alive, and what each was for, is written down nowhere.
+  survive under `~/.claude/projects/`, but **which** sessions were alive, and what each was for, is
+  written down nowhere.
+
+### What resume actually needs, and what it can never get back
+
+Spiked 2026-09-08. Two corrections to what this plan assumed, both of which make the register
+*larger* rather than smaller — which is the direction you want to be wrong in only once.
+
+**`gjd-remote` cannot resume anything.** `new-claude`
+([`scripts/gjd-remote.ts:2484`](../../scripts/gjd-remote.ts)) always mints a fresh `randomUUID()` and
+passes `--session-id <new-uuid>`; it never passes `--resume` or `--continue`. And `gjd-remote resume`
+is a different feature entirely — `tmux attach -d`, which needs the tmux session to still be alive.
+So O4 is not "call the existing tool"; the CLI has the machinery (`-r/--resume`, `-c/--continue`,
+`--fork-session`) and our tooling uses none of it. **That is a change to `gjd-remote`, and it should
+be a flag on `new-claude` rather than a second launcher in `tools/overseer/`.**
+
+**The transcript path is not enough, and this plan previously said it was.** The directory in
+`~/.claude/projects/` is a *slugified* cwd, so it is lossy; and `repo` is provably not derivable from
+the directory at all — [`scripts/gjd-remote-log.ts`](../../scripts/gjd-remote-log.ts) says so in a
+comment. So the register records the real values rather than reconstructing them:
+
+| field | why, and whether it survives a reboot without us |
+|---|---|
+| `claudeSessionId` | what `--resume` takes. Recoverable from the transcript filename, but see identity below |
+| `dir` | the real path. **Not** recoverable — the projects directory holds a lossy slug |
+| `repo` | **Not derivable from `dir`.** Must be recorded |
+| `kind`, `metadataVersion` | the `META` contract; tmux-only, so gone |
+| `name` | the human handle, and the claim register other jobs rely on |
+| `model`, `permissionMode` | not set by `gjd-remote` today and not reported by `claude agents --json`, so **if a future flag ever sets one, there is currently no way to recover it.** Record them the moment anything can vary them |
+| `lastSeenAlive` | the heartbeat. Absent-and-finished and absent-and-killed look identical without it |
+
+**What no register can restore**, and O4 must say so plainly rather than implying a fleet that comes
+back whole: the in-flight turn and its tool calls, all subagent state under
+`~/.claude/teams/session-<id>/`, and every pid-keyed socket identity
+(`~/.claude/sessions/<pid>.json`, `/run/user/1000/cc-socks/<pid>.sock` — tmpfs, gone on reboot
+regardless). A resumed session is the *conversation* back, not the *work* back.
+
+**Resuming a session that never died is untested territory.** `--bg --resume` documents a guard
+("starts a copy and says so when the session is already running"); plain interactive `--resume`
+documents none, and nobody here has tried it. So the Overseer checks liveness before it ever calls
+resume, and O4's dry-run exists partly to make that check visible.
 - **The Overseer does not collect.** Settled with the dashboard agent on 2026-09-08. Its server
   serves the whole snapshot at `/api/state` and streams it at `/api/live` (SSE, event name
   `snapshot`, same bytes by construction — both call one `statePayload()`). A collection costs ~12s
