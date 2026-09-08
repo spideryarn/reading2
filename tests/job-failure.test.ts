@@ -69,6 +69,7 @@ import {
   providerHttpFailure,
   stepGaveUp,
 } from "../src/messages.js";
+import { MIN_ARTICLE_CHARS } from "../src/extract.js";
 import { sanitise } from "../src/monitoring-scrub.js";
 import { PublishRefused } from "../src/store/pg-revisions.js";
 import { STEPS, type StepContext } from "../src/pipeline.js";
@@ -337,6 +338,63 @@ describe("the failures a retry cannot change", () => {
     const reader = readerFailureOf(err, "Splitting it into blocks");
     expect(reader.message).not.toContain("[jb-step-no]");
     expect(reader.message).toMatch(/paywall/i);
+    /* **And the *fetched* sentence of the two**, since 2026-09-08. There is no
+       manifest planted above, so this is also the named fallback: a step that
+       cannot read stage 1's product falls back to the wording that shipped
+       rather than guessing (src/pipeline.ts, the `NoBlocksProduced` arm). */
+    expect(reader.message).toContain("[jb-no-text]");
+    expect(reader.message).toMatch(/address the article came from/i);
+  });
+
+  /**
+   * **The same stage-3 refusal, for a document off a reader's disk** — the
+   * finding that closed Stage 2 of
+   * docs/plans/260908a-match-the-documents-leading-tokens-instead-of-searching-for-markup.md,
+   * and the one both this file's author and its reviewer had to be shown.
+   *
+   * Splitting the two stage-2 refusals by origin left this one, one step later,
+   * still telling every reader to go and look at *"the address the article came
+   * from"*. **The reachable case is a PDF, not a web page**: a scan whose only
+   * text is a publisher record passes stage 2's floor, `renderHtml`
+   * (src/pdf-read.ts) withholds that record on purpose, and stage 3 is handed a
+   * document with no prose in it. ⟨GPT Sol, F24, with the reproduction.⟩
+   *
+   * The HTML below stands in for what stage 2 leaves behind in that case, since
+   * what stage 3 reads is an artefact and not a PDF. What makes this test about
+   * the *origin* rather than about the markup is the manifest beside it.
+   */
+  it("tells a reader who uploaded a document with no text in it about the document", async () => {
+    const store = memoryArtefacts();
+    store.plant(
+      "a-slug",
+      "extract",
+      "extractedHtml",
+      '<!doctype html><html><body>\n<div id="page"></div>\n</body></html>',
+    );
+    /* **Planted the way the store hands one back**: a `filename`, no `url`, and
+       no `origin` — that column does not exist. A step that went back to
+       reading `manifest.origin` gets the fetched sentence here and fails. */
+    store.plant("a-slug", "fetch", "raw", {
+      kind: "pdf",
+      file: "raw.pdf",
+      filename: "a-scan-i-made.pdf",
+      contentType: "application/pdf",
+      encoding: "utf-8",
+      bytes: 12,
+      sha256: "c".repeat(64),
+      storedSha256: "c".repeat(64),
+      storedBytes: 12,
+      fetchedAt: new Date().toISOString(),
+    });
+
+    const err = await threw(() => STEPS.blocks.run(ctx(), store, nullCheckpointStore()));
+    expect(failureKindOf(err)).toBe("blocked");
+    const reader = readerFailureOf(err, "Splitting it into blocks");
+
+    expect(reader.message).toContain("[jb-file-no-text]");
+    expect(reader.message).not.toMatch(/address|fetched|came from/i);
+    /* The cause worth naming for this one, and it has no fetched equivalent. */
+    expect(reader.message).toMatch(/scan|picture of a page/i);
   });
 
   /**
@@ -489,6 +547,13 @@ describe("the failures a retry cannot change", () => {
     expect(reader.message).not.toMatch(/Readability/);
     expect(reader.message).not.toContain("[jb-step-no]");
     expect(reader.message).toMatch(/no article/i);
+    /* **And the *fetched* one of the two**, added 2026-09-08 with the origin
+       split below. Found by mutation, not by reading: forcing every document to
+       the uploaded sentence left this case green, because "there was no article
+       to find in the file you uploaded" matches /no article/i too. The code is
+       what separates the branches, so the code is what this asserts. */
+    expect(reader.message).toContain("[jb-no-article]");
+    expect(reader.message).toMatch(/address it came from/i);
   });
 
   it("calls a page with too little text on it `blocked`, and tells the reader how little", async () => {
@@ -541,6 +606,103 @@ describe("the failures a retry cannot change", () => {
        this rule reads no markup and knows nothing of walls or 404s. */
     expect(reader.message).not.toMatch(/Readability/);
     expect(reader.message).toMatch(/usually/);
+  });
+
+  /**
+   * **The same two refusals, told to somebody who uploaded a file** — stage 2
+   * of docs/plans/260908a-match-the-documents-leading-tokens-instead-of-searching-for-markup.md,
+   * and a copy bug that was live from 2026-09-07.
+   *
+   * Both sentences above end *"it is the address it came from that needs
+   * looking at"*, and an upload has no address. They sent the reader to look at
+   * something that does not exist and withheld the move that works. Stage 1's
+   * rewrite the following day made it far more reachable: uploads stopped being
+   * asked *"is this a document"* and started being asked *"is this provably
+   * something else"*, so a fragment, a page saved mid-script and plain prose
+   * named `.html` all arrive here now.
+   *
+   * **The manifest is what carries the answer**, and it is planted the way the
+   * store hands one back rather than the way `acquireUpload` returns one: a
+   * `filename`, no `url`, **and no `origin`** — that column does not exist, and
+   * a predicate reading `manifest.origin` passed every unit test while failing
+   * every real upload once already (src/fetch.ts § `cameFromAnUpload`).
+   *
+   * **`ctx()` has no URL either**, so a step that reached for one would throw
+   * `requireUrl`'s `ours` failure instead, and these cases would fail rather
+   * than quietly assert about the wrong sentence.
+   */
+  const uploaded = (bytes: Uint8Array, put: { sha256: string }) => ({
+    kind: "html" as const,
+    file: "raw.html",
+    filename: "a-page-i-saved.html",
+    contentType: "text/html",
+    encoding: "utf-8",
+    bytes: bytes.byteLength,
+    sha256: put.sha256,
+    storedSha256: put.sha256,
+    storedBytes: bytes.byteLength,
+    fetchedAt: new Date().toISOString(),
+  });
+
+  it("tells a reader who uploaded a file with no article in it about the file", async () => {
+    const store = memoryArtefacts();
+    /* **An empty document, as its fetched sibling above uses**, and the choice
+       is worth a line because the obvious fixture is the wrong one: a `<div>`
+       fragment — the shape the plan names — does *not* land here. Readability
+       parses it and returns 31 characters, so it goes to the capability floor
+       one test below. This branch is the library declining to produce anything
+       at all, and empty bytes are the shortest honest way to reach it. */
+    const bytes = new TextEncoder().encode("");
+    store.plant("a-slug", "fetch", "raw", uploaded(bytes, await storeRawSource(bytes, "html")));
+
+    const err = await threw(() => STEPS.extract.run(ctx(), store, nullCheckpointStore()));
+    expect(failureKindOf(err)).toBe("blocked");
+    const reader = readerFailureOf(err, "Extracting the article");
+
+    /* **Its own code**, because it is its own sentence — docs/project/copy.md. */
+    expect(reader.message).toContain("[jb-file-no-article]");
+    /* **The whole of the fix, and it is what would go red against the old
+       shared sentence**: no address, and nothing that implies one. */
+    expect(reader.message).not.toMatch(/address|fetched|came from/i);
+    /* And it still does the two things the fetched sentence does: says the
+       second attempt is the same file, and says what does work. */
+    expect(reader.message).toMatch(/same file/i);
+    expect(reader.message).toMatch(/browser/i);
+    expect(reader.message).not.toMatch(/Readability/);
+  });
+
+  it("tells a reader who uploaded a file with too little text in it how little", async () => {
+    const store = memoryArtefacts();
+    /* **The `<div>` fragment the plan's acceptance criterion names**, and it
+       arrives *here* rather than at the refusal above: Readability parses it
+       and hands back 31 characters, which is the capability floor's branch.
+       That is the case this stage exists for — a bare fragment named `.html`
+       is exactly what stage 1 stopped refusing on 2026-09-08, so it is the
+       likeliest thing a reader now sees a stage-2 sentence about.
+
+       The count is asserted as a property below rather than pinned to a number
+       this test invented, since 31 is Readability's measure and not ours. */
+    const bytes = new TextEncoder().encode("<div>a fragment, saved out of a page</div>");
+    store.plant("a-slug", "fetch", "raw", uploaded(bytes, await storeRawSource(bytes, "html")));
+
+    const err = await threw(() => STEPS.extract.run(ctx(), store, nullCheckpointStore()));
+    expect(failureKindOf(err)).toBe("blocked");
+    const reader = readerFailureOf(err, "Extracting the article");
+
+    expect(reader.message).toContain("[jb-file-too-little-text]");
+    expect(reader.message).not.toMatch(/address|fetched|came from/i);
+    /* **The count reaches the sentence on this branch too**, and it is checked
+       against a property rather than against a number this test invented: it
+       must be a real count *below the floor*, or the refusal contradicts
+       itself. Asserting a literal would pin Readability's measure of a fixture,
+       which is its number and not ours, and a second call to `readArticle` here
+       would share its assumption with the code under test rather than check it. */
+    const count = /only (\d+) characters/.exec(reader.message)?.[1];
+    expect(count, reader.message).toBeDefined();
+    expect(Number(count)).toBeGreaterThan(0);
+    expect(Number(count)).toBeLessThan(MIN_ARTICLE_CHARS);
+    expect(reader.message).toMatch(/usually/);
+    expect(reader.message).not.toMatch(/Readability/);
   });
 });
 
