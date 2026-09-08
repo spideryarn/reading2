@@ -5,7 +5,8 @@
 >
 > — Greg's brief for this workstream, 2026-09-08
 
-Status: **planned**, not built. Stage list at the bottom.
+Status: **built and looked at**, 2026-09-08. Stages 1-3 landed; stage 4's browser pass is done and
+its GPT Sol code review is the second one below. Not yet on `dev` at the time of writing.
 Wave: one of five parallel workstreams — see
 [260908f-orchestrator-wave-2](260908f-orchestrator-wave-2-write-path-usage-limits-box-health-history-attention-inbox-codex-adapter.md),
 which is where the other agents look to see who holds what.
@@ -54,12 +55,23 @@ answer.
 | the collector ran and read a number | a sample, reading arm `value` | a point on the line |
 | the collector ran and one command failed | a sample, that reading's `unknown` arm with its `why` | a violet mark on that series; **no point** |
 | the collector itself threw | a sample, `kind: "collector-failed"`, with `why` | a violet band across every series |
-| **nothing was running at all** | **no line** | **a break in the line and a hatched band** |
+| **nothing was written** | **no line** | **a break in the line and a hatched band** |
+| the writer could not write | nothing — but the writer says so on itself | a red banner: *any break after this is us, not the box* |
 
 The fourth is the one Greg is looking for and the only one that cannot be written down at the time,
-because whatever would have written it is the thing that was not running. It is recoverable only by
-inference — two consecutive samples further apart than the cadence — which is why the cadence has to
-be recorded rather than assumed.
+because whatever would have written it is the thing that was not there to write. It is recoverable
+only by inference — two samples further apart than the interval the earlier one said to expect —
+which is why the expectation has to be recorded rather than assumed.
+
+**Its row said "nothing was running at all" until GPT Sol pointed out that this claims more than the
+evidence supports**, and the correction is worth keeping in front of the table rather than filed
+under the review below. A break is *no sample was written*. That is the box being down, the dashboard
+being down, a collection that hung, a drain that blocked the loop, an append that failed, or — most
+often on this box — somebody restarting the server. **The record is silent; why it is silent is not
+in it**, and a chart that named a cause would answer Greg's question with an invention. The fifth row
+exists because it is the one cause the record CAN speak to, and it is also the most embarrassing one:
+a monitor that has stopped writing manufactures an outage that looks exactly like the thing it was
+built to detect.
 
 > A GAP MUST RENDER AS A GAP, never as a line drawn across it. […] an interpolated line through the
 > ninety minutes the box was thrashing is the single most expensive thing this feature could do,
@@ -217,50 +229,50 @@ Each is a commit, and each is worth having if the next never lands.
 
 ### Stage 1 — the sample and the store
 
-- [ ] `tools/fleet/health-history.ts`: the `HealthSample` union (two arms, per above), `appendSample`,
+- [x] `tools/fleet/health-history.ts`: the `HealthSample` union (two arms, per above), `appendSample`,
       `readSamples(sinceMs)`, rotation at the byte cap, absolute-path check on `FLEET_HEALTH_DIR`.
-- [ ] Pure/impure split the way `health.ts` does it: parsing and windowing are pure functions over
+- [x] Pure/impure split the way `health.ts` does it: parsing and windowing are pure functions over
       strings, one function touches the filesystem.
-- [ ] `tests/fleet-health-history.test.ts` against a temp dir: round-trip, rotation (write past the
+- [x] `tests/fleet-health-history.test.ts` against a temp dir: round-trip, rotation (write past the
       cap, assert the window is still covered), a torn last line, an unparseable middle line counted
       rather than fatal, a `collector-failed` sample surviving the round trip intact.
-- [ ] **Red first**: the rotation test written against a store that does not rotate.
+- [x] **Red first**: the rotation test written against a store that does not rotate.
 
 ### Stage 2 — the join, which is the stage the postmortem is about
 
-- [ ] `RefreshDeps.refreshHealth` returns what happened; new required `retainHealth` dep; the call
+- [x] `RefreshDeps.refreshHealth` returns what happened; new required `retainHealth` dep; the call
       in `refreshOnce` in the right place, in its own try/catch.
-- [ ] `server.ts`: wire the real store, mount `GET /api/health/history`.
-- [ ] `tools/fleet/routes-health-history.ts`: window clamp, gzip, the two-armed payload (samples, or
+- [x] `server.ts`: wire the real store, mount `GET /api/health/history`.
+- [x] `tools/fleet/routes-health-history.ts`: window clamp, gzip, the two-armed payload (samples, or
       "the store could not be read and here is why" — **never an empty array standing in for a
       failure**).
-- [ ] **The test that would have caught the four dead features**: run a real `refreshOnce` against a
+- [x] **The test that would have caught the four dead features**: run a real `refreshOnce` against a
       real store in a temp dir, then read it back *through the real route handler*, and assert the
       sample is there. Delete the append from `refreshOnce` and this goes red.
 
 ### Stage 3 — the panel
 
-- [ ] `health-history-client.ts`: four arms off the wire (history / store-unreadable / this-browser-
+- [x] `health-history-client.ts`: four arms off the wire (history / store-unreadable / this-browser-
       could-not-ask / not-this-API), the same discipline as `messages-client.ts`.
-- [ ] `HealthHistory.tsx`: the verdict strip, four series (load ratio, memory available, swap used,
+- [x] `HealthHistory.tsx`: the verdict strip, four series (load ratio, memory available, swap used,
       swap activity + IO wait), a shared x scale, bands from `THRESHOLDS`.
-- [ ] Gaps: break the line, hatch the band, and **say it in words underneath** — "2 breaks, the
+- [x] Gaps: break the line, hatch the band, and **say it in words underneath** — "2 breaks, the
       longest 22 min ending 06:14" — because that sentence is the answer to Greg's question and a
       shape on a 390px screen is not.
-- [ ] "History begins" boundary drawn as its own thing, with the sentence a fresh process needs:
+- [x] "History begins" boundary drawn as its own thing, with the sentence a fresh process needs:
       *collecting since 11:04; 3 samples so far*.
-- [ ] Mounted in `HealthPanel.tsx` under the tiles, above the raw disclosure.
-- [ ] `tests/fleet-web.test.tsx` additions: a gap is not interpolated; an `unknown` reading and a
+- [x] Mounted in `HealthPanel.tsx` under the tiles, above the raw disclosure.
+- [x] `tests/fleet-web.test.tsx` additions: a gap is not interpolated; an `unknown` reading and a
       `0` value do not produce the same output.
 
 ### Stage 4 — look at it, then get it reviewed
 
-- [ ] **Open the real page in a real browser at 390px and look at it.** Not a test, not a screenshot
+- [x] **Open the real page in a real browser at 390px and look at it.** Not a test, not a screenshot
       of a fixture — the running dashboard.
-- [ ] Force each of the four states and photograph them: a real gap (stop the server for a few
+- [x] Force each of the four states and photograph them: a real gap (stop the server for a few
       minutes), a `collector-failed` turn, an `unknown` reading, a fresh store with three samples.
-- [ ] GPT Sol on the built code, with the diff and the screenshots.
-- [ ] Docs: a section in `orchestrator-direction.md` or its own file, and the line under the entry
+- [x] GPT Sol on the built code, with the diff and the screenshots.
+- [x] Docs: a section in `orchestrator-direction.md` or its own file, and the line under the entry
       point that owns it.
 
 ## What the plan review changed — GPT Sol, 2026-09-08
@@ -375,6 +387,25 @@ legend entry now.
 **Two hundred sub-pixel rectangles.** A four-hour collector failure is ~200 consecutive samples and
 each drew its own 1px `<rect>`. Adjacent spans that agree are merged; the DOM went from ~200 rects
 per chart to 7.
+
+### Two more found afterwards, by re-reading my own arithmetic and my own brief
+
+**Three mechanisms described one silence and the sentence added it up.** A break could be produced by
+a wide spacing, by a corrupt line bracketed by the *same two samples*, or by the run to the right-hand
+edge — and each pushed its own entry. A torn record inside a four-hour outage was pushed twice, so the
+sentence read **"2 breaks totalling 8.0 h" about four hours**: a number Greg would act on, arrived at
+by adding a thing to itself. `mergeGaps` folds overlapping breaks, **strictly overlapping and not
+merely touching** — two breaks that share an endpoint are separated by a sample at that instant, and
+merging them would erase a moment the box was heard from. Found by walking the code while the review
+was running, reproduced with a failing test first. It is the answer to question 4 of the review
+prompt, which I wrote and then answered myself.
+
+**The chart had the number and not the event.** The brief asked for swap *activity*; I had drawn only
+`waPercent`. `health.ts` is emphatic that the percentage is not the point — *100% full and quiet is a
+different fact from 60% and thrashing* — and `activelySwapping` was collected, kept carefully
+separate, and then dropped by my renderer. That is the defect class this whole panel is against, in
+my own code. A series may now carry one boolean second fact, drawn as a bar along the bottom and
+totalled in words: *"swapping 1.5 h"*.
 
 ## Follow-ups, named rather than silently dropped
 

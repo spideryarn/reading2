@@ -26,14 +26,28 @@
  *     header is about that collapse, and a store that flattened it would undo
  *     the module it stores.
  *  3. **The collector threw.** Its own sample arm, `collector-failed`.
- *  4. **Nothing was running.** *No sample at all* — and it cannot be written
+ *  4. **Nothing was written.** *No sample at all* — and it cannot be written
  *     down, because whatever would have written it is the thing that was not
- *     running. It is recoverable only by inference, from the spacing of the
- *     samples on either side, which is why `nextDueMs` exists.
+ *     there to write. It is recoverable only by inference, from the spacing of
+ *     the samples on either side, which is why `nextDueMs` exists.
+ *
+ * **(4) IS NOT "NOTHING WAS RUNNING", AND NOTHING HERE MAY SAY IT IS.** This
+ * header said exactly that until GPT Sol pointed out it claims more than the
+ * evidence supports. A break is the box down, the dashboard down, a collection
+ * that hung (the fault `attemptedAt` in state.ts exists to catch), a drain that
+ * blocked the loop, an append that failed, or somebody restarting the server —
+ * which happens several times an hour on this box. The record is silent; **why**
+ * it is silent is not in it.
  *
  * (3) and (4) are the pair most easily merged and the pair that matters most:
- * *the box was up and health collection has been broken for six hours* and *the
- * box was down for six hours* are opposite operational facts.
+ * *the box was up and health collection has been broken for six hours* and *no
+ * sample was written for six hours* are different claims, and only one of them
+ * is something the record can make.
+ *
+ * There is a fifth, and it is the one cause the record CAN speak to: **the
+ * writer could not write.** See `RetentionStatus` — a monitor that has silently
+ * stopped manufactures an outage indistinguishable from the thing it exists to
+ * detect.
  *
  * ## `nextDueMs`: TOLD, NOT INFERRED
  *
