@@ -1090,6 +1090,50 @@ crash-loops visibly in the journal instead of hammering a box that has already r
 
 **Reboot-resume of the sessions themselves is O4, a later stage.** This one only makes it possible.
 
+#### S5's P1, found by the second review, and I caused it
+
+**The checked-in fleet unit hard-codes THIS box's tailnet address as its fallback, and a failed bind
+is fatal to the whole server — including its loopback listener.** So a freshly provisioned box gets a
+dashboard that starts and immediately dies, and dies at the address that was supposed to be the safe
+default.
+
+The sequence, which the reviewer reproduced from the source:
+
+1. Provisioning installs Tailscale **before** authentication, deliberately. So `tailscale ip -4`
+   returns nothing and the `100.*` branch never runs, and **no `/etc/fleet-dashboard.env` is written.**
+2. `tailscale up` later does not regenerate it — nothing watches for that.
+3. The unit therefore falls back to what is written in it:
+   `Environment=FLEET_BIND=127.0.0.1,100.92.255.119`. That second address belongs to *this* box.
+4. `tools/fleet/server.ts` treats a bind it cannot take as **fatal** rather than carrying on
+   half-bound — which is the right call and is what makes this a P1 rather than a degradation.
+
+And the unit's own comment asserts the opposite: *"a box without the file still starts on what is
+written here."* It does not. It starts and dies. **A comment that states a fallback works is exactly
+the kind of prose that is never checked**, which is
+[written-down-is-not-checked.md](../reusable/written-down-is-not-checked.md) rather than bad luck.
+
+**This is my error and it is the second of the same shape tonight.** The fleet dashboard agent told me
+the design plainly — *"Loopback is the default because it is the one address that is always correct,
+on this box and on the next one. The tailnet address is per-machine, so it arrives from a file
+provisioning writes — a hardcoded `100.x` here would be a second copy of a fact that can change."*
+I then relayed it to the building agent as a flat requirement, *"`Environment=FLEET_BIND=
+127.0.0.1,100.92.255.119` is required"*, and the agent did what I asked. **I compressed a design with
+a reason into a constant without one, and the reason was the half that mattered.** Same class as the
+`EnterWorktree` claim above: an orchestrator's paraphrase reaching code that nobody re-derives.
+
+**The fix, in three parts.** The checked-in unit falls back to **loopback only** — the one address
+correct on every box, and one that cannot fail to bind. The tailnet address comes solely from the env
+file. Provisioning's no-IP branch must **remove a stale env file** rather than leave it (the reviewer's
+point: a re-provisioned box could otherwise inherit a previous machine's address). And the activation
+path after `tailscale up` must regenerate the file and restart the service, written down as a step
+rather than assumed.
+
+**What that trades, said plainly:** on a new box before Tailscale login, the dashboard is reachable
+from the box and not from a phone. That is a visible, correct, recoverable state, and it is the right
+side of [orchestrator-direction.md](../project/orchestrator-direction.md)'s rule about preferring
+*correct and unavailable* to *plausible and up* — except that here we get correct **and** up, just not
+yet remote.
+
 #### The four commands that finish S5, and why they are Greg's
 
 **`sudo systemctl enable` is refused for agents on this box, and it was refused twice by different

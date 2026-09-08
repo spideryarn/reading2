@@ -4,7 +4,7 @@ What the machine can tell you about this codebase without running it, and — mo
 several tools that look perfect for this repo and are quietly wrong about it.
 
 ```
-npm run check          # everything below, gates first, ~20s (--fast skips the build)
+npm run check          # everything below, gates first — MINUTES, not seconds; see the note under it
 npm run check -- --offline   # the same, minus the database suites — NOT the real gate
 npm run knip           # unused files, exports, dependencies
 npm run cycles         # import cycles
@@ -12,6 +12,23 @@ npm run check:conflicts # unresolved merge conflicts in tracked files
 npm run complexity     # the functions worth looking at
 npm run dupes          # copy-paste
 ```
+
+**`npm run check` runs the whole test suite, and this line used to say `~20s`.** Measured
+2026-09-08: **29 minutes** — 861 test files, 16,733 tests — on a box under load. The static-analysis
+steps really are seconds; the `test` step is a `gate: true` entry inside the same command, and it
+dominates everything else by three orders of magnitude.
+
+**The wrong number cost real time the day it was corrected.** An agent reached for `npm run check`
+casually, on the strength of this file describing it as static analysis and of
+[AGENTS.md](../../AGENTS.md) signposting it as *"`static-analysis.md` (`npm run check`)"*, then tried
+to cancel it and did not succeed — so a second full suite ran for half an hour, in parallel with a
+deliberate one, on a box that had reached load 391 that morning. **A cheap-sounding name on an
+expensive command is a trap that documentation sets, not one a careless reader walks into.**
+
+So: `npm run typecheck`, `npm run knip`, `npm run cycles` and the rest are what you reach for while
+working. `npm run check` is the pre-commit gate, and you should expect to wait — run it under
+[`scripts/tmux-job.ts`](../../scripts/tmux-job.ts), because a backgrounded process is OOM-killed on
+*system* memory pressure here. `--fast` skips the build but **not** the suite.
 
 Its neighbours: [linting.md](linting.md) is Biome as a *linter* (why not ESLint, which rules are off
 and why), [typechecking.md](typechecking.md) is `tsc` and the three projects, and
