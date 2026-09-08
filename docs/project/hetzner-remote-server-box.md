@@ -928,6 +928,29 @@ plain apt package exactly like tmux. cloud-init runs once, on a box's first boot
 what gets re-run on the boxes that already exist, so it is the only file that reaches every box —
 and a second copy in cloud-init would be the copy that goes stale.
 
+## Tailscale
+
+`provision.sh` installs it, enables `tailscaled`, and stops there — deliberately not logged in.
+`tailscale up` prints a URL that has to be opened in a browser, exactly the same shape as Claude's
+and Codex's own `/login` above, and a provisioning script that blocked waiting for that would hang
+forever on a box with no browser to answer it. So the one command it leaves for whoever finishes
+the build is:
+
+```
+sudo tailscale up --hostname=spideryarn-box --operator=greg
+```
+
+**Why the box has it at all**: it is how the [agent fleet dashboard](orchestrator-direction.md)
+reaches Greg's phone. The dashboard binds the tailnet interface rather than a public one, so
+reachability *is* the access control, and nothing extra has to be built to keep it away from
+strangers.
+
+It was installed by hand on the live box first, on 2026-09-08 — a human ssh session, not
+`provision.sh` — which is exactly the gap
+[A change to the box is a change to a file](#a-change-to-the-box-is-a-change-to-a-file) exists to
+close: a box rebuilt from the script alone, before this landed, would have booted with no
+Tailscale and no way to reach it from a phone, and nothing here would have said why.
+
 ## Traps
 
 - **`gjd-remote` will not tell you a session exists when it cannot see the list.** A `tmux ls`

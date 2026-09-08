@@ -33,8 +33,27 @@ import { collect, type FleetSnapshot } from "./collect.js";
 import { page } from "./page.js";
 
 const PORT = Number(process.env.FLEET_PORT ?? 8787);
-const BIND = process.env.FLEET_BIND ?? "127.0.0.1";
-const REFRESH_MS = Number(process.env.FLEET_REFRESH_MS ?? 30_000);
+
+/**
+ * Addresses to listen on, comma-separated. Never a wildcard.
+ *
+ * TWO ON PURPOSE. The tailnet address is how a phone reaches this, and
+ * `127.0.0.1` is how an ssh forward does — and the ssh forward is the fallback
+ * that depends on nothing, so it stays even once Tailscale works. Node binds one
+ * address per server, so this is a list and we create one server per entry
+ * rather than reaching for `0.0.0.0`; the Hetzner firewall would refuse public
+ * traffic anyway, but a wildcard bind is the habit that eventually gets it wrong
+ * on a box that has no firewall.
+ */
+const BINDS = (process.env.FLEET_BIND ?? "127.0.0.1").split(",").map((s) => s.trim()).filter(Boolean);
+
+/**
+ * 60s, not 30s. One collection costs ~12s of grepping, so at 30s this process
+ * spends 40% of its life churning the page cache — and on 2026-09-08 this box
+ * hit load average 391 with the OOM killer firing, which is not a moment to be
+ * a background contributor. Raise it further, don't lower it.
+ */
+const REFRESH_MS = Number(process.env.FLEET_REFRESH_MS ?? 60_000);
 
 let snapshot: FleetSnapshot | null = null;
 let lastError: string | null = null;
@@ -52,7 +71,7 @@ function refresh(): void {
   }
 }
 
-const server = createServer((req, res) => {
+function handler(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse): void {
   const url = req.url ?? "/";
   if (url.startsWith("/api/agents")) {
     res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
@@ -66,10 +85,20 @@ const server = createServer((req, res) => {
   }
   res.writeHead(404, { "content-type": "text/plain" });
   res.end("not found\n");
-});
+}
 
-server.listen(PORT, BIND, () => {
-  console.log(`fleet v0.1 on http://${BIND}:${PORT} — refreshing every ${REFRESH_MS / 1000}s`);
-  refresh();
-  setInterval(refresh, REFRESH_MS).unref();
-});
+// One listener per address. A bind that fails is FATAL rather than logged and
+// survived: a half-bound server is one that answers on the address you tested
+// and not on the one you actually use, which is a bug you find from a phone.
+for (const bind of BINDS) {
+  const server = createServer(handler);
+  server.on("error", (err) => {
+    console.error(`could not bind ${bind}:${PORT} — ${err.message}`);
+    process.exit(1);
+  });
+  server.listen(PORT, bind, () => console.log(`fleet on http://${bind}:${PORT}`));
+}
+
+console.log(`refreshing every ${REFRESH_MS / 1000}s`);
+refresh();
+setInterval(refresh, REFRESH_MS).unref();
