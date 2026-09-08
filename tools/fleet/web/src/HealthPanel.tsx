@@ -33,6 +33,7 @@ import { RawValue } from "./RawValue";
 import { httpHistoryApi, type HistoryApi } from "./health-history-client";
 import { Explain, type Tip } from "./Tooltip";
 import { readHealthStats, type Stat } from "./health-view";
+import type { ClockSkew } from "./types";
 import type { ActionsUi } from "./useActions";
 import { Card, Pill, SectionHeading, cx, toneClasses } from "./ui";
 import type { Tone } from "./view";
@@ -132,10 +133,19 @@ export function HealthPanel({
      panel a window of history without a server, and the default is the real
      one so no caller has to know. */
   historyApi = httpHistoryApi,
+  skew,
 }: {
   health: unknown;
   actions: ActionsUi;
   historyApi?: HistoryApi;
+  /**
+   * **PASSED STRAIGHT THROUGH TO THE CHART'S LABELS, and nothing else here
+   * reads it.** Required rather than defaulted for the reason `parsePause`'s is:
+   * a new caller has to say which clock it is holding, and a default of
+   * "unmeasured" would let a page that HAS measured one quietly stop correcting
+   * the only times on this panel that a reader compares against their watch.
+   */
+  skew: ClockSkew;
 }): ReactNode {
   /**
    * **The buttons are drawn even when the readings are not.**
@@ -204,7 +214,7 @@ export function HealthPanel({
           fetches its own data — the history is about a megabyte and changes
           once a minute, so putting it in the five-second state poll would be
           the wrong shape twice over. */}
-      <HealthHistory api={historyApi} nowMs={Date.now()} />
+      <HealthHistory api={historyApi} nowMs={Date.now()} skew={skew} />
 
       {/* **The raw dump is a disclosure now, not the page.** It read as a debug
           view — load, memory, swap, disk and attribution as bare key-value

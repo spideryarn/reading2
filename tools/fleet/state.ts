@@ -139,9 +139,13 @@ export type FleetState = {
    * whole reason this is a third timestamp rather than a reuse of one of them.
    * The gap between either of those and the moment the client receives the
    * payload is GENUINE SNAPSHOT AGE — up to a full cadence of it — and there is
-   * no way to tell that apart from clock skew. `servedAt − receivedAt` is skew
-   * plus network latency, and latency on a tailnet is milliseconds against a
-   * threshold of minutes.
+   * no way to tell that apart from clock skew.
+   *
+   * `servedAt − receivedAt` is not the skew alone either: with a one-way
+   * latency `L` it is `serverOffset − browserOffset − L`, so the client's
+   * correction lands server-send on browser-receipt and understates ages by
+   * `L`. On a tailnet that is milliseconds against thresholds of minutes, and
+   * it errs towards calling a snapshot fresher rather than towards an alarm.
    *
    * Read here rather than passed in: this function IS the answer, so the
    * moment it runs is the moment being reported. A caller-supplied value could

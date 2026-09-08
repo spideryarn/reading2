@@ -140,29 +140,31 @@ const KINDS: Record<AttentionKind, { label: string; what: string; loud: boolean 
  * `scannedAt` genuinely ahead of now means a broken clock rather than an
  * ordinary phone.
  *
- * What is left is `RENDER_SLACK_MS`, and it is a different fact — not an
- * allowance for a device nobody measured, but the granularity of this page's
- * own clock. Every corrected timestamp is at most the moment the payload
- * arrived (`servedAt` is later than everything it carries, so the shift lands
- * them at or before receipt), while `now` comes from `useNow`, which ticks once
- * a second — so a render triggered by an arriving payload compares a fresh
- * timestamp against a `now` up to a tick old. Without slack a checkpoint
- * written moments before it was served would flash *"the Overseer stopped
- * checkpointing at a time this page could not read"* on a healthy fleet, which
- * is the alarm-a-clock-manufactures failure with a different clock in it.
+ * **AND IT IS MEASURED AGAINST AN ANCHOR, NOT AGAINST A TOLERANCE.** `asOf` is
+ * `Math.max(now, receivedAt)` — a browser-clock reading that cannot be older
+ * than the payload it is judging. What stood here instead was a
+ * `RENDER_SLACK_MS = 5_000`, justified by `useNow` ticking once a second, and
+ * **that reasoning was wrong at any value**: a phone in a pocket has its timers
+ * throttled and then suspended, and iOS hands the tab back by starting a
+ * refresh immediately — so a payload can be judged against a `now` that is
+ * minutes old, and a blocked main thread does the same without any tab
+ * switching. Five seconds turned a checkpoint written the instant it was served
+ * into *"the Overseer stopped checkpointing at a time this page could not
+ * read"*, which is the alarm-a-clock-manufactures failure one clock further in.
+ * GPT Sol's K2, 2026-09-08. **Do not reintroduce a constant here**: the tick is
+ * not the bound, and there is no bound.
  *
- * Five seconds: one tick plus room for a slow render, and two orders of
- * magnitude below the five- and six-minute thresholds it must not swallow.
- * Anything past it is still `null`, still loud, and still the honest answer.
+ * The anchor is sound because every corrected timestamp is at most the moment
+ * the payload arrived: `servedAt` is later than everything the payload carries,
+ * and the shift maps `servedAt` onto `receivedAt`. So a value still ahead of
+ * `asOf` is a clock that is genuinely wrong, and it is `null` — still loud, and
+ * still the honest answer.
  */
-const RENDER_SLACK_MS = 5_000;
-
-function ageMs(at: string, now: number): number | null {
+function ageMs(at: string, asOf: number): number | null {
   const parsed = Date.parse(at);
   if (!Number.isFinite(parsed)) return null;
-  const age = now - parsed;
-  if (age < -RENDER_SLACK_MS) return null;
-  return Math.max(0, age);
+  const age = asOf - parsed;
+  return age < 0 ? null : age;
 }
 
 /**
@@ -200,11 +202,28 @@ function Note({
 export function AttentionPanel({
   attention,
   now,
+  receivedAt,
   onSelect,
 }: {
   attention: AttentionView;
   /** The page's one clock. Every age on screen agrees because they all read this. */
   now: number;
+  /**
+   * When this browser received the payload these timestamps came out of, by its
+   * own clock — `null` before the first one has arrived, in which case there is
+   * nothing on this panel to age anyway.
+   *
+   * It is the other half of the anchor above, and it is what makes the ages
+   * here immune to a page whose clock has been asleep. Passed in rather than
+   * stamped here: this component re-renders on every tick and would stamp a
+   * fresh receipt each time, which is a receipt of nothing.
+   *
+   * This is `useFleetState`'s stamp, which is a React render LATER than the one
+   * the skew was measured against inside `fetchFleetState` — and later is the
+   * safe direction, because the anchor only has to be no earlier than the
+   * payload it judges. transport.ts says why the two are separate.
+   */
+  receivedAt: number | null;
   /**
    * Pick a session. The SAME callback `App.tsx` threads to `SessionsPanel`, on
    * purpose: this panel adds a way IN to the session that already exists, and
@@ -212,6 +231,10 @@ export function AttentionPanel({
    */
   onSelect: (id: string) => void;
 }): ReactNode {
+  /* ONE ANCHOR FOR THE WHOLE PANEL, computed here rather than in `ageMs`, so
+     that the checkpoint's clock and the list's cannot be judged against two
+     different readings of ours. See `ageMs`. */
+  const asOf = receivedAt === null ? now : Math.max(now, receivedAt);
   /* NOTHING AT ALL. `not-asked` means this server did not look — there is no
      fact to report, so there is no line, not even a quiet one. A page that drew
      "the coordinator is not running" here would be inventing an observation on
@@ -276,20 +299,21 @@ export function AttentionPanel({
   }
 
   return (
-    <Published list={attention.list} writtenAt={attention.coordinatorWrittenAt} now={now} onSelect={onSelect} />
+    <Published list={attention.list} writtenAt={attention.coordinatorWrittenAt} asOf={asOf} onSelect={onSelect} />
   );
 }
 
 function Published({
   list,
   writtenAt,
-  now,
+  asOf,
   onSelect,
 }: {
   list: AttentionList;
   /** The CHECKPOINT's clock. A different failure from the list's — see the header. */
   writtenAt: string;
-  now: number;
+  /** What every age here is measured against. `ageMs` says why it is not `now`. */
+  asOf: number;
   onSelect: (id: string) => void;
 }): ReactNode {
   if (list.kind === "unknown") {
@@ -318,8 +342,8 @@ function Published({
     );
   }
 
-  const scanned = ageMs(list.scannedAt, now);
-  const written = ageMs(writtenAt, now);
+  const scanned = ageMs(list.scannedAt, asOf);
+  const written = ageMs(writtenAt, asOf);
   /* ON SCREEN, ALWAYS, for a list. The pass runs about every two minutes and
      costs model calls, so a list that quietly stopped being produced looks
      exactly like a calm fleet — and that is the one failure this panel must not
@@ -460,7 +484,7 @@ function Published({
           (b), and the half with the model calls is the half that can see why
           one of these matters more than another. */}
       {list.items.map((item) => (
-        <AttentionCard key={item.id} item={item} now={now} onSelect={onSelect} />
+        <AttentionCard key={item.id} item={item} asOf={asOf} onSelect={onSelect} />
       ))}
     </section>
   );
@@ -476,15 +500,16 @@ function Published({
  */
 function AttentionCard({
   item,
-  now,
+  asOf,
   onSelect,
 }: {
   item: AttentionItem;
-  now: number;
+  /** What the wait is measured against. `ageMs` says why it is not `now`. */
+  asOf: number;
   onSelect: (id: string) => void;
 }): ReactNode {
   const kind = KINDS[item.kind];
-  const waited = ageMs(item.waitingSince, now);
+  const waited = ageMs(item.waitingSince, asOf);
   return (
     <Card className={cx("session-card tw:mb-2 tw:border-l-4 tw:p-3", kind.loud ? "tw:border-l-alarm" : "tw:border-l-needs")}>
       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1">
