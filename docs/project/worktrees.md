@@ -305,6 +305,12 @@ process asking, the owner itself is asking. A third party gets the age floor ins
 schedule a continuation for an hour's time and exit because the box is loaded, leaving a tree that is
 clean, landed, unlocked by a dead pid, and still wanted.
 
+It is **cooperative evidence, not an unforgeable capability**: another same-uid session could read a
+common ancestor's pid out of `/proc` and write a lock reason naming it. It raises the bar from *any
+agent may delete any tree* to *an agent must deliberately forge a lock*, which is the useful part.
+And it can fail the other way — a supervisor that detached the session from this process tree leaves
+a legitimate owner unauthorised, and waiting out the floor like anybody else.
+
 The recommended flow from inside a Claude session, because removing the directory you are standing in
 leaves your shell in one that no longer exists:
 
@@ -498,9 +504,17 @@ primary's vantage point or would be wrong inside a single tree:
   still exists: move a worktree away, put anything back at its old path, and you get
   `prunable gitdir file points to non-existent location` over a directory full of somebody's files.
   It is now `UNKNOWN`, and names the fix, `git worktree repair <path>`.
-  **Nothing was lost by the old behaviour** — a ghost is unregistered with `--force --force`, and
-  measured, git refuses that anyway (*"validation failed … `<path>/.git` does not exist"*). What it
-  produced was a confusing failure over a full directory rather than the one instruction that works.
+
+  **And `worktree:remove` passes no `--force`, on any path, ever.** That is the part that actually
+  protects files, and it took two rounds to see why. The classification fix above closes nothing on
+  its own: measured, `--force --force` refuses a present-and-prunable path anyway, because git's
+  validator wants `<path>/.git` and that is exactly what is missing there. The case that *does* lose
+  files is a **genuine ghost whose directory comes back** between the listing and the removal — GPT
+  Sol reproduced it, `--force --force` exit 0, directory gone. A classification taken a moment earlier
+  cannot see that, and no amount of re-checking closes a race. What closes it is asking git to
+  revalidate at the moment it acts, which is what removing the force does — and measured, a plain
+  `git worktree remove` clears an absent registration on its own, so nothing here needed the force in
+  the first place.
 - **You are standing in it.**
 - **The 24-hour age floor.** A worktree touched this recently is never removable, however landed. This
   is not caution, it is the bug that retired the sibling repo's sweep: a fresh tree whose tip equals
