@@ -1063,7 +1063,7 @@ queue now say ~73 seconds instead of *"within a minute or so"*. Four tests in
 `tests/fleet-web.test.tsx` § *queueing a message*; five mutants, each killed by the test that names
 its rule.
 
-### 🔵 Stage v0.4g: the session detail view is cluttered
+### ✅ Stage v0.4g: the session detail view is cluttered (landed 2026-09-08, `a07b9528`)
 
 **Greg, 2026-09-08:** *"Use Playwright or similar to take screenshots and make the Session detail view
 less confusing and cluttered and more user-friendly (with product input from Fable)."*
@@ -1073,14 +1073,95 @@ brief names both halves of how to get one: **screenshots of the real page**, bec
 green is not evidence a reader can see it, and **Fable**, because the question is what a person needs
 first and that is not a technical fork.
 
-- [ ] Playwright against system Chrome on the box — `docs/project/browser-control.md` decides which
-      automation, not preference. Phone width as well as desktop: the page is read on a phone.
-- [ ] Every band of the detail view has a reason it is there, written in `SessionDetail.tsx`'s
-      header. **A cut needs a reason back**, not just less ink — several of those bands exist because
-      a collapsed distinction cost something.
-- [ ] Ask Fable for the ordering, not for a redesign: *what does a person need to see first on a
-      phone at 3am*. The answer is a product call, so anything user-visible beyond ordering and
-      density goes to Greg.
+- [x] Playwright against system Chrome on the box. Six full-page captures at 390px and 1280px,
+      before and after.
+- [x] **Measured rather than described.** A needs-you detail view was **3,398px tall at 390px wide —
+      four screens of scrolling — with 31 buttons and two text inputs**. An idle session with nothing
+      to report still ran to two and a half screens.
+- [x] Fable ruled on ordering and density, and on Greg's four open questions.
+
+#### The rule, which is the part that outlives this stage
+
+The prose on this page is *deliberate* and it is *good*: several paragraphs exist because somebody was
+previously misled by a bare number, and this tool's non-negotiable rule is that a number without its
+caveat is a lie. So the question was never "less prose or more". Fable's answer, 2026-09-08:
+
+> **A caveat stays on screen only if it would change what you do on this screen in the next ten
+> seconds. If it only changes what you would *believe*, it lives one tap away, attached to the fact it
+> qualifies. If it qualifies something that is not on screen — an empty section, a state this session
+> is not in — it goes.**
+
+Two corollaries did most of the work. **An honest label replaces a paragraph**: `Queue (~73s)` says
+what a sentence was saying, `Ask it to…` says these are requests an agent may decline, `(dry run)`
+says the server will not act. And **the tap is on the number, never on a separate help link** — which
+is what keeps the non-negotiable rule intact, because the page still renders no bare numbers. It
+renders numbers wearing their caveats, and `Explain` is how they wear them.
+
+#### What changed
+
+- [x] Composer above the button strip. The commonest thing a needs-you session wants is an answer in
+      prose, and it was third, behind fifteen buttons.
+- [x] Fifteen spoken buttons became **four visible** — Continue, Where are you?, Pull latest, Wrap up
+      — with the rest under a `More` disclosure grouped into **Work / Pause / Hand off**.
+- [x] The rename field is behind a `Rename` disclosure, and the page shows **one name** rather than an
+      italic *no title yet* above a box holding the real one.
+- [x] *Where it is* is collapsed, with the repo in its summary.
+- [x] **`wrote 21m ago` in the header**, beside the badge — the one number that tells a working
+      session from a stuck one, previously buried a screen and a half down as the first line of
+      *Recent messages*. It asks `transcriptAge` for the alarm threshold rather than recomputing it,
+      so the header and the section cannot disagree, and `useRecentMessages` is exported so one
+      transcript read serves both.
+- [x] **A shell gets one sentence and none of the controls**, which reverses a rule in
+      `SessionDetail.tsx`'s own header. The old rule — do not reimplement `steerableStatus` here —
+      was written to stop the page second-guessing a *refusal*, and it was right about that. But the
+      page already branches on `status.kind` to draw the SHELL badge, so hiding the composer on the
+      same branch adds no second source of truth, and fifteen buttons and a text box that cannot work
+      under a badge saying they cannot is the more expensive lie. The header now separates the two
+      questions: this file does not decide **refusals**, and it does decide **what to offer**.
+- [x] Two deletions. A section headed *What it needs from you* whose entire content was *"Nothing. It
+      is not asking you anything."* — a heading whose only content was the news that it had none. And
+      a *Say something to it* heading nested inside a section of the same name and repeated 300px
+      lower over the composer, so the page said the same four words about two different things.
+      Fable: the single most confusing thing in the screenshots.
+
+#### The one part that could lose a feature, and it has a watched test
+
+`groupSpoken` sorts by **id, from a list written in the client** — and the *server* owns this
+catalogue and can add to it. A grouping that silently dropped what it did not recognise would be a
+fresh instance of [260908b](../postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md)'s
+class. So anything unrecognised lands in an **Other** group and is still pressable, and
+`still draws an action this build has never heard of` goes red when that one line is removed —
+measured, hatch out, test fails, file restored byte-identical.
+
+Related, and caught by the tests rather than by review: *What each of these actually says* was first
+placed inside the `More` disclosure, per the ruling — which is right when More holds ten buttons and
+makes it **unreachable when the catalogue is small enough to have no More at all**. It renders
+unconditionally.
+
+#### Fable's answers to the four questions that are Greg's
+
+- **(a) Rename from the phone?** Almost never, and when he does it is because a card says *no title
+  yet*. So: no field, a disclosure — and show one name, not two.
+- **(b) Last prose turn, or the raw pane tail?** The prose turn, **with its age**. The pane tail is
+  forty lines of tool output a phone cannot fit, and the prose turn is what *Where are you?* would
+  return anyway. A prose line without an age is the misleading number, so the age is part of the
+  ruling. **Built.**
+- **(c) Should a working session's composer default to Queue?** **No.** Send stays primary in every
+  state; typing at a working agent means *steer it now*, and a 73-second default is wrong for a tool
+  used in a hurry. The exception is already built: when the queue is non-empty, ordering is the
+  point.
+- **(d) Same order on the desktop?** Yes, one column, as the 1280px capture already had it. Desktop
+  gets the width for the transcript, not a second map — and the coordinator agent will read both.
+
+#### Two of Fable's rulings NOT taken, named rather than quietly dropped
+
+- **Cut `Sleep 5h`.** Deleting an action touches the catalogue, the `SpokenActionId` union in
+  `wire.ts`, and anything already queued under that id — for a cosmetic gain the `More` disclosure
+  already delivers. Kept, in the **Pause** group.
+- **Put the `Force` group below the queue.** Separating the loud red block from the strip it is the
+  exception to makes it easier to lose than to find. Kept adjacent.
+
+Both are Greg's to overrule in a word.
 
 ### The pane shows text nobody typed, and it reads as an instruction
 

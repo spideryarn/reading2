@@ -1,6 +1,11 @@
 # Match the document's leading tokens instead of searching for markup
 
-**Status:** planned, 2026-09-08. Not started.
+**Status:** **done, 2026-09-08.** Both stages landed on `dev` and reviewed clean — Stage 1 at
+`0ace43c5` after four rounds with GPT Sol, Stage 2 at `1ef41647` after two. Each stage's own record
+is below, under *What Stage 1 actually landed* and *What Stage 2 landed*, including where each
+departed from what is planned above and why. One idea is recorded and deliberately not built: an
+exhaustive `reason × origin` matrix behind one formatter, so a refusal that has nothing to say to an
+upload is a compile error rather than something a sweep has to catch — see the round-2 notes.
 
 **Why:** the fix that landed the night before
 ([260907c](../postmortems/260907c-a-heuristic-promoted-to-a-gate.md)) was landed **knowingly

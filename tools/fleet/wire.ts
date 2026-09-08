@@ -203,6 +203,127 @@ export type QueueView = {
 };
 
 /* ------------------------------------------------------------------ *
+ * Which harness is in a pane, and what may honestly be done to it.
+ * ------------------------------------------------------------------ */
+
+/**
+ * The harnesses this box can tell apart.
+ *
+ * From the direction doc's principle: *"One adapter per harness, and honest
+ * about what each can do. Claude, Codex and bare shells have genuinely
+ * different capabilities; flattening them into one 'message an agent' verb
+ * produces a UI that lies."*
+ *
+ * The KIND is here because the page renders it. The EVIDENCE for it — which
+ * pid, how many hops below the pane — is `Harness` in
+ * `tools/overseer/harness.ts` and stays on the server, because it is a fact
+ * about a process tree rather than anything a button needs.
+ *
+ * `unknown` is a real arm, not a fallback. A pane we could not identify is a
+ * pane nothing may be typed at, and saying so out loud is the point.
+ *
+ * MEASURED ON THIS BOX, 2026-09-08 at 12:15 UTC, 26 panes: 17 `claude-code`, 6
+ * `shell`, 1 `codex-batch`, 2 `codex-interactive`, 0 `claude-headless`, 0
+ * `unknown`. Seventeen minutes earlier the same measurement found 22 panes and
+ * **no Codex of any kind**, so a Codex column that renders empty is a reading
+ * of a moving fleet rather than a bug to chase — and an empty one is not
+ * evidence that the arm is dead code.
+ */
+export type HarnessKind =
+  | "claude-code"
+  | "claude-headless"
+  | "codex-batch"
+  | "codex-interactive"
+  | "shell"
+  | "unknown";
+
+/**
+ * May we do this, and if not, what does the reader get told?
+ *
+ * NOT A BOOLEAN. A greyed-out button with no sentence beside it is a UI saying
+ * "no" and meaning "I am not going to tell you", and the reader of that goes
+ * and does the thing by hand in the terminal instead. The `why` IS the feature.
+ *
+ * **THE CLIENT MUST DERIVE A THIRD ARM FROM THIS RATHER THAN CONSUME IT
+ * DIRECTLY.** This crosses as JSON, so the field can be absent — an older
+ * server, a partial response — and an absence is a claim nobody made. Reading a
+ * missing field as `can: false` invents a refusal; reading it as `can: true`
+ * invents a grant and offers an action that cannot work. The client's parse
+ * needs a `not-told` arm of its own. That is the sixteenth instance in
+ * docs/postmortems/260908b, and the one that keeps coming back.
+ */
+export type Capability = { can: true } | { can: false; why: string };
+
+/**
+ * The three questions worth asking of a harness, and why they are three rather
+ * than one.
+ *
+ * `steerWithProse` and `answerDialog` come apart, and not hypothetically: a
+ * Claude session sitting on a trust dialog can be sent `Down` then `Enter` at a
+ * moment when a sentence would be swallowed by that dialog, and the two were
+ * proven on different days by different means. Collapsing them into "can I talk
+ * to it" would have to pick one and would be wrong about the other.
+ *
+ * `watch` is here even though everything on this box can be watched, because a
+ * capability set in which nothing is ever true reads as a list of excuses. It
+ * is also the first arm a remote or cloud session would refuse.
+ */
+export type HarnessCapabilities = {
+  /** Free prose, delivered to be READ as a message rather than executed. */
+  steerWithProse: Capability;
+  /** A recognised dialog answered with an arrow key or a digit. */
+  answerDialog: Capability;
+  /** Reading the pane's screen and its process tree. */
+  watch: Capability;
+};
+
+/* ------------------------------------------------------------------ *
+ * Dictation: POST /api/transcribe.
+ * ------------------------------------------------------------------ */
+
+/**
+ * A recording, on its way to be turned into words.
+ *
+ * **`audio` is base64 of somebody talking in Greg's room**, which is a class of
+ * payload nothing else on this server handles. Three rules follow it everywhere
+ * it goes: it is never logged, its size is never logged either (a running tally
+ * of request sizes is a picture of when somebody was talking), and it is held
+ * for one request and then dropped.
+ *
+ * `format` is the container word, not a MIME type — `formatOf` in
+ * `src/dictation-limits.ts` maps one to the other in the browser, and the server
+ * checks the result against the same closed list. A wrong container is not a
+ * rejection, it is a transcript of noise.
+ */
+export type TranscribeRequest = {
+  audio: string;
+  format: string;
+  /**
+   * Which box this came from, so the vocabulary can be built for it.
+   *
+   * `session` names a tmux handle the snapshot already knows — the server looks
+   * it up rather than trusting it, so the worst a crafted value can do is miss.
+   * `new-session` is the box that starts an agent, which relates to no session
+   * yet and gets the fleet-wide list.
+   */
+  context: { kind: "session"; sessionId: string } | { kind: "new-session" };
+};
+
+/**
+ * What came back.
+ *
+ * **An empty `text` is a success**, not a failure: somebody who pressed the
+ * button and said nothing must have their box left exactly as it was rather
+ * than be told something went wrong.
+ *
+ * A failure is `{ error }` with the sentence in it, and the HTTP status carries
+ * whether a second identical request could work — read off the number rather
+ * than out of the prose, because the prose is freely rewritable and the branch
+ * is not.
+ */
+export type TranscribeResponse = { text: string };
+
+/* ------------------------------------------------------------------ *
  * The attention inbox. Produced by the Overseer, rendered by the page.
  *
  * The premise it corrects was measured on the live fleet 2026-09-08 and is
@@ -291,3 +412,143 @@ export type AttentionList =
       scannedAt: string;
     }
   | { kind: "unknown"; why: string; scannedAt: string };
+
+/* ------------------------------------------------------------------ *
+ * Why a session is not doing anything, which is three facts wearing one word.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **A session that is paused, and what it is waiting for.**
+ *
+ * Greg, 2026-09-08: *"can you try and distinguish between statuses like
+ * `Working`, `Hit usage limits`, and `Paused/waiting` (e.g. because it's been
+ * asked to run Unix sleep or idle waiting for a CronCreate or similar, i.e.
+ * it's kind of idle, but with an intention to reactivate, and ideally make a
+ * note of when it should reactivate (and whether it's overdue))"*.
+ *
+ * ## This is an added fact, NOT an eighth `FleetStatus` arm
+ *
+ * v0.4d decided the general form of this question — *how `idle` splits is an
+ * added fact, not another status* — and the research for this stage looked for
+ * an argument against that and did not find one. A cron-parked session is
+ * genuinely `idle`: it is at a prompt, and typing at it works. So is a
+ * rate-limited one. Making it a status would also mean touching **five**
+ * exhaustive switches (`triageRank`, `steerableStatus`, `drainGate`,
+ * `deliveryGate`, `modeApplicability`) to say something none of them needs to
+ * know.
+ *
+ * ## Where these states actually hide, measured rather than assumed
+ *
+ * Under `idle`, not `working`. A pending `CronCreate` wake-up was found on
+ * **8 of 11 idle rows** in one pass, and a rate-limited session prints its
+ * error, ends its turn and stops — so it reads `idle` too. The stage began
+ * from the opposite assumption and the measurement corrected it.
+ *
+ * ## `none` is a claim, and it is the one that will be got wrong
+ *
+ * `none` says *we looked, everywhere we can look, and this session is not
+ * waiting for anything*. It is not a default and it is not what silence
+ * produces. Every source that could not be consulted — a transcript tail that
+ * ran out of window before reaching the start of the file, a session store that
+ * could not be read, a rate-limit scan nothing has run yet — comes back as
+ * `cannot-tell` with the reason. Folding those into `none` is the
+ * ambiguous-negative mistake this module made three times in one night, and it
+ * costs more here than anywhere else: a rate-limited session never resumes by
+ * itself, so one nobody restarts is an hour of nothing. Measured on
+ * 2026-09-08: a limit hit at 06:02 with `resetsAt` 06:30, and the next turn was
+ * a person typing "Continue" at 08:21 — **111 minutes**.
+ */
+export type Pause =
+  | { kind: "none" }
+  | {
+      kind: "rate-limited";
+      /**
+       * The window's own name, verbatim from the record — `five_hour`,
+       * `seven_day`, or one of the rotating per-model codenames.
+       *
+       * **Deliberately not a closed union.** The cache carries names that
+       * appear and vanish without notice, and an exhaustive switch over them
+       * would silently drop a real one. `isKnownUsageWindow` in
+       * `tools/overseer/usage.ts` narrows the two worth naming; the rest render
+       * by raw name.
+       */
+      window: string;
+      resetsAt: string;
+      /**
+       * True only when `resetsAt` is in the past AND the session has taken no
+       * turn since. A rate-limited session never resumes by itself (Fable,
+       * 2026-09-08), so this is deterministic rather than a guess — and it may
+       * be set only when `resetsAt` was actually read.
+       */
+      overdue: boolean;
+    }
+  | { kind: "scheduled-wakeup"; at: string; overdue: boolean; source: "cron" }
+  | { kind: "in-a-shell-call"; sinceMs: number }
+  | { kind: "cannot-tell"; why: string; cause: PauseUnknownCause };
+
+/**
+ * WHY we could not tell, as a name rather than only a sentence.
+ *
+ * `tail-window-exhausted` is the one that will bite: the tail read stops at a
+ * byte budget without reaching the start of the file, so the evidence may be
+ * above it. That is a different fact from having read the whole file and found
+ * nothing, and only one of the two is `none`.
+ *
+ * `rate-limits-not-collected` is the honest state of the world until the
+ * Overseer publishes a usage report on a cadence — the scan costs seconds on a
+ * loaded box, which is far too much for a 73-second refresh loop, so this
+ * module reads a published reading rather than running one.
+ */
+export type PauseUnknownCause =
+  | "tail-window-exhausted"
+  | "no-transcript"
+  | "transcript-unreadable"
+  | "no-conversation-id"
+  | "session-store-unreadable"
+  | "rate-limits-not-collected"
+  /**
+   * A wake-up WAS found and its time could not be worked out — a recurring
+   * expression, a step, a range.
+   *
+   * The seventh arm, and it is a different shape from the other six: those are
+   * all about failing to REACH a source. This one is about reaching it and
+   * finding something we know is pending and cannot put a clock on. It is not
+   * `none`, because something is genuinely waiting; it is not
+   * `transcript-unreadable`, because the transcript read perfectly well.
+   *
+   * Added 2026-09-08 after the reader was built: the module had been mapping
+   * this case onto `transcript-unreadable` through a single named constant,
+   * with the specifics in `why`, and said so rather than editing this type
+   * unilaterally. That was the right way round — the sentence stayed true while
+   * the name was wrong, and one constant meant the repair is one line.
+   */
+  | "schedule-not-parseable";
+
+
+/* ------------------------------------------------------------------ *
+ * What happened to the keystrokes.
+ * ------------------------------------------------------------------ */
+
+/**
+ * **A steering attempt has three outcomes, not two.**
+ *
+ * Astra's A11b. `none` means nothing left this box. `partial` means **the text
+ * landed and the Enter did not**, so it is sitting in that agent's input box
+ * waiting for the next keystroke to submit it — the one case where *"try
+ * again"* is the worst available advice, because a retry appends to the
+ * half-sent text rather than replacing it. `unknown` means the call timed out
+ * or died on a signal and we genuinely cannot say.
+ *
+ * It lives here because it was declared carefully on the server, sent on the
+ * wire, and **thrown away by the browser**, which then rendered every refusal
+ * as *"Nothing was sent."* — false in the most expensive direction, and false
+ * precisely when it matters. That is instance 5 of
+ * docs/postmortems/260908b: the producer said the careful thing and the
+ * consumer had a slot for one fact where there were three.
+ *
+ * The server's own comment beside the field had already named the consumer it
+ * needed: *"it is here rather than only in the log because the person who
+ * pressed the button is the one who needs it, and they are on a phone."*
+ * Nothing related the two declarations, so nothing noticed.
+ */
+export type Delivery = "none" | "partial" | "unknown";

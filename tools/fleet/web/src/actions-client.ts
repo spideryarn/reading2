@@ -378,6 +378,23 @@ export type QueueView = Omit<
   deliverable: number | null;
   /** How many items in this queue the page could not read at all. */
   unreadableItems: number;
+  /**
+   * **The server sent a queue with no readable list of items in it.**
+   *
+   * Not the same as an empty queue, and the difference is the whole reason this
+   * field exists. `items` used to be `Array.isArray(v["items"]) ? v["items"] :
+   * []`, so a renamed or missing key produced a perfectly valid queue with
+   * nothing in it — and the page then said *"Nothing is waiting."*, which is a
+   * confident claim about the box derived from a payload it could not read.
+   *
+   * That is the same defect this file already carries a long comment about, one
+   * field along: `catalogueOffered` turned a shape mismatch into *"this server
+   * sent no list of actions at all"*. Found on 2026-09-08 by
+   * `fleet-health-history`, who hit it in their own parser and warned the rest
+   * of us — the browser is where `wire.ts` cannot reach, because a hand-written
+   * parse of an `unknown` is exactly what the compiler has no opinion about.
+   */
+  itemsUnreadable: boolean;
 };
 
 /**
@@ -445,7 +462,11 @@ export function parseQueue(v: unknown): QueueView | null {
   if (sessionId === null) return null;
   const items: QueueItemView[] = [];
   let unreadableItems = 0;
-  const raw = Array.isArray(v["items"]) ? v["items"] : [];
+  /* ABSENT IS NOT EMPTY. A queue whose item list this page cannot read is not a
+     queue with nothing in it — see `itemsUnreadable`. */
+  const rawItems = v["items"];
+  const itemsUnreadable = !Array.isArray(rawItems);
+  const raw = Array.isArray(rawItems) ? rawItems : [];
   for (const item of raw) {
     if (!isRecord(item)) {
       unreadableItems += 1;
@@ -474,6 +495,7 @@ export function parseQueue(v: unknown): QueueView | null {
     warning: str(v["warning"]) ?? ASSUMED_VOLATILE_WARNING,
     deliverable: finite(v["deliverable"]),
     unreadableItems,
+    itemsUnreadable,
   };
 }
 

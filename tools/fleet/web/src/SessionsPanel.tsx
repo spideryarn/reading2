@@ -49,6 +49,7 @@
 import type { ReactNode } from "react";
 
 import { NewSessionPanel } from "./NewSessionPanel";
+import { PauseLine } from "./PauseLine";
 import { MissingSession, SessionDetail } from "./SessionDetail";
 import { Handles, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
 import { Explain } from "./Tooltip";
@@ -121,6 +122,12 @@ function SessionCard({
     >
       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1">
         <StatusPill status={row.status} />
+        {/* BESIDE THE PILL, NEVER INSTEAD OF IT. A cron-parked session and a
+            rate-limited one are both genuinely `idle`, so the pill is unchanged
+            and this is the added fact — the one that says whether the calm is
+            "finished" or "blocked and nobody has noticed". It renders nothing
+            when there is nothing to say. PauseLine.tsx has the reasoning. */}
+        <PauseLine pause={row.pause} status={row.status} now={now} />
         <Uptime row={row} now={now} className="tw:ml-auto" />
       </div>
 

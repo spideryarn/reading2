@@ -230,3 +230,39 @@ export function stripComments(css: string): string {
 export function readerCssNoComments(): string {
   return stripComments(readerCss());
 }
+
+/**
+ * **The body of one `@media <query> { … }` block, chosen by what is inside it.**
+ *
+ * Two things here are the point rather than plumbing, and both were bought by a
+ * check that could not fail for the reason it gave.
+ *
+ * **Braces are counted**, because a lazy `\{([\s\S]*?)\}` stops at the first
+ * nested rule's `}` and hands back a fragment — every assertion against it then
+ * passes or fails on a third of the block, with nothing to say which.
+ *
+ * **And the block is found by `mustContain`**, not by being the first match:
+ * the reading-view sheets have several `@media (hover: none)` blocks and, since
+ * 2026-09-08, several `(hover: hover)` ones, and reading the wrong one is a test
+ * that is green about somebody else's rules.
+ *
+ * Shared rather than copied because two files now ask this question —
+ * `gutter-target-size` and `gutter-touch-contrast` — and a subtle helper in two
+ * places drifts in one of them.
+ */
+export function mediaBlock(css: string, query: string, mustContain: string): string {
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  for (const m of css.matchAll(new RegExp(`@media ${escaped}`, "g"))) {
+    const open = css.indexOf("{", m.index);
+    let depth = 0;
+    for (let i = open; i < css.length; i++) {
+      if (css[i] === "{") depth++;
+      else if (css[i] === "}" && --depth === 0) {
+        const body = css.slice(open + 1, i);
+        if (body.includes(mustContain)) return body;
+        break;
+      }
+    }
+  }
+  throw new Error(`no \`@media ${query}\` block containing \`${mustContain}\``);
+}

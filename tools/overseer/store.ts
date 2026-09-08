@@ -91,7 +91,6 @@
  * awkward. Refusing concurrent writers is preferable to adopting SQLite in
  * order to tolerate them.
  */
-import { randomUUID } from "node:crypto";
 import {
   closeSync,
   existsSync,
@@ -101,10 +100,9 @@ import {
   openSync,
   readFileSync,
   readSync,
-  statSync,
   unlinkSync,
 } from "node:fs";
-import { homedir, hostname } from "node:os";
+import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
 import type { AttentionItem, AttentionList } from "../fleet/wire.js";
@@ -120,7 +118,26 @@ import {
   type StatusKey,
 } from "./diff.js";
 import { truncateToLastLine, writeAll, writeAtomically, type JsonlRepair } from "./jsonl.js";
+import {
+  isProcessAlive,
+  readLock,
+  releaseLock,
+  stillOurs,
+  takeLock,
+  type HeldLock,
+  type LockHolder,
+  type LockRefusal,
+} from "./lock.js";
 import type { ObservedRow, ParseResult } from "./observation.js";
+
+/**
+ * Re-exported because this file was where they lived until 2026-09-08, and a
+ * moved symbol that also disappears from its old home costs every caller a
+ * change for no reason. The lock itself is [`lock.ts`](./lock.js) now — a leaf,
+ * so the fleet dashboard's health retention can hold the same discipline
+ * instead of writing a simpler third copy of it.
+ */
+export { isProcessAlive, type LockHolder };
 
 /**
  * The checkpoint's schema.
@@ -162,23 +179,17 @@ export const LOCK_FILE = "overseer.lock";
  */
 const REPLAY_CEILING_BYTES = 64 * 1024 * 1024;
 
-/** How many times a start will retry after clearing a lock left by a dead process. */
-const STALE_LOCK_ATTEMPTS = 3;
-
-/** Who holds the lock, in terms somebody reading it over ssh can act on. */
-export type LockHolder = { pid: number; instanceId: string; hostname: string; startedAt: string };
-
 /**
  * Why the store would not open. Never a thrown string: a launcher has to print
  * a sentence saying what a person should do, and an exception gives it nothing
  * to print that is not also a stack trace.
+ *
+ * **Four of the five arms are `LockRefusal`'s**, declared once in
+ * [`lock.ts`](./lock.js) rather than restated here — a superset by
+ * construction, so `describeRefusal` below still has to be exhaustive and the
+ * compiler still says so if the lock grows an arm.
  */
-export type StoreRefusal =
-  | { reason: "already-running"; holder: LockHolder }
-  | { reason: "lock-unreadable"; detail: string }
-  | { reason: "lost-the-race"; holder: LockHolder | null }
-  | { reason: "relative-store-dir"; path: string }
-  | { reason: "unusable-directory"; detail: string };
+export type StoreRefusal = LockRefusal | { reason: "relative-store-dir"; path: string };
 
 /** Why there was no checkpoint to resume from. Seven arms because seven different things go wrong. */
 export type ColdReason =
@@ -510,33 +521,6 @@ export function storeRoot(env: NodeJS.ProcessEnv = process.env): string {
     );
   }
   return trimmed;
-}
-
-/**
- * Whether a pid is running, asked of the kernel rather than of a file.
- *
- * `EPERM` is TRUE, not false: it means the process exists and belongs to
- * somebody else, and reading it as "gone" would let a second daemon take a live
- * lock. `ESRCH` is the only proof of absence.
- *
- * **PID REUSE IS ACCEPTED, KNOWINGLY.** Linux hands pids out again after
- * wrapping, so a lock left by a dead Overseer whose pid has since been reused
- * by anything at all reads as held, and the next start refuses instead of
- * taking over. That is the safe direction — a refusal is one `rm` away from
- * fixed and says exactly which file to remove, where a wrongly-taken lock is
- * two writers producing a plausible history. The opposite mistake, a genuinely
- * live Overseer whose lock we steal, is what the check prevents and is the one
- * worth spending a false refusal on. `hostname` and `startedAt` in the record
- * are there so a person can tell the two apart by hand.
- */
-export function isProcessAlive(pid: number): boolean {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (cause) {
-    return (cause as NodeJS.ErrnoException).code === "EPERM";
-  }
 }
 
 function isRecord(u: unknown): u is Record<string, unknown> {
@@ -1252,144 +1236,6 @@ function readSlice(path: string, from: number): Buffer {
   }
 }
 
-type LockRead =
-  | { kind: "absent" }
-  | { kind: "held"; holder: LockHolder }
-  | { kind: "unreadable"; detail: string };
-
-function readLock(path: string): LockRead {
-  if (!existsSync(path)) return { kind: "absent" };
-  let text: string;
-  try {
-    text = readFileSync(path, "utf8");
-  } catch (cause) {
-    return { kind: "unreadable", detail: String(cause) };
-  }
-  let json: unknown;
-  try {
-    json = JSON.parse(text);
-  } catch (cause) {
-    return { kind: "unreadable", detail: String(cause) };
-  }
-  if (!isRecord(json)) return { kind: "unreadable", detail: "the lock is not an object" };
-  const { pid, instanceId, hostname: host, startedAt } = json;
-  if (!isPidLike(pid) || typeof instanceId !== "string" || typeof host !== "string" || typeof startedAt !== "string") {
-    return { kind: "unreadable", detail: "the lock does not name a pid and an instance" };
-  }
-  return { kind: "held", holder: { pid, instanceId, hostname: host, startedAt } };
-}
-
-/** The lock, held as an open file descriptor: the fd is the claim, the record inside it is the diagnosis. */
-type HeldLock = { holder: LockHolder; fd: number };
-
-/**
- * Whether this process still holds the lock — **both the file and the record**.
- *
- * Two checks because there are two ways to lose it, and each check is blind to
- * the other's case. The INODE catches a competitor that unlinked our lock and
- * created its own: the contents may be byte-identical and it is still not our
- * file. The RECORD catches a lock overwritten in place, which keeps the inode
- * and changes who it says is running. `dev` as well as `ino`, because inode
- * numbers are unique only within a filesystem.
- */
-function stillOurs(lock: HeldLock, path: string): boolean {
-  let onDisk: ReturnType<typeof statSync>;
-  try {
-    onDisk = statSync(path);
-  } catch {
-    return false;
-  }
-  const ours = fstatSync(lock.fd);
-  if (onDisk.ino !== ours.ino || onDisk.dev !== ours.dev) return false;
-  const read = readLock(path);
-  return read.kind === "held" && read.holder.instanceId === lock.holder.instanceId;
-}
-
-/**
- * Take the lock, or refuse.
- *
- * **`openSync(path, "wx")` is the whole design**: `O_CREAT|O_EXCL` either
- * creates the file or fails, in one syscall, with the kernel deciding. Nothing
- * built out of read-then-write can do this — a check before a write is a TOCTOU
- * check by construction, which is what GPT Sol's S3-01 is about.
- *
- * A lock left by a **provably dead** process is removed and the claim retried.
- * That removal is the one step this cannot make atomic without a lock primitive
- * Node does not expose, so the residual race is named rather than hidden: two
- * starts that both prove the same corpse dead can both unlink and both create,
- * and one of them ends up holding a file that is no longer at the path. That is
- * why `stillOurs` is consulted before the log is repaired, before the append
- * handle is opened, and before every write — the loser stops at its next step
- * rather than writing beside the winner. It costs a `stat` per tick.
- *
- * A lock that cannot be parsed is not proof of anything, so it refuses and
- * names the file: a stale unreadable lock is one `rm` away from fixed, and
- * stealing one is two daemons away from a history nobody can tell is wrong.
- */
-function acquireLock(
-  root: string,
-  now: () => Date,
-  beforeClaim?: () => void,
-): { ok: true; lock: HeldLock } | { ok: false; refusal: StoreRefusal } {
-  const path = join(root, LOCK_FILE);
-  for (let attempt = 0; attempt < STALE_LOCK_ATTEMPTS; attempt += 1) {
-    beforeClaim?.();
-    let fd: number;
-    try {
-      fd = openSync(path, "wx");
-    } catch (cause) {
-      if ((cause as NodeJS.ErrnoException).code !== "EEXIST") {
-        return { ok: false, refusal: { reason: "unusable-directory", detail: String(cause) } };
-      }
-      const existing = readLock(path);
-      if (existing.kind === "unreadable") {
-        return { ok: false, refusal: { reason: "lock-unreadable", detail: existing.detail } };
-      }
-      if (existing.kind === "held") {
-        if (isProcessAlive(existing.holder.pid)) {
-          return { ok: false, refusal: { reason: "already-running", holder: existing.holder } };
-        }
-        clearStaleLock(path, existing.holder);
-      }
-      // `absent` means it went away between the failed create and the read, so
-      // the next attempt simply tries again.
-      continue;
-    }
-
-    const holder: LockHolder = {
-      pid: process.pid,
-      instanceId: randomUUID(),
-      hostname: hostname(),
-      startedAt: now().toISOString(),
-    };
-    try {
-      writeAll(fd, `${JSON.stringify(holder)}\n`);
-      fsyncSync(fd);
-    } catch (cause) {
-      closeSync(fd);
-      try {
-        unlinkSync(path);
-      } catch {
-        /* Leaving an empty lock is a refusal next time, which is the safe direction. */
-      }
-      return { ok: false, refusal: { reason: "unusable-directory", detail: String(cause) } };
-    }
-    return { ok: true, lock: { holder, fd } };
-  }
-  return { ok: false, refusal: { reason: "lost-the-race", holder: null } };
-}
-
-/** Remove a lock we have just proved dead — and only if it is still the same dead record. */
-function clearStaleLock(path: string, expected: LockHolder): void {
-  const again = readLock(path);
-  if (again.kind !== "held" || again.holder.instanceId !== expected.instanceId) return;
-  try {
-    unlinkSync(path);
-  } catch {
-    /* Somebody else cleared it first, which is the outcome we wanted. */
-  }
-}
-
 /**
  * Which sessions the log says are there.
  *
@@ -1722,7 +1568,7 @@ class Store implements OverseerStore {
    * than remembered.
    *
    * Checked before EVERY write, which is once a tick and costs a `stat`. It is
-   * the backstop for the one step `acquireLock` cannot make atomic — clearing a
+   * the backstop for the one step `takeLock` cannot make atomic — clearing a
    * dead process's lock — and it turns "two daemons writing forever" into "the
    * loser stops at its next tick and says why". It is a second line and not the
    * first: a check before a write is a TOCTOU check, which is exactly why the
@@ -1851,7 +1697,7 @@ function replay(path: string, from: number, size: number, ceiling: number): Repl
  * Open the store, taking the lock, repairing the log and rebuilding the
  * register — in that order, because each step needs the one before it.
  *
- * Everything after `acquireLock` is inside a `try` that releases the lock: a
+ * Everything after `takeLock` is inside a `try` that releases the lock: a
  * throw between taking it and returning a store would otherwise leave a lock
  * with a live pid on it, held by a process that has forgotten it exists, and
  * that is the deadlock this whole area is supposed to be immune to.
@@ -1883,18 +1729,11 @@ export function openStore(options: OpenStoreOptions = {}): OpenStoreResult {
     return { ok: false, refusal: { reason: "unusable-directory", detail: String(cause) } };
   }
 
-  const acquired = acquireLock(root, now, options.beforeClaim);
+  const lockPath = join(root, LOCK_FILE);
+  const acquired = takeLock(lockPath, now, options.beforeClaim);
   if (!acquired.ok) return { ok: false, refusal: acquired.refusal };
   const lock = acquired.lock;
-  const lockPath = join(root, LOCK_FILE);
-  const release = (): void => {
-    try {
-      if (stillOurs(lock, lockPath)) unlinkSync(lockPath);
-    } catch {
-      /* Nothing better to do. */
-    }
-    closeSync(lock.fd);
-  };
+  const release = (): void => releaseLock(lock, lockPath);
 
   try {
     const eventsPath = join(root, EVENTS_FILE);
