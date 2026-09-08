@@ -44,9 +44,15 @@
  * and `FleetRow.panePid` is the **pane's** pid, which is its parent. Measured
  * on this box, 2026-09-08: store file `124250.json`, and `ps -o ppid= -p
  * 124250` says `124240`. Joining on `panePid` would therefore have found a file
- * for no session at all — and "no file" is indistinguishable from "not in a
- * background work" unless you are looking for it, which is exactly how this class of
- * bug survives. So the store is read whole (0.9ms for 14 files, measured) and
+ * for no session at all — and "no file" is indistinguishable from "nothing is
+ * running in the background" unless you are looking for it, which is exactly how
+ * this class of bug survives. **Confirmed independently on 2026-09-08 by
+ * `spideryarn2-b6`**, who built the same join the obvious way and got
+ * `oracle_unknown = 4 of 4` — which, counted as "no", would have reported the
+ * effect they were measuring as zero. Two more pairs from their run: pane 1921921
+ * against store file 1921927, and 3184904 against 3184909. The offset is not
+ * fixed, so the pid join has to walk the process table; this module sidesteps it
+ * by keying on the `sessionId` INSIDE the file instead. So the store is read whole (0.9ms for 14 files, measured) and
  * indexed by the `sessionId` field it carries, which is the same conversation
  * uuid `transcript.ts` already keys on.
  *
