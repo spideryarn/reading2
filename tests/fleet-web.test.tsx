@@ -105,6 +105,11 @@ function row(over: Partial<FleetState["rows"][number]> & { id: string }): FleetS
     startedAt: new Date("2026-09-08T10:00:00Z").toISOString(),
     status: { kind: "idle" },
     question: null,
+    /* The arm `parsePermissionMode` produces for a server that said nothing,
+       so a fixture that does not care about the launch mode gets the same row
+       the page would build off a payload that omitted the field. Naming `auto`
+       here would make every fixture assert a healthy launch by accident. */
+    permissionMode: { kind: "cannot-tell", why: "the fixture did not say" },
     meta: { version: "legacy" },
     panePid: null,
     claudeSessionId: null,
@@ -1495,6 +1500,150 @@ describe("master and detail", () => {
   });
 });
 
+/**
+ * **A SESSION THAT DID NOT LAUNCH IN AUTO MODE**, on screen.
+ *
+ * The reading of the pane, the applicability rules and the wire parse live in
+ * tests/fleet-launch-mode.test.ts, against real captures. These four are the
+ * half that only exists once the page is mounted, and they are here rather than
+ * in that file because `mount`, `row` and `openSession` are here: a second copy
+ * of this scaffolding is the thing this repo keeps arguing against.
+ *
+ * The measured defect: a session in default mode stops at its first unapproved
+ * command and waits for somebody asleep — 34.9 agent-hours since 2026-09-06,
+ * 20% of launches, longest single stall 7.38 hours. `gjd-remote log` says
+ * `running`. See `PaneAutoMode` in tools/fleet/pane.ts.
+ */
+describe("a session that did not launch in auto mode", () => {
+  /** The list is where it has to show, because the promise is *within a minute*. */
+  it("names the mode on the list card, and says what it will do", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            row({
+              id: "$1",
+              title: "the defective launch",
+              status: { kind: "working" },
+              permissionMode: { kind: "not-auto", mode: "manual mode" },
+            }),
+          ],
+        }),
+      ),
+    );
+    const text = container.textContent ?? "";
+    expect(text).toContain("manual mode");
+    expect(text).toMatch(/stop at the first command it cannot approve/);
+  });
+
+  /**
+   * **A HEALTHY SESSION IS SILENT, AND A SHELL IS SILENT.** A badge on every
+   * row is a badge nobody reads, and one on a shell is a false alarm about a
+   * session that is working perfectly. Asserted as an absence because that is
+   * the guarantee — the loud strip is drawn by exactly one arm.
+   */
+  it("says nothing at all about an auto-mode session or a shell", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            row({ id: "$1", title: "fine", status: { kind: "working" }, permissionMode: { kind: "auto" } }),
+            row({
+              id: "$2",
+              title: "a shell",
+              status: { kind: "shell", busy: null },
+              permissionMode: { kind: "not-applicable", why: "this is a shell" },
+            }),
+          ],
+        }),
+      ),
+    );
+    expect(container.textContent).toContain("fine");
+    expect(container.textContent).not.toMatch(/not auto/);
+    expect(container.querySelector(".launch-mode")).toBeNull();
+  });
+
+  /**
+   * **`cannot-tell` MUST NOT LOOK LIKE THE DEFECT.** It is the arm every
+   * blocked session lands in — Claude Code's modal covers the status bar — so
+   * drawing it in the loud colour would put a red strip on the rows Greg opens
+   * the page to see, and teach him to ignore the one that is real.
+   */
+  it("does not raise the alarm about a session whose mode could not be read", () => {
+    const feed = manualTransport();
+    mount(feed.transport);
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            row({
+              id: "$1",
+              title: "unread",
+              status: { kind: "needs-you" },
+              permissionMode: { kind: "cannot-tell", why: "a dialog is covering the status bar" },
+            }),
+          ],
+        }),
+      ),
+    );
+    expect(container.querySelector(".launch-mode")).toBeNull();
+    expect(container.textContent).not.toMatch(/not auto/);
+  });
+
+  /** The detail is where the recovery is spelled out — the thing to press. */
+  it("gives the detail the fix to press", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$1",
+              title: "open me",
+              status: { kind: "working" },
+              permissionMode: { kind: "not-auto", mode: "manual mode" },
+            }),
+          ],
+        }),
+      ),
+    );
+    openSession("open me");
+    expect(container.textContent).toContain("Yes, and switch to auto mode");
+  });
+
+  /**
+   * And the detail is the ONE place the shrug is drawn: a per-session fact on
+   * the screen you opened deliberately, rather than a grey line beside every
+   * blocked row on the list.
+   */
+  it("admits on the detail that it could not tell, without offering a fix", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(
+        state({
+          rows: [
+            steerable({
+              id: "$2",
+              title: "open me too",
+              status: { kind: "working" },
+              permissionMode: { kind: "cannot-tell", why: "the status bar is not on this screenful" },
+            }),
+          ],
+        }),
+      ),
+    );
+    openSession("open me too");
+    expect(container.textContent).toContain("permission mode unread");
+    expect(container.textContent).not.toContain("Yes, and switch to auto mode");
+  });
+});
+
 describe("the orderings", () => {
   const rows = [
     steerable({
@@ -2571,7 +2720,12 @@ function queueWire(over: { sessionId?: string; items?: unknown[]; warning?: stri
   return wire;
 }
 
-function itemWire(over: { id: string; payload: unknown; leasedAt?: number }): Record<string, unknown> {
+function itemWire(over: {
+  id: string;
+  payload: unknown;
+  leasedAt?: number;
+  invalidated?: string;
+}): Record<string, unknown> {
   return {
     id: over.id,
     sessionId: "$1643",
@@ -2579,6 +2733,7 @@ function itemWire(over: { id: string; payload: unknown; leasedAt?: number }): Re
     payload: over.payload,
     enqueuedAt: 1_757_000_000_500,
     leasedAt: over.leasedAt ?? null,
+    invalidated: over.invalidated ?? null,
   };
 }
 
@@ -2674,14 +2829,24 @@ describe("the action buttons, which are the server's vocabulary", () => {
     expect(buttonSaying("Remove worktree")?.className).toContain("alarm");
   });
 
-  it("says, before you confirm an enacted action, that a working session queues it rather than doing it", async () => {
+  // THIS TEST WENT RED ON PURPOSE ON 2026-09-08 AND THAT IS THE POINT OF IT.
+  // It used to pin the sentence "waits its turn in the queue rather than
+  // happening now". `queue.ts` then started refusing enacted actions outright
+  // (`enacted-not-deliverable`), and the page went on saying the old thing —
+  // prose is a second copy of a rule and the compiler does not check it. This
+  // assertion is what noticed, so it is kept pointed at whatever the rule
+  // currently is rather than softened into a substring that survives both.
+  it("says, before you confirm an enacted action, that a working session refuses it rather than queueing it", async () => {
     openWith([REMOVE_WORKTREE_WIRE]);
     await act(async () => {});
     await clickSaying("Remove worktree");
     expect(container.textContent).toContain(REMOVE_WORKTREE_WIRE.gate);
     expect(container.textContent).toContain(
-      "waits its turn in the queue rather than happening now — so pressing it and walking away is not the same as it being done",
+      "this will be refused rather than queued — nothing delivers a queued command",
     );
+    // AND NOT THE OLD PROMISE, in any form. The failure this guards against is
+    // an edit that adds the new sentence and leaves the old one below it.
+    expect(container.textContent).not.toContain("waits its turn in the queue");
   });
 
   it("lets a confirm be backed out of, without sending anything", async () => {
@@ -2824,6 +2989,52 @@ describe("the queue, which is the feature and so is on screen", () => {
     /* And Cancel is still offered: whether a lease can be cancelled is the
        server's rule, not this page's. */
     expect(buttonLabels()).toContain("Cancel");
+  });
+
+  /* The tmux server restarting under the queue. `queue.ts`'s `noteGeneration`
+     writes a sentence onto every waiting item rather than deleting them, so
+     these three tests are about the page being the other half of that: an item
+     nobody will ever deliver has to look different from one waiting its turn,
+     or the sentence was written for nothing. The field shipped on the wire
+     before the page read it, which is why the last of the three exists. */
+  it("says an item is undeliverable, in the server's own words, when the tmux server has been replaced", async () => {
+    openQueue([
+      itemWire({
+        id: "q1",
+        payload: { kind: "message", text: "hello" },
+        invalidated: "this was queued against tmux server 1234, and the box is running 5678 now",
+      }),
+    ]);
+    await act(async () => {});
+    expect(container.textContent).toContain("This will not be delivered.");
+    expect(container.textContent).toContain("the box is running 5678 now");
+  });
+
+  it("does not also claim an invalidated item is on its way out", async () => {
+    // Both flags at once — leased when the server went, which `noteGeneration`
+    // deliberately leaves alone. The page must pick the stronger claim; saying
+    // "being delivered now" about something that can never be delivered is the
+    // reassuring half of a contradiction, and it is the half a person believes.
+    openQueue([
+      itemWire({
+        id: "q1",
+        payload: { kind: "message", text: "hello" },
+        leasedAt: 1_757_000_001_000,
+        invalidated: "this was queued against tmux server 1234, and the box is running 5678 now",
+      }),
+    ]);
+    await act(async () => {});
+    expect(container.textContent).toContain("This will not be delivered.");
+    expect(container.textContent).not.toContain("Being delivered now.");
+  });
+
+  it("invents no reason when the server is too old to send one", async () => {
+    // An absent field is not a claim. A default sentence here would put words
+    // in an old server's mouth, and the words would say a person's instruction
+    // was lost when it is very likely fine.
+    openQueue([itemWire({ id: "q1", payload: { kind: "message", text: "hello" } })]);
+    await act(async () => {});
+    expect(container.textContent).not.toContain("This will not be delivered.");
   });
 
   it("counts the items it could not read rather than quietly shortening the queue", async () => {

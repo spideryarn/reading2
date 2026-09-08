@@ -1,16 +1,24 @@
 # Agent fleet dashboard
 
-**Status as of 2026-09-08 09:15: important work left — one restart that is Greg's, and one queue
-that nothing drains.**
+**Status as of 2026-09-08 10:15: the queue drains, and Greg has asked for three more things.**
 
-Two things, in order of how much they cost:
+1. ~~Nothing drains the action queue~~ — **v0.5f landed**. A queued message now goes out on the next
+   refresh pass, at most one per session. The first design was killed by GPT Sol before a line was
+   written; the second is below, along with what it changed and why.
+2. ~~Sessions launch in the wrong permission mode~~ — **fixed**, on the box and in `provision.sh`,
+   Greg's call answered as *both*. **v0.4e** then made the defect visible: the page now says when a
+   session is not in auto mode.
+3. ~~The live server predates the code~~ — **restarted 2026-09-08 09:18**, and the pane gate
+   classified two real dialogs in opposite directions the moment it came up.
+4. **Greg's four, 2026-09-08 10:10–10:20** — v0.5g (Queue on an idle session), v0.4f (recent
+   messages, which is a HALF-LANDED stage rather than a new one — the server route exists and no page
+   calls it), v0.4g (the detail view is cluttered; take screenshots and get Fable's product input),
+   and **v0.4h**, which is the substantial one: *"working"* is hiding at least three different states,
+   including a session asleep for three hours with an intention to come back.
 
-1. **Nothing drains the action queue** —
-   [Stage v0.5f](#-stage-v05f-nothing-drains-the-queue-the-one-thing-that-is-worse-than-not-built).
-   The routes, the client and the queue are all built and tested; no production code path ever calls
-   `queue.next()`. A queued action waits thirty minutes and is dropped. A button that says *queued*
-   and means *never* is worse than no button.
-2. **The live server predates the code** — see the section below. Restarting it is Greg's.
+**What is verified right now:** all 20 fleet suites, 812 tests, plus `npm run typecheck` clean across
+all four projects, at the commit below. `tools/**` is now inside `biome.jsonc`'s allowlist, which it
+had never been.
 
 Everything else below is real but optional.
 
@@ -44,24 +52,56 @@ Two claims in earlier versions of this plan were **retracted** — the inbox soc
 anywhere" in the launch path. Both are in
 [Evidence](#evidence-what-was-actually-tested), which records what failed as well as what worked.
 
-## The running server is older than this code, and only Greg can restart it
+## The server that predated its code, and what one restart proved
 
-The process on 8787 has been up since 04:34 and predates `routes-actions.ts` and `PaneGate`. The
-client is built and live; the server is not. Two visible consequences, both correct behaviour rather
-than breakage:
+**Fixed 2026-09-08 09:18.** The process on 8787 had been up since 04:34 and predated
+`routes-actions.ts` and `PaneGate`; the client was built and live and the server was not. Greg asked
+for the restart, so the standing instruction not to touch the live server was lifted for it. Started
+the way it was documented to be started, with `npm run build:fleet` first — `server.ts` refuses to
+boot without `web/dist/index.html`, and without the build it would have served the old bundle:
 
-- `GET /api/actions` **404s**, once per ten-second poll. `useActions` keeps the last good feed and
-  shows the error beside it, so the page does not break — but the action buttons, the queues and Box
-  Health's controls have nothing to render from.
-- Every dialog reads **"Not offered: I could not tell what this is — this server did not say what
-  answering this dialog would do."** That is `parseGate` failing towards `unknown`, which is the
-  designed answer for a server too old to send the field, and it means answering is currently
-  offered for nothing at all.
+```
+npx tsx scripts/tmux-job.ts --name fleet-server env FLEET_BIND=127.0.0.1,100.92.255.119 \
+  npx tsx tools/fleet/server.ts
+```
 
-**The fix is one restart, and it is Greg's to make** — the standing instruction here is not to
-restart or kill the live server. The job runs under `scripts/tmux-job.ts`; restart it the same way it
-was started, with `FLEET_BIND=127.0.0.1,100.92.255.119`. Once it is up, `curl -s localhost:8787/api/actions | head -c 200`
-answering with JSON rather than a 404 is the whole check.
+**Two symptoms, and what each turned into.** `GET /api/actions` had been 404ing once per ten-second
+poll — `useActions` kept the last good feed and showed the error beside it, so the page never broke,
+but the action buttons, the queues and Box Health's controls had nothing to render from. And every
+dialog read *"Not offered: I could not tell what this is — this server did not say what answering
+this dialog would do"*, which is `parseGate` failing towards `unknown`: the designed answer for a
+server too old to send the field, and the reason answering was offered for nothing at all. Both
+cleared on the restart.
+
+**The restart is also the first evidence the gate works on real dialogs rather than on fixtures**,
+which is worth more than the fix. Within four seconds of the server coming up, the two blocked
+sessions in the live snapshot were classified in opposite directions:
+
+- `fb2f-dock-always-visible-landscape` — `permission`, because *"an option widens what the session
+  will approve on its own"*, quoting the option that does it. Four options, no answer button, the
+  refusal rendered with its reason.
+- `get-ready-for-deploy` — `conversation`. Three options, answerable.
+
+That is `PaneGate`'s whole claim — *pane text as executable UI is acceptable when execution means "a
+user turn", and not acceptable when it means "grant a permission"* — holding against two panes
+nobody wrote a fixture for. `answeringEnabled: true` and `attemptedAt` present in the same payload
+confirm the other two changes of that night are live.
+
+**What the failure had cost, and the lesson under it.** Greg pressed a number and a button on his
+phone and nothing happened, and the diagnosis took a Playwright run against a throwaway server on
+8791 to reach. Everything was built, tested, committed and pushed; none of that put it on the port
+he was looking at. **A deploy is not a commit, and on a long-running server it is not a build
+either.** The two facts that would have said so immediately are now in the payload: `attemptedAt`
+moves whether or not a collection completes, and `answeringEnabled` is TOLD rather than inferred, so
+a server too old to send it is visibly a server too old to send it.
+
+**When the systemd unit lands** (`orchestrator-setup`'s S5, below), 8787 stops being started this
+way. Two supervisors for one port is a fight in which the loser's failure looks like a crash, so
+tmux-job stays correct only until that unit is installed and enabled. The unit will need `FLEET_BIND`
+in its environment — the failure without it is quiet, binding loopback only, so it works from the box
+and not from the phone — and an `ExecStartPre` that runs `npm run build:fleet`, without which a `dev`
+that moves the client serves a stale page rather than failing loudly. `FLEET_ACT_ENABLED` stays out
+of it until `routes-actions.ts` has had its review.
 
 ## Do not remove this worktree while the dashboard is running
 
@@ -107,8 +147,29 @@ fallback is real; it just is not automatic, and this plan should stop implying t
 checkout, installed and verified by `infra/hetzner/provision.sh`) for the Overseer, and is making it
 generic so a second one can serve this dashboard. We take that offer rather than inventing a second
 mechanism. **The consequence, named rather than discovered later:** running from the primary
-checkout means booting whatever is on `dev` at that moment, including a red `dev` — which is
-[Q12](../project/open-questions.md) arriving from a direction neither session argued from.
+checkout means booting whatever is on `dev` at that moment, including a red `dev`.
+
+**Greg decided that, 2026-09-08, and it is a gradient rather than a yes or no:**
+
+> Briefly broken is fine for dev, have a slightly higher standard for the orchestrator and its web
+> interface, and a higher standard still for keeping things working in prod.
+
+So this page sits in the **middle tier, named explicitly** — not held to production's bar, and not
+covered by the licence `dev` gets. The unit still boots whatever is on `dev`, because a page that
+refuses to start until somebody fixes the trunk is unavailable exactly when it is most worth having;
+what the middle tier buys is that a fault here is worth stopping for, where the same fault on `dev`
+would not be. The decision lives in `AGENTS.md` under *This is a beta, and speed still wins* and in
+[orchestrator-direction.md § A higher bar](../project/orchestrator-direction.md).
+
+**The failure that standard points at is a stale client, not a red one.** The unit's `ExecStartPre`
+builds only when `tools/fleet/web/dist/index.html` is *missing* — deliberately, because with
+`Restart=always` an unconditional build is a vite build every ten seconds through a crash loop on a
+box that has reached load 391. A missing build therefore heals itself and fails loudly; a **stale**
+one does not. A `dev` that moves the client without a rebuild leaves the old bundle in place and the
+page serves it with no error anywhere, which is [silent success](../reusable/silent-success.md)
+arriving through the deployment door. Making it impossible in the unit costs more than it saves, so
+the fix belongs here and it is to make the staleness **visible**: see
+[Stage v0.7a](#stage-v07a-the-page-says-which-code-it-is).
 
 The standing direction is [orchestrator-direction.md](../project/orchestrator-direction.md); this
 plan is one implementation of it. **Read that first** — it holds the constraints, and it outlives
@@ -424,6 +485,44 @@ exactly the *augment rather than replace* shape this project is supposed to have
 - [ ] Find out why `fb2f` did not enter auto mode when its eight siblings did. **That one
       investigation removes more blocked hours than the entire write route.**
 
+#### How `idle` splits, decided 2026-09-08 — an added fact, not an eighth status
+
+**The obvious move is to add a `waiting-for-you` arm to `FleetStatus`, and it is the wrong one.**
+`status.ts`'s header spends its first paragraph explaining that the status is not ours:
+`FleetStatus = SessionState`, re-exported rather than restated, because *"a second copy of a
+seven-arm discriminated union is a copy that stops matching the day somebody adds an eighth arm."*
+The union lives in `scripts/gjd-remote-tmux.ts`, which `gjd-remote` itself depends on, and it is
+joined from `claude agents --json` plus the process table. **A session that ended its turn with a
+question genuinely IS idle by every measure that union is built from** — no process is running and
+Claude reports idle. Nothing about the process table has changed. What has changed is what the pane
+SAYS.
+
+So the new fact belongs where the other pane-derived fact already lives: beside `question` on the
+row, produced by `pane.ts`, which is the module whose whole job is reading what is on the screen.
+
+- [ ] **A new additive field on `FleetRow`**, alongside `question`. A discriminated union, not a
+      boolean: *asked a question* and *we could not tell* must not share a value, which is the
+      mistake this area keeps making one level up from wherever it was last fixed.
+- [ ] **`FleetStatus` is not touched.** Three exhaustive switches now depend on that union —
+      `triageRank`, `steerableStatus` and `drainGate` — and `drainGate`'s second branch exists
+      precisely to refuse a status it has no rule for rather than inventing one. An eighth arm would
+      make every one of them a decision, and none of those decisions is about a session that ended
+      its turn politely.
+- [ ] **Triage order is where the two facts meet**, and triage order is already declared ours:
+      *"a question about a screen and not about a session, so it does not belong in the inventory."*
+      An idle session that asked a question sorts with the blocked ones; its status still reads
+      `idle`, because that is what it is.
+- [ ] **The detection is the hard part and it is not a regex.** Ten of fifteen idle panes ended on a
+      decision handed to Greg, in prose, with no dialog and no marker. The cheap signals — a
+      trailing question mark, "say the word", "yours to call" — will both miss and over-fire, and
+      an over-firing inbox is worse than none because it teaches him to stop looking. Spike this
+      against the real panes before designing around it, and count the false positives on the
+      fifteen Fable already read rather than on invented examples.
+- [ ] **The suggested reply is evidence, not an answer.** The harness renders its own proposed reply
+      dim in the input box. Show it, attribute it to the model, and never send it without a press —
+      *augment rather than replace* is the project's first principle and this is the exact shape of
+      it.
+
 **The line Fable drew, which answers Sol's F6 better than anything I had:**
 
 > Pane text as executable UI is acceptable when execution means "a user turn", and not acceptable
@@ -627,10 +726,75 @@ not to do.
       `row.meta.dir` plus `row.claudeSessionId`, and say plainly when it cannot be found rather
       than showing an empty conversation.
 
-### 🔴 Stage v0.5f: NOTHING DRAINS THE QUEUE — the one thing that is worse than not built
+### ✅ Stage v0.5f: nothing drained the queue (landed 2026-09-08)
 
-**The queue accepts items and no code path ever delivers them.** `SteeringQueue` is built, tested and
-routed; `POST /api/actions/session` defaults to `mode: "enqueue"`; the client renders the queue and
+**`tools/fleet/drain.ts`, `tools/fleet/refresh.ts`, and the narrowing in `queue.ts`.** A queued
+message is now delivered by the next refresh pass — one item per session per pass, after the snapshot
+has been published, inside its own try/catch.
+
+**The design below was reviewed by GPT Sol before anything was built, and it came back "do not build
+this as written."** Two P0s, both confirmed against the source, and they are worth keeping because
+each is a general shape rather than a bug:
+
+**P0-1 — `steerableStatus` answers a wider question than the one being asked.** The design says *ask
+`drainGate(row.status)`, and when it says `now`, deliver*. `drainGate` is built on `steerableStatus`,
+which answers *"may this session be steered at all"*; `needs-you` passes it. But `sendMessage`
+refuses a pane that is showing a dialog (`steer.ts:1117`, `pane-is-asking`). So the drain would have
+leased the item, been refused, settled it as spent, and **destroyed the person's instruction** — once
+a minute until the queue emptied, while the agent sat on one dialog. The fix is `deliveryGate`, a
+second function differing from `drainGate` in exactly one arm, obtained by *asking* `drainGate`
+rather than copying its list, so the two cannot drift.
+
+*The general shape, and it is the third instance in one night:* a signal whose name promises more
+than its definition delivers. See `docs/reusable/name-is-evidence.md`.
+
+**P0-2 — a synchronous delivery inside the loop that draws the page.** `sendMessage` is up to six
+`execFileSync` calls at ten seconds each, and `Promise.race` cannot bound one: the timer cannot fire
+while the event loop is blocked. Unbounded, a fleet where everybody has something queued is ~36
+minutes of dead dashboard. The fix is three bounds — publish the snapshot *before* delivering,
+`MAX_SENDS_PER_PASS`, and `DRAIN_BUDGET_MS`, the last two checked *between* rows, because a send
+already under way cannot be abandoned.
+
+**And one retreat, recorded rather than dropped.** `QueuedPayload` now holds a `SpokenAction`, so an
+*enacted* action — `remove-worktree`, `kill-session` — cannot be represented as a queued item at all.
+The header's original argument (queue them, for ordering: "push, then remove the worktree" must not
+become the reverse) is right and was overruled: delivering one means running a plan of `execFile`s
+that deletes a directory, from the one loop whose failure takes the dashboard down with it, and that
+surface is the least-reviewed in the tool. The narrowing is structural rather than a check, so the
+drain has no branch for the case and could not compile one.
+
+**Three things it does that the design did not ask for**, each because the review found the hole:
+
+- **`release()`** — the one hole in *never auto-retry a keystroke*, and it is not a retry. When the
+  transport says `delivery: "none"` with an empty `sent` list, nothing left this process; the item
+  goes back to the **head** of its queue. Without it the commonest refusal on this box —
+  `pane-is-asking`, because the pane opened a dialog in the thirteen seconds since the collection —
+  destroys the message rather than delaying it. The type can only be built by `nothingWasSent`.
+- **`noteGeneration()`** — a tmux restart re-issues every `$…` and `%…` handle to different sessions,
+  so the whole queue is invalidated at once, with a *sentence* rather than a deletion, and the page
+  draws it.
+- **`refresh.ts`** — the missing line was in `server.ts`, which no test can import, because importing
+  it binds 8787. So the *order* moved to a file a test can drive, and `server.ts` keeps only the
+  dependencies. This is Sol's D8, and it is the reason the original hole was invisible to a suite in
+  which every individual part was tested.
+
+**Untrue prose is a defect, and this stage produced one.** The confirm strip said *"if this session is
+working, this waits its turn in the queue"* about an action that is now refused outright. The test
+that pinned that sentence went red, which is what it was for; it now pins the new rule and asserts
+the old one is nowhere on the page. **Prose is a second copy of a rule and the compiler does not
+check it.**
+
+**Still open, deliberately.** `broadcastRoute` picks its recipients with `drainGate` and has the same
+P0 shape — nothing is destroyed, because a broadcast has no queue, but it should ask `deliveryGate`.
+Receipts, an abandon-stuck route, and the per-pane mutex (*"the day any of this becomes async, the
+mutex arrives in the same commit"*) are named in the source and not built.
+
+<details>
+<summary>The original stage text, kept because the review is only legible against it</summary>
+
+**The queue accepts items and no code path ever delivers them.**
+
+`SteeringQueue` is built, tested and routed; `POST /api/actions/session` defaults to `mode: "enqueue"`; the client renders the queue and
 lets you cancel. But `queue.next()` is called from `tests/fleet-actions-route.test.ts` and **from
 nowhere else in the product**. A queued action sits until it goes stale at thirty minutes and is then
 silently dropped.
@@ -656,6 +820,235 @@ messages"* — so this is the difference between v0.5 being built and v0.5 worki
       are the two states the queue exists to distinguish.
 - [ ] **Until this lands, the client should say so** rather than implying delivery — one sentence
       under the queue, not a silent omission.
+
+#### The design, decided 2026-09-08
+
+**A new `tools/fleet/drain.ts`, called once per refresh, delivering at most one item per session.**
+
+- [ ] **`drainOnce(rows, deps)`** — pure over its inputs, taking the fresh snapshot's rows and
+      returning a list of receipts. It holds no clock, no timer and no transport of its own:
+      `queue.next()` decides whether there is anything to send, `sendMessage` sends it, `settle()`
+      closes the lease. The same `next → deliver → settle` seam the queue was built around, now
+      with a caller.
+- [ ] **The same instance, guaranteed by construction rather than by care.** `makeActionRoutes`
+      gains a `drain(rows)` on the returned `ActionRoutes`, and `routes-actions.ts` exports
+      `drainSharedQueues(rows)` alongside `handleActionRequest` — both go through the one lazy
+      `shared`. There is then no way to call the drain without the queue the routes filled, because
+      there is no second constructor to call. A test still gets its own via `makeActionRoutes({...})`.
+- [ ] **One item per session per pass, and no rate limiter.** A pass happens when a collection
+      succeeds — every 60 seconds — so the cadence is already one message per session per minute,
+      well inside `MIN_INTERVAL_MS`. Spending a limiter token here would let the drain push a
+      person's own urgent message further away, which is Sol's F18 in the enqueue path pointing the
+      other way. Eight queued items therefore take eight minutes to drain, and that is the feature:
+      *"the point of the queue is that an agent gets a turn between instructions."*
+- [ ] **The row is the address; the item is the claim.** `next()` is passed the row's status and the
+      row's `claudeSessionId`, and refuses `orphaned` when the pane now holds a different
+      conversation. `sendMessage` is then given a `SteerTarget` built from the same row —
+      `paneId`, `sessionId`, `claudeSessionId`, `panePid` — so the box is verified against what the
+      collector just saw, not against what somebody typed half an hour ago.
+
+**What the drain does NOT do, and why the queue must stop accepting it.**
+
+- [ ] **Enacted actions are refused at enqueue time.** `enqueueAction` accepts a session-scoped
+      *enacted* action today — `remove-worktree`, `kill-session` — and nothing in this stage will
+      run one. Delivering an enacted item means calling `runPlan` from inside the refresh loop:
+      several `execFile`s with a two-minute timeout each, deleting a directory, on the one code path
+      whose failure takes the dashboard down with it. That is the largest, least-reviewed surface in
+      the tool, and `FLEET_ACT_ENABLED` is off precisely because it has not been reviewed.
+      So the route refuses the enqueue, in one sentence naming the alternative (dry-run it, then run
+      it with a confirm), and the promise is never made.
+- [ ] **Refused unconditionally, not only while the flag is off.** A refusal conditional on
+      `actEnabled()` would re-create the silent promise the day the flag is turned on — the queue
+      would start accepting items that still nothing drains. One rule, one sentence, no trap left
+      behind for whoever flips the flag.
+- [ ] This gives up the ordering argument `queue.ts`'s own header makes — *"push, then remove the
+      worktree" must not become the reverse*. That argument is right and this is a retreat from it,
+      recorded rather than quietly dropped: ordering across a spoken action and a destructive one is
+      worth less than not running `git worktree remove` from an unreviewed loop. When
+      `routes-actions.ts` has had its Sol review and the flag goes on, extending the drain to plans
+      is the follow-up, and the enqueue refusal is the thing to delete first.
+
+**Receipts, because "sent" and "still waiting" is the distinction the queue exists to draw.**
+
+- [ ] A bounded per-session ring of receipts — `delivered`, or `refused` with steer.ts's own code
+      and sentence — carried on `QueueView` next to the items, so the page reads both from the one
+      place it already polls. Bounded because this is a server-lifetime structure on a box that
+      runs out of memory.
+- [ ] **A throw leaves the lease alone.** If `sendMessage` throws, nothing can tell a request that
+      died before the keystrokes from one that died after, so the item is neither settled nor
+      requeued: it becomes `stuck`, and a person decides. That is the queue's rule already
+      (*"never auto-retry keystrokes"*) and the drain must not be the place it is quietly relaxed.
+- [ ] **A `stuck` item blocks its session's queue and there is no route to clear one.** `settle` is
+      not exposed; `cancel` refuses an in-flight item. Found while designing this, and it is part of
+      the stage rather than a note for later, because the drain is what will start producing stuck
+      items. `POST /api/actions/settle` with outcome `abandoned`, and the page offers it only on an
+      item the snapshot reports as in-flight past its lease.
+
+**How it is checked.**
+
+- [ ] The red test first, and it is a test that would have caught the original hole: assert that a
+      queued message is delivered by a refresh pass, driving `drainOnce` with a fake `sendMessage`
+      and a fake clock. Before the drain exists it fails because nothing sends.
+- [ ] **The hole itself was invisible to the suite**, which is the more useful lesson: every part
+      was tested and the wiring between them was not. So one test asserts the wiring by name —
+      `drainSharedQueues` and `handleActionRequest` reach the same queue, proven by enqueueing
+      through the route and draining through the export.
+- [ ] Then mutate: make the drain settle without sending, and make it deliver to the wrong session,
+      and check the suite goes red for both.
+
+</details>
+
+### ✅ Stage v0.4e: the page says when a session launched in the wrong mode (landed 2026-09-08)
+
+The fix in `provision.sh` stops it happening again; this is what makes it *visible* when it happens
+anyway — a different box, an older session, a launcher nobody has updated.
+
+`readPaneMode` in `pane.ts` reads the mode off the status bar and returns one of four arms:
+`auto` / `not-auto` (carrying the name) / `cannot-tell` (with a reason) / `not-applicable`.
+
+**The design call worth keeping is the anchoring.** A mode line counts only when the line *directly
+above* it is the status bar's chrome line. Measured before it was written: across 24 pinned fixtures
+and 19 live panes, **43 mode lines, 43 anchored, 0 loose** — and a test splices a real auto-mode line
+into a real manual-mode pane's transcript, where the naive substring rule fires and the anchored one
+correctly says `not-auto`.
+
+**And the second: an unfamiliar mode name is `cannot-tell`, not `not-auto`.** "Anything that isn't
+auto is the defect" turns every row red the day Claude Code renames a mode — a false alarm across the
+whole fleet at once.
+
+Live on 20 rows the day it landed: 14 `auto`, 6 `not-applicable`, **0 `not-auto`, 0 `cannot-tell`**.
+The six were blank shell panes, which the detector alone called `cannot-tell` and `modeApplicability`
+correctly turned into "there is no mode to have". The cost is 19 captures in 176ms, median 9ms.
+
+**It is silent when healthy.** A green tick on every row makes the one without it harder to spot.
+
+**One thing the brief got wrong, and it inverted the premise:** the dashboard did *not* already
+capture every pane — only `needs-you` rows. The mode is the one thing a blocked session's pane cannot
+tell you (the modal covers the status bar), so a check reusing only the existing captures would have
+fired approximately never.
+
+### 🔵 Stage v0.4f: recent messages, which is half-landed and reads as done
+
+**Greg, 2026-09-08:** *"Show the recent message(s) for each session when I click on it in `Sessions`
+mode, no matter what status."*
+
+**The server route exists and works. No page has ever called it.** `GET /api/messages?id=` is wired
+in `server.ts` and backed by `tools/fleet/transcript.ts` (42KB, tested); `SessionDetail.tsx:522` still
+draws *"Recent messages are not wired up yet."* and points at this stage. So v0.4c is marked ✅ above
+and the thing a person can see is absent — which is the same class as the queue that nothing drained,
+caught this time by Greg looking at the page rather than by a check.
+
+- [ ] Call `/api/messages?id=` from the detail pane and render the reply's arms — it is a
+      discriminated union with `unreadable` and `not-found` cases, and those are the ones that must
+      not collapse into an empty conversation.
+- [ ] **No matter what status**, which is Greg's actual words and the easy thing to get wrong: a
+      `shell` or `no-claude` row has no transcript, and the honest answer there is a sentence, not a
+      blank panel.
+- [ ] It is agent-authored text from a process that may have handled hostile input. React escapes it;
+      nothing may add markup. Same rule as the pane capture.
+- [ ] Fix `OrchestratorPanel.tsx:65`, which calls v0.4c `"next"`, and the ✅ on v0.4c above.
+
+### 🔵 Stage v0.5g: Queue on an idle session is a worse Send
+
+**Greg, 2026-09-08:** *"I tried using "Queue" to send a message to an idle session, and nothing
+happened, because it's waiting for something - if the session is idle, either hide the Queue button
+and/or auto-send."*
+
+**Half of this is v0.5f and is now fixed** — *nothing happened* was the queue having no drain, and a
+queued message now goes out on the next pass. But the rest of the report stands, and it is a product
+point rather than a bug: on an idle session the two buttons do the same thing, one of them a minute
+later, and the page offers no reason to prefer the slow one.
+
+- [ ] When the row is `idle`, **Send is the only button**. Not "hide Queue if the queue is empty" —
+      the condition is the status, because that is the condition the person is reasoning about.
+- [ ] When something is already queued for that session, Queue stays, and it stays for the reason
+      the queue exists: order. Two buttons that both send *now* would interleave with what is
+      waiting.
+- [ ] Say the delay out loud wherever Queue is offered. It is *"within a minute or so"* and the real
+      cadence is ~73 seconds, not 60 — the collection itself takes about 13.
+- [ ] The failing test first, and it is a rendering test: an `idle` row shows no Queue button.
+
+### 🔵 Stage v0.4g: the session detail view is cluttered
+
+**Greg, 2026-09-08:** *"Use Playwright or similar to take screenshots and make the Session detail view
+less confusing and cluttered and more user-friendly (with product input from Fable)."*
+
+This is the first stage in the plan whose deliverable is a judgment rather than a mechanism, and the
+brief names both halves of how to get one: **screenshots of the real page**, because tests going
+green is not evidence a reader can see it, and **Fable**, because the question is what a person needs
+first and that is not a technical fork.
+
+- [ ] Playwright against system Chrome on the box — `docs/project/browser-control.md` decides which
+      automation, not preference. Phone width as well as desktop: the page is read on a phone.
+- [ ] Every band of the detail view has a reason it is there, written in `SessionDetail.tsx`'s
+      header. **A cut needs a reason back**, not just less ink — several of those bands exist because
+      a collapsed distinction cost something.
+- [ ] Ask Fable for the ordering, not for a redesign: *what does a person need to see first on a
+      phone at 3am*. The answer is a product call, so anything user-visible beyond ordering and
+      density goes to Greg.
+
+### 🔵 Stage v0.4h: "working" is hiding at least three different things
+
+**Greg, 2026-09-08:** *"can you try and distinguish between statuses like `Working`, `Hit usage
+limits`, and `Paused/waiting` (e.g. because it's been asked to run Unix sleep or idle waiting for a
+CronCreate or similar, i.e. it's kind of idle, but with an intention to reactivate, and ideally make
+a note of when it should reactivate (and whether it's overdue)). This might require regexes and/or
+matching on the recent messages and other metadata about the session? Get input from Fable, and you
+can run spikes with dummy sessions you've created, then get a review from GPT Sol."*
+
+**Start from what already exists, because half of one arm is built and it does not cover the case
+Greg means.** `SessionState` has a `waiting` arm carrying `secondsLeft`, and
+`sessionState()` in `scripts/gjd-remote-tmux.ts:971` produces it from `s.proc.kind === "wait"` — the
+process probe seeing a `sleep` as the session's **foreground** process. That is the launcher's own
+scheduled session: a job script that sleeps three hours and *then* starts Claude. It is checked
+before the agents lookup, so it works, and it is the easy case.
+
+**The case Greg is describing is the opposite one and reads as `working`.** An agent that has been
+*told* to sleep runs `sleep` as a child of a live `claude`; the foreground process is Claude, Claude
+Code reports `busy`, and the row says **Working** for three hours. Same for a session parked on a
+`CronCreate`, and same — differently — for one that has hit a usage limit, which is not in the agents
+map's vocabulary at all and so lands on `working` or `idle` depending on timing.
+
+So the fleet's most common long-lived states are three facts wearing one word, and the dashboard's
+whole claim is that you can tell at a glance which sessions need you.
+
+**What makes this hard, and it is the thing to establish before designing anything.** The evidence is
+in three different places and they disagree about what they can prove:
+
+- **`proc`** — what is actually running. Strong evidence, and it can see a `sleep` **child**, not just
+  a foreground one. It cannot say why.
+- **The pane capture** — already taken once a minute for every row since v0.4e. Shows what Claude
+  Code is *saying*: a usage-limit message, a countdown, a tool call in flight. Strong for the
+  usage-limit case and the only source for it. Untrusted text.
+- **The transcript tail** — v0.4f. Says what was *asked for*: "sleep for 3h", a `CronCreate`. This is
+  the only source that can supply an **intended reactivation time**, which is the half of Greg's ask
+  that nothing else can answer.
+
+**The rule this stage must not break.** `FleetStatus` has seven arms and **three exhaustive switches
+depend on it** — `triageRank`, `steerableStatus` and `drainGate`, now `deliveryGate` too. v0.4d
+already decided the general form of this question: *"how `idle` splits is an added fact, not an
+eighth status"*. Read that decision before proposing an eighth arm here. A paused-with-intent session
+is genuinely `working` by every measure `FleetStatus` is built from, and the new facts probably belong
+**beside** `question` and `permissionMode` on the row. If the research says otherwise, that is a
+finding worth arguing, not a licence.
+
+**And the rule the whole tool runs on.** Every one of these signals has a negative case that is
+ambiguous, which is the mistake this project made three times in one night. *"No sleep found"* and
+*"could not look"* are different facts. **A `cannot-tell` arm, with a reason, or it is not built.**
+
+- [ ] **Research first, and from evidence.** Two or three subagents at different angles — one reading
+      `proc` on real sessions, one reading pane captures, one reading transcripts. Agents reasoning
+      from the same source reach the same wrong answer confidently.
+- [ ] **Spikes with dummy sessions**, which Greg has explicitly authorised: make your own session,
+      put it in each state, and see what each source says. Do not reason about it. **Your own
+      sessions only** — the rest of the box is other people's work, and it is `capture-pane` only.
+- [ ] **Fable on the product shape**: how many states a person can hold in their head at a glance,
+      and what "overdue" should do to the sort order. That is a product call, not a technical fork.
+- [ ] **The reactivation time, and whether it is overdue** — Greg asked for it specifically. Note
+      that "overdue" is a claim, so it needs the same treatment: an intended time we could not read
+      is not an intended time of zero.
+- [ ] Red test first, mutations after, and a GPT Sol review at the end of the stage, which is
+      obligatory here rather than optional — this touches the type three switches are built on.
 
 ### Stage v0.5: the steering vocabulary
 
@@ -733,6 +1126,48 @@ sessions in the same run and left the probe alone.
 - [ ] Broadcast to all agents — the same mechanism as v0.5c's resource broadcast, so there is one
       implementation of "say this to everybody" and not two.
 
+**The Overseer's history is read through a file, and the shape is already decided** —
+[orchestrator-direction.md § The seam is a file, not a function](../project/orchestrator-direction.md),
+written by `orchestrator-setup` on 2026-09-08 so that neither of us negotiates it at the moment of
+building. Four files under `OVERSEER_STORE_DIR` (default `~/.overseer`); one writer, lock-free
+readers.
+
+- [ ] **Parse `current.json` here; do not import `readCheckpoint`.** `tools/overseer/` already
+      imports `collect.ts` and `status.ts` from this directory, so an import back the other way
+      closes a cycle between the two things the seam exists to keep apart. **The file is the
+      contract and `readCheckpoint` is one implementation of reading it.** Agreed rather than
+      conceded: it is the same rule the client already applies to the server's JSON.
+- [ ] **Check `schema` as the number `1`**, not as "not something else", so a schema 2 renders as
+      *I cannot read this* rather than as a page with fields quietly missing. That is `parseMeta`'s
+      rule (`web/src/types.ts`) pointed at somebody else's file.
+- [ ] **Three fields are worth more than the rest, because collection structurally cannot produce
+      them.** `statusSince` turns a state into a duration — *blocked* becomes *blocked for forty
+      minutes*, which is what triage actually needs and what a present-tense collector has no
+      yesterday to compute. `heartbeat` lets the page say **the Overseer is dead**, which belongs
+      where the count would be rather than in a footer, because a quiet page and a healthy fleet are
+      the same picture. And `writtenAt` against `lastGoodSnapshotAt` tells *deaf* from *dead* — the
+      second is our own `collectedAt`, so a disagreement there is as likely to be about us.
+- [ ] **`current.json` is written atomically** — temp file in the same directory, a `writeAll` loop
+      because a short write is rare rather than impossible, `fsync`, `rename` over the target. So a
+      reader sees the whole old file or the whole new one and never a seam. Confirmed from the code
+      by `orchestrator-setup` on 2026-09-08 after we asked: without it, "lock-free reads, one writer,
+      never wrong about the past" would not hold, and the failure would have been a truncated JSON
+      that happens to close and parses *successfully* — landing on this side looking like our parser
+      being flaky.
+- [ ] **The history files forgive the LAST line and only the last.** One record per write on an
+      `O_APPEND` fd, looping until every byte lands, so a short write cannot tear a record — but a
+      process killed mid-loop can. The daemon truncates to the final newline when it opens the file,
+      and **skipping bad lines anywhere is not a substitute for that**: the next append welds a good
+      record onto the broken bytes, so one append later the malformed record is no longer last, and
+      a reader that forgives everywhere silently loses a good record too. Forgiving only the final
+      line degrades correctly; forgiving everywhere launders corruption into history.
+- [ ] **The store does not exist yet.** Every Overseer run so far used a scratch root under a
+      session scratchpad; `~/.overseer` is absent and `overseer status` reports *NEVER RUN*
+      (measured 2026-09-08). Nothing about the seam changes — but the file this stage reads has
+      never been written where it will be read, and closing that is the systemd stage's acceptance
+      rather than work for this one. Do not build a reader against a path and then report it working
+      because it degraded politely.
+
 ### Stage v0.6c: the other harnesses are invisible, not read-only
 
 The horizon says **NOW/SOON: multiple model-families/harnesses — Claude Code and Claude agents now,
@@ -808,6 +1243,34 @@ Two costs to keep honest about. `git log` on a path is a per-file subprocess, so
 computed for the handful of paths in one failure and never for the fleet. And the last commit to
 touch a file is a heuristic, not an author — a merge commit or a sweeping rename will name the wrong
 worktree, which is precisely why the "not attributable" arm has to exist rather than be a fallback.
+
+### Stage v0.7a: the page says which code it is
+
+**A stale client bundle is served silently, and the systemd unit makes that likelier rather than
+less likely.** The unit's `ExecStartPre` rebuilds only when `tools/fleet/web/dist/index.html` is
+*missing* — right, because with `Restart=always` an unconditional build is a vite build every ten
+seconds through a crash loop on a box that has reached load 391. The cost is that **missing fails
+loudly and stale does not**: a `dev` that moves the client without a rebuild leaves the old bundle
+in place, and the page serves it with nothing in any log to say so.
+
+This is the same failure that cost the night of 2026-09-08 from the other direction — the server on
+8787 predating its own code for five hours while everything was committed, pushed and green. **A
+deploy is not a commit, and on a long-running server it is not a build either.** The fix that worked
+there was to make the fact visible rather than to make the mistake impossible: `attemptedAt` moves
+whether or not a collection completes, and `answeringEnabled` is told rather than inferred.
+
+- [ ] **The server reports its own identity** — `git rev-parse HEAD` of the checkout it is running
+      from, and its process start time, in the payload the page already polls.
+- [ ] **The bundle reports its own identity**, stamped at build time, so the two can disagree.
+      One value each; the page compares them.
+- [ ] **A disagreement is shown, not logged.** Whoever needs to know is looking at the page, and a
+      line in a log on the box is exactly the place the last one hid for five hours.
+- [ ] **Do not make it fatal.** A page that refuses to render because its bundle is behind is
+      unavailable at the moment it is most worth having, which is the same argument that put the
+      unit in the primary checkout. Say so and carry on.
+- [ ] Proposed by `orchestrator-setup` while writing the unit, and taken rather than argued with:
+      the failure it catches is specifically the one where *somebody else* deploys, which is
+      precisely the case neither session can test for itself.
 
 ### Stage v0.7+: the decision log
 

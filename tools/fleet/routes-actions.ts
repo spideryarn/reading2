@@ -76,7 +76,10 @@ import {
   type Speaker,
   type Step,
 } from "./actions.js";
+import type { FleetSnapshot } from "./collect.js";
+import { drainOnce, type DrainResult } from "./drain.js";
 import {
+  deliveryGate,
   drainGate,
   SteeringQueue,
   type DrainGate,
@@ -915,6 +918,15 @@ export function realActionDeps(): ActionDeps {
 export type ActionRoutes = {
   /** True when this request was ours — mounted the way `serveStatic` is. */
   handle(req: IncomingMessage, res: ServerResponse): boolean;
+  /**
+   * One delivery pass over a fresh snapshot, at most one item per session.
+   *
+   * ON THE ROUTES OBJECT RATHER THAN BESIDE IT, so that draining and filling
+   * are the same object's two halves. `deps.queue` is private to this closure,
+   * and that is the point: there is no way to reach the drain without the queue
+   * the routes filled, because there is no second constructor to call.
+   */
+  drain(snapshot: FleetSnapshot): DrainResult;
 };
 
 function respond(res: ServerResponse, status: number, body: ActionResponse, extra: Record<string, string> = {}): void {
@@ -955,6 +967,11 @@ const ENQUEUE_CODE: Record<EnqueueRefusalRule, ActionErrorCode> = {
   "bad-text": "bad-request",
   "no-such-action": "no-such-action",
   "wrong-scope": "wrong-scope",
+  // `wrong-mode` rather than `queue-refused`, because that is precisely what it
+  // is: the action is fine and enqueueing is the wrong thing to do with it. The
+  // page can then offer the dry run, which is the alternative the queue's own
+  // sentence names.
+  "enacted-not-deliverable": "wrong-mode",
   "session-queue-full": "queue-refused",
   "fleet-queue-full": "queue-refused",
   "double-tap": "queue-refused",
@@ -1176,8 +1193,15 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     // refused request must not push the person's own next legitimate press
     // further away.
     deps.limiter.record(r.target.sessionId, deps.now());
-    deps.log(`action session: QUEUED id=${result.item.id} session=${r.target.sessionId} position=${result.position} gate=${gate.kind}`);
-    respond(res, 200, { ok: true, op: "enqueued", item: result.item, position: result.position, gate });
+    // THE GATE WE REPORT IS THE DELIVERY ONE, and it is not the one we refused
+    // on. The refusal above is "could this session ever be typed into"; this
+    // field answers the different question the page asks — "does this go now or
+    // wait" — and the two differ on `needs-you`, where the drain holds an item
+    // until the dialog has been dealt with. Reporting `now` there would promise
+    // a delivery that the very next pass declines to make.
+    const willGo = deliveryGate(r.declaredStatus);
+    deps.log(`action session: QUEUED id=${result.item.id} session=${r.target.sessionId} position=${result.position} gate=${willGo.kind}`);
+    respond(res, 200, { ok: true, op: "enqueued", item: result.item, position: result.position, gate: willGo });
   }
 
   /* ---------------- POST/DELETE /api/actions/cancel ---------------- */
@@ -1561,6 +1585,9 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
   }
 
   return {
+    drain(snapshot) {
+      return drainOnce(snapshot, { queue: deps.queue, sendMessage: deps.sendMessage, log: deps.log, now: deps.now });
+    },
     handle(req, res) {
       const pathname = (req.url ?? "/").split("?")[0] ?? "/";
       if (pathname !== "/api/actions" && !pathname.startsWith("/api/actions/")) return false;
@@ -1660,4 +1687,17 @@ let shared: ActionRoutes | null = null;
 export function handleActionRequest(req: IncomingMessage, res: ServerResponse): boolean {
   shared ??= makeActionRoutes();
   return shared.handle(req, res);
+}
+
+/**
+ * The refresh loop's way in, THROUGH THE SAME `shared` the routes answer from.
+ *
+ * Written exactly like `handleActionRequest` above, and for the reason in that
+ * comment: two `SteeringQueue`s would be two queues, and the one the page can
+ * see would be the one nothing delivers from. That is not a hypothetical — it
+ * is the shape of the bug this stage exists to fix, one step further along.
+ */
+export function drainSharedQueues(snapshot: FleetSnapshot): DrainResult {
+  shared ??= makeActionRoutes();
+  return shared.drain(snapshot);
 }

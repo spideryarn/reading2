@@ -51,7 +51,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 
 import { ActionOutcomeCard, SessionActions, SessionQueue } from "./ActionButtons";
-import { Handles, QuestionCard, StatusPill, Uptime } from "./SessionParts";
+import { Handles, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
 import { Explain } from "./Tooltip";
 import type { ActionOutcome } from "./actions-client";
 import { NAME_RULE_TEXT, looksLikeAName, type RenameApi, type RenameOutcome } from "./rename-client";
@@ -412,6 +412,14 @@ export function SessionDetail({
       {label.detail === null ? null : (
         <p className="tw:mt-1 tw:text-[13px] tw:break-words tw:text-unknown-ink">{label.detail}</p>
       )}
+
+      {/* The same strip as the list card, with the recovery spelled out —
+          `detail` is what turns on the sentence saying what to press, and what
+          lets the honest shrug (`cannot-tell`) show at all. Placed above the
+          sections rather than inside "What it needs from you", because a
+          session in manual mode is not asking you anything yet; it is about to
+          stop asking anybody. */}
+      <LaunchMode mode={row.permissionMode} detail />
 
       {/* Beside the title, because it is a property of this session rather than
           something you do to it — and NOT on the list cards, where forty text

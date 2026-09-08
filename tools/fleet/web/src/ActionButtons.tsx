@@ -23,8 +23,9 @@
  * their own heading, in the alarm colour, with their own sentence saying what
  * that class of thing does — and the colour is never the only carrier of it.
  *
- * **3. The queue is the feature, so it is on screen.** Pressing three buttons
- * on a working session enqueues three things; queue.ts's own header says a
+ * **3. The queue is the feature, so it is on screen.** Pressing three *spoken*
+ * buttons on a working session enqueues three things — an enacted one is
+ * refused, see below; queue.ts's own header says a
  * queue you cannot see *"surprises you an hour later, which here means a
  * sentence arriving in a conversation that has moved on"*. So the list is
  * ordered, numbered, cancellable, and carries the server's persistence warning
@@ -40,11 +41,20 @@
  * runs first — for an enacted one.
  *
  * And it says the thing a person would otherwise get wrong: **on a working
- * session, an enacted action is queued, not done.** queue.ts refuses to make
- * `exit` jump the line, deliberately ("Push, then remove the worktree" must not
- * become the reverse), so a person who presses Exit on a busy agent and walks
- * away has not killed it yet. A page that let them believe otherwise would be
- * lying about the one class of action that cannot be undone.
+ * session, an enacted action is refused, not queued and not done.** It used to
+ * be queued, on the argument that ordering matters ("Push, then remove the
+ * worktree" must not become the reverse); 2026-09-08 retreated from that,
+ * because the thing that would deliver it is the refresh loop, and running
+ * `git worktree remove` from the one loop whose failure takes the dashboard
+ * down with it is worse than losing the ordering. `queue.ts`'s
+ * `enacted-not-deliverable` carries the full reasoning.
+ *
+ * **This paragraph and the strip below it were untrue for the length of that
+ * change**, which is the hazard worth naming: the sentence a page shows about
+ * a rule is a second copy of the rule, and the compiler does not check prose.
+ * A person who pressed Exit on a busy agent and walked away had not killed it —
+ * and now has not queued it either. A page that let them believe otherwise
+ * would be lying about the one class of action that cannot be undone.
  *
  * An inline strip rather than the browser's dialog: it can carry a paragraph of
  * the server's own words, it is readable on a phone, and it is in the DOM,
@@ -206,8 +216,9 @@ function ConfirmStrip({
           <p className="tw:mt-1 tw:break-words tw:text-ink">{action.gate}</p>
           {/* THE THING A PERSON WOULD OTHERWISE GET WRONG. See the header. */}
           <p className="tw:mt-1 tw:text-ink-soft">
-            If this session is working, this waits its turn in the queue rather than happening now — so pressing it
-            and walking away is not the same as it being done.
+            If this session is working, this will be refused rather than queued — nothing delivers a queued command,
+            so it is turned away at the door instead of waiting for a turn that never comes. Try it again when the
+            session is idle.
           </p>
         </>
       ) : null}
@@ -490,7 +501,18 @@ function QueueItem({
       {line.detail === null ? null : (
         <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-ink-soft">{line.detail}</p>
       )}
-      {going ? (
+      {/*
+        FIRST, AND IT SUPPRESSES THE REST. An invalidated item is not waiting
+        its turn and is not going now; it is a thing that will never happen,
+        still drawn so the person can see why rather than watching it sit there.
+        The alarm colour because the honest reading is that their instruction is
+        lost — the queue keeps it only so they can read the reason and re-press.
+      */}
+      {item.invalidated !== null ? (
+        <p className="tw:mt-1 tw:text-[12px] tw:break-words tw:text-alarm-ink">
+          This will not be delivered. {item.invalidated}
+        </p>
+      ) : going ? (
         <p className="tw:mt-1 tw:text-[12px] tw:text-work-ink">
           Being delivered now. Cancelling may not recall it — there is no receipt for a keystroke.
         </p>
@@ -547,7 +569,7 @@ export function SessionQueue({
             ? `The queue could not be read: ${error}`
             : feed !== null && !feed.queuesOffered
               ? "This server sent no queues at all, which is not the same as having none — it is probably older than this page."
-              : "Nothing is waiting. Anything you press while it is working will queue up here."}
+              : "Nothing is waiting. A message or a spoken action pressed while it is working queues up here, and goes out within a minute or so of it finishing."}
       </p>
     );
   }

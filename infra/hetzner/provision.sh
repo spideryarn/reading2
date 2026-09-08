@@ -969,9 +969,37 @@ trap 'rm -f "$tmp"' EXIT
 # `+` onto whatever is already there, not `=`. `statusLine` also carries
 # padding, refreshInterval and hideVimModeIndicator, which are Greg's to set and
 # not ours to delete on the next provisioning run. We own two keys of it.
+# `permissions.defaultMode` is the one key here that is not a preference.
+#
+# Which permission mode a session starts in was a COIN FLIP until 2026-09-08:
+# 28 auto, 7 default across the gjd-remote launches since 09-06, and two
+# sessions launched 25 seconds apart from identical generated job scripts came
+# up in opposite modes. A default-mode session runs normally until its first
+# unapprovable call -- in practice `git fetch`, `git log`, `npm run
+# worktree:setup` or an MCP read, so within the first minute of almost any
+# brief here -- and then waits for a human who is asleep. Measured stalls:
+# 7.38h, 6.34h, 5.75h, 5.35h, 5.33h, 4.30h. 34.9 agent-hours since 09-06,
+# independently reproducing the 41.6 hours since 09-01 that `c7c44f61`
+# measured. The longest stall in ANY always-auto session over three days is
+# 21 minutes.
+#
+# `scripts/gjd-remote.ts` was fixed at 03:16Z on 2026-09-08 to pass
+# `--permission-mode auto`, but that covers only the sessions IT launches:
+# interactive and EnterWorktree launches went on coin-flipping (measured twice
+# on 09-07). This key is what covers the rest, and it is here rather than only
+# on the box because a rebuilt machine that reintroduces the coin flip
+# reintroduces the thirty-five hours.
+#
+# Greg's call, 2026-09-08, asked as now / forwards / both and answered "both".
+# It makes the auto-mode classifier the fleet's permission gate by default,
+# which is a decision about who approves things and not a tuning knob.
+#
+# `+` onto whatever is already there, like `statusLine` above: `permissions`
+# also carries allow/deny rules that are Greg's and not ours to drop.
 jq --arg sl "$sl" '
   .env.CLAUDE_CODE_SCROLL_SPEED = "1"
   | .statusLine = ((.statusLine // {}) + { type: "command", command: $sl })
+  | .permissions = ((.permissions // {}) + { defaultMode: "auto" })
 ' "$f" > "$tmp"
 mv "$tmp" "$f"
 SETTINGS
@@ -1661,6 +1689,12 @@ check "claude runs over non-interactive ssh" 'out=$(timeout 30 su - '"$USER_NAME
 # key name: a merge that landed the key with the wrong value, or under the wrong
 # parent, looks identical to a working one under grep.
 check "claude scroll speed is 1" 'jq -er ".env.CLAUDE_CODE_SCROLL_SPEED" /home/'"$USER_NAME"'/.claude/settings.json | grep -qx "1"'
+# The one check here whose failure costs hours rather than comfort -- see the
+# arithmetic beside the jq that sets it. Read back out of the JSON for the same
+# reason as the line above: a merge that landed `defaultMode` under the wrong
+# parent looks identical to a working one under grep, and the symptom is a
+# session that stalls at 3am rather than an error anybody sees.
+check "claude default permission mode is auto" 'jq -er ".permissions.defaultMode" /home/'"$USER_NAME"'/.claude/settings.json | grep -qx "auto"'
 # Two facts, and they come apart: the key can name a path that is absent,
 # unreadable, or not executable. So one check reads the path back out of the
 # JSON and insists the file at it is runnable BY THE USER -- root's `test -x`
