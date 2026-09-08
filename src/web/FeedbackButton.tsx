@@ -105,10 +105,43 @@ interface FeedbackApi {
  * signed-out case rather than a mistake — App.tsx mounts the host below the
  * signed-in gate. A trigger that finds `null` renders nothing.
  *
- * Deliberately not exported. A second consumer would be a second way to open
- * the box, and the two shapes below are already every way there is.
+ * **Still not exported**, and `useFeedbackOpen` below is why that survived a
+ * third consumer arriving: what the context is *for* is opening the box, so
+ * what leaves this file is that one verb rather than the provider — nobody
+ * outside can mount a second host or widen `FeedbackApi` from the far end.
  */
 const FeedbackContext = createContext<FeedbackApi | null>(null);
+
+/**
+ * **The third way to open the box, and the first that is not a button.**
+ *
+ * Greg, 2026-09-07 (SPIDERYARN-READING2-2D): *"Add Library, Feedback, Metadata,
+ * Tweets, Homepage, Profile, and a few more likely/useful commands to Command
+ * Bar."* The command bar's Feedback row is the caller — 260908e § Feedback is
+ * the one new verb, and command-match.ts § `Command` for why that row is a
+ * third *kind* of command rather than a page.
+ *
+ * The docblock above used to end *"a second consumer would be a second way to
+ * open the box, and the two shapes below are already every way there is"*. That
+ * was true and is not any more; the sentence is replaced rather than left to
+ * quietly describe a fact that has changed. What it was protecting still holds
+ * in the shape of this hook: **one verb leaves the module**, not the context, so
+ * a caller can open the dialog and can do nothing else to it.
+ *
+ * **`null` means no host above you**, exactly as it does for `FeedbackTrigger`,
+ * and it means the same thing for the same ordinary reason — a signed-out
+ * reader, for whom App.tsx mounts no host. A caller renders no row rather than
+ * a row that would do nothing; the command bar does that in
+ * CommandBar.tsx § `besideTheModes`.
+ *
+ * A hook rather than the raw context so that the `null` case is stated in a
+ * return type every caller has to read, instead of in a `useContext` a caller
+ * can forget to check.
+ */
+export function useFeedbackOpen(): (() => void) | null {
+  const api = useContext(FeedbackContext);
+  return api === null ? null : api.open;
+}
 
 /**
  * **The dialog, mounted once for the whole life of the signed-in app.**

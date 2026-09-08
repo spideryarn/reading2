@@ -1,6 +1,7 @@
 /**
- * **Type a word, press Enter, be in that mode** — or on that page. Spotlight
- * for the fourteen modes, and for the one page that is not a mode.
+ * **Type a word, press Enter, be in that mode** — or on that page, or with that
+ * dialog open. Spotlight for the fourteen modes, and for the seven rows that
+ * are not modes.
  *
  * Greg asked for it on 2026-09-05:
  *
@@ -9,37 +10,53 @@
  *
  * and the four product calls that shape this file were his, made on 2026-09-06
  * before any of it was written (docs/plans/260906h-mode-catalog-and-a-command-bar.md
- * § The four product calls). **Two of them he changed on 2026-09-07**, which is
- * marked on each rather than tidied away — the reasoning that produced them is
- * still the reasoning that keeps the bar small:
+ * § The four product calls). **Two of them he has since changed** — on
+ * 2026-09-07 and again on 2026-09-08 — which is marked on each rather than
+ * tidied away, because the reasoning that produced them is still the reasoning
+ * that keeps the bar small:
  *
  *  1. **Modes only** — *until 2026-09-07*, when Greg asked for the changelog
  *     here too: *"add the Changelog to the footer (e.g. of the Homepage, and
- *     also as a command from the Command Bar."* Everything else that call
- *     refused is still refused, and for the reason it gave: a passage jump, a
- *     generation row, an "ask this article" each need **a verb this bar does
- *     not have**. A page needs none — "go there" is the verb every link in the
- *     app already has. `PAGES` below is the whole of the widening, and
- *     `Command` in command-match.ts is where the type says so.
+ *     also as a command from the Command Bar."* And widened again on
+ *     2026-09-08, when he asked for six more by name
+ *     (SPIDERYARN-READING2-2D, and docs/plans/260908e-more-commands-in-the-command-bar-and-the-button-beside-the-logo.md):
  *
- *     The half of the call that did not change: a mode row's Enter opens it
+ *     > Add Library, Feedback, Metadata, Tweets, Homepage, Profile, and a few
+ *     > more likely/useful commands to Command Bar.
+ *
+ *     Two of those are pages about *this* article and one is not a place at
+ *     all, so `besideTheModes` below is a function of where the bar was opened
+ *     rather than the constant it used to be, and `Command` in command-match.ts
+ *     grew a third arm to hold the one that opens a dialog. **What the original
+ *     call refused is still refused**, and for the reason it gave: a passage
+ *     jump and an "ask this article" would each need the bar to grow an
+ *     *argument*, and it has one text box and it is the filter.
+ *
+ *     The half of the call that has never changed: a mode row's Enter opens it
  *     **exactly as pressing its Dock button does** — same activation, same
- *     generate-on-open, same cost.
+ *     generate-on-open, same cost. Since 2026-09-08 that holds for the rows
+ *     that are not modes too: Tweets arms a run over the whole article on its
+ *     way to the thread page, exactly as the Dock's Tweets button does, and
+ *     wears the `generates` marker for it.
  *  2. It is reachable by **⌘/Ctrl-K and by a button in the Dock**, because
  *     ⌘-K does not exist on a phone. The Dock keeps every mode button it has —
- *     this is an additional door, never a replacement.
+ *     this is an additional door, never a replacement. **The button moved to
+ *     the left-hand end of the bar on 2026-09-08**, just after the wordmark, on
+ *     Greg's ask in the same report; the chord did not move and could not,
+ *     since it is bound to the window rather than to the button
+ *     (Dock.tsx § `useCommandBarChord`).
  *  3. **No match says `No command matches.` and nothing else.** That overrode
  *     the recommendation put to him, which was to offer the article search as a
  *     fallback row. An honest empty state was preferred to a helpful guess.
  *  4. **The bar's mode rows are exactly what the Dock lists** — narrowed from
- *     *the bar lists exactly what the Dock lists* by the same 2026-09-07
- *     change, since the page rows are the bar's own. The surviving half is
- *     still true *by construction* rather than by agreement: the visible modes
- *     arrive as a prop, computed once by `visibleModes` in Dock.tsx, so there
- *     is no second copy of the experimental-switch rule to keep in step. The
- *     pages are appended **after** that prop, never mixed into it, which is
- *     what keeps the halves separable — and tests/command-bar.test.tsx asserts
- *     both halves rather than the old single one.
+ *     *the bar lists exactly what the Dock lists* by the 2026-09-07 change,
+ *     since the rest are the bar's own. The surviving half is still true *by
+ *     construction* rather than by agreement: the visible modes arrive as a
+ *     prop, computed once by `visibleModes` in Dock.tsx, so there is no second
+ *     copy of the experimental-switch rule to keep in step. Everything else is
+ *     appended **after** that prop, never mixed into it, which is what keeps
+ *     the halves separable — and tests/command-bar.test.tsx asserts both halves
+ *     rather than the old single one.
  *
  * ## It does not import from `Dock.tsx`, and that is a hard constraint
  *
@@ -75,7 +92,8 @@
  * they are on the elements even while they carry no rules.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { modeGenerates } from "./activation.js";
+import { armActivationForTweets, modeGenerates } from "./activation.js";
+import { useFeedbackOpen } from "./FeedbackButton.js";
 import {
   commandId,
   commandText,
@@ -84,28 +102,245 @@ import {
   type Command,
 } from "./command-match.js";
 import type { Mode } from "./params.js";
-import { CHANGELOG_HREF, CHANGELOG_LABEL, navigate } from "./router.js";
+import {
+  CHANGELOG_HREF,
+  CHANGELOG_LABEL,
+  LIBRARY_HREF,
+  PROFILE_HREF,
+  PUBLIC_LIBRARY_HREF,
+  navigate,
+  readHref,
+} from "./router.js";
 import { useVisualViewport } from "./useVisualViewport.js";
 
 /**
- * **The pages the bar offers, which are not modes**, and this array is the
- * whole of Greg's 2026-09-07 widening — see call 1 in the header.
+ * **The article the bar was opened over**, or `undefined` where there is none.
+ *
+ * The two fields are the Dock's own — the slug from the *path* and the query
+ * string worth carrying between an article's views (`carriedSearch` in
+ * router.ts), so that going to the metadata page and coming back returns you to
+ * the paragraph you left. Handed over rather than recomputed for the reason the
+ * mode list is: the Dock has both in hand and a second copy is a second thing
+ * to keep in step.
+ *
+ * **It is optional even though today it is never absent.** The bar is mounted
+ * only where there is a band to change — `mode !== undefined &&
+ * onMode !== undefined && !isVisitor`, which is the reading view, for the owner
+ * — so every reader who can open the bar is standing on an article. The option
+ * is here because that is a fact about the *gate*, not about the rows: the day
+ * the bar is offered on the shelf or the metadata page (260908e § Deliberately
+ * deferred) is the day this is `undefined`, and the answer then is the one
+ * `besideTheModes` gives now — **no row at all**, rather than a row that has to
+ * say something about an article that is not there.
+ */
+export interface CommandBarArticle {
+  readonly slug: string;
+  /** Already through `carriedSearch`; `readHref` adds the `?`. */
+  readonly search: string;
+}
+
+/**
+ * **Everything the bar offers that is not a mode**, built fresh for the state
+ * the bar was opened in.
+ *
+ * A function since 2026-09-08, and a `PAGES` constant before that, because two
+ * of Greg's seven rows are about *this* article and one of them opens a dialog
+ * — none of which a module constant can see. His ask
+ * (SPIDERYARN-READING2-2D, 260908e):
+ *
+ * > Add Library, Feedback, Metadata, Tweets, Homepage, Profile, and a few more
+ * > likely/useful commands to Command Bar.
  *
  * The list lives here rather than in command-match.ts for one mechanical
  * reason: naming an href means importing router.ts, router.ts imports React,
  * and that module's first claim about itself is that it imports no React. It
- * ranks a page; it does not know which pages there are.
+ * ranks a row; it does not know which rows there are.
  *
- * **Why this is a list and not a single constant**, given it holds one entry:
- * the same argument SiteFooter.tsx § `LINKS` makes and has now been paid off
- * three times — a second page is one entry here, not an edit to the rendering
- * below. It is deliberately *not* the footer's list, though. Those two rows
- * answer different questions: the footer is the site's own navigation and
- * carries Home, Features, Pricing, Privacy and Contact, none of which a reader
- * mid-article is reaching for a keyboard to get to. Sharing one array would
- * make five rows appear in the bar to keep a promise nobody made.
+ * ## The order, which is the order they appear in
+ *
+ * **This article first, then the app, then the one thing that is neither.**
+ * `rankCommands` breaks ties on input order and does nothing else with it
+ * (command-match.ts), so this arrangement *is* the empty-query list a reader
+ * sees under the fourteen modes — closest to where you are standing at the top.
+ *
+ * ## Library and Homepage are one row, not two
+ *
+ * Greg named both. `LIBRARY_HREF` is `/`, and for a signed-in reader `/` **is**
+ * the library — the shelf is the home page, and the bar is owner-only, so
+ * everybody who can open it is signed in. Two rows would be two names for one
+ * destination, and worse than redundant: `commandId` is `page:${href}`, so both
+ * would carry the id `page:/` — *"two rows the keyboard and a screen reader
+ * cannot tell apart"* (command-match.ts § `commandId`). So `home` and
+ * `homepage` are aliases on the one row, and typing either of his words gets
+ * you there.
+ *
+ * ## What is deliberately not here
+ *
+ * **The footer's row** — Features, Pricing, Privacy, Contact, Open source. That
+ * argument is unchanged by this widening and is the same one SiteFooter.tsx
+ * § `LINKS` makes from the other side: the footer is the site's own navigation,
+ * and none of those is a thing a reader mid-article reaches for a keyboard to
+ * get to. Sharing one array would make five rows appear here to keep a promise
+ * nobody made.
+ *
+ * **`/add`** — because a bare `/add` is not a page. router.ts § the add route
+ * sends it to the shelf, *"the shelf is where the add box is"*, so a row called
+ * *Add an article* would take you somewhere with a different name on it. It is
+ * an **alias on Library** instead, which is both shorter and true.
+ *
+ * **Admin and Design**, which would need an admin check the bar has never had,
+ * for two rows one person can use; and **sign out** and the **experimental
+ * switch**, because a bar whose Enter key is one row from signing you out is a
+ * bar you press more carefully. 260908e § What was considered and left out.
  */
-const PAGES: readonly Extract<Command, { kind: "page" }>[] = [
+function besideTheModes({
+  article,
+  openComments,
+  openFeedback,
+}: {
+  article: CommandBarArticle | undefined;
+  /** The Dock drawer's `onPanel`, already bound to `"questions"`, or absent. */
+  openComments: (() => void) | undefined;
+  /** `useFeedbackOpen()`'s answer — `null` where no host is mounted above. */
+  openFeedback: (() => void) | null;
+}): readonly Command[] {
+  return [
+    ...(article === undefined ? [] : articleRows(article)),
+    ...(openComments === undefined
+      ? []
+      : [
+          {
+            kind: "action",
+            id: "comments",
+            /* **"Comments", never a name that moves with its state** — the rule
+               Dock.tsx § the Comments button states at length, and the reason
+               is a reader driving this by voice is asking for the thing called
+               Comments. No count either: the bar is a list of what you can ask
+               for, and a number on one row would be the only row that reported
+               anything. */
+            label: "Comments",
+            description: "Your bookmarks and notes on this piece, in the drawer.",
+            aliases: ["notes", "bookmarks", "annotations", "questions"],
+            /* The drawer reads what is already stored; nothing here calls a
+               model. `generates` is required on every row that is not a mode —
+               command-match.ts § `CommandWords` says why saying `false` out
+               loud is the point rather than the noise. */
+            generates: false,
+            run: openComments,
+          } as const,
+        ]),
+    ...APP_PAGES,
+    ...(openFeedback === null
+      ? []
+      : [
+          {
+            kind: "action",
+            id: "feedback",
+            label: "Feedback",
+            /* What the box is for, in the voice docs/project/copy.md asks for:
+               the reader's problem is ours, and the sentence says what happens
+               rather than what they should feel about it. */
+            description: "Tell us what is wrong, or what you wish it did.",
+            aliases: ["bug", "report", "problem", "contact", "help", "suggestion"],
+            generates: false,
+            run: openFeedback,
+          } as const,
+        ]),
+  ];
+}
+
+/**
+ * **The two rows that are about the article in front of you**, and they exist
+ * only when there is one — see `CommandBarArticle` for why that is a statement
+ * about the gate rather than about these rows.
+ *
+ * Both go exactly where the Dock button of the same name goes, `search` and
+ * all, so a reader who has learned one door has learned the other.
+ */
+function articleRows({ slug, search }: CommandBarArticle): readonly Command[] {
+  return [
+    {
+      kind: "page",
+      href: readHref(slug, search, "metadata"),
+      label: "Metadata",
+      description: "Where this came from, how long it is, and every step that built it.",
+      aliases: ["about", "details", "source", "reading time", "stats"],
+      /* The metadata page shows what the pipeline already wrote; opening it
+         runs nothing. */
+      generates: false,
+    },
+    {
+      kind: "page",
+      href: readHref(slug, search, "tweets"),
+      label: "Tweets",
+      description: "The article rewritten as a thread you could post.",
+      aliases: ["thread", "twitter", "x", "social"],
+      /**
+       * **This row spends, and it is the row CommandBar.tsx predicted.**
+       *
+       * Pressing the Dock's Tweets button arms a run over the whole article
+       * (Dock.tsx § the Tweets link) rather than taking you to a page with a
+       * button on it, and this does the same — *"a row opens its mode exactly
+       * as pressing that button here does"*, applied to a link. The alternative
+       * considered and rejected: navigate without arming, which would land the
+       * reader on the thread page with a button to press, having just been told
+       * by the marker below that Enter would start something.
+       *
+       * **The Dock guards this with `isVisitor || view === "tweets"` and this
+       * does not, because the bar's mount gate has already discharged both**:
+       * no visitor sees the bar at all, and `mode !== undefined` is only true
+       * on the reading view, so `view` is always `"article"` here. If the bar
+       * is ever offered off the reading view — 260908e § Deliberately deferred
+       * — this is the line that has to grow the second guard back.
+       */
+      onNavigate: () => armActivationForTweets(slug),
+      generates: true,
+    },
+  ];
+}
+
+/**
+ * **The app's own pages, which are the same wherever the bar is opened.**
+ *
+ * A module constant because nothing in it depends on where you are standing —
+ * the half of the old `PAGES` that survives unchanged, plus the three rows Greg
+ * asked for that are addresses.
+ */
+const APP_PAGES: readonly Extract<Command, { kind: "page" }>[] = [
+  {
+    kind: "page",
+    href: LIBRARY_HREF,
+    label: "Library",
+    /* The sentence carries the add box, because `add` is an alias and a reader
+       who types it needs to see why the row that came back says *Library*. */
+    description: "Your shelf, and the box you paste a new article into.",
+    /* Greg's `Homepage`, and the four other words for the same place. `add` and
+       `add an article` because a bare `/add` lands here anyway — see the
+       docblock above. Sparse elsewhere, for the reason the mode aliases are
+       (docs/project/reading-view-overview.md § The command bar): the cost of a
+       loose alias is not a missed match, it is the wrong row ranked first. */
+    aliases: ["home", "homepage", "shelf", "my articles", "add", "add an article"],
+    generates: false,
+  },
+  {
+    kind: "page",
+    href: PROFILE_HREF,
+    label: "Profile",
+    description: "Your account, your plan, and the settings that follow you around.",
+    aliases: ["settings", "account", "plan", "billing", "preferences"],
+    generates: false,
+  },
+  {
+    kind: "page",
+    href: PUBLIC_LIBRARY_HREF,
+    /* Named for what it is rather than for its address: `/read/public` is a
+       shelf of other people's articles, and *Public shelf* is what
+       docs/project/public-shelf.md calls it. */
+    label: "Public shelf",
+    description: "Articles other readers have made public.",
+    aliases: ["public", "public library", "shared", "browse"],
+    generates: false,
+  },
   {
     kind: "page",
     href: CHANGELOG_HREF,
@@ -130,6 +365,8 @@ const PAGES: readonly Extract<Command, { kind: "page" }>[] = [
        single likeliest spelling of all and the one this list shipped without
        until GPT Sol caught it. `whats new` covers dropping it entirely. */
     aliases: ["changelog", "releases", "updates", "what's new", "whats new"],
+    /* `/changelog` reads a file the build already shipped. */
+    generates: false,
   },
 ];
 
@@ -144,12 +381,38 @@ const PAGES: readonly Extract<Command, { kind: "page" }>[] = [
  * magic", which is the flattening voice vision.md rejects. `generates` names
  * what happens.
  *
- * Which rows carry it is `modeGenerates` in activation.ts, derived from a table
- * that is already total — so mode fifteen gets its marker decided by the row it
- * must already write. That docblock has what the marker deliberately does not
- * say, and where it over-warns.
+ * Which rows carry it is `commandGenerates` below. For a mode that is
+ * `modeGenerates` in activation.ts, derived from a table that is already total
+ * — so mode fifteen gets its marker decided by the row it must already write.
+ * That docblock has what the marker deliberately does not say, and where it
+ * over-warns.
  */
 export const GENERATES_MARKER = "generates";
+
+/**
+ * **Whether pressing this row may start a model call**, and the one place that
+ * question is answered for every kind of row.
+ *
+ * Until 2026-09-08 the renderer asked `kind === "mode" && modeGenerates(mode)`,
+ * with a comment saying exactly what would go wrong and when:
+ *
+ * > **No page row can carry it, and that is a limitation rather than a fact
+ * > about pages.** … a page that *did* spend would ship silently under-warning:
+ * > the check would go on excluding it and no test could see the difference.
+ * > (GPT Sol, 2026-09-07)
+ *
+ * The Tweets row is that page — it arms a run over the whole article on the way
+ * to the thread — so the fix is the one that comment prescribed: the answer is
+ * a **property on the command**, and this function is what puts the two arms on
+ * one footing rather than adding a second name to the old condition.
+ *
+ * The mode arm stays a table lookup rather than a copied flag, because
+ * `MODE_TARGET` is already total and a duplicated boolean per mode is fourteen
+ * chances to disagree with it.
+ */
+function commandGenerates(command: Command): boolean {
+  return command.kind === "mode" ? modeGenerates(command.mode) : command.generates === true;
+}
 
 /**
  * **The empty state, exactly as Greg specified it and nothing beside it.**
@@ -175,11 +438,32 @@ interface Props {
    * component adds only its own presentation afterwards: close, and clear.
    */
   activateMode(next: Mode): void;
+  /**
+   * **The article the bar is standing on**, or `undefined` — see
+   * `CommandBarArticle`, which carries the whole of why this is optional when
+   * today it is always given.
+   */
+  article?: CommandBarArticle | undefined;
+  /**
+   * **How to open the Dock's Comments drawer**, or absent where there is none.
+   *
+   * Bound to the panel by the caller rather than taken as an `onPanel(panel)`,
+   * so this component never learns that a drawer is a thing with more than one
+   * side to it. `Dock` § `DockCommandBar` is the one binding.
+   */
+  openComments?: (() => void) | undefined;
   open: boolean;
   onClose(): void;
 }
 
-export function CommandBar({ modes, activateMode, open, onClose }: Props) {
+export function CommandBar({
+  modes,
+  activateMode,
+  article,
+  openComments,
+  open,
+  onClose,
+}: Props) {
   const ref = useRef<HTMLDialogElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listId = useId();
@@ -198,13 +482,37 @@ export function CommandBar({ modes, activateMode, open, onClose }: Props) {
   const [selected, setSelected] = useState(0);
 
   /**
-   * **The Dock's modes, then the pages** — and the concatenation is what makes
-   * call 4 in the header true. `modes` arrives already filtered and is spread
-   * rather than merged into, so the mode rows remain exactly the prop, in
-   * exactly its order; a tie between a mode and a page therefore falls to the
-   * mode, because `rankCommands` breaks ties on input order.
+   * **The way into the Feedback dialog**, or `null` where no host is mounted
+   * above this — which is the ordinary signed-out case rather than a mistake
+   * (FeedbackButton.tsx § `useFeedbackOpen`). No opener, no row.
+   *
+   * A hook, so it is called unconditionally at the top and not inside the memo
+   * below, where the rules of hooks would not have it.
    */
-  const commands = useMemo(() => [...modes.map(modeCommand), ...PAGES], [modes]);
+  const openFeedback = useFeedbackOpen();
+
+  /**
+   * **The Dock's modes, then everything else** — and the concatenation is what
+   * makes call 4 in the header true. `modes` arrives already filtered and is
+   * spread rather than merged into, so the mode rows remain exactly the prop,
+   * in exactly its order; a tie between a mode and anything else therefore
+   * falls to the mode, because `rankCommands` breaks ties on input order.
+   *
+   * **The dependency list is the four things a row can be built out of**, and
+   * `besideTheModes` is a pure function of exactly those — which is what makes
+   * a memo honest here rather than a guess. `openFeedback` is stable across
+   * renders by construction (`FeedbackHost` § `api`), and `openComments` is
+   * the caller's business; a caller that mints a new closure every render pays
+   * one array rebuild and nothing else, because `rankCommands` below is
+   * memoised on the same value and does no work a re-run would repeat.
+   */
+  const commands = useMemo(
+    () => [
+      ...modes.map(modeCommand),
+      ...besideTheModes({ article, openComments, openFeedback }),
+    ],
+    [modes, article, openComments, openFeedback],
+  );
   const results = useMemo(() => rankCommands(draft, commands), [draft, commands]);
   const index = Math.min(selected, Math.max(0, results.length - 1));
   const active = results[index];
@@ -272,20 +580,42 @@ export function CommandBar({ modes, activateMode, open, onClose }: Props) {
    */
   const activate = useCallback(
     (command: Command) => {
-      /* **Two verbs, and the switch is the whole of the difference between the
-         two kinds of row.** A mode is armed exactly as its Dock button arms it
-         (call 1); a page is navigated to exactly as a `<Link>` navigates —
-         `navigate` is what Link.tsx calls once it has decided the reader wants
-         to stay in this tab, which a reader pressing Enter in a modal dialog
-         has.
+      /* **Three verbs, and the switch is the whole of the difference between
+         the three kinds of row.** A mode is armed exactly as its Dock button
+         arms it (call 1); a page is navigated to exactly as a `<Link>`
+         navigates — `navigate` is what Link.tsx calls once it has decided the
+         reader wants to stay in this tab, which a reader pressing Enter in a
+         modal dialog has; an action runs its closure, which is 2026-09-08 and
+         is argued in command-match.ts § `Command` rather than here.
+
+         **`onNavigate` before `navigate`, in that order**, and it is the order
+         `Link.tsx` uses for the same pair: the Tweets row arms a run and then
+         goes to the page that will show it, and arming *after* the navigation
+         would be arming in a component the navigation has unmounted.
 
          **No ⌘-click into a new tab**, which a real `<a>` would give and this
          does not. Deferred rather than missed: an `<a>` inside `role="option"`
          puts an interactive element inside an interactive role, and the rows
          are `div`s precisely because Biome is right to refuse that. The bar is
          a keyboard instrument; the footer link is the one to ⌘-click. */
-      if (command.kind === "page") navigate(command.href);
-      else activateMode(command.mode);
+      switch (command.kind) {
+        case "mode":
+          activateMode(command.mode);
+          break;
+        case "page":
+          command.onNavigate?.();
+          navigate(command.href);
+          break;
+        case "action":
+          command.run();
+          break;
+        default: {
+          /* A fourth kind fails to compile here rather than silently doing
+             nothing — which is what an `else` would have given it. */
+          const never: never = command;
+          return never;
+        }
+      }
       setDraft("");
       setSelected(0);
       onClose();
@@ -447,20 +777,12 @@ export function CommandBar({ modes, activateMode, open, onClose }: Props) {
                   {commandText(command).description}
                 </span>
                 {/* One bit, after the sentence rather than before it: the row is
-                    still about what the mode gives you, and this is a note on
-                    the end. `GENERATES_MARKER` says why it is a word.
-
-                    **No page row can carry it, and that is a limitation rather
-                    than a fact about pages.** It is true of today's only page —
-                    `/changelog` reads a file the build already shipped — and it
-                    is enforced by this `kind` check, which is exactly why a
-                    page that *did* spend would ship silently under-warning: the
-                    check would go on excluding it and no test could see the
-                    difference (GPT Sol, 2026-09-07). The fix, on the day a
-                    spending page is proposed, is to move "does this start
-                    work?" into `Command` itself and render off the property —
-                    not to add a second name to this condition. */}
-                {command.kind === "mode" && modeGenerates(command.mode) && (
+                    still about what the row gives you, and this is a note on
+                    the end. `GENERATES_MARKER` says why it is a word, and
+                    `commandGenerates` — which took the `kind` check's place on
+                    2026-09-08, on the day the spending page it warned about
+                    arrived — is the one place any row's answer comes from. */}
+                {commandGenerates(command) && (
                   <span className="cmdbar-generates tw:shrink-0 tw:text-xs tw:text-ink-faint">
                     {GENERATES_MARKER}
                   </span>

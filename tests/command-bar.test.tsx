@@ -111,11 +111,17 @@ const listed = (): string[] =>
  * *usually* true of it, and would go on passing if a page row started being
  * built as a mode.
  */
-const rowsOfKind = (kind: "mode" | "page"): HTMLElement[] =>
+type RowKind = "mode" | "page" | "action";
+
+const rowsOfKind = (kind: RowKind): HTMLElement[] =>
   rows().filter((row) => row.dataset.kind === kind);
 
-const listedOfKind = (kind: "mode" | "page"): string[] =>
+const listedOfKind = (kind: RowKind): string[] =>
   rowsOfKind(kind).map((row) => row.querySelector(".cmdbar-name")?.textContent ?? "");
+
+/** The row whose visible name is exactly this, or `undefined`. */
+const rowNamed = (label: string): HTMLElement | undefined =>
+  rows().find((row) => row.querySelector(".cmdbar-name")?.textContent === label);
 
 /** The mode buttons the Dock itself drew, in the order it drew them. */
 const dockLists = (): string[] =>
@@ -578,22 +584,46 @@ describe("the `generates` marker", () => {
   });
 
   /**
-   * **The changelog row carries no marker**, which is all this can honestly
-   * claim. An earlier version of this comment said it would catch a future page
-   * that *did* start work; it would not, and GPT Sol said so on 2026-09-07 —
-   * the renderer excludes every page by `kind`, so such a page would be
-   * unmarked here and this test would stay green while the bar under-warned.
-   * `CommandBar` § the marker records what to do on the day that comes up.
+   * **The page rows split, and that is the point of 2026-09-08.**
    *
-   * It is still worth having: it is what would go red if the marker were ever
-   * rendered off something other than `modeGenerates`.
+   * This test said *"is on no page row"* until then, and its own comment said
+   * why that was all it could honestly claim: the renderer excluded every page
+   * by `kind`, so *"a page that did start work would be unmarked here and this
+   * test would stay green while the bar under-warned"* (GPT Sol, 2026-09-07).
+   *
+   * Tweets is that page — it arms a run over the whole article on its way to
+   * the thread — so the claim is now the one that could not be made before:
+   * **the marker follows the row's own `generates`, not its kind.** Both halves
+   * are named rows rather than counts, because *some page has it and some page
+   * does not* would be satisfied by the two being the wrong way round.
    */
-  it("is on no page row", () => {
+  it("is on the page row that spends and not on the ones that only go somewhere", () => {
     reading({ experimental: EXPERIMENTAL_ON });
     openBar();
-    const pages = rowsOfKind("page");
-    expect(pages.length, "no page rows, so this asserts nothing").toBeGreaterThan(0);
-    for (const row of pages) expect(row.querySelector(".cmdbar-generates")).toBeNull();
+    const marked = new Map(
+      rowsOfKind("page").map((row) => [
+        row.querySelector(".cmdbar-name")?.textContent ?? "",
+        row.querySelector(".cmdbar-generates") !== null,
+      ]),
+    );
+    expect(marked.get("Tweets"), "the Tweets row is missing").toBe(true);
+    expect(marked.get("Metadata"), "the Metadata row is missing").toBe(false);
+    expect(marked.get("Library"), "the Library row is missing").toBe(false);
+    expect(marked.get(CHANGELOG_LABEL), "the changelog row is missing").toBe(false);
+  });
+
+  /**
+   * **An action row never carries it either**, which is true of both of today's
+   * two and is a fact about them rather than about the arm — an action that
+   * spent would say so through the same `generates` field the pages use, since
+   * `commandGenerates` reads it off `CommandWords` and not off the kind.
+   */
+  it("is on no action row", () => {
+    reading({ experimental: EXPERIMENTAL_ON });
+    openBar();
+    const actions = rowsOfKind("action");
+    expect(actions.length, "no action rows, so this asserts nothing").toBeGreaterThan(0);
+    for (const row of actions) expect(row.querySelector(".cmdbar-generates")).toBeNull();
   });
 
   /**
