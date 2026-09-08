@@ -77,6 +77,7 @@ import { looksLikeAName, makeRenameApi, renameBody, type RenameApi } from "../to
 import {
   makeSteerApi,
   parseDelivery,
+  parseVerified,
   steerMessageBody,
   type SteerApi,
   type SteerOutcome,
@@ -106,6 +107,17 @@ import {
    because server.ts binds ports at import time and can never be imported. */
 import { readAttention } from "../tools/fleet/attention";
 import { statePayload } from "../tools/fleet/state";
+/* **THE PRODUCER'S OWN TYPE, ON THE FIXTURES THAT CLAIM TO BE ITS OUTPUT.**
+   `actionsWire()` in this file once built `{actions: []}` — a flat array the
+   route has never sent — and ~196 tests passed over it while every action
+   button on the real page was invisible, under a doc comment correctly saying
+   the fixture had to be the wire shape. A fixture is a claim about the producer
+   that nothing checks against the producer, unless it is annotated with the
+   producer's type. `Partial<>`, because most of these fixtures are deliberately
+   payloads from an OLDER server; what the annotation buys is that every field
+   they do name is a field the server really sends, spelled the way it spells
+   it. A fixture that is deliberately malformed says so — see `malformed`. */
+import type { FleetState as FleetStateWire } from "../tools/fleet/wire";
 import {
   CONSEQUENCE_RANK,
   CONSEQUENCE_TONE,
@@ -219,6 +231,22 @@ function state(over: Partial<FleetState> = {}): FleetState {
        the page would really build off an older server — and nothing is shifted.
        A fixture that names a skew passes one. */
     clockSkew: CLOCK_SKEW_UNMEASURED,
+    /* **BOTH OF THESE ARRIVED HERE AS COMPILE ERRORS**, which is the whole
+       point of v0.8b: `FleetState` is now `Omit<>` of the wire type, so a field
+       the server sends and this fixture does not mention stops the build.
+       Before that, this object was a hand-written twin and the two fields the
+       server had been sending for a day were simply absent from it — and from
+       the page.
+
+       `null` for `answeringEnabled` rather than `true`, for the same reason
+       `attention` above is `not-asked`: it is what `parseFleetState` produces
+       for a payload that does not carry the field, so a fixture that does not
+       care about the flag gets the page a real older server would draw. A
+       fixture that cares about the hold passes `false` and asserts on the card.
+       `tmuxServerPid` is a real-looking pid because the tmux server on this box
+       is pid 132280 and the detail pane prints it verbatim. */
+    answeringEnabled: null,
+    tmuxServerPid: 132280,
     ...over,
   };
 }
@@ -273,7 +301,25 @@ function manualTransport(): {
  * read fails as itself instead of as a chain of optional accesses that quietly
  * assert nothing.
  */
-function wire(over: Record<string, unknown>): FleetState {
+type WirePayload = { [K in keyof FleetStateWire]?: FleetStateWire[K] | undefined };
+
+function wire(over: WirePayload): FleetState {
+  const read = parseFleetState({ schema: 1, rows: [], ...over }, Date.now());
+  if (!read.ok) throw new Error(`the fixture did not parse: ${read.why}`);
+  return read.state;
+}
+
+/**
+ * **A PAYLOAD THAT IS DELIBERATELY NOT THE WIRE SHAPE**, for the tests that are
+ * about the parser refusing one.
+ *
+ * The escape hatch from `wire()`'s annotation, and it is a separate name rather
+ * than a cast so that reaching for it is visible in the diff: every call is a
+ * test asserting what this page does with a value the server would never send.
+ * `wire()` stays typed, so a fixture that means to be honest cannot be wrong by
+ * accident — which is the failure `actionsWire()` shipped.
+ */
+function malformed(over: Record<string, unknown>): FleetState {
   const read = parseFleetState({ schema: 1, rows: [], ...over }, Date.now());
   if (!read.ok) throw new Error(`the fixture did not parse: ${read.why}`);
   return read.state;
@@ -1118,7 +1164,10 @@ describe("staleness, against the collector's own cadence", () => {
     expect(wire({ refreshMs: 60_000 }).refreshMs).toBe(60_000);
     expect(wire({}).refreshMs).toBeNull();
     // Not a number, or nonsense: the server did not say, so the page measures.
-    expect(wire({ refreshMs: "soon" }).refreshMs).toBeNull();
+    // `malformed`, because `"soon"` is not a thing this server can send — the
+    // annotation on `wire()` says so, and this test is about what happens when
+    // something else does.
+    expect(malformed({ refreshMs: "soon" }).refreshMs).toBeNull();
     expect(wire({ refreshMs: -1 }).refreshMs).toBeNull();
   });
 });
@@ -1661,11 +1710,38 @@ function recordingSteer(): {
   const api: SteerApi = {
     message: async (row, text) => {
       calls.push({ op: "message", row, arg: text });
-      return { ok: true, op: "message", sent: [["tmux", "send-keys", "-t", row.paneId ?? "?", "-l", "--", text]] };
+      return {
+        ok: true,
+        op: "message",
+        sent: [["tmux", "send-keys", "-t", row.paneId ?? "?", "-l", "--", text]],
+        /* **THE ADDRESS THE SERVER SAYS IT REACHED, AND IT IS THE ROW'S OWN.**
+           A stub that answered `not-told` would draw nothing and quietly stop
+           exercising the comparison in `Landed`; one that answered a different
+           pane would put every test's page into the mismatch alarm. This is
+           what the real server sends on a send that went where it was aimed. */
+        verified: {
+          kind: "verified",
+          paneId: row.paneId ?? "?",
+          sessionId: row.id,
+          panePid: row.panePid ?? 0,
+          claudePid: 4243,
+        },
+      };
     },
     answer: async (row, index) => {
       calls.push({ op: "answer", row, arg: index });
-      return { ok: true, op: "answer", sent: [["tmux", "send-keys", "-t", row.paneId ?? "?", "1"]] };
+      return {
+        ok: true,
+        op: "answer",
+        sent: [["tmux", "send-keys", "-t", row.paneId ?? "?", "1"]],
+        verified: {
+          kind: "verified",
+          paneId: row.paneId ?? "?",
+          sessionId: row.id,
+          panePid: row.panePid ?? 0,
+          claudePid: 4243,
+        },
+      };
     },
   };
   return { api, calls };
@@ -6030,5 +6106,297 @@ describe("the composer production uses turns a checkpoint on disk into a questio
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+/* ==========================================================================
+   Stage v0.8b — the four fields the server sent and this page dropped.
+
+   Each of these is a LOSSY JOIN: the edge existed, the consumer dropped the
+   value, and both ends were internally consistent so nothing could go red.
+   `FleetState` deriving from `wire.ts` makes the drop un-writable; it cannot
+   make the value get READ, which is what this block is for. Every assertion
+   below is on a sentence a person reads off the page.
+   docs/postmortems/260908b, and § Stage v0.8a of the plan.
+   ========================================================================== */
+
+describe("answeringEnabled, told rather than discovered by tapping", () => {
+  it("keeps 'off' apart from 'this server never said'", () => {
+    expect(wire({ answeringEnabled: true }).answeringEnabled).toBe(true);
+    expect(wire({ answeringEnabled: false }).answeringEnabled).toBe(false);
+    /* THE THIRD ANSWER, and the reason this is not a boolean. A server built
+       before the flag sends nothing, and both `true` and `false` would be
+       claims made on its behalf — one invites the tap the hold exists to
+       prevent, the other prints a warning nothing supports. */
+    expect(wire({}).answeringEnabled).toBeNull();
+    expect(malformed({ answeringEnabled: "yes" }).answeringEnabled).toBeNull();
+  });
+
+  it("says answering is off BEFORE anybody taps, and withholds the buttons", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    /* The positive control first, and it is the half that matters: with the
+       flag ON the same row is answerable, so a build that simply stopped
+       offering answers would fail here rather than passing the test below. */
+    act(() =>
+      feed.push(
+        state({
+          answeringEnabled: true,
+          rows: [
+            steerable({
+              id: "$a",
+              title: "an agent asking",
+              status: { kind: "needs-you" },
+              question: question({ gate: { kind: "conversation" } }),
+            }),
+          ],
+        }),
+      ),
+    );
+    openSession("an agent asking");
+    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
+    expect(container.textContent).not.toContain("Answering is switched off");
+
+    act(() =>
+      feed.push(
+        state({
+          answeringEnabled: false,
+          rows: [
+            steerable({
+              id: "$a",
+              title: "an agent asking",
+              status: { kind: "needs-you" },
+              question: question({ gate: { kind: "conversation" } }),
+            }),
+          ],
+        }),
+      ),
+    );
+    const text = container.textContent ?? "";
+    /* The whole point of the hold is that a person should not tap: the page was
+       being told this and dropping it, so a reader tapped and got a 503. */
+    expect(text).toContain("Answering is switched off on this server");
+    expect(container.querySelectorAll("button.answer")).toHaveLength(0);
+    /* And the composer is untouched — sending a message is unaffected by the
+       hold, which is a distinction the page draws rather than leaving to be
+       discovered. */
+    expect(container.querySelector<HTMLTextAreaElement>("#steer-text")?.disabled).toBe(false);
+  });
+
+  it("still offers the buttons when the server never said, rather than inventing a hold", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() =>
+      feed.push(
+        state({
+          answeringEnabled: null,
+          rows: [
+            steerable({
+              id: "$a",
+              title: "an old server's row",
+              status: { kind: "needs-you" },
+              question: question({ gate: { kind: "conversation" } }),
+            }),
+          ],
+        }),
+      ),
+    );
+    openSession("an old server's row");
+    expect(container.querySelectorAll("button.answer").length).toBeGreaterThan(0);
+    expect(container.textContent).not.toContain("Answering is switched off");
+  });
+});
+
+describe("tmuxServerPid, the namespace the handles live in", () => {
+  it("reads it off the payload, and null when it is absent or unreadable", () => {
+    expect(wire({ tmuxServerPid: 132280 }).tmuxServerPid).toBe(132280);
+    expect(wire({ tmuxServerPid: null }).tmuxServerPid).toBeNull();
+    expect(wire({}).tmuxServerPid).toBeNull();
+    expect(malformed({ tmuxServerPid: "132280" }).tmuxServerPid).toBeNull();
+  });
+
+  it("prints it beside the handles it qualifies, so two snapshots can be compared", () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport });
+    act(() => feed.push(state({ tmuxServerPid: 132280, rows: [steerable({ id: "$a", title: "a session" })] })));
+    openSession("a session");
+    expect(container.textContent).toContain("132280");
+
+    /* Absent says so rather than drawing nothing: a reader who cannot see this
+       number would otherwise assume the handles above it are comparable with
+       the ones they wrote down yesterday. */
+    act(() => feed.push(state({ tmuxServerPid: null, rows: [steerable({ id: "$a", title: "a session" })] })));
+    expect(container.textContent).toContain("tmux server unread");
+  });
+});
+
+describe("verified — which pane the keystrokes actually reached", () => {
+  it("refuses half an address rather than filling the missing half in", () => {
+    const whole = { paneId: "%2108", sessionId: "$1643", panePid: 4242, claudePid: 4243 };
+    expect(parseVerified(whole)).toEqual({ kind: "verified", ...whole });
+    expect(parseVerified({ ...whole, paneId: "" })).toEqual({ kind: "not-told" });
+    expect(parseVerified({ ...whole, claudePid: "4243" })).toEqual({ kind: "not-told" });
+    /* A success with no address at all — what a server older than the field
+       sends. `not-told` and never an address with holes in it. */
+    expect(parseVerified(undefined)).toEqual({ kind: "not-told" });
+  });
+
+  it("says where the message landed, and shouts when it is not where you were looking", async () => {
+    const feed = manualTransport();
+    /* A server that says the keys went somewhere else. It should be
+       impossible — `verifyTarget` refuses a claim that does not match live
+       tmux — so reaching this branch means a guard did not hold, which is
+       precisely the thing a green tick must not hide. */
+    const elsewhere: SteerApi = {
+      message: async () => ({
+        ok: true,
+        op: "message",
+        sent: [],
+        verified: { kind: "verified", paneId: "%9999", sessionId: "$9999", panePid: 1, claudePid: 2 },
+      }),
+      answer: async () => ({ ok: true, op: "answer", sent: [], verified: { kind: "not-told" } }),
+    };
+    mountFull({ transport: feed.transport, steer: elsewhere });
+    act(() => feed.push(state({ rows: [steerable({ id: "$a", title: "a session" })] })));
+    openSession("a session");
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box");
+    typeInto(box, "carry on");
+    await act(async () => {
+      buttonSaying("Send now")?.click();
+    });
+    const text = container.textContent ?? "";
+    expect(text).toContain("IT WENT SOMEWHERE ELSE");
+    expect(text).toContain("%9999");
+  });
+
+  it("names the pane on an ordinary send, rather than only saying 'Sent.'", async () => {
+    const feed = manualTransport();
+    mountFull({ transport: feed.transport, steer: recordingSteer().api });
+    act(() => feed.push(state({ rows: [steerable({ id: "$a", title: "a session", paneId: "%2108" })] })));
+    openSession("a session");
+    const box = container.querySelector<HTMLTextAreaElement>("#steer-text");
+    if (!box) throw new Error("no message box");
+    typeInto(box, "carry on");
+    await act(async () => {
+      buttonSaying("Send now")?.click();
+    });
+    const text = container.textContent ?? "";
+    expect(text).toContain("Sent.");
+    expect(text).toContain("Landed in");
+    expect(text).toContain("%2108");
+    expect(text).not.toContain("IT WENT SOMEWHERE ELSE");
+  });
+});
+
+describe("resolution and startedDir — what new-session actually did", () => {
+  /* The same two gestures the "starting a session" block above uses, and local
+     for the same reason its own are: they are the whole of how this panel is
+     reached, and a helper shared across two describes that both mount the page
+     is a helper that hides which one built the DOM being asserted on. */
+  function openNewSession(): void {
+    const button = buttonSaying("New session");
+    if (!button) throw new Error("there is no New session button");
+    act(() => button.click());
+  }
+
+  function type(id: string, value: string): void {
+    const box = container.querySelector<HTMLTextAreaElement>(`#${id}`);
+    if (!box) throw new Error(`no textarea #${id}`);
+    typeInto(box, value);
+  }
+
+  it("reads both, and refuses to guess `repo` for a server that did not say", () => {
+    const base = { id: "L9", state: "started", dir: "/home/greg/code/spideryarn2" };
+    expect(parseLaunch({ ...base, resolution: "repo", startedDir: "/home/greg/code/other" })).toMatchObject({
+      resolution: "repo",
+      startedDir: "/home/greg/code/other",
+    });
+    expect(parseLaunch({ ...base, resolution: "dir" })?.resolution).toBe("dir");
+    /* The safe-looking word is the one that must not be invented: `repo`
+       promises the setup lock was held, and an older server promised nothing. */
+    expect(parseLaunch(base)?.resolution).toBeNull();
+    expect(parseLaunch({ ...base, resolution: "repository" })?.resolution).toBeNull();
+    expect(parseLaunch(base)?.startedDir).toBeNull();
+  });
+
+  it("draws the directory the box CHOSE when it is not the one that was asked for", async () => {
+    const record = parseLaunch({
+      id: "L10",
+      state: "started",
+      name: "w2-something",
+      dir: "/home/greg/code/spideryarn2/.claude/worktrees/w2",
+      resolution: "repo",
+      startedDir: "/home/greg/code/spideryarn2",
+      promptBytes: 9,
+      requestedAt: "",
+      finishedAt: "",
+      error: null,
+      maybeStarted: false,
+      note: null,
+    });
+    if (record === null) throw new Error("the fixture did not parse");
+
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      newSession: fakeNewSession({
+        start: async () => ({ accepted: true, launch: record }),
+        poll: async () => ({ ok: true, feed: { busy: false, retryAfterMs: 0, launches: [record] } }),
+      }),
+    });
+    act(() => feed.push(state({ rows: [] })));
+    openNewSession();
+    type("new-session-prompt", "start me");
+    await act(async () => {
+      buttonSaying("Start it")?.click();
+    });
+    const text = container.textContent ?? "";
+    /* The panel's own header promises the record says which directory was USED.
+       It was parsing `dir` — what was asked for — and dropping this. */
+    expect(text).toContain("Started in");
+    expect(text).toContain("/home/greg/code/spideryarn2/.claude/worktrees/w2");
+    expect(text).toContain("not the directory that was asked for");
+  });
+
+  it("says out loud when a launch went in through the -d escape hatch", async () => {
+    const record = parseLaunch({
+      id: "L11",
+      state: "started",
+      name: "loose",
+      dir: "/tmp/somewhere",
+      resolution: "dir",
+      startedDir: "/tmp/somewhere",
+      promptBytes: 9,
+      requestedAt: "",
+      finishedAt: "",
+      error: null,
+      maybeStarted: false,
+      note: null,
+    });
+    if (record === null) throw new Error("the fixture did not parse");
+
+    const feed = manualTransport();
+    mountFull({
+      transport: feed.transport,
+      newSession: fakeNewSession({
+        start: async () => ({ accepted: true, launch: record }),
+        poll: async () => ({ ok: true, feed: { busy: false, retryAfterMs: 0, launches: [record] } }),
+      }),
+    });
+    act(() => feed.push(state({ rows: [] })));
+    openNewSession();
+    type("new-session-prompt", "start me");
+    await act(async () => {
+      buttonSaying("Start it")?.click();
+    });
+    const text = container.textContent ?? "";
+    /* `-d` skips the repo's setup status and starts the session outside the
+       setup lock — the thing that once let this dashboard start an agent in a
+       checkout a setup run was rewriting. It is not a plumbing detail. */
+    expect(text).toContain("outside the repo's setup lock");
+    /* And the ordinary path gets no such line, because a caveat drawn on every
+       row is one nobody reads. */
+    expect(text).not.toContain("Started in /home");
   });
 });

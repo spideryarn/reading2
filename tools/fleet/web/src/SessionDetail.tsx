@@ -104,7 +104,7 @@ import { Explain } from "./Tooltip";
 import { hasDeliverable, queueFor, type ActionOutcome } from "./actions-client";
 import { transcriptAge, type MessagesApi, type MessagesView } from "./messages-client";
 import { NAME_RULE_TEXT, looksLikeAName, type RenameApi, type RenameOutcome } from "./rename-client";
-import type { SteerApi, SteerOutcome } from "./steer-client";
+import type { SteerApi, SteerOutcome, VerifiedReading } from "./steer-client";
 
 /** The refusal arm, so the headline table below is keyed by a real union. */
 type SteerFailure = Extract<SteerOutcome, { ok: false }>;
@@ -135,10 +135,13 @@ function Section({ title, children }: { title: string; children: ReactNode }): R
  */
 function Outcome({
   outcome,
+  row,
   sessionName,
   onRefresh,
 }: {
   outcome: SteerOutcome;
+  /** The row the person tapped, to check `verified` against. See `Landed`. */
+  row: FleetRow;
   sessionName: string;
   onRefresh: () => void;
 }): ReactNode {
@@ -148,6 +151,7 @@ function Outcome({
         <p className="tw:font-medium tw:text-work-ink">
           {outcome.op === "answer" ? "Answered." : "Sent."}
         </p>
+        <Landed verified={outcome.verified} row={row} />
         {outcome.sent.length > 0 ? (
           <p className="tw:mt-1 tw:text-ink-soft">
             {/* The argv, because "what did you actually press" is the first
@@ -208,6 +212,56 @@ function Outcome({
 }
 
 /**
+ * **WHERE THE KEYSTROKES LANDED, CHECKED AGAINST THE ROW THAT WAS TAPPED.**
+ *
+ * `sent` says what was typed; this says where. The server resolves the address
+ * against live tmux rather than echoing the request back (`verifyTarget` in
+ * steer.ts), so the two can disagree — and **a disagreement is the one failure a
+ * green tick hides**: a message that reached a pane other than the one on
+ * screen. That is why this compares rather than merely printing, and why the
+ * mismatch is drawn in the alarm colour inside an otherwise successful card.
+ *
+ * It should be impossible. `verifyTarget` refuses the send when the claimed
+ * pane is not where the claim said it was, so reaching this branch means a
+ * guard did not hold — which is exactly the class of thing worth telling a
+ * person about rather than trusting silently. Instance 12 in the table in
+ * docs/postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md:
+ * the field was on the wire and the page dropped it, so this comparison had
+ * never once been made.
+ *
+ * `not-told` draws nothing at all. A success with no address is what a server
+ * older than this field sends, and a sentence about it would be noise on every
+ * send against one — the arm exists so that silence cannot be rendered as an
+ * address, not so that it can be announced.
+ */
+function Landed({ verified, row }: { verified: VerifiedReading; row: FleetRow }): ReactNode {
+  if (verified.kind === "not-told") return null;
+  /* Both halves, because either one alone can be right while the pair is
+     wrong: a pane moved between sessions keeps its `%…` and changes its `$…`,
+     which is the case `verifyTarget` was written for. `row.paneId` is null on a
+     row with no pane handle at all — and a send from such a row is refused
+     locally (`unaddressable`), so a null here can only mean the page has
+     changed under the outcome; treat it as a mismatch rather than as agreement. */
+  const matches = verified.paneId === row.paneId && verified.sessionId === row.id;
+  if (matches) {
+    return (
+      <p className="tw:mt-1 tw:text-ink-soft">
+        Landed in <Mono>{verified.paneId}</Mono>, the pane this row names — checked by the server
+        against live tmux, not copied back from the request.
+      </p>
+    );
+  }
+  return (
+    <p className="tw:mt-1 tw:font-medium tw:break-words tw:text-alarm-ink">
+      IT WENT SOMEWHERE ELSE. The server says the keys were typed at{" "}
+      <Mono>{verified.paneId}</Mono> in <Mono>{verified.sessionId}</Mono>, and this row is{" "}
+      <Mono>{row.paneId ?? "no pane"}</Mono> in <Mono>{row.id}</Mono>. Go and look at both before
+      sending anything else.
+    </p>
+  );
+}
+
+/**
  * THE HEADLINE ON A REFUSAL, WHICH IS NOT ALWAYS "NOTHING WAS SENT".
  *
  * It was, for every refusal, until 2026-09-08 — and that sentence is false in
@@ -216,9 +270,18 @@ function Outcome({
  * **partial** delivery — the text landed in that agent's input box and the
  * Enter did not — rendered as *"Nothing was sent."*, which invites exactly the
  * retry that appends to the half-sent text instead of replacing it. There is no
- * way to take the first one back. Instance 5 of
- * docs/postmortems/260908b, and the server's own comment beside the field had
+ * way to take the first one back. The server's own comment beside the field had
  * already named the consumer it needed.
+ *
+ * **The same CLASS as the sixteen in
+ * docs/postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md,
+ * and not one of them** — this used to cite "Instance 5", which is
+ * `SteeringQueue.revive()`. `delivery` is not in that table; the nearest entry
+ * is instance 7, `deliverable`, which is a queue COUNT and a different field
+ * entirely. Found later on 2026-09-08 while wiring this panel, and corrected
+ * here in the evening after an implementer reported the citation rather than
+ * copying it. A wrong citation is the same animal as a wrong comment: written to
+ * be trusted later, in a place nobody re-derives.
  *
  * A `Record` over the closed union rather than a chain of ifs, so a fifth arm
  * in `DeliveryReading` fails the build here instead of quietly taking the last
@@ -260,21 +323,60 @@ const DELIVERY_HEADLINE: Record<SteerFailure["delivery"]["kind"], { head: string
  *  - `why` non-null — the server has already refused a tap, and its own words
  *    are shown verbatim. This is sticky, because a control that refuses every
  *    time you press it is worse than one that says why it is not a control.
+ *  - `answering === false` — **the server has said, in the payload, that
+ *    `POST /api/steer/answer` will do nothing.** Said BEFORE anybody taps,
+ *    which is the entire reason the flag is on the state payload: without it
+ *    this page either hedged or let a person discover the hold by tapping and
+ *    getting a 503, and *the whole point of the hold is that a person should
+ *    not tap* (wire.ts § `answeringEnabled`). The server sent that field for a
+ *    day while this client dropped it, so the 503 is what a reader actually
+ *    got — instance 13 in the table in
+ *    docs/postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md.
  *  - `permission` — answering would grant a capability. Not offered.
  *  - `unknown` — we could not tell, **including because the server never said**.
  *    Treated exactly as `permission`, which is the whole discipline: "I could
  *    not tell" must not become the way through.
  *
+ * **`answering === null` draws nothing and offers the button**, which is the
+ * one place this file does not treat "did not say" as "no", and it is
+ * deliberate: `null` means a server built before the flag existed, and a page
+ * that held answering back on that basis would be inventing a hold nobody
+ * declared — the mirror of the mistake above rather than the same one. The gate
+ * is a claim about THIS dialog and is read off the pane; this flag is a claim
+ * about the server, and only its absence is ambiguous.
+ *
  * Sending a MESSAGE is unaffected in every case, and that distinction is drawn
  * here rather than left to be discovered by tapping.
  */
-function HeldBack({ why, gate }: { why: string | null; gate: FleetGate }): ReactNode {
+function HeldBack({
+  why,
+  gate,
+  answering,
+}: {
+  why: string | null;
+  gate: FleetGate;
+  /** `false` = the server says answering is off. `null` = it did not say. */
+  answering: boolean | null;
+}): ReactNode {
   if (why !== null) {
     return (
       <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-alarm/40 tw:bg-alarm-wash tw:p-3 tw:text-[13px]">
         <p className="tw:font-medium tw:text-alarm-ink">The server would not answer this.</p>
         {/* Verbatim. It names the hazard and the way round it. */}
         <p className="tw:mt-1 tw:break-words tw:text-ink">{why}</p>
+      </div>
+    );
+  }
+  if (answering === false) {
+    return (
+      <div className="tw:mt-2 tw:rounded-lg tw:border tw:border-unknown/40 tw:bg-unknown-wash tw:p-3 tw:text-[13px]">
+        <p className="tw:font-medium tw:text-unknown-ink">Answering is switched off on this server.</p>
+        <p className="tw:mt-1 tw:text-ink-soft">
+          The dashboard says so in the payload rather than leaving you to find out by pressing one:
+          a tap would come back 503 and nothing would reach the session. Answer it in the terminal —{" "}
+          <code className="tw:font-mono">gjd-remote resume &lt;name&gt;</code> — or send a message
+          below, which is not affected.
+        </p>
       </div>
     );
   }
@@ -444,6 +546,8 @@ function LastWrote({ view, status, now }: { view: MessagesView | null; status: F
 export function SessionDetail({
   row,
   now,
+  answeringEnabled,
+  tmuxServerPid,
   steer,
   rename,
   actions,
@@ -453,6 +557,21 @@ export function SessionDetail({
 }: {
   row: FleetRow;
   now: number;
+  /**
+   * **Whether `POST /api/steer/answer` will do anything**, as the server said
+   * it, or `null` when it did not say.
+   *
+   * A prop rather than a second read of the state: this component is handed
+   * everything it draws, and the flag belongs to the payload the row came out
+   * of. `HeldBack` says what each of the three answers looks like.
+   */
+  answeringEnabled: boolean | null;
+  /**
+   * **Which tmux server the handles below belong to**, or null when it could
+   * not be read. Drawn in "Where it is", beside the handles it qualifies —
+   * see there for why it is on this page at all.
+   */
+  tmuxServerPid: number | null;
   steer: SteerApi;
   rename: RenameApi;
   /** The vocabulary, the queues, and the four requests that touch them. */
@@ -693,12 +812,20 @@ export function SessionDetail({
           is the content of that state, and it says where to go instead. */}
       {row.question !== null ? (
         <Section title="What it needs from you">
-          <HeldBack why={answeringOff} gate={row.question.gate} />
+          <HeldBack why={answeringOff} gate={row.question.gate} answering={answeringEnabled} />
           <QuestionCard
             question={row.question}
             sessionName={row.name}
+            /* `answeringEnabled === false` withholds the buttons for the same
+               reason `grants-permission` does: the server has already said the
+               request would be refused, and a control that exists only to
+               return 503 teaches a reader to stop believing the ones that
+               work. `null` — a server that never said — still offers them. */
             onAnswer={
-              unaddressable === null && answeringOff === null && row.question.gate.kind === "conversation"
+              unaddressable === null &&
+              answeringOff === null &&
+              answeringEnabled !== false &&
+              row.question.gate.kind === "conversation"
                 ? onAnswer
                 : null
             }
@@ -814,7 +941,7 @@ export function SessionDetail({
           </Section>
 
           {outcome === null ? null : (
-            <Outcome outcome={outcome} sessionName={row.name} onRefresh={onRefresh} />
+            <Outcome outcome={outcome} row={row} sessionName={row.name} onRefresh={onRefresh} />
           )}
           {queueOutcome === null ? null : <ActionOutcomeCard outcome={queueOutcome} onRefresh={actions.refresh} />}
 
@@ -893,6 +1020,39 @@ export function SessionDetail({
             to the server with anything you send, exactly as they arrived, so it can check the pane is
             still the one you were looking at.
           </p>
+          {/* **THE NAMESPACE THE FOUR HANDLES ABOVE LIVE IN**, and the reason
+              it is drawn here rather than in the masthead: `$1643` means
+              nothing without it, so the place a person can compare it is beside
+              the handles it qualifies. Two snapshots with different values
+              describe different worlds — one tmux server restart re-issues
+              every `$…` and `%…` on the box, and a reader comparing a handle
+              they wrote down yesterday with one on screen today has no other
+              way to know. The server has sent this since collect.ts was
+              written and no client had ever read it (docs/postmortems/260908b).
+
+              `null` is drawn rather than hidden: "we could not read it" and "we
+              did not look" are both worth one quiet line here, because the
+              alternative is a reader who assumes the handles are comparable. */}
+          <Explain
+            tip={{
+              head: "tmux server",
+              what:
+                tmuxServerPid === null
+                  ? "not read on this snapshot"
+                  : `pid ${tmuxServerPid}`,
+              how: "Session and pane handles are only meaningful inside one tmux server. If this number is not the one you saw last time, every handle on this page was re-issued — the sessions you are looking at are not the ones you were looking at, however alike the handles look.",
+            }}
+            placement="top"
+            className="tw:mt-1 tw:block tw:text-[11px] tw:text-ink-faint"
+          >
+            {tmuxServerPid === null ? (
+              "tmux server unread"
+            ) : (
+              <>
+                tmux server <Mono>{tmuxServerPid}</Mono>
+              </>
+            )}
+          </Explain>
         </div>
       </details>
     </Card>
