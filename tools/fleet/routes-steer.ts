@@ -40,10 +40,12 @@
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import type { Readable } from "node:stream";
 
-import type { OptionKey, PaneOption } from "./pane.js";
+import { addressableHost } from "./origin.js";
+import { classifyConsequence, fingerprintMaterial, type OptionKey, type PaneMaterial, type PaneOption } from "./pane.js";
 import type { FleetStatus } from "./status.js";
 import {
   answerQuestion as realAnswerQuestion,
+  describeSend,
   sendMessage as realSendMessage,
   type RefusalCode,
   type SeenQuestion,
@@ -92,6 +94,14 @@ export type RouteErrorCode =
   | "body-too-large"
   | "rate-limited"
   | "method-not-allowed"
+  /**
+   * Answering a dialog is switched off pending a decision Greg has to make —
+   * see the long comment at the dispatch. It is a `RouteErrorCode` rather than a
+   * `RefusalCode` on purpose: nothing about the box or the request was wrong, so
+   * refreshing and trying again will not help, and a client that retries on 409
+   * must not retry on this.
+   */
+  | "answering-disabled"
   | "internal";
 
 export type SteerOp = "message" | "answer";
@@ -99,7 +109,27 @@ export type SteerOp = "message" | "answer";
 /** What the client gets back. `ok:false` always carries a code and a sentence. */
 export type SteerResponse =
   | { ok: true; op: SteerOp; verified: Verified; sent: readonly (readonly string[])[] }
-  | { ok: false; code: RefusalCode | RouteErrorCode; why: string };
+  | {
+      ok: false;
+      code: RefusalCode | RouteErrorCode;
+      why: string;
+      /**
+       * WHAT HAPPENED TO THE KEYSTROKES, when the delivery module got as far as
+       * having an opinion. Absent for anything refused before that.
+       *
+       * A refusal is not one thing, and treating it as one is how a person ends
+       * up sending a message twice. `"none"` means nothing left this box.
+       * `"partial"` means the TEXT LANDED AND THE ENTER DID NOT, so it is
+       * sitting in that agent's input box waiting for the next keystroke to
+       * submit it — the one case where "try again" is the worst available
+       * advice. `"unknown"` means the call timed out or died on a signal and we
+       * genuinely cannot say.
+       *
+       * It is here rather than only in the log because the person who pressed
+       * the button is the one who needs it, and they are on a phone.
+       */
+      delivery?: "none" | "partial" | "unknown";
+    };
 
 /**
  * A refusal's HTTP status.
@@ -132,6 +162,24 @@ export const REFUSAL_STATUS: Record<RefusalCode, number> = {
   "question-gone": 409,
   "question-changed": 409,
   "send-failed": 409,
+  // The session is not at a text input box — a dialog is up, or something has
+  // been shelled out to in the foreground. GPT Sol's F2: a message beginning
+  // "1" arriving at a numbered dialog is an approval, and the route returned
+  // 200 for it. The world moved between the page and the send, so 409.
+  "not-at-input": 409,
+  "pane-is-asking": 409,
+  // THE TWO THAT ARE NOT 5xx AND MUST NOT BE, which is a stronger statement
+  // than the rest of this table.
+  //
+  // `send-partial` means the text landed and the Enter did not, so the message
+  // is SITTING IN THE PERSON'S INPUT BOX waiting for the next keystroke to
+  // submit it. `send-unknown` means we do not know whether it landed. Neither
+  // is retryable, and a 5xx is precisely what every retry loop in the world
+  // retries — which here would submit the half-typed message it was trying to
+  // recover from. So they are 4xx, and the code in the body carries the
+  // distinction for anything that cares.
+  "send-partial": 409,
+  "send-unknown": 409,
 };
 
 /* ------------------------------------------------------------------ *
@@ -206,25 +254,10 @@ export function readBody(req: BodyStream, limit: number = MAX_BODY_BYTES): Promi
 
 export type HeaderVerdict = { ok: true } | { ok: false; status: number; code: RouteErrorCode; why: string };
 
-/**
- * A hostname we are willing to be addressed as.
- *
- * IP literals, `localhost`, and Tailscale's MagicDNS suffix — nothing else, and
- * that is what closes DNS rebinding. Without it, a page at `evil.example` whose
- * DNS re-resolves to this box's tailnet address sends `Host: evil.example` AND
- * `Origin: http://evil.example`, which agree with each other perfectly and would
- * sail through a same-origin comparison. There is no name this dashboard is
- * legitimately reached by that is not in this set — `parseBinds` in config.ts
- * refuses a wildcard and the two real binds are a literal `127.0.0.1` and a
- * tailnet address.
- */
-function addressableHost(hostname: string): boolean {
-  const h = hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
-  if (h === "localhost") return true;
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return true;
-  if (h.includes(":") && /^[0-9a-f:.]+$/.test(h)) return true;
-  return h.endsWith(".ts.net");
-}
+// `addressableHost` used to live here. It is in origin.ts now, shared with
+// routes-new.ts, which did not have it — the route that can TYPE INTO a session
+// was closed to DNS rebinding and the route that can START one was open to it.
+// Two agents, two origin checks, one of them missing the half that mattered.
 
 function header(headers: IncomingHttpHeaders, name: string): string | null {
   const v = headers[name];
@@ -391,7 +424,22 @@ export function parseStatus(v: unknown): FleetStatus | null {
     case "unknown": {
       const why = asString(o.why);
       if (why === null) return null;
-      return { kind: "unknown", why };
+      // `cause` IS OVERWRITTEN, NOT VALIDATED, and that is the odd one out in
+      // this function on purpose.
+      //
+      // Every other arm here checks a value the client is in a position to
+      // know, because it describes what the page was showing. `cause` describes
+      // what the BOX observed — and this status did not come from the box, it
+      // came from a browser saying what it had on screen. Writing one of
+      // `sessionState`'s six real causes here would assert that the box
+      // reported a fault when the box was never asked, which is the same lie as
+      // inventing a `collectedAt` for a collection that never happened
+      // (state.ts). So it gets the seventh, which names exactly what is true:
+      // nobody observed this.
+      //
+      // The client's own prose survives in `why`, which is what the refusal
+      // sentence renders, so nothing a person would read is lost.
+      return { kind: "unknown", cause: "client-declared", why };
     }
     default:
       return null;
@@ -431,6 +479,43 @@ export function parseOptionKey(v: unknown): OptionKey | null {
   }
 }
 
+/**
+ * What the dialog was actually asking about — the diff, the command, the path.
+ *
+ * STRICT, AND THE FINGERPRINT IS REBUILT RATHER THAN BELIEVED. The client sends
+ * both the text and its hash, and this recomputes the hash from the text and
+ * refuses if they disagree. Not because a lying client is the threat — a client
+ * that wanted to lie would send a consistent pair — but because a body that can
+ * disagree with itself has two answers to the same question, and something
+ * downstream will eventually read the wrong one. The same reasoning as
+ * `parseOptionKey`, which rebuilds a key rather than accepting one.
+ *
+ * `null` (a 400) on anything malformed, rather than defaulting to `unreadable`.
+ * A default would turn "your client sent nonsense" into "the box could not be
+ * read", which is a different fact with a different remedy.
+ */
+export function parseMaterial(v: unknown): PaneMaterial | null {
+  const o = asRecord(v);
+  if (!o) return null;
+  switch (asString(o.kind)) {
+    case "read": {
+      const text = asString(o.text);
+      const fingerprint = asString(o.fingerprint);
+      if (text === null || fingerprint === null) return null;
+      if (fingerprint !== fingerprintMaterial(text)) return null;
+      return { kind: "read", text, fingerprint };
+    }
+    case "no-material":
+      return { kind: "no-material" };
+    case "unreadable": {
+      const why = asString(o.why);
+      return why === null ? null : { kind: "unreadable", why };
+    }
+    default:
+      return null;
+  }
+}
+
 /** The dialog the client says it is showing. */
 export function parseQuestion(v: unknown): SeenQuestion | null {
   const o = asRecord(v);
@@ -438,6 +523,12 @@ export function parseQuestion(v: unknown): SeenQuestion | null {
   if (asString(o.kind) !== "question") return null;
   const prompt = asString(o.prompt);
   if (prompt === null) return null;
+  // THE FIELD THAT MAKES AN APPROVAL MEAN SOMETHING. Until 2026-09-08 the
+  // question was the sentence and nothing else, so two writes of the same path
+  // with different contents compared equal and an answer meant for one would
+  // have been delivered to the other. See pane.ts's `materialAbove`.
+  const material = parseMaterial(o.material);
+  if (material === null) return null;
   const raw = o.options;
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > 64) return null;
   const options: PaneOption[] = [];
@@ -447,9 +538,15 @@ export function parseQuestion(v: unknown): SeenQuestion | null {
     const label = asString(opt.label);
     const key = parseOptionKey(opt.key);
     if (label === null || key === null) return null;
-    options.push({ label, key });
+    // RECOMPUTED, NOT READ OFF THE WIRE. `consequence` is a pure function of
+    // the label, so accepting the client's copy creates a field that can
+    // disagree with itself — and this is the field that distinguishes "yes,
+    // once" from "yes, and stop asking me", which is the difference between a
+    // decision about one action and a change to the session's permission
+    // posture for everything after it.
+    options.push({ label, key, consequence: classifyConsequence(label) });
   }
-  return { kind: "question", prompt, options };
+  return { kind: "question", prompt, material, options };
 }
 
 /**
@@ -532,7 +629,12 @@ export function parseAnswerBody(raw: unknown): Parsed<AnswerRequest> {
 
 export type RateVerdict = { ok: true } | { ok: false; why: string; retryAfterMs: number };
 
-export type RateLimiter = { check(key: string, now: number): RateVerdict };
+export type RateLimiter = {
+  /** Reads only. Asking whether a send is allowed must not itself cost a slot. */
+  check(key: string, now: number): RateVerdict;
+  /** Spends a slot. Called once the request has reached the delivery module. */
+  record(key: string, now: number): void;
+};
 
 /**
  * A floor per pane and a ceiling for the box.
@@ -557,7 +659,32 @@ export function createRateLimiter(
 ): RateLimiter {
   const lastByKey = new Map<string, number>();
   let recent: number[] = [];
+  /**
+   * TESTING AND SPENDING ARE TWO OPERATIONS, and they used to be one.
+   *
+   * `check` recorded a slot the moment it said yes — before the target shape,
+   * the text, the declared status, the live verification or the delivery had
+   * been looked at. So six well-formed but bogus requests spent the whole
+   * fleet's allowance and locked out a real one for ten seconds, without a
+   * single keystroke having gone anywhere. GPT Sol's F18.
+   *
+   * Now `check` only reads. `record` is called once the request has reached the
+   * delivery module, which is the point at which it has cost the box something
+   * — three tmux commands with ten-second timeouts — and may have typed. A
+   * request refused before that (bad origin, unparseable body, an id that is
+   * not an id) is free, which is what it should be: it cost us nothing.
+   */
+  const spend = (key: string, now: number): void => {
+    lastByKey.set(key, now);
+    recent.push(now);
+    // The map is keyed by pane id, which is unbounded over a long uptime.
+    // Forget anything far older than its own floor.
+    if (lastByKey.size > 256) {
+      for (const [k, t] of lastByKey) if (now - t > opts.minIntervalMs * 20) lastByKey.delete(k);
+    }
+  };
   return {
+    record: spend,
     check(key, now) {
       const prev = lastByKey.get(key);
       if (prev !== undefined && now - prev < opts.minIntervalMs) {
@@ -575,13 +702,6 @@ export function createRateLimiter(
           why: `${recent.length} sends across the fleet in the last ${opts.burstWindowMs}ms is the ceiling`,
           retryAfterMs: Math.max(1, opts.burstWindowMs - (now - oldest)),
         };
-      }
-      lastByKey.set(key, now);
-      recent.push(now);
-      // The map is keyed by pane id, which is unbounded over a long uptime.
-      // Forget anything far older than its own floor.
-      if (lastByKey.size > 256) {
-        for (const [k, t] of lastByKey) if (now - t > opts.minIntervalMs * 20) lastByKey.delete(k);
       }
       return { ok: true };
     },
@@ -605,6 +725,16 @@ export type SteerDeps = {
   now: () => number;
   limiter: RateLimiter;
   log: (line: string) => void;
+  /**
+   * Whether tapping an option may reach the delivery module at all. See the
+   * long comment at the dispatch for why the answer is currently no.
+   *
+   * A DEP RATHER THAN A `process.env` READ AT THE DISPATCH, so a test can drive
+   * both sides of it without mutating the environment — a test that sets an env
+   * var leaks into every other test in the file when it forgets to unset it,
+   * and the failure looks like a flake rather than a bug.
+   */
+  answeringEnabled: () => boolean;
 };
 
 export function realSteerDeps(): SteerDeps {
@@ -614,6 +744,10 @@ export function realSteerDeps(): SteerDeps {
     now: () => Date.now(),
     limiter: createRateLimiter(),
     log: (line) => console.log(line),
+    // Read per request, not once at construction: flipping it is then a server
+    // restart rather than a rebuild, and nothing here caches a decision that
+    // Greg may want to change in a hurry.
+    answeringEnabled: () => process.env["FLEET_ANSWER_ENABLED"] === "1",
   };
 }
 
@@ -686,6 +820,47 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
         `pid=${target.panePid ?? "-"} declared=${request.declaredStatus.kind} ${shape}`,
     );
 
+    // ANSWERING A DIALOG IS OFF, AND THIS IS A PRODUCT DECISION WAITING FOR
+    // GREG RATHER THAN A BUG WAITING FOR A FIX.
+    //
+    // Two independent cross-family reviews on 2026-09-08 reached the same
+    // conclusion about tapping an option from a phone, by different routes.
+    //
+    //  - GPT Astra ran an experiment: it changed a proposed file's contents in
+    //    a pinned fixture and `parsePane` returned an IDENTICAL question and
+    //    identical options. `promptAbove` stops at a horizontal rule, and
+    //    Claude Code puts one between the diff and the question — so the
+    //    approval binds to "Do you want to create notes.md?" and the content
+    //    being written is discarded. **The page can ask Greg to approve
+    //    something without showing him what it is.**
+    //  - GPT Sol found six more, of which one is not fixable by tightening
+    //    anything here: pane text is not provenance. An agent that has printed
+    //    a plausible menu — deliberately, or because it was processing hostile
+    //    input — produces a capture this parser accepts, and Sol's words are
+    //    "keep dialog answering read-only unless there is a structured, trusted
+    //    source of question identity, or explicitly accept that pane text is
+    //    executable UI".
+    //
+    // That last one is Greg's call and he is asleep. So the route stays built,
+    // tested and reachable, and refuses with a sentence saying why — which is
+    // better than deleting it (the work survives and the client can render the
+    // reason) and much better than shipping it (the failure mode is a wrong
+    // approval, and there is no way to take one back).
+    //
+    // `FLEET_ANSWER_ENABLED=1` turns it on for anybody who wants to test it.
+    // Sending a MESSAGE is unaffected; stages v0.2b and v0.2c in the plan are
+    // what turn this on for real.
+    if (op === "answer" && !deps.answeringEnabled()) {
+      const why =
+        "answering a dialog is disabled: the captured question does not include what is being approved, " +
+        "so tapping an option could approve something other than what you were shown. " +
+        "Use `gjd-remote resume <name>` and answer it in the terminal. " +
+        "See docs/plans/260907e-agent-fleet-dashboard.md stage v0.2b.";
+      deps.log(`steer answer: refused code=answering-disabled pane=${target.paneId}`);
+      respond(res, 503, { ok: false, code: "answering-disabled", why });
+      return;
+    }
+
     const rate = deps.limiter.check(target.paneId, deps.now());
     if (!rate.ok) {
       deps.log(`steer ${op}: refused code=rate-limited pane=${target.paneId} why=${rate.why}`);
@@ -701,6 +876,13 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
     // EVERY FIELD BELOW COMES OUT OF THE BODY. Nothing here asks tmux who is in
     // that pane — see the header. The delivery module does the asking, and it
     // compares what it finds against these claims.
+    // SPENT HERE, not at the check above. From this line on the request costs
+    // the box three tmux commands and may type into a pane, which is what the
+    // allowance is protecting. Everything refused before this point — a bad
+    // origin, an unparseable body, an id that is not an id — was free, and
+    // charging for it let six bogus requests lock out a real one. Sol's F18.
+    deps.limiter.record(target.paneId, deps.now());
+
     let result: SteerResult;
     try {
       result =
@@ -718,11 +900,23 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
     }
 
     if (!result.ok) {
-      deps.log(`steer ${op}: refused pane=${target.paneId} code=${result.reason.code} why=${result.reason.why}`);
+      // `describeSend`, never `result.sent` — THE ARGV IS THE MESSAGE, and this
+      // file's header promises the message is never logged. A refusal that
+      // leaked it into the log would be the promise broken at the one moment
+      // somebody is reading the log to find out what went wrong.
+      deps.log(
+        `steer ${op}: refused pane=${target.paneId} code=${result.reason.code} ` +
+          `delivery=${result.delivery} landed=${describeSend(result.sent)} why=${result.reason.why}`,
+      );
       respond(res, REFUSAL_STATUS[result.reason.code], {
         ok: false,
         code: result.reason.code,
         why: result.reason.why,
+        // Carried to the CLIENT, not just to the log, because the person who
+        // pressed the button is the one who needs it and they are on a phone.
+        // "partial" means their text is sitting in that agent's input box, and
+        // "try again" is the worst available advice.
+        delivery: result.delivery,
       });
       return;
     }

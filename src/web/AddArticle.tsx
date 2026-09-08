@@ -292,7 +292,7 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
                   }}
                   placeholder="example.com/an-essay-worth-reading"
                   spellCheck={false}
-                  className="tw:min-w-48 tw:flex-1 tw:rounded-md tw:border tw:border-border tw:bg-background tw:px-3 tw:py-2 tw:font-mono tw:text-[13px] tw:text-foreground tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25"
+                  className="tw:min-w-48 tw:flex-1 tw:rounded-md tw:border tw:border-border tw:bg-background tw:px-3 tw:py-2 tw:font-mono tw:text-[13px] tw:text-foreground tw:any-pointer-coarse:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25"
                 />
                 {/* One box, so the two actions wrap together rather than the
                     row breaking between them, and `ml-auto` keeps them on the

@@ -270,6 +270,44 @@ aspirational.
 
 ### Identity, and the three ways a session can stop being there
 
+**CORRECTED 2026-09-08, late: `claudeSessionId` is a claim that decays, not an identity.** Measured
+on the live box by the agent who owns the producer, and it undercuts what the rest of this section
+originally said. Two facts:
+
+- **It is set before Claude runs.** `CLAUDE_SESSION_ID` is written into the tmux environment at
+  `tmux new-session -e …`, so a `--wait 6h` session carries a conversation uuid for six hours while
+  its pane runs `sleep 21600`. On the live payload, **30 of 35 rows carried a uuid and 5 of those
+  were `waiting`**, with no Claude process to match. **A uuid on a row is not evidence a conversation
+  exists.**
+- **It outlives the conversation.** The environment is written once and never updated, so if a pane's
+  Claude exits and a fresh one starts, the row still names the *first* conversation.
+
+> the uuid identifies a conversation, and the tmux environment's claim about which conversation is in
+> a pane is a hint that decays.
+>
+> — the dashboard agent, 2026-09-08
+
+**So the asymmetry is the finding, and it is what goes in the comment: a uuid that changes is real
+evidence of replacement; a uuid that does not change is no evidence at all.** The `session-replaced`
+event therefore fires correctly when it fires and **cannot be trusted by its absence** — which is
+exactly the case it was invented for, so the event is weaker than this plan first claimed.
+
+This is worse than an ordinary stale field, for the reason everything on this page is worse: a reader
+keyed on a stale uuid does not fail. **It returns real, well-formed, correctly-attributed content
+from a conversation that is not on screen** — the most convincing wrong answer available.
+
+The only thing that resolves it is liveness evidence the pair cannot supply: a transcript's
+`lastModified`. **A transcript last written hours ago on a row we call `working` is this bug**, and
+it is the only available signal. That is filesystem I/O, so it belongs in S4 or later, not in S2's
+pure logic; S2's job is to make the uncertainty impossible to overlook rather than to resolve it.
+
+Two related hints, recorded so nobody re-derives them: **`meta.dir` does not locate the transcript**
+— a path built from it finds the file for 7 of 30 sessions, because `EnterWorktree` *moves* the
+transcript to the worktree's slug while `meta.dir` still names the primary, so the rule is try the
+slug then scan. And **reading a transcript tail is affordable after all**: twelve turns cost 262 KB
+of a 33 MB file in 4.5 ms, and all 35 rows come to 318 ms — which reverses the assumption that
+conversation content was too expensive to keep.
+
 **Identity is the pair (tmux handle, `claudeSessionId`), never the handle alone.** The handle is
 immutable and is the right address for a live view, which is why `gjd-remote` uses it. For a
 *history* it is wrong: a tmux session can be resumed into a different conversation — same handle,
@@ -352,6 +390,16 @@ Captured 2026-09-08, and several of these contradict what a hand-written fixture
 - **Two different `tookMs` fields exist** — the snapshot's (whole collection) and `health.tookMs`
   (the health probe alone, 1.2–1.8s). Easy to confuse.
 
+**And a lesson about the fixtures themselves.** That capture was taken at 02:15 and was **already the
+wrong shape by 03:40** — the dashboard landed `meta`, `claudeSessionId`, `panePid`, `schema`,
+`tmuxServerPid` and `refreshMs` in between, so the saved rows would have failed the strict parser
+S2 is built around. The measurements above survive, because status objects did not change; the
+fixtures did not.
+
+So: **capture fixtures against a producer that is still moving, and re-capture them at the moment you
+write the parser, not before.** Committing that first set would have been worse than having none —
+a test passing against a shape the producer no longer emits is a test that has stopped watching.
+
 ## Stages
 
 **Re-sliced per Sol F11**, which observed that the first draft's stopping points were not honest: its
@@ -375,6 +423,70 @@ Nothing else. A shared-API change with every consumer and test green is a stage.
 - **Done:** `npm test` and `npm run typecheck` green, `gjd-remote ls` still renders, and a mutation
   proves a test notices.
 
+**✅ LANDED 2026-09-08.** Seven causes, not the six planned — `not-a-session-id`,
+`agents-unavailable`, `unrecognised-agent-status`, `running-but-unlisted`,
+`process-probe-unavailable`, `no-status-derived`, and `client-declared`. Five construction sites in
+`sessionState` confirmed by hand; the plan's original "three" was wrong.
+
+Three things learned in the doing, all worth more than the change itself:
+
+- **A cause must not carry anything that varies for reasons the consumer does not care about.**
+  `unrecognised-agent-status` deliberately does *not* include the status name it found: a box
+  reporting two unfamiliar statuses in turn has one problem, and folding the name in would
+  reintroduce exactly the flapping the field exists to stop. The dashboard agent generalised it into
+  the rule worth keeping — **prose, counters, countdowns and timestamps belong beside a diff key,
+  never in it.** It is `waiting.secondsLeft` again, one level up.
+- **The seventh cause came from a disagreement worth losing.** `routes-steer.ts` parses a status a
+  *client* declared, and stamping one of the six box-faults on it would launder a browser's assertion
+  into a field whose whole purpose is to say what the box observed — *"the same class of error as
+  inventing a `collectedAt` for a collection that never happened"*. Hence `client-declared`, named for
+  the fault in the same sense as the others, because **the fault is the absence of an observation.**
+  Rejecting the body instead was the other option and is worse: it replaces an informative
+  `declared-not-steerable` refusal with "your JSON was wrong", and the refusal sentence is the
+  product.
+- **The exhaustiveness guard fired for real, and only under `typecheck`.** The test annotates its
+  fixture as an exhaustive `Record` over the causes, so adding `client-declared` broke compilation
+  until it was accounted for. **`npm test` cannot catch it** — vitest does not typecheck — so a
+  type-level guard here is only ever as good as the `typecheck` gate.
+
+`statusOf`'s second `sessionState(…, LISTED_NOTHING)` call and the constant are gone, with the
+reasoning kept in the comment and a line saying the trick is no longer how the distinction is drawn.
+Evidence: 220 tests across the four affected files; three mutations, all caught, one at compile time.
+The one remaining `typecheck` error is `routes-steer.ts`, handed to its owner deliberately rather
+than swept into a pathspec commit over their uncommitted work.
+
+### S1's review, and the one finding it handed to S2
+
+GPT Sol reviewed the landed stage: **one P2 and nothing else**, with all three of the suspicions
+listed in the review prompt disproved —
+[260908b-s1-code-review-sol.md](260908b-s1-code-review-sol.md). It proved the `statusOf` equivalence
+from the clause ordering rather than accepting the claim (an invalid id and a wait both return before
+`agents` is inspected, so every session reaching the `agents === null` clause necessarily produces
+`agents-unavailable`); confirmed the `Exclude` is a real guard, since adding a union member without
+touching the fixture is a type error and *no* test can stop somebody deliberately editing its own
+assertion; and confirmed nothing load-bearing died with `LISTED_NOTHING`.
+
+**S1-1 (P2) is a real tension and it belongs here rather than there.** `unrecognised-agent-status`
+deliberately drops the status name it found. Sol's objection:
+
+> a future Claude version reports `compacting`, then `waiting-for-input`; both collections produce
+> the same transition key … the intermediate status is permanently lost despite the source having
+> changed. Unlike reworded prose, the reported status token is machine-readable observed data and may
+> encode a real transition.
+
+That is not the same thing as the rule it appears to contradict. *A field a consumer will diff must
+not contain anything that varies for reasons the consumer does not care about* was aimed at **our
+wording**; the status token is **the box's observation**, and it changes only when the box says
+something different. The two arguments were about different objects — "we have one diagnostic
+problem" versus "the session moved" — and both are right about theirs.
+
+The resolution is not to reopen `cause`, which should stay stable, but to carry the token separately
+and decide whether it participates in the canonical key. **That is an S2 decision by construction,
+because S2 is where the canonical key is defined**, and Sol agrees it need not block S1. Recorded so
+it cannot be lost between stages: the near-certain trigger is an ordinary Claude Code upgrade
+introducing a status this version has no arm for, which will happen every few months rather than
+never.
+
 ### S2 — the observation contract and the pure logic
 
 Types and pure functions. No I/O.
@@ -384,6 +496,39 @@ Types and pure functions. No I/O.
 - `diff()` over canonical transition keys.
 - **Done:** against the captured real snapshots, the right events come out; a duplicate produces
   nothing; a 35-of-36 payload is rejected whole rather than diffed.
+
+**✅ LANDED 2026-09-08.** `tools/overseer/` — `observation.ts`, `admissible.ts`, `diff.ts`, 1014
+lines. **Every import in all three is `import type`**, so the directory has no runtime dependency at
+all, does no I/O, and nothing at module scope does anything. 168 tests; typecheck green on all four
+projects. Six mutations, all caught.
+
+Three things it decided or discovered that are worth more than the code:
+
+- **The fixtures cannot catch the bug they were captured for, and this is now in their README.**
+  The 51-versus-2 noise ratio was summed over the *untrimmed* capture; the eight committed files hold
+  only `idle`, `working`, `needs-you` and `shell`, **none of which has a volatile field**. So a differ
+  comparing whole status objects structurally passes every real pair, and the mutation that proves the
+  canonical key matters was caught only by a *constructed* countdown case. A good correction to this
+  plan's brief, which had asserted the opposite.
+- **A clock that goes backwards is `reject`, not `duplicate`.** The brief said duplicate when
+  `collectedAt` "has not advanced", which covers equal and earlier alike. Equal has an innocent
+  explanation every minute; earlier has none — a second producer, an NTP step, a cached body served
+  after a fresher one. Calling it a duplicate stalls the history silently for as long as the skew
+  lasts; rejecting is visible and self-clearing.
+- **The producer moved mid-build and the typecheck caught it within the hour.** `fleetState()` grew a
+  fifth parameter, `answeringEnabled`, correctly without a schema bump per the producer's own rule.
+  Nothing else changed, because the parser ignores unknown fields — but it is the drift the fixtures
+  README warns about, happening live, between two agents.
+
+The `claudeSessionId` correction arrived mid-build and cost about forty minutes: `ObservedRow`
+carries `claimedConversationId`, a **branded** string so that using it as an identity requires a cast
+and the cast is where the reader meets the doc comment. `sessionKey` encodes the pair as
+`$1991 claims:<uuid>` — **the word `claims` is in the key** so that a human grepping the log does not
+read that half as verified either. The asymmetry is documented on the event under the heading
+*"`session-replaced` FIRING IS EVIDENCE; ITS SILENCE IS NOT"*, and there is a test named
+**"KNOWN BLIND SPOT: a replacement the tmux environment did not notice produces nothing"** that
+asserts the empty result, so the limitation is pinned where someone will read it rather than left in
+prose.
 
 ### S3 — the store: single writer, checkpoint, crash recovery
 

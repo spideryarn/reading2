@@ -35,7 +35,7 @@ Two things are being built at once, by two different agents:
 ## What to read
 
 Repository `spideryarn2`, this worktree. Read from git at revision
-`40f531d5744876fa03b556fdc34d0b19725ad935`.
+`35e4d36834dc66ca2f2603dfb0e888fb1f36750e`.
 
 Start here:
 - `docs/project/orchestrator-direction.md` — **the most important file.** The standing direction:

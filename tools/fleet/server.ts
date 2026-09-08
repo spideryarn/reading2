@@ -35,10 +35,12 @@ import { fileURLToPath } from "node:url";
 import { collect, type FleetSnapshot } from "./collect.js";
 import { parseBinds } from "./config.js";
 import { collectHealth, type HealthReport } from "./health.js";
+import { applySecurityHeaders } from "./headers.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
 import { newSessionRoutes } from "./routes-new.js";
 import { handleSteerRequest } from "./routes-steer.js";
 import { fleetState } from "./state.js";
+import { readRecentMessages } from "./transcript.js";
 
 /** Where the built React client lives. */
 const DIST = path.join(path.dirname(fileURLToPath(import.meta.url)), "web", "dist");
@@ -108,7 +110,37 @@ let health: HealthReport | null = null;
  * `collectedAt` is non-null.
  */
 function statePayload(): string {
-  return JSON.stringify(fleetState(snapshot, lastError, health, REFRESH_MS));
+  // The answering flag is read PER PAYLOAD rather than captured once at
+  // startup, for the same reason routes-steer.ts reads it per request: turning
+  // it on should be a restart, and the page should learn about it on its next
+  // refresh rather than on a reload nobody performs.
+  return JSON.stringify(
+    fleetState(snapshot, lastError, health, REFRESH_MS, process.env["FLEET_ANSWER_ENABLED"] === "1"),
+  );
+}
+
+/**
+ * The box's vitals, refreshed whatever the fleet collection did.
+ *
+ * IT USED TO BE INSIDE THE SUCCESS BRANCH, and that had it exactly backwards.
+ * A fleet collection fails when the box is in trouble — that is when `tmux`
+ * times out and when the script gets OOM-killed — so the reading that would
+ * *explain* the failure was the one the failure prevented. Greg would have got
+ * "collection failed" next to a health block from before whatever went wrong.
+ * GPT Astra's A17, 2026-09-08.
+ *
+ * Still separately guarded, for the original reason: a health reading that
+ * throws must not cost us the session list. `collectHealth` is built not to
+ * throw — every field of it can say "I could not tell" rather than returning a
+ * zero that reads as healthy — so this catch is for the case where that is
+ * itself wrong.
+ */
+function refreshHealth(): void {
+  try {
+    health = collectHealth({ includeSwapActivity: true });
+  } catch (err) {
+    console.error(`health failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 async function refresh(): Promise<void> {
@@ -120,13 +152,8 @@ async function refresh(): Promise<void> {
         (subscriberCount() ? ` → ${subscriberCount()} live` : ""),
     );
     // Cheap next to the fleet collection (~200ms without the vmstat sample,
-    // which is the one command with a real wait), and separately guarded: a
-    // health reading that throws must not cost us the session list.
-    try {
-      health = collectHealth({ includeSwapActivity: true });
-    } catch (err) {
-      console.error(`health failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
+    // which is the one command with a real wait).
+    refreshHealth();
     broadcast(statePayload());
   } catch (err) {
     // Keep the previous snapshot. The page shows the age, so a stale page is
@@ -141,6 +168,11 @@ async function refresh(): Promise<void> {
     // function. The Overseer (tools/overseer/, another session) consumes this
     // stream to record fleet history, so a failure it cannot see is a gap in
     // that history with no explanation in it.
+    //
+    // AND TAKE A HEALTH READING ANYWAY. A collection fails when the box is in
+    // trouble, so this is the moment the vitals are most worth having — and
+    // until 2026-09-08 it was the one moment they were not taken.
+    refreshHealth();
     broadcast(statePayload());
   }
 }
@@ -165,6 +197,15 @@ async function refreshLoop(): Promise<void> {
 function handler(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse): void {
   const url = req.url ?? "/";
 
+  // BEFORE ANYTHING DECIDES WHAT THE RESPONSE IS. There are five response paths
+  // here and two of them live in modules built by other agents; a header set at
+  // each exit is one that will be missing from the sixth. `setHeader` survives
+  // the `writeHead` those routes do, so they need to know nothing about it.
+  // Why these headers at all: headers.ts, and GPT Astra's A6 — this page is a
+  // privileged renderer of content written by agents processing untrusted input,
+  // and it can now type into those same agents.
+  applySecurityHeaders(res);
+
   // The stream. A new subscriber gets the cached snapshot at once rather than
   // waiting up to a minute for the next refresh, so a phone opening the page is
   // never briefly blank.
@@ -182,6 +223,57 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
     res.end(statePayload());
     return;
   }
+  // Recent messages for one session, for the detail pane.
+  //
+  // ADDRESSED THROUGH THE CURRENT SNAPSHOT, NOT THROUGH THE QUERY STRING. The
+  // caller names a tmux handle and we look up the row; it never names a path, a
+  // uuid or a directory. So the worst a crafted URL can do is miss — this route
+  // can only read a conversation the page is already showing, and there is no
+  // traversal question to get wrong because there is no caller-supplied path.
+  //
+  // Read-only, but not harmless: every string it returns is agent-authored text
+  // from a process that may have been handling hostile input. React escapes it;
+  // nothing here adds markup.
+  if (url.startsWith("/api/messages")) {
+    const id = new URL(req.url ?? "/", "http://fleet.invalid").searchParams.get("id");
+    const row = snapshot?.rows.find((r) => r.id === id) ?? null;
+    if (row === null) {
+      res.writeHead(404, { "content-type": "application/json", "cache-control": "no-store" });
+      res.end(
+        JSON.stringify({
+          kind: "not-found",
+          reason: "no-such-session",
+          why: "no session with that handle in the current snapshot",
+        }),
+      );
+      return;
+    }
+    void readRecentMessages({
+      claudeSessionId: row.claudeSessionId,
+      dir: row.meta.version === 1 ? row.meta.dir : null,
+      limit: 12,
+    })
+      .then((payload) => {
+        res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+        res.end(JSON.stringify(payload));
+      })
+      // `readRecentMessages` is built not to reject — every failure is a `kind`
+      // — so this is for the case where that is itself wrong. Without it the
+      // request hangs until the phone gives up, which is indistinguishable from
+      // the box being down.
+      .catch((err: unknown) => {
+        res.writeHead(500, { "content-type": "application/json", "cache-control": "no-store" });
+        res.end(
+          JSON.stringify({
+            kind: "unreadable",
+            path: null,
+            why: `reading the transcript threw: ${err instanceof Error ? err.message : String(err)}`,
+          }),
+        );
+      });
+    return;
+  }
+
   // THE ONLY WRITE PATH IN THIS TOOL: it types into live agent sessions.
   // Before serveStatic, so that no file which ever lands under web/dist/ can
   // shadow it — a bundle named `api/steer/message` is absurd and is exactly the

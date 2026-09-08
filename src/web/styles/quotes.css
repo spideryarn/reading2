@@ -48,7 +48,12 @@
   font-size: 0.84rem;
   cursor: pointer;
 }
-.quotes-rank-btn:hover { color: var(--ink); background: var(--surface-raised); }
+/* Behind `(hover: hover)`, with `:active` beside it — glossary.css § the same
+   two lines carries the reasoning, and the two rows must not drift. */
+@media (hover: hover) {
+  .quotes-rank-btn:hover { color: var(--ink); background: var(--surface-raised); }
+}
+.quotes-rank-btn:active { color: var(--ink); background: var(--surface-raised); }
 .quotes-rank-btn.on {
   border-color: var(--rule-strong);
   background: var(--surface-raised);
