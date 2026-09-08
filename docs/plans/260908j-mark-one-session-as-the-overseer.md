@@ -210,10 +210,66 @@ been written two different ways in a single afternoon.
    `overseer.md` § "You are the Overseer", which is rule text and goes to Greg rather than into a
    commit.
 
+## The second review, and the shape every finding had
+
+[260908j-…-review2-sol.md](260908j-mark-one-session-as-the-overseer-review2-sol.md). Two more P0s and
+three P1s, and **every one of them was the same defect wearing different clothes: a reading that
+could not be made, reported as a reading that was.** Worth naming, because the plan-stage review had
+already found that class twice and the code still shipped five more of it.
+
+- **The page could say STALE and *Overseer: alpha* in the same breath** about a session that died an
+  hour ago. `OverseerLine` looked only at the row count. It now reads the same `Freshness` the STALE
+  banner is drawn from, plus the payload's own `error` — and `ReadingCompleteness` grew a second
+  arm, because *the list is short* and *this may not describe now* are not equally bad. `contested`
+  survives the first and not the second: two holders in an old snapshot do not prove two holders now,
+  since killing one is exactly what somebody would have done about it.
+- **The multiline fix caught only the value its test used.** Counting lines matching `^GJD_ROLE=`
+  rejects `overseer\nGJD_ROLE=evil` and accepts `overseer\njunk`. The role is now read **by name**
+  with its whole output shape validated — exactly one line beginning `GJD_ROLE=` — and `has-session`
+  asked *afterwards* to tell an absent variable from a vanished session. That also closed a hole
+  nobody had noticed: reading from a dump let another variable whose value contained a `GJD_ROLE=`
+  line answer for this one.
+- **A release printed a green success when the target's role could not be read.** `releaseSucceeded`
+  now accepts two things and no others: the session is gone, or its role is positively `none`.
+- **`claimFromSnapshot` accepted four malformed authority fields** — a missing `error`, an `error`
+  that was an object, a `collectedAt` in the future, an id that was not a tmux handle. Sol confirmed
+  each against the function before reporting it.
+- **Three paths printed session names raw into a terminal**, which is what `escapeName` has existed
+  for since before any of this. The known holder now travels on `cannot-tell` as a **field** rather
+  than as words inside `why`, so a name is escaped where it is drawn rather than where it is composed.
+
+And one test that could not have failed: *"it still says WHO"* asserted `why` contained `"b"`, which
+passes on the word "be" in "could not be read". Found while re-reading, not by the reviewer.
+
+Sol's own audit of its earlier findings, verbatim on the two that were arguments rather than bugs:
+P1-4 (rename the session instead) — *"the decision is defensible, not mere rationalisation. Rename
+remains stronger and simpler, but overloading names and losing the work-name are real costs."* The
+`other` arm — *"your reasoning is sound. A valid, non-`overseer` token is positive evidence that this
+session is not the Overseer."*
+
+**Left undone deliberately.** The five older per-session metadata reads have the same
+absent-versus-unaskable shape as the role read did, and are out of scope here; Sol agreed leaving
+them is reasonable for a scoped change. And nothing calls `cmdRole` or `cmdLs` in a test — the
+decisions inside them are extracted and tested (`decideClaim`, `releaseSucceeded`, `claimLine`,
+`readOverseerClaim`), but the CLI wiring itself is covered only by having been run against the live
+box.
+
 ## Evidence
 
-Written as each stage lands.
-
-- **Stage 1–2 (2026-09-08).** The verbs work against real tmux on a disposable socket:
-  claim refuses a second holder by name, release frees it, and **killing the holder releases the
-  claim** — checked rather than assumed, in `tests/gjd-remote-overseer-claim.test.ts`.
+- **Against real tmux, on a disposable socket** (`tests/gjd-remote-overseer-claim.test.ts`): claim
+  refuses a second holder by name; release frees it; a global `GJD_ROLE` marks nothing; a role with a
+  newline in it is unreadable rather than a claim; another variable carrying a `GJD_ROLE=` line
+  cannot answer for the real one; and **killing the holder releases the claim** — checked rather than
+  assumed, which is the fact the whole no-lock-file design rests on.
+- **Against a stubbed tmux** whose `ls` succeeds and whose lookups fail: the role reads as
+  `cannot-tell` and never as `none`. That race cannot be arranged against a real server on demand.
+- **On the live box.** `gjd-remote claim-overseer Overseer` succeeded; `ls` grew a `ROLE` column and
+  the line `— overseer: 'Overseer'`; a second claim was refused naming the holder.
+- **And once by accident, which is better than a test.** While this was being built, another agent
+  created a session with an invalid `GJD_REPO`, which fails the whole listing by pre-existing design.
+  `overseer status` printed *"Overseer unknown — the dashboard's last collection failed (…), so its
+  rows are not current"* rather than naming a stale holder — the P0-3 fix working, on a failure
+  nobody arranged.
+- `npx tsx scripts/typecheck.ts` exits 0; the affected suites are green
+  (`gjd-remote-overseer-claim`, `fleet-overseer-badge`, `gjd-remote-tmux`, `gjd-remote-tmux-script`,
+  `fleet-collect`, `fleet-web` — 655 tests).
