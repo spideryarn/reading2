@@ -3,7 +3,7 @@
 **Status 2026-09-08, 09:35: the Overseer runs, and has never yet run where it will live.** S1, S2,
 S3, S4 and S6 are landed, reviewed and green; S5 (the systemd units) is being built now; S3-03 and
 two smaller findings are stage S7, in flight. Evidence: `npm run typecheck` reports **0** failures
-across all four projects, **245 tests pass** across the eight Overseer files, and `tools/overseer/`
+across all four projects, **292 tests pass** across the eight Overseer files, and `tools/overseer/`
 plus `scripts/overseer.ts` is 5,830 lines.
 
 **The live run, quoted here because its store was a scratch directory that will be deleted with the
@@ -1454,6 +1454,144 @@ found unless you insist on the summary line — and were re-run alone.
 
 *(The commit message for `5627f6c1` says 526 comparisons; the finished run says 516. The larger
 number was read off a partial capture and the smaller one is right.)*
+
+#### S7-04, as built: a pair, a schema bump, and one field the reviews disagreed about
+
+**The shape.** `statusSince` is now a discriminated pair rather than a timestamp:
+
+```ts
+export type StatusSince =
+  | { readonly kind: "observed"; readonly at: string }
+  | { readonly kind: "lower-bound"; readonly at: string };
+```
+
+The arm names are the **reader's** rather than the producer's — not `first-seen`/`transition` — because
+the seam is a file and somebody running `less ~/.overseer/current.json` has to know what the number is
+worth without opening `store.ts`. `"kind": "lower-bound"` says that on its own; `"kind": "first-seen"`
+would need this document.
+
+There are exactly two producers and they were already two places in the code. `entryOf()` mints
+`lower-bound`, which covers `session-seen` **and** `session-replaced` — a replacement is a new
+conversation in an old tmux session, so its status was never watched starting either. The
+`session-status` fold mints `observed`. **`session-wait-restarted` mints `observed` too**, and the
+brief's expectation was checked rather than trusted: diff.ts emits that event only after comparing the
+previous deadline with the current one, so the daemon did watch the wait restart. `session-row-changed`
+and `session-pane-replaced` still do not touch the field, and the tests that say so are unchanged.
+
+**`STORE_SCHEMA` goes 1 → 2.** The constant's own rule is *bump when a reader that ignored the change
+would be WRONG rather than merely poorer*, and this is the wrong half: a consumer written against
+schema 1 does `Date.parse(entry.statusSince)`, gets `NaN` on the new shape, and renders a blank or a
+nonsense age — not an error. With the bump it says *I cannot read this*, which is what
+[orchestrator-direction.md](../project/orchestrator-direction.md) § The seam is a file already tells
+it to do. **The hypothetical in that paragraph came true the day after it was written**, which is the
+argument for having written it.
+
+**Nothing is migrated, and the old checkpoint is refused twice over.** `parseCheckpoint` rejects
+schema 1 outright; `parseStatusSince` separately refuses a bare string **naming the field**, for the
+hand-edited file that gets past the first gate. Refusing costs a replay of the log, and the log holds
+events rather than durations — so the rebuild produces honest arms rather than inheriting an ambiguity
+a migration would have had to guess at. Guessing would mean choosing `observed`, which is the 13m bug
+manufactured inside the recovery path, where a wrong number survives longest and is questioned least.
+
+**The renderer.** `overseer status` prints `40m` for an observed transition and `≥13m` for a floor,
+with a legend line under the block whenever a floor is on screen, so the mark means something to
+somebody who has never read any of this. **The sort still ignores the arm**: a floor is the best
+estimate available and can only rank a session too low, whereas ranking floors above readings would be
+guessing about the part we cannot see. Against a copy of the live store, rewritten to the new shape:
+
+```
+sessions    19 in the register: 12 idle, 4 shell:true, 3 working
+            working      ≥60m  get-ready-for-deploy ($2000)
+            shell:true    57m  s5-overseer2-0935-2399531 ($2356)
+            ≥ is a floor: the daemon found it already in that state and cannot see when it began
+```
+
+**Mutations: 15 tried, 15 caught, no survivors.** `entryOf` minting the exact arm; the
+`session-status` fold minting the floor; `session-wait-restarted` minting the floor;
+`session-row-changed` promoting a floor to a measurement; `parseRegisterEntry` accepting a bare
+string; `parseStatusSince` accepting any `kind`; the same accepting any string as the timestamp; the
+schema left at 1; the schema moved to 3; `paneId` reclassified as a clock field; the renderer printing
+both arms identically; the attention list unsorted; the attention list sorted backwards; an unreadable
+checkpoint reported as `never-run` again; the unreadable detail no longer naming either schema. Each
+was applied textually and reverted from the string held in memory rather than from git, with the
+file's sha256 checked after every restore, because other agents' uncommitted work is in this tree.
+
+**The red-first test** is *"a session already running when the daemon starts reports a floor, not a
+measurement"*, and it asserts on the **arm** rather than on the number — the number was never wrong,
+which is why the old test asserting it passed throughout.
+
+**One correction to a comment, from the reviews rather than the code.** Two cross-family reviews
+disagreed about `ENTRY_FIELD_OWNERS`: one called it *"a forcing prompt, not the compile-time guarantee
+claimed"*, the other called `satisfies Record<keyof RegisterEntry, …>` a genuine compile-time census.
+Both are half right, and the comment overclaimed by not separating them. A **missing** field is a
+compile error; a **misclassified** one is not, and goes stale silently — the census-only mutation
+`paneId: "pane" → "clock"` survived the suite. The comment now says exactly that, and the gap is half
+closed rather than described: `row` was already pinned to `REGISTER_ROW_FIELDS` and the fold, and a new
+test pins `pane` by comparing the census against the fields a `session-pane-replaced` really moves
+(that mutation is now caught). **`identity` against `clock` is pinned by nothing** and is recorded in
+the comment as a known uncovered case rather than left reading as guarded.
+
+**The same defect, one screen away, found by running it rather than reading it.** With the schema
+bumped, `overseer status` against the live `~/.overseer` said this while the daemon was up, on pid
+2400163, and had written `current.json` thirty seconds earlier:
+
+```
+daemon      NEVER RUN — notes but no checkpoint: the Overseer started and never got as far as a first collection
+            the checkpoint is unusable (checkpoint-malformed): schema 1 is not 2
+source      nothing has been collected yet
+```
+
+**Every word of the headline is false**, and the second line carries the truth — so the information
+survived the parse and died in the presentation. `daemonStanding` took `Checkpoint | null`, and
+flattening `readCheckpoint`'s three outcomes into that `null` made *I cannot read this* and *nothing
+was ever written here* the same fact. It is this stage's own defect pointed at this stage: a floor
+rendered as a measurement, and *unreadable* rendered as *never happened*. And it is the worst
+direction for this tool in particular — [orchestrator-direction.md](../project/orchestrator-direction.md)
+is built against the Overseer being silently dead while the page says nothing needs you; this is that
+inverted, and a person who reads `NEVER RUN` goes and starts a second daemon beside a live one.
+
+So `StandingInput` now takes the reader's outcome **whole** (`CheckpointRead`), and there is a sixth
+arm, `cannot-tell`, which is a **refusal to guess**: it says the file exists, why this build could not
+parse it, which schema each side speaks, that the Overseer may well be running and nothing here can
+tell, and that the thing to do is wait for the next checkpoint rather than start a second daemon. The
+two other lines that lied for the same reason — *nothing has been collected yet*, and a register block
+that simply vanished — now say `unknown` and say why. It reads:
+
+```
+daemon      CANNOT TELL — there IS a current.json and this build cannot parse it (checkpoint-malformed:
+            schema 1 is not 2); this build reads schema 2. The Overseer may well be running — nothing here
+            can tell, and the daemon's own notes are below. Wait for the next checkpoint rather than
+            starting a second one.
+source      unknown — the collection clock is in the checkpoint this build cannot parse
+sessions    unknown — the register is in that checkpoint too, but the event log below is still readable
+events      77 in the log (32 KB)
+```
+
+**What the first restart does to the real store, measured rather than predicted.** Against a copy of
+`~/.overseer` taken 2026-09-08 10:55 (the copy, because the live daemon holds the lock and two writers
+is the thing the lock exists to prevent): the checkpoint is refused at the schema check, and the store
+comes up **`rebuilt`, not cold** — 77 events and 33 KB replayed, **18 sessions** back in the register,
+`10 observed, 8 lower-bound`. Nothing is lost: the register is a fold of a log that holds events rather
+than durations, the daemon restores `last-snapshot.json` as its differ baseline because the start was
+not cold, and so the fleet is not re-announced. The arms it comes back with are honest — the sessions
+whose transitions the old daemon recorded are `observed`, and the ones it only ever sighted are floors.
+
+**Open after S7-04: `observed` is looser than it sounds across a restart** (GPT Sol, reviewing this
+change; P1, and not fixed here). The daemon restores the persisted snapshot as its baseline and diffs
+the first new snapshot against it, so *"between two of our observations"* can bracket the whole
+downtime rather than one tick. A wait that ended and restarted during three hours of downtime is
+recorded as `observed` at the moment we came back, and rendered as `0s`. Same class as the 13m bug,
+bounded by the downtime rather than unbounded. **It is not fixable inside store.ts**: the fold cannot
+see it. Closing it means either the `session-status` event carrying the previous snapshot's
+`collectedAt` — so the arm can hold the whole bracket — or the daemon marking the first diff after a
+restored baseline, and both live in diff.ts and daemon.ts. It is written into the `StatusSince` comment
+as well, because the dashboard should know before it builds on `observed`.
+
+**Decided against.** A migration of old checkpoints, for the reason above. A `statusSince` that also
+carried the *previous* state's end, which is a second clock nobody has asked for. Ranking floors ahead
+of readings in the attention list. Reading `overseer.lock` to turn `cannot-tell` into a pid the reader could check — real
+evidence, and the next thing to add if the arm proves too vague, but a lock can be stale and the
+brief for this arm was *do not guess in either direction*.
 
 #### S7-03, as built, and the difference that mattered
 

@@ -1137,13 +1137,21 @@ readers.
       closes a cycle between the two things the seam exists to keep apart. **The file is the
       contract and `readCheckpoint` is one implementation of reading it.** Agreed rather than
       conceded: it is the same rule the client already applies to the server's JSON.
-- [ ] **Check `schema` as the number `1`**, not as "not something else", so a schema 2 renders as
-      *I cannot read this* rather than as a page with fields quietly missing. That is `parseMeta`'s
-      rule (`web/src/types.ts`) pointed at somebody else's file.
+- [ ] **Check `schema` as a number you know**, not as "not something else", so an unknown schema
+      renders as *I cannot read this* rather than as a page with fields quietly missing. That is
+      `parseMeta`'s rule (`web/src/types.ts`) pointed at somebody else's file. **The number is now
+      `2`, not `1`** — bumped 2026-09-08 when `statusSince` changed shape (S7-04 of
+      [260908b](260908b-overseer-store-and-clock.md)), which is this line's own hypothetical arriving
+      a day later.
 - [ ] **Three fields are worth more than the rest, because collection structurally cannot produce
       them.** `statusSince` turns a state into a duration — *blocked* becomes *blocked for forty
       minutes*, which is what triage actually needs and what a present-tense collector has no
-      yesterday to compute. `heartbeat` lets the page say **the Overseer is dead**, which belongs
+      yesterday to compute. **It is a pair, not a timestamp**:
+      `{ kind: "observed" | "lower-bound", at }`. `observed` means the Overseer watched the
+      transition; `lower-bound` means the session was already in that state when it first looked, so
+      the duration is a floor with no upper bound — render the two differently (`overseer status`
+      prints `40m` and `≥13m`). A renderer that shows a floor as a measurement is the 13m bug, which
+      is what S7-04 was. `heartbeat` lets the page say **the Overseer is dead**, which belongs
       where the count would be rather than in a footer, because a quiet page and a healthy fleet are
       the same picture. And `writtenAt` against `lastGoodSnapshotAt` tells *deaf* from *dead* — the
       second is our own `collectedAt`, so a disagreement there is as likely to be about us.
