@@ -141,6 +141,8 @@ const EVENT_KINDS: Record<OverseerEvent["kind"], true> = {
   "tmux-session-gone": true,
   "session-replaced": true,
   "session-wait-restarted": true,
+  "session-row-changed": true,
+  "session-pane-replaced": true,
 };
 
 /**
@@ -195,6 +197,12 @@ export function describeEvent(event: OverseerEvent): string {
       return `${when}  replaced   ${event.row.name} (${event.identity.tmuxId}) — a different conversation is in the pane`;
     case "session-wait-restarted":
       return `${when}  wait again ${event.identity.tmuxId} — now until ${event.deadline}`;
+    case "session-row-changed":
+      // The fields, because "renamed" and "moved to another worktree" are the
+      // same event and a person scanning the log needs to know which one it was.
+      return `${when}  changed    ${event.row.name} (${event.identity.tmuxId}) — ${event.fields.join(", ")}`;
+    case "session-pane-replaced":
+      return `${when}  new pane   ${event.identity.tmuxId} — pid ${event.previousPanePid ?? "none"} → ${event.panePid}`;
     default: {
       const never: never = event;
       throw new Error(String(never));

@@ -134,6 +134,56 @@ describe("reading the event log without disturbing the daemon", () => {
     expect(line).toContain("overseer-o1-store");
     expect(line).not.toContain("[object Object]");
   });
+
+  test("a row change says WHICH fields moved, not just that something did", () => {
+    // "changed" on its own is unreadable: a rename and a move to another
+    // worktree are the same event kind, and the field list is the only thing in
+    // the line that tells a person which one happened.
+    const changed: OverseerEvent = {
+      kind: "session-row-changed",
+      at: "2026-09-08T07:01:00.000Z",
+      tmuxServerPid: 132280,
+      key: "$1 none" as OverseerEvent["key"],
+      identity: { tmuxId: "$1", claimedConversationId: null },
+      fields: ["name", "worktree"],
+      row: {
+        id: "$1",
+        name: "renamed-by-a-person",
+        title: null,
+        repo: "spideryarn/reading2",
+        worktree: "somewhere-else",
+        meta: { version: "legacy" },
+        startedAt: "2026-09-08T07:00:00.000Z",
+        paneId: "%1",
+        panePid: 4242,
+        claimedConversationId: null,
+        question: null,
+        status: { kind: "idle" },
+      },
+    };
+    const line = describeEvent(changed);
+    expect(line).toContain("renamed-by-a-person");
+    expect(line).toContain("name, worktree");
+    expect(line).not.toContain("[object Object]");
+  });
+
+  test("a pane replacement names both pids, because that is the whole fact", () => {
+    const pane: OverseerEvent = {
+      kind: "session-pane-replaced",
+      at: "2026-09-08T07:01:00.000Z",
+      tmuxServerPid: 132280,
+      key: "$1 none" as OverseerEvent["key"],
+      identity: { tmuxId: "$1", claimedConversationId: null },
+      previousPaneId: "%1",
+      previousPanePid: 4242,
+      paneId: "%2",
+      panePid: 5353,
+    };
+    const line = describeEvent(pane);
+    expect(line).toContain("4242");
+    expect(line).toContain("5353");
+    expect(line).not.toContain("[object Object]");
+  });
 });
 
 describe("the status page a person actually reads", () => {

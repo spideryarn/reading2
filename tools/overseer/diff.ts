@@ -58,7 +58,7 @@
  * is written down, and `reportedStatus`, which is the one exception and carries
  * its own argument for being one.
  */
-import type { SessionState } from "../../scripts/gjd-remote-tmux.js";
+import type { SessionMeta, SessionState } from "../../scripts/gjd-remote-tmux.js";
 import type { AdmissibleSnapshot } from "./admissible.js";
 import type { FreshSnapshot, ObservedRow, ObservedStatus } from "./observation.js";
 
@@ -387,7 +387,108 @@ export type OverseerEvent =
       deadline: string;
       /** The waiting status itself, so the log can say how long the new wait is. */
       status: SessionState;
+    }
+  /**
+   * THE ROW MATERIAL MOVED, under an identity that did not — GPT Sol's S3-03.
+   *
+   * `session-seen` fires once and the register's `entryOf` copies the row's
+   * durable fields out of it at that moment. Nothing updated them afterwards, so
+   * every rebuild of the register — including the reboot recovery this store
+   * exists for — handed back whatever the session looked like the first time the
+   * Overseer noticed it. `POST /api/sessions/rename` (2026-09-08) is the
+   * instance somebody reported; it is not the only field in that position, and
+   * the class is *the register's row-material goes stale for any session that
+   * stays alive*.
+   *
+   * **WHY THIS IS NOT AN ARM THAT FIRES ON ANY ROW DIFFERENCE.** The reason this
+   * module records events rather than samples is that 36 sessions sampled every
+   * minute is ~52k rows a day of nothing, and a field that flaps re-creates that
+   * exactly. So the watched set is `REGISTER_ROW_FIELDS` and no wider — see the
+   * measurement on it, and `session-pane-replaced` for the two fields that were
+   * taken OUT of here rather than left in.
+   */
+  | {
+      kind: "session-row-changed";
+      at: string;
+      tmuxServerPid: number | null;
+      key: SessionKey;
+      identity: SessionIdentity;
+      /**
+       * Which of them moved, in `REGISTER_ROW_FIELDS` order and never empty.
+       *
+       * A UNION OF FIELD NAMES rather than `string[]`, so a field added to the
+       * register and forgotten here is a compile error rather than a silently
+       * unwatched field — the same discipline as `EVENT_KINDS` in store.ts, and
+       * store.ts is where the two are actually tied together.
+       */
+      fields: readonly RegisterRowField[];
+      /** The whole row, for `session-seen`'s reason: `meta.dir` is not recoverable later. */
+      row: ObservedRow;
+    }
+  /**
+   * THE PANE UNDER A LIVE SESSION WAS REPLACED — a fact about the world, not
+   * drift in a label, which is why it is not folded into the arm above.
+   *
+   * `panePid` is what `tools/fleet/steer.ts` compares before it types: a changed
+   * one means the pane somebody was looking at has been respawned and another
+   * process now wears its handle. Putting that on an event with a `name` field
+   * would describe a rename when what happened was a respawn.
+   *
+   * **A NULL IS NOT A CHANGE, and this is the whole hazard.** `paneId` and
+   * `panePid` are joined onto the session from a SEPARATE pane listing by handle
+   * (`tools/fleet/collect.ts`), so a join miss yields null on a session that is
+   * perfectly alive. An arm that read that as a respawn would fire twice per
+   * miss, forever, on the box this tooling exists for. So a pid going null is
+   * silence; a pid ARRIVING is an event, because a register that never learns
+   * the pane cannot steer it, and a sustained miss followed by a recovery is one
+   * event rather than a flap.
+   *
+   * `paneId` is not watched independently: it comes off the same join as
+   * `panePid` and moves with it, so it rides along rather than triggering.
+   */
+  | {
+      kind: "session-pane-replaced";
+      at: string;
+      tmuxServerPid: number | null;
+      key: SessionKey;
+      identity: SessionIdentity;
+      previousPaneId: string | null;
+      /** Null when the previous collection could not join a pane onto this session. */
+      previousPanePid: number | null;
+      paneId: string | null;
+      /** NEVER NULL: a pid that went away is a join miss and does not produce this event. */
+      panePid: number;
     };
+
+/**
+ * The row fields the register keeps, in the order an event lists them.
+ *
+ * **AN ORDERED LIST rather than a set**, because `fields` on an event is part of
+ * a log somebody greps and reading the same change two ways is a false
+ * difference.
+ *
+ * **WHAT IS IN, AND MEASURED.** 24 minutes of the live fleet, 25 collections a
+ * minute apart, ~530 same-identity row comparisons: `name`, `repo`, `worktree`,
+ * `meta` and `startedAt` changed **0 times**, and `question` changed on its own.
+ * `repo`, `worktree` and `meta` cannot change while a session lives — they are
+ * derived from tmux session environment variables set at creation, all-or-
+ * nothing (`SessionMeta` in scripts/gjd-remote-tmux.ts) — so 0 is what the
+ * source says too, and this arm exists for them only because the register would
+ * otherwise have no way to correct a value it read wrong once.
+ *
+ * `startedAt` is here for the same reason and should never fire. If it does, the
+ * row is not the session we thought it was, and a history that stayed silent
+ * about that would be the worse outcome.
+ *
+ * **WHAT IS OUT, and it is the more interesting half.** `title` and `question`
+ * move on their own and are not reboot-resume material — the register has never
+ * held either, on purpose (`SessionRegister` in store.ts says why). `paneId` and
+ * `panePid` are `session-pane-replaced`'s, because a null there is a join miss
+ * rather than a change.
+ */
+export const REGISTER_ROW_FIELDS = ["name", "repo", "worktree", "meta", "startedAt"] as const satisfies readonly (keyof ObservedRow)[];
+
+export type RegisterRowField = (typeof REGISTER_ROW_FIELDS)[number];
 
 /**
  * The part of the deadline bound that is not measured: whole-second rounding on
@@ -660,6 +761,39 @@ export function diff(previous: Baseline | null, next: AdmissibleSnapshot): DiffO
       });
       continue;
     }
+    // ABOVE THE STATUS ARMS AND WITHOUT A `continue`, on purpose: those two
+    // `continue` past everything below them, so a session renamed WHILE it
+    // changed state would have had the rename swallowed. A row can now produce
+    // two events in one collection, in this order — the row change, then the
+    // pane, then at most one status event.
+    const moved = movedRowFields(was, row);
+    if (moved.length > 0) {
+      events.push({
+        kind: "session-row-changed",
+        at,
+        tmuxServerPid: nextSnapshot.tmuxServerPid,
+        key: sessionKey(identityOf(row)),
+        identity: identityOf(row),
+        fields: moved,
+        row,
+      });
+    }
+    // A NULL IS NOT A CHANGE. `row.panePid === null` is a pane listing that
+    // could not be joined onto a live session, not a pane that went away — see
+    // `session-pane-replaced`.
+    if (row.panePid !== null && row.panePid !== was.panePid) {
+      events.push({
+        kind: "session-pane-replaced",
+        at,
+        tmuxServerPid: nextSnapshot.tmuxServerPid,
+        key: sessionKey(identityOf(row)),
+        identity: identityOf(row),
+        previousPaneId: was.paneId,
+        previousPanePid: was.panePid,
+        paneId: row.paneId,
+        panePid: row.panePid,
+      });
+    }
     // THE ONE THING THE CANONICAL KEY DELIBERATELY CANNOT SEE. Both statuses
     // key as `waiting`, so without this a wait that ended and was replaced by a
     // longer one is one unbroken wait in the history. See
@@ -720,6 +854,58 @@ function waitRestart(
     previousDeadline: new Date(previousDeadlineMs).toISOString(),
     deadline: new Date(deadlineMs).toISOString(),
   };
+}
+
+/**
+ * Which of the register's row fields differ, in `REGISTER_ROW_FIELDS` order.
+ *
+ * Empty is the normal answer and is what keeps the log small: measured over 24
+ * minutes of the live fleet, none of these moved at all.
+ */
+function movedRowFields(was: ObservedRow, row: ObservedRow): RegisterRowField[] {
+  return REGISTER_ROW_FIELDS.filter((field) => rowFieldMoved(field, was, row));
+}
+
+/**
+ * One field, compared the way that field has to be compared.
+ *
+ * A SWITCH RATHER THAN `was[field] !== row[field]`, and the reason is `meta`: it
+ * is an object, so the generic version compares references and reports a change
+ * on every collection for every session — the 52k-rows-a-day failure, arrived at
+ * by writing the shorter line. The exhaustiveness check also means a field added
+ * to `REGISTER_ROW_FIELDS` cannot be watched without somebody deciding how to
+ * compare it.
+ */
+function rowFieldMoved(field: RegisterRowField, was: ObservedRow, row: ObservedRow): boolean {
+  switch (field) {
+    case "name":
+      return was.name !== row.name;
+    case "repo":
+      return was.repo !== row.repo;
+    case "worktree":
+      return was.worktree !== row.worktree;
+    case "startedAt":
+      return was.startedAt !== row.startedAt;
+    case "meta":
+      return !sameMeta(was.meta, row.meta);
+    default: {
+      const never: never = field;
+      throw new Error(`no comparison for row field ${String(never)}`);
+    }
+  }
+}
+
+/**
+ * The launcher's metadata, compared by value.
+ *
+ * NARROWED RATHER THAN STRINGIFIED. `JSON.stringify` would compare these too,
+ * and would go on compiling — and silently reporting nothing — if `SessionMeta`
+ * gained a field. After the first line both sides are the version-1 arm, so a
+ * third arm makes `a.kind` an error here rather than an omission.
+ */
+function sameMeta(a: SessionMeta, b: SessionMeta): boolean {
+  if (a.version === "legacy" || b.version === "legacy") return a.version === b.version;
+  return a.kind === b.kind && a.repo === b.repo && a.dir === b.dir;
 }
 
 function seen(row: ObservedRow, at: string, tmuxServerPid: number | null): OverseerEvent {
