@@ -275,6 +275,66 @@ browser-as-confused-deputy case only. The rest is still reachability, and reacha
 guarding a write path into ~36 agent sessions rather than a list of titles. That trade should be
 re-decided rather than inherited.
 
+### 🔴 Stage v0.2b: an approval must bind to what is being approved — BLOCKS v0.4
+
+**Found by GPT Astra, 2026-09-08, by experiment rather than by reading**, and confirmed here
+against `promptAbove` in `pane.ts`. It changed a proposed file's contents from `hello` to
+`goodbye` in a pinned fixture and `parsePane` returned an **identical** question and options.
+
+The cause is structural, not a slip. `promptAbove` walks back from the first option and stops at a
+horizontal rule — and Claude Code puts a rule between the diff and the question. So the captured
+prompt is `Do you want to create notes.md?` and the *content being written* is discarded. Then
+`sameQuestion` in `steer.ts` compares prompt and option labels, both of which are unchanged, and
+happily accepts an answer for a **different proposed action** than the one displayed.
+
+Two consequences, and the second is worse than the first:
+
+- the re-capture guard passes when the material has changed underneath it;
+- **the phone can ask Greg to approve something without showing him what it is.**
+
+- [ ] `PaneQuestion` carries the **material**: the command, the diff, the destination path, the
+      permission scope — whatever is above the rule, not merely the sentence below it.
+- [ ] `sameQuestion` compares the material. A capture that cannot read it is a **refusal**, not a
+      question with an empty material field.
+- [ ] Where the capture is incomplete, offer a handoff (`gjd-remote resume <name>`) rather than a
+      button. Astra's recommendation, and the right shape: a button that cannot be honest should
+      not exist.
+- [ ] **"Yes once" and "yes, and don't ask again" get visibly different treatment.** One is a
+      decision about this action; the other changes the session's permission posture for
+      everything that follows, and they currently render as two adjacent list items.
+
+### Stage v0.2c: delivery has a third outcome, and it is "I do not know"
+
+Astra's A11. The nonce proved the transport *can* work; it says nothing about what happened to any
+later request. A phone loses connectivity after the keys land but before the response arrives; the
+text arrives and the Enter fails; an identical-looking dialog recurs and the rate limiter, which
+keys on time and pane, does not deduplicate it.
+
+- [ ] An action id minted by the client, carried through, and returned.
+- [ ] Five states, not two: accepted / keys submitted / reception observed / refused / **outcome
+      unknown**.
+- [ ] A repeat of the same action id retrieves the receipt rather than sending again.
+- [ ] **Never an automatic keystroke retry** after an ambiguous failure. A retry is a second
+      message, and there is no way to take the first one back.
+
+### Stage v0.2d: the dashboard is a privileged renderer of hostile content
+
+Astra's A6, which is explicit that it names an architectural exposure rather than claiming an
+exploit exists — it calls the React text rendering a good decision. What it wants *before* answer
+buttons ship:
+
+- [ ] A restrictive `Content-Security-Policy`, and anti-framing headers. An `Origin` check does not
+      stop a malicious page **framing** the real dashboard and getting somebody to click through
+      it, and an XSS here would defeat the CSRF protection anyway.
+
+And Astra's A5, which is the sharpest thing in the review: **the reference architecture in this
+plan's own appendix checks the caller against an `owner-logins.txt` before any POST.** Its write
+boundary was never reachability alone. We copied the half we liked.
+
+- [ ] A device-scoped tailnet grant — the dashboard port reachable from Greg's phone and laptop
+      only, not from the tailnet at large. Tailscale's default policy is permissive, so **the
+      policy has to be read rather than assumed**. Keep the ssh forward.
+
 ### Stage v0.3: status
 
 - [ ] working / idle / blocked, from the two-source join in `sessionState` — never from
@@ -286,17 +346,88 @@ re-decided rather than inherited.
 - [ ] Scrape the pending question and its numbered options from the pane.
 - [ ] Tap an option → send that digit. The narrow, safe case, and the one that pays for the phone.
 
+### Stage v0.4b: Sessions becomes master–detail
+
+Greg, 2026-09-08 — quoted in full in
+[orchestrator-direction.md](../project/orchestrator-direction.md#what-greg-asked-for-on-2026-09-08).
+
+- [ ] Left column: every session, with orderings — how long it has been running, **status
+      (default)**, and whatever else earns its place.
+- [ ] Right column on click: what input it needs, the recent messages, and more than the list can
+      hold. Steer and answer from here.
+- [ ] **The client must send `row.question` back byte-identical**, never rebuilt from parsed
+      fields. It is a stale-but-honest claim the server checks against live tmux; a client that
+      reconstructs it defeats every guard, and a client that *parses* it silently drops any field
+      the server adds later — which is exactly how v0.2b's material would go missing.
+- [ ] Narrow windows collapse to one column and the detail is a push, not a squeeze —
+      [narrow-windows.md](../project/narrow-windows.md).
+
+### Stage v0.4c: recent messages
+
+The detail pane's "recent messages" needs a source. Transcripts are on disk and are tens of
+megabytes; `gjd-remote ls` greps whole ones and costs 10–12s, which is the thing this tool exists
+not to do.
+
+- [ ] Read the **tail** of a session's transcript, not the whole thing, and only for the one
+      session being looked at.
+- [ ] `~/.claude/projects/<slug>/` is a **slugified cwd and is lossy** — resolve the path from
+      `row.meta.dir` plus `row.claudeSessionId`, and say plainly when it cannot be found rather
+      than showing an empty conversation.
+
 ### Stage v0.5: the steering vocabulary
 
-- [ ] The recurring ones as buttons rather than free text: keep going, pull latest, sleep N,
-      the box is short of resources, remove the worktree.
-- [ ] Anything with an effect outside the conversation — removing a worktree — is an action the
-      tool takes via `gjd-remote`, not a sentence an agent is asked to obey.
+Greg's list, 2026-09-08: continue, compact, pull, push, remove worktree, exit, `sleep` for
+1h/3h/5h/10h, get input from Fable or GPT Sol and then use your judgment.
+
+- [ ] Each button is a **typed action** before it is a button, so the coordinator agent has
+      something to call and does not have to synthesise a click.
+- [ ] The line the direction doc already draws: most of these are *sentences you would type*, but
+      `remove worktree` has an effect outside the conversation and is an action the tool takes via
+      `gjd-remote` — not a sentence an agent is asked to obey. `exit` is on the same side of it.
+- [ ] **Queue rather than race.** Greg: "ideally these would queue/steer if it's currently running,
+      so that one could press more than one, in combination with messages". An agent that is
+      working cannot be typed at usefully, so the queue is the feature, not a nicety: it holds an
+      ordered list per session and drains one item at a time when the session is at a prompt.
+- [ ] A queued item is visible and cancellable while it waits. A queue you cannot see is a queue
+      that surprises you an hour later.
+
+### Stage v0.5b: dictation and live chat, ported
+
+Greg wants the product's voice machinery on every input box here — new session, steering, answers.
+See [dictation.md](../project/dictation.md) and
+[live-conversation.md](../project/live-conversation.md).
+
+- [ ] This **crosses the standing rule that `tools/` does not reach into `src/`**. So it is a port,
+      and whether that boundary should move is a real question to answer rather than assume —
+      name it in the plan and let Greg decide it.
+- [ ] There is **no audio input device on this box** (measured), so this cannot be verified here
+      the way the rest can. Say so rather than claiming it works.
+
+### Stage v0.5c: Box Health can act, not only report
+
+Greg's list, against [diagnose-box-resources.md](../reusable/diagnose-box-resources.md).
+
+- [ ] Kill what is safe to kill. "Safe" has to be a rule with a name, not a judgement made at the
+      moment of the click.
+- [ ] Kill the running test suites — the biggest single lever on this box, and the one whose loss
+      costs least.
+- [ ] A broadcast telling every agent the box is short of resources, asking them to pause and to
+      drop anything cheap to restart. **Staggered**, per Greg: thirty-six agents told to pause for
+      an hour all resume in the same second, and the box falls over at the far end instead of the
+      near one. Spread the resume times across the window.
 
 ### Stage v0.6: create and kill agents
 
-- [ ] Wrap `gjd-remote new-claude` and `gjd-remote kill`. Do not grow a second way to do either.
+- [ ] ✅ `gjd-remote new-claude` behind `POST /api/sessions/new` (landed 2026-09-08, `a59d65cb`).
+      The client half is stage v0.4b.
+- [ ] `gjd-remote kill`. Do not grow a second way to do either.
 - [ ] Killing needs a confirm step; it is the one irreversible action here.
+
+### Stage v0.6b: the Orchestrator tab does something
+
+- [ ] Send a message to the Orchestrator, with the same input machinery as everything else.
+- [ ] Broadcast to all agents — the same mechanism as v0.5c's resource broadcast, so there is one
+      implementation of "say this to everybody" and not two.
 
 ### Stage v0.7+: the decision log
 
