@@ -632,6 +632,37 @@ thereby a join that answers the right question**; ancestry is merely adjacent to
 sampler now joins on the `sessionId` inside each file, the way `pause.ts` always did, and reports
 `unknown` as its own column so the next reader can check it rather than trust it.
 
+**The reason both joins were kept rather than the loser deleted**: letting two answers to the same
+question disagree is what caught the ancestry error, and it caught a second thing within minutes.
+
+The dashboard's owner drew a cheap fix out of the finding above — `working` plus a pause of
+`{kind: "background-work"}` should gate `now` rather than `later`, since the server already knows
+which working rows have merely backgrounded something. That would reach some deferred sessions
+**without touching the `:505` refusal and without the design argument the expensive version waits
+on**, which is a much better stage. It rests entirely on `background-work` picking out the rows that
+are genuinely at a prompt.
+
+Measured 2026-09-08 at 20:56, first reading with both joins: `working_but_at_prompt=1`,
+`server_bg_work=0`, `joins_disagree=1`, `oracle_unknown=0`. The two working rows were
+
+| row | Claude's own status | the server's `pause` |
+|---|---|---|
+| `overseer-md-agent-coordinator` | `busy` | `cannot-tell` |
+| `overseer-orchestrator-design-and` | `idle` | `cannot-tell` |
+
+The second is the one at a prompt, and its pause is not `background-work` — it is `cannot-tell`,
+**with a reason string identical to the busy row's**. At that instant `pause` did not discriminate
+between them at all. `background-work` is real and does occur (observed at 20:25 with
+`sinceMs: 326418`); what is unproven is that it *coincides* with being reachable.
+
+**One reading of two rows is not a refutation**, and it is recorded here as an open question rather
+than an answer: the overnight series says how often the two coincide, and `joins_disagree` makes the
+misses visible instead of leaving them to be inferred from a total. If they rarely coincide the
+cheap fix is cheap and nearly useless rather than cheap and sufficient. **The likeliest error is
+mine** — the column treats Claude's own `idle` as at-a-prompt-and-messageable, and if `idle` there
+can also mean something a broadcast should not interrupt, the column measures something looser than
+reachability.
+
 #### The Overseer sees less of the fleet than the fleet sends, and the rules should not fix that by widening the differ
 
 The three fields the rules most want are all outside `ObservedRow`: `permissionMode`, `pause`, and
