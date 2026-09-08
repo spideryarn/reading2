@@ -64,6 +64,7 @@
  * transport's own word for it: see `nothingWasSent`.
  */
 import { actionById, renderMessage, type Speaker } from "./actions.js";
+import { INSTANCE_TOKEN } from "./instance.js";
 import type { FleetStatus } from "./status.js";
 import { checkText, steerableStatus, type Refusal, type SteerFailure } from "./steer.js";
 /* A queued item is on the wire verbatim (`{...i, stale, stuck}` in
@@ -388,8 +389,42 @@ export function samePayload(a: QueuedPayload, b: QueuedPayload): boolean {
 export type QueueOptions = {
   /** Injected, always. There is no `Date.now()` anywhere below. */
   now: () => number;
+  /**
+   * Which run of the server this queue belongs to — `instance.ts`.
+   *
+   * **INJECTED FOR THE SAME REASON `now` IS, and it is not a style choice.**
+   * The tests have to build two queues with two different ids in one process
+   * to prove that an id from a dead run is refused by a live one; a queue that
+   * reached for a module-level global would make that test unwritable, and the
+   * refusal would then be guarded by nothing.
+   */
+  serverInstanceId: string;
   limits?: Partial<QueueLimits>;
 };
+
+/**
+ * Which run of the server minted an item id — as far as this queue can tell.
+ *
+ * Three arms rather than a boolean, because the third one is a real and
+ * different answer. An id that does not carry a run at all (`q1` from before
+ * ids were qualified, something hand-typed, something truncated) is **not
+ * evidence of a previous server**, and saying it was would swap one false
+ * statement for another. The routes let that arm fall through to their existing
+ * "no such item".
+ */
+export type IdOrigin = "this-instance" | "other-instance" | "not-instance-qualified";
+
+/**
+ * What separates the run from the number in an item id.
+ *
+ * **SAFE BECAUSE THE TOKEN IS LOWERCASE HEX** (`INSTANCE_TOKEN` in
+ * instance.ts), so it cannot itself contain a `-`: the FIRST `-` in a qualified
+ * id is always the boundary, whatever the half after it turns out to be. The
+ * client never needs to know any of this — it stores whatever string it was
+ * given and hands it back — but the parse below is what makes the refusal
+ * trustworthy, so the reason it cannot be ambiguous is written down beside it.
+ */
+const ID_SEPARATOR = "-";
 
 /**
  * One `SteeringQueue` per fleet server, holding one ordered list per session.
@@ -401,6 +436,13 @@ export type QueueOptions = {
  */
 export class SteeringQueue {
   private readonly now: () => number;
+  /**
+   * The run of the server every id below is stamped with.
+   *
+   * Public so a refusal can name it: "this server is 0badcafe" is what turns
+   * *no such item* into *that was a previous server*.
+   */
+  readonly serverInstanceId: string;
   private readonly limits: QueueLimits;
   private readonly bySession = new Map<string, QueuedItem[]>();
   private seq = 0;
@@ -413,6 +455,7 @@ export class SteeringQueue {
 
   constructor(options: QueueOptions) {
     this.now = options.now;
+    this.serverInstanceId = options.serverInstanceId;
     this.limits = { ...DEFAULT_LIMITS, ...options.limits };
     this.startedAt = options.now();
   }
@@ -466,6 +509,29 @@ export class SteeringQueue {
    */
   isStuck(item: QueuedItem): boolean {
     return item.leasedAt !== null && this.now() - item.leasedAt > this.limits.leaseMs;
+  }
+
+  /**
+   * Which run of the server minted this id — ours, somebody else's, or nobody's.
+   *
+   * **ASKED OF THE QUEUE RATHER THAN COMPARED AT FOUR ROUTES**, for the reason
+   * `isStuck` is: the queue owns the shape of an id, and four copies of a
+   * string comparison would drift from it the moment the shape changes. The
+   * routes ask; the answer, and the sentence a person reads, come from here.
+   *
+   * The parse is deliberately conservative. It splits at the FIRST separator —
+   * safe because the token is lowercase hex, see `ID_SEPARATOR` — and then
+   * demands the token actually LOOK like a run before believing the prefix is
+   * one. So a garbled id reports `not-instance-qualified` and the caller says
+   * "no such item", which is the honest thing to say about a string nothing
+   * ever minted.
+   */
+  idOrigin(itemId: string): IdOrigin {
+    const at = itemId.indexOf(ID_SEPARATOR);
+    if (at < 0) return "not-instance-qualified";
+    const token = itemId.slice(0, at);
+    if (!INSTANCE_TOKEN.test(token)) return "not-instance-qualified";
+    return token === this.serverInstanceId ? "this-instance" : "other-instance";
   }
 
   /**
@@ -606,16 +672,22 @@ export class SteeringQueue {
       return { ok: false, rule: "double-tap", why: `the same thing was queued ${at - twin.enqueuedAt}ms ago; press again in a moment if you meant it` };
     }
 
-    // **`q1` COMES ROUND AGAIN EVERY TIME THIS PROCESS RESTARTS**, and nothing
-    // here notices. A phone left open across a restart can therefore cancel —
-    // or, when there is a route for it, settle — a DIFFERENT `q1` from the one
-    // it is showing. That is a real defect and it already applies to `cancel`;
-    // it is noted here rather than fixed because the fix is a per-process
-    // prefix on the id and every caller that stores one, which is somebody
-    // else's stage (GPT Sol, 2026-09-08).
+    // **`q1` USED TO COME ROUND AGAIN EVERY TIME THIS PROCESS RESTARTED**, and
+    // nothing noticed: a phone left open across a restart could cancel, re-arm,
+    // abandon or clear a DIFFERENT `q1` from the one it was showing, and get a
+    // 200 for it. Measured before it was fixed, 2026-09-08: a dead run's `q1`
+    // (a `pull`) posted at a fresh run removed that run's `q1`, which was a
+    // `push`, and answered `{"ok":true,"op":"cancelled"}`.
+    //
+    // **THE QUEUE BEING VOLATILE IS NOT THE PROTECTION IT LOOKS LIKE.** A
+    // restart does empty it — and then the very next enqueue starts the counter
+    // again and re-issues the same names to different work, which is the state
+    // a phone actually meets. So the run is part of the id, `idOrigin` reads it
+    // back, and the four routes that accept an id from a client refuse a
+    // foreign one by name rather than reporting it as absent.
     this.seq += 1;
     const item: QueuedItem = {
-      id: `q${this.seq}`,
+      id: `${this.serverInstanceId}${ID_SEPARATOR}q${this.seq}`,
       sessionId: target.sessionId,
       claudeSessionId: target.claudeSessionId,
       payload,

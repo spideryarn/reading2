@@ -901,7 +901,7 @@ describe("the scheduler on the daemon's clock", () => {
             // the daemon starts shutting down.
             observe: () =>
               new Promise((resolve) => {
-                look = () => resolve({ kind: "seen", candidates: [], scanned: 750 });
+                look = () => resolve({ kind: "wedged", candidates: [], scanned: 750 });
               }),
           },
         },

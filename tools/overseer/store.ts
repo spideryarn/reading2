@@ -132,7 +132,7 @@ import {
   type OccurrenceId,
   type OccurrenceIndex,
 } from "./jobs.js";
-import type { RuleFinding, RuleId, RuleOutcome, WedgedProcess } from "./rules.js";
+import type { DriftedSession, LaunchModeFinding, RuleFinding, RuleId, RuleOutcome, WedgedProcess, WedgedWorkFinding } from "./rules.js";
 import { truncateToLastLine, writeAll, writeAtomically, type JsonlRepair } from "./jsonl.js";
 import {
   isProcessAlive,
@@ -1146,22 +1146,101 @@ function parseWedgedProcess(u: unknown): ParseResult<WedgedProcess> {
   };
 }
 
-/** What a rule found, off the disk. */
+/**
+ * What a rule found, off the disk — **one parser per rule, chosen by the
+ * finding's own `kind`.**
+ *
+ * Exhaustive on `RuleId`, so a new rule cannot be added without saying how its
+ * finding is read back. SP-9's shape: an event kind with no parse branch
+ * appends perfectly and comes back on the next read as "not an event this
+ * version knows", and the finding inside it is the same hazard one level down.
+ */
 function parseFinding(u: unknown): ParseResult<RuleFinding> {
   if (!isRecord(u)) return { ok: false, reason: "finding is not an object" };
-  if (!isRuleId(u["kind"])) return { ok: false, reason: `finding.kind ${JSON.stringify(u["kind"])} is not a rule this version knows` };
-  const policy = u["policy"];
-  if (policy !== "safe-to-kill" && policy !== "test-suites") {
-    return { ok: false, reason: `finding.policy ${JSON.stringify(policy)} is not a kill policy` };
+  const kind = u["kind"];
+  if (!isRuleId(kind)) return { ok: false, reason: `finding.kind ${JSON.stringify(kind)} is not a rule this version knows` };
+  switch (kind) {
+    case "wedged-work":
+      return parseWedgedWorkFinding(kind, u);
+    case "launch-mode":
+      return parseLaunchModeFinding(kind, u);
+    default: {
+      const never: never = kind;
+      return { ok: false, reason: `no finding parser for ${String(never)}` };
+    }
   }
+}
+
+/** Every count `decideRule` used, so a replay can redo its arithmetic rather than take its conclusion. */
+function parseCounts(u: Record<string, unknown>, fields: readonly string[]): ParseResult<Record<string, number>> {
   const counts: Record<string, number> = {};
-  for (const field of ["minAgeSeconds", "matched", "candidates", "scanned"] as const) {
+  for (const field of fields) {
     const value = u[field];
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
       return { ok: false, reason: `finding.${field} is not a count` };
     }
     counts[field] = value;
   }
+  return { ok: true, value: counts };
+}
+
+/** One drifted session off the disk — the address a person would use to go and relaunch it. */
+function parseDriftedSession(u: unknown): ParseResult<DriftedSession> {
+  if (!isRecord(u)) return { ok: false, reason: "a session is not an object" };
+  for (const field of ["id", "name", "mode"] as const) {
+    const value = u[field];
+    if (typeof value !== "string" || (field !== "name" && value === "")) {
+      return { ok: false, reason: `session.${field} is not a name` };
+    }
+  }
+  return { ok: true, value: { id: u["id"] as string, name: u["name"] as string, mode: u["mode"] as string } };
+}
+
+/**
+ * Rule 1's finding, off the disk.
+ *
+ * **The four arms are read as four counts.** A parser that summed them, or
+ * defaulted a missing one to zero, would turn "two sessions we could not read"
+ * into "two sessions that were fine" on the way back out — which is the same
+ * collapse the rule refuses to make on the way in, and the reason this is a
+ * round trip rather than an append.
+ */
+function parseLaunchModeFinding(kind: "launch-mode", u: Record<string, unknown>): ParseResult<LaunchModeFinding> {
+  const counts = parseCounts(u, ["minSessions", "maxCollectionAgeSeconds", "collectionAgeSeconds", "auto", "notAuto", "cannotTell", "notApplicable", "rows"]);
+  if (!counts.ok) return { ok: false, reason: counts.reason };
+  const raw = u["sessions"];
+  if (!Array.isArray(raw)) return { ok: false, reason: "finding.sessions is not an array" };
+  const sessions: DriftedSession[] = [];
+  for (const item of raw) {
+    const session = parseDriftedSession(item);
+    if (!session.ok) return { ok: false, reason: `finding.${session.reason}` };
+    sessions.push(session.value);
+  }
+  return {
+    ok: true,
+    value: {
+      kind,
+      minSessions: counts.value["minSessions"] as number,
+      maxCollectionAgeSeconds: counts.value["maxCollectionAgeSeconds"] as number,
+      collectionAgeSeconds: counts.value["collectionAgeSeconds"] as number,
+      auto: counts.value["auto"] as number,
+      notAuto: counts.value["notAuto"] as number,
+      cannotTell: counts.value["cannotTell"] as number,
+      notApplicable: counts.value["notApplicable"] as number,
+      rows: counts.value["rows"] as number,
+      sessions,
+    },
+  };
+}
+
+/** Rule 2's finding, off the disk. */
+function parseWedgedWorkFinding(kind: "wedged-work", u: Record<string, unknown>): ParseResult<WedgedWorkFinding> {
+  const policy = u["policy"];
+  if (policy !== "safe-to-kill" && policy !== "test-suites") {
+    return { ok: false, reason: `finding.policy ${JSON.stringify(policy)} is not a kill policy` };
+  }
+  const counts = parseCounts(u, ["minAgeSeconds", "matched", "candidates", "scanned"]);
+  if (!counts.ok) return { ok: false, reason: counts.reason };
   const raw = u["processes"];
   if (!Array.isArray(raw)) return { ok: false, reason: "finding.processes is not an array" };
   const processes: WedgedProcess[] = [];
@@ -1173,21 +1252,32 @@ function parseFinding(u: unknown): ParseResult<RuleFinding> {
   return {
     ok: true,
     value: {
-      kind: u["kind"],
+      kind,
       policy,
-      minAgeSeconds: counts["minAgeSeconds"] as number,
-      matched: counts["matched"] as number,
-      candidates: counts["candidates"] as number,
-      scanned: counts["scanned"] as number,
+      minAgeSeconds: counts.value["minAgeSeconds"] as number,
+      matched: counts.value["matched"] as number,
+      candidates: counts.value["candidates"] as number,
+      scanned: counts.value["scanned"] as number,
       processes,
     },
   };
 }
 
-const RULE_IDS = new Set<string>(["wedged-work"] satisfies RuleId[]);
+/**
+ * The rule ids this version knows.
+ *
+ * **A `Record<RuleId, true>` rather than an array**, so adding a rule without
+ * teaching the parser about it does not compile. It was
+ * `["wedged-work"] satisfies RuleId[]`, which checks that the members ARE rule
+ * ids and says nothing about whether they are ALL of them — the same
+ * not-exhaustive hole as the destructure SC-4 was about, in a different
+ * costume. Found while adding the second rule, which is the only moment it
+ * could have been found.
+ */
+const RULE_IDS: Record<RuleId, true> = { "wedged-work": true, "launch-mode": true };
 
 function isRuleId(u: unknown): u is RuleId {
-  return typeof u === "string" && RULE_IDS.has(u);
+  return typeof u === "string" && Object.hasOwn(RULE_IDS, u);
 }
 
 /**

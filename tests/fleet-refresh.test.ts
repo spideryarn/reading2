@@ -85,7 +85,7 @@ type Sent = { target: SteerTarget; text: string; declaredStatus: FleetStatus };
 function actionRoutes(): { routes: ActionRoutes; sent: Sent[]; queue: SteeringQueue } {
   let clock = 1_000_000;
   const sent: Sent[] = [];
-  const queue = new SteeringQueue({ now: () => clock });
+  const queue = new SteeringQueue({ now: () => clock, serverInstanceId: "1a2b3c4d" });
   const routes = makeActionRoutes({
     queue,
     sendMessage: (target, text, declaredStatus) => {

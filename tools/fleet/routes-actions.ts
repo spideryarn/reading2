@@ -78,6 +78,7 @@ import {
 } from "./actions.js";
 import type { FleetSnapshot } from "./collect.js";
 import { createDrainCursor, drainOnce, type DrainResult } from "./drain.js";
+import { newServerInstanceId } from "./instance.js";
 import {
   deliveryGate,
   drainGate,
@@ -219,7 +220,29 @@ export type ActionErrorCode =
    * never do is drop something nobody read. 409 rather than 400 because the
    * body was well formed — the world moved.
    */
-  | "stale-view";
+  | "stale-view"
+  /**
+   * The id was minted by a DIFFERENT run of this server, so whatever it names
+   * here is not what the person is looking at.
+   *
+   * **DISTINCT FROM `no-such-item`, WHICH IS THE MISLEADING ONE.** "There is no
+   * such item" invites the reader to conclude their instruction was never
+   * queued. The truth is that it was queued, the server restarted, the queue
+   * went with it, and the id they are holding now points at somebody else's
+   * work — see `SteeringQueue.idOrigin` and the note on `push` for what that
+   * cost before it was refused.
+   *
+   * **AND DISTINCT FROM `stale-view`, WHICH ANSWERS A DIFFERENT QUESTION.**
+   * That one guards CONCURRENT DRIFT within one run — something arrived, or
+   * went out, between the list being drawn and the tap. It cannot catch this:
+   * an old `[q1]` posted at a restarted queue that also holds exactly one item
+   * called `q1` passes its comparison exactly. Both guards are live and neither
+   * subsumes the other.
+   *
+   * 409 rather than 404 for `stale-view`'s reason: the body was well formed,
+   * the world moved.
+   */
+  | "other-instance";
 
 /**
  * A refusal's HTTP status.
@@ -260,6 +283,7 @@ export const ACTION_ERROR_STATUS: Record<ActionErrorCode, number> = {
   "nothing-to-kill": 409,
   cooldown: 429,
   "stale-view": 409,
+  "other-instance": 409,
 };
 
 /**
@@ -981,7 +1005,10 @@ export type ActionDeps = {
 
 export function realActionDeps(): ActionDeps {
   return {
-    queue: new SteeringQueue({ now: () => Date.now() }),
+    // ONE INSTANCE ID PER PROCESS, minted at the composition root and passed
+    // down. Later stages reuse it for request ids and preview identity, which
+    // is why it is `instance.ts`'s to mint rather than the queue's.
+    queue: new SteeringQueue({ now: () => Date.now(), serverInstanceId: newServerInstanceId() }),
     sendMessage: realSendMessage,
     io: realActionIo(),
     now: () => Date.now(),
@@ -1014,6 +1041,34 @@ function respond(res: ServerResponse, status: number, body: ActionResponse, extr
 
 function refuse(res: ServerResponse, code: ActionErrorCode, why: string, run?: PlanRun, extra: Record<string, string> = {}): void {
   respond(res, ACTION_ERROR_STATUS[code], run === undefined ? { ok: false, code, why } : { ok: false, code, why, run }, extra);
+}
+
+/**
+ * Is any of these ids from a run of the server that is no longer this one?
+ *
+ * **ONE HELPER RATHER THAN FOUR COPIES**, because there are four routes that
+ * take an item id from a client and match it by string equality — cancel,
+ * revive, abandon and clear — and a guard that exists on three of them is a
+ * guard whoever adds the fifth route will not know about. The judgment itself
+ * is `SteeringQueue.idOrigin`'s: the queue owns the shape of an id.
+ *
+ * Takes a LIST because `clear` posts one, and answers on the first foreign id
+ * it finds: one such id already means the whole list was drawn by a page that
+ * has been watching a dead server, so there is nothing useful to say about the
+ * rest of it.
+ *
+ * Returns the sentence, or null. The caller refuses — it does not, because each
+ * of the four writes its own log line and this must not become the place that
+ * decides what a route logs.
+ */
+function fromAnotherRun(queue: SteeringQueue, itemIds: readonly string[]): string | null {
+  const foreign = itemIds.find((id) => queue.idOrigin(id) === "other-instance");
+  if (foreign === undefined) return null;
+  return (
+    `${foreign} was queued by a different run of this dashboard; this one is ${queue.serverInstanceId}. ` +
+    "The queue does not survive a restart, so that item is gone — and an id from before it can now name something else entirely. " +
+    "Reload the page and look at what is actually queued."
+  );
 }
 
 function header(headers: IncomingHttpHeaders, name: string): string | null {
@@ -1311,6 +1366,12 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       return;
     }
     const { sessionId, itemId } = body.value;
+    const foreign = fromAnotherRun(deps.queue, [itemId]);
+    if (foreign !== null) {
+      deps.log(`action cancel: refused code=other-instance session=${sessionId} item=${itemId}`);
+      refuse(res, "other-instance", foreign);
+      return;
+    }
     const result = deps.queue.cancel(sessionId, itemId);
     if (!result.ok) {
       // The queue returns one sentence for both failures, and the page needs to
@@ -1358,6 +1419,12 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       return;
     }
     const { sessionId, itemId } = body.value;
+    const foreign = fromAnotherRun(deps.queue, [itemId]);
+    if (foreign !== null) {
+      deps.log(`action revive: refused code=other-instance session=${sessionId} item=${itemId}`);
+      refuse(res, "other-instance", foreign);
+      return;
+    }
     const result = deps.queue.revive(sessionId, itemId);
     if (!result.ok) {
       const present = deps.queue.snapshot(sessionId).items.some((i) => i.id === itemId);
@@ -1397,6 +1464,12 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       return;
     }
     const { sessionId, itemId } = body.value;
+    const foreign = fromAnotherRun(deps.queue, [itemId]);
+    if (foreign !== null) {
+      deps.log(`action abandon: refused code=other-instance session=${sessionId} item=${itemId}`);
+      refuse(res, "other-instance", foreign);
+      return;
+    }
     const item = deps.queue.snapshot(sessionId).items.find((i) => i.id === itemId);
     if (!item) {
       deps.log(`action abandon: refused code=no-such-item session=${sessionId} item=${itemId}`);
@@ -1467,6 +1540,18 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       return;
     }
     const { sessionId, itemIds } = body.value;
+    // **BEFORE `droppable` AND BEFORE THE `stale-view` COMPARISON**, and the
+    // order is the point rather than an accident. Both of those would answer
+    // this case with a code that describes something else — "nothing is waiting"
+    // when the queue is empty after a restart, and "the list has changed" when
+    // it is not — and neither can catch the case where the ids happen to line
+    // up, which is the one that destroys somebody's instruction.
+    const foreign = fromAnotherRun(deps.queue, itemIds);
+    if (foreign !== null) {
+      deps.log(`action clear: refused code=other-instance session=${sessionId} items=${itemIds.length}`);
+      refuse(res, "other-instance", foreign);
+      return;
+    }
     const items = deps.queue.snapshot(sessionId).items;
     // The queue's rule for "can still be taken back", asked of the queue rather
     // than restated: `cancel()` refuses a leased item and `clear()` keeps one,

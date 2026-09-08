@@ -156,7 +156,7 @@ No real session was steered, killed, launched, or resumed in this investigation.
 | E-actions | `boxActionBody` sends `actionId`, `mode`, `confirm`, `speaker` but no `pids` or `recipients`. `killRoute` intersects current candidates with supplied PIDs; `broadcastRoute` refuses no recipients. The browser therefore cannot complete these advertised paths. | S; audit also ran body through parser. First regression must drive real browser serializer into real route with fake execution. |
 | E-confirm | `BoxActions` displays warnings for unknown/non-dry-run previews but its Confirm condition only requires `preview.ok` and a non-null result. Failure heading is always `Nothing happened.` | S; render malformed/surprising responses and a lost reply after fake execution. |
 | E-queue | `deliverOne` settles partial/unknown delivery as refused, removing that item. A later drain can reach the next instruction despite an uncertain input buffer. `FleetQueues` hides queues with only unreadable items and describes leases as unsent. Queue counters restart at `q1`. | S; reproduce on fake transport, including stale recovery request after restart. |
-| E-seam | `OrchestratorPanel` still explains that no Overseer process/store exists. `server.ts` exposes no checkpoint projection. The actual store and daemon are in the tree. | S. Live checkpoint metadata read was schema **1**, `writtenAt=2026-09-08T12:09:05.298Z`; checked-in store contract is schema **2**. This proves version disagreement, not its cause. |
+| E-seam | **Closed 2026-09-08 by the Overseer status stage.** Was: `OrchestratorPanel` still explains that no Overseer process/store exists. `server.ts` exposes no checkpoint projection. The actual store and daemon are in the tree. | S. Live checkpoint metadata read was schema **1**, `writtenAt=2026-09-08T12:09:05.298Z`; checked-in store contract is schema **2**. This proves version disagreement, not its cause. |
 | E-work | Production search for `classifyPaneWork` and `probeProcessTable` finds definitions but no daemon caller. The expensive research and fixture tests already exist; users do not receive the result. | S. Do not promise that all foreground reviews currently look idle: the direction doc's later measurement explicitly disproved that broad claim. |
 | E-blocking | Inventory's main bash call is async, but pane enumeration/capture and health subprocesses still use synchronous calls. Health includes a real interval sample. `collectWithDeadline` races a promise without cancelling its child. | S for code; H for end-to-end latency and orphan accumulation under representative load. |
 | E-stream | `safeWrite` returns `res.write`'s boolean and `broadcastFrame` ignores it. Further snapshots/pings are still written to a slow socket. `source.ts` clears its deadline then awaits `response.text()` on unsuccessful SSE HTTP responses. | S; actual bounded-memory and hanging-body regressions still required. |
@@ -408,27 +408,102 @@ without postponing useful attention behind full performance optimisation.
 
 ### Stage: Overseer status — replace the placeholder with real history
 
-- [ ] Add a fleet-owned read-only boundary module for `current.json` and a cached `/api/overseer`
-  projection. Define `missing | unreadable | unsupported-schema | available`; no catch→empty fleet.
-  Cache on bounded refresh/file metadata, not a full event-log scan on every HTTP request.
-- [ ] Support the current declared schema, explicitly refusing unknown versions. The live schema-1
-  observation must appear as incompatibility, not be coerced to schema 2. If supporting an old schema
-  is useful, write an explicit adapter that labels old durations as unknown/lower bounds; never cast.
-- [ ] Render heartbeat age, source snapshot age, and status durations with observed versus `≥` lower
-  bound formatting. Show a stale-source warning even if the daemon's heartbeat is advancing. Missing
-  or unreadable history must not hide the independently available fleet rows.
-- [ ] First ship global heartbeat/source status without a row join. For optional history matching,
-  require the existing generation tuple (`tmuxServerPid`, `paneId`, `panePid`) and matching claimed
-  conversation id; label this as **claimed history**, not verified current execution. A child can
-  change while that tuple stays fixed. Show the observation interval rather than asserting that the
-  current child has worked/blocked for that duration. Missing/mismatched evidence remains separate
-  history; it must not hide current fleet rows. Upgrade joins only after Execution identity lands.
-- [ ] Replace `OrchestratorPanel`'s hardcoded daemon-absent narrative/roadmap with this status card,
-  existing queue controls, and short explanations. Do not invent a chat recipient: a daemon/store
-  existing still does not mean there is an agent capable of receiving a message.
-- [ ] Contract tests: real serialized checkpoint fixtures (current, old, future schema), torn/absent
-  file, healthy daemon/deaf source, stopped heartbeat, genuine empty fleet and generation mismatch.
-  Browser-check all states with injected fixtures.
+**Status 2026-09-08 evening: built, reviewed by GPT Sol, and landed on `dev` in the commit that
+carries this paragraph.** Session `260908f-overseer-status-card`, worktree of the same name. The page
+now says *Overseer last wrote 30s ago; its fleet source last updated 45s ago*, warns on a stale source
+while the heartbeat advances, and refuses schema 1 by name. The three decisions the brief left open
+are recorded under the checkboxes; Sol's findings and what was done about them are at the end.
+
+- [x] A fleet-owned read-only boundary for `current.json`: [`tools/fleet/overseer-status.ts`](../../tools/fleet/overseer-status.ts),
+  a sibling of `attention.ts` that **shares its file read** (`loadCheckpoint`, split out of it). Four
+  outcomes in this file's existing vocabulary: `checkpoint-absent | checkpoint-unreadable |
+  unsupported-schema | published`, plus `not-asked` as the parse default. No catch→empty anywhere.
+- [x] **Served on `/api/state`, not as `/api/overseer` — and this is the decision to notice.** The
+  brief allowed either; one payload wins because the card's central sentence puts the inbox's clock
+  and the checkpoint's clock side by side, and a second endpoint is a second `servedAt` to
+  skew-correct, a second cache, and a second thing that can be down while the page looks fine. It is
+  also **one file read**: `readCheckpointFeeds` projects both feeds from the same bytes, so the two
+  clocks cannot come from two versions of a file that is replaced by atomic rename. **No cache, on
+  purpose**: ~10KB read per payload, exactly as the inbox already was; nothing reads `events.jsonl`.
+- [x] Supports schema 2 and refuses anything else by name (`saw` and `known` both on the arm, because
+  this is the one failure with an action attached). The live schema-1 file renders as incompatibility.
+  No adapter was written: schema 1's `statusSince` is a bare timestamp, so every duration would be a
+  guess, and the daemon on the box now writes 2.
+- [x] Heartbeat age, source age, and `≥`-marked durations, copying `describeStatusAge`'s rule from
+  `scripts/overseer.ts`. The stale-source warning is drawn whenever the source is stale, **including
+  when the write is fresh** — the case a heartbeat-only watchdog blesses. The card carries the
+  daemon's own `snapshotStaleAfterMs` rather than restating a constant (the watchdog/daemon drift,
+  GPT Sol's C6, one consumer further out); it names its fallback when the daemon did not say.
+- [x] Global status only — **no row join was built**, per "ship it without one first". The register is
+  drawn as the Overseer's history, under its own heading, saying on screen that it is not matched to
+  the Sessions tab. So there is no *claimed history* label to earn yet, and the generation tuple stays
+  the Execution identity stage's problem. The register is bounded (longest-waiting 8) with the total
+  beside it, so the payload grows by a few hundred bytes rather than by the fleet.
+- [x] `OverseerPanel.tsx`'s daemon-absent narrative and hard-coded roadmap are **deleted**. The queue
+  controls and the broadcast are unchanged. The refusal to draw a message box stays and is re-argued
+  on today's facts: a daemon that publishes a checkpoint is still not an agent that can receive a
+  message.
+- [x] Contract tests: [`tests/fleet-overseer-status.test.ts`](../../tests/fleet-overseer-status.test.ts)
+  (27) and [`tests/fleet-overseer-panel.test.tsx`](../../tests/fleet-overseer-panel.test.tsx) (25),
+  plus one join test in `fleet-web.test.tsx` for the `App` → panel hop. **The happy paths run against
+  a checkpoint the real store wrote** — `openStore` → real events → `store.checkpoint()` — because a
+  hand-written fixture only proves the test and the reader agree, and this reader deliberately does
+  not import the producer's parser. The pathological cases (schema 1, a future schema, torn, empty,
+  a widened `scheduler.kind`, a bare schema-1 `statusSince`, a half-written register entry) are
+  hand-written, since a producer cannot be asked to emit them. Three mutations were run against the
+  reader — accept any schema, unknown scheduler kind → `off`, drop bad register entries — and each
+  turned the expected tests red.
+
+**Two things the plan did not know.** (a) `scheduler.kind` degrades to *cannot read this part* rather
+than failing the card, at 260908g's request and rightly — but an ABSENT scheduler line degrades the
+same way rather than to `not-said`, because `not-said` is the daemon's claim that nobody decided and
+an old checkpoint made no claim at all. (b) The wire types went in as one block at the **end** of
+`wire.ts` at the dashboard agent's request, to merge cleanly with its own additions the same night.
+
+**Files outside the stage's declared set that the design required**, all additive and named here
+rather than assumed: `web/src/types.ts` (the client parse — a required wire field cannot reach the
+browser without it), `web/src/App.tsx` (three attributes on one element), `server.ts` (one import and
+one field, made last after merging `origin/dev`), and the five test files whose `fleetState(…)` call
+sites the new required parameter broke, which is the mechanism working as designed.
+
+**GPT Sol's review (`gpt-5.6-sol`, high effort), and what it changed.** No P0. Three P1s, all
+accepted and fixed:
+
+1. **The browser accepted any nested checkpoint schema.** The server refuses an unknown version — but
+   a NEWER server sending schema 3 inside a `published` arm would have been drawn by an old tab, off
+   fields whose meaning had moved, and it would have looked healthy. The client now checks the
+   version too (`KNOWN_CHECKPOINT_SCHEMA` in `web/src/types.ts`), which is what the second parser is
+   for. The three mutations run before the review had all been on the server boundary, and so missed
+   this entirely.
+2. **An unbounded `snapshotStaleAfterMs` could bless a dead source for ever** — a fresh `writtenAt`,
+   a source from 2020 and a deadline of `1e300` rendered as *supervision is running*. Both boundaries
+   now refuse a deadline outside a fleet-owned ceiling of an hour and fall back to the page's own,
+   naming it.
+3. **`not-asked` collapsed two silences.** It meant both *no payload yet* and *a payload from a server
+   that does not report supervision*, and drew nothing for both — so a rollback put the tab back to
+   its pre-stage appearance with nothing saying why. `null` now means the first and draws nothing;
+   `not-asked` says the server did not report it.
+
+**Round two**, on the fixes. No P0. One P1 and it was right: refusing an *absurd* deadline still let
+a *malformed* one become **the daemon did not say** — so a four-minute-old source with a deadline of
+one hour and one millisecond read as healthy off a number nobody could have meant. Absent and invalid
+are now different: absent falls back and **the card says whose deadline it is using, on the healthy
+path as well as in the warning**; invalid fails the reading, because the deadline is part of the
+health judgement rather than a decoration on it. Of round two's P2s: the client now reads the
+checkpoint's version **before** parsing the body, so a future schema whose shape has also changed
+still produces the diagnostic naming both versions instead of a shrug; the end-to-end join runs with
+a browser clock **twenty** minutes fast rather than four (at four, deleting the skew correction left
+every assertion green, because both thresholds are five) and asserts the exact ages; and the
+*never throws* comment now says what it actually guarantees — no value `JSON.parse` can produce can
+throw out of it, which is not the same as every value of type `unknown`, and Sol demonstrated the
+hostile Proxy that escapes it.
+
+Of round one's four P2s: the *never throws* guarantee was made true rather than narrated (`JSON.stringify`
+throws on a cyclic value and on a `bigint`, inside the one function that promises not to); the
+"one read" test was measuring nothing, so the real property — **one read per payload** — is now
+counted against `statePayload`, and the old test renamed to the weaker thing it proves; the
+end-to-end join now runs with a browser clock four minutes fast and asserts a `≥` floor survives
+the browser parser; and the status line above no longer claims to be on `dev` before it is.
 
 **Acceptance:** the web page can say *Overseer last updated 12 minutes ago; fleet source last updated
 15 minutes ago* honestly. Claimed history is clearly distinct from a verified current duration;

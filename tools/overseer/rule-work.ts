@@ -2,9 +2,30 @@
  * **The impure half of a rule: how it looks at the box, and what it is allowed
  * to do about what it sees.**
  *
- * `rules.ts` is the arithmetic and `scheduler.ts` is the ordering. This file is
+ * `rules.ts` is the arithmetic and `rule-protocol.ts` is the ordering. This file is
  * the one function those two are given — deliberately small, because everything
  * a person would want to argue with afterwards is in the pure half.
+ *
+ * ## Both rules ask the dashboard, and that is one mechanism rather than two
+ *
+ * Rule 2 POSTs the box action's dry run; rule 1 GETs `/api/state` and reads
+ * `permissionMode` off the rows. Same origin, same module, same shape of
+ * `cannot-see`.
+ *
+ * **The plan proposed something else for rule 1** — that the daemon already
+ * holds the raw payload from its own stream, so a rule could read that and
+ * spend no request. Not taken, and the argument is worth keeping because it is
+ * a close call. Reading the daemon's held payload means new plumbing between
+ * `daemon.ts`, `scripts/overseer.ts` and this file; it makes rule 1 blind
+ * exactly when the Overseer's transport is down, which is when the box is
+ * least well; and, decisively, it would give the rules **two different ways to
+ * look at the fleet** where one already works. `/api/state` serves a cached
+ * string and does not make the box collect — `source.ts`'s own fallback poller
+ * hits it every 15 seconds, against rule 1's once every 15 minutes — so the
+ * cost the plan was avoiding is a request that reads a variable. What the plan
+ * was really insisting on is that nothing here widens `ObservedRow` or touches
+ * `observation.ts`, and nothing here does: this is its own narrow parser with
+ * its own unknown arms.
  *
  * ## Looking is the dashboard's own dry run, and nothing else
  *
@@ -25,8 +46,8 @@
  *
  * There is **no actor in this file**. `ruleWork` hands the daemon `observe` and
  * a pid, so the process holds no capability to act on a proposal, and a spec
- * carrying `disposition: "act"` meets a refusal from `scheduler.ts` naming the
- * actor it does not have. That replaced a `refusingActor` which answered
+ * carrying `disposition: "act"` meets a refusal from `rule-protocol.ts` naming
+ * the actor it does not have. That replaced a `refusingActor` which answered
  * `refused` politely: GPT Sol's SC-2 is that such a thing is a runtime
  * conditional wearing the clothes of a boundary.
  *
@@ -36,8 +57,17 @@
  * which is Greg's to make and nobody else's.
  */
 import type { ActionId, KillPolicy } from "../fleet/actions.js";
-import type { ProposingRuleWork } from "./scheduler.js";
-import type { RuleObservation, RuleSpec, WedgedProcess } from "./rules.js";
+import type { ProposingRuleWork } from "./rule-protocol.js";
+import type {
+  LaunchModeSpec,
+  ObservedCollection,
+  ObservedLaunchMode,
+  ObservedSession,
+  RuleObservation,
+  RuleSpec,
+  WedgedProcess,
+  WedgedWorkSpec,
+} from "./rules.js";
 
 /** The env var that arms the deterministic rules ALONE. See `scripts/overseer.ts` § schedulerWiring for why that is a separate switch. */
 export const RULES_ENABLED_VAR = "OVERSEER_RULES_ENABLED";
@@ -80,10 +110,19 @@ export type HttpPost = (url: string, init: { method: string; headers: Record<str
   text(): Promise<string>;
 }>;
 
+/** The subset of `fetch` rule 1 needs. Separate from `HttpPost` because the shapes of the two calls are different and a union would hide which. */
+export type HttpGet = (url: string, init: { method: string; headers: Record<string, string>; signal: AbortSignal }) => Promise<{
+  ok: boolean;
+  status: number;
+  statusText: string;
+  text(): Promise<string>;
+}>;
+
 export type ObserverOptions = {
   /** Where the dashboard is, origin included — `http://127.0.0.1:8787`. */
   readonly baseUrl: string;
   readonly post?: HttpPost;
+  readonly get?: HttpGet;
   readonly timeoutMs?: number;
 };
 
@@ -127,12 +166,12 @@ function parseCandidate(u: unknown): WedgedProcess | null {
  * be. That is the documented way for a non-browser client to opt in
  * (`routes-steer.ts` § checkOrigin), not a bypass of anything.
  */
-export function fleetObserver(options: ObserverOptions): ProposingRuleWork["observe"] {
+export function fleetObserver(options: ObserverOptions): (spec: WedgedWorkSpec) => Promise<RuleObservation> {
   const post: HttpPost = options.post ?? ((url, init) => fetch(url, init));
   const timeoutMs = options.timeoutMs ?? OBSERVE_TIMEOUT_MS;
   const url = `${options.baseUrl.replace(/\/+$/, "")}/api/actions/box`;
   const origin = new URL(options.baseUrl).origin;
-  return async (spec: RuleSpec): Promise<RuleObservation> => {
+  return async (spec: WedgedWorkSpec): Promise<RuleObservation> => {
     const cannotSee = (why: string): RuleObservation => ({ kind: "cannot-see", why: `could not reach the fleet API at ${url}: ${why}` });
     let response: Awaited<ReturnType<HttpPost>>;
     try {
@@ -171,7 +210,7 @@ export function fleetObserver(options: ObserverOptions): ProposingRuleWork["obse
       if (candidate === null) return cannotSee("one of its candidates is not a process record this version understands");
       candidates.push(candidate);
     }
-    return { kind: "seen", candidates, scanned };
+    return { kind: "wedged", candidates, scanned };
   };
 }
 
@@ -184,8 +223,8 @@ export function fleetObserver(options: ObserverOptions): ProposingRuleWork["obse
  * conditional in the clothes of a boundary: the process held the capability and
  * one edit stood between it and a kill. The refusal is now structural. A daemon
  * given this object has no `act` to call, and a spec carrying
- * `disposition: "act"` meets a `refused` from `scheduler.ts` naming the missing
- * actor, exactly as a session job does in a process with no `spawn`.
+ * `disposition: "act"` meets a `refused` from `rule-protocol.ts` naming the
+ * missing actor, exactly as a session job does in a process with no `spawn`.
  *
  * SP-7 is why there is nothing to put here: *an unattended process asserting the
  * `confirm: true` a kill route demands is the authority grant itself*, and that
@@ -193,5 +232,161 @@ export function fleetObserver(options: ObserverOptions): ProposingRuleWork["obse
  * one rather than switch one on.
  */
 export function ruleWork(options: ObserverOptions & { selfPid: number }): ProposingRuleWork {
-  return { selfPid: options.selfPid, observe: fleetObserver(options) };
+  const wedged = fleetObserver(options);
+  const launchModes = fleetStateObserver(options);
+  return {
+    selfPid: options.selfPid,
+    // ONE OBSERVER PER RULE, CHOSEN BY THE SPEC'S OWN HASHED `kind`, and
+    // exhaustive — so a third rule cannot quietly be handed the wrong evidence.
+    // The pairing is checked again in `decideRule`, which answers `cannot-tell`
+    // rather than deciding on a sighting of the wrong thing.
+    observe: async (spec: RuleSpec): Promise<RuleObservation> => {
+      switch (spec.kind) {
+        case "wedged-work":
+          return wedged(spec);
+        case "launch-mode":
+          return launchModes(spec);
+        default: {
+          const never: never = spec;
+          throw new Error(`no observer for rule spec ${JSON.stringify(never)}`);
+        }
+      }
+    },
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * Rule 1: reading the permission modes off the dashboard's own state.
+ * ------------------------------------------------------------------ */
+
+/**
+ * One session's permission mode, off the wire — **with our own unknown arms.**
+ *
+ * Every failure to read lands on `cannot-tell`, never on `not-auto`, and that
+ * is `readPaneMode`'s own rule one layer out: the tempting rule is *anything
+ * that is not auto is the defect*, which is right about today's arms and wrong
+ * the day the producer adds one. Every row would light up red at once, and a
+ * signal that has cried wolf on twenty rows is a signal Greg stops reading.
+ * `why` quotes what it actually saw, so teaching this a new arm is one line.
+ *
+ * An ABSENT field is `cannot-tell` for the same reason and a different one: a
+ * dashboard too old to report it has told us nothing, and reading its silence
+ * as health is exactly the drop `state.ts` documents on its own side.
+ */
+function parseLaunchMode(u: unknown): ObservedLaunchMode {
+  if (u === undefined || u === null) {
+    return { kind: "cannot-tell", why: "this dashboard does not report a permission mode for its rows" };
+  }
+  if (!isRecord(u)) return { kind: "cannot-tell", why: "the row's permissionMode is not an object" };
+  const kind = u["kind"];
+  const why = typeof u["why"] === "string" ? (u["why"] as string) : "";
+  switch (kind) {
+    case "auto":
+      return { kind: "auto" };
+    case "not-auto": {
+      const mode = u["mode"];
+      // THE NAME, OR NOTHING. `not-auto` without the mode it printed is a
+      // warning a person cannot act on — "manual mode" is a sentence, "not
+      // auto" is a thing to go and check — and inventing a name here would put
+      // a claim in the log the producer never made.
+      if (typeof mode !== "string" || mode === "") {
+        return { kind: "cannot-tell", why: "the row says its mode is not auto but does not name it" };
+      }
+      return { kind: "not-auto", mode };
+    }
+    case "cannot-tell":
+      return { kind: "cannot-tell", why: why === "" ? "the dashboard could not read this session's mode" : why };
+    case "not-applicable":
+      return { kind: "not-applicable", why: why === "" ? "this row has no permission mode" : why };
+    default:
+      return { kind: "cannot-tell", why: `the row's permission mode is ${JSON.stringify(kind)}, which this build does not recognise` };
+  }
+}
+
+/** One row off the wire. Only what rule 1 reads: the address, the name a person would search for, and the mode. */
+function parseSession(u: unknown): ObservedSession | null {
+  if (!isRecord(u)) return null;
+  const id = u["id"];
+  if (typeof id !== "string" || id === "") return null;
+  const name = u["name"];
+  if (typeof name !== "string") return null;
+  return { id, name, mode: parseLaunchMode(u["permissionMode"]) };
+}
+
+/**
+ * How old the collection was when it was served, from the payload's own two
+ * timestamps.
+ *
+ * **Both are the dashboard's clock**, so this is a duration it measured itself
+ * and there is no skew between two machines to argue about — which is the
+ * whole reason the age is computed here rather than against the Overseer's
+ * `now()`.
+ *
+ * `null` means the pair cannot be read at all, which is a `cannot-see` rather
+ * than an age: a payload whose `servedAt` predates its `collectedAt` is a
+ * producer we do not understand, and clamping that to zero would turn a broken
+ * reading into a fresh-looking one.
+ */
+function parseCollection(result: Record<string, unknown>): ObservedCollection | null {
+  const collectedAt = result["collectedAt"];
+  if (collectedAt === null) return { collected: false };
+  if (typeof collectedAt !== "string") return null;
+  const servedAt = result["servedAt"];
+  if (typeof servedAt !== "string") return null;
+  const collectedMs = Date.parse(collectedAt);
+  const servedMs = Date.parse(servedAt);
+  if (!Number.isFinite(collectedMs) || !Number.isFinite(servedMs)) return null;
+  if (servedMs < collectedMs) return null;
+  return { collected: true, ageSeconds: Math.round((servedMs - collectedMs) / 1000) };
+}
+
+/**
+ * **Ask the dashboard which mode each session launched in, and take nothing.**
+ *
+ * `GET /api/state` is the same cached payload the page polls and the Overseer's
+ * own fallback reads; it does not make the box collect. No `Origin` header,
+ * because this is a read route with no CSRF check to opt into — unlike the
+ * action route rule 2 posts to.
+ *
+ * There is no parameter here that could reach a write route, and no method but
+ * GET, for the same reason rule 2's `mode` is a literal.
+ */
+export function fleetStateObserver(options: ObserverOptions): (spec: LaunchModeSpec) => Promise<RuleObservation> {
+  const get: HttpGet = options.get ?? ((url, init) => fetch(url, init));
+  const timeoutMs = options.timeoutMs ?? OBSERVE_TIMEOUT_MS;
+  const url = `${options.baseUrl.replace(/\/+$/, "")}/api/state`;
+  return async (): Promise<RuleObservation> => {
+    const cannotSee = (why: string): RuleObservation => ({ kind: "cannot-see", why: `could not read the fleet state at ${url}: ${why}` });
+    let response: Awaited<ReturnType<HttpGet>>;
+    try {
+      response = await get(url, { method: "GET", headers: { accept: "application/json" }, signal: AbortSignal.timeout(timeoutMs) });
+    } catch (cause) {
+      return cannotSee(cause instanceof Error ? cause.message : String(cause));
+    }
+    if (!response.ok) return cannotSee(`it answered ${response.status} ${response.statusText}`);
+    let body: unknown;
+    try {
+      body = JSON.parse(await response.text()) as unknown;
+    } catch (cause) {
+      return cannotSee(`its answer was not JSON: ${cause instanceof Error ? cause.message : String(cause)}`);
+    }
+    if (!isRecord(body)) return cannotSee("its answer was not a fleet state this version understands");
+    const collection = parseCollection(body);
+    if (collection === null) return cannotSee("its collection clock is not a pair of timestamps this version can read");
+    const rows = body["rows"];
+    if (!Array.isArray(rows)) return cannotSee("its state has no row list to read");
+    const sessions: ObservedSession[] = [];
+    for (const item of rows) {
+      const session = parseSession(item);
+      // ONE UNREADABLE ROW POISONS THE WHOLE OBSERVATION, deliberately and for
+      // rule 2's reason: skipping it would shrink a denominator silently, and
+      // every number this rule records is one somebody is asked to believe.
+      // Note the asymmetry that is NOT a leak — a row we can read whose MODE we
+      // cannot is a `cannot-tell` arm rather than a poisoning, because that is
+      // a fact about one session and this is a fact about the payload.
+      if (session === null) return cannotSee("one of its rows is not a session record this version understands");
+      sessions.push(session);
+    }
+    return { kind: "launch-modes", collection, sessions };
+  };
 }

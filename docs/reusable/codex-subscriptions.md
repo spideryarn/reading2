@@ -50,10 +50,14 @@ Keychain cache, nothing derived from the path. `CODEX_HOME=/some/dir codex login
 `Not logged in` while the default still says `Logged in using ChatGPT`, and the real `auth.json` mtime
 does not move.
 
-**Normal operation writes to this file.** `last_refresh` moves as the access token is refreshed in
-place. That is enough to say two accounts should not share one home; it is *not* enough to claim a
-lost-update bug — the write protocol, locking and atomicity were not tested here. Separate homes avoid
-sharing the mutable state either way.
+**Normal operation writes to this file, and the vendor says not to share it.** `last_refresh` moves
+because "after a successful refresh, Codex writes the new tokens and a new `last_refresh` back to
+`auth.json`". The [CI/CD auth doc](https://learn.chatgpt.com/docs/auth/ci-cd-auth) draws the
+conclusion itself: *"Use one `auth.json` per runner or per serialized workflow stream. Do not share
+the same file across concurrent jobs or multiple machines."* And: *"Do not overwrite a persistent
+runner's refreshed file from the original seed on every run."* So this is a documented constraint,
+not an inference from a timestamp — though the exact failure mode of ignoring it was not reproduced
+here.
 
 **The account's identity is in the file.** `tokens.id_token` is a JWT whose payload carries `email`,
 and under the `https://api.openai.com/auth` claim, `chatgpt_plan_type` and `chatgpt_account_id`. That
@@ -205,6 +209,20 @@ Copy nothing else to begin with. A second home that starts empty and grows is th
 `codex login --device-auth` prints a link and a short code instead of opening a browser, which is what
 makes signing a second account in over SSH possible at all.
 
+**Log in to the second home; do not copy `auth.json` into it.** This is the obvious shortcut and it
+rots rather than failing at the time. The diagnosis given in
+[#15410](https://github.com/openai/codex/issues/15410) — a feature request asking for shared auth with
+isolated config, closed — is that "OAuth refresh tokens in `auth.json` are single-use. When the real
+Codex instance refreshes the token, any copy becomes invalid." Symlinking has the same problem from
+the other end. It matches the vendor's own "one `auth.json` per stream" rule above, so treat a copied
+credential as a 401 waiting for the original session to refresh.
+
+A related detail worth knowing, since it changes what a home contains:
+`codex login --with-api-key` **writes the key into `auth.json`** rather than reading it live
+([#5212](https://github.com/openai/codex/issues/5212), closed "not planned"). A home seeded that way
+has `auth_mode: "apikey"`, which the identity check below refuses — correctly, because it is not a
+subscription.
+
 ### A `PATH` script, not a shell function
 
 A `codex()` function in `~/.zshrc` exists only for the person typing. It does not exist for a
@@ -336,13 +354,21 @@ Routing by directory answers "which account does this repo bill". A fleet asks a
 |---|---|---|
 | answers | *which account does this repo bill?* | *which account has room right now?* |
 | home | `~/.codex-<name>`, chosen from the working directory | `~/.codex-<n>`, chosen by the dispatcher |
-| variable | `CODEX_HOME`, set by a `PATH` wrapper | `CODEX_HOME_<n>` in the startup file, read by the dispatcher |
+| variable | `CODEX_HOME`, set by a `PATH` wrapper | `CODEX_HOME_<n>` in the startup file — a registry the dispatcher reads and writes into the child's `CODEX_HOME` |
 | good for | keeping a client's work off your own subscription | unattended throughput, a headless box |
 
 In MindstoneRebel's version, account 1 — the normal `~/.codex` login — is **reserved**: once any
 dispatch account exists it is never dispatched to, so a sub-agent's rate-limit cannot stall the person
-driving the machine. Accounts 2..9 are minted with
+driving the machine. The reservation is structural rather than a runtime check — account 1 has no
+credential env var at all, so no execution profile can bind it. Accounts 2..9 are minted with
 `CODEX_HOME="$HOME/.codex-$n" codex login --device-auth`.
+
+**Their conclusion about the limits of this is worth carrying over.** Keeping a metered key out of a
+"subscription" lane is done by unsetting variables, and four rounds of review each found one more
+route the unset list could not see. The position they settled on is that a lane declaring
+`subscription` records route *intent*, not proof of billing, and that per-account credential-store
+isolation is the structural answer. Which is this document — so treat the routing as the durable half
+and any env-var scrubbing as best-effort.
 
 Two failures from that fleet are worth carrying, and neither is Codex-specific:
 
@@ -394,6 +420,11 @@ Two failures from that fleet are worth carrying, and neither is Codex-specific:
   `$CODEX_HOME/app-server-control/app-server-control.sock` and its state is
   `$CODEX_HOME/app-server-daemon/`, so two homes cannot share a daemon and inherit each other's
   account. From `codex doctor --json` here, where the daemon was not running.
+- **Nothing inside the repo can choose the account.** A project `.codex/config.toml` is read for a
+  trusted project, but is explicitly forbidden from setting `openai_base_url`, `chatgpt_base_url`,
+  `model_provider`, `model_providers`, `profile` or `profiles`
+  ([config-advanced](https://learn.chatgpt.com/docs/config-file/config-advanced)). So there is no
+  in-repo lever at all, and the wrapper is not a workaround for one — it is the only mechanism.
 - **`--profile` is adjacent, and not this.** `--profile NAME` layers `$CODEX_HOME/NAME.config.toml`
   over the base config ([reference](https://learn.chatgpt.com/docs/developer-commands?surface=cli)).
   It cannot point at a second account, because auth lives in `auth.json` and profiles do not touch it.

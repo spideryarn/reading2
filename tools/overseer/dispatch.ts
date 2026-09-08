@@ -40,7 +40,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import type { JobOutcome, OccurrenceKey } from "./jobs.js";
-import type { JobSpawn, SpawnJob } from "./scheduler.js";
+import type { JobSpawn, SpawnJob } from "./jobs.js";
 
 /** The env var that arms the scheduler. Named here so the CLI and the status page cannot disagree about it. */
 export const JOBS_ENABLED_VAR = "OVERSEER_JOBS_ENABLED";

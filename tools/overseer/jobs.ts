@@ -362,6 +362,33 @@ export function occurrenceId(key: OccurrenceKey): OccurrenceId {
 export type JobOutcome = { readonly kind: "exited"; readonly code: number } | { readonly kind: "failed"; readonly why: string };
 
 /**
+ * What the runner says when it is asked to start a job.
+ *
+ * **It returns a result and does not throw**, and the two arms are different
+ * facts: `refused` means *this did not start and I know it* (a precondition
+ * failed, the binary is missing), which is a settled outcome. A throw is not in
+ * the contract, and when one happens anyway the scheduler records `unknown`
+ * rather than `refused` — because a function that broke its own contract is not
+ * evidence about whether a process exists.
+ *
+ * `done` settles when the work does. A promise that never settles is not an
+ * error here; it is the case the lease exists for.
+ *
+ * **It lives here rather than in `scheduler.ts` because BOTH starters answer in
+ * it** — the session dispatcher and the rule protocol — and the rule protocol is
+ * a pinned file that must not import the scheduler. A type in the module that
+ * already owns `JobOutcome` and `JobDefinition` is the shared leaf; the
+ * alternative was a second type meaning the same thing on the rule side, which
+ * is the twin-declaration failure this area keeps writing up.
+ */
+export type JobSpawn =
+  | { readonly kind: "spawned"; readonly pid: number; readonly done: Promise<JobOutcome> }
+  | { readonly kind: "refused"; readonly why: string };
+
+/** How a session job is started. The rule protocol is the other starter, and it is not one of these — see `scheduler.ts` § `TickInput.spawn`. */
+export type SpawnJob = (definition: JobDefinition, key: OccurrenceKey) => JobSpawn;
+
+/**
  * Why an `unknown` occurrence is unknown, and whether anybody wrote that down.
  *
  * `derived` is the fold's own reading of a `reserved` left behind by an instance

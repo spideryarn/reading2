@@ -167,7 +167,7 @@ describe("the wiring the shipped CLI actually does", () => {
     // The deterministic rule rides along under the full arming, which is the
     // superset; `tests/overseer-rules.test.ts` covers the rules-only one, where
     // the daemon is handed no spawner at all.
-    expect(on.jobs?.definitions.map((job) => job.definition.id)).toEqual(["get-ready-to-deploy", "feedback-sweep", "wedged-work"]);
+    expect(on.jobs?.definitions.map((job) => job.definition.id)).toEqual(["get-ready-to-deploy", "feedback-sweep", "wedged-work", "launch-mode"]);
     expect(typeof on.jobs?.spawn).toBe("function");
     expect(on.detail).not.toContain(JOBS_ENABLED_VAR);
     expect(on.problems).toEqual([]);
@@ -176,7 +176,7 @@ describe("the wiring the shipped CLI actually does", () => {
   test("the definitions are built either way, so a disarmed daemon can still say what it would run", () => {
     // Off must not mean blind. A disarmed scheduler that could not name its jobs
     // would be indistinguishable from one that has none.
-    expect(schedulerWiring({}).definitions.map((job) => job.definition.id)).toEqual(["get-ready-to-deploy", "feedback-sweep", "wedged-work"]);
+    expect(schedulerWiring({}).definitions.map((job) => job.definition.id)).toEqual(["get-ready-to-deploy", "feedback-sweep", "wedged-work", "launch-mode"]);
   });
 });
 
