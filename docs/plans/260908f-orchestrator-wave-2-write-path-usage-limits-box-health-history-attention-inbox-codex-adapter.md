@@ -124,7 +124,7 @@ six sessions can now build in parallel without a negotiation between them.
 |---|---|---|
 | **A** attention | the five types, verbatim, in `wire.ts` (`4d5cc454`) | the classifier, and the evaluation that justifies it |
 | **B** usage | the dashboard's `Pause` contract (`f1c34e96`) | the collector and the 429 ground truth |
-| **C** harness | shape agreed with the dashboard; two live findings (below) | `harness.ts`, and moving `steer.ts`'s refusal to read it |
+| **C** harness | **DONE** (`5c2e31cb`) — six arms, one `can: true`, Sol-reviewed | nothing; the `steer.ts` inline change is queued behind `fleet-approval-binding` |
 | **D** health | seam agreed (`refreshOnce`, not `server.ts`); `lock.ts` extracted for it | retention and the drawing |
 | **E/F** dictation | file split agreed with the dashboard | all of it |
 | **A5** | **closed**, no code | nothing |
@@ -143,12 +143,34 @@ six sessions can now build in parallel without a negotiation between them.
    union in Stage A is load-bearing rather than fastidious, and why a `prose` item gets **no answer
    control at all** in v1.
 
-**And one cost finding, which is not engineering:** `w2-harness-adapter` found **two orphaned paid
-`gpt-5.6-sol --effort high` reviews running under `ppid 1`**, attributable to no session, which
-nothing on the dashboard can see or stop. Related to a trap already recorded — a killed codex run
+**And one cost finding, which is not engineering — stated with its timestamp, because that turned out
+to matter.** At **13:30** `w2-harness-adapter` found **two orphaned paid `gpt-5.6-sol --effort high`
+reviews running under `ppid 1`**: the Bash-tool shell had been reaped, leaving 45-minute jobs
+reparented to init, attributable to no session and invisible to `work.ts`, which only walks *down*
+from a pane. **At 14:05 there were none** — every `ppid 1` process on the box was a system daemon.
+So the finding is **real but transient**: not a leak that accumulates, but a window during which a
+paid job cannot be attributed or stopped. Related to a trap already recorded — a killed codex run
 still writes its `--output` file, so a stale review is indistinguishable from a fresh one and both the
 exit code and file-exists pass. An orphan whose output path is later reused is that trap with a long
 fuse.
+
+The one genuinely long-lived orphan is `bash /tmp/fake-codex-qAz9Um/codex`, reparented **6 days 20
+hours** ago at 1.7 MB. That is the **fake** codex from a test harness — the same one whose existence
+shaped the decision not to peel shells in `work.ts` — leaked from a test run last week. Harmless, and
+a live specimen of what the recogniser is built to refuse.
+
+### "There are none" is a reading, not a property
+
+The sharpest thing Stage C produced, and it generalises past Codex. At **11:58** the honest answer was
+zero Codex panes, exactly as the brief predicted — a Codex here is always a Claude session's child.
+By **12:15** there were three, two of them a bare interactive `codex` TUI under a `bash -l`. The
+module nearly shipped a comment asserting that an interactive Codex had never existed on this box,
+**minutes before two did**.
+
+Nothing was wrong with the first reading. What was wrong was the tense it was about to be written in.
+The same fragility applies to *"35 `auto`, 1 `default`"* earlier the same day, and to every count in
+this doc: **the honest form of a fleet measurement is the timestamp**, and a sentence that drops it
+has converted an observation into a claim about the world.
 
 ## Stages
 
