@@ -514,6 +514,17 @@ these before designing anything that talks to a session.**
   35, 23 of 30 GB of RAM and 18 of 31 GB of swap in use, on an ordinary afternoon (2026-09-08); it
   reached 391 with the OOM killer firing earlier the same day. A tick that costs 12 seconds of
   grepping every 60 is 20% of a core, forever. Measure before adding a second one.
+
+  **And the mechanism was caught in the act at 09:35 that evening, which is what makes A13 concrete
+  rather than prudent.** Load went 11.7 → 20.6 → 41.8 across three five-minute windows — doubling —
+  with 25 of 30 GB used, and the cause was **four separate `vitest` runs in four different worktrees,
+  one of them 26 minutes old.** Nothing was wrong with any of them. Each agent was doing the right
+  thing by the rules it had, and **not one could see the other three.** That is the whole of A13 in
+  one observation: the expensive resource is not any single job, it is the absence of anywhere to ask
+  *is now a good time*. The cheap half of the fix needs no admission controller at all — an
+  orchestrator running several agents should run the gate **once, itself, at the end**, rather than
+  letting each agent run it against a tree the others are still changing, which is fewer runs *and*
+  better evidence.
 - **Address a session by tmux pane handle plus an execution generation, never by name.** Names get
   reassigned when a session dies. Both `gjd-remote` and the third-party system Greg showed us learned
   this independently.
