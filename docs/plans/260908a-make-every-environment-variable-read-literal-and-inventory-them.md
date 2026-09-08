@@ -246,8 +246,8 @@ directly.
 plus the six `src/` reads made literal and `src/env.ts`'s two-name boundary extraction.
 
 **GPT Sol refused this stage twice and then checked the fixes twice more.** Five verdicts in all —
-[round 1](260908a-stage1-review-sol-1.md), [round 2](260908a-stage1-review-sol-2.md),
-[scoped check of four fixes](260908a-stage1-review-sol-3.md), and two narrower checks after that.
+[round 1](260908a-env-reads-stage1-review-sol-1.md), [round 2](260908a-env-reads-stage1-review-sol-2.md),
+[scoped check of four fixes](260908a-env-reads-stage1-review-sol-3.md), and two narrower checks after that.
 Every refusal was the same class the two previous attempts died of: **a read the check silently
 skips rather than refuses.** What changed is that this time the answer was never a patch.
 
