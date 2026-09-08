@@ -21,7 +21,12 @@ import { promisify } from "node:util";
 
 const run = promisify(execFile);
 
-import { buildSessionScript, parseSessions, type Session } from "../../scripts/gjd-remote-tmux.js";
+import {
+  buildSessionScript,
+  parseSessions,
+  type Session,
+  type SessionMeta,
+} from "../../scripts/gjd-remote-tmux.js";
 import { capturePane, parsePane, type PaneQuestion } from "./pane.js";
 import { statusesOf, type FleetStatus } from "./status.js";
 
@@ -36,6 +41,30 @@ export type FleetRow = {
   repo: string | null;
   /** The worktree directory's own name, when the session is in one. */
   worktree: string | null;
+  /**
+   * The launcher's metadata, WHOLE and undamaged — the same discriminated union
+   * `Session` carries, not a flattened set of nullable fields.
+   *
+   * `repo` and `worktree` above are for RENDERING and are lossy on purpose: a
+   * name for a person to read. This is the record, and it holds `dir` — the
+   * full working directory, which nothing else in the payload can reconstruct.
+   * `~/.claude/projects/<slug>/` is a slugified cwd and slugification is lossy,
+   * and the repo is provably not derivable from the directory either (there is
+   * a comment in gjd-remote-log.ts saying so).
+   *
+   * WITHOUT THIS A REBOOT IS UNRECOVERABLE, which is what put it here. Session
+   * identity lives only in the tmux environment, so a reboot erases it — and a
+   * history that recorded a tmux handle and some display fields could say what
+   * was running and not where, so nothing could be resumed. GPT Sol's P0 on the
+   * Overseer's plan (2026-09-08), relayed by that session; the fix belongs in
+   * this file because this is where the fields were being dropped.
+   *
+   * The union rather than `dir: string | null` so that reading `dir` forces the
+   * `version === 1` check: a legacy session genuinely does not have one, and a
+   * null that the compiler lets you ignore is the shape this project keeps
+   * writing comments about.
+   */
+  meta: SessionMeta;
   startedAt: string;
   /**
    * What the session is doing. A union, never a bare string, and `unknown`
@@ -85,6 +114,12 @@ export type FleetSnapshot = {
   collectedAt: string;
   /** How long the collection took. It is seconds, not milliseconds — see the server. */
   tookMs: number;
+  /**
+   * Which tmux server these handles belong to — see `tmuxServerPid`. Every `$…`
+   * and `%…` in `rows` is meaningless without it, and comparing two snapshots
+   * across a reboot without checking it silently equates different sessions.
+   */
+  tmuxServerPid: number | null;
 };
 
 /** A pane's address, and the pid that changes when it is respawned under it. */
@@ -114,6 +149,33 @@ export function panesBySession(listPanesOutput: string): Map<string, PaneInfo> {
     if (!out.has(session)) out.set(session, { paneId: pane, panePid });
   }
   return out;
+}
+
+/**
+ * The tmux SERVER's pid, from the same listing — a generation token.
+ *
+ * `$1643` is unique within one tmux server and meaningless across two. When the
+ * server dies, handles start again at `$0`, so a stored `$1643` from before a
+ * reboot and a live `$1643` after one are different sessions wearing one name,
+ * and nothing in the row can tell them apart. This is the field that can.
+ *
+ * `claudeSessionId` covers the same hazard for the CONVERSATION half (a session
+ * resumed into a different chat); this covers the runtime half (the same handle
+ * in a new tmux server). Neither subsumes the other: a reboot changes this and
+ * nothing else, and a resume changes the uuid and nothing else. Sol's finding on
+ * the Overseer's plan, 2026-09-08.
+ *
+ * Free: `#{pid}` is a fourth field on the `list-panes -a` we already run, not
+ * another call. Null when the listing is empty or the field is not a number,
+ * because a generation we had to guess would defeat the purpose.
+ */
+export function tmuxServerPid(listPanesOutput: string): number | null {
+  for (const line of listPanesOutput.split("\n")) {
+    const parts = line.trim().split(/\s+/);
+    const pid = parts[3];
+    if (pid !== undefined && /^\d{1,10}$/.test(pid)) return Number(pid);
+  }
+  return null;
 }
 
 /**
@@ -151,6 +213,7 @@ export function toRows(
     title: s.title.trim() === "" ? null : s.title.trim(),
     repo: s.meta.version === 1 ? s.meta.repo : null,
     worktree: s.meta.version === 1 ? worktreeOf(s.meta.dir) : null,
+    meta: s.meta,
     startedAt: s.created.toISOString(),
     paneId: panes.get(s.id)?.paneId ?? null,
     panePid: panes.get(s.id)?.panePid ?? null,
@@ -187,20 +250,33 @@ export function toRows(
  */
 
 /**
- * Every pane on the box, keyed by its session. Empty on failure rather than
- * throwing: not knowing a pane costs a question, while the row itself is still
- * worth showing.
+ * One `list-panes -a` answers two questions, so they travel together: which
+ * pane belongs to which session, and which tmux server all of those handles
+ * belong to. Grouped rather than passed as two arguments because a caller that
+ * can supply the panes and omit the generation is a caller that will.
  */
-function panes(): Map<string, PaneInfo> {
+export type PaneListing = { panes: ReadonlyMap<string, PaneInfo>; tmuxServerPid: number | null };
+
+/**
+ * Every pane on the box, keyed by its session, and the server they are on.
+ *
+ * Empty on failure rather than throwing: not knowing a pane costs a question,
+ * while the row itself is still worth showing. A null generation is the same
+ * bargain — it says "unverifiable", which is what a consumer needs to hear.
+ */
+function panes(): PaneListing {
   try {
-    return panesBySession(
-      execFileSync("tmux", ["list-panes", "-a", "-F", "#{session_id} #{pane_id} #{pane_pid}"], {
-        encoding: "utf8",
-        timeout: 10_000,
-      }),
+    const out = execFileSync(
+      "tmux",
+      // `#{pid}` is the SERVER's pid, not the pane's — a fourth field on a call
+      // we were already making, and the only cheap way to tell one tmux server's
+      // `$1643` from the next one's.
+      ["list-panes", "-a", "-F", "#{session_id} #{pane_id} #{pane_pid} #{pid}"],
+      { encoding: "utf8", timeout: 10_000 },
     );
+    return { panes: panesBySession(out), tmuxServerPid: tmuxServerPid(out) };
   } catch {
-    return new Map();
+    return { panes: new Map(), tmuxServerPid: null };
   }
 }
 
@@ -225,12 +301,17 @@ export function sessionScript(): string {
  */
 export function snapshotFrom(
   parsed: ReturnType<typeof parseSessions>,
-  panes: ReadonlyMap<string, PaneInfo>,
+  listing: PaneListing,
   tookMs: number,
   now = new Date(),
 ): FleetSnapshot {
   const status = new Map(statusesOf(parsed).map((r) => [r.id, r.status]));
-  return { rows: toRows(parsed.sessions, status, panes), collectedAt: now.toISOString(), tookMs };
+  return {
+    rows: toRows(parsed.sessions, status, listing.panes),
+    collectedAt: now.toISOString(),
+    tookMs,
+    tmuxServerPid: listing.tmuxServerPid,
+  };
 }
 
 export async function collect(): Promise<FleetSnapshot> {
