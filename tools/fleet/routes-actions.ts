@@ -91,6 +91,7 @@ import {
   checkOrigin,
   createRateLimiter,
   MAX_BODY_BYTES,
+  parseSpeaker,
   parseStatus,
   parseTarget,
   readBody,
@@ -333,10 +334,19 @@ export type ActionResponse =
   | { ok: true; op: "revived"; item: QueuedItem }
   /** A lease nobody settled, cleared by a person. It is NOT a claim that nothing was sent. */
   | { ok: true; op: "abandoned"; item: QueuedItem }
-  | { ok: true; op: "dry-run"; action: ActionId; steps: readonly Step[]; candidates?: KillCandidate[]; scanned?: number; unreadable?: number }
-  | { ok: true; op: "ran"; action: ActionId; run: PlanRun; killed?: number[]; skipped?: { pid: number; why: string }[] }
-  | { ok: true; op: "broadcast-preview"; action: ActionId; total: number; recipients: BroadcastOutcome[]; sample: string | null }
-  | { ok: true; op: "broadcast"; action: ActionId; total: number; recipients: BroadcastOutcome[] }
+  /*
+   * THE FOUR ARMS THAT DESCRIBE AN EFFECT, and they agree on two field names.
+   *
+   * `dryRun` says whether it really happened and `result` holds what happened
+   * or would happen; nothing else is at the top level. The page reads exactly
+   * those two — see § What a box action answers, above `boxRoute`, for the day
+   * these arms each invented their own names and the confirmation in front of
+   * `kill-test-suites` rendered the word "null" for it.
+   */
+  | { ok: true; op: "dry-run"; action: ActionId; dryRun: true; result: { steps: readonly Step[]; candidates?: KillCandidate[]; scanned?: number; unreadable?: number } }
+  | { ok: true; op: "ran"; action: ActionId; dryRun: false; result: { run: PlanRun; killed?: number[]; skipped?: { pid: number; why: string }[] } }
+  | { ok: true; op: "broadcast-preview"; action: ActionId; dryRun: true; result: { total: number; recipients: BroadcastOutcome[]; sample: string | null } }
+  | { ok: true; op: "broadcast"; action: ActionId; dryRun: false; result: { total: number; recipients: BroadcastOutcome[] } }
   | {
       ok: false;
       code: ActionErrorCode;
@@ -378,28 +388,24 @@ export function parseMode(v: unknown, fallback: ActionMode): Parsed<ActionMode> 
   return bad(`mode must be 'enqueue', 'dry-run' or 'run', not ${JSON.stringify(v)}`);
 }
 
-/**
- * Who is speaking, defaulting to the WEAKER claim.
- *
- * `overseer` rather than `greg` when the field is missing, and the asymmetry is
- * the point: a coordinator that forgets to say who it is gets the prefix that
- * says "weigh this as a peer's suggestion", and a caller that wants Greg's
- * authority has to ask for it in as many words. The other default would let a
- * model mint its own approval by omission — A12 in actions.ts's own header.
- */
-export function parseSpeaker(v: unknown): Parsed<Speaker> {
-  if (v === undefined || v === null) return { ok: true, value: "overseer" };
-  const s = asString(v);
-  if (s === "greg" || s === "overseer") return { ok: true, value: s };
-  return bad(`speaker must be 'greg' or 'overseer', not ${JSON.stringify(v)}`);
-}
-
 export type SessionActionRequest = {
   target: SteerTarget;
   declaredStatus: FleetStatus;
   what: { kind: "action"; action: Action } | { kind: "message"; text: string };
   mode: ActionMode;
   confirm: boolean;
+  /**
+   * WHO IS SPEAKING, on the path that carries almost every message.
+   *
+   * `BoxActionRequest` has had this since it was written and the broadcast
+   * route renders with it; this one did not, so the attribution rule reached
+   * every fleet-wide broadcast — the rarest thing the tool does — and no
+   * single-session instruction at all, which is the one a person taps, the one
+   * the queue drains, and the one an automated coordinator will use. It is
+   * parsed by the SAME `parseSpeaker`, so there is one answer to "what does
+   * silence mean" rather than two that can drift.
+   */
+  speaker: Speaker;
   /** For `remove-worktree`. The row's own directory and branch, as shown. */
   worktreeDir: string | null;
   branch: string | null;
@@ -443,6 +449,8 @@ export function parseSessionBody(raw: unknown): Parsed<SessionActionRequest> {
 
   const mode = parseMode(o.mode, "enqueue");
   if (!mode.ok) return mode;
+  const speaker = parseSpeaker(o.speaker);
+  if (!speaker.ok) return speaker;
   const confirm = o.confirm === true;
   const worktreeDir = asString(o.worktreeDir);
   const branch = asString(o.branch);
@@ -450,7 +458,7 @@ export function parseSessionBody(raw: unknown): Parsed<SessionActionRequest> {
 
   return {
     ok: true,
-    value: { target: target.value, declaredStatus, what, mode: mode.value, confirm, worktreeDir, branch, sessionName },
+    value: { target: target.value, declaredStatus, what, mode: mode.value, confirm, speaker: speaker.value, worktreeDir, branch, sessionName },
   };
 }
 
@@ -1109,7 +1117,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     const shape = r.what.kind === "action" ? `action=${r.what.action.id}` : `chars=${r.what.text.length}`;
     deps.log(
       `action session: pane=${target.paneId} session=${target.sessionId} claude=${target.claudeSessionId} ` +
-        `declared=${r.declaredStatus.kind} mode=${r.mode} ${shape}`,
+        `declared=${r.declaredStatus.kind} mode=${r.mode} speaker=${r.speaker} ${shape}`,
     );
 
     if (r.what.kind === "action" && r.what.action.scope !== "session") {
@@ -1150,7 +1158,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
 
     if (r.mode === "dry-run") {
-      respond(res, 200, { ok: true, op: "dry-run", action: action.id, steps: built.plan.steps });
+      respond(res, 200, { ok: true, op: "dry-run", action: action.id, dryRun: true, result: { steps: built.plan.steps } });
       return;
     }
 
@@ -1192,7 +1200,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       refuse(res, "plan-failed", `step ${(run.stoppedAt ?? 0) + 1} did not pass its gate: ${stopped?.verdict ?? "unknown"}`, run);
       return;
     }
-    respond(res, 200, { ok: true, op: "ran", action: action.id, run });
+    respond(res, 200, { ok: true, op: "ran", action: action.id, dryRun: false, result: { run } });
   }
 
   async function enqueue(r: SessionActionRequest, res: ServerResponse): Promise<void> {
@@ -1217,7 +1225,8 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     }
 
     const t = { sessionId: r.target.sessionId, claudeSessionId: r.target.claudeSessionId };
-    const result: EnqueueResult = r.what.kind === "action" ? deps.queue.enqueueAction(t, r.what.action.id) : deps.queue.enqueueMessage(t, r.what.text);
+    const result: EnqueueResult =
+      r.what.kind === "action" ? deps.queue.enqueueAction(t, r.what.action.id, r.speaker) : deps.queue.enqueueMessage(t, r.what.text, r.speaker);
     if (!result.ok) {
       deps.log(`action session: refused code=${ENQUEUE_CODE[result.rule]} rule=${result.rule}`);
       refuse(res, ENQUEUE_CODE[result.rule], result.why);
@@ -1234,7 +1243,9 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     // until the dialog has been dealt with. Reporting `now` there would promise
     // a delivery that the very next pass declines to make.
     const willGo = deliveryGate(r.declaredStatus);
-    deps.log(`action session: QUEUED id=${result.item.id} session=${r.target.sessionId} position=${result.position} gate=${willGo.kind}`);
+    deps.log(
+      `action session: QUEUED id=${result.item.id} session=${r.target.sessionId} speaker=${r.speaker} position=${result.position} gate=${willGo.kind}`,
+    );
     respond(res, 200, { ok: true, op: "enqueued", item: result.item, position: result.position, gate: willGo });
   }
 
@@ -1368,6 +1379,33 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
 
   /* ---------------- POST /api/actions/box ---------------- */
 
+  /**
+   * ## What a box action answers, and why every arm answers it the same way
+   *
+   * Two fields, on all four 200s:
+   *
+   *  - **`dryRun`** — whether this REALLY happened. Read off the answer rather
+   *    than remembered from the request by everything downstream, because a
+   *    server that ignored the flag and killed seventeen processes would
+   *    otherwise be reported on the page as having answered a question.
+   *  - **`result`** — what it did, or what it would do: the steps, the
+   *    candidate pids, the recipients, the sample sentence. Whatever this
+   *    holds, `RawValue` in ActionButtons.tsx draws it, and it is the entire
+   *    content of the confirmation a person reads before pressing *kill*.
+   *
+   * **THE UNIFORMITY IS THE FIX, not tidiness.** Until 2026-09-08 each arm
+   * invented its own top-level field names — `steps`, `candidates`, `killed`,
+   * `skipped`, `recipients`, `sample` — while `actions-client.ts` read
+   * `parsed["would"] ?? parsed["result"]`, a name no arm has ever sent. Both
+   * ends were internally coherent and disagreed about a *word*, so both
+   * compiled, both were tested, and the panel in front of `kill-test-suites`
+   * rendered the literal grey word "null" where the consequences belong. That
+   * is instance #11 of
+   * docs/postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md,
+   * and the durable repair is the shared wire type in § Stage v0.8a; this is
+   * the half of it that stops the page lying today. **A new arm here that
+   * invents a field name instead of filling `result` re-opens it.**
+   */
   async function boxRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const parsed = await parsedBody(req, res, MAX_BOX_BODY_BYTES);
     if (parsed === null) return;
@@ -1461,10 +1499,16 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         ok: true,
         op: "dry-run",
         action: action.id,
-        steps: preview.ok ? preview.plan.steps : [],
-        candidates,
-        scanned: scan.procs.length,
-        unreadable: scan.unreadable,
+        // THE TWO FIELDS THE CONFIRMATION PANEL IS BUILT OUT OF, and they are
+        // named here rather than left for a reader to infer from `op`. See
+        // § What a box action answers, above `boxRoute`.
+        dryRun: true,
+        result: {
+          steps: preview.ok ? preview.plan.steps : [],
+          candidates,
+          scanned: scan.procs.length,
+          unreadable: scan.unreadable,
+        },
       });
       return;
     }
@@ -1503,7 +1547,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
     deps.log(`action box: KILLING action=${action.id} pids=${pids.join(",")}`);
     const run = await runPlan(built.plan, deps.io);
     deps.log(`action box: ${run.completed ? "DONE" : "STOPPED"} action=${action.id} steps=${run.steps.length}`);
-    respond(res, 200, { ok: true, op: "ran", action: action.id, run, killed: pids, skipped });
+    respond(res, 200, { ok: true, op: "ran", action: action.id, dryRun: false, result: { run, killed: pids, skipped } });
   }
 
   /**
@@ -1570,11 +1614,14 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
         ok: true,
         op: "broadcast-preview",
         action: action.id,
-        total,
-        recipients: outcomes,
-        // One recipient's exact words, so the person can read what is about to
-        // be said to thirty-six agents before it is said.
-        sample: first === undefined ? null : renderBroadcast(action, { index: 0, total }, r.speaker),
+        dryRun: true,
+        result: {
+          total,
+          recipients: outcomes,
+          // One recipient's exact words, so the person can read what is about to
+          // be said to thirty-six agents before it is said.
+          sample: first === undefined ? null : renderBroadcast(action, { index: 0, total }, r.speaker),
+        },
       });
       return;
     }
@@ -1663,7 +1710,7 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       `action box: BROADCAST action=${action.id} speaker=${r.speaker} told=${sent}/${total} of ${r.recipients.length} rows` +
         (unreached > 0 ? ` (ran out of time before ${unreached})` : ""),
     );
-    respond(res, 200, { ok: true, op: "broadcast", action: action.id, total, recipients: outcomes });
+    respond(res, 200, { ok: true, op: "broadcast", action: action.id, dryRun: false, result: { total, recipients: outcomes } });
   }
 
   function skippedOutcome(rec: Recipient, gate: DrainGate | undefined): BroadcastOutcome {

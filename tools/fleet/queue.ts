@@ -63,7 +63,7 @@
  * and are still never put back. `release` refuses to be called without the
  * transport's own word for it: see `nothingWasSent`.
  */
-import { actionById, type SpokenAction } from "./actions.js";
+import { actionById, renderMessage, type SpokenAction, type Speaker } from "./actions.js";
 import type { FleetStatus } from "./status.js";
 import { checkText, steerableStatus, type Refusal, type SteerFailure } from "./steer.js";
 
@@ -107,6 +107,23 @@ export type QueuedItem = {
    */
   claudeSessionId: string;
   payload: QueuedPayload;
+  /**
+   * WHO ASKED FOR THIS, and it travels with the item because the words are
+   * rendered at DELIVERY rather than here.
+   *
+   * `renderBroadcast` already says why nothing is rendered at enqueue: a
+   * sentence written twenty minutes before it is typed has decayed by the time
+   * anybody reads it. The same argument makes the speaker a FIELD rather than a
+   * prefix baked into `payload.text` — and it is the field that stops an
+   * automated coordinator's instruction reaching an agent as an ordinary user
+   * turn indistinguishable from Greg's. See actions.ts § `Speaker` (A12).
+   *
+   * Not optional, and there is no default here on purpose: "who is speaking" is
+   * the one thing a caller of this queue may not decline to say. The place that
+   * decides what an absent claim means is `parseSpeaker`, at the HTTP boundary,
+   * where the claim actually arrives.
+   */
+  speaker: Speaker;
   enqueuedAt: number;
   /** When `next()` handed it out. Null while it is waiting. */
   leasedAt: number | null;
@@ -549,7 +566,7 @@ export class SteeringQueue {
    * body from a browser lands: `actionById` is the only way in, so a caller
    * cannot invent an action with different words in it.
    */
-  enqueueAction(target: { sessionId: string; claudeSessionId: string }, actionId: string): EnqueueResult {
+  enqueueAction(target: { sessionId: string; claudeSessionId: string }, actionId: string, speaker: Speaker): EnqueueResult {
     const action = actionById(actionId);
     if (!action) return { ok: false, rule: "no-such-action", why: `there is no action called '${actionId}'` };
     if (action.scope !== "session") {
@@ -589,7 +606,7 @@ export class SteeringQueue {
         why: `'${action.id}' runs commands on the box rather than typing a sentence, and nothing delivers a queued one — dry-run it to see what it would do, then run it with a confirm`,
       };
     }
-    return this.push(target, { kind: "action", action });
+    return this.push(target, { kind: "action", action }, speaker);
   }
 
   /**
@@ -600,14 +617,37 @@ export class SteeringQueue {
    * failing silently at the head of the queue twenty minutes later. It is the
    * same function the send will use, so the two cannot disagree about what a
    * sendable message is.
+   *
+   * **AND IT IS ASKED ABOUT THE WORDS THAT WILL ACTUALLY BE TYPED**, which are
+   * not the words that were typed in: the line naming the speaker is added at
+   * delivery and counts towards the 4000-character limit. Checking the raw text
+   * here and the rendered text at the send is exactly the disagreement the
+   * paragraph above says cannot happen — a 3,900-character message would be
+   * accepted, queued, promised, and refused twenty minutes later for a length
+   * nobody could see.
    */
-  enqueueMessage(target: { sessionId: string; claudeSessionId: string }, text: string): EnqueueResult {
+  enqueueMessage(target: { sessionId: string; claudeSessionId: string }, text: string, speaker: Speaker): EnqueueResult {
     const bad = checkText(text);
     if (bad) return { ok: false, rule: "bad-text", why: bad.why };
-    return this.push(target, { kind: "message", text });
+    // THE SAME FUNCTION THE DELIVERY WILL CALL, asked here so that a message
+    // this speaker may not send is refused while somebody is looking at it —
+    // the argument `checkText` is called for one line up. `renderMessage`
+    // refuses a slash command from anyone but Greg (see its header); the drain
+    // asks again at delivery, and that second ask is the structural one.
+    const rendered = renderMessage(text, speaker);
+    if (!rendered.ok) return { ok: false, rule: "bad-text", why: rendered.why };
+    const afterPrefix = checkText(rendered.text);
+    if (afterPrefix) {
+      return {
+        ok: false,
+        rule: "bad-text",
+        why: `${afterPrefix.why} — the line saying who is speaking is added when it goes out, and counts towards that`,
+      };
+    }
+    return this.push(target, { kind: "message", text }, speaker);
   }
 
-  private push(target: { sessionId: string; claudeSessionId: string }, payload: QueuedPayload): EnqueueResult {
+  private push(target: { sessionId: string; claudeSessionId: string }, payload: QueuedPayload, speaker: Speaker): EnqueueResult {
     if (!SESSION_HANDLE.test(target.sessionId)) {
       return { ok: false, rule: "bad-target", why: `'${target.sessionId}' is not a tmux session handle` };
     }
@@ -644,6 +684,7 @@ export class SteeringQueue {
       sessionId: target.sessionId,
       claudeSessionId: target.claudeSessionId,
       payload,
+      speaker,
       enqueuedAt: at,
       leasedAt: null,
       invalidated: null,

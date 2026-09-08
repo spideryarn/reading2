@@ -1,24 +1,45 @@
 # Agent fleet dashboard
 
-**Status as of 2026-09-08 10:15: the queue drains, and Greg has asked for three more things.**
+**Status as of 2026-09-08 12:00: important work left — the page finally does what it claimed, and
+the reason it did not is a class with sixteen instances, seven of them still open.**
 
-1. ~~Nothing drains the action queue~~ — **v0.5f landed**. A queued message now goes out on the next
-   refresh pass, at most one per session. The first design was killed by GPT Sol before a line was
-   written; the second is below, along with what it changed and why.
-2. ~~Sessions launch in the wrong permission mode~~ — **fixed**, on the box and in `provision.sh`,
-   Greg's call answered as *both*. **v0.4e** then made the defect visible: the page now says when a
-   session is not in auto mode.
-3. ~~The live server predates the code~~ — **restarted 2026-09-08 09:18**, and the pane gate
-   classified two real dialogs in opposite directions the moment it came up.
-4. **Greg's four, 2026-09-08 10:10–10:20** — v0.5g (Queue on an idle session), v0.4f (recent
-   messages, which is a HALF-LANDED stage rather than a new one — the server route exists and no page
-   calls it), v0.4g (the detail view is cluttered; take screenshots and get Fable's product input),
-   and **v0.4h**, which is the substantial one: *"working"* is hiding at least three different states,
-   including a session asleep for three hours with an intention to come back.
+**The buttons work.** All seventeen session actions and the three box actions render on the real page,
+checked in a browser at phone width and not merely in a suite. Recent messages are wired. A queued
+message is delivered. That was not true this morning, and in three cases it had never been true.
 
-**What is verified right now:** all 20 fleet suites, 812 tests, plus `npm run typecheck` clean across
-all four projects, at the commit below. `tools/**` is now inside `biome.jsonc`'s allowlist, which it
-had never been.
+**What was actually wrong, and it was not what anybody thought.** Four separate features were built,
+tested, routed, shipped and *dead* — the line joining them missing, every gate green, and the page
+saying something confident and false about each:
+
+1. **The queue had no drain.** Items accepted, rendered, cancellable, dropped at thirty minutes.
+2. **The action catalogue never reached the page.** The route sends `{session, box}`; the client asked
+   `Array.isArray`. So Continue, Compact, Pull, Push, Remove worktree, Exit and the sleeps have
+   **never appeared**, replaced by a dashed box blaming the server for being old.
+3. **Every box action ever pressed was a dry run reported as "Done."** The page sent `dryRun`; the
+   route has only ever parsed `mode`. *Kill test suites* killed nothing and said it had.
+4. **The attribution prefix reached nothing.** `renderSpoken` — the rule that an automated
+   coordinator must not acquire Greg's authority by arriving as a user turn — was called from its
+   tests and from nowhere else.
+
+All four are fixed and pushed. The postmortem is
+[260908b](../postmortems/260908b-the-parts-were-all-tested-and-none-of-the-joins-were.md) and it
+found **sixteen** instances, not four.
+
+**What is verified right now:** 1,203 tests across 30 suites and `npm run typecheck` clean at
+`fa9d3cc2`, plus `npm run check` green on every gate. And — the check that actually mattered here —
+**a real browser at 390px**, because a suite of 196 tests passed for weeks over a wire shape that did
+not exist.
+
+**What is left, in order:**
+
+1. **Stage v0.8a — the shared `wire.ts`.** The durable repair. Seven of the sixteen are still open,
+   including a session-scope destructive action that cannot run at all. Everything shipped today is
+   the half that stops the page lying; this is the half that stops it happening again.
+2. **The systemd cutover**, which is Greg's to run — `sudo systemctl enable` is refused for agents on
+   this box. Script prepared 2026-09-08 12:00.
+3. **v0.4g** — eight specific declutter edits, each with the reason its band exists, plus four
+   product questions that are Greg's.
+4. **v0.4h** — researched, Fable has ruled on the product shape, nothing built.
 
 Everything else below is real but optional.
 

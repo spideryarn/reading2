@@ -6,7 +6,7 @@
  * docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md
  * § *The bug's own rows were on disk all along*. The plan's premise was that
  * *"the $0.6252 bought no replayable evidence"*; that turned out to be true of
- * the **validation** question and false of the **valence** question, because
+ * the **validation** question and false of the **lean** question, because
  * every journalled `provider-response` holds the raw OpenRouter body verbatim,
  * and that carries two things Layer 2 was going to be sent out to buy:
  *

@@ -1298,7 +1298,7 @@ function fakeRename(over: Partial<RenameApi> = {}): RenameApi {
  * splits it, so the fixture cannot drift from the shape again without this
  * function being edited.
  */
-function actionsWire(over: { actions?: unknown[]; queues?: unknown[] } = {}): Record<string, unknown> {
+function actionsWire(over: { actions?: unknown[]; queues?: unknown[]; acting?: unknown } = {}): Record<string, unknown> {
   const all = over.actions ?? [];
   const scopeOf = (a: unknown): unknown => (typeof a === "object" && a !== null ? (a as Record<string, unknown>)["scope"] : null);
   return {
@@ -1307,6 +1307,12 @@ function actionsWire(over: { actions?: unknown[]; queues?: unknown[] } = {}): Re
       box: all.filter((a) => scopeOf(a) === "box"),
     },
     queues: over.queues ?? [],
+    // NAMED ONLY WHEN A TEST MEANS IT. The default is a feed with no `acting`
+    // field at all, which is the honest fixture for "this server said nothing"
+    // — and the arm that must NOT produce a warning. A default of
+    // `{enabled: true}` would make every test here assert against a server
+    // configured the way production is not.
+    ...(over.acting === undefined ? {} : { acting: over.acting }),
   };
 }
 
@@ -1356,7 +1362,7 @@ function recordingActions(
     },
     box: async (actionId, dryRun) => {
       calls.push({ op: "box", arg: actionId, second: dryRun });
-      return { ok: true, dryRun, dryRunStated: true, would: [], why: null };
+      return { ok: true, dryRun, dryRunStated: true, result: [], why: null };
     },
     ...over,
   };
@@ -3715,14 +3721,40 @@ describe("queueing a message, in one line with the buttons", () => {
 });
 
 describe("the box, which says what it would do before it does it", () => {
-  function openBox(actions: unknown[], over: Partial<ActionsApi> = {}): ReturnType<typeof recordingActions> {
-    const rec = recordingActions(() => actionsWire({ actions }), over);
+  function openBox(actions: unknown[], over: Partial<ActionsApi> = {}, acting?: unknown): ReturnType<typeof recordingActions> {
+    const rec = recordingActions(() => actionsWire({ actions, ...(acting === undefined ? {} : { acting }) }), over);
     window.location.hash = "#health";
     const feed = manualTransport();
     mountFull({ transport: feed.transport, actionsApi: rec.api });
     act(() => feed.push(state({ health: { verdict: { level: "strained", reasons: [] } } })));
     return rec;
   }
+
+  it("warns that this server will refuse, before anybody taps and finds out", async () => {
+    /* `FLEET_ACT_ENABLED` is off in production, so on the live page every one of
+       these buttons answers 409 on the second tap. The route has always said so
+       in the feed, under a comment naming this exact failure — "the alternative
+       is a person discovering it by tapping and getting a 503" — and nothing
+       read the field. The warning is the SERVER's sentence, not one written in
+       the page. */
+    openBox([KILL_SUITES_WIRE], {}, { enabled: false, why: "acting is off: start the server with FLEET_ACT_ENABLED=1." });
+    await act(async () => {});
+
+    expect(container.textContent).toContain("This server will not act");
+    expect(container.textContent).toContain("FLEET_ACT_ENABLED=1");
+    // The dry run is not gated by the flag, so the button stays pressable.
+    expect(buttonLabels()).toContain("Kill test suites");
+  });
+
+  it("says nothing about acting when the server said nothing about it", async () => {
+    /* SILENCE IS NOT A WARNING. A page that inferred "off" from an absent field
+       would put a red line on every server older than the field, which is the
+       mirror of the bug above and just as wrong. */
+    openBox([KILL_SUITES_WIRE]);
+    await act(async () => {});
+
+    expect(container.textContent).not.toContain("This server will not act");
+  });
 
   it("asks what it would do, and does not do it, on the first press", async () => {
     const rec = openBox([KILL_SUITES_WIRE]);
@@ -3772,7 +3804,7 @@ describe("the box, which says what it would do before it does it", () => {
     /* The worst thing this panel could get wrong: believing our own request
        instead of the reply, and reporting a kill as a question. */
     openBox([KILL_SUITES_WIRE], {
-      box: async () => ({ ok: true, dryRun: false, dryRunStated: true, would: ["killed 4"], why: null }),
+      box: async () => ({ ok: true, dryRun: false, dryRunStated: true, result: ["killed 4"], why: null }),
     });
     await act(async () => {});
     await clickSaying("Kill test suites");
@@ -3780,9 +3812,45 @@ describe("the box, which says what it would do before it does it", () => {
     expect(container.textContent).toContain("Treat this as already done and check the box.");
   });
 
+  it("refuses to look like a confirmation when the server said nothing about what it would destroy", async () => {
+    /* The panel drew the literal grey word "null" here for the life of the
+       feature, because it read a field name no route has ever sent (#11 in
+       docs/postmortems/260908b-…). A missing preview must read as a missing
+       preview — in the alarm colour, with no Confirm under it — because the
+       failure this panel exists to prevent is somebody pressing *kill* on the
+       strength of an answer that said nothing. */
+    const rec = openBox([KILL_SUITES_WIRE], {
+      box: async () => ({ ok: true, dryRun: true, dryRunStated: true, result: null, why: null }),
+    });
+    await act(async () => {});
+    await clickSaying("Kill test suites");
+
+    expect(container.textContent).toContain("did not say what it would destroy");
+    expect(container.textContent).not.toContain("null");
+    expect(buttonLabels()).not.toContain("Yes — kill test suites");
+    expect(rec.calls.filter((c) => c.op === "box" && c.second === false)).toHaveLength(0);
+  });
+
+  it("does not say Done over a server that answered the second press with a dry run", async () => {
+    /* `mode` is the field the route reads and this page sent `dryRun` until
+       2026-09-08, so every press of the second button was answered with a dry
+       run and reported as "Done." — the reassuring half of a contradiction, and
+       the page could tell, because the answer says which it was. */
+    openBox([KILL_SUITES_WIRE], {
+      box: async () => ({ ok: true, dryRun: true, dryRunStated: true, result: ["would kill 5001"], why: null }),
+    });
+    await act(async () => {});
+    await clickSaying("Kill test suites");
+    await clickSaying("Yes — kill test suites");
+
+    expect(container.textContent).toContain("Nothing was done.");
+    expect(container.textContent).toContain("Nothing on the box has changed.");
+    expect(container.textContent).not.toContain("Done.");
+  });
+
   it("will not claim a dry run when the server never said it was one", async () => {
     openBox([KILL_SUITES_WIRE], {
-      box: async () => ({ ok: true, dryRun: true, dryRunStated: false, would: [], why: null }),
+      box: async () => ({ ok: true, dryRun: true, dryRunStated: false, result: [], why: null }),
     });
     await act(async () => {});
     await clickSaying("Kill test suites");
@@ -3897,6 +3965,11 @@ describe("the bodies these buttons post, which are pure functions of the row", (
       status: { kind: "needs-you" },
       kind: "action",
       actionId: "remove-worktree",
+      // SAID, NOT LEFT TO THE DEFAULT. The server prefixes every message with a
+      // line naming its sender, and an absent `speaker` means the weaker claim
+      // — so a body without this field would have every button a person taps
+      // arrive at the agent labelled as an automated coordinator's suggestion.
+      speaker: "greg",
     });
   });
 
@@ -3905,6 +3978,7 @@ describe("the bodies these buttons post, which are pure functions of the row", (
     expect(message.sessionId).toBe("$1643");
     expect(message.kind).toBe("message");
     expect(message.text).toBe("do the other thing");
+    expect(message.speaker).toBe("greg");
   });
 
   it("cancels by what was on the snapshot, and asks for nothing else", () => {

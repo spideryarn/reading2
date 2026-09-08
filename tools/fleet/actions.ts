@@ -580,6 +580,56 @@ export function renderSpoken(action: SpokenAction, speaker: Speaker): string {
 }
 
 /**
+ * Whether a free-text message would reach Claude Code as a command rather than
+ * as words to weigh. Leading whitespace is trimmed first because Claude Code
+ * does the same.
+ */
+export function isSlashCommandText(text: string): boolean {
+  return text.trimStart().startsWith("/");
+}
+
+/**
+ * What actually goes to `sendMessage` for a FREE-TEXT message — or why nothing
+ * does.
+ *
+ * The attribution rule is about who is speaking, and it does not care whether
+ * the words came from the reviewed vocabulary or from a text box. A free-text
+ * message is in fact the more dangerous half: `SPOKEN`'s sentences were read by
+ * Greg before they were ever an action, and this text was not read by anybody.
+ *
+ * **The slash-command hole is NOT widened to arbitrary text, and that is the
+ * one decision in here.** `renderSpoken` names a real hole — a slash command
+ * must be first on the line, so `/compact` cannot carry a prefix — and its cost
+ * is small precisely because `COMPACT_TEXT` is a fixed, reviewed string with no
+ * instruction in it. Free text has neither property: `/loop 5m <anything>` is
+ * a slash command whose argument is prose, so letting any speaker send an
+ * unprefixed `/…` would turn a named exception into a general way to speak in
+ * Greg's voice. So a slash command is unprefixed when GREG is speaking, and
+ * refused when anybody else is.
+ *
+ * **The retreat, for a coordinator that needs one:** the vocabulary is where a
+ * slash command belongs. `/compact` is already in it and goes out unprefixed
+ * under the exception above; a second one is a reviewed entry in `SPOKEN`, not
+ * a string assembled at the call site.
+ *
+ * This is not an authentication boundary and must not be read as one — anything
+ * that can reach the dashboard can claim to be Greg. It stops an HONEST
+ * automated caller acquiring Greg's authority by omission or by accident, which
+ * is the failure A12 names; the boundary that stops a dishonest one is the
+ * Tailscale-only bind, and it is somewhere else.
+ */
+export function renderMessage(text: string, speaker: Speaker): { ok: true; text: string } | { ok: false; why: string } {
+  if (isSlashCommandText(text)) {
+    if (speaker === "greg") return { ok: true, text };
+    return {
+      ok: false,
+      why: "a message beginning with '/' is a command to Claude Code rather than words to weigh, and it cannot carry the line saying who is speaking — only Greg may send one, and an automated caller should use an action from the vocabulary instead",
+    };
+  }
+  return { ok: true, text: SPEAKER_PREFIX[speaker] + text };
+}
+
+/**
  * How many minutes THIS recipient is asked to pause for.
  *
  * Spread evenly across `[minMinutes, windowMinutes]`, so the first recipient

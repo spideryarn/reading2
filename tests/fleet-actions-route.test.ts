@@ -32,6 +32,7 @@ import {
   type StepRun,
 } from "../tools/fleet/routes-actions.js";
 import { createRateLimiter } from "../tools/fleet/routes-steer.js";
+import { makeActionsApi } from "../tools/fleet/web/src/actions-client";
 import { SteeringQueue } from "../tools/fleet/queue.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import type { SteerResult, SteerTarget } from "../tools/fleet/steer.js";
@@ -186,6 +187,50 @@ async function call(
   return { ...seen, json: seen.body === "" ? {} : (JSON.parse(seen.body) as Record<string, unknown>) };
 }
 
+/**
+ * The dashboard's own `fetch`, wired straight to these routes.
+ *
+ * **So that the client's parse and the server's response meet with nothing
+ * hand-written in between.** A fixture of a response is a claim about the
+ * producer that nothing checks against the producer — which is how
+ * `actions-client.ts` came to read a field name (`would`) that no route has
+ * ever sent, under a fixture that supplied it. Driving `makeActionsApi` through
+ * the real handler is the only version of this test that can fail.
+ */
+function browserFetch(routes: ReturnType<typeof harness>["routes"]): typeof fetch {
+  return (async (input: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) => {
+    // The client posts to a RELATIVE url, as a browser on the dashboard does,
+    // and its GETs carry no content type — the default here is `fetch`'s, not
+    // this file's convenience, so a route that checks the method sees what the
+    // browser would send.
+    const method = init?.method ?? "GET";
+    const r = await call(
+      routes,
+      fakeReq({
+        url: `/${String(input)}`,
+        method,
+        body: init?.body ?? "",
+        headers: init?.headers ?? (method === "GET" ? { "content-type": "" } : {}),
+      }),
+    );
+    return new Response(r.body, { status: r.status ?? 500 });
+  }) as unknown as typeof fetch;
+}
+
+/**
+ * The `result` of a 200, which is where every arm that describes an effect puts
+ * what it did or would do.
+ *
+ * A helper rather than `r.json.candidates` at fifteen call sites, because the
+ * flat spelling is what the client could not read: each arm named its own
+ * top-level field, `actions-client.ts` looked for one name none of them used,
+ * and the confirmation in front of a kill drew the word "null". Reading through
+ * one accessor here mirrors the one accessor there.
+ */
+function resultOf(r: { json: Record<string, unknown> }): Record<string, unknown> {
+  return (r.json["result"] ?? {}) as Record<string, unknown>;
+}
+
 /** The body the client sends for a session action, in one place. */
 function sessionBody(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -231,7 +276,7 @@ describe("GET /api/actions", () => {
 
   it("shows a queued item, and says the queue is volatile", async () => {
     const { routes, queue } = harness();
-    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
     const r = await call(routes, fakeReq({ url: "/api/actions", method: "GET", headers: { "content-type": "" } }));
     const queues = r.json.queues as { sessionId: string; items: { id: string; stale: boolean; stuck: boolean; payload: { kind: string; action?: { id: string } } }[]; volatile: boolean; warning: string; deliverable: number }[];
     expect(queues).toHaveLength(1);
@@ -254,12 +299,12 @@ describe("GET /api/actions", () => {
     // queue's**, the same argument as `stale` above: a page that decided it
     // would be a second opinion, and the two would drift.
     const { routes, queue, tick } = harness();
-    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
     queue.noteGeneration(132_280);
     queue.noteGeneration(400_100);
-    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "push");
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "push", "greg");
     tick(31 * 60_000);
-    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "continue");
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "continue", "greg");
 
     const r = await call(routes, fakeReq({ url: "/api/actions", method: "GET", headers: { "content-type": "" } }));
     const queues = r.json.queues as { items: { stale: boolean; invalidated: string | null }[]; deliverable: number }[];
@@ -277,6 +322,21 @@ describe("GET /api/actions", () => {
     expect((on.json.acting as { enabled: boolean }).enabled).toBe(true);
     expect((off.json.acting as { enabled: boolean; why: string }).enabled).toBe(false);
     expect((off.json.acting as { why: string }).why).toContain("FLEET_ACT_ENABLED=1");
+  });
+
+  it("tells the page acting is off in words the page actually reads", async () => {
+    // THE THIRD LIVE ONE. The route has sent `acting` since it was written,
+    // under a comment saying the alternative is "a person discovering it by
+    // tapping and getting a 503" — and `parseActionsFeed` did not read it, so
+    // that is precisely what the page did. `FLEET_ACT_ENABLED` is off in
+    // production, which makes this the state of every enacted button there.
+    const off = await makeActionsApi(browserFetch(harness({ actEnabled: () => false }).routes)).feed();
+    expect(off.ok).toBe(true);
+    expect(off.ok && off.feed.acting.kind).toBe("off");
+    expect(off.ok && off.feed.acting.kind === "off" && off.feed.acting.why).toContain("FLEET_ACT_ENABLED=1");
+
+    const on = await makeActionsApi(browserFetch(harness({ actEnabled: () => true }).routes)).feed();
+    expect(on.ok && on.feed.acting.kind).toBe("on");
   });
 
   it("is a GET, and refuses to act on any other method", async () => {
@@ -443,8 +503,8 @@ describe("POST /api/actions/session — enqueueing", () => {
 describe("cancelling a queued item", () => {
   it("takes it out of the queue, by POST and by DELETE", async () => {
     const { routes, queue } = harness();
-    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
-    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "push");
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "push", "greg");
     const ids = queue.snapshot("$99001").items.map((i) => i.id);
     expect(ids).toHaveLength(2);
 
@@ -462,7 +522,7 @@ describe("cancelling a queued item", () => {
 
   it("tells 'there is nothing there' apart from 'it is going out right now'", async () => {
     const { routes, queue } = harness();
-    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
     const id = queue.snapshot("$99001").items[0]?.id ?? "";
 
     const missing = await call(routes, fakeReq({ url: "/api/actions/cancel", body: { sessionId: "$99001", itemId: "q999" } }));
@@ -493,7 +553,7 @@ describe("re-arming an item that has waited too long", () => {
     // past `maxAgeMs` was a thing the page drew, promised, and could not send —
     // this stage's own bug in a state nobody had looked at.
     const { routes, queue, tick } = harness();
-    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
     const id = queue.snapshot("$99001").items[0]?.id ?? "";
     tick(31 * 60_000);
     expect(queue.next("$99001", IDLE_CTX).kind).toBe("stale");
@@ -507,7 +567,7 @@ describe("re-arming an item that has waited too long", () => {
 
   it("tells 'there is nothing there' apart from 'it is going out right now'", async () => {
     const { routes, queue } = harness();
-    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
     const id = queue.snapshot("$99001").items[0]?.id ?? "";
 
     const missing = await call(routes, fakeReq({ url: "/api/actions/revive", body: { sessionId: "$99001", itemId: "q999" } }));
@@ -522,14 +582,14 @@ describe("re-arming an item that has waited too long", () => {
 
   it("is a write, so a GET at it may not act", async () => {
     const { routes, queue } = harness();
-    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
     const r = await call(routes, fakeReq({ url: "/api/actions/revive", method: "GET", headers: { "content-type": "" } }));
     expect(r.status).toBe(405);
   });
 
   it("refuses a cross-origin re-arm, the same as every other write", async () => {
     const { routes, queue } = harness();
-    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
     const id = queue.snapshot("$99001").items[0]?.id ?? "";
     const r = await call(
       routes,
@@ -543,8 +603,8 @@ describe("re-arming an item that has waited too long", () => {
 describe("abandoning a lease nobody settled", () => {
   /** Lease it and let the lease go stuck, which is what a thrown send leaves behind. */
   function wedge(h: ReturnType<typeof harness>): string {
-    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
-    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "push");
+    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
+    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "push", "greg");
     const leased = h.queue.next("$99001", IDLE_CTX);
     if (leased.kind !== "ready") throw new Error("expected a lease");
     return leased.item.id;
@@ -587,7 +647,7 @@ describe("abandoning a lease nobody settled", () => {
 
   it("refuses an item that was never handed out, and names the gesture that fits", async () => {
     const h = harness();
-    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull");
+    h.queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "pull", "greg");
     const id = h.queue.snapshot("$99001").items[0]?.id ?? "";
 
     const r = await call(h.routes, fakeReq({ url: "/api/actions/abandon", body: { sessionId: "$99001", itemId: id } }));
@@ -704,7 +764,7 @@ describe("POST /api/actions/session — enacted", () => {
     const r = await call(routes, fakeReq({ body: removeBody({ mode: "dry-run" }) }));
     expect(r.status).toBe(200);
     expect(r.json.op).toBe("dry-run");
-    const steps = r.json.steps as { argv: string[]; cwd: string }[];
+    const steps = resultOf(r).steps as { argv: string[]; cwd: string }[];
     expect(steps.map((s) => s.argv)).toEqual([
       ["git", "-C", WORKTREE, "rev-parse", "--abbrev-ref", "HEAD"],
       ["npm", "run", "worktree:check"],
@@ -816,7 +876,7 @@ describe("POST /api/actions/session — enacted", () => {
   it("will not let an immediate effect jump the queue", async () => {
     const { io, ran } = fakeIo({});
     const { routes, queue } = harness({ io });
-    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "push");
+    queue.enqueueAction({ sessionId: "$99001", claudeSessionId: CLAUDE_ID }, "push", "greg");
     const r = await call(routes, fakeReq({ body: removeBody({ mode: "run" }) }));
     expect(r.status).toBe(409);
     expect(r.json.code).toBe("queue-not-empty");
@@ -882,16 +942,61 @@ describe("POST /api/actions/box — killing", () => {
     proc({ pid: 999_999, comm: "node", args: VITEST_ARGS }),
   ];
 
+  it("hands the page a preview it can actually show, and says it was a dry run", async () => {
+    // THE JOIN, DRIVEN FROM THE BROWSER'S END. Both halves of this were right
+    // on their own and disagreed about a NAME: eleven `respond(res, 200, …)`
+    // calls here, not one of them carrying the field `actions-client.ts` reads,
+    // so the confirmation panel in front of `kill-test-suites` rendered the
+    // literal grey word "null" where the consequences belong (#11 in
+    // docs/postmortems/260908b-…). No assertion on either end could see it —
+    // only one that runs the real client parse over the real response.
+    const { io, ran } = fakeIo({ procs: [...suites, ...bystanders] });
+    const { routes } = harness({ io });
+    const outcome = await makeActionsApi(browserFetch(routes)).box("kill-test-suites", true);
+    expect(outcome.ok).toBe(true);
+    const shown = outcome.ok ? outcome.result : null;
+    // Written as "what a person would read off the panel" rather than as a
+    // field access, because `RawValue` renders whatever this is: an assertion
+    // that the field is merely `not.toBe(null)` passes on `undefined`, which is
+    // exactly what a page reading a name nobody sends gets.
+    expect(JSON.stringify(shown ?? null)).toContain('"pid":5001');
+    expect(outcome.ok && outcome.dryRunStated).toBe(true);
+    expect(outcome.ok && outcome.dryRun).toBe(true);
+    expect(ran).toEqual([]);
+  });
+
+  it("asks for a real run in the field this route reads, so the second press is not another dry run", async () => {
+    // THE REQUEST HALF OF THE SAME JOIN. `boxActionBody` sent `dryRun: boolean`
+    // and `parseBoxBody` has only ever read `mode`, which defaults here to
+    // `dry-run` — so every box action ever pressed on the page was a dry run,
+    // including the confirmed one, and the panel said "Done." over it. The
+    // refusal below is the PROOF the route read `run`: a body it read as a dry
+    // run answers 200 with a preview, and this answers 409.
+    const { io, ran } = fakeIo({ procs: [...suites] });
+    const { routes } = harness({ io });
+    const outcome = await makeActionsApi(browserFetch(routes)).box("kill-test-suites", false);
+
+    expect(outcome.ok).toBe(false);
+    // AND THE REMAINING GAP, NAMED RATHER THAN HIDDEN: the page does not yet
+    // carry the pids it showed into the confirmed request, so a real kill is
+    // refused by the both-lists rule. That is an honest refusal in the server's
+    // own words rather than a false success, which is why it is reported and
+    // not patched over here — the fix is for the panel to send
+    // `result.candidates`' pids back, and it is a separate change.
+    expect(outcome.ok === false && outcome.code).toBe("nothing-to-kill");
+    expect(ran).toEqual([]);
+  });
+
   it("dry-runs a kill: the named rule decides, and nothing is signalled", async () => {
     const { io, ran } = fakeIo({ procs: [...suites, ...bystanders] });
     const { routes } = harness({ io });
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: { actionId: "kill-test-suites", mode: "dry-run" } }));
     expect(r.status).toBe(200);
-    const candidates = r.json.candidates as { pid: number; rule: string; comm: string }[];
+    const candidates = resultOf(r).candidates as { pid: number; rule: string; comm: string }[];
     expect(candidates.map((c) => c.pid)).toEqual([5001, 5002]);
     expect(candidates.every((c) => c.rule === "vitest-runner")).toBe(true);
     expect(candidates[0]?.comm).toBe("node-MainThread");
-    expect(r.json.scanned).toBe(5);
+    expect(resultOf(r).scanned).toBe(5);
     expect(ran).toEqual([]);
   });
 
@@ -905,9 +1010,9 @@ describe("POST /api/actions/box — killing", () => {
       fakeReq({ url: "/api/actions/box", body: { actionId: "kill-test-suites", mode: "run", confirm: true, pids: [5001, 5002] } }),
     );
     expect(r.status).toBe(200);
-    expect(r.json.killed).toEqual([5001]);
+    expect(resultOf(r).killed).toEqual([5001]);
     expect(ran.map((x) => x.argv)).toEqual([["kill", "-TERM", "5001"]]);
-    const skipped = r.json.skipped as { pid: number; why: string }[];
+    const skipped = resultOf(r).skipped as { pid: number; why: string }[];
     expect(skipped.map((s) => s.pid).sort()).toEqual([5002, 5005]);
     expect(skipped.find((s) => s.pid === 5005)?.why).toContain("was not on the list you confirmed");
   });
@@ -938,7 +1043,7 @@ describe("POST /api/actions/box — killing", () => {
     const { io } = fakeIo({ procs: [orphan, ...suites] });
     const { routes } = harness({ io });
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: { actionId: "kill-safe-processes", mode: "dry-run" } }));
-    const candidates = r.json.candidates as { pid: number; rule: string }[];
+    const candidates = resultOf(r).candidates as { pid: number; rule: string }[];
     expect(candidates.map((c) => c.pid)).toEqual([6001]);
     expect(candidates[0]?.rule).toBe("cwd-deleted");
   });
@@ -994,7 +1099,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
     expect(r.status).toBe(200);
     // Three deliverable of five: the working one is held, the shell is blocked.
-    expect(r.json.total).toBe(3);
+    expect(resultOf(r).total).toBe(3);
     expect(sent.map((s) => s.target.paneId)).toEqual(["%1", "%3", "%5"]);
 
     // The minutes are the shared function's, with the DELIVERABLE denominator —
@@ -1012,7 +1117,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
   it("says what happened to every row, including the ones it did not speak to", async () => {
     const { routes } = harness();
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
-    const rows = r.json.recipients as { paneId: string; outcome: string; minutes: number | null; why: string | null }[];
+    const rows = resultOf(r).recipients as { paneId: string; outcome: string; minutes: number | null; why: string | null }[];
     expect(rows.map((x) => `${x.paneId}:${x.outcome}`)).toEqual(["%1:sent", "%2:held", "%3:sent", "%4:blocked", "%5:sent"]);
     expect(rows.find((x) => x.paneId === "%2")?.why).toContain("working");
     expect(rows.find((x) => x.paneId === "%4")?.minutes).toBe(null);
@@ -1028,7 +1133,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     const { routes, sent } = harness({ result: (t) => (t.paneId === "%3" ? refusal : SENT_OK) });
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body() }));
     expect(sent.map((s) => s.target.paneId)).toEqual(["%1", "%3", "%5"]);
-    const rows = r.json.recipients as { paneId: string; outcome: string; code: string | null }[];
+    const rows = resultOf(r).recipients as { paneId: string; outcome: string; code: string | null }[];
     expect(rows.find((x) => x.paneId === "%3")).toMatchObject({ outcome: "refused", code: "not-at-input" });
     expect(rows.filter((x) => x.outcome === "sent").map((x) => x.paneId)).toEqual(["%1", "%5"]);
   });
@@ -1038,9 +1143,9 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body({ mode: "dry-run" }) }));
     expect(r.status).toBe(200);
     expect(r.json.op).toBe("broadcast-preview");
-    const rows = r.json.recipients as { paneId: string; minutes: number | null }[];
+    const rows = resultOf(r).recipients as { paneId: string; minutes: number | null }[];
     expect(rows.filter((x) => x.minutes !== null).map((x) => x.minutes)).toEqual([5, 33, 60]);
-    expect(String(r.json.sample)).toBe(renderBroadcast(BROADCAST, { index: 0, total: 3 }, "greg"));
+    expect(String(resultOf(r).sample)).toBe(renderBroadcast(BROADCAST, { index: 0, total: 3 }, "greg"));
     expect(sent).toEqual([]);
   });
 
@@ -1060,7 +1165,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     const dup = [recipient({ paneId: "%1", sessionId: "$1" }), recipient({ paneId: "%1", sessionId: "$1" }), recipient({ paneId: "%2", sessionId: "$2" })];
     const r = await call(routes, fakeReq({ url: "/api/actions/box", body: body({ recipients: dup }) }));
     expect(sent.map((s) => s.target.paneId)).toEqual(["%1", "%2"]);
-    expect(r.json.total).toBe(2);
+    expect(resultOf(r).total).toBe(2);
   });
 
   it("will not tell the fleet twice in ten minutes", async () => {
@@ -1146,7 +1251,7 @@ describe("POST /api/actions/box — the staggered broadcast", () => {
     expect(r.status).toBe(200);
     // Two got through (at 0s and 60s); the third was past 90s.
     expect(sent).toEqual(["%1", "%3"]);
-    const rows = r.json.recipients as { paneId: string; outcome: string; why: string | null }[];
+    const rows = resultOf(r).recipients as { paneId: string; outcome: string; why: string | null }[];
     expect(rows.find((x) => x.paneId === "%5")?.outcome).toBe("not-reached");
     expect(String(rows.find((x) => x.paneId === "%5")?.why)).toContain("ran out of time");
   });
