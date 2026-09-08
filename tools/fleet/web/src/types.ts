@@ -580,6 +580,7 @@ const PAUSE_CAUSES: readonly PauseUnknownCause[] = [
   "no-conversation-id",
   "session-store-unreadable",
   "rate-limits-not-collected",
+  "schedule-not-parseable",
 ];
 
 function parsePauseCause(v: unknown): PauseUnknownCause {
