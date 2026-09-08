@@ -1,7 +1,15 @@
 /**
  * **THE TWO-PHASE RULE PROTOCOL, AND THE FILE EVERY RULE IS PINNED TO.**
  *
- *     detect  ──▶  append `rule-intended` and fsync it  ──▶  act  ──▶  append `rule-settled`
+ *     detect  ──▶  append `rule-intended`  ──▶  act only if that landed  ──▶  append `rule-settled`
+ *
+ * **THE ORDERING IS HERE; THE DURABILITY IS NOT.** This file decides that
+ * nothing is attempted until the intent has been accepted, and it is pinned for
+ * that. The `fsyncSync` that makes an accepted append survive a power cut is in
+ * `store.ts`, which is not pinned — so deleting it leaves every rule's
+ * fingerprint current and turns "on the disk" into "in the page cache". GPT
+ * Sol's finding 3 on 3b, and the sentence this header used to open with claimed
+ * otherwise. See `rule-jobs.ts` § What the fingerprint does NOT cover.
  *
  * One protocol, one file, and every rule job carries its digest
  * (`rule-jobs.ts` § RULE_SOURCES). That pin is the second half of GPT Sol's

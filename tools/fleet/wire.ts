@@ -1321,3 +1321,163 @@ export type OverseerStatusFeed =
   | { kind: "unsupported-schema"; saw: string; known: number }
   /** This server did not look. Never a claim about the box. */
   | { kind: "not-asked" };
+
+/* ------------------------------------------------------------------ *
+ * WHAT AN ACTION DID, AS OPPOSED TO WHAT IT WAS ASKED TO DO.
+ *
+ * Stage 3 of docs/plans/260908j. Three shapes, and every one of them
+ * exists because a route knew several different things and wrote down
+ * one word — the Class B lossy join of docs/postmortems/260908b.
+ *
+ * **THE CEILING ON ALL OF IT: NOTHING HERE OBSERVES A CONSEQUENCE.**
+ * The dashboard runs a command and reads its exit status, or hands a
+ * sequence of `tmux send-keys` calls to steer.ts and reads how far it
+ * got. Neither is evidence about the world afterwards — no process
+ * table is re-read after a kill, and no agent acknowledges a keystroke.
+ * So the vocabularies below are deliberately about the ATTEMPT, and the
+ * plan cut a `reception observed` arm rather than ship one nothing can
+ * fill. Do not add a field here that no code can honestly write.
+ * ------------------------------------------------------------------ */
+
+/**
+ * How one step of a plan ended, judged against the gate the plan named.
+ *
+ * `failed-ignored` is the arm that stops a `best-effort` step being smoothed
+ * into a pass: thirty kills of which eleven found nothing there is a fact worth
+ * reading, and it is the difference between a signal that was accepted and one
+ * that was not.
+ */
+export type PlanStepStatus = "passed" | "failed" | "failed-ignored";
+
+/** One step of a plan, after it ran. */
+export type PlanStepView = {
+  argv: readonly string[];
+  cwd: string;
+  /** The step's own reason for existing, from the plan. */
+  why: string;
+  status: PlanStepStatus;
+  /** Why it got that status — the gate, in words. */
+  verdict: string;
+  code: number | null;
+  timedOut: boolean;
+  spawnError: string | null;
+  /** The tail of what it said, bounded, for a person. */
+  tail: string;
+};
+
+/**
+ * A plan, after it ran — **and this is the one whole-action effect contract
+ * the server has.**
+ *
+ * `steps` is the steps that RAN, so a run that stopped is shorter than the plan
+ * that produced it, and `stoppedAt` names where. That asymmetry is the useful
+ * part: a reader can say *one of three steps ran* rather than *something went
+ * wrong*, which is what the card said for the life of the feature because
+ * `refusal()` in the browser dropped this whole object.
+ *
+ * Parameterised on the action id so the server can keep its closed `ActionId`
+ * union while the browser reads a plain string. One declaration, two uses —
+ * this file exists because the alternative was two declarations related by
+ * nothing but hope.
+ */
+export type PlanRunView<Id extends string = string> = {
+  action: Id;
+  steps: PlanStepView[];
+  /**
+   * **HOW MANY STEPS THE PLAN HAD**, which `steps.length` does not say.
+   *
+   * Added in Stage 3 because the denominator was simply absent from the wire: a
+   * three-step plan that stopped at the second sent two step outcomes and a
+   * `stoppedAt`, so the only honest sentence a reader could build was *two
+   * steps ran* — which reads as **all of them**. `1 of 3` and `2 of 2` are the
+   * same list of facts without this number.
+   */
+  planned: number;
+  /** True when every step ran and none failed a gate it was not allowed to fail. */
+  completed: boolean;
+  /** The index of the step that stopped the plan, or null. */
+  stoppedAt: number | null;
+};
+
+/**
+ * **WHAT ONE `kill -TERM <pid>` ESTABLISHED, WHICH IS LESS THAN IT SOUNDS.**
+ *
+ * The strongest arm is `signal-accepted`, and it is deliberately not called
+ * `killed`: it means the `kill` command exited 0, so the signal was delivered
+ * to a process that existed and that this uid may signal. A process is free to
+ * ignore SIGTERM, and nothing re-reads the process table afterwards, so
+ * *accepted* is the whole of the claim. `killed` was the word this route used,
+ * about the pids it INTENDED to signal.
+ */
+export type KillObservation =
+  /** `kill` exited 0. The signal went. Not proof the process is gone. */
+  | "signal-accepted"
+  /** `kill` exited non-zero: no such process, or not ours to signal. Nothing happened to it. */
+  | "signal-refused"
+  /**
+   * The `kill` could not be run, was killed for taking too long, or died on a
+   * signal itself. **The most expensive arm to get wrong in either direction**:
+   * the signal may have gone out before it died, and it may not have.
+   */
+  | "not-established"
+  /** The plan stopped before reaching this pid, so nothing was sent to it at all. */
+  | "not-attempted";
+
+/** One pid, and what became of the attempt to signal it. */
+export type KillAttempt = {
+  pid: number;
+  observation: KillObservation;
+  /** The step's own verdict, verbatim, or why there was no step. */
+  why: string;
+};
+
+/**
+ * A kill, reported as **intent and evidence separately**.
+ *
+ * `attempted` is the list the route meant to signal and is a fact about the
+ * request; `observed` is what came back and is a fact about the box. They are
+ * two fields rather than one because the route used to answer with the first
+ * under a name that reads as the second, and a page cannot recover a
+ * distinction the wire has already collapsed.
+ */
+export type KillReport = {
+  /** Every pid the plan set out to signal, in order. INTENT, not effect. */
+  attempted: readonly number[];
+  /** One entry per attempted pid, in the same order. EVIDENCE. */
+  observed: readonly KillAttempt[];
+  /** Every step ran. False means the tail of `attempted` was never signalled. */
+  planCompleted: boolean;
+};
+
+/**
+ * **WHAT BECAME OF ONE RECIPIENT OF A BROADCAST**, in the vocabulary
+ * docs/plans/260908j settled on: a transient phase, then four terminal states,
+ * plus the three ways a row is never spoken to at all.
+ *
+ * The four that matter are the four the route used to answer `refused` for. A
+ * `partial` send left the literal text in that agent's input box with no Enter
+ * behind it, so the next Enter anybody presses submits it; `refused` reads as
+ * *nothing reached them*, which is the opposite fact. `outcome-unknown` is the
+ * arm for a `Delivery` of `unknown` **and** for a throw out of the delivery
+ * module, which carries no reading at all.
+ *
+ * `keys-submitted` is the ceiling and it is named for what it proves: the tmux
+ * calls completed. It is not `read`, and it is not `obeyed`.
+ */
+export type BroadcastRecipientOutcome =
+  /** A DRY RUN only. What the send would do — never mixed with what one did. */
+  | "would-send"
+  /** Every tmux call completed. The keystrokes were submitted; nothing observed a reader. */
+  | "keys-submitted"
+  /** Some of the sequence arrived and it did not finish. Half a message may be sitting there. */
+  | "partial"
+  /** A throw, or a `Delivery` of `unknown`. It may have landed and it may not. */
+  | "outcome-unknown"
+  /** The delivery module refused with nothing sent: no keystroke left this box. */
+  | "refused-before-effect"
+  /** The queue's gate said "later" — the session is working. Nothing was sent. */
+  | "held"
+  /** The queue's gate said "never" — a shell, a dead Claude. Nothing was sent. */
+  | "blocked"
+  /** The fan-out ran out of time before this row. Nothing was sent. */
+  | "not-reached";

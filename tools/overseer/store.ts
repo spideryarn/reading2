@@ -132,6 +132,7 @@ import {
   type OccurrenceId,
   type OccurrenceIndex,
 } from "./jobs.js";
+import type { KillPolicy } from "../fleet/actions.js";
 import type { DriftedSession, LaunchModeFinding, RuleFinding, RuleId, RuleOutcome, WedgedProcess, WedgedWorkFinding } from "./rules.js";
 import { truncateToLastLine, writeAll, writeAtomically, type JsonlRepair } from "./jsonl.js";
 import {
@@ -1236,7 +1237,10 @@ function parseLaunchModeFinding(kind: "launch-mode", u: Record<string, unknown>)
 /** Rule 2's finding, off the disk. */
 function parseWedgedWorkFinding(kind: "wedged-work", u: Record<string, unknown>): ParseResult<WedgedWorkFinding> {
   const policy = u["policy"];
-  if (policy !== "safe-to-kill" && policy !== "test-suites") {
+  // Keyed by `KillPolicy`, so a third policy is a compile error here rather than
+  // a value this parser silently refuses off the disk. The two-literal `!==`
+  // pair it replaces was the same not-exhaustive shape as `RULE_IDS`.
+  if (!isKillPolicy(policy)) {
     return { ok: false, reason: `finding.policy ${JSON.stringify(policy)} is not a kill policy` };
   }
   const counts = parseCounts(u, ["minAgeSeconds", "matched", "candidates", "scanned"]);
@@ -1276,6 +1280,13 @@ function parseWedgedWorkFinding(kind: "wedged-work", u: Record<string, unknown>)
  */
 const RULE_IDS: Record<RuleId, true> = { "wedged-work": true, "launch-mode": true };
 
+/** The kill policies this version can read back. Keyed by the type, for the reason `RULE_IDS` gives. */
+const KILL_POLICIES: Record<KillPolicy, true> = { "safe-to-kill": true, "test-suites": true };
+
+function isKillPolicy(u: unknown): u is KillPolicy {
+  return typeof u === "string" && Object.hasOwn(KILL_POLICIES, u);
+}
+
 function isRuleId(u: unknown): u is RuleId {
   return typeof u === "string" && Object.hasOwn(RULE_IDS, u);
 }
@@ -1288,26 +1299,39 @@ function isRuleId(u: unknown): u is RuleId {
  * broke" are the two a reader must not confuse, and a parser with a permissive
  * fallback is where that confusion would be introduced.
  */
+/**
+ * WHICH SENTENCE EACH ENDING CARRIES — a table keyed by the arm, so a sixth
+ * outcome does not compile until somebody says how it is read back.
+ *
+ * It was a `switch` on a raw string, which the compiler does not tie to
+ * `RuleOutcome["kind"]` at all: a new arm would have appended fine and come back
+ * as *"not one this version knows"*, taking the whole event with it. Same
+ * not-exhaustive shape as the `satisfies` array below it used to be, and GPT
+ * Sol found both in one pass.
+ */
+const RULE_OUTCOME_FIELDS: Record<RuleOutcome["kind"], "why" | "what"> = {
+  "nothing-to-do": "why",
+  refused: "why",
+  failed: "why",
+  proposed: "what",
+  sent: "what",
+};
+
+function isRuleOutcomeKind(u: unknown): u is RuleOutcome["kind"] {
+  return typeof u === "string" && Object.hasOwn(RULE_OUTCOME_FIELDS, u);
+}
+
 function parseRuleOutcome(u: unknown): ParseResult<RuleOutcome> {
   if (!isRecord(u)) return { ok: false, reason: "outcome is not an object" };
   const kind = u["kind"];
-  switch (kind) {
-    case "nothing-to-do":
-    case "refused":
-    case "failed": {
-      const why = u["why"];
-      if (typeof why !== "string") return { ok: false, reason: "outcome.why is not a string" };
-      return { ok: true, value: { kind, why } };
-    }
-    case "proposed":
-    case "sent": {
-      const what = u["what"];
-      if (typeof what !== "string") return { ok: false, reason: "outcome.what is not a string" };
-      return { ok: true, value: { kind, what } };
-    }
-    default:
-      return { ok: false, reason: `outcome kind ${JSON.stringify(kind)} is not one this version knows` };
-  }
+  if (!isRuleOutcomeKind(kind)) return { ok: false, reason: `outcome kind ${JSON.stringify(kind)} is not one this version knows` };
+  const field = RULE_OUTCOME_FIELDS[kind];
+  const sentence = u[field];
+  if (typeof sentence !== "string") return { ok: false, reason: `outcome.${field} is not a string` };
+  // The cast is the mapped table's own guarantee written out: `kind` and
+  // `field` came from one entry, so the pair is exactly one arm of the union,
+  // which TypeScript cannot see through a computed key.
+  return { ok: true, value: { kind, [field]: sentence } as RuleOutcome };
 }
 
 /** One rule event off the disk. The occurrence id is opaque here: the run it belongs to is addressed by it, and `parseJobEvent` is what checks the id against its own key. */
@@ -1323,6 +1347,15 @@ function parseRuleEvent(kind: RuleEvent["kind"], u: Record<string, unknown>, at:
       if (typeof what !== "string") return { ok: false, reason: "what is not a string" };
       const finding = parseFinding(u["finding"]);
       if (!finding.ok) return { ok: false, reason: finding.reason };
+      // **THE TWO DISCRIMINANTS HAVE TO AGREE**, and checking each on its own
+      // did not make them (GPT Sol's finding 5 on 3b). An event claiming
+      // `ruleId: "launch-mode"` with a `wedged-work` finding parsed perfectly
+      // and came back as a launch-mode run whose numbers are another rule's
+      // arithmetic — a record that reads plausibly and is false, which is the
+      // one thing a durable log must not produce.
+      if (finding.value.kind !== ruleId) {
+        return { ok: false, reason: `ruleId ${JSON.stringify(ruleId)} carries a ${JSON.stringify(finding.value.kind)} finding, so the event contradicts itself` };
+      }
       return { ok: true, value: { kind, at, occurrenceId, ruleId, what, finding: finding.value } };
     }
     case "rule-settled": {

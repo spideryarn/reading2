@@ -84,19 +84,40 @@ const SPECIMEN_MODE = "default";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
+/**
+ * **THE `=` IS NOT DECORATION.** A bare `-t name` resolves by exact name and
+ * then **by prefix**, so with the real specimen absent and a stray
+ * `overseer-launch-mode-specimen-old` on the box, `has-session` answers yes and
+ * `kill-session` kills the stranger. This repo has already been bitten by it
+ * (`tests/gjd-remote-tmux.test.ts` § the prefix case) and GPT Sol found it here
+ * again. `=name` is tmux's exact-match form.
+ */
+const EXACT = `=${SPECIMEN_SESSION}`;
+
 function tmux(args: readonly string[]): string {
   return execFileSync("tmux", [...args], { encoding: "utf8", timeout: 20_000 });
 }
 
+/**
+ * Whether the specimen — that one, not something whose name starts the same way
+ * — is running.
+ *
+ * **Only exit status 1 means absent.** `catch { return false }` swallowed every
+ * other way `has-session` can fail: no tmux server, no permission, a timeout.
+ * Reading any of those as "no session" makes `start` create a second specimen
+ * or `stop` claim it cleaned up when it did not — a refusal reported as a
+ * reassurance, which is the shape this whole area keeps writing up.
+ */
 function sessionExists(): boolean {
   try {
     // `stdio: "pipe"` because tmux writes "can't find session: …" to stderr on
     // the ordinary absent case, and that sentence read as an error in a script
     // whose whole job is to be trusted about whether it broke something.
-    execFileSync("tmux", ["has-session", "-t", SPECIMEN_SESSION], { encoding: "utf8", timeout: 20_000, stdio: "pipe" });
+    execFileSync("tmux", ["has-session", "-t", EXACT], { encoding: "utf8", timeout: 20_000, stdio: "pipe" });
     return true;
-  } catch {
-    return false;
+  } catch (cause) {
+    if ((cause as { status?: number }).status === 1) return false;
+    throw new Error(`tmux could not say whether ${SPECIMEN_SESSION} exists: ${cause instanceof Error ? cause.message : String(cause)}`);
   }
 }
 
@@ -105,7 +126,7 @@ function stop(): number {
     console.log(`no ${SPECIMEN_SESSION} session is running.`);
     return 0;
   }
-  tmux(["kill-session", "-t", SPECIMEN_SESSION]);
+  tmux(["kill-session", "-t", EXACT]);
   console.log(`killed ${SPECIMEN_SESSION}.`);
   return 0;
 }
@@ -142,8 +163,12 @@ export function listingVerdict(listing: Listing = realListing): { ok: true } | {
     const error = cause as { stdout?: string; stderr?: string; message?: string };
     return { ok: false, why: `${error.stderr ?? ""}${error.stdout ?? ""}${error.message ?? String(cause)}`.trim() };
   }
-  if (!out.includes(SPECIMEN_SESSION)) {
-    return { ok: false, why: `the listing succeeded but does not mention ${SPECIMEN_SESSION}, so it cannot say whether the session is readable` };
+  // AN EXACT ROW, NOT A SUBSTRING. `ls` prints the name first on each row, and
+  // `includes` was satisfied by `overseer-launch-mode-specimen-old` — the same
+  // prefix hazard as the tmux target, one layer out.
+  const named = out.split("\n").some((line) => line.trim().split(/\s+/)[0] === SPECIMEN_SESSION);
+  if (!named) {
+    return { ok: false, why: `the listing succeeded but has no row for ${SPECIMEN_SESSION}, so it cannot say whether the session is readable` };
   }
   return { ok: true };
 }
@@ -181,7 +206,7 @@ function start(): number {
   if (!healthy.ok) {
     // FAIL CLOSED, and take the specimen with us. A malformed session left
     // standing costs every reader of the fleet, not just this run.
-    tmux(["kill-session", "-t", SPECIMEN_SESSION]);
+    tmux(["kill-session", "-t", EXACT]);
     console.error(`the fleet listing could not read the box with this specimen on it, so it has been killed:\n${healthy.why}`);
     return 1;
   }

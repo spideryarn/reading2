@@ -530,10 +530,18 @@ function start(input: TickInput, definition: JobDefinition, key: OccurrenceKey, 
     }
     case "rule":
       // HANDED STRAIGHT OVER TO THE PINNED PROTOCOL, which is what reads the
-      // hashed `disposition` and chooses a runner and a capability. Nothing is
-      // decided here: this line is a call, so that no edit to this file can
-      // change whether or how a rule acts — which is precisely why this file
-      // need no longer be inside every rule's fingerprint.
+      // hashed `disposition` and chooses a runner and a capability. Nothing
+      // about WHAT a rule may do is decided here.
+      //
+      // **That is narrower than "no edit to this file can change how a rule
+      // behaves", which is what this comment used to claim and is false** (GPT
+      // Sol's finding 3 on 3b). This file still owns the authorisation gate,
+      // the lease, `sweep`'s release of an expired one, and the reservation —
+      // so an edit here can change WHETHER a rule runs and HOW OFTEN, including
+      // letting two runs overlap, without moving any rule's fingerprint. What
+      // the pin covers is the rule's own policy and the append-before-act
+      // protocol; the scheduler and the store are a reviewed execution base
+      // outside it. `rule-jobs.ts` § What the fingerprint does NOT cover.
       return startRule({ store: input.store, now: input.now }, work.rule, id, { rules: input.rules, acting: input.acting });
     default: {
       const never: never = work;
