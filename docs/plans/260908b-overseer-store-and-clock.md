@@ -1,11 +1,27 @@
 # The Overseer's store, and the clock it gives everything else
 
-**Status 2026-09-08, 09:10: the Overseer runs.** S1, S2, S3, S4 and S6 are landed, reviewed and
-green; S5 (the systemd units) is being built now; S3-03 is the one deferred finding. Evidence:
-`npm run typecheck` reports **0** failures across all four projects, **245 tests pass** across the
-eight Overseer files, `tools/overseer/` plus `scripts/overseer.ts` is 5,830 lines, and the daemon has
-been run against the live dashboard — its `events.jsonl` contains a `tmux-session-gone` for its own
-previous incarnation.
+**Status 2026-09-08, 09:35: the Overseer runs, and has never yet run where it will live.** S1, S2,
+S3, S4 and S6 are landed, reviewed and green; S5 (the systemd units) is being built now; S3-03 and
+two smaller findings are stage S7, in flight. Evidence: `npm run typecheck` reports **0** failures
+across all four projects, **245 tests pass** across the eight Overseer files, and `tools/overseer/`
+plus `scripts/overseer.ts` is 5,830 lines.
+
+**The live run, quoted here because its store was a scratch directory that will be deleted with the
+session.** Against the real dashboard on `:8787`, 2026-09-08 07:30–07:52 UTC, store root
+`scratchpad/overseer-live`: **43 events in 22 minutes — 30 `session-seen`, 8 `session-status`, 5
+`tmux-session-gone`** — and three of those five name the daemon's own earlier incarnations
+(`overseer-live-…`, `overseer-degrade-…`, `overseer-restart-…`), each with `why:
+"absent-from-snapshot"`. Its `daemon.jsonl` holds 3 `daemon-started` and 2 `daemon-stopped`, so one
+run ended without writing a stopping note, which is the `kill -9` the recovery test used.
+
+**And the thing that number does not say, found by checking rather than by remembering:
+`~/.overseer` does not exist.** `overseer status` against the default root reports *"NEVER RUN — no
+checkpoint and no notes"*. Every run so far has been against a scratch root, which was right for a
+test and means the production store is empty and unproven. **Naming the root is part of the claim** —
+"the daemon has been run" and "the daemon has been run where it will live" are different sentences,
+and only the first was ever true. Closing that is S5's acceptance, not a separate task: the unit sets
+`OVERSEER_STORE_DIR=/home/greg/.overseer` explicitly, and the evidence it must produce is events in
+*that* file.
 
 **Both P0s are closed**, one in the differ and one in the store's lock, each after a review round that
 found the first fix insufficient. Every Sol finding is either fixed or refused with reasons in this
@@ -1056,6 +1072,56 @@ mechanical check found one of twenty-three. That one is the Overseer's short-liv
 *the harness wants a permission* are different work items — and on this box the second is nearly
 always a **launch defect**, because auto mode should have handled it. So it is not a queue item for
 Greg at all; the action is to fix how that session was started.
+
+### S7 — the three findings that were reported rather than fixed
+
+**Added 2026-09-08 evening, after the debrief said "done enough to stop here".** Greg's answer was
+*"proceed autonomously with anything left to do"*, and this is what was left: three findings that
+earlier stages **named honestly and did not fix**, each for the same good reason — the file was
+landed and under review, and reopening it would have invalidated a review in flight. That reason
+expired when the reviews closed, and a finding whose only remaining justification is *we were busy*
+is a finding that has become a decision by default.
+
+Also worth saying plainly, since it is the pattern: **all three were found by the agent building the
+*next* stage**, reading the previous one to use it. That is the cheapest review in this whole plan
+and nobody scheduled it.
+
+**S7-01 — the register goes stale for any session that stays alive.** This is S3-03, widened. As
+reported, a session renamed with identity and status unchanged emits no event, so every rebuild
+returns the name Greg deliberately replaced. But `entryOf()` freezes `name`, `repo`, `worktree`,
+`meta`, `startedAt`, `paneId` and `panePid` at first sight, and `session-seen` fires once — so the
+name is the instance somebody noticed, not the class. `EnterWorktree` moves a session between
+worktrees and is common on this box.
+
+**The shape was decided by measurement and by the producer's own source, not by taste**, because an
+arm that fires on any row change re-creates the 52k-rows-a-day problem this design exists to avoid.
+The fleet dashboard agent read the collector and settled most of it: `repo`, `dir` and `kind` are
+tmux environment variables fixed at session creation, and a partial reading **fails the whole
+listing** rather than producing a degraded row (GPT Sol's finding 8 on that file), so `repo`,
+`worktree` and `meta` are safe to freeze and safe to cover. Two are not — `paneId` can be transiently
+null because it is joined from a separate pane listing, so **a null is not a change**; and `panePid`
+*changes legitimately when a pane is respawned*, which is a real fact about the world rather than
+drift in a label, and deserves its own arm rather than being flattened into a rename.
+
+**S7-02 — two parses of one payload, and the weaker one carries the freshness logic.** `tools/fleet/`
+emits `attemptedAt` — when the collector last *started*, as against `collectedAt` when one last
+*succeeded* — and the pair is what distinguishes *wedged mid-attempt* from *gone*. It exists because
+a collector wedged for thirty minutes reported `error: null`. `observation.ts` does not parse it, so
+`daemon.ts` reaches back into the raw record with its own helpers. That breaks the rule
+[typechecking.md](../project/typechecking.md) states: **the guard must read the thing it is guarding,
+not a copy of it.**
+
+**S7-03 — one append-only-log discipline, implemented twice.** `notes.ts` carries a comment admitting
+it: *"`store.ts` keeps its `repairEventLog` private, so this is a duplicate of a subtle rule rather
+than a reuse of one."* Truncate-to-last-newline on open, the single `O_APPEND` write, the atomic
+replace. **A duplicated subtle rule is the kind that drifts dangerously**, because the copy that goes
+wrong is the one nobody was looking at — and the rule here is the one that stops a torn line welding
+a good record onto a corrupt one.
+
+**What this stage is deliberately not.** It is not new capability. Nothing here makes the Overseer do
+anything it could not do this morning; it closes three gaps between what the code does and what the
+plan says it does. That is the right shape for the last stage of a plan and the wrong shape for a
+first stage of the next one.
 
 ## What this stage is not
 
