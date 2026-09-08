@@ -523,6 +523,28 @@ Greg's list, against [diagnose-box-resources.md](../reusable/diagnose-box-resour
 - [ ] Broadcast to all agents — the same mechanism as v0.5c's resource broadcast, so there is one
       implementation of "say this to everybody" and not two.
 
+### Stage v0.6c: the other harnesses are invisible, not read-only
+
+The horizon says **NOW/SOON: multiple model-families/harnesses — Claude Code and Claude agents now,
+OpenAI Codex/GPT soon**. This plan has been recording that Codex rows are shown *read-only* because
+`scripts/subagent-cli.ts:216` spawns them with `fd 0 = 'ignore'` so they cannot receive keystrokes.
+
+**That was the wrong shape of the problem.** Checked 2026-09-08 04:20: there were **4 running
+`codex exec` processes and 0 Codex tmux sessions.** Codex does not get a session here — it runs as
+a subprocess inside the Bash tool of the Claude session that asked for a review. So it is not a row
+that needs disabling; it is **work in flight that the fleet page cannot see at all.**
+
+That matters more than it sounds, because a GPT Sol review is 15–45 minutes of wall clock and real
+money, and the session that launched it looks *idle* the whole time. Two of tonight's own sessions
+were in exactly that state.
+
+- [ ] Show a session's in-flight subprocesses — at minimum a paid review, which is the expensive,
+      slow, invisible one. `pgrep -af "codex exec"` plus ancestry to the pane pid is the same walk
+      `steer.ts` already does in `descendsFrom`; reuse it rather than writing a second one.
+- [ ] A session waiting on a review is not `idle`. Same defect as v0.4d, different cause.
+- [ ] Only then ask whether Codex deserves rows of its own. It probably does not while it has no
+      sessions — a row per subprocess is a different product from a row per agent.
+
 ### Stage v0.7+: the decision log
 
 Deferred by Greg on 2026-09-08 — "eventually both, start simple, defer this to a middle stage".
