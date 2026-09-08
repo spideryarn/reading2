@@ -171,6 +171,7 @@ function row(over: Partial<FleetState["rows"][number]> & { id: string }): FleetS
       cause: "rate-limits-not-collected",
     },
     meta: { version: "legacy" },
+    role: { kind: "none" },
     panePid: null,
     claudeSessionId: null,
     rawStatus: over.status ?? { kind: "idle" },

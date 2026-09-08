@@ -29,8 +29,9 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 **The CLI**
 
 - [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — all of it: `ls`, `new-claude`,
-  `new-shell`, `resume`, `resume-all`, `kill`, `log`, `doctor`, `provision`, `clone`, `setup`,
-  `push-env`, `upload`, `resolve`, `ssh`, `tunnel`, `forget-key`. `--help` is long on purpose.
+  `new-shell`, `resume`, `resume-all`, `kill`, `claim-overseer`, `release-overseer`, `log`,
+  `doctor`, `provision`, `clone`, `setup`, `push-env`, `upload`, `resolve`, `ssh`, `tunnel`,
+  `forget-key`. `--help` is long on purpose.
 - [`scripts/gjd-remote-repo.ts`](../../scripts/gjd-remote-repo.ts) — which repo you are standing in,
   and which directory on the box is that same repo. The box-side inventory script and its
   fail-closed parse live here too. See [Which repo, and where on the box](#which-repo-and-where-on-the-box)
@@ -472,6 +473,14 @@ arbitrary path and belongs to no repo, and one started before this metadata exis
 session that carries *half* the metadata is not shown as either — the whole listing is refused,
 naming the session and the variable, because a partial list is one whose absences get reasoned from.
 
+**If you make a session by hand, set `GJD_REPO` to an `owner/name` slug or to the literal `unknown`,
+and run `gjd-remote ls` before you go on.** That refusal is the whole listing, and the listing is the
+only eye every other tool has: on 2026-09-08 one hand-made session with `GJD_REPO=spideryarn2` blinded
+`gjd-remote ls`, the fleet dashboard's collector and `overseer status` together for about twenty
+minutes, and none of the three could say anything about a box with fourteen healthy sessions on it.
+The refusal is still the right choice — a short list read as a complete one is worse — but its cost
+lands on everybody, not on the session that caused it.
+
 **The rows are sorted by who is being waited on**, not alphabetically. `needs you` is a session
 parked on a permission prompt or a question, going nowhere until somebody answers it, and it costs
 you the whole time it sits there — so it goes at the top. Then `idle`, which has finished and nobody
@@ -494,6 +503,38 @@ nothing sweeps them and there is no `--idle-shells` flag. It is there so you can
 are doing something, and `kill` the ones that are not. Before 2026-09-05 both read `shell`, and
 eight sessions accumulated on the box that nobody could tell apart
 ([§ Sessions nobody made on purpose](#sessions-nobody-made-on-purpose)).
+
+### The `ROLE` column, and the line about the Overseer
+
+The box is meant to have **exactly one Overseer** — the permanent session that supervises all the
+others, [overseer.md](overseer.md). Until 2026-09-08 nothing marked which session that was, so two
+could both believe they were it and neither could find out. Now one session holds a claim:
+
+```
+gjd-remote claim-overseer <name>     # refuses, naming the holder, if somebody else has it
+gjd-remote release-overseer <name>   # or just kill the session
+```
+
+**There is no `--force`.** Releasing is the verb, or the holder dying.
+
+`ls` grows a `ROLE` column only when some session has one — almost none ever will — and **always**
+prints a line under the table saying who the Overseer is, including `no session holds the overseer
+claim`. That absent line is the point of it: the claim is a variable in the session's own tmux
+environment, so it dies with the session **and with the tmux server**, and after a reboot nobody
+holds it. Failing to nobody is the safe direction; a stale claim pointing at a session that is gone
+would be the dangerous one.
+
+**The refusal is a courtesy, not a mutex.** Two claims racing can both pass it. What actually holds
+the line is that every reader — `ls`, the dashboard's header, `overseer status` — reports two
+holders as a fault rather than picking one, so a double claim is *visible* rather than silently
+deciding which session gets prodded. One holder plus one session whose role could not be read is
+also not an answer: it reports as unknown, and names the holder it did see.
+
+A program should ask the dashboard rather than tmux — `claimFromSnapshot` in
+[`tools/fleet/overseer-claim.ts`](../../tools/fleet/overseer-claim.ts), which refuses a stale
+snapshot, one whose collection failed, and one with rows it could not read. The dashboard serves its
+*last good* rows after a failure, so a hand-rolled read of `/api/state` will confidently name an
+Overseer that died an hour ago.
 
 **Two sources, and neither is trusted alone.**
 

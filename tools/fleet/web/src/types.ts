@@ -33,6 +33,7 @@
  * module exists to prevent.
  */
 import { readAttemptClock, type AttemptClock } from "../../attempt-clock.js";
+import { overseerClaim, parseRole, type SessionRole } from "../../overseer-claim.js";
 import type {
   AttentionAnswerability,
   AttentionEvidence,
@@ -206,6 +207,19 @@ export type FleetPermissionMode =
  */
 export type SessionMeta = { version: "legacy" } | { version: 1; kind: string | null; repo: string | null; dir: string | null };
 
+/**
+ * Whether a session is the Overseer — the box's one supervising session
+ * (docs/project/overseer.md).
+ *
+ * **NOT RESTATED HERE.** `tools/fleet/overseer-claim.ts` is a leaf module with
+ * no imports, so this project can compile it — the same escape `attempt-clock.ts`
+ * takes, and it means the parse and the *who holds it* rule are one
+ * implementation rather than a twin the compiler could not relate. Re-exported
+ * so that a component reads its types from one place.
+ */
+export type { OverseerClaim, SessionRole } from "../../overseer-claim.js";
+export { overseerClaim, parseRole };
+
 /** One session. Flat, because it is rendered and it is JSON. */
 export type FleetRow = {
   /** tmux's SESSION handle, `$1643` — the address, and stable across renames. */
@@ -231,6 +245,8 @@ export type FleetRow = {
   pause: Pause;
   /** What the session recorded about itself. See `SessionMeta`. */
   meta: SessionMeta;
+  /** Whether this session is the Overseer. See `SessionRole`. */
+  role: SessionRole;
   /**
    * The pane's own pid, when tmux told us — `#{pane_pid}`.
    *
@@ -1013,6 +1029,7 @@ export function parseRow(v: unknown, skew: ClockSkew): FleetRow | null {
     permissionMode: parsePermissionMode(v["permissionMode"]),
     pause: parsePause(v["pause"], skew),
     meta: parseMeta(v["meta"]),
+    role: parseRole(v["role"]),
     panePid:
       typeof v["panePid"] === "number" && Number.isSafeInteger(v["panePid"]) && v["panePid"] > 0
         ? v["panePid"]
