@@ -29,6 +29,7 @@
     "live:spike": "tsx scripts/live-spike.ts",
     "build:client": "vite build",
     "build:api": "vite build --config vite.api.config.ts",
+    "build:fleet": "vite build --config vite.fleet.config.ts",
     "build": "npm run build:client && npm run build:api",
     "validate-tree": "tsx src/validate-tree.ts",
     "hierarchy:flatten": "tsx src/hierarchy-flatten.ts",

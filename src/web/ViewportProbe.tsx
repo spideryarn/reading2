@@ -77,6 +77,7 @@
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 
 import { currentProbe } from "./params.js";
+import { controlsBar } from "./scroll.js";
 
 /** How many samples are kept before recording stops. */
 const CAP = 600;
@@ -291,7 +292,14 @@ function take(
       : null,
     tok: tokensFrom(spanA, spanB),
     rect: {
-      controls: box(document.querySelector(".controls")),
+      /* `controlsBar()` rather than a bare query, for the reason it gives:
+         since 2026-09-08 the bar is not always drawn, and an unscoped
+         `.controls` then finds an author's own paragraph. A probe that recorded
+         a piece of prose as the chrome would be worse than one that recorded
+         nothing — the whole point of this file is to be believed about a device
+         nobody here is holding. `null` is the honest answer for a page with no
+         bar, and `box` already produces it. */
+      controls: box(controlsBar()),
       dock: box(dock),
       hint: box(hint),
       band: box(band),

@@ -16,9 +16,28 @@
  * (docs/plans/260825c-bottom-bar.md#why-the-bottom), and a page has no such problem
  * because it is not beside anything.
  *
- * **Nothing here is generated and nothing here is a model call.** This is the
- * page you open when something looks wrong, so every number on it is read off
- * the artefacts.
+ * **Opening it generates nothing and makes no model call.** This is the page
+ * you open when something looks wrong, so its statistics are computed from
+ * artefacts already written.
+ *
+ * *Statistics*, and not *every number on it*, which was the draft and is
+ * overbroad in the same breath as a correction — the read-time stat divides by
+ * a flat `WPM` this repo chose (reading-time.ts), and a rerun confirmation
+ * quotes a fixed wait. Neither comes from an artefact. GPT Sol, 2026-09-08.
+ *
+ * That is narrower than *nothing here is generated*, which is what this line
+ * said until 2026-09-08 and which had stopped being true twice over: the page
+ * shows the hierarchy's `gist` and `summary` (§ In one sentence), and since
+ * 2026-09-07 it can start a run of its own (§ Generate it again, below, one
+ * button per step). Neither happens on arrival, and *on arrival* is the half a
+ * reader here is trusting.
+ *
+ * It is worth saying why the old sentence is worth this much space. It was
+ * copied out of this docblock into the Metadata button's hover card on
+ * 2026-09-07, where a reader would have read it — the card was corrected before
+ * it shipped, but only because a cross-family review went looking
+ * (docs/plans/260907b-rich-tooltips-on-the-dock-modes.md § Stage 2). A stale
+ * header is not a private matter between a file and its next author.
  *
  * ## The second pass, 2026-08-25: what came back from the original
  *
@@ -826,7 +845,16 @@ export function Metadata({
                 icon={Blocks}
                 label="Blocks"
                 value={stats.blocks.toLocaleString()}
-                tip="Paragraphs, headings, quotes and images. Each has a permanent id, which is how a comment or a summary stays attached to the right passage even after we re-read the article."
+                /* **Not *a permanent id*, which this said until 2026-09-08.**
+                   Stage 3 carries an id over by matching block text
+                   (block-ids.md § Surviving stage 2), so a block whose words
+                   changed can be re-minted. What survives the re-read is the
+                   *identity*: `comments_identity_fk` points at
+                   `block_identities`, which are never deleted, so the comment
+                   outlives the revision either way. Same correction as
+                   comments.md § the gutter, and the same myth the Comments
+                   tooltip had. GPT Sol. */
+                tip="Paragraphs, headings, quotes and images. Each carries an id that a re-read preserves wherever its words are unchanged — and a comment on one survives that re-read regardless, because it is anchored to an identity we never delete rather than to this version of the article."
               />
               <Stat
                 icon={BookOpen}

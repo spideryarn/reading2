@@ -104,6 +104,7 @@ function Harness() {
           comments: [COMMENT],
           loaded: true,
           loadFailed: false,
+          error: null, // nothing has failed to save; this file is about focus
           panel,
           onPanel: setPanel,
           /* App.tsx's own closure: shut the drawer on the way through, or the
@@ -285,6 +286,7 @@ function GutterHarness({ initial }: { initial: ClientComment[] }) {
           comments,
           loaded: true,
           loadFailed: false,
+          error: null, // nothing has failed to save; this file is about focus
           panel,
           onPanel: setPanel,
           onOpenComment: (id) => {
