@@ -85,6 +85,21 @@ describe("toRows", () => {
     expect(toRows([session({ id: "$1643", name: "renamed-since" })], NO_STATUS)[0]?.id).toBe("$1643");
   });
 
+  it("carries the conversation uuid, which is a different id from both handles", () => {
+    // Three ids, and they are not interchangeable: `$1643` is the tmux session,
+    // `%2108` is its pane, and this one is the CONVERSATION. A tmux session can
+    // be resumed into a different conversation and keep the first two, so this
+    // is the only one that identifies what a person means by "this agent".
+    const r = toRows([session({ claudeId: "f1ee7000-0000-4000-8000-0000000000aa" })], NO_STATUS)[0];
+    expect(r?.claudeSessionId).toBe("f1ee7000-0000-4000-8000-0000000000aa");
+  });
+
+  it("is null about a session with no conversation, rather than borrowing a handle", () => {
+    // A shell has no `--session-id`. Null here is what makes the steer route
+    // refuse; anything else would have it type into a session it cannot verify.
+    expect(toRows([session({ claudeId: null })], NO_STATUS)[0]?.claudeSessionId).toBeNull();
+  });
+
   it("gives a session the status pass missed an unknown with a reason", () => {
     expect(toRows([session()], NO_STATUS)[0]?.status).toEqual({
       kind: "unknown",
@@ -97,19 +112,36 @@ describe("panesBySession", () => {
   it("maps a session handle to its pane handle", () => {
     // The two handles look alike and are not interchangeable: `$` addresses a
     // session, `%` addresses a pane, and only the second can be read or typed into.
-    expect(panesBySession("$1 %10\n$2 %20\n").get("$2")).toBe("%20");
+    expect(panesBySession("$1 %10 100\n$2 %20 200\n").get("$2")?.paneId).toBe("%20");
   });
 
   it("keeps the first pane when a session has several", () => {
-    expect(panesBySession("$1 %10\n$1 %11\n").get("$1")).toBe("%10");
+    expect(panesBySession("$1 %10 100\n$1 %11 110\n").get("$1")?.paneId).toBe("%10");
   });
 
   it("omits a malformed line rather than storing half of it", () => {
     // An empty-string pane id would be accepted as an address downstream, and
     // a capture against "" is not obviously wrong until you read the output.
-    const m = panesBySession("$1\n\n   \n$2 %20\n");
+    const m = panesBySession("$1\n\n   \n$2 %20 200\n");
     expect(m.has("$1")).toBe(false);
-    expect(m.get("$2")).toBe("%20");
+    expect(m.get("$2")?.paneId).toBe("%20");
+  });
+
+  it("carries the pane's pid, which is what catches a respawn", () => {
+    // A pane can be respawned and keep its handle, so `%20` alone does not
+    // establish that the thing you were looking at is the thing you are about
+    // to type into. steer.ts compares this before sending.
+    expect(panesBySession("$2 %20 31337\n").get("$2")?.panePid).toBe(31337);
+  });
+
+  it("keeps the row when the pid is missing or unreadable, with a null pid", () => {
+    // Degrading to "no respawn check available" is right; dropping the row
+    // would cost the session its question, and every other guard still applies.
+    for (const line of ["$2 %20\n", "$2 %20 notapid\n"]) {
+      const info = panesBySession(line).get("$2");
+      expect(info?.paneId).toBe("%20");
+      expect(info?.panePid).toBeNull();
+    }
   });
 });
 
@@ -171,10 +203,15 @@ describe("the collector's wiring", () => {
       agents: new Map([[s.claudeId ?? "", "busy"]]),
       agentsWhy: null,
     };
-    const snap = snapshotFrom(parsed, new Map([["$7", "%70"]]), 5);
+    const snap = snapshotFrom(parsed, new Map([["$7", { paneId: "%70", panePid: 700 }]]), 5);
     const round = JSON.parse(JSON.stringify(snap)) as FleetSnapshot;
     expect(round.rows[0]?.status.kind).toBe("working");
     expect(round.rows[0]?.paneId).toBe("%70");
+    // The three ids the steer route needs, all the way through a JSON hop. A
+    // row missing any of them is a row whose Send button refuses with a 400,
+    // and the refusal would look like a bug in the route rather than a gap here.
+    expect(round.rows[0]?.panePid).toBe(700);
+    expect(round.rows[0]?.claudeSessionId).toBe(s.claudeId);
   });
 
   it("reports unknown, not idle, when the box could not be asked", () => {

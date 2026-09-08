@@ -36,6 +36,7 @@ import { collect, type FleetSnapshot } from "./collect.js";
 import { parseBinds } from "./config.js";
 import { collectHealth, type HealthReport } from "./health.js";
 import { broadcast, startHeartbeat, subscribe, subscriberCount } from "./live.js";
+import { handleSteerRequest } from "./routes-steer.js";
 
 /** Where the built React client lives. */
 const DIST = path.join(path.dirname(fileURLToPath(import.meta.url)), "web", "dist");
@@ -176,6 +177,17 @@ function handler(req: import("node:http").IncomingMessage, res: import("node:htt
     res.end(statePayload());
     return;
   }
+  // THE ONLY WRITE PATH IN THIS TOOL: it types into live agent sessions.
+  // Before serveStatic, so that no file which ever lands under web/dist/ can
+  // shadow it — a bundle named `api/steer/message` is absurd and is exactly the
+  // kind of absurdity a build step produces once and nobody notices.
+  //
+  // Everything about whether a keystroke may go out lives in routes-steer.ts
+  // and steer.ts. This line is deliberately the whole of the wiring: the server
+  // must not acquire opinions about steering that the tested modules do not
+  // have, or there will be two places to read and they will diverge.
+  if (handleSteerRequest(req, res)) return;
+
   // The React client. There is no second renderer behind it — see the startup
   // check below, which is what replaced one.
   if (serveStatic(url, res)) return;
