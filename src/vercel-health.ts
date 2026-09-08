@@ -451,6 +451,36 @@ const EXPECTED: readonly Expected[] = [
    * line is whether anything is set at all.
    */
   { name: "SPIDERYARN_JOB_CONCURRENCY", breaks: null },
+  /**
+   * **The extra origins that are *us***, comma-separated, for the sanitiser
+   * rule that stops an article's own HTML addressing our API — `ownOrigins()`
+   * in src/sanitize-policy.ts, and docs/project/security.md § *An article may
+   * not address our own API*.
+   *
+   * Arrived 2026-09-08 from the same sweep as the six above, which found it in
+   * no inventory door at all. `.env.example` ships it blank and says to leave
+   * it blank: on Vercel the deployment host comes from
+   * `VERCEL_PROJECT_PRODUCTION_URL` and `VERCEL_URL`, which the platform sets
+   * for us, and in dev the localhost fallback covers it. So it is reported and
+   * blank on almost every correct deployment.
+   *
+   * **It is here rather than on the sweep's allowlist because of who knows the
+   * answer.** The argument for leaving it out was that health cannot tell
+   * whether this deployment needs it — which is true, and is a statement about
+   * *requiredness*, which `breaks: null` does not make. What the line does is
+   * report presence to the one party who knows whether a domain is attached
+   * that neither platform variable names, and who is the only person who can
+   * set it. That matters here more than for most `breaks: null` rows, because
+   * this variable configures a **defence**: for two days in August 2026 it was
+   * the only source of that host, nobody had set it, and the server half of the
+   * rule quietly did nothing while the render-time pass covered for it. GPT
+   * Sol, reviewing the sweep that found it, 2026-09-08.
+   *
+   * **`breaks: null`, and that is a rule rather than a preference** — see the
+   * block above. A sweep found this name; a sweep is not entitled to decide
+   * that a deployment must warn without it.
+   */
+  { name: "SPIDERYARN_ORIGINS", breaks: null },
 ];
 
 /**
