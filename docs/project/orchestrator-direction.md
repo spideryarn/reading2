@@ -186,6 +186,47 @@ depends on the dashboard being up. Hence two clocks in the state file rather tha
 apart exactly when something is wrong, and a single number would hide the case where the Overseer is
 alive but deaf. **A dead dashboard is a fact the Overseer records, not a silence it sits in.**
 
+### The seam is a file, not a function — `~/.overseer/current.json`
+
+Written 2026-09-08, once the Overseer existed and the sentence *"the Overseer writes a current-state
+file, the dashboard reads and renders it"* stopped being a plan and became something that needed a
+shape. Four files, all under `OVERSEER_STORE_DIR` (default `~/.overseer`):
+
+| file | what it is | who may read it |
+|---|---|---|
+| `current.json` | the checkpoint: two clocks, the cursor, the heartbeat, and the session register | anyone, any time |
+| `events.jsonl` | the append-only history the register is a fold of | anyone, any time |
+| `daemon.jsonl` | the daemon's own facts — started, stopped, conditions degraded and restored | anyone, any time |
+| `overseer.lock` | the single-writer claim | the daemon only |
+
+**Reads are lock-free and writers are single**, which is what makes this a seam rather than a
+coupling: `readCheckpoint()` takes no lock, and the daemon is the only writer of any of them. A
+reader can be wrong about the *present* — it may read a checkpoint written a tick ago — and can never
+be wrong about the past.
+
+**The dashboard should parse `current.json` itself rather than importing the Overseer's parser**, and
+this is the load-bearing part. `tools/overseer/` already imports `collect.ts` and `status.ts` from
+`tools/fleet/`, so a `tools/fleet/` that imported `readCheckpoint` would close a cycle between the
+two things this seam exists to keep apart. **The file is the contract; the function is one
+implementation of reading it.** Parse it at the boundary the way the client already parses the
+server's JSON — tolerantly, checking `schema` as the number `1` rather than as "not something else",
+so that a schema 2 renders as *I cannot read this* rather than as a page with fields quietly missing.
+
+**What it can answer that the dashboard cannot**, which is the whole reason for the seam and the
+thing to build first when this is rendered:
+
+- **`statusSince` turns a state into a duration.** *"Blocked"* becomes *"blocked for 40 minutes"*,
+  which is what [§ Attention](#attention-and-who-the-overseer-is-really-watching) needs and what no
+  amount of collecting can produce, because the present tense has no yesterday.
+- **`heartbeat` lets the page say the Overseer is dead.** `pid`, `instanceId`, `startedAt`,
+  `lastTickAt`, `ticks`. This is [§ The failure to design against](#the-failure-to-design-against) in
+  one field: *"the Overseer was last seen 40 minutes ago"* belongs **where the count would be**, not
+  in a footer, because a quiet page and a healthy fleet are the same picture.
+- **`writtenAt` against `lastGoodSnapshotAt` distinguishes deaf from dead.** They come apart exactly
+  when something is wrong: the first says when the Overseer last wrote, the second says when it last
+  heard from the dashboard. One number would hide the case where the Overseer is alive and not
+  listening.
+
 **Box vitals belong to the dashboard, and are built.** [`tools/fleet/health.ts`](../../tools/fleet/health.ts)
 implements [diagnose-box-resources.md](../reusable/diagnose-box-resources.md) — load against cores,
 available rather than free memory, swap as a cliff, `vmstat` si/so, and memory attributed by process
