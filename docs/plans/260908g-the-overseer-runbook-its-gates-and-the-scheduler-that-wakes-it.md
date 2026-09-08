@@ -1038,10 +1038,45 @@ it catches roughly half. Cheap and *partly* useful. Whether half of a tail case 
 refusal somebody wrote deliberately is the dashboard owner's call, with their cost side; my instinct
 is that it does not obviously.
 
-**One confound, reported rather than tidied:** `joins_disagree` was 1 early and 0 in the later
-samples. If the `readShellState` fix landed inside that window it explains the change exactly, and
-the aggregate above is then pessimistic about the fix. I did not attribute it without knowing when it
-landed, so the number stands uncorrected.
+**The confound I reported was not one, and how I got it wrong is the day's own error again.** I said
+`joins_disagree` was 1 early and 0 later, and wondered whether a fix had landed in the window. The
+owner checked: no fix landed, `readShellState` is unchanged, and that item was never built. Then the
+data: **the disagreements never stopped.** The last is at 22:11:09 — the most recent sample — and
+there are fourteen separate bursts across the whole 73 minutes. I had looked at the last three lines
+of the file and reported a tail as a trend, which is the truncated-grep-becomes-an-exhaustive-list
+mistake in a new costume.
+
+The useful half came out of the same check. The identity
+`joins_disagree == working_but_at_prompt − server_bg_work` holds in **150 of 151** samples, so a
+disagreement is exactly *"an at-prompt row in plain `idle`"* — which is precisely what the
+`readShellState` diagnosis predicts. Their one-line cause is confirmed numerically, from data that
+did not assume it.
+
+#### The tail has a cause, and it argues the other way
+
+Asked whether the 1-of-8 sample coincided with anything nameable. It does, and reporting it matters
+because it cuts against the case I had been making against myself:
+
+```
+21:26  agents=4  reachable=3  working=1  ratio1=0.11     0.75 reachable
+21:46  agents=6  reachable=2  working=4  ratio1=0.12
+22:06  agents=8  reachable=2  working=6  ratio1=0.55
+22:11  agents=8  reachable=1  working=7  ratio1=0.56     0.12 reachable
+```
+
+**All 18 samples at or below 25% reachable are at 7 or 8 agents.** Reachability falls monotonically
+as the fleet fills, and the low period is the box getting busy — partly with agents this very job
+dispatched. So the bad case is **load-dependent, not random**: it appears exactly when a resource
+broadcast would matter.
+
+That means *"0 of 147 with nothing reachable"* and *"mean 0.59"* are both true and both dominated by
+an idle box. **The conditional picture at eight agents is much worse than the unconditional one**,
+and reporting only the unconditional number was one-sided in the other direction.
+
+**What is deliberately not concluded.** The obvious next sentence — *at the 20–35 agents this box is
+designed for, the bad case is the normal case* — is an unearned extrapolation from a range of four to
+eight, and that is the mistake this plan has spent all day catching rather than committing. It is a
+hypothesis with an obvious test, which is whether the overnight run reaches those counts at all.
 
 Caveats that belong next to the number rather than under it: 73 minutes is not a night; the box went
 from very quiet to busy inside it, so this is **one transition rather than a representative day**;
