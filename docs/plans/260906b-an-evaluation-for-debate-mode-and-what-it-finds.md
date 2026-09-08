@@ -412,6 +412,128 @@ Declared here rather than settled afterwards, for the reason the summaries eval 
 **Done:** *"recovered X of Y"* over Y ≥ 4, written into the spike-results doc, and journals on disk
 Layer 1 can replay. ~$0.15 per article.
 
+### The 80-20, decided 2026-09-08 — most of this eval is not needed to fix the bug
+
+Greg asked for the 80-20. Here it is, with the reasoning, because it cuts three of the five stages.
+
+**What I found by reading the captures rather than the plan.** Every journalled run stores the raw
+OpenRouter response verbatim, and that includes `message.annotations` — **eleven and twelve
+`url_citation` objects per pass, each with `url`, `title` and the `content` extract the model was
+shown**. So the frozen packets Stage C was going to *capture* are already on disk, in
+`output/debate-runs/`, bought with the $0.6384 already spent. Layer 2 needs no capture sweep; it
+needs a reader for what is there.
+
+**And the bug is stochastic, which the plan did not say.** The three Feynman rows in
+[the spike](260905f-debate-mode-stage-0-spike-results.md) § 4 point valence at the source's own
+subject. In the journalled run of the same article a day later, the equivalent
+`skepticalinquirer.org` row came back `corroborates` / **positive** — correct. One run cannot show
+this fixed, and no single re-run can show it broken. **Any honest evidence here is a rate over
+repetitions, not a before-and-after pair.** That is the finding that reshapes the stages.
+
+**What the prompt actually does, read this morning.** The defect is sharper than F54 recorded:
+
+- **Group two defines valence's target in a sentence** — *"Here `valence` is the quoted passage's
+  stance toward THE CLAIM you quoted — not toward the article as a whole, and not its tone."*
+- **Group one defines it nowhere.** `READING` says *"which way the QUOTED PASSAGE leans toward this
+  row's target"* and the word *target* is never bound for this group. The only hint is a comment in
+  the answer format, `"applies": "what it says about this article"`.
+- **Neither group's negation list covers the observed failure.** Group two rules out *the article as
+  a whole* and *its tone*. All three recorded errors are stance toward **whatever the source is
+  itself discussing** — psi, Geller — and no sentence in either prompt rules that out.
+- And F54 stands: `relation` is scoped to the outside **page** and `valence` to the **quoted
+  passage**, so the two fields do not share a subject.
+
+**So the fix is a spec repair, not a matter of taste** — a missing binding and a missing negation.
+That matters, because the machinery this plan spends most of its stages on exists to *choose between
+candidate wordings* with rigour, and there is nothing here to choose between.
+
+**The cut.** Four things, in place of Stages B–E:
+
+| | what | cost |
+|---|---|---|
+| **B′** | The free instrument: the scorer over captured journals, Layer 1 replay, Layer 0's packets as tests, the corpus manifest | **nothing** |
+| **C′** | Layer 2 from the annotations already on disk — one reading per frozen packet, no search, **repeated N times** so the output is a rate | small; no search billing |
+| **D′** | Hand-labelled ground truth for the corpus's rows, committed as a fixture | **nothing but my time** |
+| **E′** | The prompt repair, and the same packets re-read to move the rate | one more C′ sweep |
+
+**What this drops, and the condition for bringing it back.** The arms machinery, the blinded judge
+with its anchor gate, and the live confirmation sweep. The judge exists to scale labelling past what
+a person will do by hand; the corpus is **26 reported rows over three articles**, which is well
+inside hand-labelling, and a hand label is better evidence than a judged one at this size. **If D′
+turns out too small to separate the arms — if the rate moves by less than the noise across
+repetitions — the judge comes back and the arms with it**, and that is a measurement this cut
+produces rather than a risk it takes.
+
+**The simpler thing passed over, and why not.** Just fix the prompt and look at the panel. Refused:
+the bug appears on roughly half of rows on one run and none of the next, so looking proves nothing in
+either direction, and this is the exact failure [silent-success.md](../reusable/silent-success.md)
+names — a check that shares an assumption with the thing it checks.
+
+**Correction owed to Greg.** I told him Layer 3 was the only part that costs money. Layer 2 costs
+money too — a model call per packet per repetition, without search billing. Layer 3 remains the one
+that cannot be replayed, and the one to ask about.
+
+### The bug's own rows were on disk all along — measured 2026-09-08, and it changes the cut
+
+**The plan's premise was wrong in a way that made the job look far more expensive than it is.** § What
+the live runs left us with says *"The $0.6252 bought no replayable evidence. Only kept rows are
+stored."* That is true of the **validation** question, where the interesting rows are the dropped
+ones. It is false of the **valence** question, because valence is a property of a **kept** row — and
+every kept row was written to `spideryarn.article_revisions.debate` and is still there.
+
+Six artefacts are in the local database. Revision `f92fc516` (2026-09-05 22:xx) is the spike run
+itself, and it holds all three bad rows, verbatim:
+
+| relation / valence | source | what it actually does |
+|---|---|---|
+| `disputes` / **positive** | `psi-encyclopedia.spr.ac.uk` | disputes Feynman; positive about psi |
+| `corroborates` / **negative** | `skepticalinquirer.org` | backs Feynman; negative about Geller |
+| `disputes` / **positive** | `psi-encyclopedia.spr.ac.uk` | disputes Feynman; positive about parapsychology |
+
+So the positive cases are **free, recoverable and already paid for**. Nothing needs to be re-run to
+obtain them.
+
+**The measured base rate, over everything replayable.** 33 rows: 7 in the spike revision, 26 across
+the three journalled runs. **Three are wrong, all three in the spike run, and the journalled runs
+contain none** — hand-labelled row by row against § 4's definition, with two rows on the
+constitution article marked questionable rather than wrong (`windowsontheory` reads as praise and
+was called `neutral`; `nextgov` confirms the claim and was called `neutral`). The prompt did not
+change between the two: the history of `src/debate.ts` shows nothing touching `relation`, `valence`
+or either target sentence between 2026-09-05 17:36 and the journalled runs.
+
+**≈9% overall, and 43% on one run of one article. Both numbers are real and the plan was sized for
+the second one.**
+
+### And the pair F35 demoted is the cheapest detector we have
+
+**All three known bad rows are opposite pairs** — two `disputes`+`positive`, one
+`corroborates`+`negative`. Sol's F35 was right that an opposite pair is **not a contradiction**, and
+the two honest counter-examples above stand. But *not a contradiction* was then read as *only an
+inspection mark*, and the measurement says something stronger and more useful:
+
+> The opposite pair has **high recall** for this bug — every instance we have is one — and low
+> precision, which is exactly what F35 established.
+
+A high-recall, low-precision mark is worthless as a coercion and **excellent as a sampling frame**.
+That is what makes D′'s hand-labelling tractable: you do not label every row a sweep returns, you
+label **every opposite pair plus a matched control sample of same-signed rows**, and the control
+sample is what stops the frame from measuring only its own bias. Nothing is coerced, ordered or
+coloured by the pair — F35's ruling is untouched — it decides only *what a person looks at*.
+
+**And a Layer 2 packet rebuilds from the database alone.** A stored row carries `id`, `url`,
+`title`, `blockId`, `claimQuote`, `sourceQuote`, `relation`, `valence` and `applies` — every field
+§ Layer 2 asks a packet to fix except the evidence haystack, and the haystack is not what a reading
+is *about*: `READING` opens *"'relation', 'valence', 'applies' and 'limits' are YOUR READING of the
+passage you quoted"*. The passage is the `sourceQuote`, and it is stored. So the three packets that
+matter can be built for nothing, and Stage C's capture sweep buys the valence question nothing at
+all. It still earns its place for the **discovery** question, which is a different stage.
+
+**What this does to the cut.** C′ shrinks. Layer 2 was to be repeated N times per packet to find a
+rate; with the positive cases already in hand, the first question is no longer *"can we make the bug
+appear?"* but *"does the repair stop the three rows we have from coming out wrong?"* — which is
+replay against three known packets, not a rate over a sweep. The rate work comes back only if the
+repair passes those three, which is the cheap order to do it in.
+
 ### Stage B — the free instrument, and one shipped bug
 
 - `evals/debate/score.ts`: loss-reason table, the contingency table and opposite-pair mark,
