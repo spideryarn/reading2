@@ -192,7 +192,7 @@ describe("the dock, in a mode, in the query where it leaves the screen", () => {
       m[0].trim(),
     );
     expect(rules.length, "expected exactly one rule to kill the dock's transition").toBe(1);
-    expect(rules[0]).toContain(QUALIFIER + ".mode-band");
+    expect(rules[0]).toContain(`${QUALIFIER}.mode-band`);
   });
 
   it("moves the bar, the hint and the hint's room as one state", () => {
