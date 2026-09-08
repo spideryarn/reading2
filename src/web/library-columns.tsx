@@ -258,7 +258,11 @@ function TitleCell({ entry, shelf }: { entry: LibraryEntry; shelf: Shelf }) {
       <TitleEditor
         title={entry.title}
         overridden={Boolean(entry.titleOverridden)}
-        className="tw:text-sm"
+        /* `any-pointer-coarse:text-base` — iOS zooms the page in on a field under
+           16px and does not zoom back out. The reading view's fields get that floor
+           from narrow-window.css § a field iOS zooms into; the utilities layer
+           outranks it, so a `tw:`-styled field says so itself. */
+        className="tw:text-sm tw:any-pointer-coarse:text-base"
         onDone={(title) => {
           if (title === undefined) shelf.cancelRename();
           else void shelf.rename(entry.slug, title);

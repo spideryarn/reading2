@@ -323,7 +323,35 @@ export function Library({
             own line when they do not — and `gap-y-1` keeps that second line off
             the strapline below. */}
         <div className="tw:flex tw:flex-wrap tw:items-baseline tw:justify-between tw:gap-x-4 tw:gap-y-1">
-          <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">Spideryarn</h1>
+          {/* The spider beside the name, which every other page has had since
+              2026-08-26 and this one — the page the app opens on — did not.
+              Greg, 2026-09-08: *"can you include the logo itself in the
+              top-left of the logged-in Homepage next to the wordmark"*.
+
+              **Deliberately not `HomeLogo`, and deliberately not animated.**
+              This is home, so there is nothing to link to (App.tsx says why),
+              and the hover animations are calibrated in whole pixels against a
+              0.82rem wordmark and a 20px spider — a 2px pluck is invisible on a
+              30px heading, and `spya-radius` masks at a hard-coded `20px 20px`.
+              Making them travel here means expressing the whole set in `em`,
+              which is a rework rather than a class. styles/logo-animations.css.
+
+              `items-center` in its own row so the glyph centres on the word
+              while the header's outer flex keeps its baseline alignment for the
+              links opposite. */}
+          <div className="tw:flex tw:items-center tw:gap-2.5">
+            {/* `alt=""`: the wordmark is right there, and a screen reader
+                reading the name twice is how a decorative image becomes noise.
+                Same reasoning as HomeLogo.tsx. */}
+            <img
+              className="logo-image"
+              src="/spideryarn-logo.png"
+              alt=""
+              width={28}
+              height={28}
+            />
+            <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">Spideryarn</h1>
+          </div>
           {/* One group, so that once the first card is up its neighbour opens
               instantly as the pointer runs along the row — Tooltip.tsx. The
               delays are the ones the dock and the metadata cards use, because
@@ -690,7 +718,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
              tabbed into — and this input suppresses the browser's own ring
              with `outline-none`, so nothing else was drawing one. Same
              treatment on the URL box in AddArticle.tsx. */
-          className="tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:py-2 tw:pl-9 tw:pr-9 tw:text-sm tw:text-foreground tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25"
+          className="tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:py-2 tw:pl-9 tw:pr-9 tw:text-sm tw:text-foreground tw:any-pointer-coarse:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25"
         />
         {value && (
           <button

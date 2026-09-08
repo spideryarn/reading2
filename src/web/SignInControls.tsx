@@ -204,7 +204,12 @@ export function SignInControls() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-3 tw:py-2 tw:text-sm tw:text-foreground tw:outline-none tw:focus:border-highlight"
+            /* `any-pointer-coarse:text-base` — iOS zooms the page in on a field
+               under 16px and does not zoom back out. The reading view's fields get
+               that floor from narrow-window.css § a field iOS zooms into; the
+               utilities layer outranks it, so a `tw:`-styled field says so itself.
+               The password box below carries it for the same reason. */
+            className="tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-3 tw:py-2 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight"
           />
           <label className="tw:text-xs tw:text-muted-foreground" htmlFor="signin-password">
             Password
@@ -220,7 +225,7 @@ export function SignInControls() {
             minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-3 tw:py-2 tw:text-sm tw:text-foreground tw:outline-none tw:focus:border-highlight"
+            className="tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-3 tw:py-2 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight"
           />
           <div className="tw:mt-1 tw:flex tw:items-center tw:gap-3">
             <Button type="submit" disabled={busy}>

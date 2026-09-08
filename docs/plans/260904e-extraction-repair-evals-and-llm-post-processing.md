@@ -2812,6 +2812,138 @@ ruler's five recorded preconditions, which are conditions on **how stage C may u
   **the stamp rescues none of them** — the answer to the open question in the brief, and not the one
   anybody guessed.
 
+#### What is left, ranked — two reviews, and the census that decided it (2026-09-08)
+
+With C0, C1a, C4a and C5 on `dev`, what remains is C2, C3 and C4b. Fable and then **GPT Astra** were
+asked which of them is worth building, and **they disagreed**, so the tie was broken by measuring
+rather than by preferring a reviewer.
+
+- **Fable:** stage D is the real successor — it improves the reading view, arc, Summaries, Outline,
+  Structure and reading time *together*, where C2/C3 improve one page shape. Drop C4b, defer C2 with
+  C3 until somebody counts what C3 would recover.
+- **Astra:** the opposite. **One bounded recovery stage, then leave extraction.** C3 first, narrowed
+  to the data tables that are demonstrably lost; C2 only as its prerequisite and with no independent
+  programme; stage D deferred *and* narrowed; C4b dropped.
+
+**Nobody had done the count both reviews were asking for, so it was done.** Across all 35 fixtures,
+classifying a table as data by the publisher's own markup — a `<th>`, or three rows and two columns,
+excluding anything inside a declared `.navbox`/`.infobox`/`.ambox`/sidebar — the corpus holds **41
+data tables, keeps 34, and loses 7**:
+
+| fixture | lost | what it is |
+|---|---|---|
+| `wiki_gdp_table` | **2** | a **223-row** table and a 15-row table. The article is *List of countries by GDP*; **274 `<tr>` in, 1 out.** The tables are the article |
+| `ar5iv` | **2** | *Table 1: Maximum path lengths…* (6 rows) and *Table 2: …better BLEU scores…* (12 rows) — the Attention paper's results |
+| `hn_dropbox`, `mdn_cache`, `pg_greatwork` | 1 each | arguable: an HN comment tree and two layout-ish tables, none of them a reader's evidence |
+
+**Four of the seven are real, and two of those are the worst kind of loss this plan can produce**:
+`ar5iv` **keeps all four `Table N:` captions while dropping two of the tables**, so the reader is
+told a table is there and shown nothing. That is worse than dropping both, because it looks
+complete. It is also the exact failure the gates cannot see — nothing is invented and source order
+is preserved, so `attribution` and `sourceOrder` both pass.
+
+**Decision: Astra's ranking, on the strength of the census.** Four tables across two fixtures sounds
+narrow and the fixture count understates it — "a Wikipedia list article" and "a paper with a results
+table" are two of the commonest shapes a reader brings. Against that, stage D moves nothing a reader
+has lost; it re-presents things they already have. **Losing the evidence outranks re-arranging it.**
+
+**And Astra corrected Fable's *reasoning* on C4b, not only its conclusion.** Both say drop it, but
+Greg's *"a bit of junk in the structure that's getting ignored"* line supports inspectable
+classification rather than prohibiting it — and "getting ignored" is not automatically true, because
+`src/block-policy.ts` currently includes untreated blocks in automatic evidence. **So C4b is dropped
+on opportunity cost, not because Greg ruled it out.** The distinction matters if it is ever revisited.
+
+**On stage D, when it comes: keep all six visibility commitments.** Fable proposed trimming the
+stored per-block restore and the audit view, on the grounds they were promised to earn a
+*model*-driven classification and D's is deterministic. Astra called that quiet erosion and gave the
+reason that settles it: **a deterministic false positive excludes the same evidence from generated
+accounts as a model's would.** The audit can be a modest list of blocks, classification and matched
+rule; it does not have to be a dashboard. Astra also found a dependency that kills the "mostly
+assignment" estimate — restoring an interior block of a trailing supplement collapses one supplement
+group into zero, stranding it and returning the whole article as body, and a leading-run does not fix
+that shape.
+
+#### The diagnosis, 2026-09-08 — **C3 is not the reinsertion problem it was scoped as**
+
+Before designing a repair, a spike was sent to find the *mechanism*. The answer changes the stage
+completely, and it is two mechanisms rather than one.
+
+##### A — the four tables die for saying they have headers
+
+They are removed at [`Readability.js:1119-1128`], the `unlikelyCandidates` branch of `_grabArticle`'s
+node-prep walk, **before candidate scoring begins**. The regex is
+
+    /-ad-|ai2html|banner|…|footer|gdpr|header|legends|menu|…/i
+
+— and it is matched as an **unanchored substring** against `className + " " + id`. So:
+
+| the table's own class | the substring that kills it |
+|---|---|
+| `wikitable sortable sticky-header-multi static-row-numbers` | sticky-**header**-multi |
+| `ltx_tabular ltx_centering ltx_guessed_headers ltx_align_middle` | ltx_guessed_**header**s |
+
+`okMaybeItsACandidate` (`/and|article|body|column|content|main|shadow/i`) rescues neither. **A data
+table is deleted for declaring the most table-like thing a table can say**, and LaTeXML adds
+`ltx_guessed_headers` exactly when it inferred header cells — so ar5iv marks its most table-like
+tables with the token Readability reads as furniture. The two ar5iv tables that survive differ by
+precisely that one class token.
+
+**Counterfactual, run twice — by the spike and again independently, changing nothing but that
+substring inside class attributes:**
+
+| fixture | tables | `<tr>` |
+|---|---|---|
+| `ar5iv` | 7 → **9** | 42 → **60** |
+| `wiki_gdp_table` | 1 → **3** | 1 → **239** |
+
+**And the navboxes stay out** — wiki goes to 3 tables, not 8. They die on a different branch
+(`UNLIKELY_ROLES`, for `role="navigation"` on their wrapper) and **link density plays no part in it**,
+which was this plan's assumption and was wrong. So the fix cannot resurrect them; that is measured,
+not argued.
+
+**Three consequences for the stage, and they are large:**
+
+1. **There is no reinsertion problem.** The tables are deleted before the candidate is chosen, so they
+   are neither inside nor outside it. A pre-Readability signal is enough, and *"reinsertion must
+   preserve sanitisation, source order and block ids, and must not leave both Readability's fragment
+   and the rescued original"* — the reason C3 was called the largest and riskiest item — **does not
+   arise**. Landing is correct for free: ar5iv's sequence becomes `figcaption: Table 1…` /
+   `table: Layer Type…` / `h2: 5 Training`.
+2. **C2's rationale mostly goes with it.** The containment oracle was specified to verify a
+   *re-attached subtree*. Nothing is re-attached. What remains worth checking is much smaller and is
+   scoped in the stage below.
+3. **`_markDataTables` never runs on them.** It lives in `_prepArticle`, called at line 1512 — 385
+   lines after they are gone — so the `rows >= 10` rule that should have protected a 223-row table is
+   never reached.
+
+##### B — the PLOS correction notice dies somewhere else entirely
+
+Different stage, different predicate, different fix. `_cleanConditionally(articleContent, "div")`
+removes `div.amendment-citation` on *"Low weight and a little linky"* — `weight=0`,
+`linkDensity=0.291`, over the `0.2` bar — where the density comes from the citation printing its DOI
+as its own link text. Then, iterating backwards, the same pass reaches the **now-empty parent**
+`div.amendment amendment-correction` and removes it for *"No useful content"*, taking
+`<h2>Correction</h2>` with it.
+
+So a reader of that paper is never told it was corrected: `"Correction"`, `"10 Apr 2018"` and the
+correction's own DOI appear nowhere in a 26,991-character output. It is on this plan's **never-fold
+list** and it is not being folded — it is being deleted, and **both hard gates pass it**, because
+nothing is invented and source order holds.
+
+**A class-weight nudge does not fix it**, which is the useful negative result: adding `content` to the
+citation div rescues the inner div, and the *parent* then fails the same linkiness check at 0.276 and
+the notice still goes. The deletion just moves up one level.
+
+##### What the spike also found, and what it will not vouch for
+
+- **Wiki's one "surviving" table is not a table** — it is the map-legend swatch grid inside a
+  `<figcaption>`. **Zero** content tables survive that page, not one.
+- Only **6 of ~77** lost tables across the corpus die on line 1127. Fixing it fixes these four and
+  does **not** make "tables survive" true generally, and the stage below must not claim otherwise.
+- Unverified by the spike and therefore not to be relied on: the *ancestor*-level form of the
+  predictive rule (the self-level form had no exceptions across the corpus), the corpus-wide effect of
+  `linkDensityModifier`, and the code paths of the other 71 losses.
+
 **Deferred out of stage C, deliberately:**
 
 - **`dir`/`lang`.** Sol P1-C06 shows it is a data-contract change, not a recogniser: correctness needs

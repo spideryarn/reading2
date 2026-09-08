@@ -1,88 +1,58 @@
-# Review built code, before it is committed: Stage 1 of the environment-read inventory
+# Stage 1 code review: the DELETE oracle, before the chat guards move
 
-The repo is at `/home/greg/code/spideryarn2/.claude/worktrees/env-names-literal`, branch
-`worktree-env-names-literal`.
+You reviewed the plan for this slice about half an hour ago and returned *build it with these
+changes* (`docs/plans/260908a-plan-review-sol.md`). This is the first stage built from it.
 
-## The candidate — live, pre-commit
+## The candidate
 
-Base commit `7981430a` (which added only the three plan documents). Nothing else is committed, so
-`git diff 7981430a -- <paths>` is the change for the tracked files, and the two new files are
-untracked — **a diff command alone shows you nothing for those, read them directly**:
+**Durable, committed.** Repo is the worktree
+`/home/greg/code/spideryarn2/.claude/worktrees/worktree-chat-route-table`, branch
+`worktree-worktree-chat-route-table`.
 
-**Modified (tracked):**
+- **Commit `ccd3ac8c`** — the whole stage. `git show ccd3ac8c` is the diff.
+- Four paths, all of them in that commit:
+  - `tests/chat-thread-delete-route.test.ts` (new — the oracle)
+  - `tests/store-migration-registry.ts` (one lane entry plus its comment)
+  - `docs/plans/260908a-chat-and-live-sessions-join-the-route-table.md` (§ *Stage 1, as built*)
+  - `docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md` (§ *Every remaining slice
+    is provably unreachable before `requireUser`* — a general argument moved into the umbrella plan)
 
-- `src/env.ts` — `pinnedNames` parses a string; `loadEnvLocal` reads `process.env.SPIDERYARN_ENV_PINNED`
-  literally and passes the set as a required 4th argument to `applyEnvFile`; `chooseTargetUrl` takes
-  two URL strings rather than two environment records.
-- `src/jobs.ts` — the read is literal; `CONCURRENCY_ENV` **deleted**; two comments reworded.
-- `src/hierarchy-deepen.ts` — three reads literal; the three `*_ENV` consts kept.
-- `src/fetch.ts` — `seen(name, value)`; the two reads literal at the call site.
-- `src/web/lib/supabase.ts` — `required` indexes an ordinary object built from two literal reads.
-- `src/vercel-health.ts` — one comment reworded (a stale `CONCURRENCY_ENV` reference).
-- `tests/env.test.ts`, `tests/library-log-volume.test.ts` — signature changes only.
+**`src/routes.ts` is not in this commit and is byte-identical to `HEAD`.** No guard has moved yet.
+That is deliberate: this stage exists so that a red after the move is attributable to the move.
 
-**Untracked — read these directly:**
+Reading order — not a scope limit: the new test file, then `git show ccd3ac8c`, then the plan section.
 
-- `tests/helpers/env-reads.ts` — the sweep. 971 lines, 685 non-comment.
-- `tests/env-reads-are-literal.test.ts` — the gate. 389 lines, 28 assertions.
+Context you will want: `tests/turn-order.test.ts` (read its header — it is why this file is shaped as
+it is), `src/routes.ts:8517` (the guard under test) and `:2136` (`inTurnOrder`), and
+`tests/the-query-string-does-not-decide-the-route.test.ts` for the house style this file follows.
 
-Start with `tests/helpers/env-reads.ts`, then the test, then `src/env.ts`. That is a reading order,
-not a scope limit.
+## What to attack
 
-## What it is, and the history you need
+1. **Is the oracle actually red for the right reason, and green for the right reason?** Two mutations
+   were run and both results are recorded in the file header and the plan:
+   - `await inTurnOrder(…)` → `inTurnOrder(…)`: **2 failed of 2**.
+   - `inTurnOrder(k, f)` → `f()`: **2 passed of 2**.
+   The second is the control. Is the claim it licenses — *this file does not test the lock* — stated
+   correctly, and is anything in the file's assertions accidentally load-bearing on the lock after
+   all?
+2. **Is there a way this file passes while the route is broken?** In particular: could the second
+   case (*really removed it, and not only in the reply*) pass because of the first case's side
+   effects, ordering between the two `it` blocks, or the `afterAll` cleanup? Could the seeding in
+   `beforeAll` silently produce one thread instead of two and still leave the assertions meaningful?
+3. **The lane.** `tests/chat-thread-delete-route.test.ts` was put in `private-postgres`. Is that
+   right, or would `shared-services` do — and is there a way the file's exact-list assertions could
+   be falsified by a neighbouring run in the lane it has been given?
+4. **The fake `res`.** It has no `write`, `writeHead` or `on`. Is that the right shape for this
+   route, and does its absence hide anything?
+5. **The umbrella-plan section.** Is the general claim — that any namespace with a literal prefix
+   other than `/api/public` is provably unreachable before `requireUser`, because
+   `src/public/routes.ts:183` gates on `path === "/api/public" || path.startsWith("/api/public/")` —
+   true as stated, and is the exception it names (*if a future namespace is added to the public
+   dispatcher, or its claim stops being a literal prefix*) the complete set of ways it could stop
+   being true?
+6. **Anything the stage should have done and did not**, given that Stage 2 moves twelve guards next.
 
-`docs/postmortems/260827b-health-check-green-while-uploads-dead.md` item 1 asked for a static check
-that every environment variable read under `src/` is accounted for in `src/vercel-health.ts`'s
-`EXPECTED`. **You have refused two previous attempts**, most recently on 2026-09-07, across two
-rounds and nine established P1s — every one of the same class: an environment read *silently
-skipped* rather than refused. Those reviews are `docs/plans/260907e-stage4-review-sol.md` and
-`-sol-2.md`; the parked 1,754-line candidate is `docs/plans/260907e-stage4-candidate.ts.txt`.
-
-**You then designed this one.** `docs/plans/260908a-design-prompt-sol.md` is your own design answer
-from earlier tonight, and `docs/plans/260908a-make-every-environment-variable-read-literal-and-inventory-them.md`
-is the plan built from it. **Do not defer to either.** A design you proposed in prose is exactly the
-thing most likely to be wrong once it meets the tree, and I would rather you contradict yourself now
-than agree with yourself into a third failure.
-
-This is **Stage 1 only**: every read under `src/` is one of two literal shapes or one of five pinned
-mechanisms. **The inventory — every collected name accounted for in `EXPECTED` or an allowlist — is
-Stage 2 and is deliberately not asserted yet.** Do not report its absence as a finding.
-
-## Run it yourself
-
-Your sandbox has no network and no Postgres. This test needs neither:
-
-- `npx vitest run tests/env-reads-are-literal.test.ts` — please run it, and **attack the assertions
-  rather than trusting the green.**
-- `npm run typecheck` is clean (I ran it).
-- The database-backed tests are mine to run and I ran them one at a time: `tests/env.test.ts` (20),
-  `tests/stage2c-raw-bytes.test.ts` (23), `tests/hierarchy-deepen-wave.test.ts` (42),
-  `tests/unit-lane-has-no-database.test.ts`, `tests/deepen-eval.test.ts`,
-  `tests/private-lane-survives-a-module-reset.test.ts`,
-  `tests/store-boots-without-inherited-credentials.test.ts`, `tests/library-log-volume.test.ts`,
-  `tests/google-availability.test.ts` — all green after the change.
-- Red-first evidence is in the plan doc; the sweep named eight refused sites before the `src/`
-  changes, and those eight are exactly the sites then changed.
-
-## What I want, in order
-
-1. **Find a read this sweep does not see.** That is the whole game and it is what beat both previous
-   attempts. Write the file, run it through `sweepEnvReads`, and show me a spelling that is neither
-   counted nor refused. The controls in the test name sixteen; find a seventeenth.
-2. **Attack the five mechanism contracts.** Each pins a file plus an enclosing function. Can a name
-   enter or leave one without the contract noticing? `src/sanitize-policy.ts` is the one I am least
-   comfortable with — it is a **defence** (`docs/project/security-map.md`), nobody may edit it, and
-   its contract must both permit the `globalThis` alias and force its three names into the inventory.
-3. **The behaviour changes in `src/`.** `chooseTargetUrl` decides which database a command writes to.
-   `applyEnvFile`'s new required `pinned` argument replaces a value it used to find itself. Is any of
-   this a behaviour change rather than a refactor? Read `docs/project/database.md` and
-   `docs/project/supabase-local.md` on what `DATABASE_URL` and `SPIDERYARN_ENV_PINNED` are for.
-4. **Which assertions would still pass if the thing were broken?** Especially the positive controls
-   and the constant-agreement table.
-5. **The prose.** The plan doc and the source comments make factual claims about the tree and about
-   what was measured. Any claim that is not true of what is in front of you is a finding.
-
-## Severity — put one on every finding, with an ID (`P0-1`, `P1-1`, …)
+## Severity scale
 
 | | |
 |---|---|
@@ -91,22 +61,27 @@ Your sandbox has no network and no Postgres. This test needs neither:
 | **P2** | design or maintainability risk with no wrong behaviour today |
 | **P3** | non-behavioural prose or comment defect |
 
-Say plainly if it is fine. End with a verdict: land as is / land with these changes / do not land.
+Grade by consequence, not by which file the defect is in. **Refuse only on an established P0 or
+P1** — direct evidence with no unresolved material inference. Give every finding a stable ID
+(`F4`, `F5`, … — `F1`–`F3` are taken by the plan review, so do not reuse those numbers unless you
+mean the same finding).
 
-## My own suspicions — already mine, worth less, spend most of the run elsewhere
+You have no network and cannot reach Postgres, so you cannot run this file. Say so rather than
+implying a run. Everything else in the tree is readable.
 
-- **The helper is 685 non-comment lines against a 250-line budget**, and the previous attempt died of
-  exactly this growth. The author's own account: ~227 lines are `usesOf` plus three per-file rules,
-  which is the least generalisable part; ~85 lines it would defend as "easier to write than to leave
-  out", of which the clearest deletion candidate is a `gitNames.size !== 4` check that guards nothing
-  the inventory needs. Tell me what you would cut, and whether cutting it opens a hole.
-- **`applyEnvFile`'s rule is a syntactic proxy**: "the index property must be *spelled* `name`",
-  rather than resolving the binding. That is deliberate — resolving it is the scope analysis this
-  design deleted — but it means a shadowed `name` inside that function would pass. Is that reachable?
-- **The controls live in `mkdtempSync`, not `tests/fixtures/`**, because one of them must not parse
-  and an unparseable `.ts` in the repo would be a red typecheck rather than this gate speaking. Their
-  relative paths therefore begin `../`, so no `src/…` contract can match one. I think that is right;
-  say if it hides something.
-- `src/jobs.ts`'s `CONCURRENCY_ENV` was **deleted** rather than kept-and-guarded, because after
-  literalisation nothing imported it. `DEEPEN_ENV` could not be, because `evals/deepen/run.ts`
-  imports it. Is the asymmetry right?
+## End with a verdict
+
+One of: **stage is sound**, **stage is sound with these changes**, **this stage does not establish
+what it claims**, or **stop and reconsider**.
+
+---
+
+## My own suspicions, worth less than yours — spend most of the run above
+
+- The oracle turned out easier than the previous slice's stream-lifetime instrument, and I remain
+  suspicious of that even though both mutations behaved as predicted.
+- The second `it` depends on the first having deleted something. I think that is fine and is the
+  point — the store's word after the route's word — but it is the kind of coupling that reads fine
+  and later turns out to have been the reason a suite passed.
+- I asserted `expect(article.copied).toContain("blocks")` by copying the sibling file. I have not
+  checked that this file actually needs blocks; if it does not, that assertion is cargo.

@@ -73,7 +73,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | the wrapper: `<Tooltip content={…}>{trigger}</Tooltip>`, plus `TooltipGroup` and `TipNote` — the latter being the panel's text where the panel is only a sentence, which is most of them outside the reading view |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | `BandCard` — what a spine band actually says |
 | [`src/web/ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) | the other one — see below |
-| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar — the fourteen mode buttons, twice over, and the experimental switch. See [§ The bar](#the-bar-and-the-two-shapes-of-the-same-fourteen) |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar — the mode buttons, twice over, and the experimental switch. See [§ The bar](#the-bar-and-the-two-shapes-of-the-same-modes) |
 | [`src/mode-catalog.ts`](../../src/mode-catalog.ts) | the words in those fourteen cards, both paragraphs of each — the bar holds none of its own copy |
 | [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage masthead's links — Profile, plus Admin for the administrator — and the one place a tooltip's trigger is not a host element |
 | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | the two things said at the top of an article — where it came from, and who can read it. Both were `title` attributes or a bare sentence until 2026-09-06 and are `ControlTip`s now; the origin one is also the app's only tooltip on a line of *text* rather than on a glyph. Its trigger is the address's own anchor when there is an address, and a plain `<span>` with `cursor: help` and an `sr-only` pair of sentences when there is not — the second of those is the app's one tooltip a keyboard cannot open, which is why its content is duplicated rather than only shown |
@@ -172,7 +172,7 @@ set — the second paragraph is where the unguessable fact goes, which is exactl
 invention goes too. The four are listed in
 [260905h](../plans/260905h-rich-tooltips-on-the-shelf-action-buttons.md#four-of-these-were-wrong-in-the-first-draft).
 
-### The bar, and the two shapes of the same fourteen
+### The bar, and the two shapes of the same modes
 
 **The bottom bar joined on 2026-09-07**, on the same ask again — Greg: *"Make sure all the modes in
 the bottom-bar have rich tooltips."* It is the largest customer by count after Referee and the one
@@ -213,17 +213,31 @@ Three things about it are not true of any other set here.
   `TooltipGroup` of their own, so running along the end of the bar is instant after the first card;
   the experimental switch stays outside it, being the adjacent account-level control — a setting
   rather than a view of this article.
-  Two buttons in the bar still carry a `title`, `DockHome` and `DockCommands`, and neither goes
-  through `DockLink`.
+- **And then the last two**, on 2026-09-08: the wordmark and the command button, which are not modes
+  either and do not go through `DockLink`. `DockCommands` joined the group above it — it is the
+  fourth thing in that end of the row that is not a mode, and its own docblock already argued three
+  ways that it is not a fifteenth one. `DockHome` is alone at the far end with a whole radiogroup
+  between it and the nearest other card, so it is in no group: there is no scrub from one to the next
+  to make instant. **No button in the bar row carries a `title` now** — the one left in
+  `Dock.tsx` is the drawer's Close, and 260907b § Stage 3 says why it stays.
+
+  `DockHome` took a `signedIn` prop to do it, and that is the point of it rather than a detail. A
+  stranger reading a shared article sees the wordmark, and signed out `/` is the landing page — so
+  *back to your library* is a sentence true for the owner and false for the reader most likely to
+  need it, which is the shape of the Comments bug the day before. The corner logo
+  ([`HomeLogo.tsx`](../../src/web/HomeLogo.tsx)) still carries the same `title` string this one
+  dropped; it is a different component on different pages and wants the same question asked of it.
 
   Comments is the one that repaid the pass. It is **two** buttons — a `DockTab` opening the drawer on
   the reading view, a `DockLink` back to it everywhere else — and a visitor's copy on it had gone
   stale in a way only reading both could show: the drawer's *comments belong to whoever added this
   article* notice was retired on 2026-09-04, when a shared link started carrying them
   ([260904c](../plans/260904c-more-modes-on-a-shared-link.md)), and the button went on saying half of
-  it. Both arms read one string now. `COMMENTS_GAP` and the `readers-own` variant behind it are
-  still in [`visitor.ts`](../../src/web/visitor.ts) with no live consumer; retiring them is a
-  separate change.
+  it. Both arms read one string now. `COMMENTS_GAP` and the `readers-own` variant behind it were
+  retired on 2026-09-08, along with `readersOwnWork` in [`messages.ts`](../../src/messages.ts),
+  which nothing reachable called. A message with no reachable caller is not inert: that one had been
+  false for four days and was still being read out to visitors by a button that had copied half of
+  it. 260904c had already decided the deletion and nobody had done it.
 
 Five of the fourteen second paragraphs were drafted, checked against the source and thrown away for
 being **plausible and false** — the same failure the shelf's row produced four of, and the reason

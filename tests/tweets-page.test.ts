@@ -17,7 +17,8 @@
 import { describe, expect, it } from "vitest";
 import { cascadeForce } from "../src/jobs.js";
 import { parseJobRequest } from "../src/routes.js";
-import { howLong, threadMarkdown } from "../src/web/Tweets.js";
+import { threadMarkdown } from "../src/web/Tweets.js";
+import { howLong } from "../src/web/relative-time.js";
 import type { Article, TweetThread } from "../src/types.js";
 
 /** @param url omitted entirely when null — an article fetched from a file has no URL at all. */
@@ -137,6 +138,12 @@ describe("the request the rewrite sends", () => {
 /**
  * How long the model took, which the artefact has recorded from the first run
  * and nothing showed until the page grew a footer.
+ *
+ * **The function moved to `src/web/relative-time.ts` on 2026-09-08**, when the
+ * metadata page's step rows wanted the same string. These cases stayed here
+ * because they are this page's requirements on it, and they all still pass
+ * unchanged; the boundaries the move added are pinned beside the function, in
+ * tests/metadata-step-timing.test.tsx.
  */
 describe("howLong", () => {
   it("reads in seconds while it is short", () => {

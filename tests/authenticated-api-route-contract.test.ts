@@ -770,6 +770,26 @@ const EXPECTED_GUARD_COUNT = 81;
 const describeMatch = (m: MatchSpec): string =>
   m.kind === "literal" ? `literal ${m.path}` : `regex /${m.source}/${m.flags}`;
 
+/**
+ * **A matcher as something a path prefix can be looked for in**, which
+ * `describeMatch` is not.
+ *
+ * A regex's `source` keeps its escapes, so `/^\/api\/chat\/…$/` renders with
+ * `\/` between every segment and the literal substring `/api/chat` never
+ * appears in it. § *answers the moved domains from the table* used
+ * `describeMatch(...).includes(prefix)` and so was **silently vacuous for every
+ * regex route** — it could only ever catch a literal one left behind. Measured
+ * 2026-09-08: adding `/api/chat` to that list while all nine `/api/chat` guards
+ * were still in the chain left the suite green at 326.
+ *
+ * That mattered because referee and search are entirely regex, so the
+ * assertion had verified nothing for either of the last two slices, while
+ * reading in review as though it had. Dropping the backslashes is enough — the
+ * result is only ever searched for a prefix, so `\w` becoming `w` is harmless.
+ */
+const pathish = (m: MatchSpec): string =>
+  m.kind === "literal" ? m.path : m.source.replace(/\\/g, "");
+
 const sorted = (xs: string[]): string[] => [...xs].sort();
 
 /**
@@ -1897,6 +1917,19 @@ describe("the authenticated API's route contract", () => {
       expect(sorted(parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match))))
         .toEqual(
           sorted([
+            // chat and the live sessions, 260908a
+            "GET regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/cancel$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/live-tool$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/live$/",
+            "POST regex /^\\/api\\/live\\/([\\w-]+)\\/connected$/",
+            "POST regex /^\\/api\\/live\\/([\\w-]+)\\/usage$/",
+            "POST regex /^\\/api\\/live\\/([\\w-]+)\\/close$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/spoken$/",
+            "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/stop$/",
+            "PATCH regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+            "DELETE regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
             // search, 260907b stage 5
             "GET regex /^\\/api\\/search\\/([\\w.%-]+)$/",
             "POST regex /^\\/api\\/search\\/([\\w.%-]+)$/",
@@ -1928,13 +1961,44 @@ describe("the authenticated API's route contract", () => {
             "GET literal /api/billing/usage",
           ]),
         );
-      const moved = ["/api/billing", "/api/jobs", "/api/uploads", "/api/referee", "/api/search"];
+      /* **Two prefixes for one slice, and `chatLive` belongs to the first.**
+         `/api/chat/:slug/:threadId/live` is a chat path whose last segment
+         happens to read like the other namespace; sorting these twelve by the
+         word "live" would put it in the wrong list and the filter would then
+         pass while a guard was still in the chain. Nine under `/api/chat`,
+         three under `/api/live`. 260907b flagged it before the slice was cut. */
+      const moved = [
+        "/api/billing",
+        "/api/jobs",
+        "/api/uploads",
+        "/api/referee",
+        "/api/search",
+        "/api/chat",
+        "/api/live",
+      ];
       expect(
-        parsed.guards.filter(
-          (g) => !g.fromTable && moved.some((p) => describeMatch(g.match).includes(p)),
-        ),
+        parsed.guards.filter((g) => !g.fromTable && moved.some((p) => pathish(g.match).includes(p))),
         "a moved route is still a guard in the chain as well as a row in the table",
       ).toEqual([]);
+
+      /* **The control, because the assertion above passes when it is broken.**
+         It reads every remaining chain guard and finds none under a moved
+         prefix — which is also exactly what it does when the prefix test cannot
+         match the guards at all, as it could not for a regex until `pathish`.
+         So: claim a prefix whose guards are demonstrably *still* in the chain,
+         and require the same filter to find them. When that domain moves this
+         becomes a real failure, and the next unmigrated regex domain takes its
+         place — which is the point: a control nobody ever has to maintain is
+         one nobody checks is still true. It has been repointed once already,
+         from `/api/chat` to `/api/comments`, when 260907e moved chat on
+         2026-09-08. */
+      const stillInTheChain = parsed.guards.filter(
+        (g) => !g.fromTable && pathish(g.match).includes("/api/comments"),
+      );
+      expect(
+        stillInTheChain.length,
+        "the moved-prefix filter cannot see a regex guard, so the assertion above proves nothing",
+      ).toBeGreaterThan(0);
     });
 
     /**
@@ -1961,6 +2025,19 @@ describe("the authenticated API's route contract", () => {
         parsed.guards.filter((g) => g.fromTable).map((g) => pairKey(g.method, g.match)),
         "the table's rows are the bottom of the chain in the order it had them; a domain is prepended, never appended, and the interleave inside jobs/uploads is not to be tidied",
       ).toEqual([
+        // chat and the live sessions, 260908a
+        "GET regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/cancel$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/live-tool$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/live$/",
+        "POST regex /^\\/api\\/live\\/([\\w-]+)\\/connected$/",
+        "POST regex /^\\/api\\/live\\/([\\w-]+)\\/usage$/",
+        "POST regex /^\\/api\\/live\\/([\\w-]+)\\/close$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/spoken$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/stop$/",
+        "PATCH regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
+        "DELETE regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         // search, 260907b stage 5
         "GET regex /^\\/api\\/search\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/search\\/([\\w.%-]+)$/",

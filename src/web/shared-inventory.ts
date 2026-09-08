@@ -24,7 +24,13 @@
  * whether or not whoever adds it remembers this file, and it appears on the
  * withheld side, because `visitorGap` fails closed.
  *
- * ## Three buckets, because `VisitorGap` already distinguishes three
+ * ## Three buckets, and no longer one per `VisitorGap` variant
+ *
+ * They lined up until 2026-09-08, when `readers-own` was retired and the union
+ * dropped to two (visitor.ts). The buckets did not change and should not: they
+ * are about what a *shared link carries*, which is a different question from why
+ * a visitor cannot have a mode. The alignment was a coincidence worth noticing
+ * and not a contract worth restoring.
  *
  * `shared` and `withheld` are the two Greg asked for. **`ifBuilt` is the third
  * and it is the honest one:** `kind: "not-built"` does not mean *this stays

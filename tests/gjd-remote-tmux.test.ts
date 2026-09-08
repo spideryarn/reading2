@@ -23,6 +23,8 @@ import {
   SESSION_FIELDS,
   SESSION_SENTINEL,
   type Session,
+  type SessionState,
+  type SessionUnknownCause,
   bindingsVerdict,
   buildBindingsScript,
   buildSessionScript,
@@ -480,6 +482,112 @@ describe("sessionState", () => {
 
   it("says no-claude only when the box looked and found nothing", () => {
     expect(sessionState(session({ proc: { kind: "none" } }), new Map()).kind).toBe("no-claude");
+  });
+
+  /**
+   * `cause` is the half of `unknown` that a MACHINE reads, and it exists
+   * because the other half cannot be read that way.
+   *
+   * Something watching the box compares one collection with the next to decide
+   * whether anything happened. `why` is written for a person: it gets reworded,
+   * and one of the five interpolates a string that changes between calls. Diff
+   * those and a session flaps between states it never left. So what is pinned
+   * here is not the sentences — those are free to change — but that each fault
+   * has an identifier, that no two faults share one, and that the identifier
+   * does not move when the wording does.
+   */
+  describe("cause: the identifier a watcher may diff, where why is only for reading", () => {
+    const unknownOf = (state: SessionState) => {
+      if (state.kind !== "unknown") throw new Error(`expected unknown, got ${state.kind}`);
+      return state;
+    };
+
+    /**
+     * One session per unknown clause, in the order `sessionState` reaches them.
+     *
+     * The `Record` is the point of the annotation: a new cause added to the
+     * union stops this file compiling until somebody either produces a session
+     * that reaches it or says in the `Exclude` why no session can. **A new
+     * fault cannot arrive untested and cannot arrive un-argued.** It has
+     * already fired once for real: `client-declared` was added and this file
+     * refused to compile until it appeared below.
+     *
+     * Two are excluded, and both because nothing `sessionState` does can reach
+     * them — they are stamped by code that never observed the box at all:
+     *
+     *  - `no-status-derived` — tools/fleet/collect.ts's admission of a bug of
+     *    ours, and tested there.
+     *  - `client-declared` — tools/fleet/routes-steer.ts, parsing a status a
+     *    browser asserted in a request body, and tested there.
+     *
+     * NOTE that vitest does not typecheck, so this guard cannot go red at
+     * `npm test`. It fires at `npm run typecheck`, and only there.
+     */
+    const every = (): Record<
+      Exclude<SessionUnknownCause, "no-status-derived" | "client-declared">,
+      Extract<SessionState, { kind: "unknown" }>
+    > => ({
+      "not-a-session-id": unknownOf(sessionState(session({ claudeId: "not-a-uuid" }), new Map())),
+      "agents-unavailable": unknownOf(sessionState(session(), null)),
+      "unrecognised-agent-status": unknownOf(sessionState(session(), agents("compacting"))),
+      "running-but-unlisted": unknownOf(sessionState(session({ proc: { kind: "claude" } }), new Map())),
+      "process-probe-unavailable": unknownOf(sessionState(session({ proc: { kind: "unknown" } }), new Map())),
+    });
+
+    it("names the fault at each of the five clauses that can reach unknown", () => {
+      for (const [expected, state] of Object.entries(every())) {
+        expect(state.cause).toBe(expected);
+      }
+    });
+
+    /**
+     * THE ONE THAT MATTERS. Two clauses sharing a cause is not a compile error
+     * and not a visible bug — the page still reads correctly, because the page
+     * reads `why`. It only shows up as a watcher that cannot tell "the box is
+     * broken" from "this session's id is nonsense", which is the distinction
+     * every comment in this area is about.
+     */
+    it("gives no two of them the same identifier", () => {
+      const causes = Object.values(every()).map((s) => s.cause);
+      expect(new Set(causes).size).toBe(causes.length);
+    });
+
+    it("does not move when the wording does", () => {
+      // The interpolating clause, and the reason prose is unusable as a key: a
+      // box reporting two statuses this version has never heard of has ONE
+      // problem, and two different sentences about it.
+      const a = unknownOf(sessionState(session(), agents("compacting")));
+      const b = unknownOf(sessionState(session(), agents("rewinding")));
+      expect(a.why).not.toBe(b.why);
+      expect(a.cause).toBe(b.cause);
+    });
+
+    /**
+     * ...AND THE TOKEN IS NOT THROWN AWAY, which is the other half of the same
+     * argument and was added for the Overseer's S2 (GPT Sol's S1-1).
+     *
+     * The cause says WHICH FAULT this is and must not move when the box reports
+     * two unfamiliar statuses in turn — the test above. But a watcher keyed on
+     * the cause alone then sees one unchanging session while the source moved
+     * twice, and `compacting` followed by `waiting-for-input` is a real
+     * transition that would be permanently lost. The rule the cause obeys was
+     * about OUR wording; this is the box's own observation, and it changes only
+     * when the box says something different.
+     */
+    it("keeps the status token the box actually reported, beside the cause", () => {
+      const a = unknownOf(sessionState(session(), agents("compacting")));
+      const b = unknownOf(sessionState(session(), agents("rewinding")));
+      expect(a.reportedStatus).toBe("compacting");
+      expect(b.reportedStatus).toBe("rewinding");
+    });
+
+    it("sets it at that one clause and nowhere else", () => {
+      // Optional on purpose: every other construction site describes a fault it
+      // has no token for, and a required field would be a sixth thing for each
+      // of them to invent an answer to.
+      expect(unknownOf(sessionState(session(), null)).reportedStatus).toBeUndefined();
+      expect(unknownOf(sessionState(session({ claudeId: "not-a-uuid" }), new Map())).reportedStatus).toBeUndefined();
+    });
   });
 });
 

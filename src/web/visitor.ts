@@ -1,6 +1,6 @@
 /**
  * **What a visitor is told when they press a mode they cannot have** — and
- * which of the three sentences it is.
+ * which of the sentences it is.
  *
  * "Visitor" means anyone who does not own the document: signed out, or signed
  * in and reading somebody else's. Keyed on *is this mine*, never on *am I
@@ -8,7 +8,9 @@
  *
  * ## Why this is a pure function in its own file
  *
- * Because the whole risk here is the four sentences quietly becoming one. The
+ * Because the whole risk here is these sentences quietly becoming one — the
+ * number of them has changed four times and a count written into prose goes
+ * stale silently, so there is no longer one here. The
  * worked example is Notion: unpublishing a page makes every old link land on a
  * plain *"page could not be found"*, so never existed, was unshared and you may
  * not see it are all answered identically, and the visitor learns nothing. The
@@ -32,7 +34,7 @@
  * reader sees. This file decides *which*.
  */
 import type { PublicArtefacts } from "../public-types.js";
-import { notBuiltYet, ownersOnly, readersOwnWork } from "../messages.js";
+import { notBuiltYet, ownersOnly } from "../messages.js";
 /* The one name each mode has. The owners-only policy below carries no string of
    its own precisely because this record exists and is total — see `POLICY`. */
 import { MODE_LABEL } from "../title-text.js";
@@ -41,9 +43,9 @@ import { MODES, type Mode } from "./params.js";
 /**
  * Why this mode is not available here.
  *
- * **Three members since slice 1b, and it used to be five.** The discriminant is
- * the *cause* rather than the remedy, and what is left are three causes rather
- * than two causes and two uncertainties:
+ * **Two members since 2026-09-08; it was three, and before slice 1b it was
+ * five.** The discriminant is the *cause* rather than the remedy, and what is
+ * left are two causes rather than causes mixed with uncertainties:
  *
  *  - `not-yet-public` said *it exists, and a shared link does not carry it yet*.
  *    Slice 1b is what carries all four artefacts, so nothing can produce it any
@@ -66,9 +68,7 @@ export type VisitorGap =
   /** The pipeline never ran for this piece. Nobody's fault. */
   | { kind: "not-built"; noun: string }
   /** It works, it costs a model call, and it is the owner's. */
-  | { kind: "owners-only"; feature: string }
-  /** It is the owner's own annotation, and sharing an article does not share it. */
-  | { kind: "readers-own"; plural: string };
+  | { kind: "owners-only"; feature: string };
 
 /**
  * **The noun phrase each artefact is called in a sentence, article included.**
@@ -355,9 +355,6 @@ export function visitorGap(mode: Mode, available: PublicArtefacts): VisitorGap |
   }
 }
 
-/** The same question for the two things that are not modes. */
-export const COMMENTS_GAP: VisitorGap = { kind: "readers-own", plural: "Comments" };
-
 /**
  * Which mode buttons in the bottom bar are drawn dimmed, **and the sentence
  * each one will show when pressed.**
@@ -398,8 +395,6 @@ export function visitorSentence(gap: VisitorGap): string {
       return notBuiltYet(gap.noun);
     case "owners-only":
       return ownersOnly(gap.feature);
-    case "readers-own":
-      return readersOwnWork(gap.plural);
   }
 }
 
@@ -408,22 +403,35 @@ export function visitorSentence(gap: VisitorGap): string {
  *
  * The sign-up line goes beside the specific thing the visitor has just found
  * they could not do — that is the whole placement rule — so it must not appear
- * beside a gap an account does not close. Comments are the one left: they
- * belong to whoever added the article, and until
- * docs/plans/260827ai-public-read-only-access.md § Stage 3 an account does not change
- * that.
+ * beside a gap an account does not close.
  *
- * The two entries that used to be `false` for the other reason — *we are the
- * ones who have not shipped it* — went with their union members in slice 1b.
+ * **Every value here is `true`, and the map stays anyway.** Both surviving
+ * kinds are things an account fixes, so this function has one answer today; it
+ * is kept as a map rather than collapsed to `return true` because the rule it
+ * encodes is not *the offer always applies*, it is *each kind of gap decides
+ * whether the offer applies*. Collapsing it would delete the question, and the
+ * next author would find a function that looks like it never had one.
+ *
+ * The `false` entries all went the same way, and none of them was refuted by an
+ * argument about accounts. Two — *we are the ones who have not shipped it* —
+ * went with their union members in slice 1b. The third, `readers-own`, went on
+ * 2026-09-08 — the deletion 260904c had already decided on and not carried
+ * out, and **it comes back if a consent flag ever ships**, which is that plan's
+ * instruction. Nothing was left reading it: its sentence promised *a shared link
+ * carries the piece, never anybody's notes about it*, which stopped being true
+ * on 2026-09-04 when a shared link started carrying the owner's comments
+ * (docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 3). It survived
+ * four days as dead code with a live test, and in those four days it was still
+ * being read out to visitors by the Comments button, which had copied half of
+ * it — docs/plans/260907b-rich-tooltips-on-the-dock-modes.md § The find.
  *
  * A total map rather than a comparison, for the reason `RETRYABLE` in
- * src/messages.ts gives: a fourth kind is then a red compile rather than a
+ * src/messages.ts gives: a third kind is then a red compile rather than a
  * silent `false`.
  */
 const FIXED_BY_AN_ACCOUNT: Record<VisitorGap["kind"], boolean> = {
   "not-built": true,
   "owners-only": true,
-  "readers-own": false,
 };
 
 export function anAccountWouldHelp(gap: VisitorGap): boolean {

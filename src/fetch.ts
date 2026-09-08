@@ -1228,8 +1228,61 @@ const PDF_HEADER = /%PDF-\d\.\d/;
  * the same question of *decoded text* — a UTF-16 page's markup is invisible to
  * the Latin-1 scan `sniffKind` does — and two spellings of this regex would be
  * two answers to one question.
+ *
+ * **The head-level tags since 2026-09-07**, and the reason is that the four
+ * this started with were wrong about HTML. `<html>`, `<head>` and `<body>` are
+ * **optional start tags** — tag omission is in the spec, browsers infer all
+ * three, and a page can perfectly legally begin at `<title>`. So this was a
+ * list of the tags a document *may* carry, written as though they were the tags
+ * it *must*, and it refused one of our own tutorial pages
+ * (docs/postmortems/260907c-a-heuristic-promoted-to-a-gate.md).
+ *
+ * **Which tags to add is not our guess.** The WHATWG MIME Sniffing Standard
+ * has a normative pattern table for exactly this question, and
+ * `whatwg-mimetype/lib/sniff.js` — already in node_modules under jsdom — is a
+ * faithful implementation of it. Its HTML rows are:
+ *
+ * > `<!DOCTYPE HTML` `<HTML` `<HEAD` `<SCRIPT` `<IFRAME` `<H1` `<DIV` `<FONT`
+ * > `<TABLE` `<A` `<STYLE` `<TITLE` `<B` `<BODY` `<BR` `<P` `<!--`
+ *
+ * **We take a subset of it, deliberately.** The spec is answering *"is there
+ * any HTML here"* for a browser that has already decided to render something;
+ * we are answering *"is this a document"* about a file, and `<A`, `<B`, `<P`,
+ * `<DIV`, `<BR`, `<TABLE`, `<FONT`, `<H1` and `<!--` are all short enough to
+ * turn up inside JSON, templates and prose — which is the false positive the
+ * paragraph above exists to prevent, and `sniffKind`'s own suite pins. So this
+ * adds only the elements that a **document head** carries: `title`, `meta`,
+ * `style`, `script`, `link`, `base`. Three of those are the spec's; `meta`,
+ * `link` and `base` are ours, on the same argument and with the same shape.
+ *
+ * **And the library is not adopted wholesale**, which was weighed rather than
+ * skipped: `computedMIMEType`'s step 1 returns a declared `text/html` without
+ * sniffing at all, which is the opposite of this module's rule that the body
+ * wins — so it would silently stop catching the Cloudflare-challenge-page-as-
+ * `application/pdf` case that `sniffKind`'s comment says it was built for.
+ * A spec-blessed *list* is worth having; the spec's *precedence* is not ours.
  */
-const DOCUMENT_MARKUP = /<\s*(!doctype\s+html|html[\s>]|head[\s>]|body[\s>])/i;
+const DOCUMENT_MARKUP =
+  /<\s*(!doctype\s+html|html[\s>]|head[\s>]|body[\s>]|title[\s>]|meta[\s>]|link[\s>]|base[\s>]|style[\s>]|script[\s>])/i;
+
+/**
+ * **How far in we will look for that marker**, and it is not the PDF window.
+ *
+ * Two questions with two justifications, which is why this is not the 1030
+ * below. A PDF header belongs on the first line and a few junk bytes in front
+ * of it is the whole tolerance the format needs. A document's first tag can sit
+ * behind an arbitrarily long comment — a licence header, or in the file that
+ * caused this, 4102 bytes of the request the page was written from.
+ *
+ * **16 KB rather than the spec's 1445**, and the asymmetry is the reason. A
+ * browser sniffs only when the server shrugged, and being wrong costs it a
+ * re-render; we are deciding whether a file **the reader deliberately chose**
+ * is worth reading, and being wrong costs them a refusal they can do nothing
+ * about. A false negative here is unrecoverable and a false positive is a
+ * sentence from stage 2 saying there is no article in it, so the window is
+ * sized for the expensive mistake.
+ */
+const MARKUP_WINDOW = 16_384;
 
 /**
  * HTML, PDF, or something we can't read — decided by the bytes first.
@@ -1257,8 +1310,13 @@ export function sniffKind(contentType: string | null, bytes: Uint8Array): Docume
 
   /* No usable header, or a server shrugging with octet-stream: believe the
      markup, but only a **document-level** marker. Matching `<p>` or `<div>`
-     would classify `{"template":"<p>hello</p>"}` as a web page. */
-  const looksLikeHtml = DOCUMENT_MARKUP.test(head);
+     would classify `{"template":"<p>hello</p>"}` as a web page.
+
+     **Its own window, not `head`.** `head` is 1030 bytes because that is what a
+     PDF header needs; a document's first tag can sit behind a long comment, and
+     scanning for it in the PDF's window was half of why a valid page was
+     refused on 2026-09-07. `MARKUP_WINDOW` argues the size. */
+  const looksLikeHtml = DOCUMENT_MARKUP.test(latin1(bytes.subarray(0, MARKUP_WINDOW)));
   const mimeIsVague =
     mime === null || mime === "text/plain" || mime === "application/octet-stream" || mime === "application/pdf";
   if (looksLikeHtml && mimeIsVague) return "html";
@@ -1304,6 +1362,14 @@ export function sniffKind(contentType: string | null, bytes: Uint8Array): Docume
  * enough — `DOCUMENT_MARKUP` matches in the first tag — so the fallback does
  * not decode 50 MB to answer a question about the first line.
  *
+ * **Both slices are `MARKUP_WINDOW` since 2026-09-07**, and they were 1030 and
+ * 4096 — two numbers, neither of them this question's. The file that made the
+ * point carries its first tag at byte 4106, which is past both: ten bytes past
+ * the larger, so a `.html` a browser renders came back as *"not a PDF or a web
+ * page"*. Where the marker may sit is one fact, so it gets one constant, and
+ * the raw and decoded scans have to agree about it or the fallback is looking
+ * somewhere the first pass already refused.
+ *
  * **What it deliberately lets through** is a `.html` file that parses as markup
  * and holds no article. Stage 2 refuses that, with a sentence about the thing
  * that is actually wrong with it, at no cost and with the reader's slot
@@ -1314,15 +1380,34 @@ export function uploadedDocumentKind(filename: string, bytes: Uint8Array): Docum
   const kind = sniffKind(claimed, bytes);
   /* `null`, or a PDF that `PDF_HEADER` proved. Neither wants a second opinion. */
   if (kind !== "html") return kind;
-  if (DOCUMENT_MARKUP.test(latin1(bytes.subarray(0, 1030)))) return "html";
-  return DOCUMENT_MARKUP.test(decodeHtml(bytes.subarray(0, 4096), null).text) ? "html" : null;
+  const head = bytes.subarray(0, MARKUP_WINDOW);
+  if (DOCUMENT_MARKUP.test(latin1(head))) return "html";
+  return DOCUMENT_MARKUP.test(decodeHtml(head, null).text) ? "html" : null;
 }
 
-/** Bytes as characters, one for one. Only ever used to look at markup, never to keep. */
+/**
+ * Bytes as characters, one for one. Only ever used to look at markup, never to
+ * keep.
+ *
+ * **`Buffer`, not a `String.fromCharCode` loop**, since `MARKUP_WINDOW` made
+ * this 16 times longer. Measured on the box — `sniffKind`, 2000 calls after a
+ * warm-up, over the real 106 KB upload that caused all this:
+ * **30 µs** with the loop at 1030 bytes, **509 µs** with the loop at
+ * 16 KB, **13 µs** with this. The 17× was all in the concatenation and none of
+ * it in the regex — so the wider window is now *cheaper* than the narrow one
+ * used to be, and the worst case that exists (64 KB with no markup at all, so
+ * the scan runs to the end and fails) is 34 µs.
+ *
+ * **Node's `latin1` is the one-for-one mapping this needs**, and that is not a
+ * given: the WHATWG encoding standard makes the labels `latin1` and
+ * `iso-8859-1` aliases for **windows-1252**, so `new TextDecoder("latin1")`
+ * would rewrite 0x80–0x9F into typographic characters. `Buffer`'s `latin1` is
+ * the older meaning — byte `n` becomes `U+00n`, all 256 of them — which is what
+ * keeps `PDF_HEADER.exec(head).index` an offset into the bytes rather than into
+ * a decoding of them. Do not swap one for the other.
+ */
 function latin1(bytes: Uint8Array): string {
-  let out = "";
-  for (const byte of bytes) out += String.fromCharCode(byte);
-  return out;
+  return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("latin1");
 }
 
 /**

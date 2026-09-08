@@ -1,12 +1,22 @@
 # The authenticated API's dispatch becomes enumerable — and the matrix test that has to come first
 
-Status as of 2026-09-07: **the expensive part is behind us; what remains is mechanical.** Stages 1,
-1b, 1c, 2, 3a, 3b, 3c, 4a, 4b and 5 are landed and reviewed. `AUTH_ROUTES` holds **25 of the 81
-guards** (billing, jobs/uploads, referee, search); **56 remain**, and **chat is the next slice — and
-it is claimed by 260907e**, which takes it on waking at 05:17. Check `ListAgents` and ask before
-starting any slice: referee was built twice, in parallel, eleven minutes apart, because both plans
-queued it and neither session announced. Biome on `serveAuthenticatedApi`: **244 → 234 → 183 → 164 →
-153**.
+Status as of 2026-09-08: **the expensive part is behind us; what remains is mechanical.** Stages 1,
+1b, 1c, 2, 3a, 3b, 3c, 4a, 4b and 5 are landed and reviewed. `AUTH_ROUTES` holds **37 of the 81
+guards** — billing, jobs/uploads, referee and search from this plan, plus chat and live from
+260907e (`docs/plans/260908a-chat-and-live-sessions-join-the-route-table.md`), which landed on `dev`
+at 04:47. **44 remain, and `/api/comments` is next and unclaimed.** Whoever takes it inherits the
+control described below already pointing at their own domain, which will go red the moment they move
+it — that is the handoff, not a bug. Check `ListAgents` and ask before starting any slice: referee
+was built twice, in parallel, eleven minutes apart, because both plans queued it and neither session
+announced. Biome on `serveAuthenticatedApi`: **244 → 234 → 183 → 164 → 153**.
+
+**Five holes have been found inside this plan's own safety net, and all five are fixed** — the
+`const` hole in `literalConstants` (stage 3c), the last-match-wins AST extractor (the merge), the
+referee grace window that spared a row regardless of its lock (stage 4a), the leftover-guard filter
+that could not see a regex route (below), and the body diff's blindness to comment prose (260907e,
+below). Four of the five were found by asking what it would take to make the check fail, and the
+fifth by reading a diff nobody had asked to be read. **None was found by reading the check itself.**
+That is the transferable result of this job, more than the migration is.
 
 **This supersedes an earlier "done enough to stop here."** That recommendation rested on a cost
 estimate that was wrong — see § *Fable settles the end-state, and corrects the price*. The remaining
@@ -748,6 +758,43 @@ vitest reported three files passing rather than complaining about the fourth. Re
 passed` count against the number of paths you passed; when a test is load-bearing evidence, that
 count is part of the evidence.
 
+### The leftover-guard filter could not see a regex route, and so never fired
+
+Found 2026-09-08 while answering a peer's question about which prefixes chat spans — so, by luck
+again rather than by method. § *answers the moved domains from the table, not from the chain*
+filtered chain guards with `describeMatch(g.match).includes(prefix)`. `describeMatch` renders a regex
+as `regex /${m.source}/`, and **`source` keeps its escapes**, so `/^\/api\/chat\/…$/` renders with
+`\/` between every segment and the literal substring `/api/chat` never occurs in it. The filter could
+only ever catch a **literal** route left behind — which is why nobody noticed: jobs, uploads and
+billing are literals, and they were the first domains to move.
+
+**Measured rather than reasoned:** adding `/api/chat` to `moved` with all nine `/api/chat` guards
+still in the chain left the suite **green at 326**.
+
+**Scope, precisely** (260907e's correction — an earlier draft here overstated it). The *whole* test is
+not vacuous: the exact `toEqual` above it, the complete set of table pair keys, is real, does bite,
+and is the part a stage edits. **Only the `moved` prefix filter below it was dead.** But within its
+own remit it was worse than "weak": since a regex route can never match, the filter has been unable
+to catch **the one failure it exists for** — a route that is in the table *and* still in the chain —
+for **every slice since jobs and uploads**. Referee and search each passed a review in which that
+assertion could not have failed. Recorded in those terms because the next sweep will otherwise read
+"a leftover check has guarded this since stage 3a" as coverage, and it was not.
+
+Fixed with a `pathish(match)` helper that drops the backslashes; the result is only ever searched for
+a prefix, so `\w` → `w` is harmless. The same probe now fails, naming all nine guards.
+
+**And it has a control now, because the assertion passes in two different worlds** — when there is
+nothing to find, and when it *cannot* find anything. The control requires the filter to find at least
+one `/api/chat` guard still in the chain. It is deliberately a landmine: **it fails the moment chat
+moves**, telling whoever moved it to repoint the control at the next unmigrated regex domain. A
+control that never has to be maintained is one nobody checks is still true.
+
+This is the fourth silent success found inside this job's own safety net, after the `const` hole in
+`literalConstants`, the last-match-wins AST extractor, and the grace window that spared a row
+regardless of its lock. The pattern is stable enough to name: **every one was a check that passed for
+a reason unrelated to the thing it claimed to verify**, and every one was found by asking what it
+would take to make it fail — never by reading it.
+
 ### The four slices that need an oracle written before they move
 
 Sol's stage 5 review answered the question stage 5 raised. The **"once, not per domain" ruling holds**
@@ -767,6 +814,100 @@ Covered, and safe to move on the existing recipe: **chat POST** (`chat-route.tes
 `handleApi` then requires frames and stored rows), **quiz mark**, the live-session routes, and the
 non-streaming domains — glossary, ideas, quotes, timeline, arc, sketch, illustrated.
 
+### The body diff was blind to comments, and a generator corrupted English through it
+
+Found 2026-09-08 by **260907e**, in the chat slice, and it is a hole in the recipe *this* plan hands
+to every remaining slice rather than in any stage this plan built.
+
+Their move generator rewrote the matcher binding with a global `\bchat\b` → `captures`. Inside code
+that is exactly the substitution the move requires. Inside **prose** it is vandalism: a comment
+reading *"one thing from chat"* became *"one thing from captures"*, and a citation turned into a link
+to a file that does not exist. **Every body still diffed clean**, because their normaliser stripped
+comments before comparing. The check whose entire job is to prove that a move is only a move was
+blind by construction to a whole class of change the move can make.
+
+**This plan got the same thing right by luck, not by specification.** Stage 5's brief said nothing
+about comments either way; the agent implementing it happened to choose the stricter reading and
+compared prose token-for-token (§ *Stage 5*, which records that it "was stricter than the brief
+asked"). Referee, in stage 4b, was compared the same way. So the recipe below has been silently
+relying on an implementer's taste at the exact point where it claims to be mechanical.
+
+**The recipe is now explicit: the body comparison compares comment text.** 260907e's verifier does,
+and they watched it catch that exact corruption while the code body still reported `identical` — the
+red-first discipline applied to the checker rather than to the test. It is committed as
+`docs/plans/260908a-verify-move.mjs.txt` and supersedes the referee-era one for every remaining
+slice. Two related fixes of theirs travel with it: a refusal used to skip the **whole** body
+comparison rather than narrowing it, so any change anywhere in a refused guard printed "refused,
+accounted" (Sol's F10); now every body is compared, and the expected refusal is matched against the
+refusal's own words, so an explanation covering two returns cannot silently cover three.
+
+Worth naming what makes this the fifth of a kind. A normaliser exists to delete differences that do
+not matter, and every one it deletes is a difference it can no longer report. Each thing you teach it
+to ignore — whitespace, the binding name, the trailing `return;`, comments — buys precision and sells
+coverage, and the sale is silent. The four rewrites this plan normalises are each justified in §
+*Stage 3b*; comments never were, and that is the whole bug.
+
+### A gate slower than the tree is a report about a tree that no longer exists
+
+Measured on the night of 2026-09-08, when this plan and 260907e were both pushing into `dev`.
+
+The full gate takes **24 minutes**. In the 55 minutes between merging `origin/dev` at 03:37 and going
+to push, `dev` gained **74 commits** — 44 of them non-merge — from the other worktrees. So the green
+`EXIT=0` I held was a true statement about a tree that had stopped existing before I could act on it.
+Re-merging and re-gating would have produced another true statement about another tree that had
+stopped existing. **That is not caution; it is a treadmill that never converges**, and the commits it
+would re-check were gated by the agents who wrote them.
+
+What I did instead, and would do again: after the second merge, run the **contract test** and a **full
+typecheck** (1,615 files, four tsconfigs), and push on those.
+
+**260907e made the opposite call and paid for the measurement.** They re-ran the full gate after
+merging, twice. Both runs went red and **neither red was theirs** — the first was three fleet-dashboard
+tests sharing a `11111111-…` uuid, already fixed on `dev` by its owner before the diagnosis finished;
+the second was a job-deadline suite timing out at 30s under load 35, which passes 9 of 9 alone. About
+**55 minutes of gate time and 20 minutes of attention to establish "not mine."** The extra gate found
+nothing about their change that the targeted runs had not.
+
+**Their refinement, which is the part worth carrying, and which corrects me:** choose the targeted
+re-run from **what the merge brought in**, not from what your change was about. Mine happened to be
+both — `dev` landed a route change and my change is in the file that reads route changes — so the
+contract test was the right target and not merely the cheap one. Had `dev` instead landed an edit to
+`dispatchAuthRoute` or to `send`, the contract test would have been the **wrong** target and would
+still have been green. Read the merge's file list first and pick from that. In their words:
+
+> On a tree moving every 45 seconds, "I re-ran the thing my change is about" can be a comfortable
+> answer to a question nobody asked.
+
+**The cost of being wrong here is real and should be named**, not waved past: a merge can land
+something that only the full suite would catch, and this trade will eventually let one through. The
+bet is that a red found later, on a shared trunk that builds nothing, is cheaper than an hour per
+push spent re-establishing facts about vanished trees.
+
+> **Corrected by 260907e, 2026-09-08 05:10, and the correction makes the trade safer rather than
+> riskier.** The paragraph above originally named *"`main` deploys from `dev`"* as a future condition
+> that would invalidate the bet. **It is already the case** — `TRUNK_BRANCH = "dev"`
+> ([scripts/deploy-checks.ts:186](../../scripts/deploy-checks.ts)) and `dev` is deploy's only accepted
+> source since the trunk flip on 2026-09-02. A trigger written as *if this ever happens* when it
+> happened six days ago reads, to the third person to find this, as a rule whose condition has quietly
+> fired.
+>
+> **And what actually protects production is not the next agent's gate.** `npm run deploy` runs the
+> gates itself, against **a worktree of the exact sha**, and pushes that sha by name
+> (`<sha>:refs/heads/main`) rather than pushing whatever `main` has become — precisely because a green
+> working tree here has broken `main` three times. So a red that slips onto `dev` is caught by the
+> deploy's own gate before it can reach a reader.
+>
+> That changes what the downside *is*. It is **not** "production ships something broken"; it is
+> "another agent loses twenty minutes establishing that a red is not theirs" — which is exactly what
+> the measurement above cost 260907e, from the other side. That is a real cost and worth naming. It
+> is a smaller one than the original paragraph implied.
+>
+> **The triggers that would genuinely invalidate the bet**, replacing the two above: if `npm run
+> deploy` stopped gating the sha it ships; if it accepted a source other than the trunk; or — the one
+> shaped like a moment rather than a state — **if you are the last agent awake**. The bet assumes
+> somebody's gate runs after yours. At 05:00 with the fleet asleep, nothing re-checks `dev` until
+> morning, and the person who finds it will not be the person who can explain it.
+
 ### The normaliser should refuse, not rely on a hand check
 
 Sol's **P2-RETURN-NORMALIZER**: the body comparison should refuse automatic comparison whenever the
@@ -777,6 +918,48 @@ route — `dispatchAuthRoute` still returns `true` after the handler. **The dang
 the opposite: *removing* a return and letting later statements in the same handler execute.** The
 refusal boundary is right either way, and it will force deliberate handling of chat GET and of the
 existing `similar`/`projection` promise returns.
+
+### What runs before `requireUser`, stated once so no slice re-derives it
+
+Written here rather than in a slice's own plan, because it is not about any one slice and a later
+author should not have to open a chat plan to find it. Added by 260907e on 2026-09-08 at 260907b's
+suggestion — and **narrowed the same night, because the first draft was wrong in three ways that GPT
+Sol found** (260908a stage 1 review § F5). The wrong version is worth stating, because it is the
+version anybody would write:
+
+> *`src/public/routes.ts` gates on a literal prefix, so any namespace whose prefix is a literal other
+> than `/api/public` is unreachable before the gate.*
+
+Three faults. The public dispatch is **not the only thing before the gate**; a *different* literal
+prefix does not imply a *disjoint* one — `/api/public/foo` is a different literal prefix and is
+inside the public namespace; and the exceptions it listed were therefore not the complete set.
+
+**The correct statement.** `serveApi` makes exactly **two** claims before `requireUser`, and they are
+adjacent in the source:
+
+1. `isPublicNamespace(path)` (`src/routes.ts:6357`), which is
+   `path === "/api/public" || path.startsWith("/api/public/")`.
+2. `path === WEBHOOK_PATH` (`:6381`), which is exactly `/api/webhooks/stripe` — Stripe has no bearer
+   token to present, and the signature is over the bytes as they arrived.
+
+So a namespace is unreachable before the gate exactly when none of its paths is `/api/public`, sits
+under `/api/public/`, or **is** `/api/webhooks/stripe`. Every domain left in the queue satisfies that
+by its first segment alone: `chat`, `live`, `comments`, `glossary`, `article`, `reader`, `library`
+and the rest are each neither `public` nor `webhooks`. That is an argument from two string
+comparisons, not a corpus check — which is what makes it worth writing down once instead of
+witnessing per slice.
+
+**And here is the complete set of ways it stops being true**, which is the part the first draft got
+wrong by omission:
+
+- a **third** pre-auth claim is added to `serveApi`;
+- either existing claim is **widened** — `isPublicNamespace` stops being a literal prefix, or the
+  webhook comparison becomes a prefix or a pattern;
+- the **dispatch order** changes, so something else runs before the gate;
+- a queued namespace is **moved or renamed** under `/api/public/`, or onto the webhook path.
+
+Any of those four, and this section is what has to be rechecked. None of them is invisible: all four
+are edits to the twenty-odd lines around `src/routes.ts:6357`.
 
 ## Where stage 3 stands, and what the next slice costs
 
@@ -789,7 +972,9 @@ referee slice paid the only one. Sol confirmed that in the stage 4b review — *
 remaining prerequisite… I found no other test reading the `searches` or `oneRun` dispatch syntax"* —
 and gave the recipe: four ordered pair-keys added red-first, two shared module-scope matcher
 constants, four handlers prepended in GET/POST/PATCH/DELETE order, bodies compared while normalising
-**both** `slugPart` and `part` uses, `EXPECTED_AUTH_ROUTES` and the lifetime oracle untouched.
+**both** `slugPart` and `part` uses, `EXPECTED_AUTH_ROUTES` and the lifetime oracle untouched. Read
+that recipe together with § *The body diff was blind to comments*: **comment text is compared, never
+stripped**, which this stage got right without being told to.
 
 **It is now a contiguous suffix, which it was not when 260907e queued it.** That plan's § *The next
 slice* warns search is "not adjacent to the table" because referee's eight guards sat between them;

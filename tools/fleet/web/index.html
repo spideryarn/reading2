@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- `viewport-fit=cover` lets the page use the whole physical screen, under
+         the notch and the home indicator. It is inert on anything with square
+         corners, and the space it opens up is handed back by the
+         `env(safe-area-inset-*)` padding on `body` in src/tailwind.css. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Fleet</title>
+    <!-- Light and dark, unlike the product, which is dark unconditionally. This
+         page is read on a phone in daylight and at a desk at night; saying both
+         here lets the browser paint the right canvas before the stylesheet
+         loads, which is the difference between a dark page and a white flash
+         followed by a dark page. -->
+    <meta name="color-scheme" content="light dark" />
+    <!-- Nothing on this page should ever be indexed or leak an address: it is
+         reachable only over Tailscale or an ssh forward today, and "reachability
+         is the access control" is a property of the network rather than of this
+         file. Both lines are belt and braces for the day that changes. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <!-- An emoji drawn into an SVG, inline. Without a `<link rel="icon">` of
+         some kind the browser asks for `/favicon.ico` on every load, the server
+         has no such file, and each visit logs a 404 it can do nothing about — a
+         console error that costs nothing and trains you to ignore the console.
+         A data URI rather than a file because this build has no `public/`
+         directory and one file is not worth inventing one for. -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛰️</text></svg>"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
