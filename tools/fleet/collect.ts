@@ -319,6 +319,71 @@ export function snapshotFrom(
 }
 
 /**
+ * **Is this a listing of the box we are standing on?**
+ *
+ * `generationDrift` below asks whether the world changed mid-collection. This
+ * asks something more basic that nothing here asked before: whether the tmux we
+ * just interrogated is the tmux this process lives in. A `tmux ls` pointed at
+ * another socket — `TMUX` unset in a child, a `-S` somewhere in a wrapper, a
+ * second server started by hand — **succeeds**, and returns a thousand entirely
+ * plausible sessions belonging to nobody we know. Every row parses. Nothing
+ * errors. The page shows a calm, populated, wrong fleet.
+ *
+ * The idea is the `orchestrator-setup` session's, from their process probe:
+ * do not ask whether the output *looks* like the right kind of thing, ask
+ * whether it is a reading **of this machine** — and the cheapest way to know is
+ * that we are in it. It costs one lookup in data already in hand.
+ *
+ * TWO CHECKS, BECAUSE THEY FAIL DIFFERENTLY. `TMUX` carries the server's pid, so
+ * comparing it to the listing's catches the wrong *server*; `TMUX_PANE` catches
+ * a listing of the right server that has somehow lost us, which is a listing
+ * that may have lost others.
+ *
+ * NOT BEING UNDER TMUX IS NOT A FAULT. The collector runs under `tmux-job.ts` in
+ * production and from a shell in every test, so an absent `TMUX` means "cannot
+ * check" and must not block — the `/logs/` lesson in `worktree-check.ts`, which
+ * is that an alarm nobody can clear is one somebody deletes.
+ */
+export type SelfCheck =
+  /** We are in the listing, so it is ours. */
+  | { kind: "present"; paneId: string }
+  /** Not running under tmux, so there is nothing to look for. Not a fault. */
+  | { kind: "cannot-check"; why: string }
+  /** We ARE under tmux and are not in this listing. The listing is not of our box. */
+  | { kind: "absent"; why: string };
+
+export function selfCheck(
+  panes: ReadonlyMap<string, PaneInfo>,
+  listedServerPid: number | null,
+  env: { TMUX?: string | undefined; TMUX_PANE?: string | undefined },
+): SelfCheck {
+  const pane = env.TMUX_PANE;
+  const tmux = env.TMUX;
+  if (typeof pane !== "string" || pane === "" || typeof tmux !== "string" || tmux === "") {
+    return { kind: "cannot-check", why: "this process is not running under tmux, so it cannot look for itself" };
+  }
+  // `TMUX` is `<socket>,<server pid>,<session index>`.
+  const ourServer = Number(tmux.split(",")[1]);
+  if (Number.isInteger(ourServer) && listedServerPid !== null && ourServer !== listedServerPid) {
+    return {
+      kind: "absent",
+      why:
+        `this listing is of tmux server ${listedServerPid} and this process lives in server ${ourServer} — ` +
+        `every handle in it belongs to a different world`,
+    };
+  }
+  for (const info of panes.values()) {
+    if (info.paneId === pane) return { kind: "present", paneId: pane };
+  }
+  return {
+    kind: "absent",
+    why:
+      `this process runs in pane ${pane} and that pane is not in the listing — ` +
+      `so the listing is not of this box, or it is missing rows`,
+  };
+}
+
+/**
  * Did the tmux server change under us mid-collection? The message if so, null if not.
  *
  * Pure and exported so the decision can be tested without a box, because it is
@@ -453,6 +518,10 @@ export async function collect(): Promise<FleetSnapshot> {
   const listing = panes();
   const drift = generationDrift(generationBefore, listing.tmuxServerPid);
   if (drift) throw new Error(drift);
+  // Before anything is derived from the listing, not after: a listing of the
+  // wrong box produces rows that are individually perfect.
+  const self = selfCheck(listing.panes, listing.tmuxServerPid, process.env);
+  if (self.kind === "absent") throw new Error(`this is not a listing of this box: ${self.why}`);
   const snapshot = snapshotFrom(parsed, listing, 0);
   const rows = snapshot.rows;
 
