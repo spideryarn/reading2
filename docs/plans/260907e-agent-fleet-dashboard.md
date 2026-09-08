@@ -539,6 +539,27 @@ Greg's list, against [diagnose-box-resources.md](../reusable/diagnose-box-resour
 - [ ] `gjd-remote kill`. Do not grow a second way to do either.
 - [ ] Killing needs a confirm step; it is the one irreversible action here.
 
+### ✅ Stage v0.6e: rename a session (landed 2026-09-08)
+
+Greg, 2026-09-08: *"add a way to rename sessions"*. `POST /api/sessions/rename`, addressed by tmux
+handle.
+
+**The trap, and it is the whole of the work.** `gjd-remote ls` runs `adoptTitles`, which renames any
+still-*provisional* session to Claude's own title. So a rename that does not also clear
+`GJD_PROVISIONAL` is correct on the page until somebody lists the fleet, and then silently wrong.
+Both halves go in one tmux invocation, so there is no window between them.
+
+Verified by renaming a probe and then running a real `gjd-remote ls` — which renamed two *other*
+sessions in the same run and left the probe alone.
+
+- [x] Renaming to the name it already has is **allowed**, because it still clears the flag. That is
+      how somebody pins a name Claude chose and wants kept, and a naive "is it taken?" check refuses
+      exactly that case.
+- [ ] The client half — an edit-in-place near the title in the detail pane, not a field per card.
+- [ ] The payload does not say which sessions are **provisional**, so the page cannot yet offer
+      *"save to keep this name"* on one Claude is about to rename. One field on `FleetRow` when the
+      client wants it.
+
 ### Stage v0.6b: the Orchestrator tab does something
 
 - [ ] Send a message to the Orchestrator, with the same input machinery as everything else.
