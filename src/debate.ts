@@ -327,7 +327,7 @@ export async function readDebate(dir: string): Promise<Debate | null> {
  * be a member and never asks whether every member is present. Deleting
  * `"extends"` from the list compiled clean and the whole suite stayed green —
  * measured 2026-09-08, not reasoned about — and the consequence is silent:
- * `parsePass` coerces anything the set does not hold to `unclear` / `unknown`,
+ * `parsePass` coerces anything the set does not hold to `unclear` / `cannot-tell`,
  * so every `extends` row would have gone grey with nothing reporting a failure.
  * That is the shape docs/reusable/silent-success.md is about, and the same one
  * `lossesOf` (src/types.ts) was written to close for the loss reasons.
@@ -794,9 +794,17 @@ function readShared(row: Record<string, unknown>, opts: GroupInput): SharedVerdi
       ...(evidence.title ? { title: evidence.title } : {}),
       sourceQuote,
       /* Out-of-vocabulary answers become the values those vocabularies have for
-         "we cannot tell", rather than dropping the row: `unclear` and `unknown`
-         are correct answers and are drawn as calmly as the rest. A model that
-         cannot tell whether a page agrees should say so and be believed. */
+         "we cannot tell", rather than dropping the row: `unclear` and
+         `cannot-tell` are correct answers and are drawn as calmly as the rest. A
+         model that cannot tell whether a page agrees should say so and be
+         believed.
+
+         **This stays strict about the live wire on purpose.** A row arriving
+         today with the pre-2026-09-08 vocabulary is a prompt that has stopped
+         emitting what we asked for, and folding it in quietly is the exact
+         failure `vocabularyReport` exists to catch. Carrying the old vocabulary
+         forward is a job for the readers of *stored* rows — `readStoredLean` in
+         src/types.ts — not for this one. */
       relation: RELATIONS.has(str(row.relation)) ? (str(row.relation) as DebateRelation) : "unclear",
       lean: LEANS.has(str(row.lean)) ? (str(row.lean) as DebateLean) : "cannot-tell",
       applies,
@@ -1090,19 +1098,24 @@ you quoted, and are shown to the reader as such.
 
 THE ONE MISTAKE TO AVOID, AND IT IS AN EASY ONE
 
-"lean" is about THIS ROW'S TARGET. It is NOT about whatever the outside piece
-is itself discussing, and those two come apart constantly. A page arguing that
-a popular supplement does nothing is unfavourable toward the supplement — but
-if this row's target is a claim that the trials found no effect, that page
-LEANS FOR it. Ask "does this passage support or undercut the target?", never
-"is this passage favourable or unfavourable toward its own subject?".
+"lean" is about THIS ROW'S TARGET and about nothing else. The trap is a passage
+that is ALSO about some other thing — a person, a product, a phenomenon, a
+field — where it is far easier to say how the passage feels about that thing
+than to work out which way it points at the target. Those two answers are
+often opposite.
 
-"relation" and "lean" answer that same question about that same target — one
-names the move, the other which way it points. They agree far more often than
-not, and that is fine and expected. They come apart honestly when a passage
-takes issue with part of the target while backing the whole of it: "the stated
-10% is wrong; it is at least 30%, which makes the warning stronger" disputes
-and leans-for, truthfully.
+A page arguing that a popular supplement does nothing is unfavourable toward
+the supplement. But if this row's target is a claim that the trials found no
+effect, then that page LEANS FOR the target — it supports it. Answer "does
+this passage support or undercut the target?", never "how does this passage
+feel about its own subject?".
+
+"relation" and "lean" are about the same passage and the same target, but they
+ask different things: one names the argumentative move, the other says which
+way it points. They line up far more often than not, and that is expected. They
+come apart honestly when a passage takes issue with part of the target while
+backing the whole of it — "the stated 10% is wrong; it is at least 30%, which
+makes the warning stronger" disputes and leans-for, truthfully.
 
 "unclear" and "cannot-tell" are correct answers and are drawn as calmly as any
 other. If you cannot tell what a page is doing, say so.
@@ -1148,9 +1161,8 @@ ${UNTRUSTED}
 ${READING}
 
 Here this row's target is THE ARTICLE ITSELF — the piece described above — so
-"relation" and "lean" are both about that article, not about the passage's tone
-and not about its stance toward whatever the outside piece is itself
-discussing.
+"relation" and "lean" are both about that article. Not the passage's tone, and
+not its stance toward some other subject the passage is also about.
 
 Prefer named authors and established venues where you have the choice. No
 ranking by prominence is applied to what you return, and the reader is told so.
@@ -1211,9 +1223,8 @@ ${UNTRUSTED}
 ${READING}
 
 Here this row's target is THE CLAIM YOU QUOTED, so "relation" and "lean" are
-both about that claim — not about the article as a whole, not the passage's
-tone, and not the passage's stance toward whatever the outside piece is itself
-discussing.
+both about that claim. Not the article as a whole, not the passage's tone, and
+not the passage's stance toward some other subject the passage is also about.
 
 Prefer named authors and established venues where you have the choice. No
 ranking by prominence is applied to what you return, and the reader is told so.

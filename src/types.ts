@@ -3500,8 +3500,14 @@ export const MAX_QUIZ_ANSWER_CHARS = 4000;
    into a type.  */
 
 /**
- * **What the outside page does to what it is answering** — the field that
+ * **What the QUOTED PASSAGE does to this row's target** — the field that
  * groups the list.
+ *
+ * It said *"what the outside page does to what it is answering"* until
+ * 2026-09-08, and the two halves of that were both wrong by a step: the subject
+ * is the passage we quoted rather than the whole page, and the target is this
+ * row's, named. `DebateLean` had the narrower subject all along, so one row was
+ * carrying two scopes — Sol's F54.
  *
  * **Strongly associated with `DebateLean` below, and not functionally dependent
  * on it** — which is a correction, made twice. This said "orthogonal, and the
@@ -4065,12 +4071,27 @@ const LEAN_MEMBERS: { [K in DebateLean]: true } = {
  * `undefined` that arithmetic turned into `NaN`. Sol's F68 named this one before
  * it shipped rather than after.
  *
- * **One accessor, called by every consumer**, rather than the same map written
- * out at each call site. The mapping is the honest one: the old vocabulary's
- * four values carried the same four meanings under sentiment-flavoured names,
- * and anything else — a missing field, a spelling neither vocabulary knows —
- * becomes `cannot-tell`, which is a real answer here and is drawn as calmly as
- * the rest.
+ * **One accessor for every consumer that reads a stored row**, rather than the
+ * same map written out at each call site. The mapping is the honest one: the old
+ * vocabulary's four values carried the same four meanings under
+ * sentiment-flavoured names, and anything else — a missing field, a spelling
+ * neither vocabulary knows — becomes `cannot-tell`, which is a real answer here
+ * and is drawn as calmly as the rest.
+ *
+ * **It said "called by every consumer" for about an hour, and that was false.**
+ * The eval's `vocabularyReport` and `replayJournal` read `lean` directly, so
+ * every one of the 26 journalled rows read as absent and Layer 1 replayed their
+ * stance as `cannot-tell` — Sol's F71, measured before it was fixed. There is a
+ * second copy of this four-way map in `evals/debate/score.ts`
+ * (`SUPERSEDED_LEANS`), deliberately, because production must not depend on the
+ * eval and the eval must not be the only place the mapping is stated. **Edit one,
+ * edit the other** — and a test there asserts the two agree for all four
+ * spellings, so this comment goes red rather than merely going stale.
+ *
+ * **The live wire stays strict.** Carrying the old vocabulary forward is a job
+ * for readers of *stored* rows. A row arriving from a model **today** with
+ * `valence` and no `lean` is a prompt that has reverted, and `readShared` in
+ * src/debate.ts must go on coercing it rather than quietly reading it forward.
  */
 export function readStoredLean(row: { lean?: unknown; valence?: unknown }): DebateLean {
   if (typeof row.lean === "string" && Object.hasOwn(LEAN_MEMBERS, row.lean)) {

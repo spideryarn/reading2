@@ -1450,3 +1450,84 @@ plan, wrote a contradicting section into the same file, and sent it for review w
 `docs/reusable/silent-success.md`'s shape, in a document rather than in code: the check I ran shared
 its assumption with the thing being checked, because I wrote both. What caught it was the
 cross-family review, which is the one check that did not.
+
+## Review ledger — GPT Sol, round 6, on the code, 2026-09-08
+
+Prompt: [260906b-lean-rename-code-review-prompt.md](260906b-lean-rename-code-review-prompt.md).
+Answer: [260906b-lean-rename-code-review-sol.md](260906b-lean-rename-code-review-sol.md).
+Candidate: `6b5e99a1`.
+
+**No P0. Four findings, all accepted, and two of them are defects in claims I had written down as
+true.** This is the round that earns the rule about weighting a code review above a plan review: a
+plan review cannot find a docblock that promises something the code does not do.
+
+Sol also confirmed, independently and by running things: the label-sheet blinding is intact, all four
+mapped types really are exhaustiveness guards over one union, Referee mode's unrelated `valence` was
+untouched, and both mutation claims hold. 346 tests over 13 files, and every TypeScript project.
+
+- **F71 — P1, established. Accepted, and I verified it myself before fixing it.** `readStoredLean`
+  protects the panel and nothing else: `vocabularyReport` and `replayJournal` read only `lean`, so
+  every row written before the rename reads as absent. Measured over the three real journals —
+  **6/6, 10/10 and 10/10 off-vocabulary, spelling `(absent)`.** So all 26 historical rows became
+  unscorable and Layer 1 silently replayed their stance as `cannot-tell`, while the accessor's own
+  docblock claimed it was *"called by every consumer"*. It was not.
+
+  What makes this worse than an oversight: `vocabularyReport` is **the instrument built to catch a
+  prompt change that destroys a field while looking like a repair**, and it was blind to the one
+  vocabulary change that has actually happened to it. The fix keeps Sol's distinction — an adapter at
+  the stored-artefact boundary, and the **live** parser still strict, so a model answering
+  `supportive` today is still off-vocabulary and still fails the gate. Superseded rows are a **third
+  category**, counted and labelled apart from both the rows we understand and the rows we do not:
+  folding them into the off-vocabulary count makes a journal recorded last week read as a broken
+  prompt, and folding them into the known counts says nothing at all. Measured after: 26/26
+  superseded, `offVocabularyLeans` back to 0, and the real stances recovered — 7 `leans-for`, 15
+  `leans-against`, 4 `neither`, where every one of them had been `cannot-tell`.
+
+  **And a correction to my own framing of this finding, found while checking it.** `vocabularyReport`
+  is not merely blind — **it has no caller outside its own tests.** `evals/debate/run.ts` imports
+  `replayJournal` and `replayLines`, and nothing from `score.ts` but `LEAN_VALUES`. So the gate that
+  would have caught this was never wired into the runner in the first place, which is a larger gap
+  than the one Sol found and is **not fixed here**. Whoever wires it should also decide whether the
+  superseded count belongs in `vocabularyProblems` — the list a caller fails on — where it is now. It
+  is there deliberately: this function cannot know *when* its rows were written, so its sentence
+  carries both readings, and a count kept quietly out of the list is the shape the whole file exists
+  against. But that is a call better made with a real caller in front of you than invented for a
+  hypothetical one.
+- **F72 — P1, reasoned. Accepted, and my wording was self-contradictory.** The new negation said the
+  lean is *"not about whatever the outside piece is itself discussing"* — directly beside the
+  sentence binding the target to the article. But a group-one page is admissible **precisely because
+  it discusses this article**, so the clause forbade the answer it was asking for. What it must
+  exclude is a *different* subject the passage is also about. Reworded in both groups, with the old
+  phrasing now asserted **absent** so it cannot come back.
+
+  Also accepted: *"relation and lean answer that same question"* was wrong. They share a subject and
+  a target and ask different things — one names the move, the other says which way it points.
+- **F73 — P2, established. Accepted, and C4 was overstated.** The prompt test proved phrases were
+  present, not what the prompt said about them. Sol named the exact surviving mutation: change an
+  answer example to `"lean": "supportive"` and leave the vocabulary list alone, and it passes — which
+  is **F62's failure in miniature**, because every row copying that example coerces to `cannot-tell`.
+  Fixed by extracting the values actually attached to `"lean"` and `"relation"` and checking each
+  against the vocabulary. Sol's mutation now fails, run and watched.
+- **The guard test I specified was itself a silent success**, and the implementer caught it rather
+  than writing what it was told. My brief asked for a test proving the adapter does not swallow a
+  *live* off-vocabulary lean, and specified `lean: "supportive"` with no `valence` — which **passes
+  under the very mutation it was meant to catch**, because a widened adapter has no `valence` to
+  reach for. The real guard needs both fields present. That is this plan's own recurring lesson
+  arriving in a test written to enforce it, and it is the second time today a check has shared an
+  assumption with the thing it checked.
+- **F74 — P3. Accepted.** `DebateRelation` still opened *"What the outside page does to what it is
+  answering"* after the rescope; two parser comments still named `unknown`; the CSS still described
+  `neutral` and `unknown`. Fixed, plus one more the sweep found. C3's *"did not miss a Debate one"*
+  was not literally true.
+
+**And a note on the gate, because the failure is not what it looks like.** `npm run check` returned
+`✗ test` on this work with seven failures — four of them the prompt tests above and three the
+red-first tests for F71. Every one is a **torn read**: the run started at 11:11 and measured a tree
+still being edited at 11:33, so it paired the new test files with the old `src/debate.ts`. The
+failure output proves it — the prompt it printed still contains the pre-fix wording. Re-run on a
+still tree, which is what the ledger below records.
+
+Worth naming, because it will happen again on this box: **a long check measures the tree as it was
+while it ran, not as it is when you read the result.** A twenty-minute gate over a tree that two
+agents are editing reports on a commit that no longer exists. Read the failure before believing it,
+and re-run before acting on it.

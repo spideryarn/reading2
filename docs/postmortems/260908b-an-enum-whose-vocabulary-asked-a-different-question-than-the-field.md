@@ -102,10 +102,16 @@ which makes the warning stronger."* Forbidding the pair forbids that row to forb
 ## What would have caught it, ranked by ease against value
 
 1. **Read the enum's values and ask whether they can be answered without the rest of the row.** Free,
-   takes ten seconds, and would have caught this at design time — the docblock that carefully
-   explains the intended target is itself the signal that the values do not carry it. Now stated as a
-   rule in [name-is-evidence.md](../reusable/name-is-evidence.md)'s neighbourhood, and the reason this
-   file exists.
+   takes ten seconds, and would have caught this at design time — **the docblock that carefully
+   explains the intended target is itself the signal that the values do not carry it.** If the
+   meaning has to be written down beside the name, the name is not carrying it.
+
+   This is a sibling of [name-is-evidence.md](../reusable/name-is-evidence.md), and the relationship
+   is worth stating because the two are easy to conflate. That one is about a name consumed as an
+   *identity* it was never entitled to be. This one is about a name consumed as the *question* it
+   appears to ask: `positive | negative` is a perfectly good answer to a question nobody here was
+   asking. Both are cases of a label being taken at more than its provenance is worth, and in both
+   the failure is silent because every step succeeds.
 2. **Cross-tabulate a categorical model output against its neighbours as soon as there is a corpus.**
    Free and it was free all along: the rows were in `article_revisions.debate` and the raw responses
    in the run journals the whole time. The crosstab that exposed the shape took twenty minutes and

@@ -344,13 +344,13 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
    one quiet grey for the two that take no side.
 
    Every one of the four gets the same chip: same size, same weight, an icon and
-   a word. `neutral` and `unknown` are not failure states, and drawing them
+   a word. `neither` and `cannot-tell` are not failure states, and drawing them
    dimmer or smaller than their neighbours would be the panel disbelieving its
    own model out loud — the rule docs/project/timeline.md applies to an undated
    row.
 
    **The scale's middle step is deliberately unused.** `--div-rg-4` is the
-   centre of a ramp, and putting `neutral` there would say *zero on a scale*,
+   centre of a ramp, and putting `neither` there would say *zero on a scale*,
    which is the score this mode does not compute. */
 .dbt-lean {
   display: inline-flex;

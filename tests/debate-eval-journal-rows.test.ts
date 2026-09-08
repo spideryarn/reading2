@@ -28,6 +28,7 @@ import {
   journalRowsOf,
   readJournalRows,
 } from "../evals/debate/journal-rows.js";
+import { replayJournal, replayLines } from "../evals/debate/replay.js";
 import { vocabularyReport } from "../evals/debate/score.js";
 import type { DebateJournalEvent, DebatePassKind } from "../src/debate-journal.js";
 
@@ -86,7 +87,7 @@ function annotation(url: string, content: string | null, title: string | null = 
 
 function answered(
   attemptId: string,
-  opts: { content: string; annotations?: unknown },
+  opts: { content: string; annotations?: unknown; searches?: number },
 ): DebateJournalEvent {
   return {
     event: "provider-response",
@@ -103,7 +104,10 @@ function answered(
             message: { content: opts.content, annotations: opts.annotations ?? [] },
           },
         ],
-        usage: {},
+        usage:
+          opts.searches === undefined
+            ? {}
+            : { server_tool_use_details: { web_search_requests: opts.searches } },
       },
     },
   };
@@ -365,5 +369,99 @@ describe("the file itself", () => {
 
   it("refuses to treat a missing journal as an empty one", async () => {
     await expect(readJournalRows(path.join(tmpdir(), "spideryarn-no-such-journal.jsonl"))).rejects.toThrow();
+  });
+});
+
+/* ============================================================================
+   Replaying a journal recorded before the lean rename
+   ========================================================================== */
+
+/**
+ * **Every row in every journal on disk was written before 2026-09-08**, when
+ * `valence: positive | negative | neutral | unknown` became
+ * `lean: leans-for | leans-against | neither | cannot-tell`. Production reads
+ * those rows forward with `readStoredLean`; the replay read them with
+ * `readShared`, which is strict about the live wire on purpose — so every
+ * historical row replayed as `cannot-tell`, and Layer 1's stance figures were
+ * about the rename rather than about the run.
+ *
+ * The adapter therefore sits at the journal boundary and nowhere else, and the
+ * second test here is the one that keeps it there.
+ */
+describe("replaying a journal recorded before the lean rename", () => {
+  const BLOCK_ID = "spya-k3m9qt";
+  const blockText = new Map<string, { text: string; kind: "text" }>([
+    [BLOCK_ID, { text: "The bridge opened in 1994 and cost twice its estimate.", kind: "text" }],
+  ]);
+  const EXTRACT = "A study found the bridge cost three times its estimate.";
+
+  function claimsJournal(stance: Record<string, unknown>): DebateJournalEvent[] {
+    return [
+      started("a1", "claims"),
+      answered("a1", {
+        content: fence([
+          {
+            url: "https://x.example/1",
+            sourceQuote: "the bridge cost three times its estimate",
+            blockId: BLOCK_ID,
+            claimQuote: "cost twice its estimate",
+            relation: "disputes",
+            applies: "The page puts the overrun higher than the article does.",
+            ...stance,
+          },
+        ]),
+        annotations: [annotation("https://x.example/1", EXTRACT)],
+        searches: 1,
+      }),
+    ];
+  }
+
+  it("keeps a stored valence's stance instead of replaying it as cannot-tell", () => {
+    const [replayed] = replayJournal(claimsJournal({ valence: "negative" }), { blockText });
+    if (!replayed?.ok) throw new Error(`expected a replay, got ${replayed?.skipped ?? "nothing"}`);
+    expect(replayed.group.counts.keptRows).toBe(1);
+    expect(replayed.group.rows[0]?.lean).toBe("leans-against");
+    /* Counted and printed: a replay that rewrote rows without saying so would
+       be the same silent success one level down. */
+    expect(replayed.supersededLeans).toBe(1);
+    expect(replayLines([replayed]).join("\n")).toContain("valence");
+  });
+
+  /**
+   * **The adapter must not reach the live wire.** `supportive` is not a row from
+   * before the rename, it is a prompt that has stopped emitting what we asked
+   * for, and it has to go on landing where production puts it.
+   */
+  it("leaves an out-of-vocabulary lean coerced, and counts nothing adapted", () => {
+    const [replayed] = replayJournal(claimsJournal({ lean: "supportive" }), { blockText });
+    if (!replayed?.ok) throw new Error(`expected a replay, got ${replayed?.skipped ?? "nothing"}`);
+    expect(replayed.group.counts.keptRows).toBe(1);
+    expect(replayed.group.rows[0]?.lean).toBe("cannot-tell");
+    expect(replayed.supersededLeans).toBe(0);
+    expect(replayLines([replayed]).join("\n")).not.toContain("valence");
+  });
+
+  /**
+   * **The over-reach this whole design is arranged against**, and it took a
+   * mutation to find: the test above passes even with the adapter widened to
+   * fire on *any* unrecognised `lean`, because that row carries no `valence` for
+   * a widened adapter to reach for. This one does. Widen `supersededLean` from
+   * *"`lean` is absent"* to *"`lean` is unrecognised"* and this goes red.
+   */
+  it("does not reach for a valence when today's lean is merely a word we do not know", () => {
+    const [replayed] = replayJournal(
+      claimsJournal({ lean: "supportive", valence: "positive" }),
+      { blockText },
+    );
+    if (!replayed?.ok) throw new Error(`expected a replay, got ${replayed?.skipped ?? "nothing"}`);
+    expect(replayed.group.rows[0]?.lean).toBe("cannot-tell");
+    expect(replayed.supersededLeans).toBe(0);
+  });
+
+  it("leaves a row that already speaks today's vocabulary exactly as it is", () => {
+    const [replayed] = replayJournal(claimsJournal({ lean: "leans-against" }), { blockText });
+    if (!replayed?.ok) throw new Error(`expected a replay, got ${replayed?.skipped ?? "nothing"}`);
+    expect(replayed.group.rows[0]?.lean).toBe("leans-against");
+    expect(replayed.supersededLeans).toBe(0);
   });
 });

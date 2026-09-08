@@ -68,9 +68,22 @@ describe("every prompt binds this row's target", () => {
 
 describe("every prompt rules out the target the bug actually reached for", () => {
   /* The clause with the most evidence behind it: all three known errors are a
-     stance toward the outside piece's own subject. */
-  it.each(PROMPTS)("%s excludes the outside piece's own subject", (_name, prompt) => {
-    expect(prompt).toContain("whatever the outside piece is itself discussing");
+     stance toward the outside piece's own subject.
+
+     **The wording matters and the first draft got it backwards.** It said "not
+     about whatever the outside piece is itself discussing", which contradicts
+     the binding it sits beside: a group-one page is *admissible* precisely
+     because it discusses this article, so that sentence forbade the answer it
+     was asking for. Sol's F72. It has to exclude a **different** subject the
+     passage is also about, not the target itself. */
+  it.each(PROMPTS)("%s excludes some other subject the passage is also about", (_name, prompt) => {
+    expect(prompt).toContain("some other subject the passage is also about");
+  });
+
+  /* The positive control for the finding above: the phrase that contradicted
+     the binding must not come back. */
+  it.each(PROMPTS)("%s does not forbid the target by describing it", (_name, prompt) => {
+    expect(prompt).not.toContain("whatever the outside piece is itself discussing");
   });
 
   /* The two exclusions that were already there and must not be lost in the
@@ -108,6 +121,33 @@ describe("the answer vocabulary the prompt shows is the vocabulary the parser ac
   it.each(PROMPTS)("%s asks for the field by its current name", (_name, prompt) => {
     expect(prompt).toContain('"lean"');
     expect(prompt).not.toContain('"valence"');
+  });
+
+  /**
+   * **Every worked value in the answer format is one the parser accepts.**
+   *
+   * Sol's F73, and it is the F62 hole reopened at a smaller scale: the check
+   * above only proves the four words appear *somewhere*. Change the answer
+   * example to `"lean": "supportive"` and leave the vocabulary list alone and it
+   * still passes — while every row the model produced by copying that example
+   * would coerce to `cannot-tell`, which reads as *the wrong label was removed*.
+   *
+   * So this reads the values actually attached to `"lean"` and `"relation"` and
+   * checks each against the vocabulary, rather than checking the vocabulary is
+   * mentioned.
+   */
+  const RELATIONS = ["disputes", "qualifies", "extends", "corroborates", "unclear"];
+
+  it.each(PROMPTS)("%s attaches only real leans to the lean key", (_name, prompt) => {
+    const used = [...prompt.matchAll(/"lean":\s*"([^"]*)"/g)].map((m) => m[1]);
+    expect(used.length).toBeGreaterThan(0);
+    for (const value of used) expect(LEANS).toContain(value);
+  });
+
+  it.each(PROMPTS)("%s attaches only real relations to the relation key", (_name, prompt) => {
+    const used = [...prompt.matchAll(/"relation":\s*"([^"]*)"/g)].map((m) => m[1]);
+    expect(used.length).toBeGreaterThan(0);
+    for (const value of used) expect(RELATIONS).toContain(value);
   });
 });
 

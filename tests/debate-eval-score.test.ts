@@ -33,12 +33,13 @@ import {
   oppositePairs,
   RELATION_VALUES,
   type ScorableRow,
+  SUPERSEDED_LEANS,
   vocabularyLines,
   vocabularyProblems,
   vocabularyReport,
   zeroLosses,
 } from "../evals/debate/score.js";
-import type { DebateLean, DebateLosses, DebateRelation } from "../src/types.js";
+import { type DebateLean, type DebateLosses, type DebateRelation, readStoredLean } from "../src/types.js";
 
 const row = (relation: string, lean: string): ScorableRow => ({ relation, lean });
 
@@ -144,6 +145,7 @@ describe("the raw vocabulary, read before any coercion", () => {
       offVocabularyRelations: 0,
       offVocabularyLeans: 0,
       offVocabularyRows: 0,
+      supersededLeans: 0,
       unreadableRows: 0,
     });
     expect(vocabularyProblems(report)).toEqual([]);
@@ -157,6 +159,85 @@ describe("the raw vocabulary, read before any coercion", () => {
     expect(text).toContain("OFF-VOCABULARY");
     expect(text).toContain('coerced to "unclear"');
     expect(text).toContain('coerced to "cannot-tell"');
+  });
+
+  /* ------------------------------------------------------------------------
+     The vocabulary that was superseded, rather than the vocabulary that broke
+     ---------------------------------------------------------------------- */
+
+  /**
+   * **A journal recorded before 2026-09-08 is not a prompt failure**, and until
+   * this test it was counted as one — every one of the 26 rows in the three
+   * captured journals reads `valence` and no `lean`, so the instrument built to
+   * notice a destroyed field reported all of them destroyed and could not have
+   * noticed a real one underneath.
+   */
+  it("reads a row from before the rename as superseded, not as an off-vocabulary answer", () => {
+    const report = vocabularyReport([
+      { relation: "disputes", valence: "negative" },
+      { relation: "corroborates", valence: "positive" },
+    ]);
+    expect(report.supersededLeans).toBe(2);
+    expect(report.offVocabularyLeans).toBe(0);
+    expect(report.offVocabularyRows).toBe(0);
+    /* Visible, and visibly from the older vocabulary — not folded into
+       `(absent)`, where a reader would have to know the rename to guess why. */
+    const labels = report.leans.map((v) => v.label);
+    expect(labels).not.toContain("(absent)");
+    expect(labels.sort()).toEqual([
+      "(valence: negative \u2014 superseded)",
+      "(valence: positive \u2014 superseded)",
+    ]);
+    expect(report.leans.every((v) => v.superseded === true)).toBe(true);
+    /* Said out loud, because an account quietly short of what was produced is
+       the failure this whole file is against. */
+    expect(vocabularyProblems(report).some((p) => p.includes("valence"))).toBe(true);
+    expect(vocabularyLines(report).join("\n")).toContain("superseded");
+  });
+
+  /**
+   * **The one that stops the adapter over-reaching**, and it matters more than
+   * the test above it. `supportive` today is a prompt that has stopped emitting
+   * what we asked for, whatever else is on the row.
+   */
+  it("still counts a live off-vocabulary lean as off-vocabulary, valence beside it or not", () => {
+    const report = vocabularyReport([
+      { relation: "disputes", lean: "supportive" },
+      { relation: "disputes", lean: "supportive", valence: "positive" },
+    ]);
+    expect(report.supersededLeans).toBe(0);
+    expect(report.offVocabularyLeans).toBe(2);
+    expect(report.offVocabularyRows).toBe(2);
+    expect(
+      vocabularyProblems(report).some((p) => p.includes("does not know") && p.includes("supportive")),
+    ).toBe(true);
+  });
+
+  it("refuses a valence spelling this build never had, rather than reading it forward", () => {
+    const report = vocabularyReport([{ relation: "disputes", valence: "supportive" }]);
+    expect(report.supersededLeans).toBe(0);
+    expect(report.offVocabularyLeans).toBe(1);
+    expect(report.leans.map((v) => v.label)).toEqual(["(absent)"]);
+  });
+
+  /**
+   * The two mappings are written out twice — here and in `readStoredLean`
+   * (src/types.ts), which the panel reads stored rows through — because sharing
+   * one would make production import from `evals/`. This is what stops them
+   * disagreeing: a change to either that the other does not follow is red here.
+   */
+  it("agrees with production's readStoredLean about every superseded spelling", () => {
+    for (const [valence, lean] of Object.entries(SUPERSEDED_LEANS)) {
+      expect(readStoredLean({ valence })).toBe(lean);
+    }
+    /* And the other direction: a spelling production reads forward that this
+       list has never heard of would be invisible above. */
+    expect(Object.keys(SUPERSEDED_LEANS).sort()).toEqual([
+      "negative",
+      "neutral",
+      "positive",
+      "unknown",
+    ]);
   });
 
   it("mirrors production's coercion, including its trimming", () => {
