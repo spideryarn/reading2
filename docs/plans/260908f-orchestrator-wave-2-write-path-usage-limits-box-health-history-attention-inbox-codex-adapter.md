@@ -114,20 +114,25 @@ put the write path in as *"a stage, but it doesn't have to be the top-priority."
 that. So on the Overseer's side the order is **attention first**, and the write path stays where he
 put it.
 
-## Where this stands, 13:55 on 2026-09-08
+## Where this stands, 2026-09-08T13:42Z
 
-**Important work left**, and it is the implementation of five of the six stages. What is finished is
-the part that had to be finished first: **every seam is agreed and every contract is a type**, so the
-six sessions can now build in parallel without a negotiation between them.
+**Important work left**, and it is now the last mile of four stages rather than all of six. What is
+finished is the part that had to be finished first: **every seam is agreed and every contract is a
+type**, so no session is waiting on another to decide anything.
 
 | | landed | what remains |
 |---|---|---|
-| **A** attention | the five types, verbatim, in `wire.ts` (`4d5cc454`) | the classifier, and the evaluation that justifies it |
-| **B** usage | the dashboard's `Pause` contract (`f1c34e96`) | the collector and the 429 ground truth |
-| **C** harness | **DONE** (`5c2e31cb`) — six arms, one `can: true`, Sol-reviewed | nothing; the `steer.ts` inline change is queued behind `fleet-approval-binding` |
+| **A** attention | the five types (`4d5cc454`); classifier built, evaluated and Sol-reviewed | **the push** — `Checkpoint.attention` is not on dev yet |
+| **B** usage | the dashboard's `Pause` contract (`f1c34e96`) and `pause.ts` | **the push**, then `Checkpoint.usage` on my side, behind A |
+| **C** harness | **DONE** (`5c2e31cb`), worktree torn down | nothing; the `steer.ts` argv parser is unowned |
 | **D** health | seam agreed (`refreshOnce`, not `server.ts`); `lock.ts` extracted for it | retention and the drawing |
-| **E/F** dictation | file split agreed with the dashboard | all of it |
+| **E** dictation | the server half — `transcribe.ts`, `routes-transcribe.ts`, `vocabulary.ts` | the client half, and Greg's own mic test |
+| **F** realtime dialog | designed, gated on E | not started, deliberately |
+| **#1** write path | A6 (`0a5a3008`), A9/A10 work landing (`91e1f3a0`, `2bfe48dc`) | the dashboard's own stage list |
 | **A5** | **closed**, no code | nothing |
+
+**The queue on `Checkpoint` is the only ordering constraint left in the wave**: `attention` lands,
+then `usage` on top, one editor of that type at a time. Everything else can finish in any order.
 
 **Three things landed that were not in the plan**, all of them because the work turned them up:
 
@@ -203,6 +208,34 @@ settled the orphan question was not a second reading at all but a **mechanism**:
 when a Bash-tool shell is reaped mid-run and leaves when the job ends, so the population is bounded by
 concurrent reviews rather than growing. That argument would hold with zero readings, which is what
 makes it the evidence.
+
+### An incomplete observation may not be read as a negative one
+
+**Three modules, three authors, arrived at separately, and stated here once so it is not restated
+three times locally.** Each found it in its own material and none of them was looking for a general
+rule:
+
+- **The health history** (`fleet-health-history`): *a gap must render as a gap, never a line drawn
+  across it.* An interpolated line through the ninety minutes the box was thrashing answers Greg's
+  actual question — *"were there disruptions I should know about?"* — with a confident **no**.
+- **The dashboard's improvement on it**: a gap has **two** causes and they must not draw identically.
+  *Absence means nothing was running. An `unknown` band means we were alive and could not tell.* If
+  the retention appends only on success, the case Greg most needs — *the box was up and health
+  collection has been broken for six hours* — becomes invisible.
+- **The usage collector** (`w2-usage-limits`): `absenceGap`, and the rule that **when it is non-null
+  this scan is not entitled to contradict what is already known.** A scan that fell over has not
+  discovered that a rate limit lifted.
+
+The same shape turns up in the types rather than the data three more times the same day: `≥` on a
+duration that is a lower bound, an unpriced call keeping a money total from printing as a figure, and
+`verdict.activeLimit` staying `null` while `level === "limited"` — **being limited can be established
+while *which* limit binds is not.** Which generalises to the sentence worth keeping:
+
+> **A composite verdict must be able to be certain about one part and uncertain about another, and a
+> type that forces them to agree will make one of them lie.**
+
+**This is a `docs/reusable/` candidate rather than a project fact**, and it is deliberately not
+written there yet — those edits go one approved set at a time and no set is open. Greg's call.
 
 ## Stages
 
@@ -343,6 +376,59 @@ things it has decided not to ask him. It lands when something answers, not when 
 test that feeds it an expired `resets_at` and watches it refuse. And a **positive control** — a probe
 that finds no 429s anywhere must be distinguishable from a probe that is broken
 ([silent-success.md](../reusable/silent-success.md)).
+
+#### The store half is a separate owner, and the two `Checkpoint` fields must land one at a time
+
+The collector is `w2-usage-limits`'s; **writing it into `~/.overseer/current.json` is the Overseer's**,
+because it needs a `Checkpoint` field, a `parseCheckpoint` arm, both construction sites and a cadence
+decision in `daemon.ts`. That session declined to land a schema change in a module somebody else might
+be editing, which was the right call — **`Checkpoint.attention` and `Checkpoint.usage` are in flight at
+the same time**, so the order is: attention lands, then usage on top, one editor of `Checkpoint` at a
+time.
+
+#### The 45-second scan should be paid once, not every pass
+
+The full transcript scan is **45s over 1,770 transcripts, 2.9 GB, 870,799 lines**, and the wide window
+is deliberate: a narrower one can miss a `seven_day` rejection that is still in force. But that is an
+argument for reading the whole history **once**, not for re-reading it. **A `seven_day` rejection found
+at T with a `resetsAt` of T+7d stays in force until that instant whether or not you look again** — it
+is a fact with an expiry, not one that needs re-confirming. So: cold start pays the full scan and
+records the watermark it reached; every pass after it scans only what moved; a known unexpired
+rejection is carried forward from the store, and one whose `resetsAt` has passed is dropped as a
+**positive act with a reason** rather than a silent absence. The cache is read every tick regardless,
+because it is one file and free.
+
+**That is the store earning its keep** — it is what turns an expensive repeated scan into a cheap
+incremental one, which is the Overseer's tense doing the job it exists for. It also supplies a real
+positive control on the incremental path: the watermark plus the count of files whose mtime moved, so
+*"found nothing new"* is distinguishable from *"looked at nothing"*.
+
+**Two ways it could be wrong, named rather than discovered**: a transcript can be *rewritten* rather
+than appended (a compaction), which moves content behind the watermark; and a 429 can land in a file
+whose mtime is then missed if the clock moves. If either is real, the answer is the plain 45 seconds
+on a slow timer — which is a perfectly good design and much better than a clever one that misses a
+live rejection.
+
+**And it must not run inside the tick.** `heartbeat.lastTickAt` is how a reader decides the Overseer is
+dead rather than showing a stale register as current, so a 45-second blocking scan makes every tick
+look 45 seconds late — **A17 exactly, healthy operation spending most of its time alarming**, which
+teaches Greg to ignore the alarm. It goes in as an injected runner with its own interval, one pass at a
+time, a thrown pass becoming an explicit `unknown` rather than silence: the same shape `attention` uses,
+and consistency between the two is worth more than either being individually optimal.
+
+#### A relative time is a rendering, and a rendering must not be quotable as a measurement
+
+The sharpest instance of the timestamp rule, and it was found in the place the rule does not obviously
+reach. `w2-usage-limits`'s *report* was already right — `collectedAt`, `fetchedAtMs`, `resetsAt`,
+`resetsAtMs`, instants as fields all the way from the source, never re-typed. **The CLI renderer was
+the leak**: it printed `cache fetched 73 min ago`, which is true when printed and false when pasted —
+and CLI output on this box gets pasted into messages and plan docs hours later *as evidence*. Now it
+prints the ISO instant with the age in parentheses.
+
+**And one wave-level fact that should govern every timeout anybody sets here**: the same scan over the
+same files took **1.8s and 9.7s two hours apart, purely from ambient load** (measured
+2026-09-08T13:16Z). A 5× variance is the argument against any design whose correctness depends on
+something finishing promptly.
 
 ### Stage C — the Codex/GPT harness adapter, v1
 
